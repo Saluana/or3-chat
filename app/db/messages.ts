@@ -34,6 +34,16 @@ import {
 import type { MessageEntity } from '../core/hooks/hook-types';
 import { serializeFileHashes } from './files-util';
 
+export function compareMessageOrder(
+    a: Pick<Message, 'index' | 'order_key' | 'id'>,
+    b: Pick<Message, 'index' | 'order_key' | 'id'>
+): number {
+    const indexOrder = (a.index ?? 0) - (b.index ?? 0);
+    if (indexOrder !== 0) return indexOrder;
+    const keyOrder = (a.order_key ?? '').localeCompare(b.order_key ?? '');
+    return keyOrder !== 0 ? keyOrder : a.id.localeCompare(b.id);
+}
+
 // Convert Message schema type to MessageEntity for hooks
 function toMessageEntity(msg: Message): MessageEntity {
     // Validate role is one of the expected types
@@ -180,11 +190,20 @@ export async function upsertMessage(value: Message): Promise<void> {
 export function messagesByThread(threadId: string) {
     const hooks = useHooks();
     return dbTry(
-        () => getDb().messages.where('thread_id').equals(threadId).sortBy('index'),
+        () =>
+            getDb()
+                .messages.where('[thread_id+index]')
+                .between([threadId, Dexie.minKey], [threadId, Dexie.maxKey])
+                .toArray(),
         { op: 'read', entity: 'messages', action: 'byThread' }
-    ).then((res) =>
-        hooks.applyFilters('db.messages.byThread:filter:output', res)
-    );
+    ).then(async (res) => {
+        const filtered = await hooks.applyFilters(
+            'db.messages.byThread:filter:output',
+            res
+        );
+        if (Array.isArray(filtered)) filtered.sort(compareMessageOrder);
+        return filtered;
+    });
 }
 
 /**
@@ -252,13 +271,17 @@ export function messageByStream(streamId: string) {
 export async function softDeleteMessage(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages', { includeTombstones: true }),
+        async () => {
         const m = await dbTry(() => db.messages.get(id), {
             op: 'read',
             entity: 'messages',
             action: 'get',
         });
         if (!m) return;
+        if (m.deleted) return;
         await hooks.doAction('db.messages.delete:action:soft:before', {
             entity: toMessageEntity(m),
             id: m.id,
@@ -280,7 +303,8 @@ export async function softDeleteMessage(id: string): Promise<void> {
             id: m.id,
             tableName: 'messages',
         });
-    });
+        }
+    );
 }
 
 /**
@@ -545,7 +569,16 @@ export async function insertMessageAfter(
         } else {
             // No gap, normalize thread then place after
             await normalizeThreadIndexes(after.thread_id);
-            newIndex = after.index + 1000;
+            const normalizedAfter = await db.messages.get(afterMessageId);
+            if (!normalizedAfter) throw new Error('after message disappeared');
+            const normalizedNext = await db.messages
+                .where('[thread_id+index]')
+                .above([normalizedAfter.thread_id, normalizedAfter.index])
+                .first();
+            newIndex = normalizedNext
+                ? normalizedAfter.index +
+                    Math.floor((normalizedNext.index - normalizedAfter.index) / 2)
+                : normalizedAfter.index + 1000;
         }
         // Handle file_hashes array serialization
         const processedInput = { ...input };

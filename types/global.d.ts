@@ -54,10 +54,16 @@ declare global {
         registry: Ref<
             Array<{
                 paneId: string;
-                api: { setText(t: string): void; triggerSend(): void };
+                api: {
+                    setText(t: string): void;
+                    triggerSend(): Promise<import('~/utils/chat/types').SendResult>;
+                };
             }>
         >;
-        programmaticSend: (paneId: string, text: string) => boolean;
+        programmaticSend: (
+            paneId: string,
+            text: string
+        ) => Promise<import('~/utils/chat/types').SendResult>;
         hasPane: (paneId: string) => boolean;
     }
 

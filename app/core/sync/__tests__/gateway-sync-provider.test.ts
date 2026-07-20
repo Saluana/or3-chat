@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PullResponse, SyncChange, SyncScope } from '~~/shared/sync/types';
+import type { PullResponse, SnapshotResponse, SyncChange, SyncScope } from '~~/shared/sync/types';
 import { createGatewaySyncProvider } from '../providers/gateway-sync-provider';
 
 function makeOkResponse(body: unknown) {
@@ -291,5 +291,129 @@ describe('GatewaySyncProvider', () => {
             status: 429,
             retryAfterMs: 4000,
         });
+    });
+
+    it('requests bounded materialized snapshot pages through the gateway', async () => {
+        const response: SnapshotResponse = {
+            workspaceId: 'ws-1',
+            snapshotId: 'snapshot-1',
+            highWatermark: 42,
+            items: [],
+            nextPageToken: null,
+        };
+        const fetchMock = vi.fn(async () => makeOkResponse(response));
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+        const provider = createGatewaySyncProvider({ baseUrl: 'https://sync.example.test' });
+
+        await expect(provider.snapshot?.({
+            scope: { workspaceId: 'ws-1' },
+            pageSize: 50,
+            pageToken: 'opaque-page',
+            tables: ['messages'],
+        })).resolves.toEqual(response);
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            'https://sync.example.test/api/sync/snapshot',
+            expect.objectContaining({
+                method: 'POST',
+                credentials: 'include',
+                body: JSON.stringify({
+                    scope: { workspaceId: 'ws-1' },
+                    pageSize: 50,
+                    pageToken: 'opaque-page',
+                    tables: ['messages'],
+                }),
+            })
+        );
+    });
+
+    it('honors Retry-After seconds before the next subscription pull', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                makeErrorResponse(429, 'rate limited', { 'Retry-After': '4' })
+            )
+            .mockResolvedValue(
+                makeOkResponse({ changes: [], nextCursor: 0, hasMore: false })
+            );
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
+        const unsubscribe = await provider.subscribe(
+            { workspaceId: 'ws-1' },
+            ['messages'],
+            () => undefined,
+            { cursor: 0, limit: 10 }
+        );
+
+        await vi.advanceTimersByTimeAsync(100);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(3999);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+
+        unsubscribe();
+    });
+
+    it('honors Retry-After HTTP dates and caps excessive delays', async () => {
+        vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const retryAt = new Date(Date.now() + 60_000).toUTCString();
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                makeErrorResponse(429, 'rate limited', { 'Retry-After': retryAt })
+            )
+            .mockResolvedValue(
+                makeOkResponse({ changes: [], nextCursor: 0, hasMore: false })
+            );
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+
+        const provider = createGatewaySyncProvider({
+            pollIntervalMs: 100,
+            maxRetryAfterMs: 2000,
+        });
+        const unsubscribe = await provider.subscribe(
+            { workspaceId: 'ws-1' },
+            ['messages'],
+            () => undefined,
+            { cursor: 0, limit: 10 }
+        );
+
+        await vi.advanceTimersByTimeAsync(100);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1999);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+
+        unsubscribe();
+    });
+
+    it('cancels a pending Retry-After delay on unsubscribe', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const fetchMock = vi.fn(async () =>
+            makeErrorResponse(429, 'rate limited', { 'Retry-After': '4' })
+        );
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
+        const unsubscribe = await provider.subscribe(
+            { workspaceId: 'ws-1' },
+            ['messages'],
+            () => undefined,
+            { cursor: 0, limit: 10 }
+        );
+
+        await vi.advanceTimersByTimeAsync(100);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        unsubscribe();
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 });

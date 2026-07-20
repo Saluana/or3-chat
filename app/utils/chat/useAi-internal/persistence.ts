@@ -18,6 +18,7 @@ import { getDb } from '~/db/client';
 import { serializeFileHashes } from '~/db/files-util';
 import type { StoredMessage, AssistantPersister } from './types';
 import type { ToolCallInfo } from '~/utils/chat/uiMessages';
+import { createForegroundGenerationLease } from '~/utils/chat/generation-lease';
 
 /**
  * `makeAssistantPersister`
@@ -27,7 +28,8 @@ import type { ToolCallInfo } from '~/utils/chat/uiMessages';
  */
 export function makeAssistantPersister(
     assistantDbMsg: StoredMessage,
-    assistantFileHashes: string[]
+    assistantFileHashes: string[],
+    generationLeaseId?: string
 ): AssistantPersister {
     // Cache last serialized file hashes to avoid recomputing on each write
     let lastSerialized: string | null = assistantDbMsg.file_hashes || null;
@@ -43,13 +45,18 @@ export function makeAssistantPersister(
         toolCalls?: ToolCallInfo[] | null;
         finalize?: boolean;
     }): Promise<string | null> {
-        const baseData =
-            assistantDbMsg.data && typeof assistantDbMsg.data === 'object'
-                ? (assistantDbMsg.data as Record<string, unknown>)
-                : {};
+        // Always merge against the latest row. Streaming writes must not erase
+        // concurrent plugin metadata, synced edits, or file references.
+        const latest =
+            ((await getDb().messages.get(assistantDbMsg.id)) as
+                | StoredMessage
+                | undefined) ?? assistantDbMsg;
+        const baseData = latest.data && typeof latest.data === 'object'
+            ? (latest.data as Record<string, unknown>)
+            : {};
         const serialized = assistantFileHashes.length
             ? serializeFileHashes(assistantFileHashes)
-            : lastSerialized;
+            : latest.file_hashes ?? lastSerialized;
         if (
             serialized !== lastSerialized ||
             content != null ||
@@ -58,24 +65,22 @@ export function makeAssistantPersister(
             finalize
         ) {
             const payload: StoredMessage = {
-                ...assistantDbMsg,
-                pending: finalize ? false : assistantDbMsg.pending, // Clear pending on finalize
+                ...latest,
+                pending: finalize ? false : latest.pending,
                 data: {
                     ...baseData,
-                    content:
-                        content ??
-                        (typeof baseData.content === 'string'
-                            ? baseData.content
-                            : ''),
-                    reasoning_text:
-                        reasoning ??
-                        (typeof baseData.reasoning_text === 'string'
-                            ? baseData.reasoning_text
-                            : null),
-                    ...(toolCalls
+                    ...(content !== undefined ? { content } : {}),
+                    ...(reasoning !== undefined
+                        ? { reasoning_text: reasoning }
+                        : {}),
+                    ...(toolCalls !== undefined
                         ? {
-                              tool_calls: toolCalls.map((t) => ({ ...t })),
+                              tool_calls: (toolCalls ?? []).map((t) => ({ ...t })),
                           }
+                        : {}),
+                    ...(finalize ? { generation_state: 'complete' } : {}),
+                    ...(generationLeaseId && !finalize
+                        ? createForegroundGenerationLease(generationLeaseId)
                         : {}),
                 },
                 file_hashes: serialized,
@@ -100,31 +105,27 @@ export async function updateMessageRecord(
     existing?: StoredMessage | null
 ): Promise<void> {
     const base =
-        existing ??
-        ((await getDb().messages.get(id)) as StoredMessage | undefined);
+        ((await getDb().messages.get(id)) as StoredMessage | undefined) ??
+        existing;
     if (!base) return;
 
     // If error is being updated, also update data.error for reliable sync
     // (data uses v.any() and syncs reliably; top-level error may not)
     let finalPatch = patch;
-    if ('error' in patch) {
-        const baseData =
-            base.data && typeof base.data === 'object'
-                ? (base.data as Record<string, unknown>)
-                : {};
-        const patchData =
-            patch.data && typeof patch.data === 'object'
-                ? (patch.data as Record<string, unknown>)
-                : {};
-        finalPatch = {
-            ...patch,
-            data: {
-                ...baseData,
-                ...patchData,
-                error: patch.error, // Sync error to data.error
-            },
-        };
-    }
+    const baseData = base.data && typeof base.data === 'object'
+        ? (base.data as Record<string, unknown>)
+        : {};
+    const patchData = patch.data && typeof patch.data === 'object'
+        ? (patch.data as Record<string, unknown>)
+        : {};
+    finalPatch = {
+        ...patch,
+        data: {
+            ...baseData,
+            ...patchData,
+            ...('error' in patch ? { error: patch.error } : {}),
+        },
+    };
 
     await upsert.message({
         ...base,

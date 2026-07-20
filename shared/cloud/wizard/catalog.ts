@@ -1052,6 +1052,7 @@ export function createDefaultAnswers(
     const presetName = input.presetName ?? 'recommended';
     const wizardMode = inferWizardModeFromPresetName(presetName);
     const base: WizardAnswers = {
+        targetAdvancedEnabled: false,
         instanceDir: input.instanceDir,
         envFile: input.envFile ?? '.env',
         deploymentTarget: 'local-dev',
@@ -1065,6 +1066,7 @@ export function createDefaultAnswers(
         syncAdvancedEnabled: false,
         storageAdvancedEnabled: false,
         cloudAdvancedEnabled: false,
+        featuresAdvancedEnabled: false,
         or3SiteName: 'OR3',
         or3DefaultTheme: 'retro',
         themeInstallMode: 'use-existing',
@@ -1108,6 +1110,7 @@ export function createDefaultAnswers(
         strictConfig: false,
         trustProxy: false,
         forwardedForHeader: 'x-forwarded-for',
+        adminUsername: 'admin',
     };
 
     const withModeDefaults = applyWizardModeDefaults(base, wizardMode);

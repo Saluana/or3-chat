@@ -67,6 +67,7 @@ export interface StreamingState {
     reasoningText: string;
     isActive: boolean;
     finalized: boolean;
+    aborted: boolean;
     error: Error | null;
     version: number; // increments on each flush for lightweight watchers
 }
@@ -112,6 +113,7 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         reasoningText: '',
         isActive: true,
         finalized: false,
+        aborted: false,
         error: null,
         version: 0,
     });
@@ -215,6 +217,7 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         if (pendingMain.length || pendingReasoning.length) flush();
         else state.version++;
         if (opts?.error) state.error = opts.error;
+        state.aborted = opts?.aborted === true;
         state.isActive = false;
         state.finalized = true;
     }
@@ -234,6 +237,7 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         state.text = '';
         state.reasoningText = '';
         state.error = null;
+        state.aborted = false;
         state.isActive = true;
         state.finalized = false;
         state.version++;

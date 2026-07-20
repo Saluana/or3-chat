@@ -16,6 +16,7 @@ export type MemoryTable<T extends Record<string, unknown>> = {
     put: (row: T) => Promise<void>;
     add: (row: T) => Promise<string>;
     update: (id: string, patch: Partial<T>) => Promise<number>;
+    delete: (id: string) => Promise<void>;
     hook: (event: string, callback: Function) => void;
 };
 
@@ -88,6 +89,9 @@ export function createMemoryTable<T extends Record<string, unknown>>(
             const updated = { ...existing, ...patch };
             rows.set(id, updated);
             return 1;
+        },
+        async delete(id: string) {
+            rows.delete(id);
         },
         hook(event: string, callback: Function) {
             if (!hooks.has(event)) hooks.set(event, []);

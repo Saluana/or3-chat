@@ -10,8 +10,12 @@ export type {
     ToolHandler,
     ExtendedToolDefinition,
     RegisteredTool,
+    TypedToolDefinition,
 } from './tool-registry';
-export type { ToolDefinition, ToolCall, ToolRuntime } from './types';
+export type { ToolDefinition, ToolCall, ToolExecutionContext, ToolRuntime } from './types';
+import type { ToolDefinition } from './types';
+import type { TypedToolDefinition } from './tool-registry';
+import { validateToolDefinition } from '~~/shared/chat/tool-schema';
 
 /**
  * `defineTool`
@@ -29,7 +33,9 @@ export type { ToolDefinition, ToolCall, ToolRuntime } from './types';
  * ```
  */
 export function defineTool<T extends Record<string, unknown>>(
-    def: T
-): T {
+    def: ToolDefinition
+): TypedToolDefinition<T> {
+    const validation = validateToolDefinition(def);
+    if (!validation.valid) throw new Error(`Invalid tool definition: ${validation.error}`);
     return def;
 }

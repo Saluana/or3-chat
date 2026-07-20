@@ -106,6 +106,7 @@ describe('POST /api/storage/presign-upload', () => {
         });
         getWorkspaceStorageUsageSnapshotMock.mockReset().mockResolvedValue({
             usedBytes: 0,
+            reservedBytes: 0,
             filesByHash: new Map<string, number>(),
         });
         presignUploadMock.mockReset().mockResolvedValue({
@@ -226,6 +227,7 @@ describe('POST /api/storage/presign-upload', () => {
         });
         getWorkspaceStorageUsageSnapshotMock.mockResolvedValue({
             usedBytes: 1_000,
+            reservedBytes: 0,
             filesByHash: new Map<string, number>(),
         });
         readBodyMock.mockResolvedValue({
@@ -236,6 +238,25 @@ describe('POST /api/storage/presign-upload', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({
             statusCode: 413,
         });
+    });
+
+    it('includes active reservations in projected workspace quota', async () => {
+        const handler = (await import('../presign-upload.post')).default as (event: H3Event) => Promise<unknown>;
+        useRuntimeConfigMock.mockReturnValue({
+            storage: {
+                allowedMimeTypes: ['image/png'],
+                workspaceQuotaBytes: 1_500,
+            },
+        });
+        getWorkspaceStorageUsageSnapshotMock.mockResolvedValue({
+            usedBytes: 1_000,
+            reservedBytes: 400,
+            filesByHash: new Map<string, number>(),
+        });
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), size_bytes: 200 });
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 413 });
+        expect(presignUploadMock).not.toHaveBeenCalled();
     });
 
     it('returns 500 when adapter is missing', async () => {

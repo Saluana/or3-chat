@@ -63,6 +63,94 @@ type LiveJobEvent =
       };
 
 const jobStreams = new Map<string, LiveJobState>();
+const JOB_RECONCILE_LIVE_MS = 1_000;
+const JOB_RECONCILE_FALLBACK_MS = 300;
+
+type JobReconciler = {
+    poll: () => Promise<BackgroundJob | null>;
+    listeners: Set<(job: BackgroundJob | null, error?: Error) => void>;
+    timer: ReturnType<typeof setTimeout> | null;
+    running: boolean;
+};
+
+const jobReconcilers = new Map<string, JobReconciler>();
+
+/** One adaptive provider poller per job, shared by every SSE viewer. */
+export function registerJobReconciler(
+    jobId: string,
+    poll: () => Promise<BackgroundJob | null>,
+    listener: (job: BackgroundJob | null, error?: Error) => void
+): () => void {
+    let reconciler = jobReconcilers.get(jobId);
+    if (!reconciler) {
+        reconciler = { poll, listeners: new Set(), timer: null, running: false };
+        jobReconcilers.set(jobId, reconciler);
+    }
+    reconciler.listeners.add(listener);
+
+    const run = async () => {
+        const current = jobReconcilers.get(jobId);
+        if (!current || current.running || current.listeners.size === 0) return;
+        current.running = true;
+        let terminal = false;
+        try {
+            const job = await current.poll();
+            terminal = job !== null && job.status !== 'streaming';
+            for (const subscriber of [...current.listeners]) {
+                try { subscriber(job); } catch { /* isolate viewers */ }
+            }
+        } catch (error) {
+            const failure = error instanceof Error ? error : new Error(String(error));
+            for (const subscriber of [...current.listeners]) {
+                try { subscriber(null, failure); } catch { /* isolate viewers */ }
+            }
+        } finally {
+            current.running = false;
+        }
+        if (jobReconcilers.get(jobId) !== current) return;
+        if (terminal || current.listeners.size === 0) {
+            jobReconcilers.delete(jobId);
+            return;
+        }
+        const live = getJobLiveState(jobId);
+        const delay = live?.status === 'streaming'
+            ? JOB_RECONCILE_LIVE_MS
+            : JOB_RECONCILE_FALLBACK_MS;
+        current.timer = setTimeout(() => void run(), delay);
+        if (typeof current.timer.unref === 'function') current.timer.unref();
+    };
+
+    if (!reconciler.running && !reconciler.timer) void run();
+    let disposed = false;
+    return () => {
+        if (disposed) return;
+        disposed = true;
+        const current = jobReconcilers.get(jobId);
+        if (!current) return;
+        current.listeners.delete(listener);
+        if (current.listeners.size === 0) {
+            if (current.timer) clearTimeout(current.timer);
+            jobReconcilers.delete(jobId);
+        }
+    };
+}
+
+export function getJobReconcilerCount(): number {
+    return jobReconcilers.size;
+}
+
+/** Test isolation for process-local viewer state. */
+export function resetJobViewersForTests(): void {
+    for (const reconciler of jobReconcilers.values()) {
+        if (reconciler.timer) clearTimeout(reconciler.timer);
+    }
+    for (const state of jobStreams.values()) {
+        if (state.cleanupTimer) clearTimeout(state.cleanupTimer);
+    }
+    jobReconcilers.clear();
+    jobStreams.clear();
+    jobViewers.clear();
+}
 
 /**
  * Purpose:

@@ -30,6 +30,7 @@ import type {
     LargeTextBlock,
     UploadedImage,
 } from '~/components/chat/chat-input/types';
+import type { SendResult } from '~/utils/chat/types';
 
 defineOptions({ inheritAttrs: false });
 
@@ -42,6 +43,8 @@ type ChatInputSendPayload = {
     settings: ImageSettings;
     webSearchEnabled: boolean;
     thinkingEnabled: boolean;
+    reasoningEffort: string | null;
+    registerResult: (result: Promise<SendResult>) => void;
 };
 
 type ResizePayload = {

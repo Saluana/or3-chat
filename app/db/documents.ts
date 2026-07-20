@@ -90,7 +90,7 @@ export interface DocumentRecord {
 
 const DOCUMENT_TABLE = 'documents';
 
-async function putDocumentPostRow(row: Post): Promise<void> {
+async function putDocumentPostRow(row: Post, includeTombstones = false): Promise<void> {
     const db = getDb();
     if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
         await db.posts.put(row);
@@ -98,7 +98,7 @@ async function putDocumentPostRow(row: Post): Promise<void> {
     }
     await db.transaction(
         'rw',
-        getWriteTxTableNames(db, 'posts'),
+        getWriteTxTableNames(db, 'posts', { includeTombstones }),
         async () => {
             await db.posts.put(row);
         }
@@ -554,6 +554,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
         action: 'getDocument',
     });
     if (!isDocumentPost(existing)) return;
+    if (existing.deleted) return;
     const existingRow: DocumentRow = {
         id: existing.id,
         title: existing.title,
@@ -589,7 +590,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
         clock: updatedRow.clock,
     };
     await dbTry(
-        () => putDocumentPostRow(postRow),
+        () => putDocumentPostRow(postRow, true),
         { op: 'write', entity: 'posts', action: 'softDeleteDocument' },
         { rethrow: true }
     );

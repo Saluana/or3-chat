@@ -23,9 +23,9 @@
  * @see core/sync/hook-bridge for sync transaction suppression
  */
 import type { Or3DB } from '~/db/client';
-import type { SyncChange, Tombstone } from '~~/shared/sync/types';
+import type { ChangeStamp, SyncChange, Tombstone } from '~~/shared/sync/types';
 import type { Transaction } from 'dexie';
-import { compareHLC } from './hlc';
+import { compareSyncRevision } from '~~/shared/sync/revision';
 import { getHookBridge } from './hook-bridge';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
@@ -35,8 +35,28 @@ import { normalizeSyncPayload } from './sync-payload-normalizer';
 interface LocalRecord {
     clock?: number;
     hlc?: string;
+    op_id?: string;
     deleted?: boolean;
     [key: string]: unknown;
+}
+
+function rowRevision(record: LocalRecord) {
+    return {
+        clock: record.clock ?? 0,
+        hlc: record.hlc ?? '',
+        opId: record.op_id ?? '',
+    };
+}
+
+function tombstoneBlocks(stamp: ChangeStamp, tombstone: Tombstone): boolean {
+    if (tombstone.clock !== stamp.clock) return tombstone.clock > stamp.clock;
+    // A legacy equal-clock tombstone has an ambiguous order. Fail closed until
+    // the repair command can prove its originating delete from change_log.
+    if (!tombstone.hlc || !tombstone.opId) return true;
+    return compareSyncRevision(
+        { clock: tombstone.clock, hlc: tombstone.hlc, opId: tombstone.opId },
+        stamp
+    ) >= 0;
 }
 
 /**
@@ -113,8 +133,10 @@ export class ConflictResolver {
             });
 
             for (const change of changes) {
-                const local = existingByTable.get(change.tableName)?.get(change.pk);
-                const tombstone = tombstonesMap.get(`${change.tableName}:${change.pk}`);
+                const tableState = existingByTable.get(change.tableName)!;
+                const tombstoneId = `${change.tableName}:${change.pk}`;
+                const local = tableState.get(change.pk);
+                const tombstone = tombstonesMap.get(tombstoneId);
 
                 const changeResult = change.op === 'delete'
                     ? await this.applyDeleteWithLocal(tx, change, local, tombstone, conflicts)
@@ -123,6 +145,22 @@ export class ConflictResolver {
                 result.applied += changeResult.applied ? 1 : 0;
                 result.skipped += changeResult.skipped ? 1 : 0;
                 result.conflicts += changeResult.isConflict ? 1 : 0;
+
+                // A page may contain multiple revisions of one logical key.
+                // Resolve the next operation against the state produced by this
+                // operation, not the single pre-transaction bulkGet snapshot.
+                const nextLocal: unknown = await tx.table(change.tableName).get(change.pk);
+                if (nextLocal) {
+                    tableState.set(change.pk, nextLocal as LocalRecord);
+                } else {
+                    tableState.delete(change.pk);
+                }
+                const nextTombstone: unknown = await tx.table('tombstones').get(tombstoneId);
+                if (nextTombstone) {
+                    tombstonesMap.set(tombstoneId, nextTombstone as Tombstone);
+                } else {
+                    tombstonesMap.delete(tombstoneId);
+                }
             }
         });
 
@@ -150,19 +188,20 @@ export class ConflictResolver {
         hookBridge.markSyncTransaction(tx);
 
         if (!local) {
-            await this.writeTombstone(tx, tableName, pk, stamp.clock, existingTombstone);
+            await this.writeTombstone(tx, tableName, pk, stamp, change.serverVersion, existingTombstone);
             // Already gone or never existed
             return { applied: false, skipped: true, isConflict: false };
         }
 
         if (local.deleted) {
-            await this.writeTombstone(tx, tableName, pk, stamp.clock, existingTombstone);
+            await this.writeTombstone(tx, tableName, pk, stamp, change.serverVersion, existingTombstone);
             // Already deleted
             return { applied: false, skipped: true, isConflict: false };
         }
 
         // Check if remote delete wins
         const localClock = local.clock ?? 0;
+        const comparison = compareSyncRevision(stamp, rowRevision(local));
 
         if (stamp.clock > localClock) {
             // Remote wins
@@ -174,14 +213,12 @@ export class ConflictResolver {
                 deleted_at: deletedAt,
                 clock: stamp.clock,
                 hlc: stamp.hlc,
+                op_id: stamp.opId,
             });
-            await this.writeTombstone(tx, tableName, pk, stamp.clock, existingTombstone);
+            await this.writeTombstone(tx, tableName, pk, stamp, change.serverVersion, existingTombstone);
             return { applied: true, skipped: false, isConflict: false };
         } else if (stamp.clock === localClock) {
-            // Tie-break with HLC
-            const localHlc = local.hlc ?? '';
-            const cmp = compareHLC(stamp.hlc, localHlc);
-            if (cmp > 0) {
+            if (comparison > 0) {
                 const remotePayload = change.payload as { deleted_at?: number } | undefined;
                 const deletedAt = remotePayload?.deleted_at ?? nowSec();
 
@@ -190,15 +227,16 @@ export class ConflictResolver {
                     deleted_at: deletedAt,
                     clock: stamp.clock,
                     hlc: stamp.hlc,
+                    op_id: stamp.opId,
                 });
-                await this.writeTombstone(tx, tableName, pk, stamp.clock, existingTombstone);
+                await this.writeTombstone(tx, tableName, pk, stamp, change.serverVersion, existingTombstone);
                 if (import.meta.dev) {
                     console.debug('[sync] conflict delete tie -> remote', {
                         tableName,
                         pk,
                         localClock,
                         remoteClock: stamp.clock,
-                        localHlc,
+                        localHlc: local.hlc ?? '',
                         remoteHlc: stamp.hlc,
                     });
                 }
@@ -206,7 +244,7 @@ export class ConflictResolver {
                 conflicts.push({ tableName, pk, local, remote: { deleted: true }, winner: 'remote' });
                 return { applied: true, skipped: false, isConflict: true, winner: 'remote' };
             }
-            if (cmp === 0) {
+            if (comparison === 0) {
                 // Exact duplicate delivery, not a conflict.
                 return { applied: false, skipped: true, isConflict: false };
             }
@@ -217,7 +255,7 @@ export class ConflictResolver {
                     pk,
                     localClock,
                     remoteClock: stamp.clock,
-                    localHlc,
+                    localHlc: local.hlc ?? '',
                     remoteHlc: stamp.hlc,
                 });
             }
@@ -252,9 +290,24 @@ export class ConflictResolver {
             return { applied: false, skipped: true, isConflict: false };
         }
 
-        const remotePayload = normalized.payload;
+        // ref_count is a local derived cache. It is deliberately omitted from
+        // outbound sync and must never be accepted as authority from a remote
+        // provider (including a malicious/custom provider). Preserve a valid
+        // local value on updates and seed new remote rows at zero. Canonical
+        // server GC uses materialized reference edges instead of this cache.
+        const remotePayload = tableName === 'file_meta'
+            ? {
+                  ...normalized.payload,
+                  ref_count:
+                      typeof local?.ref_count === 'number' &&
+                      Number.isSafeInteger(local.ref_count) &&
+                      local.ref_count >= 0
+                          ? local.ref_count
+                          : 0,
+              }
+            : normalized.payload;
         
-        if (tombstone && tombstone.clock >= remoteClock) {
+        if (tombstone && tombstoneBlocks(stamp, tombstone)) {
             return { applied: false, skipped: true, isConflict: false };
         }
 
@@ -263,28 +316,28 @@ export class ConflictResolver {
         if (!local) {
             // New record - just insert
             await table.put(remotePayload);
-            if (tombstone && tombstone.clock < remoteClock) {
+            if (tombstone) {
                 await this.clearTombstone(tx, tableName, pk);
             }
             return { applied: true, skipped: false, isConflict: false };
         }
 
         const localClock = local.clock ?? 0;
+        const comparison = compareSyncRevision(stamp, rowRevision(local));
 
         if (remoteClock > localClock) {
             // Remote wins - update
             await table.put(remotePayload);
-            if (tombstone && tombstone.clock < remoteClock) {
+            if (tombstone) {
                 await this.clearTombstone(tx, tableName, pk);
             }
             return { applied: true, skipped: false, isConflict: false };
         } else if (remoteClock === localClock) {
             // Tie-break with HLC
             const localHlc = local.hlc ?? '';
-            const cmp = compareHLC(stamp.hlc, localHlc);
-            if (cmp > 0) {
+            if (comparison > 0) {
                 await table.put(remotePayload);
-                if (tombstone && tombstone.clock < remoteClock) {
+                if (tombstone) {
                     await this.clearTombstone(tx, tableName, pk);
                 }
                 if (import.meta.dev) {
@@ -301,7 +354,7 @@ export class ConflictResolver {
                 conflicts.push({ tableName, pk, local, remote: payload, winner: 'remote' });
                 return { applied: true, skipped: false, isConflict: true, winner: 'remote' };
             }
-            if (cmp === 0) {
+            if (comparison === 0) {
                 // Exact duplicate delivery, not a conflict.
                 return { applied: false, skipped: true, isConflict: false };
             }
@@ -328,12 +381,13 @@ export class ConflictResolver {
         tx: Transaction,
         tableName: string,
         pk: string,
-        clock: number,
+        stamp: ChangeStamp,
+        serverVersion: number,
         existing: Tombstone | undefined
     ): Promise<void> {
         const id = `${tableName}:${pk}`;
 
-        if (existing && existing.clock >= clock) {
+        if (existing && tombstoneBlocks(stamp, existing)) {
             return;
         }
 
@@ -342,7 +396,10 @@ export class ConflictResolver {
             tableName,
             pk,
             deletedAt: nowSec(),
-            clock,
+            clock: stamp.clock,
+            hlc: stamp.hlc,
+            opId: stamp.opId,
+            serverVersion,
             syncedAt: nowSec(),
         };
         await tx.table('tombstones').put(tombstone);

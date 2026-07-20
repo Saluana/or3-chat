@@ -360,3 +360,40 @@ Mock Externalities: Isolate business logic from side effects (databases, APIs) t
 38. **Wizard deploy should initialize Convex scaffold before `convex dev`/env commands**
     - For Convex-selected stacks, include `bunx or3-provider-convex init` in deploy flow before `bunx convex dev --once`.
     - Without this step, first-run sandboxes fail preflight with missing `convex/` even when dependencies are installed correctly.
+
+39. **`bun start` is the single entry point for the app**
+    - `scripts/cli/start.ts` installs dependencies on first run, then asks one question (local vs cloud) or hands off directly.
+    - Choosing local writes a minimal `.env` (`SSR_AUTH_ENABLED=false`) so the prompt never reappears.
+    - Non-interactive environments start `bun run dev` directly.
+    - Registered in `package.json` as the `start` script.
+
+40. **`scripts/cli/dev.ts` wraps `nuxt dev` with port preflight**
+    - Detects port conflicts (stale Nuxt servers on both IPv4 and IPv6 loopback), explains the cause, and offers interactive port fallback.
+    - `package.json` `dev` script points here; `dev:ssr` and `dev:offline` transitively use it.
+
+41. **Key persistence must go through `persistUserApiKey()` in `app/core/auth/useUserApiKey.ts`**
+    - Writes to Dexie `kv`, updates global reactive state, dispatches `openrouter:connected`.
+    - Do NOT set `state.value.openrouterKey` directly without `kv.set()` — the key is lost on reload.
+    - `isValidOpenRouterKeyFormat()` validates `sk-or-` prefix.
+
+42. **First-run welcome card: `app/components/chat/ChatWelcomeCard.vue`**
+    - Shown in `ChatContainer` when message list is empty and no OpenRouter key exists.
+    - Offers OAuth PKCE connect, paste-input with validation, and KV-persisted dismiss.
+    - Also connected to `ChatInputDropper.vue` toast action (replaces lost-on-reload `prompt()`).
+    - Teleported modal (`z-50` backdrop) above mobile chat input; `role="dialog"` + focus trap + Escape dismiss.
+
+43. **Startup banner: `shared/dev/startup-banner.ts`** (wired from `nuxt.config.ts` listen hook)
+    - Prints mode (LOCAL / CLOUD, with provider stack), URL, admin URL, next-step commands.
+    - Skipped when `OR3_WIZARD_UI_ENABLED` is set or in production builds.
+    - Next-step commands come from `shared/cloud/wizard/next-steps.ts` (shared with CLI cheat sheet).
+
+44. **Wizard steps collapsed behind advanced toggles**
+    - Step 1 (Getting Started): `instanceDir`, `envFile`, `deploymentTarget`, `dryRun` hidden unless `targetAdvancedEnabled` is true.
+    - Features step: per-feature toggles hidden unless `featuresAdvancedEnabled` is true.
+    - AI/Limits/Security step: `limitsEnabled`, `forceHttps`, `trustProxy` behind `cloudAdvancedEnabled`.
+    - `WizardAnswers` types: `targetAdvancedEnabled: boolean`, `featuresAdvancedEnabled: boolean`.
+    - Default admin username is `'admin'` (in `createDefaultAnswers`). Password auto-generates on empty Enter.
+
+45. **`or3-cloud:doctor` for health checks**
+    - Extends `or3-cloud validate` with provider package checks, generated providers file sync, DB path writability, port availability, and Convex CLI checks.
+    - `validate` parses config only; `doctor` adds extended checks. Exit code 1 on failures.

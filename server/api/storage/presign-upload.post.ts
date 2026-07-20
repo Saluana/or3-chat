@@ -154,9 +154,10 @@ export default defineEventHandler(async (event) => {
         );
         const hashKey = normalizeHash(body.data.hash);
         const alreadyStored = usage.filesByHash.has(hashKey);
+        const committedAndReservedBytes = usage.usedBytes + usage.reservedBytes;
         const projectedBytes = alreadyStored
-            ? usage.usedBytes
-            : usage.usedBytes + body.data.size_bytes;
+            ? committedAndReservedBytes
+            : committedAndReservedBytes + body.data.size_bytes;
         if (projectedBytes > workspaceQuotaBytes) {
             throw createError({
                 statusCode: 413,
@@ -181,6 +182,7 @@ export default defineEventHandler(async (event) => {
         sizeBytes: body.data.size_bytes,
         expiresInMs: body.data.expires_in_ms,
         disposition: body.data.disposition,
+        workspaceQuotaBytes,
     });
 
     recordSyncRequest(userId, 'storage:upload');
@@ -193,5 +195,6 @@ export default defineEventHandler(async (event) => {
         ...(typeof result.method === 'string' ? { method: result.method } : {}),
         ...(result.headers ? { headers: result.headers } : {}),
         ...(typeof result.storageId === 'string' ? { storageId: result.storageId } : {}),
+        ...(typeof result.intentId === 'string' ? { intentId: result.intentId } : {}),
     };
 });

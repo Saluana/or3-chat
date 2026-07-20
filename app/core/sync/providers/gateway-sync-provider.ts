@@ -31,6 +31,8 @@ import type {
     SyncChange,
     PullRequest,
     PullResponse,
+    SnapshotRequest,
+    SnapshotResponse,
     PushBatch,
     PushResult,
     SyncSubscribeOptions,
@@ -38,6 +40,7 @@ import type {
 
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 const DEFAULT_PULL_LIMIT = 100;
+const DEFAULT_MAX_RETRY_AFTER_MS = 5 * 60 * 1000;
 
 /**
  * Purpose:
@@ -52,6 +55,7 @@ export interface GatewaySyncProviderConfig {
     baseUrl?: string;
     pollIntervalMs?: number;
     pullLimit?: number;
+    maxRetryAfterMs?: number;
 }
 
 class GatewaySyncRequestError extends Error {
@@ -172,11 +176,19 @@ export function createGatewaySyncProvider(
     const baseUrl = config.baseUrl ?? '';
     const pollIntervalMs = config.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     const pullLimit = config.pullLimit ?? DEFAULT_PULL_LIMIT;
+    const maxRetryAfterMs = Math.max(
+        pollIntervalMs,
+        config.maxRetryAfterMs ?? DEFAULT_MAX_RETRY_AFTER_MS
+    );
     const subscriptions = new Set<() => void>();
 
     return {
         id: config.id ?? 'gateway',
         mode: 'gateway',
+        capabilities: {
+            snapshotBootstrap: 'snapshot-v1',
+            historyRetention: 'snapshot-v1',
+        },
 
         async subscribe(
             scope: SyncScope,
@@ -231,6 +243,7 @@ export function createGatewaySyncProvider(
             const run = async () => {
                 if (!active || running) return;
                 running = true;
+                let retryAfterMs: number | undefined;
                 try {
                     await poll();
                 } catch (error) {
@@ -255,6 +268,14 @@ export function createGatewaySyncProvider(
                                 })
                             );
                         }
+                    } else if (
+                        error instanceof GatewaySyncRequestError &&
+                        error.retryAfterMs !== undefined
+                    ) {
+                        retryAfterMs = Math.min(
+                            Math.max(error.retryAfterMs, pollIntervalMs),
+                            maxRetryAfterMs
+                        );
                     }
                 } finally {
                     running = false;
@@ -262,7 +283,10 @@ export function createGatewaySyncProvider(
                 if (!active) return;
                 // Add random jitter (0-500ms) to prevent thundering herd
                 const jitter = Math.floor(Math.random() * 500);
-                timeout = setTimeout(run, pollIntervalMs + jitter);
+                timeout = setTimeout(
+                    run,
+                    retryAfterMs ?? pollIntervalMs + jitter
+                );
             };
 
             // Delay the first poll by the configured interval + jitter.
@@ -290,6 +314,10 @@ export function createGatewaySyncProvider(
 
         async pull(request: PullRequest): Promise<PullResponse> {
             return requestJson<PullResponse>('/api/sync/pull', request, baseUrl);
+        },
+
+        async snapshot(request: SnapshotRequest): Promise<SnapshotResponse> {
+            return requestJson<SnapshotResponse>('/api/sync/snapshot', request, baseUrl);
         },
 
         async push(batch: PushBatch): Promise<PushResult> {

@@ -1,0 +1,7 @@
+{
+  "event": "job.failed",
+  "data": {
+    "job_id": "job_123",
+    "error": "boom"
+  }
+}

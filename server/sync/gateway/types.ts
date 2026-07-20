@@ -23,7 +23,80 @@ import type {
     PullResponse,
     PushBatch,
     PushResult,
+    SnapshotRequest,
+    SnapshotResponse,
 } from '~~/shared/sync/types';
+
+export type CanonicalStorageQueryKind =
+    | 'live_metadata'
+    | 'reference_edges'
+    | 'active_reservations';
+
+export interface CanonicalStorageQueryRequest {
+    scope: { workspaceId: string };
+    kind: CanonicalStorageQueryKind;
+    /** Opaque, provider-issued keyset cursor. */
+    cursor?: string;
+    /** Maximum records returned. Providers must clamp this to a finite bound. */
+    limit?: number;
+    /** Optional exact normalized-or-prefixed content hash filter. */
+    hash?: string;
+    /** Epoch seconds used to exclude expired reservations deterministically. */
+    now?: number;
+}
+
+export interface CanonicalStorageMetadataRecord {
+    kind: 'metadata';
+    hash: string;
+    sizeBytes: number;
+    storageId?: string;
+    updatedAt: number;
+}
+
+export interface CanonicalStorageReferenceEdge {
+    kind: 'reference';
+    hash: string;
+    sourceTable: 'messages' | 'posts';
+    sourceId: string;
+}
+
+export interface CanonicalStorageReservationRecord {
+    kind: 'reservation';
+    reservationId: string;
+    hash: string;
+    sizeBytes: number;
+    expiresAt: number;
+}
+
+export type CanonicalStorageRecord =
+    | CanonicalStorageMetadataRecord
+    | CanonicalStorageReferenceEdge
+    | CanonicalStorageReservationRecord;
+
+export interface CanonicalStorageQueryResponse {
+    items: CanonicalStorageRecord[];
+    nextCursor?: string;
+    hasMore: boolean;
+}
+
+export interface UploadIntentReservationRequest {
+    intentId: string;
+    workspaceId: string;
+    hash: string;
+    mimeType: string;
+    sizeBytes: number;
+    expiresAt: number;
+    workspaceQuotaBytes?: number;
+}
+
+export interface UploadIntentConsumptionRequest {
+    intentId: string;
+    workspaceId: string;
+    hash: string;
+    mimeType: string;
+    sizeBytes: number;
+    storageId: string;
+}
 
 /**
  * Purpose:
@@ -43,6 +116,18 @@ import type {
 export interface SyncGatewayAdapter {
     id: string;
 
+    /** Atomically persist an expiring reservation and enforce workspace quota. */
+    reserveUploadIntent?(event: H3Event, input: UploadIntentReservationRequest): Promise<void>;
+    /** Consume a matching active intent exactly once. */
+    consumeUploadIntent?(event: H3Event, input: UploadIntentConsumptionRequest): Promise<void>;
+    /** Release an active reservation after a failed/cancelled upload. */
+    cancelUploadIntent?(event: H3Event, input: { workspaceId: string; intentId: string }): Promise<void>;
+    /** Explicit protocol contracts implemented by this adapter. Missing is fail-closed. */
+    capabilities?: {
+        snapshotBootstrap?: 'snapshot-v1';
+        historyRetention?: 'snapshot-v1';
+    };
+
     /**
      * Pull changes from server since cursor.
      *
@@ -57,6 +142,21 @@ export interface SyncGatewayAdapter {
      * @returns Pull response with changes and next cursor
      */
     pull(event: H3Event, input: PullRequest): Promise<PullResponse>;
+
+    /** One bounded page from a consistent materialized snapshot. */
+    snapshot?(
+        event: H3Event,
+        input: SnapshotRequest
+    ): Promise<SnapshotResponse>;
+
+    /**
+     * Read bounded pages from canonical materialized storage state. Retained
+     * operation/change logs must never be consulted by this method.
+     */
+    queryCanonicalStorage?(
+        event: H3Event,
+        input: CanonicalStorageQueryRequest
+    ): Promise<CanonicalStorageQueryResponse>;
 
     /**
      * Push batch of operations to server.

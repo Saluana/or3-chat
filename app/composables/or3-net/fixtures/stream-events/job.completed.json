@@ -1,0 +1,7 @@
+{
+  "event": "job.completed",
+  "data": {
+    "job_id": "job_123",
+    "output": "done"
+  }
+}

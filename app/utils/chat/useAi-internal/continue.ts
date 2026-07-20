@@ -27,31 +27,29 @@
 
 import type { Ref } from 'vue';
 import type { Message } from '~/db';
+import { compareMessageOrder } from '~/db/messages';
 import type { ChatMessage, ContentPart } from '~/utils/chat/types';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { getDb } from '~/db/client';
 import { newId } from '~/db/util';
 import { parseHashes } from '~/utils/files/attachments';
 import { createOrRefFile } from '~/db/files';
-import { deriveMessageContent, trimOrMessagesImages } from '~/utils/chat/messages';
+import {
+    deriveMessageContent,
+    shouldKeepAssistantMessage,
+    getChatModalities,
+} from '~/utils/chat/messages';
 import { composeSystemPrompt } from '~/utils/chat/prompt-utils';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
-import { openRouterStream } from '~/utils/chat/openrouterStream';
-import { dataUrlToBlob } from '~/utils/chat/files';
+import { openRouterStreamWithRetry } from '~/utils/chat/openrouterStream';
+import { dataUrlToBlob, fetchImageBlob } from '~/utils/chat/files';
 import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
 import { reportError, err } from '~/utils/errors';
 import type { StoredMessage, OpenRouterMessage } from './types';
 import { makeAssistantPersister, updateMessageRecord } from './persistence';
-
-/** Model input message for OpenRouter build */
-type ModelInputMessage = {
-    role: 'user' | 'assistant' | 'system';
-    content: string | ContentPart[];
-    id?: string;
-    file_hashes?: string | null;
-    name?: string;
-    tool_call_id?: string;
-};
+import { buildOpenRouterMessagesForSend } from './messageBuild';
+import { createStreamWriteCoalescer } from './streamWriteCoalescer';
+import { utf8Bytes } from '~~/shared/chat/tool-limits';
 
 /** Chat settings from useAiSettings */
 type ChatSettings = {
@@ -106,8 +104,6 @@ const CONTINUE_TAIL_CHARS = 1200;
 const CONTINUATION_PREFIX = '>>';
 
 /** Write interval for persistence during streaming */
-const WRITE_INTERVAL_MS = 500;
-
 /**
  * Internal helper. Extracts reasoning text from message data or legacy field.
  */
@@ -226,38 +222,6 @@ const needsBoundarySpace = (prev: string, next: string): boolean => {
 };
 
 /**
- * Check if a message should be kept (non-empty assistant messages).
- */
-const shouldKeepAssistantMessage = (m: ChatMessage): boolean => {
-    if (m.role !== 'assistant') return true;
-    const c = m.content;
-    if (typeof c === 'string') return c.trim().length > 0;
-    if (Array.isArray(c)) {
-        return c.some((p) => {
-            if (p.type === 'text') return p.text.trim().length > 0;
-            // image and file parts are always considered non-empty
-            return true;
-        });
-    }
-    return true;
-};
-
-/**
- * Check if message input has image content.
- */
-const hasImageContent = (messages: ModelInputMessage[]): boolean =>
-    messages.some((m) =>
-        Array.isArray(m.content)
-            ? m.content.some((p) => {
-                  const part = p as { type?: string; mediaType?: string };
-                  if (part.type === 'image' || part.type === 'image_url') return true;
-                  if (part.mediaType) return /image\//.test(part.mediaType);
-                  return false;
-              })
-            : false
-    );
-
-/**
  * `ai.chat.continue:action:*` (action)
  *
  * Purpose:
@@ -317,7 +281,7 @@ export async function continueMessageImpl(
             .between([ctx.threadIdRef.value, DexieMod.minKey], [ctx.threadIdRef.value, target.index])
             .filter((m: Message) => !m.deleted)
             .toArray();
-        all.sort((a: Message, b: Message) => (a.index || 0) - (b.index || 0));
+        all.sort(compareMessageOrder);
 
         const toContent = (m: StoredMessage): string => {
             if (m.id === target.id) return existingText;
@@ -410,30 +374,17 @@ export async function continueMessageImpl(
             Array.isArray(effectiveMessages) ? effectiveMessages : []
         ).filter(shouldKeepAssistantMessage);
 
-        const isModelMessage = (
-            m: ChatMessage
-        ): m is ChatMessage & { role: 'user' | 'assistant' | 'system' } => m.role !== 'tool';
-
-        const modelInputMessages: ModelInputMessage[] = sanitizedEffectiveMessages
-            .filter(isModelMessage)
-            .map(
-                (m): ModelInputMessage => ({
-                    role: m.role,
-                    content: m.content,
-                    id: m.id,
-                    file_hashes: m.file_hashes,
-                    name: m.name,
-                    tool_call_id: m.tool_call_id,
-                })
-            );
-
-        const { buildOpenRouterMessages } = await import('~/core/auth/openrouter-build');
-        let orMessages: OpenRouterMessage[] = await buildOpenRouterMessages(modelInputMessages, {
-            maxImageInputs: 16,
+        let orMessages = await buildOpenRouterMessagesForSend({
+            effectiveMessages: sanitizedEffectiveMessages,
+            assistantHashes: [],
+            // Continue reuses the target assistant's own file hashes in context;
+            // don't clear them. Context-hash injection is not wired for continue yet.
+            contextHashes: [],
+            fileHashes: [],
+            maxImageInputs: 5,
             imageInclusionPolicy: 'all',
-            debug: false,
+            maxInputTokens: 8000,
         });
-        trimOrMessagesImages(orMessages as Parameters<typeof trimOrMessagesImages>[0], 5);
 
         const filteredMessages = await ctx.hooks.applyFilters(
             'ai.chat.messages:filter:before_send',
@@ -461,9 +412,7 @@ export async function continueMessageImpl(
             modelOverride ||
             ctx.defaultModelId;
         // modalities controls OUTPUT format, not input capability
-        // Only request image output for actual image generation models
-        const isImageGenerationModel = /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId);
-        const modalities = isImageGenerationModel ? ['image', 'text'] : ['text'];
+        const modalities = getChatModalities(modelId);
 
         ctx.streamAcc.reset();
         const newStreamId = newId();
@@ -510,17 +459,28 @@ export async function continueMessageImpl(
         const assistantFileHashes = existingHashes.slice();
         const persistAssistant = makeAssistantPersister(target, assistantFileHashes);
 
-        const stream = openRouterStream({
+        // Durable generation identity must precede the first continuation byte,
+        // so reload can distinguish an active continuation from a stale row.
+        target.pending = true;
+        target.stream_id = newStreamId;
+        target.error = null;
+        await updateMessageRecord(messageId, {
+            pending: true,
+            stream_id: newStreamId,
+            error: null,
+            data: { error: null },
+        });
+
+        const stream = openRouterStreamWithRetry({
             apiKey: ctx.effectiveApiKey.value,
             model: modelId,
-            orMessages: orMessages as Parameters<typeof openRouterStream>[0]['orMessages'],
+            orMessages: orMessages as Parameters<typeof openRouterStreamWithRetry>[0]['orMessages'],
             modalities,
             threadId: ctx.threadIdRef.value,
             messageId: target.id,
             signal: ctx.abortController.value.signal,
         });
 
-        let chunkIndex = 0;
         let stripPrefixPending = true;
         let prefixBuffer = '';
         let boundarySpacingApplied = false;
@@ -544,7 +504,18 @@ export async function continueMessageImpl(
             return out;
         };
 
-        let lastPersistAt = 0;
+        const writeCoalescer = createStreamWriteCoalescer();
+
+        const flushProgress = async () => {
+            if (!writeCoalescer.hasDirty()) return;
+            await persistAssistant({
+                content: current.text,
+                reasoning: current.reasoning_text ?? null,
+                toolCalls: current.toolCalls ?? undefined,
+            });
+            if (assistantFileHashes.length) current.file_hashes = assistantFileHashes;
+            writeCoalescer.flushed();
+        };
 
         try {
             for await (const ev of stream) {
@@ -552,6 +523,7 @@ export async function continueMessageImpl(
                     if (current.reasoning_text === null) current.reasoning_text = ev.text;
                     else current.reasoning_text += ev.text;
                     ctx.streamAcc.append(ev.text, { kind: 'reasoning' });
+                    writeCoalescer.markDirty(utf8Bytes(ev.text));
                 } else if (ev.type === 'text') {
                     if (current.pending) current.pending = false;
                     const rawDelta = consumeContinuationDelta(ev.text);
@@ -560,7 +532,7 @@ export async function continueMessageImpl(
                     if (!delta) continue;
                     ctx.streamAcc.append(delta, { kind: 'text' });
                     current.text += delta;
-                    chunkIndex++;
+                    writeCoalescer.markDirty(utf8Bytes(delta));
                 } else if (ev.type === 'image') {
                     if (current.pending) current.pending = false;
                     // Store image first, then use hash placeholder (not Base64)
@@ -568,11 +540,7 @@ export async function continueMessageImpl(
                         let blob: Blob | null = null;
                         if (ev.url.startsWith('data:image/')) blob = dataUrlToBlob(ev.url);
                         else if (/^https?:/.test(ev.url)) {
-                            try {
-                                blob = await $fetch<Blob>(ev.url, { responseType: 'blob' });
-                            } catch {
-                                /* intentionally empty */
-                            }
+                            blob = await fetchImageBlob(ev.url);
                         }
                         if (blob) {
                             try {
@@ -583,11 +551,8 @@ export async function continueMessageImpl(
                                 if (!already) {
                                     current.text += (current.text ? '\n\n' : '') + placeholder;
                                 }
-                                const serialized = await persistAssistant({
-                                    content: current.text,
-                                    reasoning: current.reasoning_text ?? null,
-                                });
-                                current.file_hashes = serialized?.split(',') ?? [];
+                                current.file_hashes = assistantFileHashes;
+                                writeCoalescer.markDirty(placeholder.length);
                             } catch {
                                 /* intentionally empty */
                             }
@@ -597,26 +562,16 @@ export async function continueMessageImpl(
                             const already = current.text.includes(placeholder);
                             if (!already) {
                                 current.text += (current.text ? '\n\n' : '') + placeholder;
+                                writeCoalescer.markDirty(placeholder.length);
                             }
                         }
                     }
                 }
 
-                const now = Date.now();
-                const shouldPersist =
-                    now - lastPersistAt >= WRITE_INTERVAL_MS || chunkIndex % 50 === 0;
-                if (shouldPersist) {
-                    await persistAssistant({
-                        content: current.text,
-                        reasoning: current.reasoning_text ?? null,
-                        toolCalls: current.toolCalls ?? undefined,
-                    });
-                    if (assistantFileHashes.length) {
-                        current.file_hashes = assistantFileHashes;
-                    }
-                    lastPersistAt = now;
-                }
+                if (writeCoalescer.shouldFlush()) await flushProgress();
             }
+
+            await flushProgress();
 
             if (current.pending) current.pending = false;
             await persistAssistant({

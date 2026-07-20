@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ref } from 'vue';
+import type { ChatMessage } from '~/utils/chat/types';
 
 const reportErrorSpy = vi.fn();
 const openRouterStreamSpy = vi.fn();
@@ -50,6 +51,10 @@ vi.mock('~/db/client', () => ({
 
 vi.mock('~/db/messages', () => ({
     messagesByThread: (...args: unknown[]) => messagesByThreadSpy(...args),
+    compareMessageOrder: (a: { index?: number; order_key?: string; id: string }, b: { index?: number; order_key?: string; id: string }) =>
+        (a.index ?? 0) - (b.index ?? 0) ||
+        (a.order_key ?? '').localeCompare(b.order_key ?? '') ||
+        a.id.localeCompare(b.id),
 }));
 
 vi.mock('~/db/files-util', () => ({
@@ -65,7 +70,11 @@ vi.mock('~/utils/chat/messages', () => ({
         if (m.data && typeof m.data.content === 'string') return m.data.content;
         return '';
     },
-    trimOrMessagesImages: () => {},
+    shouldKeepAssistantMessage: () => true,
+    getChatModalities: (modelId: string) =>
+        /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId)
+            ? ['image', 'text']
+            : ['text'],
 }));
 
 vi.mock('~/utils/chat/uiMessages', () => ({
@@ -81,6 +90,9 @@ vi.mock('~/utils/chat/uiMessages', () => ({
 
 vi.mock('~/utils/chat/openrouterStream', () => ({
     openRouterStream: (...args: unknown[]) => openRouterStreamSpy(...args),
+    openRouterStreamWithRetry: async function* (...args: unknown[]) {
+        yield* openRouterStreamSpy(...args);
+    },
 }));
 
 vi.mock('~/utils/files/attachments', () => ({
@@ -106,6 +118,12 @@ vi.mock('~/utils/chat/prompt-utils', () => ({
 
 vi.mock('~/core/auth/openrouter-build', () => ({
     buildOpenRouterMessages: vi.fn(async () => [
+        { role: 'user', content: 'continue' },
+    ]),
+}));
+
+vi.mock('../messageBuild', () => ({
+    buildOpenRouterMessagesForSend: vi.fn(async () => [
         { role: 'user', content: 'continue' },
     ]),
 }));
@@ -329,7 +347,7 @@ describe('continue/retry regressions', () => {
         expect(tailAssistant.value?.pending).toBe(false);
     });
 
-    it('retry deletes inside sync-aware transaction and resends message', async () => {
+    it('retry preserves the source branch and resends with the prior turn boundary', async () => {
         const userMsg = {
             id: 'u1',
             role: 'user',
@@ -364,7 +382,7 @@ describe('continue/retry regressions', () => {
 
         messagesByThreadSpy.mockResolvedValue([userMsg, assistantMsg]);
         parseFileHashesSpy.mockReturnValue(['h1']);
-        const sendMessageSpy = vi.fn(async () => {});
+        const sendMessageSpy = vi.fn(async () => ({ status: 'accepted' as const, requestId: 'retry-1' }));
         const hooksSpy = { doAction: vi.fn(async () => {}) };
 
         await retryMessageImpl(
@@ -389,17 +407,14 @@ describe('continue/retry regressions', () => {
             'override-model'
         );
 
-        const txTables = dbState.transaction.mock.calls[0]?.[1] as string[];
-        expect(txTables).toEqual(
-            expect.arrayContaining(['messages', 'pending_ops', 'tombstones'])
-        );
-        expect(dbState.messagesDelete).toHaveBeenCalledWith('u1');
-        expect(dbState.messagesDelete).toHaveBeenCalledWith('a1');
+        expect(dbState.transaction).not.toHaveBeenCalled();
+        expect(dbState.messagesDelete).not.toHaveBeenCalled();
         expect(sendMessageSpy).toHaveBeenCalledWith('retry this', {
             model: 'override-model',
             file_hashes: ['h1'],
             files: [],
             online: false,
+            historyOverride: [],
         });
         expect(hooksSpy.doAction).toHaveBeenCalledWith(
             'ai.chat.retry:action:before',
@@ -438,7 +453,7 @@ describe('continue/retry regressions', () => {
         );
         messagesByThreadSpy.mockResolvedValue([userMsg]);
         parseFileHashesSpy.mockReturnValue([]);
-        const sendMessageSpy = vi.fn(async () => {});
+        const sendMessageSpy = vi.fn(async () => ({ status: 'accepted' as const, requestId: 'retry-2' }));
         const hooksSpy = { doAction: vi.fn(async () => {}) };
 
         await retryMessageImpl(
@@ -460,17 +475,107 @@ describe('continue/retry regressions', () => {
             'u2'
         );
 
-        const txTables = dbState.transaction.mock.calls[0]?.[1] as string[];
-        expect(txTables).toEqual(
-            expect.arrayContaining(['messages', 'pending_ops', 'tombstones'])
-        );
-        expect(dbState.messagesDelete).toHaveBeenCalledTimes(1);
-        expect(dbState.messagesDelete).toHaveBeenCalledWith('u2');
+        expect(dbState.transaction).not.toHaveBeenCalled();
+        expect(dbState.messagesDelete).not.toHaveBeenCalled();
         expect(sendMessageSpy).toHaveBeenCalledWith('retry solo', {
             model: 'default-model',
             file_hashes: [],
             files: [],
             online: false,
+            historyOverride: [],
         });
+    });
+
+    it('retry extracts text from ContentPart[] user messages', async () => {
+        const userMsg = {
+            id: 'u3',
+            role: 'user',
+            thread_id: 't1',
+            index: 5,
+            content: [{ type: 'text', text: 'image prompt' }],
+            data: null,
+            file_hashes: null,
+            deleted: false,
+        };
+
+        dbState.messagesGet.mockResolvedValue(userMsg);
+        const assistantChain = {
+            between: vi.fn().mockReturnThis(),
+            filter: vi.fn().mockReturnThis(),
+            first: vi.fn().mockResolvedValue(undefined),
+        };
+        dbState.where.mockReturnValue(assistantChain);
+        dbState.transaction.mockImplementation(
+            async (_mode: string, _tables: string[], cb: () => Promise<void>) => {
+                await cb();
+            }
+        );
+        messagesByThreadSpy.mockResolvedValue([userMsg]);
+        parseFileHashesSpy.mockReturnValue([]);
+        const sendMessageSpy = vi.fn(async () => ({ status: 'accepted' as const, requestId: 'retry-3' }));
+        const hooksSpy = { doAction: vi.fn(async () => {}) };
+
+        await retryMessageImpl(
+            {
+                loading: ref(false),
+                threadIdRef: ref('t1'),
+                tailAssistant: ref(null),
+                rawMessages: ref([
+                    { id: 'u3', role: 'user', content: [{ type: 'text', text: 'image prompt' }] },
+                ]) as any,
+                messages: ref([
+                    { id: 'u3', role: 'user', text: 'image prompt' },
+                ]) as any,
+                hooks: hooksSpy,
+                sendMessage: sendMessageSpy,
+                defaultModelId: 'default-model',
+                suppressNextTailFlush: vi.fn(),
+            },
+            'u3'
+        );
+
+        expect(sendMessageSpy).toHaveBeenCalledWith('image prompt', {
+            model: 'default-model',
+            file_hashes: [],
+            files: [],
+            online: false,
+            historyOverride: [],
+        });
+    });
+
+    it('keeps earlier tool rows and excludes the selected and future turns', async () => {
+        const rows = [
+            { id: 'u0', role: 'user', thread_id: 't1', index: 1, data: { content: 'first' }, deleted: false },
+            { id: 'a0', role: 'assistant', thread_id: 't1', index: 2, data: { content: 'calling', tool_calls: [{ id: 'c1' }] }, deleted: false },
+            { id: 'tool0', role: 'tool', thread_id: 't1', index: 3, data: { content: 'result', tool_call_id: 'c1', tool_name: 'lookup' }, deleted: false },
+            { id: 'u1', role: 'user', thread_id: 't1', index: 4, data: { content: 'retry me' }, deleted: false },
+            { id: 'a1', role: 'assistant', thread_id: 't1', index: 5, data: { content: 'old' }, deleted: false },
+            { id: 'u2', role: 'user', thread_id: 't1', index: 6, data: { content: 'future' }, deleted: false },
+        ];
+        dbState.messagesGet.mockResolvedValue(rows[4]);
+        messagesByThreadSpy.mockResolvedValue(rows);
+        parseFileHashesSpy.mockReturnValue([]);
+        const sendMessageSpy = vi.fn(async () => ({ status: 'rejected' as const, requestId: 'retry-4', reason: 'filtered' as const }));
+
+        const result = await retryMessageImpl(
+            {
+                loading: ref(false), threadIdRef: ref('t1'), tailAssistant: ref(null),
+                rawMessages: ref([]), messages: ref([]),
+                hooks: { doAction: vi.fn(async () => {}) },
+                sendMessage: sendMessageSpy, defaultModelId: 'model',
+                suppressNextTailFlush: vi.fn(),
+            },
+            'a1'
+        );
+
+        expect(result).toMatchObject({ status: 'rejected', reason: 'filtered' });
+        const sendCall = sendMessageSpy.mock.calls[0] as unknown as [
+            string,
+            { historyOverride?: ChatMessage[] },
+        ];
+        const history = sendCall[1].historyOverride;
+        expect(history?.map((message: ChatMessage) => message.id)).toEqual(['u0', 'a0', 'tool0']);
+        expect(history?.[2]).toMatchObject({ role: 'tool', tool_call_id: 'c1', name: 'lookup' });
+        expect(dbState.messagesDelete).not.toHaveBeenCalled();
     });
 });

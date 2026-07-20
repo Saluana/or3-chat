@@ -41,6 +41,8 @@ export interface PresignUploadRequest {
     expiresInMs?: number;
     /** Optional disposition hint (e.g. inline/attachment). Provider may honor. */
     disposition?: string;
+    /** Optional hard workspace quota. Providers with reservation support enforce this atomically. */
+    workspaceQuotaBytes?: number;
 }
 
 /**
@@ -60,6 +62,8 @@ export interface PresignUploadResponse {
     headers?: Record<string, string>;
     method?: string;
     storageId?: string;
+    /** Persisted, expiring, one-time upload authorization. */
+    intentId?: string;
 }
 
 /**

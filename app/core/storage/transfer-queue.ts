@@ -40,6 +40,7 @@ import type { FileMeta } from '~/db/schema';
 import type {
     FileTransfer,
     FileTransferDirection,
+    RecoverableFileTransferState,
 } from '~~/shared/storage/types';
 import {
     computeHashHex,
@@ -55,6 +56,8 @@ const DEFAULT_BACKOFF_MAX_MS = 60000;
 const DEFAULT_PRESIGN_EXPIRY_MS = 60 * 60 * 1000;
 const TRANSFER_RETENTION_SEC = 7 * 24 * 60 * 60;
 const TRANSFER_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+const DEFAULT_LEASE_DURATION_MS = 30_000;
+const DEFAULT_MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024;
 
 function resolveUploadMethod(presign: {
     url: string;
@@ -100,6 +103,8 @@ export interface FileTransferQueueConfig {
     maxAttempts?: number;
     backoffBaseMs?: number;
     backoffMaxMs?: number;
+    leaseDurationMs?: number;
+    maxDownloadBytes?: number;
     /**
      * Optional DB resolver for workspace-aware singleton usage.
      * Internal-facing; tests can omit this and provide a static DB instance.
@@ -110,7 +115,30 @@ export interface FileTransferQueueConfig {
 type TransferWaiter = {
     resolve: () => void;
     reject: (error: Error) => void;
+    timeout: ReturnType<typeof setTimeout>;
 };
+
+type TransferExecutionContext = {
+    workspaceId: string;
+    dbName: string;
+    db: Or3DB;
+};
+
+type RecoverableTransferError = Error & {
+    transferState: RecoverableFileTransferState;
+};
+
+function recoverableTransferError(
+    state: RecoverableFileTransferState,
+    message: string
+): RecoverableTransferError {
+    const error = err('ERR_STORAGE_FILE_NOT_FOUND', message, {
+        tags: { domain: 'storage', stage: 'download' },
+        retryable: false,
+    }) as unknown as RecoverableTransferError;
+    error.transferState = state;
+    return error;
+}
 
 /**
  * Purpose:
@@ -138,6 +166,10 @@ export class FileTransferQueue {
     private processQueueAt: number | null = null;
     private lastCleanupAt = 0;
     private dbResolver?: () => Or3DB;
+    private leaseDurationMs: number;
+    private maxDownloadBytes: number;
+    private readonly workerId = crypto.randomUUID();
+    private leaseRenewals = new Map<string, ReturnType<typeof setInterval>>();
 
     constructor(
         private db: Or3DB,
@@ -148,6 +180,8 @@ export class FileTransferQueue {
         this.maxAttempts = config.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
         this.backoffBaseMs = config.backoffBaseMs ?? DEFAULT_BACKOFF_BASE_MS;
         this.backoffMaxMs = config.backoffMaxMs ?? DEFAULT_BACKOFF_MAX_MS;
+        this.leaseDurationMs = config.leaseDurationMs ?? DEFAULT_LEASE_DURATION_MS;
+        this.maxDownloadBytes = config.maxDownloadBytes ?? DEFAULT_MAX_DOWNLOAD_BYTES;
         this.dbResolver = config.dbResolver;
     }
 
@@ -190,6 +224,20 @@ export class FileTransferQueue {
         }
     }
 
+    /** Idempotently release every resource owned by this queue instance. */
+    dispose(): void {
+        this.workspaceId = null;
+        this.cancelAllRunning();
+        if (this.processQueueTimeout) clearTimeout(this.processQueueTimeout);
+        this.processQueueTimeout = null;
+        this.processQueueAt = null;
+        for (const timer of this.leaseRenewals.values()) clearInterval(timer);
+        this.leaseRenewals.clear();
+        for (const [id] of this.waiters) {
+            this.rejectWaiters(id, 'Transfer queue disposed');
+        }
+    }
+
     async enqueue(
         hash: string,
         direction: FileTransferDirection
@@ -216,6 +264,7 @@ export class FileTransferQueue {
             bytes_done: 0,
             state: 'queued',
             attempts: 0,
+            retry_at: 0,
             created_at: now,
             updated_at: now,
         };
@@ -226,15 +275,18 @@ export class FileTransferQueue {
     }
 
     async waitForTransfer(id: string, timeoutMs = 60_000): Promise<void> {
-        const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error('Transfer timeout')), timeoutMs);
-        });
-
         // Register waiter first to avoid race condition where transfer
         // completes between state check and Promise creation
         const waiterPromise = new Promise<void>((resolve, reject) => {
             const waiters = this.waiters.get(id) ?? [];
-            waiters.push({ resolve, reject });
+            const waiter = {} as TransferWaiter;
+            waiter.resolve = resolve;
+            waiter.reject = reject;
+            waiter.timeout = setTimeout(() => {
+                this.removeWaiter(id, waiter);
+                reject(new Error('Transfer timeout'));
+            }, timeoutMs);
+            waiters.push(waiter);
             this.waiters.set(id, waiters);
         });
 
@@ -251,13 +303,35 @@ export class FileTransferQueue {
             this.resolveWaiters(id);
             return;
         }
-        if (transfer.state === 'failed') {
+        if (
+            transfer.state === 'failed' ||
+            transfer.state === 'pending_upload' ||
+            transfer.state === 'remote_missing'
+        ) {
             const errorMsg = transfer.last_error || 'Transfer failed';
             this.rejectWaiters(id, errorMsg);
             throw new Error(errorMsg);
         }
 
-        return Promise.race([waiterPromise, timeoutPromise]);
+        return waiterPromise;
+    }
+
+    /** Explicitly retry a transfer after upload/reconciliation state changes. */
+    async retryRecoverable(id: string): Promise<boolean> {
+        const transfer = await this.db.file_transfers.get(id);
+        if (
+            !transfer ||
+            (transfer.state !== 'pending_upload' && transfer.state !== 'remote_missing')
+        ) {
+            return false;
+        }
+        await this.updateTransfer(id, {
+            state: 'queued',
+            retry_at: 0,
+            last_error: undefined,
+        });
+        this.scheduleProcessQueue(0);
+        return true;
     }
 
     async ensureDownloadedBlob(hash: string): Promise<Blob | undefined> {
@@ -295,23 +369,23 @@ export class FileTransferQueue {
 
         try {
             await this.cleanupOldTransfers();
+            const context: TransferExecutionContext = {
+                workspaceId: this.workspaceId,
+                dbName: this.db.name,
+                db: this.db,
+            };
 
             const available = this.concurrency - this.running.size;
-            // Use compound index for efficient workspace-scoped queries
-            const candidates = await this.db.file_transfers
-                .where('[state+workspace_id+created_at]')
-                .between(
-                    ['queued', this.workspaceId, Dexie.minKey],
-                    ['queued', this.workspaceId, Dexie.maxKey]
-                )
-                .limit(available)
-                .toArray();
+            const candidates = await this.claimQueuedTransfers(context, available);
 
-            if (!candidates.length) return;
+            if (!candidates.length) {
+                await this.scheduleNextPersistedRetry(context);
+                return;
+            }
 
             for (const transfer of candidates) {
                 this.running.add(transfer.id);
-                void this.processTransfer(transfer).finally(() => {
+                void this.processTransfer(transfer, context).finally(() => {
                     this.running.delete(transfer.id);
                     this.scheduleProcessQueue(0);
                 });
@@ -325,29 +399,43 @@ export class FileTransferQueue {
         }
     }
 
-    private async processTransfer(transfer: FileTransfer): Promise<void> {
+    private async processTransfer(
+        transfer: FileTransfer,
+        context: TransferExecutionContext = {
+            workspaceId: transfer.workspace_id,
+            dbName: this.db.name,
+            db: this.db,
+        }
+    ): Promise<void> {
         const controller = new AbortController();
         this.abortControllers.set(transfer.id, controller);
 
         const markedRunning = await this.safeUpdateTransfer(transfer.id, {
             state: 'running',
-        });
+            lease_owner: this.workerId,
+            lease_expires_at: Date.now() + this.leaseDurationMs,
+            last_attempt_at: Date.now(),
+        }, context.db);
         if (!markedRunning) {
             return;
         }
+        this.startLeaseRenewal(transfer.id, context.db);
 
         try {
             if (transfer.direction === 'upload') {
-                await this.doUpload(transfer, controller.signal);
+                await this.doUpload(transfer, controller.signal, context);
             } else {
-                await this.doDownload(transfer, controller.signal);
+                await this.doDownload(transfer, controller.signal, context);
             }
 
-            const latest = await this.db.file_transfers.get(transfer.id);
+            const latest = await context.db.file_transfers.get(transfer.id);
             const markedDone = await this.safeUpdateTransfer(transfer.id, {
                 state: 'done',
                 bytes_done: latest?.bytes_total ?? transfer.bytes_total,
-            });
+                retry_at: 0,
+                lease_owner: undefined,
+                lease_expires_at: undefined,
+            }, context.db);
             if (!markedDone) {
                 return;
             }
@@ -363,8 +451,22 @@ export class FileTransferQueue {
                 await this.safeUpdateTransfer(transfer.id, {
                     state: 'failed',
                     last_error: 'Transfer cancelled',
-                });
+                }, context.db);
                 this.rejectWaiters(transfer.id, 'Transfer cancelled');
+                return;
+            }
+
+            const recoverableState =
+                error && typeof error === 'object' && 'transferState' in error
+                    ? (error as { transferState?: RecoverableFileTransferState }).transferState
+                    : undefined;
+            if (recoverableState === 'pending_upload' || recoverableState === 'remote_missing') {
+                const message = error instanceof Error ? error.message : 'Transfer requires reconciliation';
+                await this.safeUpdateTransfer(transfer.id, {
+                    state: recoverableState,
+                    last_error: message,
+                }, context.db);
+                this.rejectWaiters(transfer.id, message);
                 return;
             }
 
@@ -382,12 +484,15 @@ export class FileTransferQueue {
                 (error as { retryable?: boolean }).retryable === false;
 
             const failed = isNonRetryable || attempts >= this.maxAttempts;
-            
+            const delay = failed ? 0 : this.getBackoffDelay(attempts);
             const updated = await this.safeUpdateTransfer(transfer.id, {
                 state: failed ? 'failed' : 'queued',
                 attempts,
                 last_error: message,
-            });
+                retry_at: failed ? 0 : Date.now() + delay,
+                lease_owner: undefined,
+                lease_expires_at: undefined,
+            }, context.db);
             if (!updated) {
                 return;
             }
@@ -401,11 +506,110 @@ export class FileTransferQueue {
                 return;
             }
 
-            const delay = this.getBackoffDelay(attempts);
             this.scheduleProcessQueue(delay);
         } finally {
+            this.stopLeaseRenewal(transfer.id);
             this.abortControllers.delete(transfer.id);
         }
+    }
+
+    private async claimQueuedTransfers(
+        context: TransferExecutionContext,
+        limit: number
+    ): Promise<FileTransfer[]> {
+        if (limit <= 0) return [];
+        const now = Date.now();
+        return context.db.transaction('rw', context.db.file_transfers, async () => {
+            const expired = await context.db.file_transfers
+                .where('[state+workspace_id+lease_expires_at]')
+                .between(
+                    ['running', context.workspaceId, Dexie.minKey],
+                    ['running', context.workspaceId, now]
+                )
+                .limit(limit)
+                .toArray();
+            const queued = await context.db.file_transfers
+                .where('[state+workspace_id+retry_at]')
+                .between(
+                    ['queued', context.workspaceId, Dexie.minKey],
+                    ['queued', context.workspaceId, now]
+                )
+                .limit(limit)
+                .toArray();
+            const candidates = [...expired, ...queued].slice(0, limit);
+            const claimed: FileTransfer[] = [];
+            for (const candidate of candidates) {
+                const current = await context.db.file_transfers.get(candidate.id);
+                if (!current) continue;
+                const queuedAndDue =
+                    current.state === 'queued' && (current.retry_at ?? 0) <= now;
+                const abandoned =
+                    current.state === 'running' && (current.lease_expires_at ?? 0) <= now;
+                if (!queuedAndDue && !abandoned) continue;
+                const next: FileTransfer = {
+                    ...current,
+                    state: 'running',
+                    lease_owner: this.workerId,
+                    lease_expires_at: now + this.leaseDurationMs,
+                    last_attempt_at: now,
+                    retry_at: 0,
+                    updated_at: nowSec(),
+                };
+                await context.db.file_transfers.put(next);
+                claimed.push(next);
+            }
+            return claimed;
+        });
+    }
+
+    private async scheduleNextPersistedRetry(context: TransferExecutionContext): Promise<void> {
+        const now = Date.now();
+        const future = await context.db.file_transfers
+            .where('[state+workspace_id+retry_at]')
+            .between(
+                ['queued', context.workspaceId, now + 1],
+                ['queued', context.workspaceId, Dexie.maxKey]
+            )
+            .limit(1)
+            .toArray();
+        const retryAt = future[0]?.retry_at;
+        if (typeof retryAt === 'number') {
+            this.scheduleProcessQueue(Math.max(0, retryAt - now));
+        }
+    }
+
+    private startLeaseRenewal(id: string, db: Or3DB): void {
+        this.stopLeaseRenewal(id);
+        const intervalMs = Math.max(250, Math.floor(this.leaseDurationMs / 3));
+        const timer = setInterval(() => {
+            void this.renewLease(id, db);
+        }, intervalMs);
+        this.leaseRenewals.set(id, timer);
+    }
+
+    private stopLeaseRenewal(id: string): void {
+        const timer = this.leaseRenewals.get(id);
+        if (timer) clearInterval(timer);
+        this.leaseRenewals.delete(id);
+    }
+
+    private async renewLease(id: string, db: Or3DB): Promise<boolean> {
+        return db.transaction('rw', db.file_transfers, async () => {
+            const current = await db.file_transfers.get(id);
+            if (
+                !current ||
+                current.state !== 'running' ||
+                current.lease_owner !== this.workerId
+            ) {
+                this.stopLeaseRenewal(id);
+                return false;
+            }
+            await db.file_transfers.update(id, {
+                lease_expires_at: Date.now() + this.leaseDurationMs,
+                updated_at: nowSec(),
+            });
+            return true;
+        });
     }
 
     private scheduleProcessQueue(delayMs: number): void {
@@ -433,9 +637,17 @@ export class FileTransferQueue {
         }, delayMs);
     }
 
-    private async doUpload(transfer: FileTransfer, signal: AbortSignal): Promise<void> {
-        const meta = await this.db.file_meta.get(transfer.hash);
-        const blobRow = await this.db.file_blobs.get(transfer.hash);
+    private async doUpload(
+        transfer: FileTransfer,
+        signal: AbortSignal,
+        context: TransferExecutionContext = {
+            workspaceId: transfer.workspace_id,
+            dbName: this.db.name,
+            db: this.db,
+        }
+    ): Promise<void> {
+        const meta = await context.db.file_meta.get(transfer.hash);
+        const blobRow = await context.db.file_blobs.get(transfer.hash);
         if (!meta || !blobRow?.blob) {
             throw err(
                 'ERR_STORAGE_FILE_NOT_FOUND',
@@ -476,7 +688,7 @@ export class FileTransferQueue {
         await this.updateTransfer(transfer.id, {
             bytes_total: meta.size_bytes,
             bytes_done: 0,
-        });
+        }, context.db);
 
         const presign = await this.provider.getPresignedUploadUrl({
             workspaceId: transfer.workspace_id,
@@ -547,12 +759,13 @@ export class FileTransferQueue {
                 workspaceId: transfer.workspace_id,
                 hash: meta.hash,
                 storageId,
+                intentId: presign.intentId,
                 meta: toCommitMeta(meta),
                 storageProviderId: this.provider.id,
             });
         }
 
-        await this.persistUploadMetadata(meta, storageId);
+        await this.persistUploadMetadata(meta, storageId, context.db);
 
         await hooks.doAction('storage.files.upload:action:after', {
             hash: meta.hash,
@@ -561,17 +774,20 @@ export class FileTransferQueue {
         });
     }
 
-    private async doDownload(transfer: FileTransfer, signal: AbortSignal): Promise<void> {
-        const meta = await this.db.file_meta.get(transfer.hash);
+    private async doDownload(
+        transfer: FileTransfer,
+        signal: AbortSignal,
+        context: TransferExecutionContext = {
+            workspaceId: transfer.workspace_id,
+            dbName: this.db.name,
+            db: this.db,
+        }
+    ): Promise<void> {
+        const meta = await context.db.file_meta.get(transfer.hash);
         if (!meta?.storage_id) {
-            await this.markFileDeletedMissingRemote(transfer.hash);
-            throw err(
-                'ERR_STORAGE_FILE_NOT_FOUND',
-                'Remote file not available',
-                {
-                    tags: { domain: 'storage', stage: 'download' },
-                    retryable: false,
-                }
+            throw recoverableTransferError(
+                'pending_upload',
+                'Remote upload has not been committed yet'
             );
         }
 
@@ -605,14 +821,9 @@ export class FileTransferQueue {
 
         if (!response.ok) {
             if (response.status === 404 || response.status === 410) {
-                await this.markFileDeletedMissingRemote(meta.hash);
-                throw err(
-                    'ERR_STORAGE_FILE_NOT_FOUND',
-                    'Remote file not available',
-                    {
-                        tags: { domain: 'storage', stage: 'download' },
-                        retryable: false,
-                    }
+                throw recoverableTransferError(
+                    'remote_missing',
+                    'Remote object is temporarily missing and requires reconciliation'
                 );
             }
             throw err(
@@ -622,14 +833,27 @@ export class FileTransferQueue {
             );
         }
 
+        const responseMime = response.headers.get('content-type');
+        if (!responseMime || normalizeTransferMime(responseMime) !== normalizeTransferMime(meta.mime_type)) {
+            await response.body?.cancel();
+            throw err(
+                'ERR_STORAGE_DOWNLOAD_FAILED',
+                'Downloaded object content-type mismatch',
+                { tags: { domain: 'storage', stage: 'download' }, retryable: false }
+            );
+        }
+
         const { blob, bytesTotal } = await this.readBlobWithProgress(
             response,
-            transfer.id
+            transfer.id,
+            context.db,
+            this.maxDownloadBytes,
+            responseMime
         );
         await this.updateTransfer(transfer.id, {
             bytes_total: bytesTotal,
             bytes_done: bytesTotal,
-        });
+        }, context.db);
 
         const parsed = parseHash(meta.hash);
         if (!parsed) {
@@ -649,7 +873,7 @@ export class FileTransferQueue {
             );
         }
 
-        await this.db.file_blobs.put({ hash: meta.hash, blob });
+        await context.db.file_blobs.put({ hash: meta.hash, blob });
 
         await hooks.doAction('storage.files.download:action:after', {
             hash: meta.hash,
@@ -660,11 +884,27 @@ export class FileTransferQueue {
 
     private async readBlobWithProgress(
         response: Response,
-        transferId: string
+        transferId: string,
+        db: Or3DB = this.db,
+        maxBytes = this.maxDownloadBytes,
+        mimeType = response.headers.get('content-type') ?? ''
     ): Promise<{ blob: Blob; bytesTotal: number }> {
         const contentLength = Number(response.headers.get('content-length') || 0);
+        if (contentLength > maxBytes) {
+            await response.body?.cancel();
+            throw err('ERR_STORAGE_DOWNLOAD_FAILED', 'Download exceeds configured byte limit', {
+                tags: { domain: 'storage', stage: 'download' },
+                retryable: false,
+            });
+        }
         if (!response.body) {
             const blob = await response.blob();
+            if (blob.size > maxBytes) {
+                throw err('ERR_STORAGE_DOWNLOAD_FAILED', 'Download exceeds configured byte limit', {
+                    tags: { domain: 'storage', stage: 'download' },
+                    retryable: false,
+                });
+            }
             return { blob, bytesTotal: contentLength || blob.size };
         }
 
@@ -683,19 +923,28 @@ export class FileTransferQueue {
                     await this.updateTransfer(transferId, {
                         bytes_done: received,
                         bytes_total: contentLength || received,
-                    });
+                    }, db);
                     controller.close();
                     return;
                 }
 
                 received += value.byteLength;
+                if (received > maxBytes) {
+                    await reader.cancel('download byte limit exceeded');
+                    controller.error(err(
+                        'ERR_STORAGE_DOWNLOAD_FAILED',
+                        'Download exceeds configured byte limit',
+                        { tags: { domain: 'storage', stage: 'download' }, retryable: false }
+                    ));
+                    return;
+                }
 
                 const now = Date.now();
                 if (now - lastUpdate > UPDATE_INTERVAL_MS) {
                     await this.updateTransfer(transferId, {
                         bytes_done: received,
                         bytes_total: contentLength || received,
-                    });
+                    }, db);
                     lastUpdate = now;
                 }
 
@@ -703,21 +952,24 @@ export class FileTransferQueue {
             },
         });
 
-        const blob = await new Response(stream).blob();
+        const blob = await new Response(stream, {
+            headers: mimeType ? { 'content-type': mimeType } : undefined,
+        }).blob();
         return { blob, bytesTotal: contentLength || blob.size };
     }
 
     private async persistUploadMetadata(
         meta: FileMeta,
-        storageId: string
+        storageId: string,
+        db: Or3DB = this.db
     ): Promise<void> {
-        await this.db.transaction(
+        await db.transaction(
             'rw',
-            getWriteTxTableNames(this.db, 'file_meta'),
+            getWriteTxTableNames(db, 'file_meta'),
             async () => {
-            const existing = await this.db.file_meta.get(meta.hash);
+            const existing = await db.file_meta.get(meta.hash);
             if (!existing) return;
-            await this.db.file_meta.put({
+            await db.file_meta.put({
                 ...existing,
                 storage_id: storageId,
                 storage_provider_id: this.provider.id,
@@ -727,31 +979,12 @@ export class FileTransferQueue {
         });
     }
 
-        private async markFileDeletedMissingRemote(hash: string): Promise<void> {
-            await this.db.transaction(
-                'rw',
-                getWriteTxTableNames(this.db, 'file_meta', { include: ['file_blobs'] }),
-                async () => {
-                    const existing = await this.db.file_meta.get(hash);
-                    if (!existing) return;
-                    const now = nowSec();
-                    await this.db.file_meta.put({
-                        ...existing,
-                        deleted: true,
-                        deleted_at: now,
-                        updated_at: now,
-                        clock: nextClock(existing.clock),
-                    });
-                    await this.db.file_blobs.delete(hash);
-                }
-            );
-        }
-
     private async updateTransfer(
         id: string,
-        patch: Partial<FileTransfer>
+        patch: Partial<FileTransfer>,
+        db: Or3DB = this.db
     ): Promise<void> {
-        await this.db.file_transfers.update(id, {
+        await db.file_transfers.update(id, {
             ...patch,
             updated_at: nowSec(),
         });
@@ -759,10 +992,11 @@ export class FileTransferQueue {
 
     private async safeUpdateTransfer(
         id: string,
-        patch: Partial<FileTransfer>
+        patch: Partial<FileTransfer>,
+        db: Or3DB = this.db
     ): Promise<boolean> {
         try {
-            await this.updateTransfer(id, patch);
+            await this.updateTransfer(id, patch, db);
             return true;
         } catch (error) {
             if (!this.isDatabaseClosedError(error)) {
@@ -812,16 +1046,34 @@ export class FileTransferQueue {
     private resolveWaiters(id: string) {
         const waiters = this.waiters.get(id);
         if (!waiters) return;
-        waiters.forEach((waiter) => waiter.resolve());
+        waiters.forEach((waiter) => {
+            clearTimeout(waiter.timeout);
+            waiter.resolve();
+        });
         this.waiters.delete(id);
     }
 
     private rejectWaiters(id: string, message: string) {
         const waiters = this.waiters.get(id);
         if (!waiters) return;
-        waiters.forEach((waiter) => waiter.reject(new Error(message)));
+        waiters.forEach((waiter) => {
+            clearTimeout(waiter.timeout);
+            waiter.reject(new Error(message));
+        });
         this.waiters.delete(id);
     }
+
+    private removeWaiter(id: string, waiter: TransferWaiter): void {
+        const waiters = this.waiters.get(id);
+        if (!waiters) return;
+        const remaining = waiters.filter((candidate) => candidate !== waiter);
+        if (remaining.length) this.waiters.set(id, remaining);
+        else this.waiters.delete(id);
+    }
+}
+
+function normalizeTransferMime(value: string): string {
+    return value.split(';', 1)[0]?.trim().toLowerCase() ?? '';
 }
 
 function toCommitMeta(meta: FileMeta) {
@@ -865,8 +1117,6 @@ export function getStorageTransferQueue(): FileTransferQueue | null {
  * Dispose and reset the singleton transfer queue. Intended for tests and HMR.
  */
 export function _resetStorageTransferQueue(): void {
-    if (queueInstance) {
-        queueInstance.cancelAllRunning();
-    }
+    queueInstance?.dispose();
     queueInstance = null;
 }

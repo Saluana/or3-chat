@@ -87,23 +87,47 @@ You start with static. When you need more, the built-in install wizard sets up c
 
 ## 🚀 Quick Start
 
+### Choose your path
+
+| You want to… | Run this |
+|---|---|
+| Just chat locally **right now** | `bun start` |
+| Set up accounts, sync & file storage | `bun run or3-cloud:init --fast` |
+| Same, but step-by-step in your browser | `bun run or3-cloud:init` |
+| Same, but step-by-step in the terminal | `bun run or3-cloud:init --cli` |
+
 ### Prerequisites
 
 - [Bun](https://bun.sh) (v1.1+)
 - [Git](https://git-scm.com)
 
-### Download & Run
+### Local mode — one command
 
 ```bash
 git clone https://github.com/Saluana/or3-chat.git
 cd or3-chat
-bun install
-bun run dev
+bun start
 ```
 
-Open **http://localhost:3000**, connect your OpenRouter account, and start chatting. That's it.
+`bun start` is the single entry point — it installs dependencies, asks one question (local vs cloud) on a fresh clone, saves that choice, and starts the dev server. Open **http://localhost:3000**, connect your OpenRouter account, and start chatting.
 
 > **Tip:** OR3 uses Bun for everything — package management, scripts, builds, and runtime. No need for Node.js or npm.
+
+### Cloud mode — accounts, sync & storage
+
+The fastest path to a self-hosted cloud instance with **zero external services** — no accounts to create, no sign-ups:
+
+```bash
+bun run or3-cloud:init --fast
+```
+
+This zero-question command creates a complete self-hosted setup (Basic Auth + SQLite + Filesystem) and starts your server. Credentials are printed once — save them.
+
+For a guided setup with provider choices, open the browser wizard:
+
+```bash
+bun run or3-cloud:init
+```
 
 ---
 
@@ -175,6 +199,15 @@ Cloud mode adds a server layer on top of OR3. It enables user accounts, database
 bun run or3-cloud:init
 ```
 
+By default, the wizard opens in your browser with a step-by-step UI.
+Use `--cli` to force the terminal-based flow.
+
+**Fast path** — zero questions, instantly ready:
+
+```bash
+bun run or3-cloud:init --fast
+```
+
 The wizard will ask you to pick providers for each layer:
 
 | Layer | What It Does | Available Providers |
@@ -193,10 +226,10 @@ The wizard will ask you to pick providers for each layer:
 
 ### After the Wizard
 
-Start the dev server in SSR mode:
+Start the dev server:
 
 ```bash
-bun run dev:ssr
+bun run dev
 ```
 
 Or build for production:
@@ -204,6 +237,16 @@ Or build for production:
 ```bash
 bun run build
 ```
+
+### Health Check
+
+To verify everything is working correctly:
+
+```bash
+bun run or3-cloud:doctor
+```
+
+Checks that provider packages are installed, database paths are writable, the port is free, and the config is valid. Runs in seconds with ✅/⚠️/❌ output per check.
 
 ### Example: Minimal Self-Hosted Setup
 

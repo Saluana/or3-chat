@@ -695,7 +695,7 @@
                     "name": "provider-convex.md",
                     "path": "/cloud/provider-convex",
                     "category": "Guide",
-                    "summary": "Dedicated setup guide for `or3-provider-convex`. Covers install, Convex backend init/codegen, required config, and the Clerk to Convex bridge flow."
+                    "summary": "Dedicated setup guide for `or3-provider-convex`. Covers install, backend init/codegen, required config, authorization guardrails, and consistent materialized snapshot pages."
                 },
                 {
                     "name": "admin-access-bridge.md",
@@ -749,7 +749,7 @@
                     "name": "sync-layer.md",
                     "path": "/cloud/sync-layer",
                     "category": "Architecture",
-                    "summary": "Detailed overview of the offline-first DB Sync Layer. Covers the local-first architecture, write/read paths, LWW conflict resolution with Hybrid Logical Clocks, and core components (HookBridge, OutboxManager, SubscriptionManager)."
+                    "summary": "Detailed overview of the offline-first DB Sync Layer. Covers materialized snapshot bootstrap, retention safety, write/read paths, LWW conflict resolution, and core sync components."
                 },
                 {
                     "name": "auth-system.md",
@@ -762,6 +762,12 @@
                     "path": "/cloud/identity-access-concepts",
                     "category": "Architecture",
                     "summary": "Conceptual guide to OR3 access control vocabulary and flow. Explains provider vs internal user IDs, workspaces, active workspace selection, workspace roles, entitlements, `can()` permissions, and how plugin policy decisions are layered."
+                },
+                {
+                    "name": "capability-matrix.md",
+                    "path": "/cloud/capability-matrix",
+                    "category": "Reference",
+                    "summary": "Normative authorization matrix for public Convex, workspace, sync, storage, AI, background-job, workflow, and tool operations, including subject source, resource scope, capability, and allowed roles."
                 },
                 {
                     "name": "plugin-access-gating.md",

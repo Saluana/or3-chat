@@ -53,6 +53,8 @@ export interface ToolCallInfo {
     args?: string;
     result?: string;
     error?: string;
+    fingerprint?: string;
+    completedAt?: number;
 }
 
 /**
@@ -254,25 +256,4 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         isWorkflow,
         workflowState,
     };
-}
-
-// Legacy raw storage (non reactive). We expose accessor for plugins.
-const _rawMessages: RawMessageLike[] = [];
-/**
- * `recordRawMessage`
- *
- * Purpose:
- * Stores raw messages for plugin access and diagnostics.
- */
-export function recordRawMessage(m: RawMessageLike): void {
-    _rawMessages.push(m);
-}
-/**
- * `getRawMessages`
- *
- * Purpose:
- * Returns a snapshot of stored raw messages.
- */
-export function getRawMessages(): readonly RawMessageLike[] {
-    return _rawMessages.slice();
 }

@@ -77,6 +77,15 @@ describe('POST /api/sync/gc-tombstones', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
     });
 
+    it.each([1, 3599, 3600.5, 31536001])(
+        'returns 400 for unsafe retentionSeconds %s',
+        async (retentionSeconds) => {
+            const handler = (await import('../gc-tombstones.post')).default as (event: H3Event) => Promise<unknown>;
+            readBodyMock.mockResolvedValue({ scope: { workspaceId: 'ws-1' }, retentionSeconds });
+            await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+        }
+    );
+
     it('enforces permission and returns 403 when denied', async () => {
         const handler = (await import('../gc-tombstones.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue(makeValidBody());
@@ -94,26 +103,28 @@ describe('POST /api/sync/gc-tombstones', () => {
         );
     });
 
-    it('returns 500 when adapter is missing', async () => {
-        const handler = (await import('../gc-tombstones.post')).default as (event: H3Event) => Promise<unknown>;
-        readBodyMock.mockResolvedValue(makeValidBody());
-        getActiveSyncGatewayAdapterMock.mockReturnValue(null);
-
-        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 500 });
-    });
-
-    it('returns 501 when adapter does not support gcTombstones', async () => {
-        const handler = (await import('../gc-tombstones.post')).default as (event: H3Event) => Promise<unknown>;
-        readBodyMock.mockResolvedValue(makeValidBody());
-        getActiveSyncGatewayAdapterMock.mockReturnValue({ id: 'adapter-1' });
-
-        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 501 });
-    });
-
-    it('passes through successful adapter result', async () => {
+    it('fails closed when the adapter omits the retention capability', async () => {
         const handler = (await import('../gc-tombstones.post')).default as (event: H3Event) => Promise<unknown>;
         const body = makeValidBody();
         readBodyMock.mockResolvedValue(body);
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 503,
+            message: expect.stringContaining('snapshot-v1'),
+        });
+        expect(getActiveSyncGatewayAdapterMock).toHaveBeenCalled();
+        expect(gcTombstonesMock).not.toHaveBeenCalled();
+    });
+
+    it('dispatches only for an adapter declaring snapshot-v1 retention', async () => {
+        const handler = (await import('../gc-tombstones.post')).default as (event: H3Event) => Promise<unknown>;
+        const body = makeValidBody();
+        readBodyMock.mockResolvedValue(body);
+        getActiveSyncGatewayAdapterMock.mockReturnValue({
+            id: 'verified-adapter',
+            capabilities: { snapshotBootstrap: 'snapshot-v1', historyRetention: 'snapshot-v1' },
+            gcTombstones: gcTombstonesMock,
+        });
 
         await expect(handler(makeEvent())).resolves.toEqual({ deletedCount: 3 });
         expect(gcTombstonesMock).toHaveBeenCalledWith(expect.anything(), body);

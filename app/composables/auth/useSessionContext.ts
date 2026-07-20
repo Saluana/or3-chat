@@ -7,6 +7,7 @@ import { $fetch } from 'ofetch';
 import { useFetch, useRuntimeConfig, useState } from '#imports';
 import type { ComputedRef, Ref } from 'vue';
 import type { SessionContext } from '~/core/hooks/hook-types';
+import { recoverClientSession } from '~/composables/auth/useClientSessionRecovery';
 
 export type SessionPayload = {
     session: SessionContext | null;
@@ -19,7 +20,9 @@ type SessionContextState = {
     refresh: () => Promise<SessionPayload | void>;
 };
 
-let inFlight: Promise<SessionPayload> | null = null;
+// Every client refresh owns a monotonic generation. A later auth/workspace
+// refresh supersedes older network work even when responses arrive out of order.
+let latestRefreshGeneration = 0;
 
 /** True when SSR auth is disabled — blocks all network requests. */
 function isAuthDisabled(): boolean {
@@ -56,32 +59,46 @@ export function useSessionContext(): SessionContextState {
             return state.value;
         }
 
-        // Check-and-assign atomically to prevent race conditions
-        if (inFlight) return inFlight;
-        
-        // Create the promise immediately before any async gap
-        const fetchPromise = $fetch<SessionPayload>('/api/auth/session', {
-            // Always bypass caches; workspace switching depends on fresh session reads.
-            cache: 'no-store',
-        });
-        inFlight = fetchPromise;
-        
+        const refreshGeneration = ++latestRefreshGeneration;
         pending.value = true;
         error.value = null;
-        
-        return fetchPromise
-            .then((res) => {
+
+        const fetchSession = () =>
+            $fetch<SessionPayload>('/api/auth/session', {
+                // Always bypass caches; workspace switching depends on fresh session reads.
+                cache: 'no-store',
+            });
+
+        return (async () => {
+            try {
+                let res = await fetchSession();
+
+                // Access may be expired while refresh is still valid. Let the
+                // active provider recover (silent refresh / Clerk session touch)
+                // once, then retry. No-op when no recovery is registered.
+                if (!res.session?.authenticated) {
+                    const recovered = await recoverClientSession();
+                    if (recovered) {
+                        res = await fetchSession();
+                    }
+                }
+
+                if (refreshGeneration !== latestRefreshGeneration) {
+                    return undefined;
+                }
                 state.value = res;
                 return res;
-            })
-            .catch((err) => {
-                error.value = err instanceof Error ? err : new Error(String(err));
+            } catch (err) {
+                if (refreshGeneration === latestRefreshGeneration) {
+                    error.value = err instanceof Error ? err : new Error(String(err));
+                }
                 throw err;
-            })
-            .finally(() => {
-                pending.value = false;
-                inFlight = null;
-            });
+            } finally {
+                if (refreshGeneration === latestRefreshGeneration) {
+                    pending.value = false;
+                }
+            }
+        })();
     };
 
     if (import.meta.server) {
@@ -132,4 +149,9 @@ export function getCachedSessionContext(): SessionContext | null {
     } catch {
         return null;
     }
+}
+
+/** Refresh the existing client session generation during bounded auth recovery. */
+export async function refreshCachedSessionContext(): Promise<void> {
+    await useSessionContext().refresh();
 }

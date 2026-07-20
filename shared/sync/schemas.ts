@@ -75,7 +75,34 @@ export const PendingOpSchema = z.object({
     createdAt: z.number(),
     attempts: z.number().int().nonnegative(),
     nextAttemptAt: z.number().int().nonnegative().optional(),
-    status: z.enum(['pending', 'syncing', 'failed']),
+    status: z.enum([
+        'pending',
+        'in_flight',
+        'retry_wait',
+        'failed_retryable',
+        'failed_permanent',
+        'applied',
+        'discarded',
+        // Legacy persisted states, migrated lazily by the outbox manager.
+        'syncing',
+        'failed',
+    ]),
+    lastError: z.string().optional(),
+    lastErrorCode: z.enum([
+        'VALIDATION_ERROR',
+        'UNAUTHORIZED',
+        'CONFLICT',
+        'NOT_FOUND',
+        'RATE_LIMITED',
+        'OVERSIZED',
+        'NETWORK_ERROR',
+        'SERVER_ERROR',
+        'UNKNOWN',
+    ]).optional(),
+    failureKind: z.enum(['retry_exhausted', 'permanent']).optional(),
+    failedAt: z.number().int().nonnegative().optional(),
+    discardedAt: z.number().int().nonnegative().optional(),
+    discardReason: z.string().optional(),
 });
 
 export const SyncChangeSchema = z.object({
@@ -210,6 +237,44 @@ export const PullResponseSchema = z.object({
     hasMore: z.boolean(),
 });
 
+export const SnapshotRequestSchema = z.object({
+    scope: SyncScopeSchema,
+    pageSize: z.number().int().positive().max(1000),
+    pageToken: z.string().min(1).max(4096).optional(),
+    tables: z.array(z.string().min(1)).optional(),
+});
+
+export const SnapshotRevisionSchema = z.object({
+    clock: z.number().int().nonnegative(),
+    hlc: z.string().min(1),
+    opId: z.string().min(1),
+});
+
+export const SnapshotItemSchema = z.discriminatedUnion('kind', [
+    z.object({
+        kind: z.literal('row'),
+        tableName: z.string().min(1),
+        pk: z.string().min(1),
+        payload: z.unknown(),
+        revision: SnapshotRevisionSchema,
+    }),
+    z.object({
+        kind: z.literal('tombstone'),
+        tableName: z.string().min(1),
+        pk: z.string().min(1),
+        revision: SnapshotRevisionSchema,
+        serverDeletedAt: z.number().int().nonnegative(),
+    }),
+]);
+
+export const SnapshotResponseSchema = z.object({
+    workspaceId: z.string().min(1),
+    snapshotId: z.string().min(1),
+    highWatermark: z.number().int().nonnegative(),
+    items: z.array(SnapshotItemSchema).max(1000),
+    nextPageToken: z.string().min(1).max(4096).nullable(),
+});
+
 export const PushBatchSchema = z.object({
     scope: SyncScopeSchema,
     ops: z.array(PendingOpSchema),
@@ -255,6 +320,10 @@ export const TombstoneSchema = z.object({
     pk: z.string(),
     deletedAt: z.number(),
     clock: z.number().int().nonnegative(),
+    hlc: z.string().min(1).optional(),
+    opId: z.string().min(1).optional(),
+    serverVersion: z.number().int().nonnegative().optional(),
+    serverDeletedAt: z.number().nonnegative().optional(),
     syncedAt: z.number().optional(),
 });
 
@@ -287,6 +356,8 @@ export type PendingOpZ = z.infer<typeof PendingOpSchema>;
 export type SyncChangeZ = z.infer<typeof SyncChangeSchema>;
 export type PullRequestZ = z.infer<typeof PullRequestSchema>;
 export type PullResponseZ = z.infer<typeof PullResponseSchema>;
+export type SnapshotRequestZ = z.infer<typeof SnapshotRequestSchema>;
+export type SnapshotResponseZ = z.infer<typeof SnapshotResponseSchema>;
 export type PushBatchZ = z.infer<typeof PushBatchSchema>;
 export type PushResultZ = z.infer<typeof PushResultSchema>;
 export type TombstoneZ = z.infer<typeof TombstoneSchema>;

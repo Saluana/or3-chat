@@ -27,7 +27,18 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
     }
 
-    requireCan(session, 'workspace.read', {
+    const targetMembership = (await store.listUserWorkspaces(session.user.id)).find(
+        (workspace) => workspace.id === workspaceId
+    );
+    const targetSession = {
+        ...session,
+        workspace: targetMembership
+            ? { id: targetMembership.id, name: targetMembership.name }
+            : undefined,
+        role: targetMembership?.role,
+    };
+
+    requireCan(targetSession, 'workspace.read', {
         kind: 'workspace',
         id: workspaceId,
     });

@@ -253,7 +253,7 @@ describe('sanitizePayloadForSync', () => {
         expect(asJson.includes('[max-depth-stripped]')).toBe(true);
     });
 
-    it('compacts oversized workflow message payloads below sync budget', () => {
+    it('rejects oversized workflow messages without replacing canonical content', () => {
         const hugeOutput = 'x'.repeat(90000);
         const payload = {
             id: 'msg-workflow',
@@ -292,14 +292,10 @@ describe('sanitizePayloadForSync', () => {
             },
         };
 
-        const result = sanitizePayloadForSync('messages', payload, 'put') as Record<string, unknown>;
-        const sizeBytes = new TextEncoder().encode(JSON.stringify(result)).length;
-        const compactedData = result.data as Record<string, unknown>;
-
-        expect(sizeBytes).toBeLessThanOrEqual(60 * 1024);
-        expect(compactedData.type).toBe('workflow-execution');
-        expect(compactedData.workflowId).toBe('wf-1');
-        expect(typeof compactedData.finalOutput).toBe('string');
-        expect(compactedData.sessionMessages).toBeUndefined();
+        expect(() => sanitizePayloadForSync('messages', payload, 'put')).toThrow(
+            /Payload too large for messages/
+        );
+        expect(payload.data.finalOutput).toBe(hugeOutput);
+        expect(payload.data.sessionMessages[0]!.content).toBe(hugeOutput);
     });
 });

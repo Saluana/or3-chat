@@ -365,7 +365,10 @@ export async function ensureFileBlob(
 export async function softDeleteFile(hash: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'file_meta', { includeTombstones: true }),
+        async () => {
         const meta = await db.file_meta.get(hash);
         if (!meta) return;
         const payload = createFileDeletePayload(meta, hash);
@@ -379,7 +382,8 @@ export async function softDeleteFile(hash: string): Promise<void> {
             clock: nextClock(meta.clock),
         });
         await hooks.doAction('db.files.delete:action:soft:after', payload);
-    });
+        }
+    );
 }
 
 /**
@@ -400,7 +404,10 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
     if (!unique.length) return;
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'file_meta', { includeTombstones: true }),
+        async () => {
         const metas = await db.file_meta.bulkGet(unique);
         const updates: FileMeta[] = [];
         const payloads: DbDeletePayload<FileEntity>[] = [];
@@ -430,7 +437,8 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
         for (const payload of payloads) {
             await hooks.doAction('db.files.delete:action:soft:after', payload);
         }
-    });
+        }
+    );
 }
 
 /**

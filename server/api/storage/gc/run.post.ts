@@ -2,10 +2,10 @@
  * @module server/api/storage/gc/run.post
  *
  * Purpose:
- * Manually triggers Garbage Collection for orphaned storage blobs in a workspace.
+ * Requests adapter-specific garbage collection for a workspace.
  *
  * Responsibilities:
- * - Identifies files not referenced by any attachment/record.
+ * - Dispatches to the active storage adapter, which may report GC disabled.
  * - Enforces retention policies (default 30 days).
  * - Rate limits execution to prevent abuse (runtime-configurable cooldown per workspace).
  */
@@ -65,7 +65,7 @@ function recordGcRun(workspaceId: string, now: number, cooldownMs: number): void
  * Behavior:
  * - Requires `admin.access` on the workspace.
  * - Dispatches to registered StorageGatewayAdapter.
- * - Returns count of deleted objects.
+ * - Returns the adapter result, including any disabled/safe-scan status.
  *
  * Constraints:
  * - Cooldown: runtime-configurable per workspace (`storage.gcCooldownMs`).

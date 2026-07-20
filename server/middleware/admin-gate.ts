@@ -211,17 +211,6 @@ export default defineEventHandler(async (event) => {
         return sendRedirect(event, `${basePath}/plugins`, 307);
     }
 
-    // Super-admin-only admin panel/API policy.
-    if (adminContext.principal.kind !== 'super_admin') {
-        if (event.path.startsWith('/api/')) {
-            throw createError({
-                statusCode: 403,
-                statusMessage: 'Forbidden: Super admin access required',
-            });
-        }
-        return sendRedirect(event, `${basePath}/login`, 307);
-    }
-
     // Store admin context in event for downstream use
     event.context.admin = adminContext;
 });

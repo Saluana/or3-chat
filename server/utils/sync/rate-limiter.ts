@@ -42,6 +42,8 @@ export const SYNC_RATE_LIMITS: Record<string, RateLimitConfig> = {
     'sync:push': { windowMs: 60_000, maxRequests: 200 },
     // Pull: 120 requests per minute
     'sync:pull': { windowMs: 60_000, maxRequests: 120 },
+    // Snapshot pages: same read budget as incremental pulls
+    'sync:snapshot': { windowMs: 60_000, maxRequests: 120 },
     // Cursor updates: 60 requests per minute
     'sync:cursor': { windowMs: 60_000, maxRequests: 60 },
     // GC operations: 10 requests per minute (low limit for admin-only operations)
@@ -66,6 +68,8 @@ export const STORAGE_RATE_LIMITS: Record<string, RateLimitConfig> = {
 export const AUTH_RATE_LIMITS: Record<string, RateLimitConfig> = {
     // Auth session: 60 per minute per IP
     'auth:session': { windowMs: 60_000, maxRequests: 60 },
+    // OR3 Net exchange: lower-volume auth bridge, 30 per minute per IP
+    'auth:or3-net-exchange': { windowMs: 60_000, maxRequests: 30 },
 };
 
 /**

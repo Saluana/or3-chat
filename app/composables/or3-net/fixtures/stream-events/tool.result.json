@@ -1,0 +1,11 @@
+{
+  "event": "tool.result",
+  "data": {
+    "name": "read_file",
+    "tool_call_id": "tool_1",
+    "result": {
+      "ok": true
+    },
+    "content": "demo"
+  }
+}

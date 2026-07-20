@@ -7,7 +7,7 @@ Setup and operating guide for the default-stack object storage backend.
 - Gateway-mode blob storage using local filesystem paths.
 - Presign/commit/download integration for OR3 storage APIs.
 - Hash-addressed blob persistence (`sha256:<hex>` compatible).
-- Storage GC support for orphaned blobs with retention windows.
+- Canonical reference-driven, retention-bounded blob GC with a fail-closed fallback.
 
 ## Install
 
@@ -44,14 +44,19 @@ OR3_STORAGE_WORKSPACE_QUOTA_BYTES=optional-quota-bytes
 - Token secret must be set at startup; missing secret should fail fast.
 - Upload endpoints must enforce server-side max file size.
 - Uploaded bytes should pass SHA-256 integrity verification before commit.
-- Presigned tokens should remain short-lived and user-bound.
+- Presigned tokens are user-bound and configuration rejects lifetimes over one hour.
 - Use `PUT` for FS upload URLs (`/api/storage/fs/upload?token=...`).
 
 ## Operational Notes
 
 - Place `OR3_STORAGE_FS_ROOT` on persistent storage.
 - Use separate volumes for DB and blob storage when possible.
-- Run periodic GC and monitor deleted blob counts.
+- With a sync provider that implements canonical storage queries, GC keeps blobs
+  found in live materialized `file_meta` or message/post reference edges and
+  rechecks immediately before deletion. Scans and provider pages are bounded.
+- Without that capability, GC returns `deleted_count: 0`, `status: "disabled"`,
+  and `reason: "canonical_reference_state_required"`. It never falls back to
+  retained sync history.
 - Keep `Cache-Control: no-store` on presign/upload/download responses.
 
 ## Related
@@ -60,4 +65,3 @@ OR3_STORAGE_WORKSPACE_QUOTA_BYTES=optional-quota-bytes
 - [storage-layer](./storage-layer)
 - [provider-basic-auth](./provider-basic-auth)
 - [provider-sqlite](./provider-sqlite)
-

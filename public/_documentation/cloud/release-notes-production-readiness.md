@@ -2,6 +2,11 @@
 
 Release notes for the production-readiness tranche covering sync casing normalization, background execution hardening, and documentation completion.
 
+> **Current release verdict: BLOCKED.** The combined cloud/chat audit remediation
+> checklist at `planning/or3-cloud-chat-audit-remediation/tasks.md` is the release
+> gate. Do not publish a release while any unchecked task linked to a Blocker or
+> High finding remains.
+
 ## Highlights
 
 - Sync ingestion now accepts both camelCase and snake_case payload inputs, normalizing to snake_case.
@@ -57,4 +62,3 @@ Release notes for the production-readiness tranche covering sync casing normaliz
 - [migration-default-stack](./migration-default-stack)
 - [deployment-operations](./deployment-operations)
 - [provider-compatibility-matrix](./provider-compatibility-matrix)
-

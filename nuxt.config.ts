@@ -6,10 +6,28 @@ import * as ts from 'typescript';
 import { createLogger } from 'vite';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
+import { printStartupBanner as printOr3StartupBanner } from './shared/dev/startup-banner';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
 const isWizardUiProcess = process.env.OR3_WIZARD_UI_ENABLED === 'true';
+const isStaticGenerateBuild = process.argv.includes('generate');
+const isStaticCloudDisabledBuild = isStaticGenerateBuild && !isSsrAuthEnabled;
+const shouldLoadCloudProviderModules =
+    !isWizardUiProcess && !isStaticCloudDisabledBuild;
+const or3NetHostUrl =
+    process.env.OR3_NET_HOST_URL?.trim() ||
+    process.env.NUXT_PUBLIC_OR3_NET_HOST_URL?.trim() ||
+    '';
+const or3NetExchangeSecret = process.env.OR3_NET_EXCHANGE_SECRET?.trim() || '';
+const or3NetExchangeIssuer = process.env.OR3_NET_EXCHANGE_ISSUER?.trim() || 'or3-chat';
+const or3NetExchangeAudience = process.env.OR3_NET_EXCHANGE_AUDIENCE?.trim() || 'or3-net';
+const or3NetExchangeTtlMs = process.env.OR3_NET_EXCHANGE_TTL_MS
+    ? Number(process.env.OR3_NET_EXCHANGE_TTL_MS)
+    : 60_000;
+const or3NetExchangeTimeoutMs = process.env.OR3_NET_EXCHANGE_TIMEOUT_MS
+    ? Number(process.env.OR3_NET_EXCHANGE_TIMEOUT_MS)
+    : 10_000;
 
 const convexUrl = or3CloudConfig.sync.convex?.url || '';
 const convexAdminKey = or3CloudConfig.sync.convex?.adminKey || '';
@@ -39,7 +57,7 @@ function isProviderAvailable(providerId: string): boolean {
 }
 
 function loadGeneratedProviderModules(): string[] {
-    if (isWizardUiProcess) {
+    if (!shouldLoadCloudProviderModules) {
         return [];
     }
 
@@ -83,7 +101,7 @@ function loadGeneratedProviderModules(): string[] {
 const or3ProviderModules = loadGeneratedProviderModules();
 
 const providerIdsFromConfig = new Set<string>();
-if (!isWizardUiProcess) {
+if (shouldLoadCloudProviderModules) {
     if (or3CloudConfig.auth.enabled) providerIdsFromConfig.add(or3CloudConfig.auth.provider);
     if (or3CloudConfig.sync.enabled) providerIdsFromConfig.add(or3CloudConfig.sync.provider);
     if (or3CloudConfig.storage.enabled) providerIdsFromConfig.add(or3CloudConfig.storage.provider);
@@ -123,6 +141,9 @@ for (const moduleId of configuredPluginModules) {
         console.warn(`[or3-plugin] Ignoring invalid plugin module id "${moduleId}".`);
         continue;
     }
+    if (isStaticCloudDisabledBuild && pkgName.startsWith('or3-provider-')) {
+        continue;
+    }
     if (!isPackageInstalled(pkgName)) {
         console.warn(
             `[or3-plugin] Configured plugin module "${moduleId}" expects package "${pkgName}", but it is not installed.`
@@ -156,9 +177,12 @@ const activeProviderModules = Array.from(
     ])
 );
 
-const authProviderAvailable = isProviderAvailable(or3CloudConfig.auth.provider);
-const syncProviderAvailable = isProviderAvailable(or3CloudConfig.sync.provider);
-const storageProviderAvailable = isProviderAvailable(or3CloudConfig.storage.provider);
+const authProviderAvailable =
+    isStaticCloudDisabledBuild || isProviderAvailable(or3CloudConfig.auth.provider);
+const syncProviderAvailable =
+    isStaticCloudDisabledBuild || isProviderAvailable(or3CloudConfig.sync.provider);
+const storageProviderAvailable =
+    isStaticCloudDisabledBuild || isProviderAvailable(or3CloudConfig.storage.provider);
 
 const effectiveSsrAuthEnabled =
     isSsrAuthEnabled && authProviderAvailable && syncProviderAvailable;
@@ -174,6 +198,10 @@ const effectiveStorageEnabled =
     effectiveSsrAuthEnabled &&
     or3CloudConfig.storage.enabled &&
     storageProviderAvailable;
+const or3NetEnabled =
+    effectiveSsrAuthEnabled &&
+    or3NetHostUrl.length > 0 &&
+    or3NetExchangeSecret.length > 0;
 
 if (isSsrAuthEnabled && !authProviderAvailable) {
     console.warn(
@@ -190,11 +218,15 @@ if (or3CloudConfig.storage.enabled && !storageProviderAvailable) {
         `[or3-provider] Storage provider "${or3CloudConfig.storage.provider}" is not available. Cloud storage is disabled.`
     );
 }
+if (or3NetHostUrl && !or3NetExchangeSecret) {
+    console.warn(
+        '[or3-net] OR3_NET_HOST_URL is set but OR3_NET_EXCHANGE_SECRET is missing. OR3 Network chat integration is disabled.'
+    );
+}
 
 // Branding defaults (sourced from or3Config)
 const appName = or3Config.site.name;
 const appShortName = appName.length > 12 ? appName.slice(0, 12) : appName;
-const isStaticGenerateBuild = process.argv.includes('generate');
 const pwaNavigateFallback = isStaticGenerateBuild ? '/index.html' : null;
 const pwaOpenRouterCallbackFallback = isStaticGenerateBuild
     ? '/openrouter-callback/index.html'
@@ -399,6 +431,18 @@ export default defineNuxtConfig({
             enabled: process.env.OR3_WIZARD_UI_ENABLED === 'true',
             token: process.env.OR3_WIZARD_UI_TOKEN ?? '',
         },
+        or3Net: {
+            hostUrl: or3NetHostUrl,
+            exchangeSecret: or3NetExchangeSecret,
+            exchangeIssuer: or3NetExchangeIssuer,
+            exchangeAudience: or3NetExchangeAudience,
+            exchangeTtlMs: Number.isFinite(or3NetExchangeTtlMs)
+                ? Math.max(1_000, Math.floor(or3NetExchangeTtlMs))
+                : 60_000,
+            exchangeTimeoutMs: Number.isFinite(or3NetExchangeTimeoutMs)
+                ? Math.max(1_000, Math.floor(or3NetExchangeTimeoutMs))
+                : 10_000,
+        },
         // Background streaming configuration (SSR mode only)
         backgroundJobs: {
             enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
@@ -460,6 +504,10 @@ export default defineNuxtConfig({
             },
             wizardUi: {
                 enabled: process.env.OR3_WIZARD_UI_ENABLED === 'true',
+            },
+            or3Net: {
+                enabled: or3NetEnabled,
+                hostUrl: or3NetHostUrl,
             },
             // Feature toggles from OR3 config - exposed for client-side gating
             features: {
@@ -694,6 +742,10 @@ export default defineNuxtConfig({
             skipWaiting: true, // activate new SW immediately
             clientsClaim: true, // control pages right away
             cleanupOutdatedCaches: true,
+            // The app bundle currently exceeds Workbox's 2 MiB default during
+            // production preview/E2E builds. Raise the cap so local preview and
+            // Playwright can boot instead of hard-failing the build.
+            maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
             // Ensure the prerendered callback HTML can be matched regardless of auth params
             ignoreURLParametersMatching: [/^code$/, /^state$/],
             // Never serve the generic SPA fallback for these routes.
@@ -916,4 +968,29 @@ export default defineNuxtConfig({
         // The new super admin feature uses JWT-based authentication and is gated
         // at runtime via isAdminEnabled() check in server/middleware/admin-gate.ts.
     ].filter(Boolean) as string[],
+    hooks: {
+        listen(_server, listener) {
+            if (isWizardUiProcess) return;
+            const url =
+                listener && typeof (listener as { url?: unknown }).url === 'string'
+                    ? (listener as { url: string }).url
+                    : undefined;
+            // Defer so this prints after Nuxt's own URL output.
+            setTimeout(() => {
+                printOr3StartupBanner({
+                    appUrl: url,
+                    ssrAuthEnabled: effectiveSsrAuthEnabled,
+                    degradedCloud:
+                        isSsrAuthEnabled &&
+                        !effectiveSsrAuthEnabled &&
+                        !isStaticGenerateBuild,
+                    authProvider: or3CloudConfig.auth.provider,
+                    syncEnabled: effectiveSyncEnabled,
+                    syncProvider: or3CloudConfig.sync.provider,
+                    storageEnabled: effectiveStorageEnabled,
+                    storageProvider: or3CloudConfig.storage.provider,
+                });
+            }, 1200);
+        },
+    },
 });

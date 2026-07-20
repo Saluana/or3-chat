@@ -88,6 +88,29 @@
                 </div>
             </template>
         </UPopover>
+
+        <!-- Mode badge: shows Local / Cloud so users always know what they're running -->
+        <UTooltip
+            :delay-duration="0"
+            :content="{
+                side: 'right',
+            }"
+            :text="modeTooltip"
+        >
+            <component
+                :is="modeLinkComponent"
+                v-bind="modeLinkProps"
+                :aria-label="modeLabel"
+                class="mt-auto mb-1 block rounded-[var(--md-border-radius)] border px-1.5 py-0.5 text-[9px] uppercase tracking-wider whitespace-nowrap"
+                :class="
+                    isSsrAuthEnabled
+                        ? 'border-[var(--md-primary)]/40 text-[var(--md-primary)]'
+                        : 'border-[var(--md-border-color)] text-[var(--md-secondary)]'
+                "
+            >
+                {{ modeLabel }}
+            </component>
+        </UTooltip>
     </div>
     <component
         :is="modelCatalogModalComponent"
@@ -127,6 +150,18 @@ const modelCatalogModalComponent = computed(
 // Check if SSR auth is enabled via runtime config
 const config = useRuntimeConfig();
 const isSsrAuthEnabled = computed(() => config.public?.ssrAuthEnabled === true);
+
+// Mode badge: shows the active runtime mode so users aren't guessing.
+const modeLabel = computed(() => (isSsrAuthEnabled.value ? 'Cloud' : 'Local'));
+const modeTooltip = computed(() =>
+    isSsrAuthEnabled.value
+        ? 'Cloud mode — user accounts, sync & file storage enabled. Click to open admin dashboard.'
+        : 'Local mode — your data stays in this browser. Run `bun run or3-cloud:init` to enable accounts & sync.'
+);
+const modeLinkComponent = computed(() => (isSsrAuthEnabled.value ? 'NuxtLink' : 'div'));
+const modeLinkProps = computed(() =>
+    isSsrAuthEnabled.value ? { to: '/admin', external: false } : {}
+);
 
 defineOptions({ inheritAttrs: false });
 const showSettingsModal = ref(false);

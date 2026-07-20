@@ -255,8 +255,9 @@ const importing = ref(false);
 
 const sessionContext = useSessionContext();
 const {
-    refreshSessionUntilWorkspace,
+    changeActiveWorkspace,
     refreshSessionAfterWorkspaceRemoval,
+    publishCurrentActiveWorkspaceRevision,
     notifyOtherTabsAuthSessionChanged,
 } = useWorkspaceManagerSession(sessionContext);
 
@@ -381,10 +382,18 @@ async function createWorkspace() {
         });
         const workspaceId = result.id;
         await saveWorkspacePolicy(workspaceId, createLogoutPolicy.value);
-        await workspaceApi.setActive({ id: workspaceId });
-
-        // Ensure the next reload resolves into the newly active workspace.
-        await refreshSessionUntilWorkspace(workspaceId);
+        const workspaceChange = await changeActiveWorkspace(
+            workspaceId,
+            (id) => workspaceApi.setActive({ id })
+        );
+        if (!workspaceChange.committed) {
+            toast.add({
+                title: 'Workspace switch superseded',
+                description: 'A newer workspace selection from another tab was kept.',
+            });
+            reloadNuxtApp({ ttl: 500 });
+            return;
+        }
 
         // Update cache before reload so UI shows correctly immediately after
         cachedActiveId.value = workspaceId;
@@ -420,10 +429,18 @@ async function selectWorkspace(workspace: WorkspaceSummary) {
     if (workspace.isActive) return;
     selecting.value = true;
     try {
-        await workspaceApi.setActive({ id: workspace.id });
-
-        // Ensure the next reload resolves into the selected workspace.
-        await refreshSessionUntilWorkspace(workspace.id);
+        const workspaceChange = await changeActiveWorkspace(
+            workspace.id,
+            (id) => workspaceApi.setActive({ id })
+        );
+        if (!workspaceChange.committed) {
+            toast.add({
+                title: 'Workspace switch superseded',
+                description: 'A newer workspace selection from another tab was kept.',
+            });
+            reloadNuxtApp({ ttl: 500 });
+            return;
+        }
 
         // Update cache before reload
         cachedActiveId.value = workspace.id;
@@ -498,6 +515,7 @@ async function deleteWorkspace(workspace: WorkspaceSummary) {
         await refreshNuxtData('auth-session');
         await fetchWorkspaces();
         await saveCache(workspaces.value);
+        publishCurrentActiveWorkspaceRevision();
         notifyOtherTabsAuthSessionChanged();
 
         if (wasActive) {

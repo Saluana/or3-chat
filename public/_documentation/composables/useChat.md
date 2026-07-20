@@ -134,12 +134,32 @@ await chat.retryMessage(failedMessageId, 'anthropic/claude-3-opus');
 chat.abort();
 ```
 
-### 6. Clear everything
+### 6. Dispose and clear explicitly
 
 ```ts
-// Remove all messages and reset state
-chat.clear();
+// Release hooks/subscriptions when replacing a chat instance. Durable and
+// in-memory conversation state is left intact.
+chat.dispose();
+
+// Clear only in-memory projections. Persisted Dexie rows are preserved.
+chat.clearConversation({ persistence: 'preserve' });
 ```
+
+`clear()` remains a compatibility helper that disposes the instance and clears
+in-memory state only when no generation is being detached. It never deletes
+persisted conversation rows.
+
+## Request state and send results
+
+Admission is synchronous and single-flight. Every accepted request owns its
+abort controller, accumulator, stream ID, tool replay ledger, and persister.
+`requestState` transitions through `admitted`, `persisted`, `streaming`, and one
+`terminal` result. `sendMessage()` returns a typed `SendResult`; callers should
+clear drafts only after the result contains a durable `userMessageId`.
+
+Terminal results distinguish `complete`, `aborted`, `detached`, `rejected`, and
+`failed`, including busy, credential, filter, client-limit, empty-context,
+tool-iteration-limit, and stream failures.
 
 ---
 
@@ -158,7 +178,10 @@ When you call `useChat()`, you get an object with:
 | `sendMessage`        | `function`                   | Send a new user message                                         |
 | `retryMessage`       | `function`                   | Retry a failed message                                          |
 | `abort`              | `function`                   | Cancel the current AI response                                  |
-| `clear`              | `function`                   | Clear all messages                                              |
+| `clear`              | `function`                   | Compatibility dispose/reset; never deletes persisted rows       |
+| `dispose`            | `function`                   | Release this instance's hooks/subscriptions without clearing     |
+| `clearConversation`  | `function`                   | Clear in-memory projections with explicit persistence semantics  |
+| `requestState`       | `Ref<ChatRequestState>`      | Current admitted/persisted/streaming/terminal request state       |
 | `resetStream`        | `function`                   | Reset stream state (usually automatic)                          |
 | `flushTailAssistant` | `function`                   | Move `tailAssistant` into `messages` (usually automatic)        |
 
@@ -331,10 +354,26 @@ If you don't provide a `threadId`, the first `sendMessage` creates one automatic
 
 When you retry a message:
 
-1. Finds the user message and its assistant response
-2. Deletes both from database and memory
-3. Re-sends with original text and attachments
-4. Creates new message IDs
+1. Finds the selected user turn and its assistant response.
+2. Builds provider context only through the preceding turn boundary, retaining
+   complete assistant/tool-call/tool-result groups.
+3. Re-sends the original text and attachments as a new branch.
+4. Leaves the original and later turns untouched if admission is rejected or
+   the replacement fails.
+
+### Canonical transcript
+
+Persisted user, assistant, and tool-result rows carry versioned transcript
+metadata. Assistant rows identify their parent user turn and generation;
+tool-result rows identify both the parent assistant and call ID. UI and provider
+history are projected from those records, so a reload restores matching
+assistant tool calls and results without leaving calls stuck in a loading state.
+
+Streaming persistence always re-reads the latest assistant row before applying
+owned content, reasoning, file, tool, or terminal fields. Concurrent plugin and
+sync metadata is therefore preserved. A completed foreground tool result and
+the assistant's completed call state are persisted before another provider
+request is issued.
 
 ### Hooks integration
 
@@ -472,10 +511,13 @@ function useChat(
         aborted: Ref<boolean>;
     };
     tailAssistant: Ref<UiChatMessage | null>; // includes toolCalls during execution
-    sendMessage: (content: string, params?: SendMessageParams) => Promise<void>;
-    retryMessage: (messageId: string, modelOverride?: string) => Promise<void>;
+    sendMessage: (content: string, params?: SendMessageParams) => Promise<SendResult>;
+    retryMessage: (messageId: string, modelOverride?: string) => Promise<SendResult | undefined>;
+    replaceCanonicalHistory: (messages: ChatMessage[]) => void;
     abort: () => void;
     clear: () => void;
+    dispose: () => void;
+    clearConversation: (options?: { persistence?: 'preserve' }) => void;
     resetStream: () => void;
     flushTailAssistant: () => void;
 };

@@ -88,12 +88,18 @@
                                         :loading="loading"
                                         :streaming="props.streaming"
                                         :thinking-supported="modelSupportsThinking"
+                                        :reasoning-efforts="
+                                            modelReasoningEfforts
+                                        "
                                         v-model:model="selectedModel"
                                         v-model:web-search-enabled="
                                             webSearchEnabled
                                         "
                                         v-model:thinking-enabled="
                                             thinkingEnabled
+                                        "
+                                        v-model:reasoning-effort="
+                                            reasoningEffort
                                         "
                                         @open-system-prompts="
                                             showSystemPrompts = true
@@ -153,10 +159,12 @@
                         class="chat-input-send-btn"
                         v-if="!props.streaming"
                         v-bind="sendButtonProps"
-                        @click="handleSend"
+                        @click="handleSendClick"
                         :disabled="
                             loading ||
-                            (!promptText.trim() && uploadedImages.length === 0)
+                            (!promptText.trim() &&
+                                uploadedImages.length === 0 &&
+                                largeTextBlocks.length === 0)
                         "
                         type="button"
                         aria-label="Send message"
@@ -184,20 +192,18 @@
         >
             <!-- Images -->
             <div
-                v-for="(image, index) in uploadedImages.filter(
-                    (att) => att.kind === 'image'
-                )"
-                :key="'img-' + index"
+                v-for="image in imageAttachments"
+                :key="image.key"
                 class="chat-input-attachment-image-container relative group aspect-square"
             >
                 <img
                     :src="image.url"
-                    :alt="'Uploaded Image ' + (index + 1)"
+                    :alt="'Uploaded Image ' + (image.displayIndex + 1)"
                     class="chat-input-attachment-image w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
                 />
                 <UButton
                     v-bind="attachmentRemoveBtnProps"
-                    @click="() => removeImage(uploadedImages.indexOf(image))"
+                    @click="removeImage(image.index)"
                     :disabled="loading"
                     aria-label="Remove image"
                 />
@@ -209,10 +215,8 @@
             </div>
             <!-- PDFs -->
             <div
-                v-for="(pdf, index) in uploadedImages.filter(
-                    (att) => att.kind === 'pdf'
-                )"
-                :key="'pdf-' + index"
+                v-for="pdf in pdfAttachments"
+                :key="pdf.key"
                 :class="[
                     'chat-input-attachment-pdf-container relative group aspect-square overflow-hidden flex items-center justify-center bg-(--md-surface-container-low) p-2 text-center',
                     attachmentPdfContainerProps?.class || '',
@@ -239,7 +243,7 @@
                 </div>
                 <UButton
                     v-bind="attachmentRemoveBtnProps"
-                    @click="() => removeImage(uploadedImages.indexOf(pdf))"
+                    @click="removeImage(pdf.index)"
                     :disabled="loading"
                     aria-label="Remove PDF"
                 />
@@ -318,11 +322,13 @@
             @selected="handlePromptSelected"
             @closed="handlePromptModalClosed"
         />
+        <OpenRouterKeyModal v-model:open="showKeyModal" />
     </div>
 </template>
 
 <script setup lang="ts">
 import {
+    computed,
     ref,
     nextTick,
     onMounted,
@@ -332,12 +338,12 @@ import {
     defineAsyncComponent,
 } from 'vue';
 import { useOr3Config } from '~/composables/useOr3Config';
+import { resolveOpenRouterKeyAvailability } from '~/core/auth/openRouterKeyAvailability';
 import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';
 import { Editor, EditorContent } from '@tiptap/vue-3';
 import { Extension, Node } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
-import { computed } from 'vue';
 import { isMobile, state } from '~/state/global';
 import {
     useToast,
@@ -367,6 +373,21 @@ import type {
     UploadedImage,
 } from '~/components/chat/chat-input/types';
 import { useChatInputAttachments } from '~/components/chat/chat-input/useChatInputAttachments';
+import {
+    getDefaultReasoningEffort,
+    getSupportedReasoningEfforts,
+    modelSupportsReasoning,
+} from '~~/shared/openrouter/reasoning';
+import type { OpenRouterReasoningEffort } from '~~/shared/openrouter/reasoning';
+import type { OpenRouterModel } from '~~/shared/openrouter/types';
+import {
+    hasDurableSendAcceptance,
+    type SendResult,
+} from '~/utils/chat/types';
+
+const OpenRouterKeyModal = defineAsyncComponent(
+    () => import('~/components/chat/OpenRouterKeyModal.vue')
+);
 
 const props = defineProps<{
     loading?: boolean;
@@ -388,17 +409,20 @@ const { favoriteModels, getFavoriteModels, catalog } = useModelStore();
 const { settings: aiSettings } = useAiSettings();
 const webSearchEnabled = ref<boolean>(false);
 const thinkingEnabled = ref<boolean>(false);
+const reasoningEffort = ref<string | undefined>(undefined);
 const LAST_MODEL_KEY = 'last_selected_model';
 const runtimeConfig = useRuntimeConfig();
-const openRouterConfig = computed(() => runtimeConfig.public?.openRouter ?? {});
+const openRouterAvailability = computed(() =>
+    resolveOpenRouterKeyAvailability(runtimeConfig.public?.openRouter)
+);
 const requireUserKey = computed(
-    () => openRouterConfig.value.requireUserKey === true
+    () => openRouterAvailability.value.requireUserKey
 );
 const allowUserOverride = computed(
-    () => openRouterConfig.value.allowUserOverride !== false || requireUserKey.value
+    () => openRouterAvailability.value.allowUserOverride
 );
 const hasInstanceKey = computed(
-    () => openRouterConfig.value.hasInstanceKey === true && !requireUserKey.value
+    () => openRouterAvailability.value.hasInstanceKey
 );
 
 // Use VueUse's useLocalStorage for persisted model selection
@@ -544,6 +568,7 @@ watch(
 
 const showModelCatalog = ref(false);
 const showSystemPrompts = ref(false);
+const showKeyModal = ref(false);
 
 const emit = defineEmits<{
     (
@@ -557,6 +582,10 @@ const emit = defineEmits<{
             settings: ImageSettings;
             webSearchEnabled: boolean;
             thinkingEnabled: boolean;
+            reasoningEffort: string | null;
+            registerResult: (
+                result: Promise<SendResult>
+            ) => void;
         }
     ): void;
     (e: 'prompt-change', value: string): void;
@@ -651,66 +680,48 @@ const composerActionButtonProps = useButtonOverrides(
     }
 );
 
-const mainContainerProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'div',
-        context: 'chat',
-        identifier: 'chat.input-main-container',
-        isNuxtUI: false,
-    });
-
-    return overrides.value;
+const mainContainerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.input-main-container',
+    isNuxtUI: false,
 });
 
-const containerProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'div',
-        context: 'chat',
-        identifier: 'chat.input-container',
-        isNuxtUI: false,
-    });
-
-    return overrides.value;
+const containerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.input-container',
+    isNuxtUI: false,
 });
 
-const editorProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'div',
-        context: 'chat',
-        identifier: 'chat.editor',
-        isNuxtUI: false,
-    });
-
-    return overrides.value;
+const editorProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.editor',
+    isNuxtUI: false,
 });
 
-const attachmentPdfContainerProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'div',
-        context: 'chat',
-        identifier: 'chat.attachment-pdf-container',
-        isNuxtUI: false,
-    });
-    return overrides.value;
+const attachmentPdfContainerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.attachment-pdf-container',
+    isNuxtUI: false,
 });
 
-const attachmentTextContainerProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'div',
-        context: 'chat',
-        identifier: 'chat.attachment-text-container',
-        isNuxtUI: false,
-    });
-    return overrides.value;
+const attachmentTextContainerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.attachment-text-container',
+    isNuxtUI: false,
 });
 
+const attachmentRemoveButtonOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'chat',
+    identifier: 'chat.attachment-remove-btn',
+    isNuxtUI: true,
+});
 const attachmentRemoveBtnProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'chat',
-        identifier: 'chat.attachment-remove-btn',
-        isNuxtUI: true,
-    });
     const fallback = {
         type: 'button' as const,
         color: 'error' as const,
@@ -720,7 +731,8 @@ const attachmentRemoveBtnProps = computed(() => {
         icon: iconClose.value,
         class: 'chat-input-attachment-remove-btn flex items-center justify-center absolute top-1 right-1 h-[22px] w-[22px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white bg-[var(--md-error)]/85 hover:bg-[var(--md-error)]',
     };
-    const overrideValue = (overrides.value as Record<string, unknown>) || {};
+    const overrideValue =
+        (attachmentRemoveButtonOverrides.value as Record<string, unknown>) || {};
     const overrideClass =
         typeof overrideValue.class === 'string' ? overrideValue.class : '';
     const mergedClass = [fallback.class, overrideClass]
@@ -733,14 +745,11 @@ const attachmentRemoveBtnProps = computed(() => {
     };
 });
 
-const dragOverlayProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'div',
-        context: 'chat',
-        identifier: 'chat.drag-overlay',
-        isNuxtUI: false,
-    });
-    return overrides.value;
+const dragOverlayProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.drag-overlay',
+    isNuxtUI: false,
 });
 
 const or3Config = useOr3Config();
@@ -764,28 +773,61 @@ const {
     onImageRemove: (index) => emit('image-remove', index),
 });
 
+const imageAttachments = computed(() =>
+    uploadedImages.value
+        .map((attachment, index) => ({
+            ...attachment,
+            index,
+            key:
+                attachment.hash ||
+                attachment.url ||
+                `${index}:${attachment.name}`,
+        }))
+        .filter((attachment) => attachment.kind === 'image')
+        .map((attachment, displayIndex) => ({
+            ...attachment,
+            displayIndex,
+        }))
+);
+
+const pdfAttachments = computed(() =>
+    uploadedImages.value
+        .map((attachment, index) => ({
+            ...attachment,
+            index,
+            key:
+                attachment.hash ||
+                attachment.url ||
+                `${index}:${attachment.name}`,
+        }))
+        .filter((attachment) => attachment.kind === 'pdf')
+);
+
 const selectedModel = ref<string>('openai/gpt-oss-120b');
 
-const modelSupportsThinking = computed(() => {
+function stripThinkingSuffix(modelId: string): string {
+    return modelId.endsWith(':thinking')
+        ? modelId.slice(0, -':thinking'.length)
+        : modelId;
+}
+
+const selectedModelMeta = computed<OpenRouterModel | undefined>(() => {
     const selected = selectedModel.value;
-    if (!selected) return false;
-    const baseModel = selected.endsWith(':thinking')
-        ? selected.slice(0, -':thinking'.length)
-        : selected;
+    if (!selected) return undefined;
+    const baseModel = stripThinkingSuffix(selected);
 
-    const model =
+    return (
         catalog.value.find((item) => item.id === baseModel) ||
-        favoriteModels.value.find((item) => item.id === baseModel);
-    const supported = Array.isArray(model?.supported_parameters)
-        ? model.supported_parameters
-        : [];
-
-    return supported.some(
-        (parameter) =>
-            parameter === 'reasoning' ||
-            parameter.startsWith('reasoning.') ||
-            parameter === 'thinking'
+        favoriteModels.value.find((item) => item.id === baseModel)
     );
+});
+
+const modelReasoningEfforts = computed(() => {
+    return getSupportedReasoningEfforts(selectedModelMeta.value);
+});
+
+const modelSupportsThinking = computed(() => {
+    return modelReasoningEfforts.value.length > 0;
 });
 
 watch(modelSupportsThinking, (supported) => {
@@ -793,6 +835,24 @@ watch(modelSupportsThinking, (supported) => {
         thinkingEnabled.value = false;
     }
 });
+
+watch(
+    [selectedModelMeta, modelReasoningEfforts],
+    ([model, efforts]) => {
+        if (!modelSupportsReasoning(model)) {
+            reasoningEffort.value = undefined;
+            return;
+        }
+        if (
+            reasoningEffort.value &&
+            efforts.includes(reasoningEffort.value as OpenRouterReasoningEffort)
+        ) {
+            return;
+        }
+        reasoningEffort.value = getDefaultReasoningEffort(model);
+    },
+    { immediate: true }
+);
 // hiddenFileInput removed
 // hiddenFileInputListener removed
 const imageSettings = ref<ImageSettings>({
@@ -889,15 +949,15 @@ const handleContainerClick = (event: MouseEvent) => {
     }
 };
 
-const handleSend = async () => {
-    if (props.loading) return;
+const handleSend = async (): Promise<SendResult> => {
+    if (props.loading) return { status: 'rejected', reason: 'busy' };
     if (
         !guardPendingAttachmentSend(attachments.value, useToast(), {
             description: 'Please wait for attachments to finish before sending.',
             duration: 2600,
         })
     ) {
-        return;
+        return { status: 'rejected', reason: 'client_limit' };
     }
     // Require OpenRouter connection (api key) before sending
     const { apiKey } = useUserApiKey();
@@ -910,40 +970,33 @@ const handleSend = async () => {
                 color: 'primary',
                 duration: 5000,
             });
-            return;
+            return { status: 'rejected', reason: 'missing_credentials' };
         }
         const { startLogin } = useOpenRouterAuth();
         // Show toast with action to initiate login
         useToast().add({
             id: 'need-openrouter-login',
             title: 'Connect to OpenRouter',
-            description: 'You need to log in before sending messages.',
+            description: 'You need an OpenRouter API key to send messages.',
             color: 'primary',
-            duration: 5000,
+            duration: 8000,
             actions: [
                 {
-                    label: 'Login',
+                    label: 'Connect',
                     onClick: () => startLogin(),
                     size: 'sm',
                 },
                 {
-                    label: 'Manually enter key',
-                    onClick: (toast) => {
-                        const apiKey = prompt(
-                            'Please enter your OpenRouter API key:'
-                        );
-
-                        if (apiKey && apiKey.trim()) {
-                            // Save the API key
-                            state.value.openrouterKey = apiKey.trim();
-                        }
+                    label: 'Paste a key',
+                    onClick: () => {
+                        showKeyModal.value = true;
                     },
                     size: 'sm',
                     variant: 'link',
                 },
             ],
         });
-        return;
+        return { status: 'rejected', reason: 'missing_credentials' };
     }
     if (
         promptText.value.trim() ||
@@ -963,6 +1016,7 @@ const handleSend = async () => {
             // Silently handle editor JSON dispatch failure
         }
 
+        let sendResult: Promise<SendResult> | null = null;
         emit('send', {
             text: promptText.value,
             images: attachments.value, // backward compatibility
@@ -973,7 +1027,35 @@ const handleSend = async () => {
             webSearchEnabled: webSearchEnabled.value,
             thinkingEnabled:
                 thinkingEnabled.value && modelSupportsThinking.value,
+            reasoningEffort:
+                thinkingEnabled.value && modelSupportsThinking.value
+                    ? reasoningEffort.value ?? null
+                    : null,
+            registerResult: (result) => {
+                sendResult = result;
+            },
         });
+        // A parent that cannot accept the request leaves the draft untouched.
+        if (!sendResult) {
+            return {
+                status: 'failed',
+                requestId: 'composer-send',
+                reason: 'stream_error',
+                error: 'No chat submission handler accepted the request.',
+            };
+        }
+        let result: SendResult;
+        try {
+            result = await sendResult;
+        } catch (error) {
+            return {
+                status: 'failed',
+                requestId: 'composer-send',
+                reason: 'stream_error',
+                error: error instanceof Error ? error.message : String(error),
+            };
+        }
+        if (!hasDurableSendAcceptance(result)) return result;
         // Reset local state and editor content so placeholder shows again
         promptText.value = '';
         try {
@@ -984,8 +1066,14 @@ const handleSend = async () => {
         // Release any blob URLs to avoid leaking when clearing attachments
         clearAll();
         autoResize();
+        return result;
     }
+    return { status: 'rejected', reason: 'filtered' };
 };
+
+function handleSendClick(): void {
+    void handleSend();
+}
 
 // Imperative bridge API (used by programmatic pane plugin sends)
 function setText(t: string) {
@@ -997,8 +1085,8 @@ function setText(t: string) {
     } catch {}
     autoResize();
 }
-function triggerSend() {
-    handleSend();
+function triggerSend(): Promise<SendResult> {
+    return handleSend();
 }
 defineExpose({ setText, triggerSend });
 

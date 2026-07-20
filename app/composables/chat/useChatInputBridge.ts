@@ -38,15 +38,16 @@
  * onBeforeUnmount(() => unregisterPaneInput(paneId));
  *
  * // In pane plugin (programmatic send)
- * if (programmaticSend(paneId, 'Hello!')) {
+ * const result = await programmaticSend(paneId, 'Hello!');
+ * if ('userMessageId' in result && result.userMessageId) {
  *   console.log('Message sent');
  * }
  * ```
  *
  * **Error Handling**
- * - `programmaticSend()` catches exceptions from input API and returns false
+ * - `programmaticSend()` catches exceptions and returns a typed failed result
  * - Dev-mode logs send failures (console.debug)
- * - Returns false if pane not found or send fails
+ * - Returns an `unavailable` rejection if the pane is not registered
  * - Does NOT throw (safe for plugin code)
  */
 
@@ -69,10 +70,11 @@
  */
 
 import { ref } from 'vue';
+import type { SendResult } from '~/utils/chat/types';
 
 interface ChatInputImperativeApi {
     setText(t: string): void;
-    triggerSend(): void; // send current text/attachments
+    triggerSend(): Promise<SendResult>; // send current text/attachments
 }
 
 interface RegisteredPaneInput {
@@ -129,7 +131,7 @@ export function unregisterPaneInput(paneId: string) {
  * **Behavior**
  * - Sets input text via `api.setText(text)`
  * - Triggers native send flow via `api.triggerSend()`
- * - Returns true on success, false if pane not found or send fails
+ * - Awaits and returns the native composer's real `SendResult`
  *
  * **Error Handling**
  * - Catches exceptions from input API
@@ -138,19 +140,26 @@ export function unregisterPaneInput(paneId: string) {
  *
  * @param paneId - Unique pane identifier
  * @param text - Message text to send
- * @returns true if send succeeded, false otherwise
+ * @returns the native send result, including durable message IDs
  */
-export function programmaticSend(paneId: string, text: string): boolean {
+export async function programmaticSend(
+    paneId: string,
+    text: string
+): Promise<SendResult> {
     const r = find(paneId);
-    if (!r) return false;
+    if (!r) return { status: 'rejected', reason: 'unavailable' };
     try {
         r.api.setText(text);
-        r.api.triggerSend();
-        return true;
+        return await r.api.triggerSend();
     } catch (e) {
         if (import.meta.dev)
             console.debug('[useChatInputBridge] send failed', e);
-        return false;
+        return {
+            status: 'failed',
+            requestId: 'programmatic-send',
+            reason: 'stream_error',
+            error: e instanceof Error ? e.message : String(e),
+        };
     }
 }
 

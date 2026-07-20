@@ -52,6 +52,17 @@
             </Or3Scroll>
         </ClientOnly>
 
+        <!-- First-run welcome: true modal layer above mobile input (z-40) -->
+        <Teleport to="body">
+            <div
+                v-if="showWelcomeCard"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-[color:color-mix(in_oklab,var(--md-scrim,#000)_45%,transparent)] p-4"
+                data-welcome-backdrop
+            >
+                <ChatWelcomeCard @dismiss="onWelcomeDismiss" />
+            </div>
+        </Teleport>
+
         <!-- Input area overlay -->
         <div
             v-bind="inputWrapperProps"
@@ -114,6 +125,7 @@ import {
     type Ref,
     type CSSProperties,
     onBeforeUnmount,
+    onMounted,
     nextTick,
 } from 'vue';
 
@@ -123,7 +135,10 @@ import {
     setPanePendingPrompt,
     setupPanePromptCleanup,
 } from '~/composables/core/usePanePrompt';
-import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
+import type {
+    ChatMessage as ChatMessageType,
+    SendResult,
+} from '~/utils/chat/types';
 import { Or3Scroll } from 'or3-scroll';
 import 'or3-scroll/style.css';
 import { useElementSize } from '@vueuse/core';
@@ -131,8 +146,15 @@ import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
-import { useToast, useHooks, useChat } from '#imports';
+import { useToast, useHooks, useChat, useRuntimeConfig } from '#imports';
 import { getMaxMessageFileHashes } from '~/db/files-util';
+import { kv } from '~/db';
+import {
+    hydrateUserApiKeyFromKv,
+    useUserApiKey,
+} from '~/core/auth/useUserApiKey';
+import { resolveOpenRouterKeyAvailability } from '~/core/auth/openRouterKeyAvailability';
+import ChatWelcomeCard from '~/components/chat/ChatWelcomeCard.vue';
 import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';
 import type {
     ChatInstance,
@@ -213,6 +235,49 @@ const emit = defineEmits<{
     (e: 'reached-bottom'): void;
 }>();
 
+// ── First-run welcome card ──────────────────────────────────────────────
+// Shown only when the chat is empty AND the user has no usable OpenRouter
+// key. Disappears automatically once a key exists; dismissal is persisted.
+const WELCOME_DISMISS_KV_KEY = 'or3_welcome_card_dismissed';
+const runtimeConfig = useRuntimeConfig();
+const { apiKey } = useUserApiKey();
+const keyStateReady = ref(false);
+const welcomeDismissed = ref(true); // default hidden until hydrated
+const openRouterAvailability = computed(() =>
+    resolveOpenRouterKeyAvailability(runtimeConfig.public?.openRouter)
+);
+
+const showWelcomeCard = computed(
+    () =>
+        keyStateReady.value &&
+        !welcomeDismissed.value &&
+        openRouterAvailability.value.canAcceptUserKey &&
+        !openRouterAvailability.value.hasUsableKey(apiKey.value) &&
+        allMessages.value.length === 0
+);
+
+function onWelcomeDismiss(): void {
+    welcomeDismissed.value = true;
+    kv.set(WELCOME_DISMISS_KV_KEY, 'true').catch(() => {
+        // Persistence failure is non-critical; card just reappears next load.
+    });
+}
+
+onMounted(async () => {
+    try {
+        await hydrateUserApiKeyFromKv();
+    } catch {
+        // Key hydration failure is non-critical.
+    }
+    try {
+        const record = await kv.get(WELCOME_DISMISS_KV_KEY);
+        welcomeDismissed.value = record?.value === 'true';
+    } catch {
+        welcomeDismissed.value = false;
+    }
+    keyStateReady.value = true;
+});
+
 // Register pane-close cleanup after Nuxt app context is available.
 setupPanePromptCleanup();
 
@@ -243,7 +308,7 @@ watch(
         }
         // Free previous thread messages & abort any active stream before switching
         try {
-            chat.value?.clear?.();
+            chat.value?.dispose?.();
         } catch (e) {
             if (import.meta.dev) {
                 console.warn(
@@ -285,11 +350,7 @@ watch(
         if (hasPendingBackground) {
             return;
         }
-        // Prefer to update the internal messages array directly to avoid remount flicker
-        // Filter out tool messages before updating
-        chat.value!.messages.value = (mh || [])
-            .filter((m) => m.role !== 'tool')
-            .map((m) => ensureUiMessage(m));
+        chat.value.replaceCanonicalHistory?.(mh || []);
     }
 );
 
@@ -612,6 +673,8 @@ type ChatInputSendPayload = {
     };
     webSearchEnabled: boolean;
     thinkingEnabled: boolean;
+    reasoningEffort?: string | null;
+    registerResult: (result: Promise<SendResult>) => void;
 };
 
 function onSend(payload: ChatInputSendPayload) {
@@ -670,8 +733,9 @@ function onSend(payload: ChatInputSendPayload) {
             .filter(Boolean) ?? [];
 
     // Send message via useChat composable
-    chat.value
-        ?.send({
+    const activeChat = chat.value;
+    if (!activeChat) return;
+    const result = activeChat.send({
             content: payload.text,
             model: payload.model || model.value,
             files,
@@ -679,13 +743,16 @@ function onSend(payload: ChatInputSendPayload) {
             extraTextParts,
             online: !!payload.webSearchEnabled,
             thinking: !!payload.thinkingEnabled,
+            reasoningEffort: payload.reasoningEffort ?? null,
             context_hashes,
-        })
-        ?.then(() => {
+        });
+    payload.registerResult(result);
+    void result
+        .then(() => {
             // Ensure layout is stable after sending (input shrink + new message)
             nextTick(() => scroller.value?.refreshMeasurements?.());
         })
-        ?.catch(() => {});
+        .catch(() => {});
 }
 
 function onRetry(messageId: string) {
@@ -726,6 +793,7 @@ function onPendingPromptSelected(promptId: string | null) {
         setPanePendingPrompt(props.paneId, promptId);
     }
     // Reinitialize chat with the pending prompt
+    chat.value?.dispose?.();
     chat.value = useChat(
         props.messageHistory,
         props.threadId,
@@ -812,7 +880,7 @@ const cleanupWorkflowHook = hooks.on(
 onBeforeUnmount(() => {
     cleanupWorkflowHook();
     try {
-        chat.value?.clear?.();
+        chat.value?.dispose?.();
     } catch {}
 });
 </script>

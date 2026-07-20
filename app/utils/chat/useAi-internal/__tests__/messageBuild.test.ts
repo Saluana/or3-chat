@@ -4,8 +4,6 @@ import type { ChatMessage } from '~/utils/chat/types';
 const getMaxMessageFileHashesSpy = vi.fn();
 const hashToContentPartSpy = vi.fn();
 const buildOpenRouterMessagesSpy = vi.fn();
-const trimOrMessagesImagesSpy = vi.fn();
-
 vi.mock('~/db/util', () => ({
     newId: () => 'id-1',
 }));
@@ -29,9 +27,46 @@ vi.mock('~/utils/chat/prompt-utils', () => ({
         [master, thread || ''].filter(Boolean).join('\n'),
 }));
 
+const countTokensApproxSpy = vi.fn();
+
 vi.mock('~/utils/chat/messages', () => ({
-    trimOrMessagesImages: (...args: unknown[]) =>
-        trimOrMessagesImagesSpy(...args),
+    trimOrMessagesByTokenBudget: async (
+        messages: unknown[],
+        maxTokens: number,
+        countTokens: (text: string) => Promise<number>
+    ) => {
+        for (const m of messages as Array<{ content?: unknown }>) {
+            const text =
+                typeof m.content === 'string'
+                    ? m.content
+                    : Array.isArray(m.content)
+                    ? m.content
+                          .filter(
+                              (p: { type?: string; text?: string }) =>
+                                  p.type === 'text'
+                          )
+                          .map((p: { text?: string }) => p.text)
+                          .join('\n')
+                    : '';
+            await countTokens(text);
+        }
+        return messages.slice(-2);
+    },
+}));
+
+vi.mock('~/utils/chat/tokens', () => ({
+    countTokensApprox: (text: string) => countTokensApproxSpy(text),
+    messageToCountableText: (m: { content?: unknown }) =>
+        typeof m.content === 'string'
+            ? m.content
+            : Array.isArray(m.content)
+            ? m.content
+                  .filter(
+                      (p: { type?: string; text?: string }) => p.type === 'text'
+                  )
+                  .map((p: { text?: string }) => p.text)
+                  .join('\n')
+            : '',
 }));
 
 vi.mock('../files', () => ({
@@ -50,7 +85,7 @@ describe('buildOpenRouterMessagesForSend', () => {
         getMaxMessageFileHashesSpy.mockReset();
         hashToContentPartSpy.mockReset();
         buildOpenRouterMessagesSpy.mockReset();
-        trimOrMessagesImagesSpy.mockReset();
+        countTokensApproxSpy.mockReset();
 
         getMaxMessageFileHashesSpy.mockReturnValue(8);
         buildOpenRouterMessagesSpy.mockImplementation(async (messages) =>
@@ -96,8 +131,31 @@ describe('buildOpenRouterMessagesForSend', () => {
             { type: 'text', text: 'from-ctx-3' },
         ]);
 
-        expect(trimOrMessagesImagesSpy).toHaveBeenCalledTimes(1);
         expect(result).toEqual(passedMessages);
+    });
+
+    it('trims messages to maxInputTokens budget while keeping system and last user', async () => {
+        const effectiveMessages: ChatMessage[] = [
+            { id: 's-1', role: 'system', content: 'system' },
+            { id: 'u-1', role: 'user', content: 'first' },
+            { id: 'a-1', role: 'assistant', content: 'middle' },
+            { id: 'u-2', role: 'user', content: 'last' },
+        ];
+
+        await buildOpenRouterMessagesForSend({
+            effectiveMessages,
+            assistantHashes: [],
+            prevAssistantId: null,
+            contextHashes: [],
+            fileHashes: [],
+            maxInputTokens: 10,
+        });
+
+        const [passedMessages] = buildOpenRouterMessagesSpy.mock.calls[0] as [
+            Array<{ role: string; content: unknown }>,
+        ];
+        expect(passedMessages).toHaveLength(4);
+        expect(countTokensApproxSpy).toHaveBeenCalled();
     });
 
     it('skips context hash hydration when there is no user message target', async () => {
@@ -129,6 +187,54 @@ describe('buildOpenRouterMessagesForSend', () => {
             role: 'system',
             id: 's-1',
             content: 'system',
+        });
+    });
+
+    it('preserves assistant tool calls and their associated tool result rows', async () => {
+        await buildOpenRouterMessagesForSend({
+            effectiveMessages: [
+                { id: 'u-1', role: 'user', content: 'look it up' },
+                {
+                    id: 'a-1',
+                    role: 'assistant',
+                    content: 'calling',
+                    data: {
+                        tool_calls: [
+                            {
+                                id: 'call-1',
+                                type: 'function',
+                                function: { name: 'lookup', arguments: '{}' },
+                            },
+                        ],
+                    },
+                },
+                {
+                    id: 'tool-1',
+                    role: 'tool',
+                    content: 'result',
+                    data: { tool_call_id: 'call-1', tool_name: 'lookup' },
+                },
+                { id: 'u-2', role: 'user', content: 'continue' },
+            ],
+            assistantHashes: [],
+            contextHashes: [],
+            fileHashes: [],
+        });
+
+        const [passedMessages] = buildOpenRouterMessagesSpy.mock.calls[0] as [
+            Array<Record<string, unknown>>,
+        ];
+        expect(passedMessages[1]).toMatchObject({
+            role: 'assistant',
+            tool_calls: [
+                expect.objectContaining({ id: 'call-1' }),
+            ],
+        });
+        expect(passedMessages[2]).toMatchObject({
+            role: 'tool',
+            tool_call_id: 'call-1',
+            name: 'lookup',
+            content: 'result',
         });
     });
 });

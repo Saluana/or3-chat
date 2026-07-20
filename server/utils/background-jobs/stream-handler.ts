@@ -29,6 +29,7 @@ import {
 } from '../background-jobs/store';
 import {
     parseOpenRouterSSE,
+    type StreamedFieldMode,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
 import { getNotificationEmitter } from '../notifications/registry';
 import {
@@ -40,11 +41,39 @@ import {
 import { logBackgroundEvent } from './logging';
 import type { ToolCall, ToolDefinition } from '~/utils/chat/types';
 import { executeServerTool } from '../chat/tool-registry';
+import { MAX_TOOL_ITERATIONS } from '~/utils/chat/constants';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
 import {
     emitBackgroundJobWebhookEvent,
     emitMessageCompletedWebhookEvent,
 } from '../webhooks/hook-emissions';
+import { snapshotToolDefinitions } from '~~/shared/chat/tool-policy';
+import { sensitiveValueMetadata } from '~~/shared/logging/sensitive-metadata';
+import {
+    projectToolResult,
+} from '~~/shared/chat/tool-limits';
+import {
+    decideToolCall,
+    toolCallFingerprint,
+    type ToolLedgerEntry,
+} from '~~/shared/chat/tool-ledger';
+import {
+    beginNormalizedIteration,
+    createNormalizedStreamState,
+    failNormalizedStream,
+    finishNormalizedIteration,
+    reduceNormalizedStreamEvent,
+    settleNormalizedTool,
+} from '~~/shared/chat/normalized-stream-reducer';
+import {
+    canonicalToolResult,
+    type CanonicalToolResult,
+} from '~~/shared/chat/canonical-tool-transcript';
+import {
+    fetchWithResponseDeadline,
+    readResponseTextWithIdleDeadline,
+    withIdleWatchdog,
+} from '~~/shared/openrouter/deadlines';
 
 function logBgStream(
     _stage: string,
@@ -85,16 +114,6 @@ function isForcedFunctionToolChoice(
     return typeof name === 'string' && name.length > 0;
 }
 
-function previewForLog(
-    value: string | undefined,
-    max = 180
-): string | undefined {
-    if (typeof value !== 'string') return undefined;
-    return value.length > max
-        ? `${value.slice(0, max)}...(${value.length})`
-        : value;
-}
-
 async function assertJobNotAborted(params: {
     provider: BackgroundJobProvider;
     jobId: string;
@@ -127,6 +146,10 @@ export interface BackgroundStreamParams {
     threadId: string;
     messageId: string;
     referer: string;
+}
+
+function normalizeStreamedFieldMode(value: unknown): StreamedFieldMode {
+    return value === 'cumulative-snapshot' ? value : 'delta';
 }
 
 /**
@@ -276,26 +299,30 @@ export async function consumeBackgroundStream(params: {
     flushOnEveryChunk?: boolean;
     flushIntervalMs?: number;
     flushChunkInterval?: number;
+    streamedFieldMode?: StreamedFieldMode;
 }): Promise<void> {
     let fullContent = '';
     let chunks = 0;
+    let normalizedState = beginNormalizedIteration(
+        createNormalizedStreamState()
+    );
     const flushEveryChunk = params.flushOnEveryChunk ?? false;
     const UPDATE_INTERVAL =
         typeof params.flushChunkInterval === 'number'
             ? Math.max(1, Math.floor(params.flushChunkInterval))
             : flushEveryChunk
             ? 1
-            : 3;
+            : 50;
     const UPDATE_INTERVAL_MS =
         typeof params.flushIntervalMs === 'number'
             ? Math.max(0, Math.floor(params.flushIntervalMs))
             : flushEveryChunk
             ? 30
-            : 120;
+            : 500;
     const notificationEmitter = getNotificationEmitter(params.provider.name);
     const shouldNotify = params.shouldNotify ?? (() => true);
     let pendingChunk = '';
-    let lastUpdateAt = 0;
+    let lastUpdateAt = Date.now();
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
     let flushScheduled = false;
     let flushInFlight = Promise.resolve();
@@ -360,10 +387,13 @@ export async function consumeBackgroundStream(params: {
     };
 
     try {
-        for await (const evt of parseOpenRouterSSE(params.stream)) {
+        for await (const evt of parseOpenRouterSSE(params.stream, {
+            streamedFieldMode: params.streamedFieldMode,
+        })) {
+            normalizedState = reduceNormalizedStreamEvent(normalizedState, evt);
             if (evt.type === 'text') {
-                fullContent += evt.text;
-                chunks++;
+                fullContent = normalizedState.cumulativeText;
+                chunks = normalizedState.chunks;
                 pendingChunk += evt.text;
                 emitJobDelta(params.jobId, evt.text, {
                     contentLength: fullContent.length,
@@ -403,6 +433,10 @@ export async function consumeBackgroundStream(params: {
         if (flushError) {
             throw flushError;
         }
+        normalizedState = finishNormalizedIteration(
+            normalizedState,
+            MAX_TOOL_ITERATIONS
+        ).state;
 
         const latestJob = await params.provider.getJob(
             params.jobId,
@@ -493,7 +527,14 @@ export async function consumeBackgroundStream(params: {
         }
 
     } catch (err) {
+        normalizedState = failNormalizedStream(normalizedState, err);
         clearFlushTimer();
+        try {
+            if (pendingChunk) await flushPending();
+            await flushInFlight;
+        } catch {
+            /* terminal handling below remains authoritative */
+        }
         if (err instanceof Error && err.name === 'AbortError') {
             // Job was aborted (already marked in provider)
             logBgStream('server-consume-background-aborted', {
@@ -601,16 +642,21 @@ export async function consumeBackgroundStreamWithTools(params: {
     toolRuntime?: Record<string, string>;
     shouldNotify?: () => boolean;
     abortSignal?: AbortSignal;
+    streamedFieldMode?: StreamedFieldMode;
 }): Promise<void> {
-    const MAX_TOOL_ITERATIONS = 10;
     let fullContent = '';
     let chunks = 0;
-    let loopIteration = 0;
+    let normalizedState = createNormalizedStreamState();
     const notificationEmitter = getNotificationEmitter(params.provider.name);
     const shouldNotify = params.shouldNotify ?? (() => true);
-    const tools = Array.isArray(params.body.tools)
-        ? (params.body.tools as ToolDefinition[])
-        : undefined;
+    const tools = snapshotToolDefinitions(
+        Array.isArray(params.body.tools)
+            ? (params.body.tools as ToolDefinition[])
+            : undefined
+    );
+    const admittedByName = new Map(
+        (tools ?? []).map((definition) => [definition.function.name, definition])
+    );
     const requestedToolChoice = params.body.tool_choice;
     let activeToolChoice: unknown = requestedToolChoice;
 
@@ -622,11 +668,56 @@ export async function consumeBackgroundStreamWithTools(params: {
         args?: string;
         result?: string;
         error?: string;
+        argument_fingerprint?: string;
+        transcript?: CanonicalToolResult;
     }>();
+    const toolLedger = new Map<string, ToolLedgerEntry>();
+    let pendingProviderContent = '';
+    let providerDirtyEvents = 0;
+    let lastProviderFlushAt = Date.now();
+    const persistedJob = await params.provider.getJob(params.jobId, params.context.userId);
+    for (const call of persistedJob?.tool_calls ?? []) {
+        if (!call.id) continue;
+        const fingerprint = call.argument_fingerprint
+            ?? (call.args === undefined ? '' : toolCallFingerprint(call.name, call.args));
+        if (!fingerprint) continue;
+        const state = call.status === 'complete' ? 'completed'
+            : call.status === 'error' || call.status === 'skipped' ? 'failed'
+            : call.status === 'loading' ? 'running' : 'pending';
+        toolStates.set(call.id, { ...call, argument_fingerprint: fingerprint });
+        toolLedger.set(call.id, {
+            callId: call.id, name: call.name, argumentFingerprint: fingerprint,
+            state, result: call.result, error: call.error,
+        });
+    }
 
-    const emitToolState = async () => {
+    const flushProviderProgress = async (force = false) => {
+        if (providerDirtyEvents === 0) return;
+        if (
+            !force &&
+            providerDirtyEvents < 50 &&
+            pendingProviderContent.length < 16 * 1024 &&
+            Date.now() - lastProviderFlushAt < 500
+        ) return;
+        const contentChunk = pendingProviderContent;
+        pendingProviderContent = '';
+        providerDirtyEvents = 0;
+        await params.provider.updateJob(params.jobId, {
+            contentChunk: contentChunk || undefined,
+            chunksReceived: chunks,
+            tool_calls: Array.from(toolStates.values()),
+        });
+        lastProviderFlushAt = Date.now();
+    };
+
+    const emitToolState = async (force = false) => {
         const tool_calls = Array.from(toolStates.values());
-        await params.provider.updateJob(params.jobId, { tool_calls });
+        providerDirtyEvents += 1;
+        await flushProviderProgress(force);
+        const publicToolCalls = tool_calls.map((call) => ({
+            ...call,
+            result: call.result === undefined ? undefined : projectToolResult(call.result).ui,
+        }));
         logBgStream('server-consume-tools-state', {
             jobId: params.jobId,
             toolCallCount: tool_calls.length,
@@ -640,7 +731,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             content: fullContent,
             contentLength: fullContent.length,
             chunksReceived: chunks,
-            tool_calls,
+            tool_calls: publicToolCalls,
         });
     };
 
@@ -668,8 +759,9 @@ export async function consumeBackgroundStreamWithTools(params: {
 
     try {
         const openRouterUrl = resolveOpenRouterChatCompletionsUrl();
-        while (loopIteration < MAX_TOOL_ITERATIONS) {
-            loopIteration += 1;
+        while (true) {
+            normalizedState = beginNormalizedIteration(normalizedState);
+            const loopIteration = normalizedState.iteration;
             logBackgroundEvent('info', 'background.tools.iteration.started', {
                 jobId: params.jobId,
                 iteration: loopIteration,
@@ -694,7 +786,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                 stream: true,
             } as Record<string, unknown>;
 
-            const upstream = await fetch(openRouterUrl, {
+            const upstream = await fetchWithResponseDeadline(openRouterUrl, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${params.apiKey}`,
@@ -704,8 +796,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                     'X-Title': 'or3.chat',
                 },
                 body: JSON.stringify(requestBody),
-                signal: params.abortSignal,
-            });
+            }, { signal: params.abortSignal });
             logBgStream('server-consume-tools-upstream-response', {
                 jobId: params.jobId,
                 iteration: loopIteration,
@@ -715,32 +806,43 @@ export async function consumeBackgroundStreamWithTools(params: {
             });
 
             if (!upstream.ok || !upstream.body) {
-                const errorText = await upstream.text().catch(() => '<no body>');
-                throw new Error(
-                    `OpenRouter error ${upstream.status}: ${errorText.slice(0, 200)}`
-                );
+                const errorText = await readResponseTextWithIdleDeadline(upstream, {
+                    signal: params.abortSignal,
+                }).catch(() => '<no body>');
+                logBackgroundEvent('warn', 'background.tools.upstream_rejected', {
+                    jobId: params.jobId,
+                    iteration: loopIteration,
+                    status: upstream.status,
+                    responseMetadata: sensitiveValueMetadata(errorText),
+                });
+                throw new Error(`OpenRouter error ${upstream.status}`);
             }
 
             const pendingToolCalls: ToolCall[] = [];
             let loopContent = '';
-            for await (const evt of parseOpenRouterSSE(upstream.body)) {
+            const guardedBody = withIdleWatchdog(upstream.body, {
+                signal: params.abortSignal,
+            });
+            for await (const evt of parseOpenRouterSSE(guardedBody, {
+                streamedFieldMode: params.streamedFieldMode,
+            })) {
                 await assertJobNotAborted({
                     provider: params.provider,
                     jobId: params.jobId,
                     abortSignal: params.abortSignal,
                 });
+                normalizedState = reduceNormalizedStreamEvent(normalizedState, evt);
                 if (evt.type === 'text') {
-                    fullContent += evt.text;
-                    loopContent += evt.text;
-                    chunks += 1;
+                    fullContent = normalizedState.cumulativeText;
+                    loopContent = normalizedState.iterationText;
+                    chunks = normalizedState.chunks;
+                    pendingProviderContent += evt.text;
+                    providerDirtyEvents += 1;
                     emitJobDelta(params.jobId, evt.text, {
                         contentLength: fullContent.length,
                         chunksReceived: chunks,
                     });
-                    await params.provider.updateJob(params.jobId, {
-                        contentChunk: evt.text,
-                        chunksReceived: chunks,
-                    });
+                    await flushProviderProgress();
                 }
                 if (evt.type === 'tool_call') {
                     const toolCall = evt.tool_call;
@@ -749,20 +851,39 @@ export async function consumeBackgroundStreamWithTools(params: {
                         iteration: loopIteration,
                         toolCallId: toolCall.id,
                         toolName: toolCall.function.name,
-                        args: previewForLog(toolCall.function.arguments, 300),
+                        argumentMetadata: sensitiveValueMetadata(toolCall.function.arguments),
                     });
                     pendingToolCalls.push(toolCall);
-                    toolStates.set(toolCall.id, {
-                        id: toolCall.id,
-                        name: toolCall.function.name,
-                        status: 'loading',
-                        args: toolCall.function.arguments,
-                    });
+                    if (!toolStates.has(toolCall.id)) {
+                        const fingerprint = toolCallFingerprint(
+                            toolCall.function.name,
+                            toolCall.function.arguments
+                        );
+                        toolStates.set(toolCall.id, {
+                            id: toolCall.id,
+                            name: toolCall.function.name,
+                            status: 'pending',
+                            args: toolCall.function.arguments,
+                            argument_fingerprint: fingerprint,
+                        });
+                        toolLedger.set(toolCall.id, {
+                            callId: toolCall.id,
+                            name: toolCall.function.name,
+                            argumentFingerprint: fingerprint,
+                            state: 'pending',
+                        });
+                    }
                     await emitToolState();
                 }
             }
 
-            if (pendingToolCalls.length === 0) {
+            await flushProviderProgress(true);
+
+            if (normalizedState.iterationToolCallIds.length === 0) {
+                normalizedState = finishNormalizedIteration(
+                    normalizedState,
+                    MAX_TOOL_ITERATIONS
+                ).state;
                 break;
             }
 
@@ -778,18 +899,66 @@ export async function consumeBackgroundStreamWithTools(params: {
                     abortSignal: params.abortSignal,
                 });
                 const runtimeHint = toolRuntime[toolCall.function.name];
+                const admittedDefinition = admittedByName.get(toolCall.function.name);
+                const decision = decideToolCall(toolLedger.get(toolCall.id), {
+                    id: toolCall.id,
+                    name: toolCall.function.name,
+                    arguments: toolCall.function.arguments,
+                });
                 let toolResultText = '';
                 let status: 'complete' | 'error' | 'skipped' = 'complete';
                 let errorMessage: string | undefined;
 
-                if (runtimeHint === 'client') {
+                if (decision.action === 'replay') {
+                    toolResultText = decision.result;
+                } else if (decision.action === 'conflict') {
+                    status = 'error';
+                    errorMessage = `Tool call ID "${toolCall.id}" was reused with different arguments.`;
+                    toolResultText = errorMessage;
+                } else if (decision.action === 'running') {
+                    status = 'error';
+                    errorMessage = `Tool call "${toolCall.id}" may already have executed; refusing replay.`;
+                    toolResultText = errorMessage;
+                } else if (decision.action === 'failed') {
+                    status = 'error';
+                    errorMessage = decision.error;
+                    toolResultText = errorMessage;
+                } else if (!admittedDefinition) {
+                    status = 'skipped';
+                    errorMessage = `Tool "${toolCall.function.name}" was not advertised for this request.`;
+                    toolResultText = errorMessage;
+                } else if (runtimeHint === 'client') {
                     status = 'skipped';
                     errorMessage = `Tool \"${toolCall.function.name}\" is client-only.`;
                     toolResultText = errorMessage;
                 } else {
+                    toolLedger.set(toolCall.id, {
+                        callId: toolCall.id,
+                        name: toolCall.function.name,
+                        argumentFingerprint: decision.fingerprint,
+                        state: 'running',
+                    });
+                    toolStates.set(toolCall.id, {
+                        id: toolCall.id,
+                        name: toolCall.function.name,
+                        status: 'loading',
+                        args: toolCall.function.arguments,
+                        argument_fingerprint: decision.fingerprint,
+                    });
+                    await emitToolState(true);
                     const execution = await executeServerTool(
                         toolCall.function.name,
-                        toolCall.function.arguments
+                        toolCall.function.arguments,
+                        {
+                            subject: params.context.userId,
+                            workspaceId: params.context.workspaceId,
+                            threadId: params.context.threadId,
+                            messageId: params.context.messageId,
+                            callId: toolCall.id,
+                            requestId: params.jobId,
+                            abortSignal: params.abortSignal ?? new AbortController().signal,
+                        },
+                        { definition: admittedDefinition }
                     );
                     if (execution.error) {
                         status = execution.runtime === 'client' ? 'skipped' : 'error';
@@ -799,6 +968,15 @@ export async function consumeBackgroundStreamWithTools(params: {
                         toolResultText = execution.result || '';
                     }
                 }
+                const projectedResult = projectToolResult(toolResultText);
+                toolLedger.set(toolCall.id, {
+                    callId: toolCall.id,
+                    name: toolCall.function.name,
+                    argumentFingerprint: decision.fingerprint,
+                    state: status === 'complete' ? 'completed' : 'failed',
+                    result: status === 'complete' ? projectedResult.durable : undefined,
+                    error: status === 'complete' ? undefined : errorMessage,
+                });
 
                 logBackgroundEvent('info', 'background.tools.call.completed', {
                     jobId: params.jobId,
@@ -806,12 +984,14 @@ export async function consumeBackgroundStreamWithTools(params: {
                     toolCallId: toolCall.id,
                     toolName: toolCall.function.name,
                     status,
-                    args: previewForLog(toolCall.function.arguments, 300),
-                    resultPreview:
+                    argumentMetadata: sensitiveValueMetadata(toolCall.function.arguments),
+                    resultMetadata:
                         status === 'complete'
-                            ? previewForLog(toolResultText, 240)
+                            ? sensitiveValueMetadata(toolResultText)
                             : undefined,
-                    error: errorMessage,
+                    errorMetadata: errorMessage
+                        ? sensitiveValueMetadata(errorMessage)
+                        : undefined,
                 });
 
                 toolStates.set(toolCall.id, {
@@ -819,12 +999,30 @@ export async function consumeBackgroundStreamWithTools(params: {
                     name: toolCall.function.name,
                     status,
                     args: toolCall.function.arguments,
-                    result: status === 'complete' ? toolResultText : undefined,
+                    result: status === 'complete' ? projectedResult.durable : undefined,
                     error: status !== 'complete' ? errorMessage : undefined,
+                    argument_fingerprint: decision.fingerprint,
+                    transcript: canonicalToolResult({
+                        turnId: params.context.messageId,
+                        parentAssistantId: params.context.messageId,
+                        callId: toolCall.id,
+                        toolName: toolCall.function.name,
+                        fingerprint: decision.fingerprint,
+                        status: status === 'complete' ? 'complete' : 'error',
+                        result: projectedResult.durable,
+                        error: status === 'complete' ? undefined : errorMessage,
+                    }),
                 });
+                normalizedState = settleNormalizedTool(
+                    normalizedState,
+                    toolCall.id,
+                    status === 'complete'
+                        ? { status: 'complete', result: projectedResult.durable }
+                        : { status: status === 'skipped' ? 'skipped' : 'error', error: errorMessage }
+                );
                 await emitToolState();
 
-                toolResultsForNextLoop.push({ call: toolCall, result: toolResultText });
+                toolResultsForNextLoop.push({ call: toolCall, result: projectedResult.model });
             }
 
             orMessages.push({
@@ -849,17 +1047,19 @@ export async function consumeBackgroundStreamWithTools(params: {
                 });
             }
 
+            await flushProviderProgress(true);
+
             // If the caller forced a specific function, only enforce that on the first
             // turn; subsequent turns should allow the model to produce the final answer.
             if (isForcedFunctionToolChoice(activeToolChoice)) {
                 activeToolChoice = 'auto';
             }
 
-            if (loopIteration >= MAX_TOOL_ITERATIONS) {
-                throw new Error(
-                    `Background tool loop exceeded max iterations (${MAX_TOOL_ITERATIONS})`
-                );
-            }
+            normalizedState = finishNormalizedIteration(
+                normalizedState,
+                MAX_TOOL_ITERATIONS
+            ).state;
+
         }
 
         const latestJob = await params.provider.getJob(
@@ -878,6 +1078,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             );
         }
 
+        await flushProviderProgress(true);
         await params.provider.completeJob(params.jobId, fullContent);
         logBackgroundEvent('info', 'background.tools.completed', {
             jobId: params.jobId,
@@ -952,6 +1153,14 @@ export async function consumeBackgroundStreamWithTools(params: {
             }
         }
     } catch (err) {
+        normalizedState = failNormalizedStream(normalizedState, err);
+        // Preserve the last coalesced text/tool snapshot before publishing a
+        // terminal error. A failed flush must not hide the original failure.
+        try {
+            await flushProviderProgress(true);
+        } catch {
+            /* terminal handling below remains authoritative */
+        }
         if (err instanceof Error && err.name === 'AbortError') {
             logBgStream('server-consume-tools-aborted', {
                 jobId: params.jobId,
@@ -987,14 +1196,14 @@ export async function consumeBackgroundStreamWithTools(params: {
         });
         warnBgStream('server-consume-tools-error', {
             jobId: params.jobId,
-            iteration: loopIteration,
+            iteration: normalizedState.iteration,
             chunks,
             contentLength: fullContent.length,
             error: err instanceof Error ? err.message : String(err),
         });
         logBackgroundEvent('error', 'background.tools.failed', {
             jobId: params.jobId,
-            iteration: loopIteration,
+            iteration: normalizedState.iteration,
             chunksReceived: chunks,
             contentLength: fullContent.length,
             error: err instanceof Error ? err.message : String(err),
@@ -1002,8 +1211,12 @@ export async function consumeBackgroundStreamWithTools(params: {
                 id: call.id,
                 name: call.name,
                 status: call.status,
-                args: call.args,
-                error: call.error,
+                argumentMetadata: call.args
+                    ? sensitiveValueMetadata(call.args)
+                    : undefined,
+                errorMetadata: call.error
+                    ? sensitiveValueMetadata(call.error)
+                    : undefined,
             })),
         });
 
@@ -1072,12 +1285,14 @@ async function streamInBackground(
         _messageId,
         _backgroundMode,
         _toolRuntime,
+        _streamedFieldMode,
         ...cleanBody
     } = params.body;
     const toolRuntime =
         typeof _toolRuntime === 'object' && _toolRuntime !== null
             ? (_toolRuntime as Record<string, string>)
             : undefined;
+    const streamedFieldMode = normalizeStreamedFieldMode(_streamedFieldMode);
 
     const hasTools =
         Array.isArray(cleanBody.tools) && cleanBody.tools.length > 0;
@@ -1104,12 +1319,13 @@ async function streamInBackground(
             toolRuntime,
             shouldNotify: () => !hasJobViewers(jobId),
             abortSignal: ac.signal,
+            streamedFieldMode,
         });
         return;
     }
 
     const openRouterUrl = resolveOpenRouterChatCompletionsUrl();
-    const upstream = await fetch(openRouterUrl, {
+    const upstream = await fetchWithResponseDeadline(openRouterUrl, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${params.apiKey}`,
@@ -1119,8 +1335,7 @@ async function streamInBackground(
             'X-Title': 'or3.chat',
         },
         body: JSON.stringify(cleanBody),
-        signal: ac.signal,
-    });
+    }, { signal: ac.signal });
     logBgStream('server-stream-in-background-upstream-response', {
         jobId,
         status: upstream.status,
@@ -1129,25 +1344,24 @@ async function streamInBackground(
     });
 
     if (!upstream.ok || !upstream.body) {
-        const errorText = await upstream.text().catch(() => '<no body>');
+        const errorText = await readResponseTextWithIdleDeadline(upstream, {
+            signal: ac.signal,
+        }).catch(() => '<no body>');
         warnBgStream('server-stream-in-background-upstream-failed', {
             jobId,
             status: upstream.status,
-            errorPreview: errorText.slice(0, 200),
+            responseMetadata: sensitiveValueMetadata(errorText),
         });
-        throw new Error(
-            `OpenRouter error ${upstream.status}: ${errorText.slice(0, 200)}`
-        );
+        throw new Error(`OpenRouter error ${upstream.status}`);
     }
 
     await consumeBackgroundStream({
         jobId,
-        stream: upstream.body,
+        stream: withIdleWatchdog(upstream.body, { signal: ac.signal }),
         context: params,
         provider,
         shouldNotify: () => !hasJobViewers(jobId),
-        flushOnEveryChunk: true,
-        flushIntervalMs: 30,
+        streamedFieldMode,
     });
 }
 

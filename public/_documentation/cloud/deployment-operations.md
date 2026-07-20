@@ -113,15 +113,20 @@ OR3_TRUST_PROXY=true
 
 ## Operational Checks Before Release
 
-1. `bun run type-check` passes.
-2. SSR auth session endpoint works and sets `Cache-Control: no-store`.
-3. Sync push/pull and storage presign/upload/download pass smoke tests.
-4. Background job start + status + abort endpoints behave correctly.
-5. Backup and rollback procedures are documented for the active stack.
+> **Release blocked:** `planning/or3-cloud-chat-audit-remediation/tasks.md`
+> is the authoritative remediation checklist. A release MUST NOT proceed while
+> any unchecked task linked to a Blocker or High finding remains in that file.
+
+1. Confirm every task linked to a Blocker or High finding in the remediation
+   checklist is checked and has its stated verification evidence.
+2. `bun run type-check` passes.
+3. SSR auth session endpoint works and sets `Cache-Control: no-store`.
+4. Sync push/pull and storage presign/upload/download pass smoke tests.
+5. Background job start + status + abort endpoints behave correctly.
+6. Backup and rollback procedures are documented for the active stack.
 
 ## Related
 
 - [config-reference](./config-reference)
 - [provider-compatibility-matrix](./provider-compatibility-matrix)
 - [release-notes-production-readiness](./release-notes-production-readiness)
-

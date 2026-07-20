@@ -41,7 +41,7 @@ export function getAdminStoreProvider(id: string): AdminStoreProvider | null {
 function resolveProviderId(event?: H3Event): string {
     void event;
     const config = useRuntimeConfig();
-    return config.sync?.provider || config.public.sync.provider || 'convex';
+    return config.sync.provider || config.public.sync.provider || 'convex';
 }
 
 /**

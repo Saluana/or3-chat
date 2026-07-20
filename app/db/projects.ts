@@ -120,13 +120,17 @@ export async function upsertProject(value: Project): Promise<void> {
 export async function softDeleteProject(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getWriteTxTableNames(db, 'projects'), async () => {
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'projects', { includeTombstones: true }),
+        async () => {
         const p = await dbTry(() => db.projects.get(id), {
             op: 'read',
             entity: 'projects',
             action: 'get',
         });
         if (!p) return;
+        if (p.deleted) return;
         await hooks.doAction('db.projects.delete:action:soft:before', {
             entity: p,
             id: p.id,
@@ -143,7 +147,8 @@ export async function softDeleteProject(id: string): Promise<void> {
             id: p.id,
             tableName: 'projects',
         });
-    });
+        }
+    );
 }
 
 /**

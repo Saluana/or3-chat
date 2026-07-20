@@ -94,6 +94,7 @@ export function createGatewayStorageProvider(
                 headers?: Record<string, string>;
                 method?: string;
                 storageId?: string;
+                intentId?: string;
             }>('/api/storage/presign-upload', {
                 workspace_id: input.workspaceId,
                 hash: input.hash,
@@ -109,6 +110,7 @@ export function createGatewayStorageProvider(
                 headers: result.headers,
                 method: result.method,
                 storageId: result.storageId,
+                intentId: result.intentId,
             };
         },
 
@@ -141,6 +143,7 @@ export function createGatewayStorageProvider(
                 workspace_id: input.workspaceId,
                 hash: input.hash,
                 storage_id: input.storageId,
+                intent_id: input.intentId,
                 storage_provider_id: input.storageProviderId ?? id,
                 mime_type: input.meta.mimeType,
                 size_bytes: input.meta.sizeBytes,

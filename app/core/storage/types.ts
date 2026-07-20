@@ -27,6 +27,7 @@ export interface PresignedUrlResult {
     headers?: Record<string, string>;
     expiresAt: number;
     storageId?: string;
+    intentId?: string;
     method?: string;
 }
 
@@ -76,6 +77,7 @@ export interface ObjectStorageProvider {
         workspaceId: string;
         hash: string;
         storageId: string;
+        intentId?: string;
         meta: {
             name: string;
             mimeType: string;

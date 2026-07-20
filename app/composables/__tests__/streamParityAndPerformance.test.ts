@@ -50,6 +50,11 @@ vi.mock('~/utils/chat/messages', () => ({
         ...new Set([...(a || []), ...(b || [])]),
     ],
     trimOrMessagesImages: () => {},
+    shouldKeepAssistantMessage: () => true,
+    getChatModalities: (modelId: string) =>
+        /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId)
+            ? ['image', 'text']
+            : ['text'],
 }));
 vi.mock('~/db', () => ({
     db: {

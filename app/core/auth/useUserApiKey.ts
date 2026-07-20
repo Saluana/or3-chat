@@ -13,21 +13,62 @@
  *
  * Constraints:
  * - Client-only (Dexie read is guarded by `import.meta.client`)
- * - Does not persist back to KV; callers are responsible for persistence
+ * - `setKey()` / `clearKey()` are in-memory only; use `persistUserApiKey()`
+ *   for the canonical paste-key path that writes Dexie KV
  * - Relies on `~/state/global` singleton for cross-component reactivity
  *
  * Non-goals:
  * - Does not handle the OAuth flow (see useOpenrouter)
- * - Does not validate the key against OpenRouter
  *
  * @see core/auth/useOpenrouter for login/logout flow
  * @see state/global for the reactive state singleton
  */
 import { computed } from 'vue';
 import { getDb } from '~/db/client';
+import { kv } from '~/db';
 import { state } from '~/state/global';
 
 let kvHydrationStarted = false;
+
+const OPENROUTER_KEY_PREFIX = 'sk-or-';
+
+/**
+ * Validates the format of an OpenRouter API key.
+ * OpenRouter keys start with `sk-or-` and are long random strings.
+ */
+export function isValidOpenRouterKeyFormat(key: string): boolean {
+    const trimmed = key.trim();
+    return (
+        trimmed.startsWith(OPENROUTER_KEY_PREFIX) &&
+        trimmed.length > OPENROUTER_KEY_PREFIX.length + 8
+    );
+}
+
+/**
+ * Persists an OpenRouter API key the same way the OAuth callback does:
+ * writes it to the Dexie `kv` table (survives reloads), updates the global
+ * reactive state, and notifies listeners via `openrouter:connected`.
+ *
+ * This is the canonical "paste a key" path — callers must use this instead
+ * of only mutating in-memory state (which loses the key on reload).
+ *
+ * @throws Error when the key fails format validation.
+ */
+export async function persistUserApiKey(key: string): Promise<void> {
+    const trimmed = key.trim();
+    if (!isValidOpenRouterKeyFormat(trimmed)) {
+        throw new Error(
+            `That doesn't look like an OpenRouter API key. Keys start with "${OPENROUTER_KEY_PREFIX}" — get yours at openrouter.ai/keys.`
+        );
+    }
+    await kv.set('openrouter_api_key', trimmed);
+    state.value.openrouterKey = trimmed;
+    try {
+        window.dispatchEvent(new CustomEvent('openrouter:connected'));
+    } catch {
+        // Event dispatch may fail in non-browser contexts - non-critical
+    }
+}
 
 type KvApiKeyRow = {
     id: string;
@@ -74,7 +115,7 @@ export async function hydrateUserApiKeyFromKv(): Promise<void> {
  * - `setKey` and `clearKey` update in-memory state immediately
  *
  * Constraints:
- * - Does not persist changes to KV (caller must persist if needed)
+ * - `setKey`/`clearKey` do not write KV — use `persistUserApiKey` to save
  * - Client-only hydration; safe to call in SSR but will not read Dexie
  */
 export function useUserApiKey() {

@@ -6,6 +6,7 @@ This provider:
 
 - registers a server-side `StorageGatewayAdapter` with ID `s3`
 - generates short-lived presigned upload/download URLs
+- binds uploads to the declared SHA-256 checksum and exact content length
 - keeps S3 credentials **server-only** (never shipped to the browser)
 
 ## Install
@@ -46,7 +47,7 @@ OR3_STORAGE_S3_FORCE_PATH_STYLE=true
 ## Optional config
 
 ```bash
-# Presigned URL TTL (seconds). Default 900, bounded.
+# Presigned URL TTL (seconds). Default 900, maximum 3600.
 OR3_STORAGE_S3_URL_TTL_SECONDS=900
 
 # Optional key prefix inside the bucket (no leading slash)
@@ -83,6 +84,14 @@ OR3 client flow:
 5. Client calls `POST /api/storage/commit` so the server can verify the upload (size/type) and finalize metadata.
 
 Downloads are similar via `POST /api/storage/presign-download` + direct `GET`.
+
+## Garbage Collection Safety
+
+Destructive S3 blob GC is temporarily disabled. GC requests return
+`deleted_count: 0`, `status: "disabled"`, and
+`reason: "canonical_reference_state_required"` without listing or deleting
+objects. It must remain disabled until canonical materialized reference state,
+not a partial bucket listing, determines blob liveness.
 
 ## Related
 

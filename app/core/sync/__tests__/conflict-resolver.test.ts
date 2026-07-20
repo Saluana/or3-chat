@@ -31,6 +31,7 @@ type MessageRow = {
     id: string;
     clock: number;
     hlc?: string;
+    op_id?: string;
     deleted?: boolean;
     deleted_at?: number;
     thread_id?: string;
@@ -65,12 +66,14 @@ function buildChange({
     clock,
     hlc,
     payload,
+    opId = 'op-1',
 }: {
     pk: string;
     op: 'put' | 'delete';
     clock: number;
     hlc: string;
     payload?: Record<string, unknown>;
+    opId?: string;
 }): SyncChange {
     return {
         serverVersion: 1,
@@ -82,7 +85,7 @@ function buildChange({
             clock,
             hlc,
             deviceId: 'device-1',
-            opId: 'op-1',
+            opId,
         },
     };
 }
@@ -91,6 +94,94 @@ describe('ConflictResolver', () => {
     beforeEach(() => {
         hookState.doAction.mockClear();
         hookBridgeState.markSyncTransaction.mockClear();
+    });
+
+    it('never imports remote file ref_count authority and preserves a valid local cache', async () => {
+        const hash = `sha256:${'a'.repeat(64)}`;
+        const table = createMemoryTable<Record<string, unknown>>('hash');
+        const tombstones = createMemoryTable<Record<string, unknown>>('id');
+        await table.put({
+            hash,
+            name: 'local.png',
+            mime_type: 'image/png',
+            kind: 'image',
+            size_bytes: 10,
+            ref_count: 3,
+            deleted: false,
+            created_at: 1,
+            updated_at: 1,
+            clock: 1,
+            hlc: '0000000000001:0000:local',
+            op_id: 'local-op',
+        });
+        const db = createMockDb({ file_meta: table, tombstones });
+        const resolver = new ConflictResolver(db as never);
+
+        await resolver.applyChanges([{
+            serverVersion: 2,
+            tableName: 'file_meta',
+            pk: hash,
+            op: 'put',
+            payload: {
+                hash,
+                name: 'remote.png',
+                mime_type: 'image/png',
+                kind: 'image',
+                size_bytes: 10,
+                ref_count: Number.NaN,
+                deleted: false,
+                created_at: 1,
+                updated_at: 2,
+                clock: 2,
+            },
+            stamp: {
+                clock: 2,
+                hlc: '0000000000002:0000:remote',
+                deviceId: 'remote',
+                opId: 'remote-op',
+            },
+        }]);
+
+        expect(await table.get(hash)).toMatchObject({
+            name: 'remote.png',
+            ref_count: 3,
+            clock: 2,
+        });
+    });
+
+    it('seeds remotely discovered file metadata with a finite zero ref_count', async () => {
+        const hash = `sha256:${'b'.repeat(64)}`;
+        const table = createMemoryTable<Record<string, unknown>>('hash');
+        const tombstones = createMemoryTable<Record<string, unknown>>('id');
+        const db = createMockDb({ file_meta: table, tombstones });
+        const resolver = new ConflictResolver(db as never);
+
+        await resolver.applyChanges([{
+            serverVersion: 1,
+            tableName: 'file_meta',
+            pk: hash,
+            op: 'put',
+            payload: {
+                hash,
+                name: 'remote.png',
+                mime_type: 'image/png',
+                kind: 'image',
+                size_bytes: 10,
+                ref_count: 999_999,
+                deleted: false,
+                created_at: 1,
+                updated_at: 1,
+                clock: 1,
+            },
+            stamp: {
+                clock: 1,
+                hlc: '0000000000001:0000:remote',
+                deviceId: 'remote',
+                opId: 'remote-op',
+            },
+        }]);
+
+        expect(await table.get(hash)).toMatchObject({ ref_count: 0 });
     });
 
     it('applies remote put when local record is missing', async () => {
@@ -113,6 +204,36 @@ describe('ConflictResolver', () => {
         expect(result.applied).toBe(1);
         expect(stored?.clock).toBe(1);
         expect(stored?.hlc).toBe(change.stamp.hlc);
+    });
+
+    it('resolves repeated page keys against the preceding applied revision', async () => {
+        const table = createMemoryTable<MessageRow>('id');
+        const tombstones = createMemoryTable<never>('id');
+        const db = createMockDb({ messages: table, tombstones });
+        const resolver = new ConflictResolver(db as never);
+
+        const newer = buildChange({
+            pk: 'm1',
+            op: 'put',
+            clock: 2,
+            hlc: '0000000000002:0000:node',
+            payload: buildMessagePayload({ id: 'm1', text: 'newer', clock: 2 }),
+        });
+        const older = buildChange({
+            pk: 'm1',
+            op: 'put',
+            clock: 1,
+            hlc: '0000000000001:0000:node',
+            payload: buildMessagePayload({ id: 'm1', text: 'older', clock: 1 }),
+        });
+
+        const result = await resolver.applyChanges([newer, older]);
+        const stored = await table.get('m1') as MessageRow & { text?: string };
+
+        expect(result.applied).toBe(1);
+        expect(result.skipped).toBe(1);
+        expect(stored.clock).toBe(2);
+        expect(stored.text).toBe('newer');
     });
 
     it('applies remote delete when clock is higher', async () => {
@@ -168,7 +289,7 @@ describe('ConflictResolver', () => {
 
     it('keeps local record when HLC tie-breaker favors local', async () => {
         const table = createMemoryTable<MessageRow>('id', [
-            { id: 'm1', clock: 2, hlc: '0000000000002:0002:node' },
+            { id: 'm1', clock: 2, hlc: '0000000000002:0002:node', op_id: 'op-1' },
         ]);
         const tombstones = createMemoryTable<any>('id');
         const db = createMockDb({ messages: table, tombstones });
@@ -195,7 +316,7 @@ describe('ConflictResolver', () => {
 
     it('treats equal HLC put as idempotent duplicate (not conflict)', async () => {
         const table = createMemoryTable<MessageRow>('id', [
-            { id: 'm1', clock: 2, hlc: '0000000000002:0002:node' },
+            { id: 'm1', clock: 2, hlc: '0000000000002:0002:node', op_id: 'op-1' },
         ]);
         const tombstones = createMemoryTable<any>('id');
         const db = createMockDb({ messages: table, tombstones });
@@ -223,7 +344,7 @@ describe('ConflictResolver', () => {
 
     it('treats equal HLC delete as idempotent duplicate (not conflict)', async () => {
         const table = createMemoryTable<MessageRow>('id', [
-            { id: 'm1', clock: 2, hlc: '0000000000002:0002:node', deleted: false },
+            { id: 'm1', clock: 2, hlc: '0000000000002:0002:node', op_id: 'op-1', deleted: false },
         ]);
         const tombstones = createMemoryTable<any>('id');
         const db = createMockDb({ messages: table, tombstones });
@@ -246,5 +367,46 @@ describe('ConflictResolver', () => {
             'sync.conflict:action:detected',
             expect.anything()
         );
+    });
+
+    it('uses operation ID as the final equal-clock/equal-HLC tie-breaker', async () => {
+        const table = createMemoryTable<MessageRow>('id', [
+            { id: 'm1', clock: 2, hlc: '0000000000002:0002:node', op_id: 'op-a' },
+        ]);
+        const tombstones = createMemoryTable<any>('id');
+        const resolver = new ConflictResolver(createMockDb({ messages: table, tombstones }) as any);
+
+        const result = await resolver.applyChanges([buildChange({
+            pk: 'm1', op: 'put', clock: 2, hlc: '0000000000002:0002:node', opId: 'op-b',
+            payload: buildMessagePayload({ id: 'm1', text: 'op-id-winner', clock: 2 }),
+        })]);
+
+        expect(result.applied).toBe(1);
+        expect(await table.get('m1')).toMatchObject({ op_id: 'op-b', text: 'op-id-winner' });
+    });
+
+    it('fails closed on ambiguous legacy tombstone ties but accepts a proven newer tuple', async () => {
+        const table = createMemoryTable<MessageRow>('id');
+        const tombstones = createMemoryTable<any>('id', [{
+            id: 'messages:m1', tableName: 'messages', pk: 'm1', deletedAt: 1, clock: 2,
+        }]);
+        const resolver = new ConflictResolver(createMockDb({ messages: table, tombstones }) as any);
+        const payload = buildMessagePayload({ id: 'm1', text: 'candidate', clock: 2 });
+
+        const ambiguous = await resolver.applyChanges([buildChange({
+            pk: 'm1', op: 'put', clock: 2, hlc: '0000000000002:0002:node', opId: 'op-z', payload,
+        })]);
+        expect(ambiguous.applied).toBe(0);
+        expect(await table.get('m1')).toBeUndefined();
+
+        await tombstones.put({
+            id: 'messages:m1', tableName: 'messages', pk: 'm1', deletedAt: 1, clock: 2,
+            hlc: '0000000000002:0002:node', opId: 'op-a',
+        });
+        const newer = await resolver.applyChanges([buildChange({
+            pk: 'm1', op: 'put', clock: 2, hlc: '0000000000002:0002:node', opId: 'op-z', payload,
+        })]);
+        expect(newer.applied).toBe(1);
+        expect(await table.get('m1')).toMatchObject({ op_id: 'op-z' });
     });
 });

@@ -44,6 +44,11 @@ const REQUEST_ID_KEY = '__or3_request_id';
 const DEFAULT_SHARED_SESSION_CACHE_TTL_MS = 60_000;
 const MAX_SHARED_SESSION_CACHE_ENTRIES = 2_000;
 
+let nextAuthorizationRevision = 1;
+let globalAuthorizationRevision = 0;
+const identityAuthorizationRevisions = new Map<string, number>();
+const storeAuthorizationRevisions = new Map<string, number>();
+
 type SharedSessionCacheEntry = {
     session: SessionContext;
     expiresAtMs: number;
@@ -59,6 +64,34 @@ function getSharedSessionCacheKey(
     storeId: string
 ): string {
     return `${providerId}:${providerUserId}:${storeId}`;
+}
+
+function getIdentityAuthorizationRevisionKey(
+    providerId: string,
+    providerUserId: string,
+    storeId: string
+): string {
+    return `${providerId}:${providerUserId}:${storeId}`;
+}
+
+function getAuthorizationRevision(
+    providerId: string,
+    providerUserId: string,
+    storeId: string
+): number {
+    return Math.max(
+        globalAuthorizationRevision,
+        storeAuthorizationRevisions.get(storeId) ?? 0,
+        identityAuthorizationRevisions.get(
+            getIdentityAuthorizationRevisionKey(providerId, providerUserId, storeId)
+        ) ?? 0
+    );
+}
+
+function advanceAuthorizationRevision(): number {
+    const revision = nextAuthorizationRevision;
+    nextAuthorizationRevision += 1;
+    return revision;
 }
 
 function clearSharedSessionCacheEntry(
@@ -314,16 +347,10 @@ export async function resolveSessionContext(
             }
 
             if (registrationDecision.invite) {
-                if (typeof store.consumeInvite !== 'function') {
+                if (typeof store.acceptInviteAndProvisionUser !== 'function') {
                     throw createError({
                         statusCode: 503,
-                        statusMessage: 'Auth store missing invite consume capability.',
-                    });
-                }
-                if (typeof store.listInvites !== 'function') {
-                    throw createError({
-                        statusCode: 503,
-                        statusMessage: 'Auth store missing invite lookup capability.',
+                        statusMessage: 'Auth store missing atomic invite provisioning capability.',
                     });
                 }
 
@@ -338,66 +365,44 @@ export async function resolveSessionContext(
                     });
                 }
 
-                const pendingInvite = (
-                    await store.listInvites({
-                        workspaceId: registrationDecision.invite.payload.workspaceId,
-                        status: 'pending',
-                        limit: 500,
-                    })
-                ).find(
-                    (invite) =>
-                        invite.tokenHash === registrationDecision.invite.tokenHash &&
-                        invite.email.trim().toLowerCase() === inviteEmail &&
-                        invite.expiresAt > Date.now()
-                );
-                if (!pendingInvite) {
-                    throw createError({
-                        statusCode: 403,
-                        statusMessage: 'Invite token is invalid or expired.',
-                    });
-                }
-            }
-
-            const created = await store.getOrCreateUser({
-                provider: providerSession.provider,
-                providerUserId: providerSession.user.id,
-                email: providerSession.user.email,
-                displayName: providerSession.user.displayName,
-            });
-            userId = created.userId;
-            await emitWebhookSystemHook('auth.user:action:created', {
-                userId,
-                provider: providerSession.provider,
-                email: providerSession.user.email ?? null,
-            });
-
-            if (registrationDecision.invite) {
-                const inviteEmail =
-                    registrationDecision.invite.payload.email.trim().toLowerCase();
-                const consumeInvite = store.consumeInvite;
-                if (typeof consumeInvite !== 'function') {
-                    throw createError({
-                        statusCode: 503,
-                        statusMessage: 'Auth store missing invite consume capability.',
-                    });
-                }
-
-                const consumeResult = await consumeInvite({
+                const provisioned = await store.acceptInviteAndProvisionUser({
+                    provider: providerSession.provider,
+                    providerUserId: providerSession.user.id,
+                    email: providerEmail,
+                    displayName: providerSession.user.displayName,
                     workspaceId: registrationDecision.invite.payload.workspaceId,
-                    email: inviteEmail,
                     tokenHash: registrationDecision.invite.tokenHash,
-                    acceptedUserId: userId,
                 });
-
-                if (!consumeResult.ok) {
+                if (!provisioned.ok) {
                     throw createError({
                         statusCode: 403,
                         statusMessage: 'Invite token is invalid or expired.',
+                    });
+                }
+                userId = provisioned.userId;
+                if (provisioned.createdUser) {
+                    await emitWebhookSystemHook('auth.user:action:created', {
+                        userId,
+                        provider: providerSession.provider,
+                        email: providerSession.user.email ?? null,
                     });
                 }
 
                 deleteCookie(event, 'or3_invite_token', {
                     path: '/',
+                });
+            } else {
+                const created = await store.getOrCreateUser({
+                    provider: providerSession.provider,
+                    providerUserId: providerSession.user.id,
+                    email: providerSession.user.email,
+                    displayName: providerSession.user.displayName,
+                });
+                userId = created.userId;
+                await emitWebhookSystemHook('auth.user:action:created', {
+                    userId,
+                    provider: providerSession.provider,
+                    email: providerSession.user.email ?? null,
                 });
             }
         }
@@ -455,6 +460,11 @@ export async function resolveSessionContext(
             role: workspaceInfo.role,
             expiresAt: providerSession.expiresAt.toISOString(),
             deploymentAdmin,
+            authorizationRevision: getAuthorizationRevision(
+                providerSession.provider,
+                providerSession.user.id,
+                storeId
+            ),
         };
 
         recordSessionResolution(true);
@@ -505,6 +515,10 @@ export async function resolveSessionContext(
  */
 export function _resetSharedSessionCache(): void {
     sharedSessionCache.clear();
+    identityAuthorizationRevisions.clear();
+    storeAuthorizationRevisions.clear();
+    globalAuthorizationRevision = 0;
+    nextAuthorizationRevision = 1;
 }
 
 /**
@@ -521,4 +535,24 @@ export function invalidateSharedSessionCacheForIdentity(input: {
     storeId?: string;
 }): void {
     clearSharedSessionCacheEntry(input.provider, input.providerUserId, input.storeId);
+
+    const revision = advanceAuthorizationRevision();
+    if (input.provider && input.providerUserId && input.storeId) {
+        identityAuthorizationRevisions.set(
+            getIdentityAuthorizationRevisionKey(
+                input.provider,
+                input.providerUserId,
+                input.storeId
+            ),
+            revision
+        );
+        return;
+    }
+
+    if (input.storeId) {
+        storeAuthorizationRevisions.set(input.storeId, revision);
+        return;
+    }
+
+    globalAuthorizationRevision = revision;
 }

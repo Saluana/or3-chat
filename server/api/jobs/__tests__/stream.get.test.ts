@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { BackgroundJob } from '../../../utils/background-jobs/types';
 
-let serializeJobStatus: typeof import('../[id]/stream.get').serializeJobStatus;
+let streamModule: typeof import('../[id]/stream.get');
 
 const baseJob: BackgroundJob = {
     id: 'job-1',
@@ -46,19 +46,19 @@ beforeAll(async () => {
     }
 
     const mod = await import('../[id]/stream.get');
-    serializeJobStatus = mod.serializeJobStatus;
+    streamModule = mod;
 });
 
 describe('serializeJobStatus', () => {
     it('includes content by default', () => {
-        const status = serializeJobStatus(baseJob);
+        const status = streamModule.serializeJobStatus(baseJob);
 
         expect(status.content).toBe(baseJob.content);
         expect(status.content_length).toBe(baseJob.content.length);
     });
 
     it('omits content when includeContent is false', () => {
-        const status = serializeJobStatus(baseJob, {
+        const status = streamModule.serializeJobStatus(baseJob, {
             includeContent: false,
             content_delta: '!',
             content_length: baseJob.content.length + 1,
@@ -70,9 +70,18 @@ describe('serializeJobStatus', () => {
     });
 
     it('passes through tool calls and workflow state', () => {
-        const status = serializeJobStatus(baseJob);
+        const status = streamModule.serializeJobStatus(baseJob);
 
         expect(status.tool_calls).toEqual(baseJob.tool_calls);
         expect(status.workflow_state).toEqual(baseJob.workflow_state);
+    });
+});
+
+describe('SSE viewer queue performance gate', () => {
+    it('caps every viewer at 256 KiB and rejects the first overflowing event', () => {
+        expect(streamModule.MAX_SSE_VIEWER_QUEUE_BYTES).toBe(256 * 1024);
+        expect(streamModule.hasSseQueueCapacity(1024, 1024)).toBe(true);
+        expect(streamModule.hasSseQueueCapacity(1023, 1024)).toBe(false);
+        expect(streamModule.hasSseQueueCapacity(null, 1024)).toBe(true);
     });
 });

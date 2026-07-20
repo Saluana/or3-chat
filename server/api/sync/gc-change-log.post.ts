@@ -16,10 +16,19 @@ import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isSyncEnabled } from '../../utils/sync/is-sync-enabled';
 import { getActiveSyncGatewayAdapter } from '../../sync/gateway/registry';
+import {
+    canRunSyncHistoryGc,
+    MAX_SYNC_RETENTION_SECONDS,
+    MIN_SYNC_RETENTION_SECONDS,
+    SYNC_HISTORY_GC_POLICY,
+    supportsSyncHistoryRetention,
+} from '~~/shared/sync/history-gc-policy';
 
 const GcRequestSchema = z.object({
     scope: SyncScopeSchema,
-    retentionSeconds: z.number().int().positive(),
+    retentionSeconds: z.number().int()
+        .min(MIN_SYNC_RETENTION_SECONDS)
+        .max(MAX_SYNC_RETENTION_SECONDS),
 });
 
 /**
@@ -54,6 +63,13 @@ export default defineEventHandler(async (event) => {
         id: parsed.data.scope.workspaceId,
     });
 
+    if (!canRunSyncHistoryGc()) {
+        throw createError({
+            statusCode: 503,
+            statusMessage: SYNC_HISTORY_GC_POLICY.reason,
+        });
+    }
+
     // Rate limiting for GC operations (even admins need limits)
     const { checkSyncRateLimit, recordSyncRequest } = await import('../../utils/sync/rate-limiter');
     const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:gc');
@@ -68,6 +84,10 @@ export default defineEventHandler(async (event) => {
     const adapter = getActiveSyncGatewayAdapter();
     if (!adapter) {
         throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
+    }
+
+    if (!supportsSyncHistoryRetention(adapter.capabilities)) {
+        throw createError({ statusCode: 503, statusMessage: SYNC_HISTORY_GC_POLICY.reason });
     }
 
     // Check if adapter supports GC change log

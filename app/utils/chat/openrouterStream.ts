@@ -20,8 +20,54 @@ import type { WorkflowMessageData } from './workflow-types';
 import {
     parseOpenRouterSSE,
     type ORStreamEvent,
+    type StreamedFieldMode,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
+import { OpenRouterStreamError } from '~~/shared/openrouter/errors';
+import {
+    getAnthropicPromptCacheControl,
+    type OpenRouterCacheControl,
+} from '~~/shared/openrouter/request';
+import type { OpenRouterReasoningConfig } from '~~/shared/openrouter/reasoning';
+import { sensitiveValueMetadata } from '~~/shared/logging/sensitive-metadata';
+import {
+    abortableDelay,
+    DEFAULT_BACKGROUND_START_TIMEOUT_MS,
+    fetchWithResponseDeadline,
+    OpenRouterTimeoutError,
+    readResponseJsonWithIdleDeadline,
+    readResponseTextWithIdleDeadline,
+    withIdleWatchdog,
+} from '~~/shared/openrouter/deadlines';
+
+function parseRetryAfterSeconds(value: string): number {
+    const seconds = Number(value);
+    if (Number.isFinite(seconds) && seconds > 0) return seconds;
+    // Retry-After may also be an HTTP-date string; for our budget we treat
+    // unparseable values as a small default.
+    return 1;
+}
+
+export type BackgroundPollFailureKind =
+    | 'transport'
+    | 'rate_limit'
+    | 'server'
+    | 'not_found'
+    | 'auth'
+    | 'protocol';
+
+export class BackgroundJobPollError extends Error {
+    constructor(
+        message: string,
+        readonly kind: BackgroundPollFailureKind,
+        readonly retryable: boolean,
+        readonly statusCode?: number,
+        readonly retryAfterMs?: number
+    ) {
+        super(message);
+        this.name = 'BackgroundJobPollError';
+    }
+}
 
 // NOTE: The OpenRouter SDK supports streaming, but this module uses raw fetch
 // so we can keep one shared SSE parser for both direct and proxied/server routes.
@@ -38,12 +84,7 @@ type ORMessage = {
     [key: string]: unknown;
 };
 
-export type OpenRouterReasoningConfig = {
-    effort?: 'low' | 'medium' | 'high';
-    enabled?: boolean;
-    max_tokens?: number;
-    exclude?: boolean;
-};
+export type { OpenRouterReasoningConfig } from '~~/shared/openrouter/reasoning';
 
 interface ServerRouteCacheEntry {
     available: boolean;
@@ -56,12 +97,14 @@ type OpenRouterRequestBody = {
     modalities: string[];
     stream: true;
     reasoning?: OpenRouterReasoningConfig;
+    cache_control?: OpenRouterCacheControl;
     tools?: ToolDefinition[];
     tool_choice?: ToolChoice;
     _background?: true;
     _threadId?: string;
     _messageId?: string;
     _toolRuntime?: Record<string, string>;
+    _streamedFieldMode?: StreamedFieldMode;
 };
 
 // Cache key for detecting static build (no server routes)
@@ -156,6 +199,11 @@ export async function* openRouterStream(params: {
     toolChoice?: ToolChoice;
     signal?: AbortSignal;
     reasoning?: OpenRouterReasoningConfig;
+    /** How the selected provider emits streamed tool name/argument fields. */
+    streamedFieldMode?: StreamedFieldMode;
+    /** Primarily configurable for deterministic tests and constrained runtimes. */
+    responseTimeoutMs?: number;
+    idleTimeoutMs?: number;
 }): AsyncGenerator<ORStreamEvent, void, unknown> {
     const { apiKey, model, orMessages, modalities, tools, signal } = params;
     const hasApiKey = Boolean(apiKey);
@@ -192,15 +240,24 @@ export async function* openRouterStream(params: {
     if (params.reasoning) {
         body.reasoning = params.reasoning;
     }
+    const cacheControl = getAnthropicPromptCacheControl(model);
+    if (cacheControl) {
+        body.cache_control = cacheControl;
+    }
 
     if (tools) {
         body.tools = tools.map(stripUiMetadata);
         body.tool_choice = params.toolChoice ?? 'auto';
     }
 
-    // Req 3, 5, 6: Try server route first (/api/openrouter/stream) if available
-    // Skip if we've already determined it's not available (static build or server down)
+    // Req 3, 5, 6: Try server route first (/api/openrouter/stream) if available.
+    // Only 404/405 and genuine network failures are treated as "route unavailable";
+    // other proxy errors (5xx, 401, 403, etc.) propagate so the caller can retry or
+    // surface them instead of silently poisoning the availability cache.
     if (forceServerRoute || isServerRouteAvailable()) {
+        let serverResp: Response | undefined;
+        let networkError: Error | undefined;
+
         try {
             const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
@@ -208,52 +265,76 @@ export async function* openRouterStream(params: {
             if (hasApiKey) {
                 headers['x-or3-openrouter-key'] = apiKey as string;
             }
-            const serverResp = await fetch('/api/openrouter/stream', {
+            serverResp = await fetchWithResponseDeadline('/api/openrouter/stream', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(body),
-                signal,
-            });
+            }, { signal, timeoutMs: params.responseTimeoutMs });
+        } catch (e) {
+            if (
+                signal?.aborted ||
+                (e instanceof Error && e.name === 'AbortError')
+            ) {
+                throw e;
+            }
+            if (e instanceof OpenRouterTimeoutError) throw e;
+            networkError = e instanceof Error ? e : new Error(String(e));
+        }
 
+        if (serverResp) {
             if (serverResp.ok && serverResp.body) {
                 // Server route available; use shared parser on response
-                for await (const evt of parseOpenRouterSSE(serverResp.body)) {
+                const guardedBody = withIdleWatchdog(serverResp.body, {
+                    signal,
+                    timeoutMs: params.idleTimeoutMs,
+                });
+                for await (const evt of parseOpenRouterSSE(guardedBody, {
+                    streamedFieldMode: params.streamedFieldMode,
+                })) {
                     yield evt;
                 }
                 return; // Success; don't fall back
             }
 
             if (serverResp.status === 404 || serverResp.status === 405) {
-                // Server route not OK
                 if (forceServerRoute) {
-                    throw new Error(
-                        'OpenRouter server route unavailable in SSR mode (/api/openrouter/stream)'
+                    throw new OpenRouterStreamError(
+                        'OpenRouter server route unavailable in SSR mode (/api/openrouter/stream)',
+                        { status: serverResp.status, retryable: false }
                     );
                 }
                 setServerRouteAvailable(false);
             } else {
-                const errorText = await serverResp.text().catch(() => '');
-                throw new Error(
+                const errorText = await readResponseTextWithIdleDeadline(serverResp, {
+                    signal,
+                    timeoutMs: params.idleTimeoutMs,
+                }).catch(() => '');
+                const retryable =
+                    serverResp.status === 429 || serverResp.status >= 500;
+                throw new OpenRouterStreamError(
                     `OpenRouter proxy error ${serverResp.status}: ${errorText.slice(
                         0,
                         300
-                    )}`
+                    )}`,
+                    { status: serverResp.status, retryable }
                 );
             }
-        } catch (error) {
+        } else if (networkError) {
             if (forceServerRoute) {
-                throw error instanceof Error
-                    ? error
-                    : new Error('OpenRouter server route failed in SSR mode');
+                throw new OpenRouterStreamError(networkError.message, {
+                    status: 0,
+                    retryable: true,
+                });
             }
-            // Server route unavailable (404, network error, transient proxy errors, etc.);
-            // mark as unavailable and fall back to direct API when allowed.
             setServerRouteAvailable(false);
         }
     }
 
     if (!hasApiKey) {
-        throw new Error('Missing OpenRouter API key');
+        throw new OpenRouterStreamError('Missing OpenRouter API key', {
+            status: 400,
+            retryable: false,
+        });
     }
 
     // Fallback: direct OpenRouter (legacy path)
@@ -262,69 +343,149 @@ export async function* openRouterStream(params: {
     delete fallbackBody._threadId;
     delete fallbackBody._messageId;
 
-    const resp = await fetch(openRouterChatUrl, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer':
-                (typeof location !== 'undefined' && location.origin) ||
-                'https://or3.chat',
-            'X-Title': 'or3.chat',
-            Accept: 'text/event-stream',
-        },
-        body: JSON.stringify(fallbackBody),
-        signal,
-    });
+    let resp: Response;
+    try {
+        resp = await fetchWithResponseDeadline(openRouterChatUrl, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer':
+                    (typeof location !== 'undefined' && location.origin) ||
+                    'https://or3.chat',
+                'X-Title': 'or3.chat',
+                Accept: 'text/event-stream',
+            },
+            body: JSON.stringify(fallbackBody),
+        }, { signal, timeoutMs: params.responseTimeoutMs });
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
+        if (error instanceof OpenRouterStreamError) throw error;
+        throw new OpenRouterStreamError(
+            error instanceof Error ? error.message : 'OpenRouter network request failed',
+            { status: 0, retryable: true, kind: 'transport' }
+        );
+    }
 
     if (!resp.ok || !resp.body) {
         // Read response text for diagnostics
         let respText = '<no-body>';
         try {
-            respText = await resp.text();
+            respText = await readResponseTextWithIdleDeadline(resp, {
+                signal,
+                timeoutMs: params.idleTimeoutMs,
+            });
         } catch (readErr) {
             respText = `<error-reading-body:${
                 readErr instanceof Error ? readErr.message : 'err'
             }>`;
         }
 
-        // Produce a truncated preview of the outgoing body to help debug (truncate long strings)
-        let bodyPreview = '<preview-failed>';
-        try {
-            bodyPreview = JSON.stringify(
-                fallbackBody,
-                (_key: string, value: unknown): unknown => {
-                    if (typeof value === 'string' && value.length > 300) {
-                        return `${value.slice(0, 300)}...(${value.length})`;
-                    }
-                    return value;
-                },
-                2
-            );
-        } catch (stringifyErr) {
-            bodyPreview = `<stringify-error:${
-                stringifyErr instanceof Error ? stringifyErr.message : 'err'
-            }>`;
-        }
-
         console.warn('[openrouterStream] OpenRouter request failed', {
             status: resp.status,
             statusText: resp.statusText,
-            responseSnippet: respText.slice(0, 2000),
-            bodyPreview,
+            responseMetadata: sensitiveValueMetadata(respText),
+            requestMetadata: sensitiveValueMetadata(JSON.stringify(fallbackBody)),
         });
 
-        throw new Error(
-            `OpenRouter request failed ${resp.status} ${
-                resp.statusText
-            }: ${respText.slice(0, 300)}`
+        const retryable = resp.status === 429 || resp.status >= 500;
+        const retryAfter = resp.headers.get('retry-after');
+        const retryAfterMs = retryAfter
+            ? parseRetryAfterSeconds(retryAfter) * 1000
+            : undefined;
+        throw new OpenRouterStreamError(
+            `OpenRouter request failed ${resp.status} ${resp.statusText}`,
+            { status: resp.status, retryable, retryAfterMs }
         );
     }
 
     // Req 6: Use shared parser on fallback (direct) path to ensure identical behavior
-    for await (const evt of parseOpenRouterSSE(resp.body)) {
+    const guardedBody = withIdleWatchdog(resp.body, {
+        signal,
+        timeoutMs: params.idleTimeoutMs,
+    });
+    for await (const evt of parseOpenRouterSSE(guardedBody, {
+        streamedFieldMode: params.streamedFieldMode,
+    })) {
         yield evt;
     }
+}
+
+/**
+ * `openRouterStreamWithRetry`
+ *
+ * Purpose:
+ * Wraps `openRouterStream` with automatic retry for transient connection
+ * failures. Retries only before the first streamed event is yielded; once
+ * bytes start flowing, mid-stream errors propagate so the caller can preserve
+ * partial state.
+ *
+ * Behavior:
+ * - Retries 429 (with Retry-After), 5xx, and network errors up to `maxRetries`
+ * - Caps per-retry wait at `maxRetryAfterMs` (default 5s)
+ * - Non-retryable errors (4xx except 429, AbortError) propagate immediately
+ */
+export async function* openRouterStreamWithRetry(
+    params: Parameters<typeof openRouterStream>[0] & {
+        maxRetries?: number;
+        maxRetryAfterMs?: number;
+    }
+): AsyncGenerator<ORStreamEvent, void, unknown> {
+    const {
+        maxRetries = 2,
+        maxRetryAfterMs = 5000,
+        ...streamParams
+    } = params;
+    const baseDelayMs = 500;
+    let lastError: OpenRouterStreamError | undefined;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const stream = openRouterStream(streamParams);
+            const iterator = stream[Symbol.asyncIterator]();
+            const first = await iterator.next();
+            if (first.done) {
+                return;
+            }
+            yield first.value;
+            // First event succeeded; drain the rest without retry to avoid duplicates.
+            while (true) {
+                const next = await iterator.next();
+                if (next.done) return;
+                yield next.value;
+            }
+        } catch (e) {
+            const error =
+                e instanceof OpenRouterStreamError
+                    ? e
+                    : new OpenRouterStreamError(
+                          e instanceof Error ? e.message : String(e),
+                          {
+                              status: 0,
+                              retryable:
+                                  !(e instanceof Error) ||
+                                  e.name !== 'AbortError',
+                          }
+                      );
+            lastError = error;
+            if (!error.retryable || attempt >= maxRetries) {
+                throw error;
+            }
+            const delayMs = Math.min(
+                error.retryAfterMs ?? baseDelayMs * 2 ** attempt,
+                maxRetryAfterMs
+            );
+            await abortableDelay(delayMs, streamParams.signal);
+        }
+    }
+
+    throw (
+        lastError ??
+        new OpenRouterStreamError('OpenRouter stream failed', {
+            status: 0,
+            retryable: true,
+        })
+    );
 }
 
 // ============================================================
@@ -453,6 +614,10 @@ export async function startBackgroundStream(params: {
     tools?: ToolDefinition[];
     toolChoice?: ToolChoice;
     toolRuntime?: Record<string, string>;
+    streamedFieldMode?: StreamedFieldMode;
+    signal?: AbortSignal;
+    responseTimeoutMs?: number;
+    idleTimeoutMs?: number;
 }): Promise<BackgroundStreamResult> {
     const body: OpenRouterRequestBody & {
         _background: true;
@@ -471,6 +636,10 @@ export async function startBackgroundStream(params: {
     if (params.reasoning) {
         body.reasoning = params.reasoning;
     }
+    const cacheControl = getAnthropicPromptCacheControl(params.model);
+    if (cacheControl) {
+        body.cache_control = cacheControl;
+    }
 
     if (params.tools) {
         body.tools = params.tools.map(stripUiMetadata);
@@ -478,6 +647,9 @@ export async function startBackgroundStream(params: {
     }
     if (params.toolRuntime) {
         body._toolRuntime = params.toolRuntime;
+    }
+    if (params.streamedFieldMode) {
+        body._streamedFieldMode = params.streamedFieldMode;
     }
 
     const headers: Record<string, string> = {
@@ -487,11 +659,14 @@ export async function startBackgroundStream(params: {
         headers['x-or3-openrouter-key'] = params.apiKey;
     }
 
-    const resp = await fetch('/api/openrouter/stream', {
+    const resp = await fetchWithResponseDeadline('/api/openrouter/stream', {
         method: 'POST',
         headers,
         credentials: 'include',
         body: JSON.stringify(body),
+    }, {
+        signal: params.signal,
+        timeoutMs: params.responseTimeoutMs ?? DEFAULT_BACKGROUND_START_TIMEOUT_MS,
     });
 
     if (!resp.ok) {
@@ -506,7 +681,10 @@ export async function startBackgroundStream(params: {
         throw new Error(message);
     }
 
-    const result = await resp.json() as BackgroundStreamResult;
+    const result = await readResponseJsonWithIdleDeadline<BackgroundStreamResult>(resp, {
+        signal: params.signal,
+        timeoutMs: params.idleTimeoutMs,
+    });
     
     // Mark background streaming as available since it worked
     setBackgroundStreamingAvailable(true);
@@ -522,23 +700,56 @@ export async function startBackgroundStream(params: {
  */
 export async function pollJobStatus(
     jobId: string,
-    offset?: number
+    offset?: number,
+    signal?: AbortSignal
 ): Promise<BackgroundJobStatus> {
     const url =
         typeof offset === 'number' && Number.isFinite(offset) && offset >= 0
             ? `/api/jobs/${jobId}/status?offset=${Math.floor(offset)}`
             : `/api/jobs/${jobId}/status`;
-    const resp = await fetch(url);
+    let resp: Response;
+    try {
+        resp = await fetchWithResponseDeadline(url, {}, { signal });
+    } catch (error) {
+        if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+            throw error;
+        }
+        throw new BackgroundJobPollError(
+            error instanceof Error ? error.message : 'Job status transport failed',
+            'transport',
+            true
+        );
+    }
 
     if (!resp.ok) {
         const message = await readErrorMessage(
             resp,
             `Job status failed: ${resp.status}`
         );
-        throw new Error(message);
+        const retryAfter = resp.headers.get('retry-after');
+        const retryAfterMs = retryAfter
+            ? Math.min(30_000, Math.max(0, parseRetryAfterSeconds(retryAfter) * 1_000))
+            : undefined;
+        const kind: BackgroundPollFailureKind =
+            resp.status === 429
+                ? 'rate_limit'
+                : resp.status >= 500
+                    ? 'server'
+                    : resp.status === 404
+                        ? 'not_found'
+                        : resp.status === 401 || resp.status === 403
+                            ? 'auth'
+                            : 'protocol';
+        throw new BackgroundJobPollError(
+            message,
+            kind,
+            kind !== 'protocol',
+            resp.status,
+            retryAfterMs
+        );
     }
 
-    const status = await resp.json() as BackgroundJobStatus;
+    const status = await readResponseJsonWithIdleDeadline<BackgroundJobStatus>(resp, { signal });
     return status;
 }
 

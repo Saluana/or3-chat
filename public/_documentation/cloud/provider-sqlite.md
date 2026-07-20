@@ -8,6 +8,7 @@ Setup and operating guide for the default-stack sync backend.
 - Canonical workspace/user storage through provider `AuthWorkspaceStore`.
 - Global `server_version` cursor progression per workspace.
 - Durable outbox push/pull support with idempotency (`op_id`) and LWW conflict semantics.
+- Consistent materialized snapshot pages pinned to one server high-watermark.
 
 ## Install
 
@@ -44,7 +45,10 @@ OR3_SQLITE_ALLOW_IN_MEMORY=false
 - Workspace isolation on materialized sync tables (`workspace_id` scoping).
 - Monotonic workspace `server_version` allocation.
 - Idempotent push handling via `op_id`.
-- Tombstones retained and GC’d via device cursors + retention window.
+- Snapshot items are frozen under `BEGIN IMMEDIATE`, ordered by
+  `(tableName, primaryKey, kind)`, and served through bounded keyset pages.
+- Tombstones and change history remain retained while end-to-end snapshot apply
+  and replay verification are incomplete.
 - One cursor per workspace (not per-table cursors).
 
 ## Operational Notes
@@ -59,4 +63,3 @@ OR3_SQLITE_ALLOW_IN_MEMORY=false
 - [sync-layer](./sync-layer)
 - [provider-basic-auth](./provider-basic-auth)
 - [provider-fs](./provider-fs)
-

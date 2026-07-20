@@ -3,6 +3,7 @@ import type { FileTransfer } from '~~/shared/storage/types';
 import type { FileMeta } from '~/db/schema';
 import { FileTransferQueue } from '../transfer-queue';
 import type { ObjectStorageProvider } from '../types';
+import { controlledIo, flushTransferScheduling } from './fixtures/transfer-faults';
 
 const hookState = vi.hoisted(() => ({
     applyFilters: vi.fn(async (_name: string, payload: unknown) => payload),
@@ -60,6 +61,24 @@ class TableStub<T extends Record<string, any>> {
                         const [us, uw] = upper as [string, string, number];
                         return row.state === ls && row.state === us && row.workspace_id === lw && row.workspace_id === uw;
                     }
+                    if (field === '[state+workspace_id+retry_at]') {
+                        const [ls, lw, lts] = lower as [string, string, number];
+                        const [us, uw, uts] = upper as [string, string, number];
+                        const retryAt = row.retry_at ?? 0;
+                        const minRetryAt = typeof lts === 'number' ? lts : Number.NEGATIVE_INFINITY;
+                        const maxRetryAt = typeof uts === 'number' ? uts : Number.POSITIVE_INFINITY;
+                        return row.state === ls && row.state === us && row.workspace_id === lw &&
+                            row.workspace_id === uw && retryAt >= minRetryAt && retryAt <= maxRetryAt;
+                    }
+                    if (field === '[state+workspace_id+lease_expires_at]') {
+                        const [ls, lw, lts] = lower as [string, string, number];
+                        const [us, uw, uts] = upper as [string, string, number];
+                        const expiresAt = row.lease_expires_at ?? 0;
+                        const minExpiresAt = typeof lts === 'number' ? lts : Number.NEGATIVE_INFINITY;
+                        const maxExpiresAt = typeof uts === 'number' ? uts : Number.POSITIVE_INFINITY;
+                        return row.state === ls && row.state === us && row.workspace_id === lw &&
+                            row.workspace_id === uw && expiresAt >= minExpiresAt && expiresAt <= maxExpiresAt;
+                    }
                     if (field === '[state+created_at]') {
                         const [ls, lts] = lower as [string, number];
                         const [us, uts] = upper as [string, number];
@@ -92,9 +111,7 @@ function createDbStub(metaRows: FileMeta[], blobRows: Array<{ hash: string; blob
         file_transfers: new TableStub<FileTransfer>('id'),
         file_meta: new TableStub<FileMeta>('hash', metaRows),
         file_blobs: new TableStub<{ hash: string; blob: Blob }>('hash', blobRows),
-        transaction: async (_mode: string, _tables: unknown, fn: () => Promise<void>) => {
-            await fn();
-        },
+        transaction: async (_mode: string, _tables: unknown, fn: () => Promise<unknown>) => fn(),
     };
 }
 
@@ -115,9 +132,7 @@ function makeMeta(overrides?: Partial<FileMeta>): FileMeta {
 }
 
 async function pumpQueue() {
-    await vi.advanceTimersByTimeAsync(0);
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTransferScheduling();
 }
 
 describe('FileTransferQueue', () => {
@@ -225,7 +240,7 @@ describe('FileTransferQueue', () => {
 
         vi.stubGlobal('fetch', vi.fn(async () => new Response(new Blob(['hello']), {
             status: 200,
-            headers: { 'content-length': '5' },
+            headers: { 'content-length': '5', 'content-type': 'text/plain' },
         })));
 
         const queue = new FileTransferQueue(db as any, provider, { concurrency: 1, maxAttempts: 2 });
@@ -259,7 +274,62 @@ describe('FileTransferQueue', () => {
         expect(hookState.doAction).toHaveBeenCalledWith('storage.files.download:action:after', expect.anything());
     });
 
-    it('marks file metadata deleted when remote blob is permanently missing (404)', async () => {
+    it('rejects MIME mismatches and aborts streaming downloads over the hard cap', async () => {
+        const meta = makeMeta({ storage_id: 'st_1', mime_type: 'text/plain' });
+        const db = createDbStub([meta], []);
+        const provider: ObjectStorageProvider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(async () => ({ url: 'upload', expiresAt: Date.now() })),
+            getPresignedDownloadUrl: vi.fn(async () => ({ url: 'download', expiresAt: Date.now() })),
+        };
+        const queue = new FileTransferQueue(db as any, provider, { maxDownloadBytes: 5 });
+        vi.stubGlobal('fetch', vi.fn(async () => new Response('hello', {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+        })));
+
+        await expect((queue as any).doDownload({
+            id: 'mime-mismatch',
+            hash: meta.hash,
+            workspace_id: 'ws-1',
+            direction: 'download',
+            bytes_total: 0,
+            bytes_done: 0,
+            state: 'running',
+            attempts: 0,
+            created_at: 1,
+            updated_at: 1,
+        }, new AbortController().signal)).rejects.toThrow('content-type mismatch');
+        expect(await db.file_blobs.get(meta.hash)).toBeUndefined();
+
+        const oversizedStream = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(new Uint8Array([1, 2, 3]));
+                controller.enqueue(new Uint8Array([4, 5, 6]));
+                controller.close();
+            },
+        });
+        await expect((queue as any).readBlobWithProgress(
+            new Response(oversizedStream, { headers: { 'content-type': 'text/plain' } }),
+            'oversized-stream',
+            db,
+            5,
+            'text/plain'
+        )).rejects.toThrow('byte limit');
+
+        const verified = await (queue as any).readBlobWithProgress(
+            new Response('hello', { headers: { 'content-type': 'text/plain; charset=utf-8' } }),
+            'verified-mime',
+            db,
+            5,
+            'text/plain; charset=utf-8'
+        );
+        expect(verified.blob.type).toContain('text/plain');
+    });
+
+    it('records a recoverable outcome without deleting metadata or cache on one 404', async () => {
         const meta = makeMeta({
             hash: `sha256:${'c'.repeat(64)}`,
             storage_id: 'missing-remote',
@@ -281,7 +351,9 @@ describe('FileTransferQueue', () => {
 
         const queue = new FileTransferQueue(db as any, provider, { concurrency: 1, maxAttempts: 5 });
 
-        await expect((queue as any).doDownload(
+        let missingError: unknown;
+        try {
+            await (queue as any).doDownload(
             {
                 id: 'download-404',
                 hash: meta.hash,
@@ -295,11 +367,79 @@ describe('FileTransferQueue', () => {
                 updated_at: 1,
             } as FileTransfer,
             new AbortController().signal,
-        )).rejects.toThrow('Remote file not available');
+            );
+        } catch (error) {
+            missingError = error;
+        }
 
         const updatedMeta = await db.file_meta.get(meta.hash);
-        expect(updatedMeta?.deleted).toBe(true);
-        expect(updatedMeta?.deleted_at).toBeTypeOf('number');
+        expect((missingError as { transferState?: string }).transferState).toBe('remote_missing');
+        expect(updatedMeta).toEqual(meta);
+    });
+
+    it('treats missing storage_id as pending upload without mutating metadata', async () => {
+        const meta = makeMeta({ storage_id: undefined, deleted: false });
+        const cached = { hash: meta.hash, blob: new Blob(['cached']) };
+        const db = createDbStub([meta], [cached]);
+        const provider: ObjectStorageProvider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(async () => ({ url: 'https://upload.example', expiresAt: Date.now() })),
+            getPresignedDownloadUrl: vi.fn(async () => ({ url: 'https://download.example', expiresAt: Date.now() })),
+        };
+        const queue = new FileTransferQueue(db as any, provider);
+
+        await expect((queue as any).doDownload({
+            id: 'pending-upload',
+            hash: meta.hash,
+            workspace_id: 'ws-1',
+            direction: 'download',
+            bytes_total: 0,
+            bytes_done: 0,
+            state: 'running',
+            attempts: 0,
+            created_at: 1,
+            updated_at: 1,
+        }, new AbortController().signal)).rejects.toMatchObject({
+            transferState: 'pending_upload',
+        });
+
+        expect(await db.file_meta.get(meta.hash)).toEqual(meta);
+        expect(await db.file_blobs.get(meta.hash)).toEqual(cached);
+    });
+
+    it('persists recoverable transfer state and requires an explicit retry', async () => {
+        const meta = makeMeta({ storage_id: undefined });
+        const db = createDbStub([meta], []);
+        const transfer: FileTransfer = {
+            id: 'recoverable-download',
+            hash: meta.hash,
+            workspace_id: 'ws-1',
+            direction: 'download',
+            bytes_total: 0,
+            bytes_done: 0,
+            state: 'queued',
+            attempts: 0,
+            created_at: 1,
+            updated_at: 1,
+        };
+        await db.file_transfers.put(transfer);
+        const provider: ObjectStorageProvider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(async () => ({ url: 'https://upload.example', expiresAt: Date.now() })),
+            getPresignedDownloadUrl: vi.fn(async () => ({ url: 'https://download.example', expiresAt: Date.now() })),
+        };
+        const queue = new FileTransferQueue(db as any, provider);
+
+        await (queue as any).processTransfer(transfer);
+        expect((await db.file_transfers.get(transfer.id))?.state).toBe('pending_upload');
+
+        await db.file_meta.put({ ...meta, storage_id: 'now-committed' });
+        await expect(queue.retryRecoverable(transfer.id)).resolves.toBe(true);
+        expect((await db.file_transfers.get(transfer.id))?.state).toBe('queued');
     });
 
     it('cancels in-flight transfer on workspace switch and explicit cancellation', async () => {
@@ -327,6 +467,59 @@ describe('FileTransferQueue', () => {
         (queue as any).abortControllers.set('running-b', manualController);
         queue.setWorkspaceId('ws-2');
         expect(manualController.signal.aborted).toBe(true);
+    });
+
+    it('settles an in-flight transfer only against its captured workspace database', async () => {
+        const hash = `sha256:${'a'.repeat(64)}`;
+        const oldMeta = makeMeta({ hash, storage_id: undefined, name: 'old-workspace.png', size_bytes: 3 });
+        const newMeta = makeMeta({ hash, storage_id: undefined, name: 'new-workspace.png', size_bytes: 3 });
+        const oldDb = createDbStub([oldMeta], [{ hash, blob: new Blob(['old']) }]);
+        const newDb = createDbStub([newMeta], [{ hash, blob: new Blob(['new']) }]);
+        const transfer: FileTransfer = {
+            id: 'workspace-bound-upload',
+            hash,
+            workspace_id: 'ws-old',
+            direction: 'upload',
+            bytes_total: 0,
+            bytes_done: 0,
+            state: 'queued',
+            attempts: 0,
+            created_at: 1,
+            updated_at: 1,
+        };
+        await oldDb.file_transfers.put(transfer);
+        await newDb.file_transfers.put({ ...transfer, workspace_id: 'ws-new' });
+        let activeDb = oldDb;
+        const upload = controlledIo<Response>();
+        vi.stubGlobal('fetch', upload.request);
+        const provider: ObjectStorageProvider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(async () => ({
+                url: 'https://upload.example',
+                expiresAt: Date.now(),
+                storageId: 'old-storage-id',
+            })),
+            getPresignedDownloadUrl: vi.fn(async () => ({ url: 'https://download.example', expiresAt: Date.now() })),
+        };
+        const queue = new FileTransferQueue(oldDb as any, provider, {
+            dbResolver: () => activeDb as any,
+        });
+        queue.setWorkspaceId('ws-old');
+        (queue as any).running.add(transfer.id);
+
+        const processing = (queue as any).processTransfer(transfer);
+        for (let i = 0; i < 20 && !vi.mocked(fetch).mock.calls.length; i++) await Promise.resolve();
+        activeDb = newDb;
+        queue.setWorkspaceId('ws-new');
+        upload.succeed(new Response('', { status: 200 }));
+        await processing;
+
+        expect((await oldDb.file_meta.get(hash))?.storage_id).toBe('old-storage-id');
+        expect((await oldDb.file_transfers.get(transfer.id))?.state).toBe('done');
+        expect(await newDb.file_meta.get(hash)).toEqual(newMeta);
+        expect((await newDb.file_transfers.get(transfer.id))?.state).toBe('queued');
     });
 
     it('enforces concurrency cap', async () => {
@@ -392,6 +585,59 @@ describe('FileTransferQueue', () => {
         expect((queue as any).getBackoffDelay(2)).toBe(200);
         expect((queue as any).getBackoffDelay(3)).toBe(250);
         expect((queue as any).getBackoffDelay(8)).toBe(250);
+    });
+
+    it('persists retry_at so immediate pumping cannot bypass backoff', async () => {
+        vi.setSystemTime(1_000);
+        const meta = makeMeta();
+        const db = createDbStub([meta], [{ hash: meta.hash, blob: new Blob(['x']) }]);
+        const provider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(),
+            getPresignedDownloadUrl: vi.fn(),
+        } as unknown as ObjectStorageProvider;
+        const queue = new FileTransferQueue(db as any, provider, {
+            backoffBaseMs: 100,
+            backoffMaxMs: 100,
+            maxAttempts: 3,
+        });
+        (queue as any).workspaceId = 'ws-1';
+        const transfer: FileTransfer = {
+            id: 'persisted-retry',
+            hash: meta.hash,
+            workspace_id: 'ws-1',
+            direction: 'upload',
+            bytes_total: 0,
+            bytes_done: 0,
+            state: 'queued',
+            attempts: 0,
+            retry_at: 0,
+            created_at: 1,
+            updated_at: 1,
+        };
+        await db.file_transfers.put(transfer);
+        (queue as any).doUpload = vi.fn()
+            .mockRejectedValueOnce(new Error('offline'))
+            .mockResolvedValueOnce(undefined);
+
+        await (queue as any).processTransfer(transfer);
+        expect(await db.file_transfers.get(transfer.id)).toMatchObject({
+            state: 'queued',
+            attempts: 1,
+            retry_at: 1_100,
+        });
+
+        (queue as any).scheduleProcessQueue(0);
+        await vi.advanceTimersByTimeAsync(99);
+        expect((queue as any).doUpload).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        for (let i = 0; i < 20 && (queue as any).doUpload.mock.calls.length < 2; i++) {
+            await Promise.resolve();
+        }
+        expect((queue as any).doUpload).toHaveBeenCalledTimes(2);
+        expect((await db.file_transfers.get(transfer.id))?.state).toBe('done');
     });
 
     it('treats 413 uploads as non-retryable permanent failure', async () => {
@@ -499,6 +745,52 @@ describe('FileTransferQueue', () => {
         expect(cached).toBeDefined();
     });
 
+    it('disposes timers, waiters, lease renewals, and running requests idempotently', async () => {
+        const meta = makeMeta();
+        const db = createDbStub([meta], []);
+        const provider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(),
+            getPresignedDownloadUrl: vi.fn(),
+        } as unknown as ObjectStorageProvider;
+        const queue = new FileTransferQueue(db as any, provider);
+        const transfer: FileTransfer = {
+            id: 'dispose-me',
+            hash: meta.hash,
+            workspace_id: 'ws-1',
+            direction: 'download',
+            bytes_total: 0,
+            bytes_done: 0,
+            state: 'queued',
+            attempts: 0,
+            retry_at: 0,
+            created_at: 1,
+            updated_at: 1,
+        };
+        await db.file_transfers.put(transfer);
+        (queue as any).workspaceId = 'ws-1';
+        (queue as any).scheduleProcessQueue(1_000);
+        const controller = new AbortController();
+        (queue as any).running.add(transfer.id);
+        (queue as any).abortControllers.set(transfer.id, controller);
+        (queue as any).leaseRenewals.set(transfer.id, setInterval(() => undefined, 1_000));
+        const waiting = expect(queue.waitForTransfer(transfer.id, 10_000))
+            .rejects.toThrow('Transfer queue disposed');
+        await Promise.resolve();
+
+        queue.dispose();
+        queue.dispose();
+        await waiting;
+
+        expect(controller.signal.aborted).toBe(true);
+        expect((queue as any).waiters.size).toBe(0);
+        expect((queue as any).leaseRenewals.size).toBe(0);
+        expect((queue as any).processQueueTimeout).toBeNull();
+        expect(queue.getWorkspaceId()).toBeNull();
+    });
+
     it('rejects upload via policy filter and cleans old done/failed transfers', async () => {
         const meta = makeMeta({ kind: 'image', mime_type: 'image/png', name: 'a.png' });
         const db = createDbStub([meta], [{ hash: meta.hash, blob: new Blob(['abc']) }]);
@@ -585,6 +877,7 @@ describe('FileTransferQueue', () => {
                     })),
                 })),
             },
+            transaction: async (_mode: string, _table: unknown, fn: () => Promise<unknown>) => fn(),
         };
 
         const openDb = {
@@ -597,6 +890,7 @@ describe('FileTransferQueue', () => {
                     })),
                 })),
             },
+            transaction: async (_mode: string, _table: unknown, fn: () => Promise<unknown>) => fn(),
         };
 
         let currentDb = closedDb as any;

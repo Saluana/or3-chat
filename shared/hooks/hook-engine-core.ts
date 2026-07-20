@@ -300,11 +300,18 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
     };
 
     function recordTiming(name: string, ms: number) {
-        (diagnostics.timings[name] ||= []).push(ms);
+        if (Object.hasOwn(diagnostics.timings, name)) {
+            diagnostics.timings[name]!.push(ms);
+            return;
+        }
+
+        diagnostics.timings[name] = [ms];
     }
 
     function recordError(name: string) {
-        diagnostics.errors[name] = (diagnostics.errors[name] || 0) + 1;
+        diagnostics.errors[name] = Object.hasOwn(diagnostics.errors, name)
+            ? diagnostics.errors[name]! + 1
+            : 1;
     }
 
     function logCallbackError(error: unknown, name: string, isFilter: boolean) {

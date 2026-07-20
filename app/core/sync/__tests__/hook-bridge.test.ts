@@ -59,14 +59,14 @@ function makeTx(storeNames: string[]) {
 }
 
 function makeDbWithHookableTable(tableNames: string[]) {
-    const hookFns = new Map<string, (...args: unknown[]) => void>();
+    const hookFns = new Map<string, (...args: unknown[]) => unknown>();
     const tables = tableNames.map((name) => ({ name }));
 
     const db = {
         name: 'test-db',
         tables,
         table: (name: string) => ({
-            hook: (kind: string, fn: (...args: unknown[]) => void) => {
+            hook: (kind: string, fn: (...args: unknown[]) => unknown) => {
                 hookFns.set(`${name}:${kind}`, fn);
             },
         }),
@@ -102,6 +102,8 @@ describe('HookBridge', () => {
 
         expect(pendingOps).toHaveLength(1);
         expect(pendingOps[0]).toEqual(expect.objectContaining({ tableName: 'messages', operation: 'put', pk: 'm1' }));
+        const op = pendingOps[0] as any;
+        expect(op.payload).toMatchObject({ clock: op.stamp.clock, op_id: op.stamp.opId });
     });
 
     it('suppresses capture for marked sync transactions (including wrappers)', () => {
@@ -257,7 +259,66 @@ describe('HookBridge', () => {
         expect(pendingOps).toHaveLength(1);
         expect((pendingOps[0] as any).operation).toBe('delete');
         expect(tombstones).toHaveLength(1);
-        expect(tombstones[0]).toEqual(expect.objectContaining({ id: 'messages:m1', pk: 'm1' }));
+        expect(tombstones[0]).toEqual(expect.objectContaining({
+            id: 'messages:m1',
+            pk: 'm1',
+            clock: (pendingOps[0] as any).stamp.clock,
+            hlc: (pendingOps[0] as any).stamp.hlc,
+            opId: (pendingOps[0] as any).stamp.opId,
+        }));
+    });
+
+    it('classifies a soft-delete update as a delete and atomically writes its tombstone', () => {
+        const { db, hookFns } = makeDbWithHookableTable(['messages', 'pending_ops', 'tombstones']);
+        const { tx, pendingOps, tombstones } = makeTx(['messages', 'pending_ops', 'tombstones']);
+        const bridge = new HookBridge(db as any);
+        bridge.start();
+
+        const updating = hookFns.get('messages:updating');
+        const revision = updating?.(
+            { deleted: true, updated_at: 200, clock: 8 },
+            'm-soft-delete',
+            {
+                id: 'm-soft-delete',
+                thread_id: 't1',
+                role: 'user',
+                index: 0,
+                deleted: false,
+                created_at: 1,
+                updated_at: 1,
+                clock: 7,
+            },
+            tx
+        ) as Record<string, unknown>;
+
+        expect(pendingOps).toHaveLength(1);
+        expect(pendingOps[0]).toEqual(expect.objectContaining({
+            tableName: 'messages',
+            operation: 'delete',
+            pk: 'm-soft-delete',
+        }));
+        const op = pendingOps[0] as any;
+        expect(op.stamp.clock).toBe(8);
+        expect(op.payload).toMatchObject({
+            id: 'm-soft-delete',
+            deleted: true,
+            deleted_at: expect.any(Number),
+        });
+        expect(revision).toMatchObject({
+            clock: op.stamp.clock,
+            hlc: op.stamp.hlc,
+            op_id: op.stamp.opId,
+            deleted: true,
+            deleted_at: op.payload.deleted_at,
+        });
+        expect(tombstones).toEqual([
+            expect.objectContaining({
+                id: 'messages:m-soft-delete',
+                clock: op.stamp.clock,
+                hlc: op.stamp.hlc,
+                opId: op.stamp.opId,
+            }),
+        ]);
     });
 
     it('throws non-atomic error when pending_ops/tombstones missing from tx scope', () => {

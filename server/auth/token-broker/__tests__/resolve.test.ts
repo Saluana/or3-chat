@@ -4,13 +4,19 @@ import { testRuntimeConfig } from '../../../../tests/setup';
 import {
     resolveProviderToken,
     _resetProviderTokenCache,
+    _getProviderTokenCacheKeysForTest,
 } from '../resolve';
 
 const getProviderTokenMock = vi.hoisted(() => vi.fn());
 const getProviderTokenBrokerMock = vi.hoisted(() => vi.fn());
+const resolveSessionContextMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../registry', () => ({
     getProviderTokenBroker: getProviderTokenBrokerMock as any,
+}));
+
+vi.mock('../../session', () => ({
+    resolveSessionContext: resolveSessionContextMock,
 }));
 
 function makeEvent(headers?: Record<string, string>): H3Event {
@@ -31,6 +37,17 @@ describe('resolveProviderToken', () => {
         getProviderTokenBrokerMock.mockReset().mockImplementation(() => ({
             getProviderToken: getProviderTokenMock,
         }));
+        resolveSessionContextMock.mockReset().mockResolvedValue({
+            authenticated: true,
+            provider: 'clerk',
+            providerUserId: 'provider-user-1',
+            user: { id: 'user-1' },
+            workspace: { id: 'workspace-1', name: 'Workspace' },
+            role: 'owner',
+            expiresAt: '2026-01-01T01:00:00.000Z',
+            deploymentAdmin: false,
+            authorizationRevision: 4,
+        });
 
         testRuntimeConfig.value = {
             ...testRuntimeConfig.value,
@@ -105,6 +122,52 @@ describe('resolveProviderToken', () => {
         await resolveProviderToken(makeEvent({ cookie: 'session=b' }), request);
 
         expect(getProviderTokenMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('stores only an opaque digest of bearer and cookie credentials in keys', async () => {
+        const cookie = 'or3_session=top-secret-cookie';
+        await resolveProviderToken(makeEvent({ cookie }), {
+            providerId: 'convex',
+            template: 'convex-sync',
+        });
+
+        const keys = _getProviderTokenCacheKeysForTest();
+        expect(keys).toHaveLength(1);
+        expect(keys[0]).toContain('credential-sha256=');
+        expect(keys[0]).toContain('authorization-revision=4');
+        expect(keys[0]).not.toContain(cookie);
+        expect(keys[0]).not.toContain('top-secret-cookie');
+    });
+
+    it('does not reuse a token after the authorization revision changes', async () => {
+        const event = makeEvent({ authorization: 'Bearer top-secret-token' });
+        const request = { providerId: 'convex', template: 'convex-sync' };
+
+        await resolveProviderToken(event, request);
+        resolveSessionContextMock.mockResolvedValue({
+            ...(await resolveSessionContextMock.mock.results[0]!.value),
+            authorizationRevision: 5,
+        });
+        await resolveProviderToken(event, request);
+
+        expect(getProviderTokenMock).toHaveBeenCalledTimes(2);
+        expect(_getProviderTokenCacheKeysForTest().join('\n')).not.toContain(
+            'top-secret-token'
+        );
+    });
+
+    it('does not cache provider tokens for unauthenticated requests', async () => {
+        resolveSessionContextMock.mockResolvedValue({ authenticated: false });
+
+        await resolveProviderToken(makeEvent({ cookie: 'session=guest' }), {
+            providerId: 'convex',
+        });
+        await resolveProviderToken(makeEvent({ cookie: 'session=guest' }), {
+            providerId: 'convex',
+        });
+
+        expect(getProviderTokenMock).toHaveBeenCalledTimes(2);
+        expect(_getProviderTokenCacheKeysForTest()).toEqual([]);
     });
 
     it('expires cached tokens after ttl', async () => {

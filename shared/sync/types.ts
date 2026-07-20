@@ -40,8 +40,29 @@ export interface PendingOp {
     createdAt: number;
     attempts: number;
     nextAttemptAt?: number;
-    status: 'pending' | 'syncing' | 'failed';
+    status: PendingOpStatus;
+    lastError?: string;
+    lastErrorCode?: SyncErrorCode;
+    failureKind?: 'retry_exhausted' | 'permanent';
+    failedAt?: number;
+    discardedAt?: number;
+    discardReason?: string;
 }
+
+/**
+ * Durable outbox lifecycle. `syncing` and `failed` are retained only so
+ * databases created by older clients can be recovered in place.
+ */
+export type PendingOpStatus =
+    | 'pending'
+    | 'in_flight'
+    | 'retry_wait'
+    | 'failed_retryable'
+    | 'failed_permanent'
+    | 'applied'
+    | 'discarded'
+    | 'syncing'
+    | 'failed';
 
 /**
  * A change received from the server
@@ -76,6 +97,50 @@ export interface PullResponse {
     changes: SyncChange[];
     nextCursor: number;
     hasMore: boolean;
+}
+
+/** Request a bounded page from one consistent materialized snapshot. */
+export interface SnapshotRequest {
+    scope: SyncScope;
+    pageSize: number;
+    /** Opaque provider token; callers return it unchanged. */
+    pageToken?: string;
+    tables?: string[];
+}
+
+export interface SnapshotRevision {
+    clock: number;
+    hlc: string;
+    opId: string;
+}
+
+/** Providers order canonical items by `(tableName, pk, kind)`. */
+export type SnapshotItem =
+    | {
+          kind: 'row';
+          tableName: string;
+          pk: string;
+          payload: unknown;
+          revision: SnapshotRevision;
+      }
+    | {
+          kind: 'tombstone';
+          tableName: string;
+          pk: string;
+          revision: SnapshotRevision;
+          serverDeletedAt: number;
+      };
+
+/**
+ * Every page in a chain carries the same snapshot ID and high-watermark.
+ * Incremental replay starts strictly after the watermark after final apply.
+ */
+export interface SnapshotResponse {
+    workspaceId: string;
+    snapshotId: string;
+    highWatermark: number;
+    items: SnapshotItem[];
+    nextPageToken: string | null;
 }
 
 /**
@@ -153,6 +218,11 @@ export interface SyncProvider {
     id: string;
     mode: SyncProviderMode;
     auth?: SyncProviderAuth;
+    /** Explicit protocol contracts implemented by this provider. Missing is fail-closed. */
+    capabilities?: {
+        snapshotBootstrap?: 'snapshot-v1';
+        historyRetention?: 'snapshot-v1';
+    };
 
     /**
      * Subscribe to real-time changes
@@ -169,6 +239,9 @@ export interface SyncProvider {
      * Pull changes since cursor (for bootstrap/recovery)
      */
     pull(request: PullRequest): Promise<PullResponse>;
+
+    /** Consistent materialized snapshot used before replaying after its watermark. */
+    snapshot?(request: SnapshotRequest): Promise<SnapshotResponse>;
 
     /**
      * Push batch of changes
@@ -209,6 +282,14 @@ export interface Tombstone {
     pk: string;
     deletedAt: number;
     clock: number;
+    /** Present on deterministic tombstones; optional only for legacy rows. */
+    hlc?: string;
+    /** Present on deterministic tombstones; optional only for legacy rows. */
+    opId?: string;
+    /** Server sequence that installed this tombstone, when known. */
+    serverVersion?: number;
+    /** Trusted server receipt time; distinct from caller-supplied deletedAt. */
+    serverDeletedAt?: number;
     syncedAt?: number;
 }
 

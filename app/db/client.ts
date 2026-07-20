@@ -188,6 +188,31 @@ export class Or3DB extends Dexie {
             notifications:
                 '&id, user_id, [user_id+read_at], [user_id+created_at], [user_id+thread_id], type, deleted, clock, created_at, updated_at',
         });
+
+        // Version 13: durable transfer leases and persisted retry scheduling.
+        this.version(13)
+            .stores({
+                file_transfers:
+                    'id, hash, direction, state, workspace_id, created_at, updated_at, retry_at, lease_owner, lease_expires_at, [hash+direction], [state+created_at], [state+workspace_id], [state+workspace_id+created_at], [state+lease_expires_at], [state+workspace_id+lease_expires_at], [state+workspace_id+retry_at]',
+            })
+            .upgrade((tx) => tx.table<FileTransfer, string>('file_transfers')
+                .toCollection()
+                .modify((transfer) => {
+                    if (!Number.isSafeInteger(transfer.attempts) || transfer.attempts < 0) {
+                        transfer.attempts = 0;
+                    }
+                    if (!Number.isSafeInteger(transfer.retry_at) || (transfer.retry_at ?? 0) < 0) {
+                        transfer.retry_at = 0;
+                    }
+                    if (transfer.state === 'running') {
+                        if (!Number.isSafeInteger(transfer.lease_expires_at)) {
+                            transfer.lease_expires_at = 0;
+                        }
+                        if (typeof transfer.lease_owner !== 'string') {
+                            transfer.lease_owner = '';
+                        }
+                    }
+                }));
     }
 }
 

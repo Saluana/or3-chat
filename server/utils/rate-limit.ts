@@ -97,8 +97,8 @@ export function getRateLimitStatus(
     };
 }
 
-// Cleanup old entries every 5 minutes
-setInterval(() => {
+// Cleanup old entries every 5 minutes without keeping build/prerender workers alive.
+const cleanupInterval = setInterval(() => {
     const now = Date.now();
     for (const [key, entry] of store.entries()) {
         if (now > entry.resetAt) {
@@ -106,3 +106,4 @@ setInterval(() => {
         }
     }
 }, 5 * 60 * 1000);
+cleanupInterval.unref?.();

@@ -62,12 +62,15 @@ OR3_AUTH_INVITE_TOKEN_TTL_SECONDS=604800
 - Use long random secrets for `OR3_BASIC_AUTH_JWT_SECRET` and `OR3_BASIC_AUTH_REFRESH_SECRET`.
 - Keep bootstrap credentials only for initial provisioning. Rotate/remove afterward.
 - Set `OR3_AUTH_AUTO_PROVISION=false` for closed deployments.
+- In `invite_only` mode, registration verifies the invite signature, expiry, persisted status/token hash, and normalized email before creating the Basic Auth account or session.
+- The selected sync provider must implement atomic invite provisioning so internal user creation, auth mapping, workspace membership, and invite consumption either all commit or all roll back.
 - Keep `Cache-Control: no-store` on auth/sync/storage routes (core handlers already enforce this pattern).
 
 ## Verification Checklist
 
 - `GET /api/auth/session` returns an authenticated user after login.
 - `POST /api/basic-auth/register` creates an account when registration mode allows it.
+- Garbage, expired, consumed, revoked, and wrong-email invites are rejected without leaving an account or session behind.
 - Access token expiry triggers refresh and does not silently break background/sync routes.
 - Logout invalidates local session state.
 - Workspace-scoped routes still require `can()` authorization.
@@ -78,4 +81,3 @@ OR3_AUTH_INVITE_TOKEN_TTL_SECONDS=604800
 - [provider-sqlite](./provider-sqlite)
 - [provider-fs](./provider-fs)
 - [auth-system](./auth-system)
-

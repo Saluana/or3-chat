@@ -21,7 +21,7 @@ Lightweight registry that lets external features (pane plugins, slash commands, 
 | --------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `registerPaneInput`   | `(paneId: string, api: ChatInputImperativeApi) => void` | Register or update the imperative API for a pane. Called by the chat input component on mount/HMR.         |
 | `unregisterPaneInput` | `(paneId: string) => void`                              | Remove the pane entry on unmount.                                                                          |
-| `programmaticSend`    | `(paneId: string, text: string) => boolean`             | Push text into the pane input and trigger its native send handler. Returns `false` if the pane is missing. |
+| `programmaticSend`    | `(paneId: string, text: string) => Promise<SendResult>` | Push text into the pane input, await native admission, and return its exact typed result.                   |
 | `hasPane`             | `(paneId: string) => boolean`                           | Test whether a pane is currently registered.                                                               |
 
 ### `ChatInputImperativeApi`
@@ -29,7 +29,7 @@ Lightweight registry that lets external features (pane plugins, slash commands, 
 ```ts
 interface ChatInputImperativeApi {
     setText(t: string): void;
-    triggerSend(): void;
+    triggerSend(): Promise<SendResult>;
 }
 ```
 
@@ -65,10 +65,10 @@ onUnmounted(() => {
 ```ts
 import { programmaticSend } from '~/composables/chat/useChatInputBridge';
 
-const success = programmaticSend(activePaneId, '/imagine neon city at dusk');
+const result = await programmaticSend(activePaneId, '/imagine neon city at dusk');
 
-if (!success) {
-    console.warn('Pane not ready yet');
+if (result.status === 'rejected') {
+    console.warn('Message rejected:', result.reason);
 }
 ```
 
@@ -78,7 +78,7 @@ if (!success) {
 
 1. **Registry** — Maintains a `Ref<RegisteredPaneInput[]>`. Lookup happens through the helper `find(paneId)` to keep the public API concise.
 2. **Updates** — Re-registering the same pane ID replaces the stored API so HMR or re-renders don’t stack duplicates.
-3. **Error handling** — `programmaticSend` wraps calls in `try/catch`; errors log in dev mode and return `false` so callers can retry or surface UI feedback.
+3. **Error handling** — loading, auth, filter, quota, and unavailable-pane rejections retain their exact typed reason; thrown failures become a typed failed result.
 4. **Debug hook** — In dev, the registry is exposed on `globalThis.__or3ChatInputBridge` for console inspection.
 5. **No storage** — Everything lives in memory; it only coordinates runtime components.
 

@@ -17,6 +17,7 @@
  */
 
 import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
+import type { CanonicalToolResult } from '~~/shared/chat/canonical-tool-transcript';
 
 /**
  * Purpose:
@@ -59,6 +60,8 @@ export interface BackgroundJob {
         args?: string;
         result?: string;
         error?: string;
+        argument_fingerprint?: string;
+        transcript?: CanonicalToolResult;
     }>;
     /** Workflow execution state snapshot */
     workflow_state?: WorkflowMessageData;

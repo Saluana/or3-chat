@@ -56,3 +56,20 @@ export function inferMimeFromUrl(u: string, provided?: string) {
     };
     return map[ext] || 'image/png';
 }
+
+/**
+ * `fetchImageBlob`
+ *
+ * Purpose:
+ * Fetches an image URL and returns it as a Blob. Swallows network errors and
+ * returns null so callers can fall back gracefully.
+ */
+export async function fetchImageBlob(url: string): Promise<Blob | null> {
+    try {
+        const resp = await fetch(url);
+        if (!resp.ok) return null;
+        return await resp.blob();
+    } catch {
+        return null;
+    }
+}

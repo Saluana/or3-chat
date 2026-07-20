@@ -253,13 +253,17 @@ export function searchPosts(term: string) {
 export async function softDeletePost(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
+        async () => {
         const p = await dbTry(() => db.posts.get(id), {
             op: 'read',
             entity: 'posts',
             action: 'get',
         });
         if (!p) return;
+        if (p.deleted) return;
         await hooks.doAction('db.posts.delete:action:soft:before', {
             entity: toPostEntity(p),
             id: p.id,
@@ -276,7 +280,8 @@ export async function softDeletePost(id: string): Promise<void> {
             id: p.id,
             tableName: 'posts',
         });
-    });
+        }
+    );
 }
 
 /**

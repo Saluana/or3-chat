@@ -32,14 +32,20 @@ The `FileTransferQueue` (`core/storage/transfer-queue.ts`) manages all network a
 
 *   **Concurrency**: Limits parallel uploads/downloads based on network type (4G vs 3G).
 *   **Retries**: Exponential backoff for transient failures.
-*   **Resumability**: Tracks transfer state in `db.file_transfers` to survive page reloads.
+*   **Resumability**: Tracks transfer state in `db.file_transfers` with an owner,
+    expiring lease, heartbeat, persisted retry time, and stale-running recovery.
+    A claim is transactional, so tabs cannot execute the same transfer concurrently.
 
 ### Upload Flow
 1.  **Drafting**: File is computed locally, hash generated, blob stored in `file_blobs`.
 2.  **Queueing**: A `file_transfer` record is created (status: `queued`).
-3.  **Presigning**: The queue requests a presigned URL from the backend (`/api/storage/presign-upload`).
-4.  **Transfer**: The binary is POSTed directly to the object storage (S3/R2/Convex).
-5.  **Commit**: On success, the backend is notified to link the upload to the metadata.
+3.  **Reservation**: The backend atomically reserves quota and creates an
+    expiring, subject/workspace-bound, one-time upload intent.
+4.  **Presigning**: The queue receives a short-lived URL bound to the intent,
+    object ID, SHA-256, byte length, and MIME type.
+5.  **Transfer**: The binary is uploaded directly to object storage.
+6.  **Commit**: The server rechecks actual object metadata/checksum and atomically
+    consumes the intent/reservation. Replays and mismatched subjects or metadata fail.
 
 ### Download Flow
 1.  **Request**: UI components use `useObjectUrl(hash)` or explicit `queue.download(hash)`.
@@ -151,4 +157,26 @@ export default defineNuxtPlugin(() => {
 *   **Permissions**: `requireCan(session, 'workspace.write')` checks on all operations.
 *   **Rate Limiting**: Per-user limits on upload/download generation endpoints.
 *   **Hash Verification**: Files verified against SHA-256 hash after download.
-*   **Presigned URLs**: Short-lived URLs (1 hour default) prevent unauthorized access.
+*   **Presigned URLs**: Upload and download URLs are capped at one hour; provider
+    defaults are shorter. Commit authorization never relies on URL possession alone.
+
+## Canonical metadata, quota, and garbage collection
+
+Storage lifecycle decisions use the sync provider's materialized workspace state;
+they never replay the retained sync change log. A sync gateway may expose bounded,
+opaque-cursor pages for three views:
+
+- live `file_meta` rows (`hash`, `sizeBytes`, optional `storageId`);
+- live reference edges from `messages.file_hashes` and `posts.file_hashes`;
+- unexpired upload quota reservations.
+
+Quota is the sum of canonical live metadata plus active reservations. If the active
+sync provider does not implement this query, quota enforcement fails closed instead
+of undercounting from incomplete history.
+
+Filesystem GC is available only with the same canonical query capability. It scans
+a bounded number of retained objects, keeps an object when either live metadata or a
+live reference edge exists, and rechecks both immediately before deleting the blob
+and its commit sidecar. Providers without canonical queries continue to report GC as
+disabled. SQLite and Convex implement the same bounded canonical query contract;
+there is no fallback to `pull()`.

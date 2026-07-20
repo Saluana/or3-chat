@@ -25,7 +25,8 @@ import { getThreadSystemPrompt } from '~/db/threads';
 import { getPrompt } from '~/db/prompts';
 import { getMaxMessageFileHashes } from '~/db/files-util';
 import { promptJsonToString, composeSystemPrompt } from '~/utils/chat/prompt-utils';
-import { trimOrMessagesImages } from '~/utils/chat/messages';
+import { trimOrMessagesByTokenBudget } from '~/utils/chat/messages';
+import { countTokensApprox } from '~/utils/chat/tokens';
 import type { ChatMessage, ContentPart } from '~/utils/chat/types';
 import type { ModelInputMessage } from '../../../../types/chat-internal';
 import type { OpenRouterMessage } from './types';
@@ -135,6 +136,12 @@ export type BuildOpenRouterMessagesParams = {
         | 'recent'
         | 'recent-user'
         | 'recent-assistant';
+    /**
+     * Approximate input-token budget. When set, oldest non-system/non-user
+     * messages are dropped until the remaining text fits. The system message
+     * and last user message are always kept.
+     */
+    maxInputTokens?: number;
 };
 
 /**
@@ -146,21 +153,28 @@ export type BuildOpenRouterMessagesParams = {
 export async function buildOpenRouterMessagesForSend(
     params: BuildOpenRouterMessagesParams
 ): Promise<OpenRouterMessage[]> {
-    const isModelMessage = (
-        m: ChatMessage
-    ): m is ChatMessage & { role: 'user' | 'assistant' | 'system' } =>
-        m.role !== 'tool';
-
     const modelInputMessages: ModelInputMessage[] = params.effectiveMessages
-        .filter(isModelMessage)
         .map(
             (m): ModelInputMessage => ({
                 role: m.role,
                 content: m.content,
                 id: m.id,
                 file_hashes: m.file_hashes,
-                name: m.name,
-                tool_call_id: m.tool_call_id,
+                name:
+                    m.name ??
+                    (typeof m.data?.tool_name === 'string'
+                        ? m.data.tool_name
+                        : undefined),
+                tool_call_id:
+                    m.tool_call_id ??
+                    (typeof m.data?.tool_call_id === 'string'
+                        ? m.data.tool_call_id
+                        : undefined),
+                tool_calls:
+                    m.tool_calls ??
+                    (Array.isArray(m.data?.tool_calls)
+                        ? (m.data.tool_calls as ModelInputMessage['tool_calls'])
+                        : undefined),
             })
         );
 
@@ -220,19 +234,22 @@ export async function buildOpenRouterMessagesForSend(
     }
 
     const { buildOpenRouterMessages } = await getOpenRouterBuildModule();
-    const orMessages: OpenRouterMessage[] = await buildOpenRouterMessages(
+    let orMessages: OpenRouterMessage[] = await buildOpenRouterMessages(
         modelInputMessages,
         {
-            maxImageInputs: params.maxImageInputs ?? 16,
+            maxImageInputs: params.maxImageInputs ?? 5,
             imageInclusionPolicy: params.imageInclusionPolicy ?? 'all',
             debug: false,
         }
     );
 
-    trimOrMessagesImages(
-        orMessages as Parameters<typeof trimOrMessagesImages>[0],
-        5
-    );
+    if (params.maxInputTokens && params.maxInputTokens > 0) {
+        orMessages = await trimOrMessagesByTokenBudget(
+            orMessages,
+            params.maxInputTokens,
+            countTokensApprox
+        );
+    }
 
     return orMessages;
 }
