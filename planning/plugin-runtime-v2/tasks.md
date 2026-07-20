@@ -192,7 +192,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R4.AC2, R4.AC7
       Done when: a 100-record commit emits one observable reactive publication for that surface.
 
-- [ ] 4.4 Implement `TransactionalPluginScope` validation, pre-activation, hidden insert, publication CAS, rollback, and sequential LIFO disposal
+- [x] 4.4 Implement `TransactionalPluginScope` validation, pre-activation, hidden insert, publication CAS, rollback, and sequential LIFO disposal
       Requirements: R3.AC2-R3.AC4, R4.AC2-R4.AC3
       Done when: failures before publish leave the old owner visible and rollback after a forced synchronous publish fault restores it first.
 

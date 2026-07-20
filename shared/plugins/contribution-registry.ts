@@ -98,15 +98,12 @@ export class ContributionRegistry<
         generation: number;
         values: readonly StagedContribution<T, TMetadata>[];
     }): RegistryStageResult {
-        if (this.#recordsByOwner.has(input.owner)) {
-            return { ok: false, code: 'owner-already-staged' };
-        }
+        const validation = this.validateStage(input);
+        if (!validation.ok) return validation;
         const prepared = new Map<string, StoredRecord<T, TMetadata>>();
         for (const staged of input.values) {
             const value = this.#normalize(staged.value);
             const id = this.#getId(value);
-            if (!id) return { ok: false, code: 'invalid-id' };
-            if (prepared.has(id)) return { ok: false, code: 'duplicate-id', id };
             prepared.set(
                 id,
                 Object.freeze({
@@ -124,6 +121,25 @@ export class ContributionRegistry<
         }
         this.#recordsByOwner.set(input.owner, prepared);
         return { ok: true, count: prepared.size };
+    }
+
+    validateStage(input: {
+        owner: symbol;
+        pluginId: string;
+        generation: number;
+        values: readonly StagedContribution<T, TMetadata>[];
+    }): RegistryStageResult {
+        if (this.#recordsByOwner.has(input.owner)) {
+            return { ok: false, code: 'owner-already-staged' };
+        }
+        const ids = new Set<string>();
+        for (const staged of input.values) {
+            const id = this.#getId(this.#normalize(staged.value));
+            if (!id) return { ok: false, code: 'invalid-id' };
+            if (ids.has(id)) return { ok: false, code: 'duplicate-id', id };
+            ids.add(id);
+        }
+        return { ok: true, count: ids.size };
     }
 
     registerLegacy(input: {
