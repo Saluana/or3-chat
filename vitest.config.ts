@@ -20,6 +20,10 @@ export default defineConfig({
         dedupe: ['vue', 'nuxt', 'zod'],
         alias: {
             '#imports': path.resolve(__dirname, 'tests/stubs/nuxt-imports.ts'),
+            '#build/or3/bundled-plugin-catalog': path.resolve(
+                __dirname,
+                'tests/stubs/bundled-plugin-catalog.ts'
+            ),
             '~': path.resolve(__dirname, 'app'),
             '~~': path.resolve(__dirname),
             '~~/': path.resolve(__dirname) + '/',

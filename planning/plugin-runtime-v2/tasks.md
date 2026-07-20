@@ -84,7 +84,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC2
       Done when: reordered object keys hash identically, changed identity inputs hash differently, and delimiter-like values cannot collide.
 
-- [ ] 2.3 Generate a bundled-plugin catalog containing host build ID, plugin ID, and exact module key for shared server/client use
+- [x] 2.3 Generate a bundled-plugin catalog containing host build ID, plugin ID, and exact module key for shared server/client use
       Requirements: R2.AC1, R2.AC3, R7.AC1
       Done when: a production build exposes only modules captured by its `import.meta.glob`, and a post-build disk plugin is absent/rebuild-required.
 

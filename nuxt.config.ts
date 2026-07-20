@@ -591,6 +591,7 @@ export default defineNuxtConfig({
         },
     },
     modules: [
+        './modules/plugin-runtime-catalog',
         '@nuxt/ui',
         '@nuxt/fonts',
         '@vite-pwa/nuxt',

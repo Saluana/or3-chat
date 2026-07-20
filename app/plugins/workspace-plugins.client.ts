@@ -1,5 +1,6 @@
 import { watch } from 'vue';
 import { useRuntimeConfig } from '#imports';
+import { bundledPluginCatalog } from '#build/or3/bundled-plugin-catalog';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import {
     createWorkspacePluginApi,
@@ -7,6 +8,7 @@ import {
     unregisterWorkspacePluginInstance,
     type Or3WorkspacePlugin,
 } from '~/composables/plugins/workspace-runtime';
+import { resolveBundledPluginArtifact } from '~~/shared/plugins/bundled-plugin-catalog';
 
 type PluginRuntimeManifestResponse = {
     workspaceId: string | null;
@@ -24,37 +26,13 @@ type PluginRuntimeManifestResponse = {
     revision: string;
 };
 
-const legacyEntries = ['plugin.client.ts', 'plugin.client.js', 'plugin.client.mjs'];
-
-function normalizePath(path: string): string {
-    return path.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '');
-}
-
 function findLoader(
     modules: Record<string, () => Promise<unknown>>,
     pluginId: string,
     entry?: string
 ): (() => Promise<unknown>) | null {
-    const normalizedEntry = entry ? normalizePath(entry) : null;
-    if (normalizedEntry) {
-        const suffix = normalizePath(`extensions/plugins/${pluginId}/${normalizedEntry}`);
-        for (const [key, loader] of Object.entries(modules)) {
-            if (normalizePath(key).endsWith(suffix)) {
-                return loader;
-            }
-        }
-    }
-
-    for (const fallback of legacyEntries) {
-        const suffix = normalizePath(`extensions/plugins/${pluginId}/${fallback}`);
-        for (const [key, loader] of Object.entries(modules)) {
-            if (normalizePath(key).endsWith(suffix)) {
-                return loader;
-            }
-        }
-    }
-
-    return null;
+    const resolution = resolveBundledPluginArtifact(bundledPluginCatalog, pluginId, entry);
+    return resolution.status === 'bundled' ? modules[resolution.artifact.moduleKey] ?? null : null;
 }
 
 function parseWorkspacePlugin(mod: unknown, pluginId: string): Or3WorkspacePlugin | null {
@@ -86,14 +64,14 @@ export default defineNuxtPlugin(() => {
     }
 
     const modules = {
-        ...import.meta.glob('~~/extensions/plugins/*/**/*.client.ts'),
-        ...import.meta.glob('~~/extensions/plugins/*/**/*.client.js'),
-        ...import.meta.glob('~~/extensions/plugins/*/**/*.client.mjs'),
+        ...import.meta.glob('../../extensions/plugins/*/**/*.client.ts'),
+        ...import.meta.glob('../../extensions/plugins/*/**/*.client.js'),
+        ...import.meta.glob('../../extensions/plugins/*/**/*.client.mjs'),
         // Production-build compatibility corpus. These modules are bundled so the
         // V1 loader boundary is exercised, but they are outside the installed
         // extension inventory and therefore can never be enabled at runtime.
         ...import.meta.glob(
-            '~~/tests/plugin-runtime/build-fixtures/extensions/plugins/*/**/*.client.ts'
+            '../../tests/plugin-runtime/build-fixtures/extensions/plugins/*/**/*.client.ts'
         ),
     } as Record<string, () => Promise<unknown>>;
 

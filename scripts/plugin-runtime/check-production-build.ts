@@ -12,6 +12,7 @@ const modeArg = process.argv[process.argv.indexOf('--mode') + 1] as Mode | undef
 const BUILTIN_SENTINEL = 'Create document';
 const V1_FIXTURE_SENTINEL = 'or3-v1-build-fixture:message-action';
 const NON_CLIENT_SENTINEL = 'or3-v1-build-fixture:must-not-bundle';
+const CATALOG_SENTINEL = 'or3-bundled-plugin-catalog:v1';
 
 function fail(message: string): never {
     throw new Error(`[plugin-runtime-build:${modeArg ?? 'unknown'}] ${message}`);
@@ -48,9 +49,11 @@ const publicFiles = executableFiles(publicRoot);
 const serverFiles = executableFiles(serverRoot);
 const fixtureFiles = findMarker(publicFiles, V1_FIXTURE_SENTINEL);
 const builtinFiles = findMarker(publicFiles, BUILTIN_SENTINEL);
+const catalogFiles = findMarker(publicFiles, CATALOG_SENTINEL);
 
 if (!fixtureFiles.length) fail('bundled V1 workspace plugin sentinel is absent from public client output');
 if (!builtinFiles.length) fail('current built-in message action sentinel is absent from public client output');
+if (!catalogFiles.length) fail('generated bundled-plugin catalog is absent from public client output');
 if (findMarker(publicFiles, NON_CLIENT_SENTINEL).length) {
     fail('a non-client workspace fixture leaked into public output');
 }
