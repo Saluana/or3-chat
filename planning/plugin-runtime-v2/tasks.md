@@ -316,7 +316,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R6.AC5
       Done when: host/API/dependency/feature/trust mismatches each block before loader invocation.
 
-- [ ] 6.4 Implement required/optional dependency resolution, semver checks, cycle paths, topological start, and reverse stop ordering
+- [x] 6.4 Implement required/optional dependency resolution, semver checks, cycle paths, topological start, and reverse stop ordering
       Requirements: R2.AC2, R6.AC5, R6.AC8
       Done when: missing/incompatible required dependencies and cycles block before import, optional absence negotiates cleanly, and start/stop order is deterministic.
 
