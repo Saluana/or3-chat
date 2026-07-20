@@ -48,6 +48,7 @@ describe('Plugin SDK test harness', () => {
     it('activates, publishes staged registrations, and cleans up locally', async () => {
         const events: string[] = [];
         const host = createPluginTestHost({
+            approvedGrants: ['hooks.register', 'ui.dashboard.register'],
             supportedFeatures: ['host.contributions'],
         });
         const definition = plugin((context) => {
@@ -60,7 +61,7 @@ describe('Plugin SDK test harness', () => {
             });
             context.onActivate(() => events.push('activate'));
             context.onCleanup(() => events.push('cleanup'));
-        });
+        }, ['hooks.register', 'ui.dashboard.register']);
 
         const result = await host.activate(definition);
 
@@ -85,7 +86,9 @@ describe('Plugin SDK test harness', () => {
 
     it('returns a stable denial for an unapproved grant', async () => {
         let denied: unknown;
-        const host = createPluginTestHost();
+        const host = createPluginTestHost({
+            approvedGrants: ['hooks.register', 'ui.dashboard.register'],
+        });
         const result = await host.activate(
             plugin(async (context) => {
                 denied = await context.storage.set('secret', 'value');
@@ -118,7 +121,9 @@ describe('Plugin SDK test harness', () => {
 
     it('rolls back staged registrations and runs cleanup on activation failure', async () => {
         const cleanup = vi.fn();
-        const host = createPluginTestHost();
+        const host = createPluginTestHost({
+            approvedGrants: ['hooks.register', 'ui.dashboard.register'],
+        });
         const result = await host.activate(
             plugin((context) => {
                 context.hooks.onAction('sample:event', () => undefined);
@@ -131,7 +136,7 @@ describe('Plugin SDK test harness', () => {
                 context.onActivate(() => {
                     throw new Error('activation exploded');
                 });
-            })
+            }, ['hooks.register', 'ui.dashboard.register'])
         );
 
         expect(result).toMatchObject({

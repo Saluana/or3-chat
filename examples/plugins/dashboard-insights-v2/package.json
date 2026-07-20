@@ -1,0 +1,9 @@
+{
+  "name": "@or3/plugin-dashboard-insights-v2",
+  "version": "2.0.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@or3/plugin-sdk": "^2.0.0"
+  }
+}

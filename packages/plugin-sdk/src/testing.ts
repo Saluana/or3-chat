@@ -117,6 +117,9 @@ export class PluginTestHost {
         const controller = new AbortController();
         const cleanups: Array<() => void | Promise<void>> = [];
         const activations: Array<() => void | Promise<void>> = [];
+        const requested = new Set(definition.manifest.requestedGrants);
+        const grants = [...this.#approvedGrants].filter((grant) => requested.has(grant));
+        const approved = new Set(grants);
         let stagedContributions = 0;
         let stagedHooks = 0;
         const handle = (dispose: () => void): PluginRegistrationHandle => {
@@ -133,6 +136,9 @@ export class PluginTestHost {
         };
         const contributions: PluginContributions = {
             register: <TDefinition>(_contribution: PluginContribution<TDefinition>) => {
+                if (!approved.has('ui.dashboard.register')) {
+                    throw new Error('Grant ui.dashboard.register was not approved');
+                }
                 stagedContributions += 1;
                 return handle(() => {
                     stagedContributions = Math.max(0, stagedContributions - 1);
@@ -141,12 +147,18 @@ export class PluginTestHost {
         };
         const hooks: PluginHooks = {
             onAction: () => {
+                if (!approved.has('hooks.register')) {
+                    throw new Error('Grant hooks.register was not approved');
+                }
                 stagedHooks += 1;
                 return handle(() => {
                     stagedHooks = Math.max(0, stagedHooks - 1);
                 });
             },
             onFilter: () => {
+                if (!approved.has('hooks.register')) {
+                    throw new Error('Grant hooks.register was not approved');
+                }
                 stagedHooks += 1;
                 return handle(() => {
                     stagedHooks = Math.max(0, stagedHooks - 1);
@@ -163,8 +175,6 @@ export class PluginTestHost {
             optional: (feature) => this.#supportedFeatures.has(feature),
             available: this.#supportedFeatures,
         };
-        const requested = new Set(definition.manifest.requestedGrants);
-        const grants = [...this.#approvedGrants].filter((grant) => requested.has(grant));
         const context = createHostPluginContext({
             identity: {
                 pluginId: definition.manifest.id,

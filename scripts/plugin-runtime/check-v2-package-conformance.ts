@@ -163,6 +163,30 @@ function autoImportNames(repoRoot: string): Set<string> {
     return names;
 }
 
+function moduleSpecifiers(sourceFile: ts.SourceFile): string[] {
+    const result: string[] = [];
+    const visit = (node: ts.Node) => {
+        if (
+            (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+            node.moduleSpecifier &&
+            ts.isStringLiteral(node.moduleSpecifier)
+        ) {
+            result.push(node.moduleSpecifier.text);
+        } else if (
+            ts.isCallExpression(node) &&
+            (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+                (ts.isIdentifier(node.expression) && node.expression.text === 'require')) &&
+            node.arguments.length === 1 &&
+            ts.isStringLiteral(node.arguments[0]!)
+        ) {
+            result.push(node.arguments[0]!.text);
+        }
+        ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+    return result;
+}
+
 export function checkV2PackageConformance(
     packageRoot: string,
     options: { repoRoot?: string } = {}
@@ -259,9 +283,9 @@ export function checkV2PackageConformance(
     for (const file of codeFiles(root)) {
         const source = readFileSync(file, 'utf8');
         const fileName = posix(relative(root, file));
-        const imports = ts
-            .preProcessFile(source, true, true)
-            .importedFiles.map((entry) => entry.fileName);
+        const kind = file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+        const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, kind);
+        const imports = moduleSpecifiers(sourceFile);
         for (const specifier of imports) {
             if (
                 PRIVATE_IMPORT_PREFIXES.some(
@@ -283,8 +307,6 @@ export function checkV2PackageConformance(
                 });
             }
         }
-        const kind = file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
-        const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, kind);
         const declared = declaredNames(sourceFile);
         const reported = new Set<string>();
         const visit = (node: ts.Node) => {

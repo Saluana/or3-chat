@@ -344,7 +344,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R10.AC3-R10.AC5
       Done when: upgrade/rollback eligibility is computed without mutating state and incompatible rollback is clearly represented.
 
-- [ ] 6.11 Build one first-party sample V2 package and run the full SDK/transactional lifecycle suite
+- [x] 6.11 Build one first-party sample V2 package and run the full SDK/transactional lifecycle suite
       Requirements: R3.AC2-R3.AC4, R6.AC4-R6.AC6
       Done when: sample setup, atomic visibility, grant denial, rollback, and cleanup pass without app-private imports.
 

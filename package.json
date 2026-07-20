@@ -56,6 +56,7 @@
         "plugin-runtime:contracts:check": "bun x tsc --project tests/plugin-runtime/contracts/tsconfig.json",
         "plugin-runtime:sdk:check": "bun x tsc --project packages/plugin-sdk/tsconfig.json && bun x tsc --project tests/plugin-runtime/sdk-minimal/tsconfig.json",
         "plugin-runtime:v2-conformance:check": "bun run scripts/plugin-runtime/check-v2-package-conformance.ts tests/plugin-runtime/v2-conformance/valid && bun x vitest run scripts/__tests__/plugin-runtime-v2-conformance.test.ts",
+        "plugin-runtime:first-party-v2:check": "bun run scripts/plugin-runtime/check-v2-package-conformance.ts examples/plugins/dashboard-insights-v2 && bun x vitest run tests/unit/plugin-sdk-first-party-v2.test.ts tests/unit/plugin-sdk-test-harness.test.ts",
         "dev:offline": "env SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false bun run dev"
     },
     "bin": {
@@ -64,6 +65,7 @@
     "dependencies": {
         "@nuxt/ui": "^3.3.7",
         "@openrouter/sdk": "^0.3.11",
+        "@or3/plugin-sdk": "file:./packages/plugin-sdk",
         "@orama/orama": "^3.1.16",
         "@tiptap/core": "^3.13.0",
         "@tiptap/extension-mention": "^3.13.0",
