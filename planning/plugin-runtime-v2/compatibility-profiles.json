@@ -97,6 +97,22 @@
       "globalKeys": [],
       "implementation": "legacy-equivalent",
       "behavior": { "duplicate": "replace-in-place-by-id", "storedValue": "normalized-caller-value", "pageDefaultPath": "id", "defaultOrder": 0, "equalOrderTie": "array-position", "pluginDiscovery": "loaded-once-per-module-instance", "loadFailure": "dev-error-skip-continue", "componentCacheKey": "shared-page-or-widget-id", "componentCacheMax": 50, "componentCacheEviction": "fifo-insertion", "replacementCacheInvalidation": "none", "registerReturn": "void", "disposal": "none" }
+    },
+    {
+      "id": "registry.client-tools",
+      "family": "client AI tools",
+      "sources": ["app/utils/chat/tool-registry.ts"],
+      "globalKeys": ["__or3ToolRegistry"],
+      "implementation": "legacy-equivalent",
+      "behavior": { "duplicate": "reject-unless-override", "storedValue": "RegisteredTool-object-identity", "definition": "copied-with-normalized-runtime", "runtimePrecedence": "options-definition-hybrid", "state": ["enabled-ref", "lastError-ref"], "replacement": "stop-old-watcher-before-set", "persistenceKey": "or3.tools.enabled", "persistenceDebounceMs": 300, "initialEnabledPrecedence": "options-storage-definition-default-true", "registerReturn": "RegisteredTool", "disposal": "exact-owner-boolean", "timeoutMs": 10000, "schema": "shared-tool-schema", "limits": "shared-tool-limits" }
+    },
+    {
+      "id": "registry.server-tools",
+      "family": "server AI tools",
+      "sources": ["server/utils/chat/tool-registry.ts"],
+      "globalKeys": [],
+      "implementation": "legacy-equivalent",
+      "behavior": { "duplicate": "reject-unless-override", "storedValue": "RegisteredServerTool", "definition": "copied-with-normalized-runtime", "runtimePrecedence": "options-definition-hybrid", "runtimeHints": "client-hint-skips-server-match", "requestDefinition": "exact-shared-policy-parity", "registerReturn": "exact-owner-disposer-function", "timeoutDefaultMs": 10000, "timeoutOverride": true, "schema": "shared-tool-schema", "limits": "shared-tool-limits" }
     }
   ]
 }

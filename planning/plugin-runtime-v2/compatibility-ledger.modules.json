@@ -31,13 +31,13 @@
     { "source": "app/core/hooks/hooks.ts", "runtime": "client", "publicPaths": ["~/core/hooks/hooks", "~/core/hooks"], "docs": ["public/_documentation/hooks/typed-hooks.md", "docs/hooks.md"] },
     { "source": "app/core/hooks/typed-hooks.ts", "runtime": "client", "publicPaths": ["~/core/hooks/typed-hooks"], "docs": ["public/_documentation/hooks/typed-hooks.md", "docs/hooks-augmentation.md"] },
     { "source": "app/core/hooks/useHooks.ts", "runtime": "client", "publicPaths": ["~/core/hooks/useHooks"], "docs": ["docs/hooks.md"] },
-    { "source": "app/utils/chat/tool-registry.ts", "runtime": "client", "publicPaths": ["~/utils/chat/tool-registry"], "docs": ["public/_documentation/start/plugin-quickstart.md"] },
+    { "source": "app/utils/chat/tool-registry.ts", "runtime": "client", "publicPaths": ["~/utils/chat/tool-registry"], "docs": ["public/_documentation/start/plugin-quickstart.md"], "behaviorProfileIds": ["registry.client-tools"] },
     { "source": "app/utils/chat/tools-public.ts", "runtime": "client", "publicPaths": ["~/utils/chat/tools-public"], "docs": ["public/_documentation/start/plugin-quickstart.md"] },
     { "source": "server/hooks/admin-hook-types.ts", "runtime": "server", "publicPaths": ["~~/server/hooks/admin-hook-types"], "docs": ["docs/hooks.md"] },
     { "source": "server/hooks/hook-engine.ts", "runtime": "server", "publicPaths": ["~~/server/hooks/hook-engine"], "docs": ["docs/hooks.md"] },
     { "source": "server/hooks/index.ts", "runtime": "server", "publicPaths": ["~~/server/hooks"], "docs": ["docs/hooks.md"] },
     { "source": "server/hooks/typed-hooks.ts", "runtime": "server", "publicPaths": ["~~/server/hooks/typed-hooks"], "docs": ["docs/hooks.md"] },
-    { "source": "server/utils/chat/tool-registry.ts", "runtime": "server", "publicPaths": ["~~/server/utils/chat/tool-registry"], "docs": ["public/_documentation/start/plugin-quickstart.md"] },
+    { "source": "server/utils/chat/tool-registry.ts", "runtime": "server", "publicPaths": ["~~/server/utils/chat/tool-registry"], "docs": ["public/_documentation/start/plugin-quickstart.md"], "behaviorProfileIds": ["registry.server-tools"] },
     { "source": "shared/hooks/hook-engine-core.ts", "runtime": "shared", "publicPaths": ["~~/shared/hooks/hook-engine-core"], "docs": ["docs/hooks.md"] },
     { "source": "shared/plugins/registration-handle.ts", "runtime": "shared", "publicPaths": ["~~/shared/plugins/registration-handle"], "docs": ["public/_documentation/types/composables.md"] }
   ]

@@ -58,7 +58,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC5, R4.AC4
       Done when: both profile families have explicit golden tests and return-type entries.
 
-- [ ] 1.11 Record client/server tool profiles including duplicates, override, returned object/disposer, refs/watchers, runtime hints, schema parity, timeouts/limits, and `or3.tools.enabled`
+- [x] 1.11 Record client/server tool profiles including duplicates, override, returned object/disposer, refs/watchers, runtime hints, schema parity, timeouts/limits, and `or3.tools.enabled`
       Requirements: R1.AC5, R4.AC8
       Done when: preference round-trip and replacement watcher cleanup are tested in addition to current tool suites.
 

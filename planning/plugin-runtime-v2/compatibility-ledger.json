@@ -4,11 +4,11 @@
   "generator": "scripts/plugin-runtime/generate-compatibility-ledger.ts",
   "inputs": {
     "moduleManifest": "planning/plugin-runtime-v2/compatibility-ledger.modules.json",
-    "moduleManifestSha256": "3a871f6246af52624d53d9d05c19d231c665fd584c48a3be258416fa64ee5094",
+    "moduleManifestSha256": "6964af291c26d9a715cdce7cc98483396ccd7f0db8f5768f85cffa5ff1b0fd35",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
     "nuxtImportsDeclarationSha256": "ce447adff37ea0a4e108ac66ece72d02f5ac7d6ce5aa5e46da8816907f45c991",
     "behaviorProfiles": "planning/plugin-runtime-v2/compatibility-profiles.json",
-    "behaviorProfilesSha256": "3d8f13186f8f8507425c59ea4cf469dff545f8843278be358e8fbc5a1c34d5ee"
+    "behaviorProfilesSha256": "3da04d48d16d44a8adda5742383a733e9797c57cc587d4fd713ca020309239d2"
   },
   "coverage": {
     "moduleCount": 36,
@@ -39,6 +39,36 @@
         "replacementCacheInvalidation": "none",
         "registerReturn": "void",
         "disposal": "none"
+      }
+    },
+    {
+      "id": "registry.client-tools",
+      "family": "client AI tools",
+      "sources": [
+        "app/utils/chat/tool-registry.ts"
+      ],
+      "globalKeys": [
+        "__or3ToolRegistry"
+      ],
+      "implementation": "legacy-equivalent",
+      "behavior": {
+        "duplicate": "reject-unless-override",
+        "storedValue": "RegisteredTool-object-identity",
+        "definition": "copied-with-normalized-runtime",
+        "runtimePrecedence": "options-definition-hybrid",
+        "state": [
+          "enabled-ref",
+          "lastError-ref"
+        ],
+        "replacement": "stop-old-watcher-before-set",
+        "persistenceKey": "or3.tools.enabled",
+        "persistenceDebounceMs": 300,
+        "initialEnabledPrecedence": "options-storage-definition-default-true",
+        "registerReturn": "RegisteredTool",
+        "disposal": "exact-owner-boolean",
+        "timeoutMs": 10000,
+        "schema": "shared-tool-schema",
+        "limits": "shared-tool-limits"
       }
     },
     {
@@ -269,6 +299,28 @@
         "globalPersistence": "globalThis-map",
         "registerReturn": "void",
         "disposal": "id-only-public-api"
+      }
+    },
+    {
+      "id": "registry.server-tools",
+      "family": "server AI tools",
+      "sources": [
+        "server/utils/chat/tool-registry.ts"
+      ],
+      "globalKeys": [],
+      "implementation": "legacy-equivalent",
+      "behavior": {
+        "duplicate": "reject-unless-override",
+        "storedValue": "RegisteredServerTool",
+        "definition": "copied-with-normalized-runtime",
+        "runtimePrecedence": "options-definition-hybrid",
+        "runtimeHints": "client-hint-skips-server-match",
+        "requestDefinition": "exact-shared-policy-parity",
+        "registerReturn": "exact-owner-disposer-function",
+        "timeoutDefaultMs": 10000,
+        "timeoutOverride": true,
+        "schema": "shared-tool-schema",
+        "limits": "shared-tool-limits"
       }
     },
     {
@@ -9719,7 +9771,9 @@
       "docs": [
         "public/_documentation/start/plugin-quickstart.md"
       ],
-      "behaviorProfileIds": [],
+      "behaviorProfileIds": [
+        "registry.client-tools"
+      ],
       "exports": [
         {
           "name": "ContextualToolHandler",
@@ -10411,7 +10465,9 @@
       "docs": [
         "public/_documentation/start/plugin-quickstart.md"
       ],
-      "behaviorProfileIds": [],
+      "behaviorProfileIds": [
+        "registry.server-tools"
+      ],
       "exports": [
         {
           "name": "ContextualToolHandler",
