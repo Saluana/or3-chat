@@ -6,7 +6,7 @@
     "moduleManifest": "planning/plugin-runtime-v2/compatibility-ledger.modules.json",
     "moduleManifestSha256": "6964af291c26d9a715cdce7cc98483396ccd7f0db8f5768f85cffa5ff1b0fd35",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "f70eb736703a0f20cad123422d0e5e330e092e45deaa8cde0d5e784c29693b68",
+    "nuxtImportsDeclarationSha256": "9e2e3806f7e3ec7971f65e7cf66f0fc13071b778c97466e167b9f3185933b72e",
     "behaviorProfiles": "planning/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "3da04d48d16d44a8adda5742383a733e9797c57cc587d4fd713ca020309239d2"
   },
@@ -770,7 +770,7 @@
     },
     {
       "source": "app/composables/chat/useMessageActions.ts",
-      "apiSha256": "deeab0c1d4d7773bed8d778d1f8d00cf38d3e81540f4bbc025bc5c00ac24d9dd",
+      "apiSha256": "21ee8ce7d88eb02fc9019e43e794aa39d4fdca6fe0cec107c2697c52cf153c17",
       "runtime": "client",
       "publicPaths": [
         "~/composables/chat/useMessageActions"
@@ -791,7 +791,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 55,
+              "line": 57,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ChatMessageAction {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Tooltip text. */\n    tooltip: string;\n    /** Where to show the action. */\n    showOn: 'user' | 'assistant' | 'both';\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    /** Handler invoked on click. */\n    handler: (ctx: {\n        message: UiChatMessage;\n        threadId?: string;\n    }) => void | Promise<void>;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this action. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -808,7 +808,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 158,
+                "line": 171,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredMessageActionIds(): string[];"
               }
@@ -817,7 +817,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 158,
+              "line": 171,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredMessageActionIds(): string[];"
             }
@@ -834,7 +834,7 @@
               "resolvedReturnType": "globalThis.RegistrationHandle",
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 103,
+                "line": 115,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerMessageAction(action: ChatMessageAction);"
               }
@@ -843,7 +843,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 103,
+              "line": 115,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerMessageAction(action: ChatMessageAction);"
             }
@@ -860,7 +860,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 117,
+                "line": 129,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterMessageAction(id: string);"
               }
@@ -869,7 +869,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 117,
+              "line": 129,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterMessageAction(id: string);"
             }
@@ -886,7 +886,7 @@
               "resolvedReturnType": "globalThis.ComputedRef<ChatMessageAction[]>",
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 138,
+                "line": 151,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useMessageActions(message: { role: 'user' | 'assistant' });"
               }
@@ -895,7 +895,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 138,
+              "line": 151,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useMessageActions(message: { role: 'user' | 'assistant' });"
             }
@@ -2441,7 +2441,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "0add11fe47be86a50e5843b35a80c408513d8a4742358c193f3764e1e247658d",
+      "apiSha256": "cad32a8d8b95bd45b53039217ead355b489f4277f2672443033e7fcd14ce6f28",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2568,7 +2568,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 55,
+              "line": 57,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ChatMessageAction {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Tooltip text. */\n    tooltip: string;\n    /** Where to show the action. */\n    showOn: 'user' | 'assistant' | 'both';\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    /** Handler invoked on click. */\n    handler: (ctx: {\n        message: UiChatMessage;\n        threadId?: string;\n    }) => void | Promise<void>;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this action. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -2596,7 +2596,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 71,
+              "line": 73,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ComposerAction {\n    /** Unique identifier for the action */\n    id: string;\n    /** Icon name displayed in the toolbar button */\n    icon: string;\n    /** Optional tooltip shown on hover/focus */\n    tooltip?: string;\n    /** Optional visible label (text inside button) */\n    label?: string;\n    /** Optional ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional color variant for the button */\n    color?: ChromeActionColor;\n    /** Handler called when the action button is clicked */\n    handler: (ctx: ComposerActionContext) => void | Promise<void>;\n    /** Optional function to determine if action should be visible */\n    visible?: (ctx: ComposerActionContext) => boolean;\n    /** Optional function to determine if action should be disabled */\n    disabled?: (ctx: ComposerActionContext) => boolean;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this action. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -2610,7 +2610,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 41,
+              "line": 43,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ComposerActionContext {\n    /** The TipTap editor instance, if available */\n    editor?: Editor | null;\n    /** ID of the current thread, if any */\n    threadId?: string | null;\n    /** ID of the current pane, if any */\n    paneId?: string | null;\n    /** Whether AI content is currently streaming */\n    isStreaming?: boolean;\n    /** Additional context properties for extensibility */\n    [key: string]: unknown;\n}"
             }
@@ -2624,7 +2624,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 111,
+              "line": 113,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ComposerActionEntry {\n    /** The composer action definition */\n    action: ComposerAction;\n    /** Whether the action is currently disabled based on context */\n    disabled: boolean;\n}"
             }
@@ -3082,7 +3082,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useHeaderActions.ts",
-              "line": 64,
+              "line": 66,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface HeaderAction extends RegistryItem {\n    /** Unique identifier for the action */\n    id: string;\n    /** Icon name displayed in the header button */\n    icon: string;\n    /** Optional tooltip shown on hover/focus */\n    tooltip?: string;\n    /** Optional visible label (text inside button) */\n    label?: string;\n    /** Optional ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional color variant for the button */\n    color?: ChromeActionColor;\n    /** Handler called when the action button is clicked */\n    handler: (ctx: HeaderActionContext) => void | Promise<void>;\n    /** Optional function to determine if action should be visible */\n    visible?: (ctx: HeaderActionContext) => boolean;\n    /** Optional function to determine if action should be disabled */\n    disabled?: (ctx: HeaderActionContext) => boolean;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this action. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -3096,7 +3096,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useHeaderActions.ts",
-              "line": 39,
+              "line": 41,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface HeaderActionContext {\n    /** The current Vue Router route object */\n    route?: RouteLocationNormalizedLoaded | null;\n    /** Whether the application is in mobile view */\n    isMobile?: boolean;\n    /** Additional context properties for extensibility */\n    [key: string]: unknown;\n}"
             }
@@ -3110,7 +3110,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useHeaderActions.ts",
-              "line": 104,
+              "line": 106,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface HeaderActionEntry {\n    /** The header action definition */\n    action: HeaderAction;\n    /** Whether the action is currently disabled based on context */\n    disabled: boolean;\n}"
             }
@@ -3259,7 +3259,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 272,
+                "line": 291,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredComposerActionIds(): string[];"
               }
@@ -3268,7 +3268,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 272,
+              "line": 291,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredComposerActionIds(): string[];"
             }
@@ -3441,7 +3441,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/sidebar/useHeaderActions.ts",
-                "line": 213,
+                "line": 227,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredHeaderActionIds(): string[];"
               }
@@ -3450,7 +3450,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useHeaderActions.ts",
-              "line": 213,
+              "line": 227,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredHeaderActionIds(): string[];"
             }
@@ -3467,7 +3467,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 158,
+                "line": 171,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredMessageActionIds(): string[];"
               }
@@ -3476,7 +3476,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 158,
+              "line": 171,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredMessageActionIds(): string[];"
             }
@@ -3885,7 +3885,7 @@
               "resolvedReturnType": "RegistrationHandle",
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 176,
+                "line": 189,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerComposerAction(action: ComposerAction): RegistrationHandle;"
               }
@@ -3894,7 +3894,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 176,
+              "line": 189,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerComposerAction(action: ComposerAction): RegistrationHandle;"
             }
@@ -4107,7 +4107,7 @@
               "resolvedReturnType": "globalThis.RegistrationHandle",
               "declaration": {
                 "source": "app/composables/sidebar/useHeaderActions.ts",
-                "line": 138,
+                "line": 151,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerHeaderAction(action: HeaderAction);"
               }
@@ -4116,7 +4116,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useHeaderActions.ts",
-              "line": 138,
+              "line": 151,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerHeaderAction(action: HeaderAction);"
             }
@@ -4133,7 +4133,7 @@
               "resolvedReturnType": "globalThis.RegistrationHandle",
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 103,
+                "line": 115,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerMessageAction(action: ChatMessageAction);"
               }
@@ -4142,7 +4142,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 103,
+              "line": 115,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerMessageAction(action: ChatMessageAction);"
             }
@@ -4601,7 +4601,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 215,
+                "line": 229,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterComposerAction(id: string);"
               }
@@ -4610,7 +4610,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 215,
+              "line": 229,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterComposerAction(id: string);"
             }
@@ -4809,7 +4809,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useHeaderActions.ts",
-                "line": 157,
+                "line": 170,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterHeaderAction(id: string);"
               }
@@ -4818,7 +4818,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useHeaderActions.ts",
-              "line": 157,
+              "line": 170,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterHeaderAction(id: string);"
             }
@@ -4835,7 +4835,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 117,
+                "line": 129,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterMessageAction(id: string);"
               }
@@ -4844,7 +4844,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 117,
+              "line": 129,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterMessageAction(id: string);"
             }
@@ -5095,7 +5095,7 @@
               "resolvedReturnType": "ComputedRef<ComposerActionEntry[]>",
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 236,
+                "line": 254,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useComposerActions(\n    context: () => ComposerActionContext = () => ({})\n): ComputedRef<ComposerActionEntry[]>;"
               }
@@ -5104,7 +5104,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 236,
+              "line": 254,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useComposerActions(\n    context: () => ComposerActionContext = () => ({})\n): ComputedRef<ComposerActionEntry[]>;"
             }
@@ -5343,7 +5343,7 @@
               "resolvedReturnType": "ComputedRef<HeaderActionEntry[]>",
               "declaration": {
                 "source": "app/composables/sidebar/useHeaderActions.ts",
-                "line": 176,
+                "line": 190,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useHeaderActions(\n    context: () => HeaderActionContext = () => ({})\n): ComputedRef<HeaderActionEntry[]>;"
               }
@@ -5352,7 +5352,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useHeaderActions.ts",
-              "line": 176,
+              "line": 190,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useHeaderActions(\n    context: () => HeaderActionContext = () => ({})\n): ComputedRef<HeaderActionEntry[]>;"
             }
@@ -5421,7 +5421,7 @@
               "resolvedReturnType": "globalThis.ComputedRef<ChatMessageAction[]>",
               "declaration": {
                 "source": "app/composables/chat/useMessageActions.ts",
-                "line": 138,
+                "line": 151,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useMessageActions(message: { role: 'user' | 'assistant' });"
               }
@@ -5430,7 +5430,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageActions.ts",
-              "line": 138,
+              "line": 151,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useMessageActions(message: { role: 'user' | 'assistant' });"
             }
@@ -6602,7 +6602,7 @@
     },
     {
       "source": "app/composables/sidebar/useComposerActions.ts",
-      "apiSha256": "9195de1e454e2f4cab564e9226de95c31341910606f938b2bb3865c36dbd48b0",
+      "apiSha256": "7905b39ef8cdb14f03a7439974e5e00d4fe9e61374b91d069bc4229f811cdf50",
       "runtime": "client",
       "publicPaths": [
         "~/composables/sidebar/useComposerActions"
@@ -6623,7 +6623,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 71,
+              "line": 73,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ComposerAction {\n    /** Unique identifier for the action */\n    id: string;\n    /** Icon name displayed in the toolbar button */\n    icon: string;\n    /** Optional tooltip shown on hover/focus */\n    tooltip?: string;\n    /** Optional visible label (text inside button) */\n    label?: string;\n    /** Optional ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional color variant for the button */\n    color?: ChromeActionColor;\n    /** Handler called when the action button is clicked */\n    handler: (ctx: ComposerActionContext) => void | Promise<void>;\n    /** Optional function to determine if action should be visible */\n    visible?: (ctx: ComposerActionContext) => boolean;\n    /** Optional function to determine if action should be disabled */\n    disabled?: (ctx: ComposerActionContext) => boolean;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this action. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -6637,7 +6637,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 41,
+              "line": 43,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ComposerActionContext {\n    /** The TipTap editor instance, if available */\n    editor?: Editor | null;\n    /** ID of the current thread, if any */\n    threadId?: string | null;\n    /** ID of the current pane, if any */\n    paneId?: string | null;\n    /** Whether AI content is currently streaming */\n    isStreaming?: boolean;\n    /** Additional context properties for extensibility */\n    [key: string]: unknown;\n}"
             }
@@ -6651,7 +6651,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 111,
+              "line": 113,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ComposerActionEntry {\n    /** The composer action definition */\n    action: ComposerAction;\n    /** Whether the action is currently disabled based on context */\n    disabled: boolean;\n}"
             }
@@ -6668,7 +6668,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 272,
+                "line": 291,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredComposerActionIds(): string[];"
               }
@@ -6677,7 +6677,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 272,
+              "line": 291,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredComposerActionIds(): string[];"
             }
@@ -6694,7 +6694,7 @@
               "resolvedReturnType": "RegistrationHandle",
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 176,
+                "line": 189,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerComposerAction(action: ComposerAction): RegistrationHandle;"
               }
@@ -6703,7 +6703,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 176,
+              "line": 189,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerComposerAction(action: ComposerAction): RegistrationHandle;"
             }
@@ -6720,7 +6720,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 215,
+                "line": 229,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterComposerAction(id: string);"
               }
@@ -6729,7 +6729,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 215,
+              "line": 229,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterComposerAction(id: string);"
             }
@@ -6746,7 +6746,7 @@
               "resolvedReturnType": "ComputedRef<ComposerActionEntry[]>",
               "declaration": {
                 "source": "app/composables/sidebar/useComposerActions.ts",
-                "line": 236,
+                "line": 254,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useComposerActions(\n    context: () => ComposerActionContext = () => ({})\n): ComputedRef<ComposerActionEntry[]>;"
               }
@@ -6755,7 +6755,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useComposerActions.ts",
-              "line": 236,
+              "line": 254,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useComposerActions(\n    context: () => ComposerActionContext = () => ({})\n): ComputedRef<ComposerActionEntry[]>;"
             }
@@ -6765,7 +6765,7 @@
     },
     {
       "source": "app/composables/sidebar/useHeaderActions.ts",
-      "apiSha256": "51ff51f96072b43a8f4dc01a08c0cdb2f360c8d34e947d979dfc1797ae86f929",
+      "apiSha256": "3a9a4227dd92a09d35e8c9feb3752e8755dd135b1498bac66144d4b98728b032",
       "runtime": "client",
       "publicPaths": [
         "~/composables/sidebar/useHeaderActions"
@@ -6786,7 +6786,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useHeaderActions.ts",
-              "line": 64,
+              "line": 66,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface HeaderAction extends RegistryItem {\n    /** Unique identifier for the action */\n    id: string;\n    /** Icon name displayed in the header button */\n    icon: string;\n    /** Optional tooltip shown on hover/focus */\n    tooltip?: string;\n    /** Optional visible label (text inside button) */\n    label?: string;\n    /** Optional ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional color variant for the button */\n    color?: ChromeActionColor;\n    /** Handler called when the action button is clicked */\n    handler: (ctx: HeaderActionContext) => void | Promise<void>;\n    /** Optional function to determine if action should be visible */\n    visible?: (ctx: HeaderActionContext) => boolean;\n    /** Optional function to determine if action should be disabled */\n    disabled?: (ctx: HeaderActionContext) => boolean;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this action. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -6800,7 +6800,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useHeaderActions.ts",
-              "line": 39,
+              "line": 41,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface HeaderActionContext {\n    /** The current Vue Router route object */\n    route?: RouteLocationNormalizedLoaded | null;\n    /** Whether the application is in mobile view */\n    isMobile?: boolean;\n    /** Additional context properties for extensibility */\n    [key: string]: unknown;\n}"
             }
@@ -6814,7 +6814,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useHeaderActions.ts",
-              "line": 104,
+              "line": 106,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface HeaderActionEntry {\n    /** The header action definition */\n    action: HeaderAction;\n    /** Whether the action is currently disabled based on context */\n    disabled: boolean;\n}"
             }
@@ -6831,7 +6831,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/sidebar/useHeaderActions.ts",
-                "line": 213,
+                "line": 227,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredHeaderActionIds(): string[];"
               }
@@ -6840,7 +6840,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useHeaderActions.ts",
-              "line": 213,
+              "line": 227,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredHeaderActionIds(): string[];"
             }
@@ -6857,7 +6857,7 @@
               "resolvedReturnType": "globalThis.RegistrationHandle",
               "declaration": {
                 "source": "app/composables/sidebar/useHeaderActions.ts",
-                "line": 138,
+                "line": 151,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerHeaderAction(action: HeaderAction);"
               }
@@ -6866,7 +6866,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useHeaderActions.ts",
-              "line": 138,
+              "line": 151,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerHeaderAction(action: HeaderAction);"
             }
@@ -6883,7 +6883,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useHeaderActions.ts",
-                "line": 157,
+                "line": 170,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterHeaderAction(id: string);"
               }
@@ -6892,7 +6892,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useHeaderActions.ts",
-              "line": 157,
+              "line": 170,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterHeaderAction(id: string);"
             }
@@ -6909,7 +6909,7 @@
               "resolvedReturnType": "ComputedRef<HeaderActionEntry[]>",
               "declaration": {
                 "source": "app/composables/sidebar/useHeaderActions.ts",
-                "line": 176,
+                "line": 190,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useHeaderActions(\n    context: () => HeaderActionContext = () => ({})\n): ComputedRef<HeaderActionEntry[]>;"
               }
@@ -6918,7 +6918,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useHeaderActions.ts",
-              "line": 176,
+              "line": 190,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useHeaderActions(\n    context: () => HeaderActionContext = () => ({})\n): ComputedRef<HeaderActionEntry[]>;"
             }

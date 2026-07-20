@@ -20,6 +20,8 @@ import { createRegistry } from '../_registry';
 import type { RegistryItem } from '../_registry';
 import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 /**
  * `HeaderActionContext`
@@ -119,6 +121,17 @@ const DEFAULT_ORDER = 200;
  * Ensures actions persist across component instances.
  */
 const registry = createRegistry<HeaderAction>('__or3HeaderActionsRegistry');
+const v2Kernel = getContributionSurfaceKernel<HeaderAction>('header-actions', {
+    getId: (action) => action.id,
+    normalize: (action) => Object.freeze({ ...action }),
+    compare: (left, right) =>
+        (left.order ?? DEFAULT_ORDER) - (right.order ?? DEFAULT_ORDER) ||
+        left.id.localeCompare(right.id),
+});
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('header-actions');
+}
 
 /**
  * `registerHeaderAction`
@@ -136,7 +149,7 @@ const registry = createRegistry<HeaderAction>('__or3HeaderActionsRegistry');
  * - Does not validate action payload beyond the registry behavior
  */
 export function registerHeaderAction(action: HeaderAction) {
-    return registry.register(action);
+    return useV2Surface() ? v2Kernel.registry.registerLegacy({ value: action }) : registry.register(action);
 }
 
 /**
@@ -155,7 +168,8 @@ export function registerHeaderAction(action: HeaderAction) {
  * - Does not run teardown callbacks
  */
 export function unregisterHeaderAction(id: string) {
-    registry.unregister(id);
+    if (useV2Surface()) v2Kernel.registry.unregisterLegacy(id);
+    else registry.unregister(id);
 }
 
 /**
@@ -176,7 +190,7 @@ export function unregisterHeaderAction(id: string) {
 export function useHeaderActions(
     context: () => HeaderActionContext = () => ({})
 ): ComputedRef<HeaderActionEntry[]> {
-    const items = registry.useItems();
+    const items = useV2Surface() ? v2Kernel.items : registry.useItems();
     return computed(() => {
         const ctx = context();
         return items.value
@@ -211,5 +225,5 @@ export function useHeaderActions(
  * - Does not reflect visibility or ordering in the UI
  */
 export function listRegisteredHeaderActionIds(): string[] {
-    return registry.listIds();
+    return useV2Surface() ? [...v2Kernel.registry.listLegacyIds()] : registry.listIds();
 }

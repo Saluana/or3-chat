@@ -1,7 +1,7 @@
-export interface DifferentialSurfaceAdapter<T> {
-    register(value: T): unknown;
+export interface DifferentialSurfaceAdapter<TRegistration, TProjection = TRegistration> {
+    register(value: TRegistration): unknown;
     unregister(id: string): unknown;
-    snapshot(): readonly T[];
+    snapshot(): readonly TProjection[];
     subscribe(listener: () => void): () => void;
 }
 
@@ -80,11 +80,13 @@ function observeException(operation: string, error: unknown): DifferentialExcept
     });
 }
 
-export function captureDifferentialSurface<T>(input: {
-    fixture: DifferentialSurfaceFixture<T>;
-    adapter: DifferentialSurfaceAdapter<T>;
-    getId: (value: T) => string;
-    projectValue: (value: T) => unknown;
+export function captureDifferentialSurface<TRegistration, TProjection = TRegistration>(input: {
+    fixture: DifferentialSurfaceFixture<TRegistration>;
+    adapter: DifferentialSurfaceAdapter<TRegistration, TProjection>;
+    getId: (value: TRegistration) => string;
+    getProjectedId?: (value: TProjection) => string;
+    identityValue?: (value: TProjection) => unknown;
+    projectValue: (value: TProjection) => unknown;
 }): DifferentialSurfaceObservation {
     let notificationCount = 0;
     const stop = input.adapter.subscribe(() => {
@@ -92,7 +94,7 @@ export function captureDifferentialSurface<T>(input: {
     });
     const exceptions: DifferentialExceptionObservation[] = [];
     const returns: unknown[] = [];
-    const lastSourceById = new Map<string, T>();
+    const lastSourceById = new Map<string, TRegistration>();
     for (let index = 0; index < input.fixture.registrations.length; index++) {
         const value = input.fixture.registrations[index]!;
         lastSourceById.set(input.getId(value), value);
@@ -130,14 +132,23 @@ export function captureDifferentialSurface<T>(input: {
     const frozenById: Record<string, boolean> = {};
     const sourceIdentityById: Record<string, boolean> = {};
     for (const value of snapshot) {
-        const id = input.getId(value);
-        frozenById[id] = Object.isFrozen(value);
-        sourceIdentityById[id] = lastSourceById.get(id) === value;
+        const id = input.getProjectedId
+            ? input.getProjectedId(value)
+            : input.getId(value as unknown as TRegistration);
+        const identityValue = input.identityValue?.(value) ?? value;
+        frozenById[id] = Object.isFrozen(identityValue);
+        sourceIdentityById[id] = lastSourceById.get(id) === identityValue;
     }
     return Object.freeze({
         profileId: input.fixture.profileId,
         projectedValues: Object.freeze(snapshot.map(input.projectValue)),
-        projectedIds: Object.freeze(snapshot.map(input.getId)),
+        projectedIds: Object.freeze(
+            snapshot.map((value) =>
+                input.getProjectedId
+                    ? input.getProjectedId(value)
+                    : input.getId(value as unknown as TRegistration)
+            )
+        ),
         frozenById: Object.freeze(frozenById),
         sourceIdentityById: Object.freeze(sourceIdentityById),
         registerReturns: Object.freeze(returns.map(observeReturn)),

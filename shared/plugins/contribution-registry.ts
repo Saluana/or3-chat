@@ -183,6 +183,10 @@ export class ContributionRegistry<
         return this.removeOwner(record.owner) > 0;
     }
 
+    listLegacyIds(): readonly string[] {
+        return Object.freeze(Array.from(this.#legacyById.keys()));
+    }
+
     removeOwner(owner: symbol): number {
         const records = this.#recordsByOwner.get(owner);
         if (!records) return 0;

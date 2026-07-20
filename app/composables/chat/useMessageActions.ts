@@ -50,6 +50,8 @@ import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { createRegistry } from '../_registry';
 import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 /** Definition for an extendable chat message action button. */
 export interface ChatMessageAction {
@@ -77,6 +79,16 @@ export interface ChatMessageAction {
 const registry = createRegistry<ChatMessageAction>(
     '__or3MessageActionsRegistry'
 );
+const v2Kernel = getContributionSurfaceKernel<ChatMessageAction>('message-actions', {
+    getId: (action) => action.id,
+    normalize: (action) => Object.freeze({ ...action }),
+    compare: (left, right) =>
+        (left.order ?? 200) - (right.order ?? 200) || left.id.localeCompare(right.id),
+});
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('message-actions');
+}
 
 /**
  * Registers (or replaces) a message action in the global registry.
@@ -101,7 +113,7 @@ const registry = createRegistry<ChatMessageAction>(
  * @param action - Action definition
  */
 export function registerMessageAction(action: ChatMessageAction) {
-    return registry.register(action);
+    return useV2Surface() ? v2Kernel.registry.registerLegacy({ value: action }) : registry.register(action);
 }
 
 /**
@@ -115,7 +127,8 @@ export function registerMessageAction(action: ChatMessageAction) {
  * @param id - Action ID to remove
  */
 export function unregisterMessageAction(id: string) {
-    registry.unregister(id);
+    if (useV2Surface()) v2Kernel.registry.unregisterLegacy(id);
+    else registry.unregister(id);
 }
 
 /**
@@ -136,7 +149,7 @@ export function unregisterMessageAction(id: string) {
  * @returns Computed ref of applicable actions
  */
 export function useMessageActions(message: { role: 'user' | 'assistant' }) {
-    const allActions = registry.useItems();
+    const allActions = useV2Surface() ? v2Kernel.items : registry.useItems();
     return computed(() =>
         allActions.value.filter(
             (a) =>
@@ -156,7 +169,7 @@ export function useMessageActions(message: { role: 'user' | 'assistant' }) {
  * @returns Array of action IDs
  */
 export function listRegisteredMessageActionIds(): string[] {
-    return registry.listIds();
+    return useV2Surface() ? [...v2Kernel.registry.listLegacyIds()] : registry.listIds();
 }
 
 // Note: Core (built-in) actions remain hard-coded in ChatMessage.vue so they always appear;

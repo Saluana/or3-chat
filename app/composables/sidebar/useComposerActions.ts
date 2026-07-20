@@ -22,6 +22,8 @@ import {
     type RegistrationHandle,
 } from '~~/shared/plugins/registration-handle';
 import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 /**
  * `ComposerActionContext`
@@ -141,6 +143,17 @@ const ownedRegistry: Map<string, OwnedComposerAction> =
 const registry: Map<string, ComposerAction> =
     g.__or3ComposerActionsRegistry ??
     (g.__or3ComposerActionsRegistry = new Map<string, ComposerAction>());
+const v2Kernel = getContributionSurfaceKernel<ComposerAction>('composer-actions', {
+    getId: (action) => action.id,
+    normalize: (action) => Object.freeze({ ...action }),
+    // Composer's frozen V1 exception is an order-only stable sort.
+    compare: (left, right) =>
+        (left.order ?? DEFAULT_ORDER) - (right.order ?? DEFAULT_ORDER),
+});
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('composer-actions');
+}
 
 /**
  * Reactive list that mirrors the registry for Vue reactivity.
@@ -174,6 +187,7 @@ function sync() {
  * - Does not validate action schemas beyond basic presence
  */
 export function registerComposerAction(action: ComposerAction): RegistrationHandle {
+    if (useV2Surface()) return v2Kernel.registry.registerLegacy({ value: action });
     if (import.meta.dev && registry.has(action.id)) {
         console.warn(
             `[useComposerActions] Overwriting existing action: ${action.id}`
@@ -213,6 +227,10 @@ export function registerComposerAction(action: ComposerAction): RegistrationHand
  * - Does not run any teardown hook for removed actions
  */
 export function unregisterComposerAction(id: string) {
+    if (useV2Surface()) {
+        v2Kernel.registry.unregisterLegacy(id);
+        return;
+    }
     ownedRegistry.delete(id);
     if (registry.delete(id)) sync();
 }
@@ -238,7 +256,8 @@ export function useComposerActions(
 ): ComputedRef<ComposerActionEntry[]> {
     return computed(() => {
         const ctx = context();
-        return reactiveList.items
+        const items = useV2Surface() ? v2Kernel.items.value : reactiveList.items;
+        return [...items]
             .filter((action) =>
                 getPluginGateDecision(action.pluginId, action.access).allowed
             )
@@ -270,5 +289,5 @@ export function useComposerActions(
  * - Does not reflect sorting or visibility filters
  */
 export function listRegisteredComposerActionIds(): string[] {
-    return Array.from(registry.keys());
+    return useV2Surface() ? [...v2Kernel.registry.listLegacyIds()] : Array.from(registry.keys());
 }
