@@ -358,7 +358,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R7.AC2, R7.AC4
       Done when: traversal, symlink, device file, duplicate normalized path, case-fold collision, mode, length, and manifest-integrity vectors pass.
 
-- [ ] 7.2 Implement per-plugin immutable store layout and in-process operation mutex
+- [x] 7.2 Implement per-plugin immutable store layout and in-process operation mutex
       Requirements: R7.AC5, R7.AC6
       Done when: verified trees are never mutated and unrelated plugin IDs do not share a mutex.
 

@@ -58,7 +58,7 @@
         "plugin-runtime:v2-conformance:check": "bun run scripts/plugin-runtime/check-v2-package-conformance.ts tests/plugin-runtime/v2-conformance/valid && bun x vitest run scripts/__tests__/plugin-runtime-v2-conformance.test.ts",
         "plugin-runtime:first-party-v2:check": "bun run scripts/plugin-runtime/check-v2-package-conformance.ts examples/plugins/dashboard-insights-v2 && bun x vitest run tests/unit/plugin-sdk-first-party-v2.test.ts tests/unit/plugin-sdk-test-harness.test.ts",
         "plugin-runtime:host-esm-facade:check": "bun run scripts/plugin-runtime/check-host-esm-facade.ts && bun x vitest run shared/plugins/__tests__/host-esm-facade.test.ts scripts/__tests__/plugin-runtime-host-esm-facade.test.ts",
-        "plugin-runtime:package-tree:check": "bun x vitest run server/admin/plugins/__tests__/package-tree.test.ts",
+        "plugin-runtime:package-tree:check": "bun x vitest run server/admin/plugins/__tests__/package-tree.test.ts server/admin/plugins/__tests__/package-store.test.ts",
         "dev:offline": "env SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false bun run dev"
     },
     "bin": {

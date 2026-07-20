@@ -64,6 +64,8 @@ export interface VerifiedPackageTree {
     readonly totalBytes: number;
     readonly declaredManifestIntegrity: Sha256 | null;
     readonly detachedExpectedDigest: Sha256 | null;
+    readonly manifestId: string | null;
+    readonly manifestVersion: number | null;
 }
 
 const DEFAULT_LIMITS: PackageTreeLimits = Object.freeze({
@@ -150,6 +152,8 @@ function canonicalJson(value: unknown): string {
 function canonicalManifestBytes(bytes: Uint8Array): {
     readonly bytes: Uint8Array;
     readonly declaredIntegrity: Sha256 | null;
+    readonly manifestId: string | null;
+    readonly manifestVersion: number | null;
 } {
     let manifest: Record<string, unknown>;
     try {
@@ -185,6 +189,9 @@ function canonicalManifestBytes(bytes: Uint8Array): {
     return {
         bytes: Buffer.from(canonicalJson(manifest), 'utf8'),
         declaredIntegrity,
+        manifestId: typeof manifest.id === 'string' ? manifest.id : null,
+        manifestVersion:
+            typeof manifest.manifestVersion === 'number' ? manifest.manifestVersion : null,
     };
 }
 
@@ -311,6 +318,8 @@ export function verifyCanonicalPackageEntries(
         totalBytes,
         declaredManifestIntegrity,
         detachedExpectedDigest: options.expectedDigest ?? null,
+        manifestId: canonicalManifest.manifestId,
+        manifestVersion: canonicalManifest.manifestVersion,
     });
 }
 
