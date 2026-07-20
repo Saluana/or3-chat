@@ -22,7 +22,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC1, R1.AC2, R5.AC1
       Done when: the ledger covers documented APIs plus exports found under plugin-facing composables/core/utils, and a reviewer can map every entry to its source file.
 
-- [ ] 1.2 Snapshot generated public declaration output and Nuxt auto-import declarations in CI
+- [x] 1.2 Snapshot generated public declaration output and Nuxt auto-import declarations in CI
       Requirements: R1.AC1, R1.AC2, R9.AC6
       Done when: a fixture that removes an import or changes a `void`/disposer/handle/tool return causes the snapshot job to fail.
 

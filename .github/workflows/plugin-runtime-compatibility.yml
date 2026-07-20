@@ -1,0 +1,60 @@
+name: Plugin Runtime V1 Compatibility
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'app/composables/**'
+      - 'app/core/hooks/**'
+      - 'app/utils/chat/**'
+      - 'server/hooks/**'
+      - 'server/utils/chat/**'
+      - 'shared/hooks/**'
+      - 'shared/plugins/**'
+      - 'scripts/plugin-runtime/**'
+      - 'scripts/__tests__/plugin-runtime-compatibility-snapshots.test.ts'
+      - 'planning/plugin-runtime-v2/**'
+      - 'nuxt.config.ts'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/plugin-runtime-compatibility.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/composables/**'
+      - 'app/core/hooks/**'
+      - 'app/utils/chat/**'
+      - 'server/hooks/**'
+      - 'server/utils/chat/**'
+      - 'shared/hooks/**'
+      - 'shared/plugins/**'
+      - 'scripts/plugin-runtime/**'
+      - 'scripts/__tests__/plugin-runtime-compatibility-snapshots.test.ts'
+      - 'planning/plugin-runtime-v2/**'
+      - 'nuxt.config.ts'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/plugin-runtime-compatibility.yml'
+
+jobs:
+  v1-compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Nuxt declarations
+        run: bunx nuxt prepare
+
+      - name: Verify compatibility ledger and declaration snapshots
+        run: bun run plugin-runtime:compatibility:check
+
+      - name: Prove snapshot regressions fail the gate
+        run: bunx vitest run scripts/__tests__/plugin-runtime-compatibility-snapshots.test.ts
