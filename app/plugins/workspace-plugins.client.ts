@@ -9,22 +9,7 @@ import {
     type Or3WorkspacePlugin,
 } from '~/composables/plugins/workspace-runtime';
 import { resolveBundledPluginArtifact } from '~~/shared/plugins/bundled-plugin-catalog';
-
-type PluginRuntimeManifestResponse = {
-    workspaceId: string | null;
-    enabledPluginIds: string[];
-    installedPluginIds: string[];
-    runtime: Record<
-        string,
-        {
-            clientEntry?: string;
-            hasServerRoutes: boolean;
-            loadAllowed?: boolean;
-            loadDeniedReason?: string;
-        }
-    >;
-    revision: string;
-};
+import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
 
 function findLoader(
     modules: Record<string, () => Promise<unknown>>,

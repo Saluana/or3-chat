@@ -24,6 +24,10 @@ export default defineConfig({
                 __dirname,
                 'tests/stubs/bundled-plugin-catalog.ts'
             ),
+            '#or3-bundled-plugin-catalog': path.resolve(
+                __dirname,
+                'tests/stubs/bundled-plugin-catalog.ts'
+            ),
             '~': path.resolve(__dirname, 'app'),
             '~~': path.resolve(__dirname),
             '~~/': path.resolve(__dirname) + '/',

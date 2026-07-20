@@ -127,8 +127,9 @@ export function generateBundledPluginCatalog(options: {
 
 export function renderBundledPluginCatalogModule(catalog: BundledPluginCatalog): string {
     return [
-        "import type { BundledPluginCatalog } from '~~/shared/plugins/bundled-plugin-catalog';",
-        `export const bundledPluginCatalog = Object.freeze(${JSON.stringify(catalog, null, 2)}) as unknown as BundledPluginCatalog;`,
+        // This source is consumed both as a .ts Nuxt template and as a Nitro
+        // JavaScript virtual module, so it must stay valid in both parsers.
+        `export const bundledPluginCatalog = Object.freeze(${JSON.stringify(catalog, null, 2)});`,
         '',
     ].join('\n');
 }

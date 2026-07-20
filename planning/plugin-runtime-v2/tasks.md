@@ -88,7 +88,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC1, R2.AC3, R7.AC1
       Done when: a production build exposes only modules captured by its `import.meta.glob`, and a post-build disk plugin is absent/rebuild-required.
 
-- [ ] 2.4 Add the generated artifact identity, policy/grant revisions, lifecycle coverage, and descriptor key additively to the runtime-manifest contract
+- [x] 2.4 Add the generated artifact identity, policy/grant revisions, lifecycle coverage, and descriptor key additively to the runtime-manifest contract
       Requirements: R2.AC1-R2.AC5
       Done when: V1 response fields remain present and old response fixtures still parse.
 

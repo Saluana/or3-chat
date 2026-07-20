@@ -42,6 +42,10 @@ export type PluginArtifactIdentity =
 
 export type PluginSource = 'builtin' | 'extension' | 'package';
 export type PluginTrustMode = 'trusted-host' | 'isolated-client' | 'isolated-server';
+export type PluginLifecycleCoverage =
+    | 'managed-v2'
+    | 'managed-v1-api'
+    | 'legacy-global-possible';
 
 interface PluginDescriptorBase {
     readonly id: string;
