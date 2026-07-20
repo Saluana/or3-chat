@@ -51,6 +51,9 @@
             <UBadge v-if="managerV2Enabled" color="neutral" variant="subtle">
                 Workspace canaries: {{ managerV2WorkspaceLabel }}
             </UBadge>
+            <UBadge color="neutral" variant="subtle">
+                V2 contribution surfaces: {{ contributionSurfaceLabel }}
+            </UBadge>
         </div>
 
         <details v-if="managerV2Enabled" class="rounded border border-[var(--md-outline-variant)] p-3 text-xs">
@@ -152,6 +155,7 @@
 <script setup lang="ts">
 import { getShadowPluginManager } from '~/composables/plugins/shadow-plugin-manager';
 import { getBundledV1WorkspaceManager } from '~/composables/plugins/bundled-v1-manager-runtime';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
 
 const runtimeConfig = useRuntimeConfig();
 const shadowObserverEnabled =
@@ -179,6 +183,10 @@ const managerV2WorkspaceLabel = managerV2WorkspaceIds.length
     : 'all';
 const managerV2 = managerV2Enabled ? getBundledV1WorkspaceManager() : null;
 const managerV2Records = shallowRef(managerV2?.listRecords() ?? []);
+const contributionSurfaces = getContributionSurfaceSelection().listSelected();
+const contributionSurfaceLabel = contributionSurfaces.length
+    ? contributionSurfaces.join(', ')
+    : 'V1 only';
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
 function refresh() {

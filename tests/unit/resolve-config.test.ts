@@ -527,6 +527,16 @@ describe('buildOr3CloudConfigFromEnv', () => {
             'workspace-a',
             'workspace-b',
         ]);
+        expect(configured.admin?.pluginContributionV2Surfaces).toEqual([]);
+    });
+
+    it('parses the startup-only contribution surface allowlist', () => {
+        expect(buildOr3CloudConfigFromEnv({}).admin?.pluginContributionV2Surfaces).toEqual([]);
+        expect(
+            buildOr3CloudConfigFromEnv({
+                OR3_PLUGIN_CONTRIBUTION_V2_SURFACES: 'message-actions, pane-apps',
+            }).admin?.pluginContributionV2Surfaces
+        ).toEqual(['message-actions', 'pane-apps']);
     });
 
     it('parses admin extension limits', () => {

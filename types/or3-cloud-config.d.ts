@@ -480,6 +480,13 @@ export interface Or3CloudConfig {
         pluginRuntimeV2WorkspaceIds?: string[];
 
         /**
+         * Startup-only allowlist of contribution surfaces using V2 adapters.
+         * @env OR3_PLUGIN_CONTRIBUTION_V2_SURFACES
+         * @default []
+         */
+        pluginContributionV2Surfaces?: string[];
+
+        /**
          * Enables admin ZIP-based extension install endpoint.
          * @default true
          */

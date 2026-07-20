@@ -370,6 +370,11 @@ export function buildOr3CloudConfigFromEnv(
                       .map((workspaceId) => workspaceId.trim())
                       .filter(Boolean)
                 : [],
+            pluginContributionV2Surfaces: env.OR3_PLUGIN_CONTRIBUTION_V2_SURFACES
+                ? env.OR3_PLUGIN_CONTRIBUTION_V2_SURFACES.split(',')
+                      .map((surface) => surface.trim())
+                      .filter(Boolean)
+                : [],
             rebuildCommand: env.OR3_ADMIN_REBUILD_COMMAND || DEFAULT_REBUILD_COMMAND,
             extensionMaxZipBytes: envNum(env.OR3_ADMIN_EXTENSION_MAX_ZIP_BYTES),
             extensionMaxFiles: envNum(env.OR3_ADMIN_EXTENSION_MAX_FILES),

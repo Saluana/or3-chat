@@ -185,6 +185,7 @@ describe('defineOr3CloudConfig', () => {
         expect(config.admin?.pluginRuntimeLoaderEnabled).toBe(true);
         expect(config.admin?.pluginRuntimeV2Enabled).toBe(false);
         expect(config.admin?.pluginRuntimeV2WorkspaceIds).toEqual([]);
+        expect(config.admin?.pluginContributionV2Surfaces).toEqual([]);
         expect(config.admin?.pluginZipInstallEnabled).toBe(true);
         expect(config.admin?.pluginRouteDispatcherEnabled).toBe(true);
     });
@@ -198,6 +199,7 @@ describe('defineOr3CloudConfig', () => {
                 pluginRuntimeShadowEnabled: false,
                 pluginRuntimeV2Enabled: true,
                 pluginRuntimeV2WorkspaceIds: ['workspace-canary'],
+                pluginContributionV2Surfaces: ['message-actions'],
                 pluginZipInstallEnabled: false,
                 pluginRouteDispatcherEnabled: false,
             },
@@ -208,6 +210,7 @@ describe('defineOr3CloudConfig', () => {
         expect(config.admin?.pluginRuntimeShadowEnabled).toBe(false);
         expect(config.admin?.pluginRuntimeV2Enabled).toBe(true);
         expect(config.admin?.pluginRuntimeV2WorkspaceIds).toEqual(['workspace-canary']);
+        expect(config.admin?.pluginContributionV2Surfaces).toEqual(['message-actions']);
         expect(config.admin?.pluginZipInstallEnabled).toBe(false);
         expect(config.admin?.pluginRouteDispatcherEnabled).toBe(false);
     });

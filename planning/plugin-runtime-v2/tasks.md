@@ -200,7 +200,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC5, R9.AC6
       Done when: it compares values, returns, exceptions, object identity, order, and reactive notification count between V1 and adapter paths.
 
-- [ ] 4.6 Add startup `pluginContributionV2Surfaces` allowlist and runtime inspection
+- [x] 4.6 Add startup `pluginContributionV2Surfaces` allowlist and runtime inspection
       Requirements: R9.AC1, R9.AC3
       Done when: one surface can select/revert independently before plugin discovery.
 
