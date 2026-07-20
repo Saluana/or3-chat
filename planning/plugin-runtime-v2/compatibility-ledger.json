@@ -7575,7 +7575,7 @@
     },
     {
       "source": "app/composables/sidebar/useSidebarPages.ts",
-      "apiSha256": "886775f3f4d01fb1a8459b2864661d4e2c7436f287416deda22a497137d02831",
+      "apiSha256": "6cec36ff09898a64bc38546298af551614c05a6af50592225114454eda703915",
       "runtime": "client",
       "publicPaths": [
         "~/composables/sidebar",
@@ -7597,7 +7597,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 139,
+              "line": 141,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type RegisteredSidebarPage = SidebarPageDef;"
             }
@@ -7611,7 +7611,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 111,
+              "line": 113,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarActivateContext {\n    /** The page being activated/deactivated */\n    page: SidebarPageDef;\n    /** The previously active page, or null if this is the first activation */\n    previousPage: SidebarPageDef | null;\n    /** Whether the sidebar is currently collapsed */\n    isCollapsed: boolean;\n    /** API for managing panes in the multi-pane system */\n    multiPane: UseMultiPaneApi;\n    /** API for pane plugin operations */\n    panePluginApi: PanePluginApi;\n}"
             }
@@ -7625,7 +7625,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 89,
+              "line": 91,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarPageContext {\n    /** The page definition for this context */\n    page: SidebarPageDef;\n    /** Function to expose APIs to other parts of the application */\n    expose: (api: Record<string, unknown>) => void;\n}"
             }
@@ -7639,7 +7639,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 45,
+              "line": 47,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarPageDef {\n    /** Unique identifier for the sidebar page */\n    id: string;\n    /** Display label shown in UI (e.g., tooltips) */\n    label: string;\n    /** Iconify icon name */\n    icon: string;\n    /** Optional ordering (lower = earlier in sorted lists). Defaults to 200 */\n    order?: number;\n    /** Vue component or async component factory */\n    component: Component | (() => Promise<Component>);\n    /** Opt-in caching for the component */\n    keepAlive?: boolean;\n    /** Whether this page uses the default header. Defaults to true for home page */\n    usesDefaultHeader?: boolean;\n    /** Optional context provider for the page */\n    provideContext?: (ctx: SidebarPageContext) => void;\n    /** Optional activation guard - return false to prevent activation */\n    canActivate?: (ctx: SidebarActivateContext) => boolean | Promise<boolean>;\n    /** Optional activation hook called when page becomes active */\n    onActivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional deactivation hook called when page becomes inactive */\n    onDeactivate?: (ctx: SidebarActivateContext) => void | Promise<void>;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this page. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -7656,7 +7656,7 @@
               "resolvedReturnType": "{ registerSidebarPage: (def: SidebarPageDef) => () => void; unregisterSidebarPage: (id: string) => void; getSidebarPage: (id: string) => RegisteredSidebarPage | undefined; listSidebarPages: ComputedRef<SidebarPageDef[]>; }",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarPages.ts",
-                "line": 287,
+                "line": 305,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarPages();"
               }
@@ -7665,7 +7665,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarPages.ts",
-              "line": 287,
+              "line": 305,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarPages();"
             }

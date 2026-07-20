@@ -26,6 +26,8 @@ import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 /**
  * `SidebarPageDef`
@@ -268,6 +270,22 @@ function normalizeSidebarPageDef(def: SidebarPageDef): RegisteredSidebarPage {
     return normalized;
 }
 
+const v2Kernel = getContributionSurfaceKernel<RegisteredSidebarPage>(
+    'sidebar-pages',
+    {
+        getId: (page) => page.id,
+        normalize: normalizeSidebarPageDef,
+        // Sidebar pages preserve registration order when order values tie.
+        compare: (left, right) =>
+            (left.order ?? DEFAULT_ORDER) -
+            (right.order ?? DEFAULT_ORDER),
+    }
+);
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('sidebar-pages');
+}
+
 /**
  * `useSidebarPages`
  *
@@ -320,15 +338,28 @@ export function useSidebarPages() {
             );
         }
 
-        const normalized = normalizeSidebarPageDef(def);
-        const registry = getRegistry();
+        const useV2 = useV2Surface();
 
-        if (import.meta.dev && registry.has(def.id)) {
+        if (
+            import.meta.dev &&
+            (useV2
+                ? v2Kernel.registry.get(def.id, undefined) !== undefined
+                : getRegistry().has(def.id))
+        ) {
             console.warn(
                 `[useSidebarPages] Replacing existing page id: ${def.id}`
             );
         }
 
+        if (useV2) {
+            const handle = v2Kernel.registry.registerLegacy({ value: def });
+            return () => {
+                handle.dispose();
+            };
+        }
+
+        const normalized = normalizeSidebarPageDef(def);
+        const registry = getRegistry();
         registry.set(def.id, normalized);
         // Trigger reactivity
         state.version++;
@@ -359,6 +390,10 @@ export function useSidebarPages() {
      * - Does not run page-specific teardown
      */
     function unregisterSidebarPage(id: string): void {
+        if (useV2Surface()) {
+            v2Kernel.registry.unregisterLegacy(id);
+            return;
+        }
         const registry = getRegistry();
         if (registry.delete(id)) {
             // Trigger reactivity
@@ -382,7 +417,9 @@ export function useSidebarPages() {
      * - Does not validate the page ID format
      */
     function getSidebarPage(id: string): RegisteredSidebarPage | undefined {
-        return getRegistry().get(id);
+        return useV2Surface()
+            ? v2Kernel.registry.get(id, undefined)
+            : getRegistry().get(id);
     }
 
     /**
@@ -402,6 +439,11 @@ export function useSidebarPages() {
      */
     const listSidebarPages: ComputedRef<RegisteredSidebarPage[]> = computed(
         () => {
+            if (useV2Surface()) {
+                return [...v2Kernel.items.value].filter((page) =>
+                    isSidebarPageAllowed(page)
+                );
+            }
             // Access state.version to establish dependency
             void state.version;
             const registry = getRegistry();
