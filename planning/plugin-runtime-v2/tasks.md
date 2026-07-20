@@ -370,7 +370,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R7.AC5, R7.AC8
       Done when: fault injection around temp write/flush/rename/restart always selects a complete verified tree.
 
-- [ ] 7.5 Adapt install/update to store an immutable candidate without changing the current pointer
+- [x] 7.5 Adapt install/update to store an immutable candidate without changing the current pointer
       Requirements: R7.AC2, R7.AC8, R10.AC4
       Done when: bad digest, compatibility, grants, dependency, loader, or state preflight leaves the prior pointer unchanged.
 

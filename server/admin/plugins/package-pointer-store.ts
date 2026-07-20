@@ -252,35 +252,48 @@ export class PluginPackagePointerStore {
         if (!pointer || pointer.pluginId !== pluginId) {
             throw new PackagePointerStoreError('pointer-invalid', `Invalid package pointer for ${pluginId}`);
         }
-        await this.#packages.runPluginOperation(pluginId, async () => {
-            await fs.mkdir(this.#activeRoot, { recursive: true, mode: 0o700 });
-            const persisted = await this.#readPersistedPointer(pluginId);
-            const expectedRevision = (persisted?.revision ?? 0) + 1;
-            if (pointer.revision !== expectedRevision) {
-                throw new PackagePointerStoreError(
-                    'pointer-invalid',
-                    `Package pointer revision ${pointer.revision} must follow ${persisted?.revision ?? 0}`
-                );
-            }
-            await this.#validatePackages(pointer);
-            const targetPath = this.pointerPath(pluginId);
-            const temporaryPath = resolve(this.#activeRoot, `.${pluginId}.${randomUUID()}.tmp`);
-            const source = `${JSON.stringify(pointer)}\n`;
-            await options.fault?.('before-temp-write');
-            const handle = await fs.open(temporaryPath, 'wx', 0o600);
-            try {
-                await handle.writeFile(source, 'utf8');
-                await options.fault?.('after-temp-write');
-                await handle.sync();
-                await options.fault?.('after-temp-fsync');
-            } finally {
-                await handle.close();
-            }
-            await fs.rename(temporaryPath, targetPath);
-            await options.fault?.('after-rename');
-            await fsyncDirectory(this.#activeRoot);
-            await options.fault?.('after-directory-fsync');
-        });
+        await this.#packages.runPluginOperation(pluginId, () =>
+            this.writePointerWithinOperation(pluginId, pointer, options)
+        );
+    }
+
+    /** Caller must already hold this package store instance's per-plugin operation lease. */
+    async writePointerWithinOperation(
+        pluginId: string,
+        input: PluginPackagePointer,
+        options: PackagePointerWriteOptions = {}
+    ): Promise<void> {
+        const pointer = parsePluginPackagePointer(input);
+        if (!pointer || pointer.pluginId !== pluginId) {
+            throw new PackagePointerStoreError('pointer-invalid', `Invalid package pointer for ${pluginId}`);
+        }
+        await fs.mkdir(this.#activeRoot, { recursive: true, mode: 0o700 });
+        const persisted = await this.#readPersistedPointer(pluginId);
+        const expectedRevision = (persisted?.revision ?? 0) + 1;
+        if (pointer.revision !== expectedRevision) {
+            throw new PackagePointerStoreError(
+                'pointer-invalid',
+                `Package pointer revision ${pointer.revision} must follow ${persisted?.revision ?? 0}`
+            );
+        }
+        await this.#validatePackages(pointer);
+        const targetPath = this.pointerPath(pluginId);
+        const temporaryPath = resolve(this.#activeRoot, `.${pluginId}.${randomUUID()}.tmp`);
+        const source = `${JSON.stringify(pointer)}\n`;
+        await options.fault?.('before-temp-write');
+        const handle = await fs.open(temporaryPath, 'wx', 0o600);
+        try {
+            await handle.writeFile(source, 'utf8');
+            await options.fault?.('after-temp-write');
+            await handle.sync();
+            await options.fault?.('after-temp-fsync');
+        } finally {
+            await handle.close();
+        }
+        await fs.rename(temporaryPath, targetPath);
+        await options.fault?.('after-rename');
+        await fsyncDirectory(this.#activeRoot);
+        await options.fault?.('after-directory-fsync');
     }
 
     async readStartupSelection(pluginId: string): Promise<PackagePointerStartupSelection> {

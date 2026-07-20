@@ -170,20 +170,66 @@ export class ImmutablePluginPackageStore {
     ): Promise<StoredPluginPackage> {
         assertPluginId(pluginId);
         if (expectedDigest) assertDigest(expectedDigest);
-        return this.runPluginOperation(pluginId, async () => {
-            const sourceVerification = await verifyPackageTree(sourceRoot, { expectedDigest });
-            if (
-                sourceVerification.manifestVersion !== 2 ||
-                sourceVerification.manifestId !== pluginId
-            ) {
-                throw new PluginPackageStoreError(
-                    'package-identity-mismatch',
-                    `Package manifest identity does not match ${pluginId}`
-                );
-            }
-            const digest = sourceVerification.digest;
-            const target = this.packagePath(pluginId, digest);
-            if (await pathExists(target)) {
+        return this.runPluginOperation(pluginId, () =>
+            this.installPackageWithinOperation(pluginId, sourceRoot, expectedDigest)
+        );
+    }
+
+    /** Caller must already hold this store instance's per-plugin operation lease. */
+    async installPackageWithinOperation(
+        pluginId: string,
+        sourceRoot: string,
+        expectedDigest?: Sha256
+    ): Promise<StoredPluginPackage> {
+        assertPluginId(pluginId);
+        if (expectedDigest) assertDigest(expectedDigest);
+        const sourceVerification = await verifyPackageTree(sourceRoot, { expectedDigest });
+        if (
+            sourceVerification.manifestVersion !== 2 ||
+            sourceVerification.manifestId !== pluginId
+        ) {
+            throw new PluginPackageStoreError(
+                'package-identity-mismatch',
+                `Package manifest identity does not match ${pluginId}`
+            );
+        }
+        const digest = sourceVerification.digest;
+        const target = this.packagePath(pluginId, digest);
+        if (await pathExists(target)) {
+            const verification = await this.verifyStoredPackage(pluginId, digest);
+            return Object.freeze({
+                status: 'existing',
+                pluginId,
+                digest,
+                path: target,
+                verification,
+            });
+        }
+
+        const pluginStore = resolve(this.#storeRoot, pluginId);
+        await fs.mkdir(pluginStore, { recursive: true, mode: 0o755 });
+        const staging = resolve(pluginStore, `.staging-${randomUUID()}`);
+        if (basename(staging).startsWith('.staging-') === false || !isInside(pluginStore, staging)) {
+            throw new PluginPackageStoreError('invalid-package-digest', 'Invalid package staging path');
+        }
+        try {
+            await fs.cp(resolve(sourceRoot), staging, {
+                recursive: true,
+                dereference: false,
+                errorOnExist: true,
+                force: false,
+            });
+            await verifyPackageTree(staging, { expectedDigest: digest });
+            await chmodTreeReadOnly(staging);
+            await verifyPackageTree(staging, { expectedDigest: digest });
+            try {
+                await fs.rename(staging, target);
+            } catch (error) {
+                const code = error && typeof error === 'object' && 'code' in error
+                    ? (error as { code?: string }).code
+                    : undefined;
+                if (code !== 'EEXIST' && code !== 'ENOTEMPTY') throw error;
+                await removeStagingTree(staging);
                 const verification = await this.verifyStoredPackage(pluginId, digest);
                 return Object.freeze({
                     status: 'existing',
@@ -193,52 +239,17 @@ export class ImmutablePluginPackageStore {
                     verification,
                 });
             }
-
-            const pluginStore = resolve(this.#storeRoot, pluginId);
-            await fs.mkdir(pluginStore, { recursive: true, mode: 0o755 });
-            const staging = resolve(pluginStore, `.staging-${randomUUID()}`);
-            if (basename(staging).startsWith('.staging-') === false || !isInside(pluginStore, staging)) {
-                throw new PluginPackageStoreError('invalid-package-digest', 'Invalid package staging path');
-            }
-            try {
-                await fs.cp(resolve(sourceRoot), staging, {
-                    recursive: true,
-                    dereference: false,
-                    errorOnExist: true,
-                    force: false,
-                });
-                await verifyPackageTree(staging, { expectedDigest: digest });
-                await chmodTreeReadOnly(staging);
-                await verifyPackageTree(staging, { expectedDigest: digest });
-                try {
-                    await fs.rename(staging, target);
-                } catch (error) {
-                    const code = error && typeof error === 'object' && 'code' in error
-                        ? (error as { code?: string }).code
-                        : undefined;
-                    if (code !== 'EEXIST' && code !== 'ENOTEMPTY') throw error;
-                    await removeStagingTree(staging);
-                    const verification = await this.verifyStoredPackage(pluginId, digest);
-                    return Object.freeze({
-                        status: 'existing',
-                        pluginId,
-                        digest,
-                        path: target,
-                        verification,
-                    });
-                }
-                return Object.freeze({
-                    status: 'installed',
-                    pluginId,
-                    digest,
-                    path: target,
-                    verification: await this.verifyStoredPackage(pluginId, digest),
-                });
-            } catch (error) {
-                await removeStagingTree(staging).catch(() => undefined);
-                throw error;
-            }
-        });
+            return Object.freeze({
+                status: 'installed',
+                pluginId,
+                digest,
+                path: target,
+                verification: await this.verifyStoredPackage(pluginId, digest),
+            });
+        } catch (error) {
+            await removeStagingTree(staging).catch(() => undefined);
+            throw error;
+        }
     }
 }
 
