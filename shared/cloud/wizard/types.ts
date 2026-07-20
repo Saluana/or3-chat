@@ -78,6 +78,8 @@ export type WizardStorageProvider = 'fs' | 'convex' | 's3' | 'custom';
  */
 export interface WizardAnswers {
     // ── Target ──
+    /** When true, reveals install location/env file/deploy target/dry-run fields. */
+    targetAdvancedEnabled: boolean;
     /** Absolute path to the OR3 instance project directory. */
     instanceDir: string;
     /** Which env file to write. `.env` is recommended for admin tooling compat. */
@@ -122,6 +124,8 @@ export interface WizardAnswers {
     or3FaviconUrl?: string;
 
     // ── Feature toggles ──
+    /** When true, reveals per-feature enable/disable fields. */
+    featuresAdvancedEnabled: boolean;
     workflowsEnabled: boolean;
     documentsEnabled: boolean;
     backupEnabled: boolean;
@@ -558,6 +562,14 @@ export interface WizardApi {
     getSession(
         id: string,
         options?: { includeSecrets?: boolean }
+    ): Promise<WizardSession>;
+    /**
+     * Resume a disk session in this process, optionally rehydrating secrets
+     * from an existing env map. Secrets are never persisted to disk.
+     */
+    resumeSession?(
+        id: string,
+        options?: { existingEnvMap?: Record<string, string> }
     ): Promise<WizardSession>;
     /** Get the step definition the session is currently on. */
     getCurrentStep(id: string): Promise<WizardStep>;

@@ -1,4 +1,5 @@
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { confirmClientSignedOut } from '~/composables/auth/confirmClientSignedOut';
 import {
     ACTIVE_WORKSPACE_REVISION_STORAGE_KEY,
     activeWorkspaceRevisionCoordinator,
@@ -33,12 +34,22 @@ export default defineNuxtPlugin(() => {
             const nextAuthenticated =
                 sessionContext.data.value?.session?.authenticated ?? false;
 
-            if (
-                previousWorkspaceId !== nextWorkspaceId ||
-                previousAuthenticated !== nextAuthenticated
-            ) {
-                reloadNuxtApp({ ttl: 500 });
+            const workspaceChanged = previousWorkspaceId !== nextWorkspaceId;
+            const authChanged = previousAuthenticated !== nextAuthenticated;
+
+            if (!workspaceChanged && !authChanged) {
+                return;
             }
+
+            // Auth flip to signed-out must be confirmed — HMR can briefly null the session.
+            if (previousAuthenticated && !nextAuthenticated) {
+                const signedOut = await confirmClientSignedOut();
+                if (!signedOut) {
+                    return;
+                }
+            }
+
+            reloadNuxtApp({ ttl: 500 });
         } catch (error) {
             console.warn('[auth-session-refresh] Failed to refresh auth session:', error);
         }

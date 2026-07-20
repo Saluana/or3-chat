@@ -5,13 +5,10 @@ export async function shouldClearWorkspaceForNullSession(
     if (!import.meta.client) return true;
 
     try {
-        const { resolveClientAuthStatus } = await import(
-            '~/composables/auth/useClientAuthStatus.client'
+        const { confirmClientSignedOut } = await import(
+            '~/composables/auth/confirmClientSignedOut'
         );
-        const status = await resolveClientAuthStatus();
-        if (!status.ready) return false;
-        if (status.authenticated === undefined) return false;
-        return !status.authenticated;
+        return await confirmClientSignedOut();
     } catch {
         // If auth status cannot be resolved, avoid destructive fallback to default DB.
         return false;

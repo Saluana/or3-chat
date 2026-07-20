@@ -6,6 +6,7 @@ import * as ts from 'typescript';
 import { createLogger } from 'vite';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
+import { printStartupBanner as printOr3StartupBanner } from './shared/dev/startup-banner';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
@@ -967,4 +968,29 @@ export default defineNuxtConfig({
         // The new super admin feature uses JWT-based authentication and is gated
         // at runtime via isAdminEnabled() check in server/middleware/admin-gate.ts.
     ].filter(Boolean) as string[],
+    hooks: {
+        listen(_server, listener) {
+            if (isWizardUiProcess) return;
+            const url =
+                listener && typeof (listener as { url?: unknown }).url === 'string'
+                    ? (listener as { url: string }).url
+                    : undefined;
+            // Defer so this prints after Nuxt's own URL output.
+            setTimeout(() => {
+                printOr3StartupBanner({
+                    appUrl: url,
+                    ssrAuthEnabled: effectiveSsrAuthEnabled,
+                    degradedCloud:
+                        isSsrAuthEnabled &&
+                        !effectiveSsrAuthEnabled &&
+                        !isStaticGenerateBuild,
+                    authProvider: or3CloudConfig.auth.provider,
+                    syncEnabled: effectiveSyncEnabled,
+                    syncProvider: or3CloudConfig.sync.provider,
+                    storageEnabled: effectiveStorageEnabled,
+                    storageProvider: or3CloudConfig.storage.provider,
+                });
+            }, 1200);
+        },
+    },
 });

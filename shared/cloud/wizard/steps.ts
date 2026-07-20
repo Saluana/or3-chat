@@ -202,14 +202,22 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
         {
             id: 'target',
             title: 'Getting Started',
-            description: 'First, let\'s figure out where your OR3 project lives and how you want to run it.',
+            description: 'Let\'s get you set up. Defaults work for almost everyone — you can change them later.',
             fields: [
+                {
+                    key: 'targetAdvancedEnabled',
+                    type: 'boolean',
+                    label: 'Customize install location & advanced options?',
+                    help: 'Only needed for unusual setups: different project folder, .env.local file, production build, or a no-changes preview.',
+                    defaultValue: false,
+                },
                 {
                     key: 'instanceDir',
                     type: 'text',
                     label: 'Project folder',
                     help: 'The folder where your OR3 Chat project is. Press Enter to use the current folder.',
                     required: true,
+                    visibleWhen: (current) => current.targetAdvancedEnabled,
                 },
                 {
                     key: 'envFile',
@@ -221,6 +229,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                         { label: '.env (default)', value: '.env' },
                         { label: '.env.local', value: '.env.local' },
                     ],
+                    visibleWhen: (current) => current.targetAdvancedEnabled,
                 },
                 {
                     key: 'deploymentTarget',
@@ -231,12 +240,14 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                         { label: 'Local Dev — for testing and development', value: 'local-dev' },
                         { label: 'Production — ready to deploy', value: 'prod-build' },
                     ],
+                    visibleWhen: (current) => current.targetAdvancedEnabled,
                 },
                 {
                     key: 'dryRun',
                     type: 'boolean',
                     label: 'Preview only? (no files will be changed)',
                     defaultValue: false,
+                    visibleWhen: (current) => current.targetAdvancedEnabled,
                 },
             ],
         },
@@ -352,13 +363,20 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
         {
             id: 'features',
             title: 'Features',
-            description: 'Turn features on or off. Everything is enabled by default — just press Enter to keep the defaults.',
+            description: 'All features are enabled by default, which is right for almost everyone.',
             fields: [
-                { key: 'workflowsEnabled', type: 'boolean', label: 'Workflows (automation pipelines)' },
-                { key: 'documentsEnabled', type: 'boolean', label: 'Documents (rich text editor)' },
-                { key: 'backupEnabled', type: 'boolean', label: 'Backups (export/import conversations)' },
-                { key: 'mentionsEnabled', type: 'boolean', label: 'Mentions (@-mention documents and chats)' },
-                { key: 'dashboardEnabled', type: 'boolean', label: 'Dashboard' },
+                {
+                    key: 'featuresAdvancedEnabled',
+                    type: 'boolean',
+                    label: 'Customize features?',
+                    help: 'Only say yes if you already know you want to turn something off.',
+                    defaultValue: false,
+                },
+                { key: 'workflowsEnabled', type: 'boolean', label: 'Workflows (automation pipelines)', visibleWhen: (current) => current.featuresAdvancedEnabled },
+                { key: 'documentsEnabled', type: 'boolean', label: 'Documents (rich text editor)', visibleWhen: (current) => current.featuresAdvancedEnabled },
+                { key: 'backupEnabled', type: 'boolean', label: 'Backups (export/import conversations)', visibleWhen: (current) => current.featuresAdvancedEnabled },
+                { key: 'mentionsEnabled', type: 'boolean', label: 'Mentions (@-mention documents and chats)', visibleWhen: (current) => current.featuresAdvancedEnabled },
+                { key: 'dashboardEnabled', type: 'boolean', label: 'Dashboard', visibleWhen: (current) => current.featuresAdvancedEnabled },
             ],
         },
         {
@@ -461,19 +479,20 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 tier: 'core',
             },
             {
+                key: 'cloudAdvancedEnabled',
+                type: 'boolean',
+                label: 'Show limits & security options?',
+                help: 'Usage limits, HTTPS enforcement, and reverse-proxy settings. Off is right for most local setups.',
+                defaultValue: false,
+                tier: 'core',
+            },
+            {
                 key: 'limitsEnabled',
                 type: 'boolean',
                 label: 'Enable usage limits',
                 help: 'Helps prevent abuse by capping how much users can do.',
                 tier: 'core',
-            },
-            {
-                key: 'cloudAdvancedEnabled',
-                type: 'boolean',
-                label: 'Show advanced options?',
-                help: 'Enable advanced OpenRouter, limits, and security controls.',
-                defaultValue: false,
-                tier: 'core',
+                visibleWhen: isCloudAdvancedEnabled,
             },
             {
                 key: 'openrouterAllowUserOverride',
@@ -538,6 +557,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 label: 'Force HTTPS',
                 help: 'Recommended for production. Ensures all traffic is encrypted.',
                 tier: 'core',
+                visibleWhen: isCloudAdvancedEnabled,
             },
             {
                 key: 'trustProxy',
@@ -545,6 +565,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 label: 'Behind a reverse proxy (nginx, Cloudflare, etc.)?',
                 help: 'Turn this on if your server is behind a load balancer or CDN.',
                 tier: 'core',
+                visibleWhen: isCloudAdvancedEnabled,
             },
             {
                 key: 'forwardedForHeader',
@@ -604,7 +625,8 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
         title: 'Admin Dashboard',
         description:
             'Set up a super admin account for the admin dashboard.\n' +
-            'This is separate from user login — it\'s how you manage your instance.',
+            'This is separate from user login — it\'s how you manage your instance.\n' +
+            'Leave the password blank to auto-generate a strong one (CLI: press Enter; browser: leave empty and continue).',
         fields: [
             {
                 key: 'adminUsername',
@@ -635,8 +657,8 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
             {
                 key: 'adminPassword',
                 type: 'password',
-                label: 'Admin password',
-                help: 'Choose a strong password for the admin dashboard.',
+                label: 'Admin password (leave blank to auto-generate)',
+                help: 'Choose a strong password, or leave blank and we\'ll generate a secure one for you.',
                 required: true,
                 secret: true,
                 tier: 'core',

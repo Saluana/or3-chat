@@ -566,6 +566,41 @@ export class Or3CloudWizardApi implements WizardApi {
         };
     }
 
+    /**
+     * Rehydrate a disk session into this process for CLI resume.
+     *
+     * Secrets are never stored on disk. When available, missing secret fields
+     * are filled from an existing env map (e.g. a prior apply). Otherwise they
+     * stay blank so Enter can auto-generate them again.
+     */
+    async resumeSession(
+        id: string,
+        options: { existingEnvMap?: Record<string, string> } = {}
+    ): Promise<WizardSession> {
+        const session = await readSession(id);
+        const envPrefill = options.existingEnvMap
+            ? pickSecretAnswers(
+                  createDefaultAnswers({
+                      instanceDir: session.answers.instanceDir,
+                      envFile: session.answers.envFile,
+                      existingEnv: options.existingEnvMap,
+                  })
+              )
+            : {};
+        const livingSecrets = transientSessionSecrets.get(id) ?? {};
+        const answers = completeAnswers({
+            ...session.answers,
+            ...envPrefill,
+            ...livingSecrets,
+        });
+        await persistSession({
+            ...session,
+            answers,
+            updatedAt: nowIso(),
+        });
+        return this.getSession(id, { includeSecrets: true });
+    }
+
     async getCurrentStep(id: string) {
         const session = await readSession(id);
         const answers = getFullAnswersForSession(session);

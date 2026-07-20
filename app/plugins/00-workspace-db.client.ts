@@ -1,7 +1,7 @@
 import { watch } from 'vue';
 import { setActiveWorkspaceDb } from '~/db/client';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
-import { resolveClientAuthStatus } from '~/composables/auth/useClientAuthStatus.client';
+import { confirmClientSignedOut } from '~/composables/auth/confirmClientSignedOut';
 import { useWorkspaceManager } from '~/composables/workspace/useWorkspaceManager';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { cleanupHookBridge } from '~/core/sync/hook-bridge';
@@ -12,12 +12,7 @@ async function shouldRunLogoutCleanup(
     authenticated: boolean | undefined
 ): Promise<boolean> {
     if (authenticated) return false;
-    const status = await resolveClientAuthStatus();
-    if (!status.ready) return false;
-    // Unknown auth state (no resolver or provider still booting) is treated as
-    // transient; do not run destructive logout cleanup in this case.
-    if (status.authenticated === undefined) return false;
-    return !status.authenticated;
+    return await confirmClientSignedOut();
 }
 
 export default defineNuxtPlugin(async () => {

@@ -7,6 +7,7 @@ import { $fetch } from 'ofetch';
 import { useFetch, useRuntimeConfig, useState } from '#imports';
 import type { ComputedRef, Ref } from 'vue';
 import type { SessionContext } from '~/core/hooks/hook-types';
+import { recoverClientSession } from '~/composables/auth/useClientSessionRecovery';
 
 export type SessionPayload = {
     session: SessionContext | null;
@@ -59,32 +60,45 @@ export function useSessionContext(): SessionContextState {
         }
 
         const refreshGeneration = ++latestRefreshGeneration;
-        const fetchPromise = $fetch<SessionPayload>('/api/auth/session', {
-            // Always bypass caches; workspace switching depends on fresh session reads.
-            cache: 'no-store',
-        });
         pending.value = true;
         error.value = null;
 
-        return fetchPromise
-            .then((res) => {
+        const fetchSession = () =>
+            $fetch<SessionPayload>('/api/auth/session', {
+                // Always bypass caches; workspace switching depends on fresh session reads.
+                cache: 'no-store',
+            });
+
+        return (async () => {
+            try {
+                let res = await fetchSession();
+
+                // Access may be expired while refresh is still valid. Let the
+                // active provider recover (silent refresh / Clerk session touch)
+                // once, then retry. No-op when no recovery is registered.
+                if (!res.session?.authenticated) {
+                    const recovered = await recoverClientSession();
+                    if (recovered) {
+                        res = await fetchSession();
+                    }
+                }
+
                 if (refreshGeneration !== latestRefreshGeneration) {
                     return undefined;
                 }
                 state.value = res;
                 return res;
-            })
-            .catch((err) => {
+            } catch (err) {
                 if (refreshGeneration === latestRefreshGeneration) {
                     error.value = err instanceof Error ? err : new Error(String(err));
                 }
                 throw err;
-            })
-            .finally(() => {
+            } finally {
                 if (refreshGeneration === latestRefreshGeneration) {
                     pending.value = false;
                 }
-            });
+            }
+        })();
     };
 
     if (import.meta.server) {

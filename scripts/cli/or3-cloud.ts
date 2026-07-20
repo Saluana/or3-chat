@@ -19,6 +19,7 @@ import {
     WIZARD_OWNED_ENV_KEYS,
 } from '../../shared/cloud/wizard/catalog';
 import { getWizardSteps } from '../../shared/cloud/wizard/steps';
+import { buildCheatSheetLines } from '../../shared/cloud/wizard/next-steps';
 import { readEnvFile } from '../../server/admin/config/env-file';
 import {
     buildOr3CloudConfigFromEnv,
@@ -32,6 +33,7 @@ import {
     parseInstallPackageManager,
 } from '../../shared/cloud/wizard/install-plan';
 import { readLastSessionId, readSession } from '../../shared/cloud/wizard/store';
+import { runDoctorChecks } from './or3-cloud-doctor';
 import type {
     WizardAnswers,
     WizardDeployResult,
@@ -409,6 +411,11 @@ function printBanner(): void {
   Press Enter to accept defaults shown in [brackets].
   Type your answer to change a value.
   During setup questions, type /back or /next to navigate.
+
+  Fast options (for the impatient):
+    --fast    Zero questions — everything is configured automatically
+    --ui      Open the setup wizard in your browser (nicer UI)
+    --cli     Force terminal wizard (default when no browser available)
 `);
 }
 
@@ -759,6 +766,87 @@ function printDeployResult(result: WizardDeployResult): void {
     }
 }
 
+function printSaveThesePanel(
+    answers: WizardAnswers,
+    generatedSecrets: Array<{ key: string; value: string }>
+): void {
+    const hasBootstrap =
+        answers.authProvider === 'basic-auth' &&
+        answers.basicAuthBootstrapEmail;
+    if (
+        generatedSecrets.length === 0 &&
+        !hasBootstrap &&
+        !answers.adminUsername
+    ) {
+        return;
+    }
+
+    const lines: string[] = [];
+    lines.push('');
+    lines.push('  ┌─ SAVE THESE ──────────────────────────────');
+
+    if (hasBootstrap) {
+        lines.push(`  │  Bootstrap email:   ${answers.basicAuthBootstrapEmail}`);
+        const pwGen = generatedSecrets.find(
+            (g) => g.key === 'basicAuthBootstrapPassword'
+        );
+        if (pwGen) {
+            lines.push(`  │  Bootstrap password: ${pwGen.value}`);
+        } else {
+            lines.push('  │  Bootstrap password: (the one you entered above)');
+        }
+    }
+
+    if (answers.adminUsername) {
+        lines.push(
+            `  │  Admin dashboard:   ${answers.adminUsername}`
+        );
+        const pwGen = generatedSecrets.find((g) => g.key === 'adminPassword');
+        if (pwGen) {
+            lines.push(`  │  Admin password:     ${pwGen.value}`);
+        } else {
+            lines.push('  │  Admin password:     (the one you entered above)');
+        }
+    }
+
+    for (const gen of generatedSecrets) {
+        if (
+            gen.key === 'adminPassword' ||
+            gen.key === 'basicAuthBootstrapPassword'
+        ) {
+            continue;
+        }
+        const label =
+            {
+                basicAuthJwtSecret: 'Auth JWT secret',
+                fsTokenSecret: 'File access key',
+                clerkSecretKey: 'Clerk secret key',
+                s3SecretAccessKey: 'S3 secret access key',
+                convexSelfHostedAdminKey: 'Convex admin key',
+            }[gen.key] ?? gen.key;
+        lines.push(`  │  ${label}: ${gen.value}`);
+    }
+
+    lines.push('  │');
+    lines.push('  │  All values are also written to .env.');
+    lines.push('  │  Keep that file private — it contains secrets.');
+    lines.push('  └─────────────────────────────────────────────');
+    lines.push('');
+    console.log(lines.join('\n'));
+}
+
+function printCheatSheet(answers: WizardAnswers): void {
+    const lines = ['', '  ┌─ Next steps ──────────────────────────────'];
+    for (const line of buildCheatSheetLines({
+        ssrAuthEnabled: answers.ssrAuthEnabled,
+    })) {
+        lines.push(`  │  ${line}`);
+    }
+    lines.push('  └─────────────────────────────────────────────');
+    lines.push('');
+    console.log(lines.join('\n'));
+}
+
 function isWizardUiHostDir(pathValue: string): boolean {
     return (
         existsSync(resolve(pathValue, 'package.json')) &&
@@ -936,31 +1024,48 @@ async function runFastInit(flags: CliFlags): Promise<void> {
 
     const deployResult = await api.deploy(session.id);
     printDeployResult(deployResult);
+    printCheatSheet(session.answers as WizardAnswers);
 }
 
 function printHelp(): void {
     console.log(`or3-cloud commands
 
-  or3-cloud init [--preset recommended|clerk-convex] [--instance-dir <path>] [--env-file .env|.env.local] [--dry-run] [--manual] [--fast] [--ui] [--ui-port <port>] [--enable-install] [--package-manager bun|npm] [--no-focused-prompts]
+  or3-cloud init [--preset recommended|clerk-convex] [--instance-dir <path>] [--env-file .env|.env.local] [--dry-run] [--cli] [--manual] [--fast] [--ui] [--ui-port <port>] [--enable-install] [--package-manager bun|npm] [--no-focused-prompts]
   or3-cloud validate [--env-file .env|.env.local] [--strict]
+  or3-cloud doctor [--env-file .env|.env.local] [--strict]
   or3-cloud presets list
   or3-cloud presets save <name> [--session <id>]
   or3-cloud presets load <name>
   or3-cloud presets delete <name>
   or3-cloud deploy [--session <id>]
+
+  By default, 'init' opens the setup wizard in your browser.
+  Use --cli to force the terminal-based wizard.
+  Use --fast for a zero-question automatic setup.
 `);
 }
 
 async function runInit(flags: CliFlags): Promise<void> {
-    printBanner();
-    if (toBooleanFlag(flags, 'ui')) {
-        await runUiInit(flags);
-        return;
-    }
     if (toBooleanFlag(flags, 'fast')) {
         await runFastInit(flags);
         return;
     }
+
+    // Default to browser wizard when running in a terminal (not CI) and --cli
+    // was not explicitly passed. Non-interactive environments fall through to
+    // the terminal-based flow.
+    const forceCli = toBooleanFlag(flags, 'cli');
+    const useUi =
+        !forceCli &&
+        (toBooleanFlag(flags, 'ui') ||
+            (Boolean(input.isTTY && output.isTTY) &&
+                process.env.CI !== 'true'));
+    if (useUi) {
+        await runUiInit(flags);
+        return;
+    }
+
+    printBanner();
     const api = new Or3CloudWizardApi();
     const prompt = new Prompt();
     const manualMode = toBooleanFlag(flags, 'manual');
@@ -979,6 +1084,9 @@ async function runInit(flags: CliFlags): Promise<void> {
     const normalizedPresetName =
         presetFlag === 'clerk-convex' ? 'legacy-clerk-convex' : presetFlag;
 
+    // Mutable reference for Ctrl+C handler so the finally block can clean it up.
+    let sigintCleanup: (() => void) | null = null;
+
     try {
         const instanceDir = toStringFlag(flags, 'instance-dir') ?? process.cwd();
         const envFile =
@@ -989,6 +1097,8 @@ async function runInit(flags: CliFlags): Promise<void> {
         });
         const hasExistingConfig = hasExistingWizardConfiguration(existingEnv.map);
         let prefillFromEnv = true;
+        let resumedSession: WizardSession | null = null;
+
         if (hasExistingConfig) {
             console.log(`\nDetected existing wizard-managed settings in ${existingEnv.path}.`);
             prefillFromEnv = await promptBooleanNoNav(
@@ -996,20 +1106,58 @@ async function runInit(flags: CliFlags): Promise<void> {
                 'Update this existing setup (recommended) instead of starting fresh?',
                 true
             );
+        } else {
+            // No existing config — offer to resume a previous incomplete session.
+            const lastId = await readLastSessionId();
+            if (lastId) {
+                try {
+                    const existing = await readSession(lastId);
+                    const when = new Date(existing.updatedAt).toLocaleString();
+                    const resume = await promptBooleanNoNav(
+                        prompt,
+                        `Resume your previous setup from ${when}? (passwords/secrets will be re-entered or auto-generated)`,
+                        true
+                    );
+                    if (resume) {
+                        resumedSession = await api.resumeSession(lastId, {
+                            existingEnvMap: existingEnv.map,
+                        });
+                    }
+                } catch {
+                    // Session file is corrupted or inaccessible — start fresh.
+                }
+            }
         }
 
-        const session = await api.createSession({
-            presetName: normalizedPresetName ?? recommendedPreset.name,
-            instanceDir,
-            envFile,
-            includeSecrets: false,
-            prefillFromEnv,
-            existingEnvMap: prefillFromEnv ? existingEnv.map : undefined,
-        });
+        const session =
+            resumedSession ??
+            (await api.createSession({
+                presetName: normalizedPresetName ?? recommendedPreset.name,
+                instanceDir,
+                envFile,
+                includeSecrets: false,
+                prefillFromEnv,
+                existingEnvMap: prefillFromEnv ? existingEnv.map : undefined,
+            }));
+
+        // Set up Ctrl+C handler so the user knows their progress was saved.
+        const sessionId = session.id;
+        const sigintHandler = () => {
+            console.log(
+                `\n\n  Setup paused. Non-secret answers are saved (session ${sessionId}).`
+            );
+            console.log(
+                '  Resume with: bun run or3-cloud:init  (passwords can be auto-generated again)\n'
+            );
+            process.exit(130);
+        };
+        sigintCleanup = () => process.off('SIGINT', sigintHandler);
+        process.once('SIGINT', sigintHandler);
 
         let stepIndex = 0;
         let finalAnswers: WizardAnswers | null = null;
         let validationWarnings: string[] = [];
+        const generatedSecrets: Array<{ key: string; value: string }> = [];
         while (true) {
             while (true) {
                 const latestSession = await api.getSession(session.id, {
@@ -1157,7 +1305,14 @@ async function runInit(flags: CliFlags): Promise<void> {
                             field.required &&
                             nextValue.trim().length === 0
                         ) {
-                            nextValue = api.generateSecureSecret();
+                            nextValue =
+                                field.key === 'adminPassword'
+                                    ? generateAdminPassword(24)
+                                    : api.generateSecureSecret();
+                            generatedSecrets.push({
+                                key: field.key as string,
+                                value: nextValue as string,
+                            });
                             console.log(
                                 `Generated secure value for "${field.label}".`
                             );
@@ -1368,6 +1523,11 @@ async function runInit(flags: CliFlags): Promise<void> {
                     console.log(`    ↩ ${file}`);
                 }
             }
+
+            if (generatedSecrets.length > 0 || answers.authProvider === 'basic-auth') {
+                printSaveThesePanel(answers, generatedSecrets);
+            }
+            printCheatSheet(answers);
         }
 
         if (
@@ -1446,28 +1606,63 @@ async function runInit(flags: CliFlags): Promise<void> {
             }
             const deployResult = await api.deploy(session.id);
             printDeployResult(deployResult);
+            if (!dryRun) {
+                printCheatSheet(answers);
+            }
         }
     } finally {
+        sigintCleanup?.();
         await prompt.close();
     }
 }
 
-async function runValidate(flags: CliFlags): Promise<void> {
+async function runValidate(flags: CliFlags, isDoctor = false): Promise<void> {
     const envFile = (toStringFlag(flags, 'env-file') as '.env' | '.env.local') ?? '.env';
     const { map } = await readEnvFile({
         instanceDir: process.cwd(),
         envFile,
     });
     const strict = hasFlag(flags, 'strict') ? toBooleanFlag(flags, 'strict') : undefined;
+    let config: ReturnType<typeof buildOr3CloudConfigFromEnv> | null = null;
+    let configOk = true;
+
     try {
         buildOr3ConfigFromEnv(map);
-        buildOr3CloudConfigFromEnv(map, strict === undefined ? {} : { strict });
-        console.log(`Validation passed for ${envFile}.`);
+        config = buildOr3CloudConfigFromEnv(map, strict === undefined ? {} : { strict });
     } catch (error) {
-        console.log(`Validation failed for ${envFile}:`);
-        console.log((error as Error).message);
-        process.exitCode = 1;
+        configOk = false;
+        console.log(`\n  ❌ Config validation failed for ${envFile}:`);
+        console.log(`     ${(error as Error).message}\n`);
     }
+
+    if (configOk) {
+        console.log(`\n  ✅ Config is valid for ${envFile}.`);
+    }
+
+    if (!isDoctor) {
+        process.exitCode = configOk ? 0 : 1;
+        return;
+    }
+
+    let exitCode = configOk ? 0 : 1;
+    if (configOk && config) {
+        const doctor = await runDoctorChecks({ config, envMap: map });
+        console.log('');
+        for (const line of doctor.lines) {
+            console.log(line);
+        }
+        console.log('');
+        exitCode = doctor.exitCode === 0 ? exitCode : doctor.exitCode;
+        if (exitCode === 0) {
+            console.log('  ✅ Doctor: all checks passed.');
+        } else {
+            console.log('  ℹ️  Doctor completed with errors.');
+        }
+    } else {
+        console.log('\n  ℹ️  Doctor completed with errors.\n');
+    }
+
+    process.exitCode = exitCode;
 }
 
 async function resolveSessionId(flags: CliFlags): Promise<string> {
@@ -1541,7 +1736,10 @@ async function main(): Promise<void> {
                 await runInit(flags);
                 return;
             case 'validate':
-                await runValidate(flags);
+                await runValidate(flags, false);
+                return;
+            case 'doctor':
+                await runValidate(flags, true);
                 return;
             case 'presets':
                 await runPresets(rest, flags);

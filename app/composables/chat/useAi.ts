@@ -1256,13 +1256,23 @@ export function useChat(
                     color: 'warning',
                     duration: 4000,
                 });
-            } else {
-                // allowUserOverride is true but guestAccessEnabled is false - no action
-                // User must authenticate via SSR auth first
+            } else if (runtimeConfig.public.ssrAuthEnabled === true) {
+                // SSR mode: user must authenticate via the auth provider first
                 useToast().add({
                     title: 'Sign in required',
                     description:
                         'Please sign in to continue chatting.',
+                    color: 'info',
+                    duration: 4000,
+                });
+            } else {
+                // Static/local mode: there is no "sign in" — the user just
+                // needs an OpenRouter key. The chat input already shows
+                // connect/paste actions; this is only a backstop.
+                useToast().add({
+                    title: 'Connect to OpenRouter',
+                    description:
+                        'Add an OpenRouter API key to start chatting.',
                     color: 'info',
                     duration: 4000,
                 });

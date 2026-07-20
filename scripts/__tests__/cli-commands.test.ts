@@ -78,7 +78,7 @@ describe('CLI Commands', () => {
                 );
 
                 expect(result.exitCode).toBe(0);
-                expect(result.output).toContain('Validation passed for .env.');
+                expect(result.output).toContain('Config is valid for .env.');
             } finally {
                 await rm(workspaceDir, { recursive: true, force: true });
             }

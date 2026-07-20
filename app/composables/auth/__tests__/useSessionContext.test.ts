@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 
 const fetchMock = vi.hoisted(() => vi.fn());
+const recoverClientSessionMock = vi.hoisted(() => vi.fn(async () => false));
 const sessionState = ref<unknown>(null);
 
 type TestPayload = {
@@ -14,6 +15,10 @@ type TestPayload = {
 
 vi.mock('ofetch', () => ({
     $fetch: fetchMock,
+}));
+
+vi.mock('~/composables/auth/useClientSessionRecovery', () => ({
+    recoverClientSession: recoverClientSessionMock,
 }));
 
 vi.mock('#imports', () => ({
@@ -36,6 +41,7 @@ describe('useSessionContext refresh generations', () => {
     beforeEach(() => {
         vi.resetModules();
         fetchMock.mockReset();
+        recoverClientSessionMock.mockReset().mockResolvedValue(false);
         sessionState.value = { session: null, appAccessAllowed: false };
     });
 
@@ -111,5 +117,26 @@ describe('useSessionContext refresh generations', () => {
 
         expect(context.error.value).toBeNull();
         expect(context.pending.value).toBe(false);
+    });
+
+    it('retries session fetch after successful provider recovery', async () => {
+        recoverClientSessionMock.mockResolvedValue(true);
+        fetchMock
+            .mockResolvedValueOnce({ session: null, appAccessAllowed: false })
+            .mockResolvedValueOnce({
+                session: {
+                    authenticated: true,
+                    workspace: { id: 'workspace-recovered' },
+                },
+                appAccessAllowed: true,
+            });
+
+        const { useSessionContext } = await import('../useSessionContext');
+        const context = useSessionContext();
+        await context.refresh();
+
+        expect(recoverClientSessionMock).toHaveBeenCalled();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(context.data.value?.session?.workspace?.id).toBe('workspace-recovered');
     });
 });

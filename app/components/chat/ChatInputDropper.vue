@@ -322,6 +322,7 @@
             @selected="handlePromptSelected"
             @closed="handlePromptModalClosed"
         />
+        <OpenRouterKeyModal v-model:open="showKeyModal" />
     </div>
 </template>
 
@@ -337,6 +338,7 @@ import {
     defineAsyncComponent,
 } from 'vue';
 import { useOr3Config } from '~/composables/useOr3Config';
+import { resolveOpenRouterKeyAvailability } from '~/core/auth/openRouterKeyAvailability';
 import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';
 import { Editor, EditorContent } from '@tiptap/vue-3';
 import { Extension, Node } from '@tiptap/core';
@@ -383,6 +385,10 @@ import {
     type SendResult,
 } from '~/utils/chat/types';
 
+const OpenRouterKeyModal = defineAsyncComponent(
+    () => import('~/components/chat/OpenRouterKeyModal.vue')
+);
+
 const props = defineProps<{
     loading?: boolean;
     containerWidth?: number;
@@ -406,15 +412,17 @@ const thinkingEnabled = ref<boolean>(false);
 const reasoningEffort = ref<string | undefined>(undefined);
 const LAST_MODEL_KEY = 'last_selected_model';
 const runtimeConfig = useRuntimeConfig();
-const openRouterConfig = computed(() => runtimeConfig.public?.openRouter ?? {});
+const openRouterAvailability = computed(() =>
+    resolveOpenRouterKeyAvailability(runtimeConfig.public?.openRouter)
+);
 const requireUserKey = computed(
-    () => openRouterConfig.value.requireUserKey === true
+    () => openRouterAvailability.value.requireUserKey
 );
 const allowUserOverride = computed(
-    () => openRouterConfig.value.allowUserOverride !== false || requireUserKey.value
+    () => openRouterAvailability.value.allowUserOverride
 );
 const hasInstanceKey = computed(
-    () => openRouterConfig.value.hasInstanceKey === true && !requireUserKey.value
+    () => openRouterAvailability.value.hasInstanceKey
 );
 
 // Use VueUse's useLocalStorage for persisted model selection
@@ -560,6 +568,7 @@ watch(
 
 const showModelCatalog = ref(false);
 const showSystemPrompts = ref(false);
+const showKeyModal = ref(false);
 
 const emit = defineEmits<{
     (
@@ -968,26 +977,19 @@ const handleSend = async (): Promise<SendResult> => {
         useToast().add({
             id: 'need-openrouter-login',
             title: 'Connect to OpenRouter',
-            description: 'You need to log in before sending messages.',
+            description: 'You need an OpenRouter API key to send messages.',
             color: 'primary',
-            duration: 5000,
+            duration: 8000,
             actions: [
                 {
-                    label: 'Login',
+                    label: 'Connect',
                     onClick: () => startLogin(),
                     size: 'sm',
                 },
                 {
-                    label: 'Manually enter key',
-                    onClick: (toast) => {
-                        const apiKey = prompt(
-                            'Please enter your OpenRouter API key:'
-                        );
-
-                        if (apiKey && apiKey.trim()) {
-                            // Save the API key
-                            state.value.openrouterKey = apiKey.trim();
-                        }
+                    label: 'Paste a key',
+                    onClick: () => {
+                        showKeyModal.value = true;
                     },
                     size: 'sm',
                     variant: 'link',

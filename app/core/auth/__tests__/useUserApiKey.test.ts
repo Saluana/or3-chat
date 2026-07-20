@@ -57,4 +57,51 @@ describe('useUserApiKey', () => {
         expect(equals).toHaveBeenCalledWith('openrouter_api_key');
         expect(first).toHaveBeenCalledTimes(1);
     });
+
+    it('validates OpenRouter key format', async () => {
+        vi.doMock('~/db/client', () => ({ getDb: () => ({ tables: [] }) }));
+        vi.doMock('~/db', () => ({ kv: { set: vi.fn() } }));
+        vi.doMock('~/state/global', () => ({
+            state: ref({ openrouterKey: null }),
+        }));
+
+        const mod = await import('~/core/auth/useUserApiKey');
+        expect(mod.isValidOpenRouterKeyFormat('sk-or-v1-abcdefghij')).toBe(
+            true
+        );
+        expect(mod.isValidOpenRouterKeyFormat('sk-or-short')).toBe(false);
+        expect(mod.isValidOpenRouterKeyFormat('not-a-key')).toBe(false);
+    });
+
+    it('persistUserApiKey writes kv and updates state', async () => {
+        const kvSet = vi.fn().mockResolvedValue(undefined);
+        const stateRef = ref({ openrouterKey: null as string | null });
+
+        vi.doMock('~/db/client', () => ({ getDb: () => ({ tables: [] }) }));
+        vi.doMock('~/db', () => ({ kv: { set: kvSet } }));
+        vi.doMock('~/state/global', () => ({ state: stateRef }));
+
+        const mod = await import('~/core/auth/useUserApiKey');
+        const key = 'sk-or-v1-abcdefghijklmnop';
+        await mod.persistUserApiKey(key);
+
+        expect(kvSet).toHaveBeenCalledWith('openrouter_api_key', key);
+        expect(stateRef.value.openrouterKey).toBe(key);
+    });
+
+    it('persistUserApiKey rejects invalid keys without writing', async () => {
+        const kvSet = vi.fn();
+        vi.doMock('~/db/client', () => ({ getDb: () => ({ tables: [] }) }));
+        vi.doMock('~/db', () => ({ kv: { set: kvSet } }));
+        vi.doMock('~/state/global', () => ({
+            state: ref({ openrouterKey: null }),
+        }));
+
+        const mod = await import('~/core/auth/useUserApiKey');
+        await expect(mod.persistUserApiKey('bad-key')).rejects.toThrow(
+            /sk-or-/
+        );
+        expect(kvSet).not.toHaveBeenCalled();
+    });
 });
+

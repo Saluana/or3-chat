@@ -465,6 +465,36 @@ export function useWizardSession() {
         updateAnswer(key, nextValue as WizardAnswers[keyof WizardAnswers]);
     }
 
+    /**
+     * UX: empty required secrets auto-generate (matches CLI "press Enter").
+     * Returns keys that were filled so callers can include them in the PATCH.
+     */
+    function fillEmptyRequiredSecrets(
+        steps: WizardStep[]
+    ): Partial<WizardAnswers> {
+        const patch: Partial<WizardAnswers> = {};
+        for (const step of steps) {
+            for (const field of getVisibleFields(step, answers.value)) {
+                if (!field.secret || !field.required) continue;
+                const current = answers.value[field.key];
+                if (typeof current === 'string' && current.trim().length > 0) {
+                    continue;
+                }
+                if (current != null && typeof current !== 'string') continue;
+                const nextValue =
+                    field.key === 'adminPassword'
+                        ? generateAdminPassword(24)
+                        : randomSecret(48);
+                updateAnswer(
+                    field.key,
+                    nextValue as WizardAnswers[keyof WizardAnswers]
+                );
+                patch[field.key] = nextValue as never;
+            }
+        }
+        return patch;
+    }
+
     function buildPatchFromStep(step: WizardStep): Partial<WizardAnswers> {
         const patch: Partial<WizardAnswers> = {};
         for (const field of getVisibleFields(step, answers.value)) {
@@ -476,10 +506,10 @@ export function useWizardSession() {
         return patch;
     }
 
-    async function saveStep(step = currentStep.value): Promise<boolean> {
-        if (!session.value || !step) return true;
-        const patch = buildPatchFromStep(step);
-        if (Object.keys(patch).length === 0) return true;
+    async function persistAnswerPatch(
+        patch: Partial<WizardAnswers>
+    ): Promise<boolean> {
+        if (!session.value || Object.keys(patch).length === 0) return true;
 
         isSaving.value = true;
         try {
@@ -500,6 +530,15 @@ export function useWizardSession() {
         } finally {
             isSaving.value = false;
         }
+    }
+
+    async function saveStep(step = currentStep.value): Promise<boolean> {
+        if (!session.value || !step) return true;
+        const generated = fillEmptyRequiredSecrets([step]);
+        return persistAnswerPatch({
+            ...generated,
+            ...buildPatchFromStep(step),
+        });
     }
 
     function getFurthestVisitedIndex(): number {
@@ -700,8 +739,11 @@ export function useWizardSession() {
         skipDeploy: boolean;
     }): Promise<DeployResponse | null> {
         if (!session.value) return null;
-        const saved = await saveStep();
-        if (!saved) return null;
+        // Fill any remaining empty required secrets across the whole flow
+        // before validate/apply so the browser wizard matches CLI Enter-to-generate.
+        const generated = fillEmptyRequiredSecrets(visibleSteps.value);
+        if (!(await persistAnswerPatch(generated))) return null;
+        if (!(await saveStep())) return null;
 
         isDeploying.value = true;
         clearStatus();
@@ -720,11 +762,16 @@ export function useWizardSession() {
             deployResponse.value = response;
             clearValidationState();
             validationWarnings.value = response.validation.warnings;
-            statusMessage.value = input.skipDeploy
-                ? 'Validation passed.'
-                : response.deployResult?.accessUrl
-                  ? 'Deployment completed.'
-                  : response.deployResult?.instructions || 'Deployment completed.';
+            if (input.dryRun) {
+                statusMessage.value = 'Validation passed.';
+            } else if (input.skipDeploy) {
+                statusMessage.value = 'Settings applied.';
+            } else if (response.deployResult?.accessUrl) {
+                statusMessage.value = 'Deployment completed.';
+            } else {
+                statusMessage.value =
+                    response.deployResult?.instructions || 'Deployment completed.';
+            }
             if (!input.skipDeploy) {
                 void redirectToAccessUrl(response.deployResult?.accessUrl);
             }

@@ -79,9 +79,9 @@
             </div>
         </div>
 
-        <!-- Deploy success -->
+        <!-- Success banner (validate / apply / deploy) -->
         <div
-            v-if="deployResponse?.ok && !isDeploying"
+            v-if="successBanner && !isDeploying"
             class="rounded-[var(--md-border-radius)] border border-[var(--md-primary)]/40 bg-[var(--md-primary)]/6 px-5 py-5"
         >
             <div class="flex items-start gap-3">
@@ -92,10 +92,10 @@
                 </div>
                 <div>
                     <p class="font-heading text-sm text-[var(--md-on-surface)]">
-                        Deployment Complete
+                        {{ successBanner.title }}
                     </p>
                     <p class="mt-1 text-sm leading-relaxed text-[var(--md-on-surface)]/50">
-                        Your OR3 Cloud instance has been configured and deployed. Check the next steps below to get started.
+                        {{ successBanner.body }}
                     </p>
                 </div>
             </div>
@@ -150,6 +150,7 @@ import type {
     WizardStep,
     WizardValidationResult,
 } from '~~/shared/cloud/wizard/types';
+import { buildApplyOnlySuccessBody } from '~~/shared/cloud/wizard/next-steps';
 
 type DeployResponse = {
     ok: boolean;
@@ -182,6 +183,27 @@ defineEmits<{
     (event: 'apply-only'): void;
     (event: 'deploy'): void;
 }>();
+
+const successBanner = computed(() => {
+    if (!props.deployResponse?.ok) return null;
+    const apply = props.deployResponse.applyResult;
+    if (apply?.dryRun) {
+        return {
+            title: 'Validation passed',
+            body: 'Your configuration looks good. Nothing was written yet — use Apply Only or Apply + Deploy when you are ready.',
+        };
+    }
+    if (props.deployResponse.deployResult) {
+        return {
+            title: 'Deployment complete',
+            body: 'Your OR3 Cloud instance has been configured and deployed. Check the next steps below to get started.',
+        };
+    }
+    return {
+        title: 'Settings applied',
+        body: buildApplyOnlySuccessBody(),
+    };
+});
 
 const summaryGroups = computed(() => [
     {

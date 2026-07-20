@@ -1,13 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerClientAuthStatusResolver } from '~/composables/auth/useClientAuthStatus.client';
 
 const logoutCleanup = vi.fn(async () => undefined);
+const confirmClientSignedOut = vi.fn(async () => false);
 
 vi.mock('~/utils/logout-cleanup', () => ({
     logoutCleanup,
 }));
 
-const sessionState = { value: { session: null as null | { authenticated: boolean; workspace?: { id?: string } } } };
+vi.mock('~/composables/auth/confirmClientSignedOut', () => ({
+    confirmClientSignedOut,
+}));
+
+const sessionState = {
+    value: {
+        session: null as null | { authenticated: boolean; workspace?: { id?: string } },
+    },
+};
 
 vi.mock('~/composables/auth/useSessionContext', () => ({
     useSessionContext: () => ({
@@ -18,6 +26,12 @@ vi.mock('~/composables/auth/useSessionContext', () => ({
 
 vi.mock('~/db/client', () => ({
     setActiveWorkspaceDb: vi.fn(),
+}));
+
+vi.mock('~/composables/workspace/useWorkspaceManager', () => ({
+    useWorkspaceManager: () => ({
+        activeWorkspaceId: { value: null },
+    }),
 }));
 
 vi.mock('~/core/sync/cursor-manager', () => ({
@@ -44,6 +58,7 @@ describe('workspace logout cleanup plugin', () => {
     beforeEach(() => {
         vi.resetModules();
         logoutCleanup.mockClear();
+        confirmClientSignedOut.mockReset().mockResolvedValue(false);
         sessionState.value.session = null;
         (globalThis as typeof globalThis & {
             defineNuxtPlugin?: (plugin: () => unknown) => unknown;
@@ -60,32 +75,31 @@ describe('workspace logout cleanup plugin', () => {
         }).useNuxtApp = () => ({
             provide: vi.fn(),
         });
-        registerClientAuthStatusResolver(() => ({
-            ready: true,
-            authenticated: undefined,
-        }));
     });
 
-    it('does not clear workspace DBs when auth state is unknown on load', async () => {
+    it('does not clear workspace DBs when sign-out is not confirmed', async () => {
+        confirmClientSignedOut.mockResolvedValue(false);
         await import('~/plugins/00-workspace-db.client');
+        await vi.waitFor(() => {
+            expect(confirmClientSignedOut).toHaveBeenCalled();
+        });
         expect(logoutCleanup).toHaveBeenCalledTimes(0);
     });
 
-    it('clears workspace DBs when session is unauthenticated and resolver confirms logout', async () => {
-        registerClientAuthStatusResolver(() => ({
-            ready: true,
-            authenticated: false,
-        }));
+    it('clears workspace DBs when session is unauthenticated and sign-out is confirmed', async () => {
+        confirmClientSignedOut.mockResolvedValue(true);
         await import('~/plugins/00-workspace-db.client');
-        expect(logoutCleanup).toHaveBeenCalledTimes(1);
+        await vi.waitFor(() => {
+            expect(logoutCleanup).toHaveBeenCalledTimes(1);
+        });
     });
 
-    it('does not clear workspace DBs when Clerk still has an active session', async () => {
-        registerClientAuthStatusResolver(() => ({
-            ready: true,
-            authenticated: true,
-        }));
+    it('does not clear workspace DBs when session is authenticated', async () => {
+        sessionState.value.session = { authenticated: true };
+        confirmClientSignedOut.mockResolvedValue(true);
         await import('~/plugins/00-workspace-db.client');
+        await Promise.resolve();
+        expect(confirmClientSignedOut).not.toHaveBeenCalled();
         expect(logoutCleanup).toHaveBeenCalledTimes(0);
     });
 });

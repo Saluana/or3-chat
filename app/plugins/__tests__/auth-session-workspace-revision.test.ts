@@ -7,18 +7,27 @@ const sessionState = {
             authenticated: true,
             workspace: { id: 'workspace-a' },
             authorizationRevision: 1,
+        } as null | {
+            authenticated: boolean;
+            workspace: { id: string };
+            authorizationRevision: number;
         },
     },
 };
 const sessionRefreshMock = vi.fn();
 const refreshWorkspaceRevisionMock = vi.fn();
 const reloadNuxtAppMock = vi.fn();
+const confirmClientSignedOutMock = vi.fn(async () => false);
 
 vi.mock('~/composables/auth/useSessionContext', () => ({
     useSessionContext: () => ({
         data: sessionState,
         refresh: sessionRefreshMock,
     }),
+}));
+
+vi.mock('~/composables/auth/confirmClientSignedOut', () => ({
+    confirmClientSignedOut: confirmClientSignedOutMock,
 }));
 
 vi.mock('~/composables/workspace/useWorkspaceManagerSession', () => ({
@@ -31,6 +40,7 @@ describe('auth session cross-tab workspace refresh', () => {
     beforeEach(() => {
         vi.resetModules();
         sessionRefreshMock.mockReset();
+        confirmClientSignedOutMock.mockReset().mockResolvedValue(false);
         refreshWorkspaceRevisionMock.mockReset().mockImplementation(async (revision) => {
             sessionState.value.session = {
                 authenticated: true,
@@ -88,6 +98,38 @@ describe('auth session cross-tab workspace refresh', () => {
         await Promise.resolve();
 
         expect(refreshWorkspaceRevisionMock).toHaveBeenCalledTimes(1);
-        expect(sessionState.value.session.workspace.id).toBe('workspace-b');
+        expect(sessionState.value.session?.workspace.id).toBe('workspace-b');
+    });
+
+    it('does not reload on auth flip to signed-out when confirmation fails', async () => {
+        sessionRefreshMock.mockImplementation(async () => {
+            sessionState.value.session = null;
+            return sessionState.value;
+        });
+        confirmClientSignedOutMock.mockResolvedValue(false);
+
+        await import('../11.auth-session-refresh.client');
+        window.dispatchEvent(new CustomEvent('or3:auth-session-changed'));
+
+        await vi.waitFor(() => {
+            expect(sessionRefreshMock).toHaveBeenCalled();
+        });
+        expect(confirmClientSignedOutMock).toHaveBeenCalled();
+        expect(reloadNuxtAppMock).not.toHaveBeenCalled();
+    });
+
+    it('reloads on auth flip to signed-out when confirmation succeeds', async () => {
+        sessionRefreshMock.mockImplementation(async () => {
+            sessionState.value.session = null;
+            return sessionState.value;
+        });
+        confirmClientSignedOutMock.mockResolvedValue(true);
+
+        await import('../11.auth-session-refresh.client');
+        window.dispatchEvent(new CustomEvent('or3:auth-session-changed'));
+
+        await vi.waitFor(() => {
+            expect(reloadNuxtAppMock).toHaveBeenCalledWith({ ttl: 500 });
+        });
     });
 });
