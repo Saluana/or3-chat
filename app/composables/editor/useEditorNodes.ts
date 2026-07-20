@@ -1,6 +1,8 @@
 import { reactive } from 'vue';
 import type { Node, Mark, Extension } from '@tiptap/core';
 import type { LazyEditorExtensionFactory } from './useEditorExtensionLoader';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 /**
  * @module app/composables/editor/useEditorNodes
@@ -125,6 +127,53 @@ const extensionsReactiveList = reactive<{ items: EditorExtension[] }>({
     items: [],
 });
 
+const nodeV2Kernel = getContributionSurfaceKernel<EditorNode>(
+    'editor-extensions',
+    {
+        getId: (node) => node.id,
+        compare: compareEditorEntries,
+    },
+    'nodes'
+);
+const markV2Kernel = getContributionSurfaceKernel<EditorMark>(
+    'editor-extensions',
+    {
+        getId: (mark) => mark.id,
+        compare: compareEditorEntries,
+    },
+    'marks'
+);
+const extensionV2Kernel = getContributionSurfaceKernel<EditorExtension>(
+    'editor-extensions',
+    {
+        getId: (extension) => extension.id,
+        compare: compareEditorEntries,
+    },
+    'extensions'
+);
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('editor-extensions');
+}
+
+function compareEditorEntries(
+    left: { id: string; order?: number },
+    right: { id: string; order?: number }
+): number {
+    return (
+        (left.order ?? 200) - (right.order ?? 200) ||
+        left.id.localeCompare(right.id)
+    );
+}
+
+function listV2Entries<T extends { id: string; order?: number }>(
+    items: readonly T[]
+): T[] {
+    return items
+        .map((item) => reactive(item) as T)
+        .sort(compareEditorEntries);
+}
+
 function syncNodesReactiveList() {
     nodesReactiveList.items = Array.from(nodesRegistry.values());
 }
@@ -153,8 +202,17 @@ function syncExtensionsReactiveList() {
  * - Deduplicating nodes across plugin boundaries
  */
 export function registerEditorNode(node: EditorNode) {
-    if (import.meta.dev && nodesRegistry.has(node.id)) {
+    if (
+        import.meta.dev &&
+        (useV2Surface()
+            ? nodeV2Kernel.registry.get(node.id, undefined) !== undefined
+            : nodesRegistry.has(node.id))
+    ) {
         console.warn(`[useEditorNodes] Overwriting existing node: ${node.id}`);
+    }
+    if (useV2Surface()) {
+        nodeV2Kernel.registry.registerLegacy({ value: node });
+        return;
     }
     nodesRegistry.set(node.id, node);
     syncNodesReactiveList();
@@ -176,7 +234,8 @@ export function registerEditorNode(node: EditorNode) {
  * - Cleaning up related editor state or UI
  */
 export function unregisterEditorNode(id: string) {
-    if (nodesRegistry.delete(id)) syncNodesReactiveList();
+    if (useV2Surface()) nodeV2Kernel.registry.unregisterLegacy(id);
+    else if (nodesRegistry.delete(id)) syncNodesReactiveList();
 }
 
 /**
@@ -195,8 +254,17 @@ export function unregisterEditorNode(id: string) {
  * - Deduplicating marks across plugin boundaries
  */
 export function registerEditorMark(mark: EditorMark) {
-    if (import.meta.dev && marksRegistry.has(mark.id)) {
+    if (
+        import.meta.dev &&
+        (useV2Surface()
+            ? markV2Kernel.registry.get(mark.id, undefined) !== undefined
+            : marksRegistry.has(mark.id))
+    ) {
         console.warn(`[useEditorNodes] Overwriting existing mark: ${mark.id}`);
+    }
+    if (useV2Surface()) {
+        markV2Kernel.registry.registerLegacy({ value: mark });
+        return;
     }
     marksRegistry.set(mark.id, mark);
     syncMarksReactiveList();
@@ -218,7 +286,8 @@ export function registerEditorMark(mark: EditorMark) {
  * - Cleaning up related editor state or UI
  */
 export function unregisterEditorMark(id: string) {
-    if (marksRegistry.delete(id)) syncMarksReactiveList();
+    if (useV2Surface()) markV2Kernel.registry.unregisterLegacy(id);
+    else if (marksRegistry.delete(id)) syncMarksReactiveList();
 }
 
 /**
@@ -237,10 +306,20 @@ export function unregisterEditorMark(id: string) {
  * - Deduplicating extensions across plugin boundaries
  */
 export function registerEditorExtension(extension: EditorExtension) {
-    if (import.meta.dev && extensionsRegistry.has(extension.id)) {
+    if (
+        import.meta.dev &&
+        (useV2Surface()
+            ? extensionV2Kernel.registry.get(extension.id, undefined) !==
+              undefined
+            : extensionsRegistry.has(extension.id))
+    ) {
         console.warn(
             `[useEditorNodes] Overwriting existing extension: ${extension.id}`
         );
+    }
+    if (useV2Surface()) {
+        extensionV2Kernel.registry.registerLegacy({ value: extension });
+        return;
     }
     extensionsRegistry.set(extension.id, extension);
     syncExtensionsReactiveList();
@@ -262,7 +341,8 @@ export function registerEditorExtension(extension: EditorExtension) {
  * - Cleaning up related editor state or UI
  */
 export function unregisterEditorExtension(id: string) {
-    if (extensionsRegistry.delete(id)) syncExtensionsReactiveList();
+    if (useV2Surface()) extensionV2Kernel.registry.unregisterLegacy(id);
+    else if (extensionsRegistry.delete(id)) syncExtensionsReactiveList();
 }
 
 /**
@@ -281,6 +361,7 @@ export function unregisterEditorExtension(id: string) {
  * - Returning a defensive copy
  */
 export function listEditorNodes(): EditorNode[] {
+    if (useV2Surface()) return listV2Entries(nodeV2Kernel.items.value);
     return [...nodesReactiveList.items].sort((a, b) => {
         const orderDiff = (a.order ?? 200) - (b.order ?? 200);
         // Stable sort: tie-break by id
@@ -304,6 +385,7 @@ export function listEditorNodes(): EditorNode[] {
  * - Returning a defensive copy
  */
 export function listEditorMarks(): EditorMark[] {
+    if (useV2Surface()) return listV2Entries(markV2Kernel.items.value);
     return [...marksReactiveList.items].sort((a, b) => {
         const orderDiff = (a.order ?? 200) - (b.order ?? 200);
         // Stable sort: tie-break by id
@@ -327,6 +409,7 @@ export function listEditorMarks(): EditorMark[] {
  * - Returning a defensive copy
  */
 export function listEditorExtensions(): EditorExtension[] {
+    if (useV2Surface()) return listV2Entries(extensionV2Kernel.items.value);
     return [...extensionsReactiveList.items].sort((a, b) => {
         const orderDiff = (a.order ?? 200) - (b.order ?? 200);
         // Stable sort: tie-break by id
@@ -350,7 +433,9 @@ export function listEditorExtensions(): EditorExtension[] {
  * - Providing reactive updates
  */
 export function listRegisteredEditorNodeIds(): string[] {
-    return Array.from(nodesRegistry.keys());
+    return useV2Surface()
+        ? [...nodeV2Kernel.registry.listLegacyIds()]
+        : Array.from(nodesRegistry.keys());
 }
 
 /**
@@ -369,7 +454,9 @@ export function listRegisteredEditorNodeIds(): string[] {
  * - Providing reactive updates
  */
 export function listRegisteredEditorMarkIds(): string[] {
-    return Array.from(marksRegistry.keys());
+    return useV2Surface()
+        ? [...markV2Kernel.registry.listLegacyIds()]
+        : Array.from(marksRegistry.keys());
 }
 
 /**
@@ -388,7 +475,9 @@ export function listRegisteredEditorMarkIds(): string[] {
  * - Providing reactive updates
  */
 export function listRegisteredEditorExtensionIds(): string[] {
-    return Array.from(extensionsRegistry.keys());
+    return useV2Surface()
+        ? [...extensionV2Kernel.registry.listLegacyIds()]
+        : Array.from(extensionsRegistry.keys());
 }
 
 // Note: Core (built-in) extensions remain hard-coded in DocumentEditor.vue;

@@ -236,7 +236,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC5, R4.AC4
       Done when: resolve, retry, removal, replacement, active navigation, and cache invalidation tests match the V1 profile.
 
-- [ ] 4.15 Migrate editor node, mark, and generic extension registries behind adapters
+- [x] 4.15 Migrate editor node, mark, and generic extension registries behind adapters
       Requirements: R1.AC5, R4.AC4-R4.AC7
       Done when: ordering, stored identity, lazy factory failure, and list APIs match.
 

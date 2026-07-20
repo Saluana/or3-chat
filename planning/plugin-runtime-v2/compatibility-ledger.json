@@ -1902,7 +1902,7 @@
     },
     {
       "source": "app/composables/editor/useEditorNodes.ts",
-      "apiSha256": "92f82e9c216856c55b363ec93da7f13dd85f1be3c7e753ec4148da9b46fca948",
+      "apiSha256": "2bb453ff3408881d70a6df642777eec4b9e8a265722217e0b83b8a1eb0de183d",
       "runtime": "client",
       "publicPaths": [
         "~/composables/editor/useEditorNodes"
@@ -1923,7 +1923,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 92,
+              "line": 94,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface EditorExtension {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** TipTap Extension instance. */\n    extension?: Extension;\n    /** Optional lazy factory to create the extension without pulling TipTap into entry. */\n    factory?: LazyEditorExtensionFactory;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n}"
             }
@@ -1937,7 +1937,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 66,
+              "line": 68,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface EditorMark {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** TipTap Mark extension instance. */\n    extension: Mark;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n}"
             }
@@ -1951,7 +1951,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 40,
+              "line": 42,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface EditorNode {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** TipTap Node extension instance. */\n    extension: Node;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n}"
             }
@@ -1968,7 +1968,7 @@
               "resolvedReturnType": "EditorExtension[]",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 329,
+                "line": 411,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listEditorExtensions(): EditorExtension[];"
               }
@@ -1977,7 +1977,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 329,
+              "line": 411,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listEditorExtensions(): EditorExtension[];"
             }
@@ -1994,7 +1994,7 @@
               "resolvedReturnType": "EditorMark[]",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 306,
+                "line": 387,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listEditorMarks(): EditorMark[];"
               }
@@ -2003,7 +2003,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 306,
+              "line": 387,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listEditorMarks(): EditorMark[];"
             }
@@ -2020,7 +2020,7 @@
               "resolvedReturnType": "EditorNode[]",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 283,
+                "line": 363,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listEditorNodes(): EditorNode[];"
               }
@@ -2029,7 +2029,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 283,
+              "line": 363,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listEditorNodes(): EditorNode[];"
             }
@@ -2046,7 +2046,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 390,
+                "line": 477,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredEditorExtensionIds(): string[];"
               }
@@ -2055,7 +2055,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 390,
+              "line": 477,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredEditorExtensionIds(): string[];"
             }
@@ -2072,7 +2072,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 371,
+                "line": 456,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredEditorMarkIds(): string[];"
               }
@@ -2081,7 +2081,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 371,
+              "line": 456,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredEditorMarkIds(): string[];"
             }
@@ -2098,7 +2098,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 352,
+                "line": 435,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredEditorNodeIds(): string[];"
               }
@@ -2107,7 +2107,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 352,
+              "line": 435,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredEditorNodeIds(): string[];"
             }
@@ -2124,7 +2124,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 239,
+                "line": 308,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerEditorExtension(extension: EditorExtension);"
               }
@@ -2133,7 +2133,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 239,
+              "line": 308,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerEditorExtension(extension: EditorExtension);"
             }
@@ -2150,7 +2150,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 197,
+                "line": 256,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerEditorMark(mark: EditorMark);"
               }
@@ -2159,7 +2159,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 197,
+              "line": 256,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerEditorMark(mark: EditorMark);"
             }
@@ -2176,7 +2176,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 155,
+                "line": 204,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerEditorNode(node: EditorNode);"
               }
@@ -2185,7 +2185,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 155,
+              "line": 204,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerEditorNode(node: EditorNode);"
             }
@@ -2202,7 +2202,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 264,
+                "line": 343,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterEditorExtension(id: string);"
               }
@@ -2211,7 +2211,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 264,
+              "line": 343,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterEditorExtension(id: string);"
             }
@@ -2228,7 +2228,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 220,
+                "line": 288,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterEditorMark(id: string);"
               }
@@ -2237,7 +2237,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 220,
+              "line": 288,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterEditorMark(id: string);"
             }
@@ -2254,7 +2254,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 178,
+                "line": 236,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterEditorNode(id: string);"
               }
@@ -2263,7 +2263,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 178,
+              "line": 236,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterEditorNode(id: string);"
             }
@@ -2466,7 +2466,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "61cd575c097bd7f518e7d0d924d5258e66cd7af897c56d8fc33955675bc77c05",
+      "apiSha256": "f4d908daa9e6ea26bbd913ae1a721e96c84e4b42334d12602a45e4beed5781b7",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2843,7 +2843,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 92,
+              "line": 94,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface EditorExtension {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** TipTap Extension instance. */\n    extension?: Extension;\n    /** Optional lazy factory to create the extension without pulling TipTap into entry. */\n    factory?: LazyEditorExtensionFactory;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n}"
             }
@@ -2857,7 +2857,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 66,
+              "line": 68,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface EditorMark {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** TipTap Mark extension instance. */\n    extension: Mark;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n}"
             }
@@ -2871,7 +2871,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 40,
+              "line": 42,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface EditorNode {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** TipTap Node extension instance. */\n    extension: Node;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n}"
             }
@@ -3206,7 +3206,7 @@
               "resolvedReturnType": "EditorExtension[]",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 329,
+                "line": 411,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listEditorExtensions(): EditorExtension[];"
               }
@@ -3215,7 +3215,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 329,
+              "line": 411,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listEditorExtensions(): EditorExtension[];"
             }
@@ -3232,7 +3232,7 @@
               "resolvedReturnType": "EditorMark[]",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 306,
+                "line": 387,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listEditorMarks(): EditorMark[];"
               }
@@ -3241,7 +3241,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 306,
+              "line": 387,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listEditorMarks(): EditorMark[];"
             }
@@ -3258,7 +3258,7 @@
               "resolvedReturnType": "EditorNode[]",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 283,
+                "line": 363,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listEditorNodes(): EditorNode[];"
               }
@@ -3267,7 +3267,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 283,
+              "line": 363,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listEditorNodes(): EditorNode[];"
             }
@@ -3362,7 +3362,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 390,
+                "line": 477,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredEditorExtensionIds(): string[];"
               }
@@ -3371,7 +3371,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 390,
+              "line": 477,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredEditorExtensionIds(): string[];"
             }
@@ -3388,7 +3388,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 371,
+                "line": 456,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredEditorMarkIds(): string[];"
               }
@@ -3397,7 +3397,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 371,
+              "line": 456,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredEditorMarkIds(): string[];"
             }
@@ -3414,7 +3414,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 352,
+                "line": 435,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredEditorNodeIds(): string[];"
               }
@@ -3423,7 +3423,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 352,
+              "line": 435,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredEditorNodeIds(): string[];"
             }
@@ -4014,7 +4014,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 239,
+                "line": 308,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerEditorExtension(extension: EditorExtension);"
               }
@@ -4023,7 +4023,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 239,
+              "line": 308,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerEditorExtension(extension: EditorExtension);"
             }
@@ -4040,7 +4040,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 197,
+                "line": 256,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerEditorMark(mark: EditorMark);"
               }
@@ -4049,7 +4049,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 197,
+              "line": 256,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerEditorMark(mark: EditorMark);"
             }
@@ -4066,7 +4066,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 155,
+                "line": 204,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerEditorNode(node: EditorNode);"
               }
@@ -4075,7 +4075,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 155,
+              "line": 204,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerEditorNode(node: EditorNode);"
             }
@@ -4730,7 +4730,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 264,
+                "line": 343,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterEditorExtension(id: string);"
               }
@@ -4739,7 +4739,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 264,
+              "line": 343,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterEditorExtension(id: string);"
             }
@@ -4756,7 +4756,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 220,
+                "line": 288,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterEditorMark(id: string);"
               }
@@ -4765,7 +4765,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 220,
+              "line": 288,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterEditorMark(id: string);"
             }
@@ -4782,7 +4782,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorNodes.ts",
-                "line": 178,
+                "line": 236,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterEditorNode(id: string);"
               }
@@ -4791,7 +4791,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorNodes.ts",
-              "line": 178,
+              "line": 236,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterEditorNode(id: string);"
             }
