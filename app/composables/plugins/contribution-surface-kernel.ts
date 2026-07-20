@@ -14,7 +14,7 @@ export interface VueContributionSurfaceKernel<T> {
 type KernelGlobals = typeof globalThis & {
     __or3PluginActivationTable?: ActivationTable;
     __or3ContributionSurfaceKernels?: Map<
-        PluginContributionSurfaceId,
+        string,
         VueContributionSurfaceKernel<unknown>
     >;
 };
@@ -29,13 +29,15 @@ export function getPluginContributionActivationTable(): ActivationTable {
 
 export function getContributionSurfaceKernel<T>(
     surface: PluginContributionSurfaceId,
-    options: Omit<ContributionRegistryOptions<T, void, Readonly<Record<string, unknown>>>, 'activationTable'>
+    options: Omit<ContributionRegistryOptions<T, void, Readonly<Record<string, unknown>>>, 'activationTable'>,
+    channel = 'default'
 ): VueContributionSurfaceKernel<T> {
     const globals = globalThis as KernelGlobals;
     const kernels =
         globals.__or3ContributionSurfaceKernels ??
         (globals.__or3ContributionSurfaceKernels = new Map());
-    const existing = kernels.get(surface) as VueContributionSurfaceKernel<T> | undefined;
+    const kernelKey = channel === 'default' ? surface : `${surface}:${channel}`;
+    const existing = kernels.get(kernelKey) as VueContributionSurfaceKernel<T> | undefined;
     if (existing) return existing;
 
     const registry = new ContributionRegistry<T, void>({
@@ -47,6 +49,6 @@ export function getContributionSurfaceKernel<T>(
         items.value = registry.snapshot(undefined);
     });
     const kernel = Object.freeze({ registry, items });
-    kernels.set(surface, kernel as VueContributionSurfaceKernel<unknown>);
+    kernels.set(kernelKey, kernel as VueContributionSurfaceKernel<unknown>);
     return kernel;
 }

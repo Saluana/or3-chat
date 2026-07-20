@@ -1042,7 +1042,7 @@
     },
     {
       "source": "app/composables/dashboard/useDashboardPlugins.ts",
-      "apiSha256": "0216f2cdf9f1d2987a8fa72a668db4a4cdc84d3c6aa7582fe49edac6862acb84",
+      "apiSha256": "91d7b0040717c65450f22799cab4d5c1a617fcdf0248f09b832f554fae2a82d1",
       "runtime": "client",
       "publicPaths": [
         "~/composables/dashboard/useDashboardPlugins"
@@ -1064,7 +1064,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 120,
+              "line": 186,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DashboardNavigationError {\n    code: DashboardNavigationErrorCode;\n    message: string;\n    pluginId?: string;\n    pageId?: string;\n    cause?: unknown;\n}"
             }
@@ -1078,7 +1078,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 114,
+              "line": 180,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DashboardNavigationErrorCode =\n    | 'missing-plugin'\n    | 'missing-page'\n    | 'handler-error'\n    | 'resolve-error';"
             }
@@ -1092,7 +1092,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 136,
+              "line": 202,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DashboardNavigationResult =\n    | { ok: true }\n    | { ok: false; error: DashboardNavigationError };"
             }
@@ -1106,7 +1106,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 128,
+              "line": 194,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DashboardNavigationState {\n    view: 'dashboard' | 'page';\n    activePluginId: string | null;\n    activePageId: string | null;\n    loadingPage: boolean;\n    error: DashboardNavigationError | null;\n}"
             }
@@ -1120,7 +1120,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 22,
+              "line": 24,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DashboardPlugin {\n    /** Unique id across all dashboard plugins */\n    id: string;\n    /** Icon name (Iconify) shown in the grid */\n    icon: string;\n    /** Short label shown under the icon */\n    label: string;\n    /** Optional longer description (tooltip or detail panel later) */\n    description?: string;\n    /** Optional order (lower = earlier). Defaults to 200. */\n    order?: number;\n    /** Optional click handler when user activates the icon. */\n    handler?: (ctx: { id: string }) => void | Promise<void>;\n    /** Optional pages declared inline on registration (normalized into page registry). */\n    pages?: DashboardPluginPage[];\n    /**\n     * Optional capability declarations for permission-based access control.\n     * Standard capabilities:\n     * - 'canReadMessages': Read chat messages/history\n     * - 'canWriteDocs': Create/modify documents\n     * - 'canSend': Send messages or trigger AI operations\n     * - 'canReadFiles': Access file attachments\n     * - 'canWriteFiles': Upload or modify files\n     * - 'canManageThreads': Create/delete/modify threads\n     * - 'canAccessSettings': Read or modify app settings\n     */\n    capabilities?: string[];\n    /** Optional access gate policy for this plugin. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -1134,7 +1134,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 53,
+              "line": 55,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DashboardPluginPage {\n    /** Unique within the plugin. */\n    id: string;\n    /** Display title. */\n    title: string;\n    /** Optional icon for page navigation lists. */\n    icon?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional description used in landing list. */\n    description?: string;\n    /** Component or async factory returning component (lazy loaded). */\n    component: Component | (() => Promise<{ default?: Component } | Component>);\n    /** Optional access gate policy for this page. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -1151,7 +1151,7 @@
               "resolvedReturnType": "DashboardPluginPage | undefined",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 512,
+                "line": 648,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
               }
@@ -1160,7 +1160,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 512,
+              "line": 648,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
             }
@@ -1177,7 +1177,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 888,
+                "line": 1029,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getPluginCapabilities(pluginId: string): string[];"
               }
@@ -1186,7 +1186,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 888,
+              "line": 1029,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getPluginCapabilities(pluginId: string): string[];"
             }
@@ -1203,7 +1203,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 915,
+                "line": 1056,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasAllCapabilities(\n    pluginId: string,\n    capabilities: string[]\n): boolean;"
               }
@@ -1212,7 +1212,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 915,
+              "line": 1056,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasAllCapabilities(\n    pluginId: string,\n    capabilities: string[]\n): boolean;"
             }
@@ -1229,7 +1229,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 942,
+                "line": 1083,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasAnyCapability(\n    pluginId: string,\n    capabilities: string[]\n): boolean;"
               }
@@ -1238,7 +1238,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 942,
+              "line": 1083,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasAnyCapability(\n    pluginId: string,\n    capabilities: string[]\n): boolean;"
             }
@@ -1255,7 +1255,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 861,
+                "line": 1002,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasCapability(pluginId: string, capability: string): boolean;"
               }
@@ -1264,7 +1264,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 861,
+              "line": 1002,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasCapability(pluginId: string, capability: string): boolean;"
             }
@@ -1281,7 +1281,7 @@
               "resolvedReturnType": "DashboardPluginPage[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 485,
+                "line": 617,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
               }
@@ -1290,7 +1290,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 485,
+              "line": 617,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
             }
@@ -1307,7 +1307,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 343,
+                "line": 448,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredDashboardPluginIds(): string[];"
               }
@@ -1316,7 +1316,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 343,
+              "line": 448,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredDashboardPluginIds(): string[];"
             }
@@ -1333,7 +1333,7 @@
               "resolvedReturnType": "RegistrationHandle",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 234,
+                "line": 308,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
               }
@@ -1342,7 +1342,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 234,
+              "line": 308,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
             }
@@ -1359,7 +1359,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 372,
+                "line": 479,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
               }
@@ -1368,7 +1368,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 372,
+              "line": 479,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
             }
@@ -1385,7 +1385,7 @@
               "resolvedReturnType": "Promise<Component | undefined>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 553,
+                "line": 694,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
               }
@@ -1394,7 +1394,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 553,
+              "line": 694,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
             }
@@ -1411,7 +1411,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 288,
+                "line": 387,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPlugin(id: string);"
               }
@@ -1420,7 +1420,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 288,
+              "line": 387,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPlugin(id: string);"
             }
@@ -1437,7 +1437,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 417,
+                "line": 519,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
               }
@@ -1446,7 +1446,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 417,
+              "line": 519,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
             }
@@ -1463,7 +1463,7 @@
               "resolvedReturnType": "{ state: { readonly view: \"dashboard\" | \"page\"; readonly activePluginId: string | null; readonly activePageId: string | null; readonly loadingPage: boolean; readonly error: { readonly code: DashboardNavigationErrorCode; readonly message: string; readonly pluginId?: string | undefined; readonly pageId?: string | undefined; readonly cause?: Readonly<unknown> | undefined; } | null; }; resolvedPageComponent: Readonly<globalThis.Ref<FunctionalComponent<any, {}, any, {}> | ComponentPublicInstanceConstructor<any, any, any, any, ComputedOptions, MethodOptions> | { readonly [x: string]: any; readonly setup?: ((this: void, props: LooseRequired<any>, ctx: { attrs: Data; slots: Readonly<InternalSlots>; emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void); expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void; }) => any) | undefined; readonly name?: string | undefined; readonly template?: string | object | undefined; readonly render?: Function | undefined; readonly components?: { readonly [x: string]: FunctionalComponent<any, {}, any, {}> | ComponentPublicInstanceConstructor<any, any, any, any, ComputedOptions, MethodOptions> | any; } | undefined; readonly directives?: { readonly [x: string]: FunctionDirective<any, any, string, any> | { readonly created?: DirectiveHook<any, null, any, string, any> | undefined; readonly beforeMount?: DirectiveHook<any, null, any, string, any> | undefined; readonly mounted?: DirectiveHook<any, null, any, string, any> | undefined; readonly beforeUpdate?: DirectiveHook<any, globalThis.VNode<any, any, { [key: string]: any; }>, any, string, any> | undefined; readonly updated?: DirectiveHook<any, globalThis.VNode<any, any, { [key: string]: any; }>, any, string, any> | undefined; readonly beforeUnmount?: DirectiveHook<any, null, any, string, any> | undefined; readonly unmounted?: DirectiveHook<any, null, any, string, any> | undefined; readonly getSSRProps?: SSRDirectiveHook<any, string, any> | undefined; readonly deep?: boolean | undefined; }; } | undefined; readonly inheritAttrs?: boolean | undefined; readonly emits?: any; readonly slots?: {} | undefined; readonly expose?: readonly string[] | undefined; readonly serverPrefetch?: (() => void | Promise<any>) | undefined; readonly compilerOptions?: { readonly isCustomElement?: ((tag: string) => boolean) | undefined; readonly whitespace?: \"preserve\" | \"condense\" | undefined; readonly comments?: boolean | undefined; readonly delimiters?: readonly [string, string] | undefined; } | undefined; readonly call?: ((this: unknown, ...args: unknown[]) => never) | undefined; readonly __isFragment?: never | undefined; readonly __isTeleport?: never | undefined; readonly __isSuspense?: never | undefined; readonly __defaults?: {} | undefined; readonly compatConfig?: { readonly GLOBAL_MOUNT?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_MOUNT_CONTAINER?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_EXTEND?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_PROTOTYPE?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_SET?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_DELETE?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_OBSERVABLE?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_PRIVATE_UTIL?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_SILENT?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_DEVTOOLS?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_KEY_CODES?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_PRODUCTION_TIP?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_IGNORED_ELEMENTS?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_WHITESPACE?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_OPTION_MERGE_STRATS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_SET?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_DELETE?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_DESTROY?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_EVENT_EMITTER?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_EVENT_HOOKS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_CHILDREN?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_LISTENERS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_SCOPED_SLOTS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_ATTRS_CLASS_STYLE?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_DATA_FN?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_DATA_MERGE?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_BEFORE_DESTROY?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_DESTROYED?: boolean | \"suppress-warning\" | undefined; readonly WATCH_ARRAY?: boolean | \"suppress-warning\" | undefined; readonly PROPS_DEFAULT_THIS?: boolean | \"suppress-warning\" | undefined; readonly V_ON_KEYCODE_MODIFIER?: boolean | \"suppress-warning\" | undefined; readonly CUSTOM_DIR?: boolean | \"suppress-warning\" | undefined; readonly ATTR_FALSE_VALUE?: boolean | \"suppress-warning\" | undefined; readonly ATTR_ENUMERATED_COERCION?: boolean | \"suppress-warning\" | undefined; readonly TRANSITION_CLASSES?: boolean | \"suppress-warning\" | undefined; readonly TRANSITION_GROUP_ROOT?: boolean | \"suppress-warning\" | undefined; readonly COMPONENT_ASYNC?: boolean | \"suppress-warning\" | undefined; readonly COMPONENT_FUNCTIONAL?: boolean | \"suppress-warning\" | undefined; readonly COMPONENT_V_MODEL?: boolean | \"suppress-warning\" | undefined; readonly RENDER_FUNCTION?: boolean | \"suppress-warning\" | undefined; readonly FILTERS?: boolean | \"suppress-warning\" | undefined; readonly PRIVATE_APIS?: boolean | \"suppress-warning\" | undefined; readonly MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined; } | undefined; readonly data?: ((this: any, vm: any) => any) | undefined; readonly computed?: { readonly [x: string]: ComputedGetter<any> | { readonly get: ComputedGetter<any>; readonly set: ComputedSetter<any>; }; } | undefined; readonly methods?: { readonly [x: string]: Function; } | undefined; readonly watch?: { readonly [x: string]: string | WatchCallback | { readonly handler: WatchCallback | string; readonly immediate?: boolean | undefined; readonly deep?: boolean | number | undefined; readonly once?: boolean | undefined; readonly flush?: \"pre\" | \"post\" | \"sync\" | undefined; readonly onTrack?: ((event: DebuggerEvent) => void) | undefined; readonly onTrigger?: ((event: DebuggerEvent) => void) | undefined; } | readonly (string | WatchCallback | { readonly handler: WatchCallback | string; readonly immediate?: boolean | undefined; readonly deep?: boolean | number | undefined; readonly once?: boolean | undefined; readonly flush?: \"pre\" | \"post\" | \"sync\" | undefined; readonly onTrack?: ((event: DebuggerEvent) => void) | undefined; readonly onTrigger?: ((event: DebuggerEvent) => void) | undefined; })[]; } | undefined; readonly provide?: Function | { readonly [x: string]: Readonly<unknown>; readonly [x: symbol]: Readonly<unknown>; } | undefined; readonly inject?: readonly string[] | {} | undefined; readonly filters?: { readonly [x: string]: Function; } | undefined; readonly mixins?: readonly any[] | undefined; readonly extends?: any; readonly beforeCreate?: (() => any) | undefined; readonly created?: (() => any) | undefined; readonly beforeMount?: (() => any) | undefined; readonly mounted?: (() => any) | undefined; readonly beforeUpdate?: (() => any) | undefined; readonly updated?: (() => any) | undefined; readonly activated?: (() => any) | undefined; readonly deactivated?: (() => any) | undefined; readonly beforeDestroy?: (() => any) | undefined; readonly beforeUnmount?: (() => any) | undefined; readonly destroyed?: (() => any) | undefined; readonly unmounted?: (() => any) | undefined; readonly renderTracked?: DebuggerHook | undefined; readonly renderTriggered?: DebuggerHook | undefined; readonly errorCaptured?: ErrorCapturedHook<unknown> | undefined; readonly delimiters?: readonly [string, string] | undefined; readonly __differentiator?: string | number | symbol | undefined; readonly __isBuiltIn?: boolean | undefined; readonly __file?: string | undefined; readonly __name?: string | undefined; readonly beforeRouteEnter?: (TypesConfig extends Record<\"beforeRouteEnter\", infer T> ? T : NavigationGuardWithThis<undefined>) | undefined; readonly beforeRouteUpdate?: (TypesConfig extends Record<\"beforeRouteUpdate\", infer T> ? T : NavigationGuard) | undefined; readonly beforeRouteLeave?: (TypesConfig extends Record<\"beforeRouteLeave\", infer T> ? T : NavigationGuard) | undefined; readonly head?: ((nuxtApp: NuxtApp) => UseHeadInput) | undefined; } | null, FunctionalComponent<any, {}, any, {}> | ComponentPublicInstanceConstructor<any, any, any, any, ComputedOptions, MethodOptions> | { readonly [x: string]: any; readonly setup?: ((this: void, props: LooseRequired<any>, ctx: { attrs: Data; slots: Readonly<InternalSlots>; emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void); expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void; }) => any) | undefined; readonly name?: string | undefined; readonly template?: string | object | undefined; readonly render?: Function | undefined; readonly components?: { readonly [x: string]: FunctionalComponent<any, {}, any, {}> | ComponentPublicInstanceConstructor<any, any, any, any, ComputedOptions, MethodOptions> | any; } | undefined; readonly directives?: { readonly [x: string]: FunctionDirective<any, any, string, any> | { readonly created?: DirectiveHook<any, null, any, string, any> | undefined; readonly beforeMount?: DirectiveHook<any, null, any, string, any> | undefined; readonly mounted?: DirectiveHook<any, null, any, string, any> | undefined; readonly beforeUpdate?: DirectiveHook<any, globalThis.VNode<any, any, { [key: string]: any; }>, any, string, any> | undefined; readonly updated?: DirectiveHook<any, globalThis.VNode<any, any, { [key: string]: any; }>, any, string, any> | undefined; readonly beforeUnmount?: DirectiveHook<any, null, any, string, any> | undefined; readonly unmounted?: DirectiveHook<any, null, any, string, any> | undefined; readonly getSSRProps?: SSRDirectiveHook<any, string, any> | undefined; readonly deep?: boolean | undefined; }; } | undefined; readonly inheritAttrs?: boolean | undefined; readonly emits?: any; readonly slots?: {} | undefined; readonly expose?: readonly string[] | undefined; readonly serverPrefetch?: (() => void | Promise<any>) | undefined; readonly compilerOptions?: { readonly isCustomElement?: ((tag: string) => boolean) | undefined; readonly whitespace?: \"preserve\" | \"condense\" | undefined; readonly comments?: boolean | undefined; readonly delimiters?: readonly [string, string] | undefined; } | undefined; readonly call?: ((this: unknown, ...args: unknown[]) => never) | undefined; readonly __isFragment?: never | undefined; readonly __isTeleport?: never | undefined; readonly __isSuspense?: never | undefined; readonly __defaults?: {} | undefined; readonly compatConfig?: { readonly GLOBAL_MOUNT?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_MOUNT_CONTAINER?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_EXTEND?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_PROTOTYPE?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_SET?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_DELETE?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_OBSERVABLE?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_PRIVATE_UTIL?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_SILENT?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_DEVTOOLS?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_KEY_CODES?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_PRODUCTION_TIP?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_IGNORED_ELEMENTS?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_WHITESPACE?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_OPTION_MERGE_STRATS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_SET?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_DELETE?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_DESTROY?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_EVENT_EMITTER?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_EVENT_HOOKS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_CHILDREN?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_LISTENERS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_SCOPED_SLOTS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_ATTRS_CLASS_STYLE?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_DATA_FN?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_DATA_MERGE?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_BEFORE_DESTROY?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_DESTROYED?: boolean | \"suppress-warning\" | undefined; readonly WATCH_ARRAY?: boolean | \"suppress-warning\" | undefined; readonly PROPS_DEFAULT_THIS?: boolean | \"suppress-warning\" | undefined; readonly V_ON_KEYCODE_MODIFIER?: boolean | \"suppress-warning\" | undefined; readonly CUSTOM_DIR?: boolean | \"suppress-warning\" | undefined; readonly ATTR_FALSE_VALUE?: boolean | \"suppress-warning\" | undefined; readonly ATTR_ENUMERATED_COERCION?: boolean | \"suppress-warning\" | undefined; readonly TRANSITION_CLASSES?: boolean | \"suppress-warning\" | undefined; readonly TRANSITION_GROUP_ROOT?: boolean | \"suppress-warning\" | undefined; readonly COMPONENT_ASYNC?: boolean | \"suppress-warning\" | undefined; readonly COMPONENT_FUNCTIONAL?: boolean | \"suppress-warning\" | undefined; readonly COMPONENT_V_MODEL?: boolean | \"suppress-warning\" | undefined; readonly RENDER_FUNCTION?: boolean | \"suppress-warning\" | undefined; readonly FILTERS?: boolean | \"suppress-warning\" | undefined; readonly PRIVATE_APIS?: boolean | \"suppress-warning\" | undefined; readonly MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined; } | undefined; readonly data?: ((this: any, vm: any) => any) | undefined; readonly computed?: { readonly [x: string]: ComputedGetter<any> | { readonly get: ComputedGetter<any>; readonly set: ComputedSetter<any>; }; } | undefined; readonly methods?: { readonly [x: string]: Function; } | undefined; readonly watch?: { readonly [x: string]: string | WatchCallback | { readonly handler: WatchCallback | string; readonly immediate?: boolean | undefined; readonly deep?: boolean | number | undefined; readonly once?: boolean | undefined; readonly flush?: \"pre\" | \"post\" | \"sync\" | undefined; readonly onTrack?: ((event: DebuggerEvent) => void) | undefined; readonly onTrigger?: ((event: DebuggerEvent) => void) | undefined; } | readonly (string | WatchCallback | { readonly handler: WatchCallback | string; readonly immediate?: boolean | undefined; readonly deep?: boolean | number | undefined; readonly once?: boolean | undefined; readonly flush?: \"pre\" | \"post\" | \"sync\" | undefined; readonly onTrack?: ((event: DebuggerEvent) => void) | undefined; readonly onTrigger?: ((event: DebuggerEvent) => void) | undefined; })[]; } | undefined; readonly provide?: Function | { readonly [x: string]: Readonly<unknown>; readonly [x: symbol]: Readonly<unknown>; } | undefined; readonly inject?: readonly string[] | {} | undefined; readonly filters?: { readonly [x: string]: Function; } | undefined; readonly mixins?: readonly any[] | undefined; readonly extends?: any; readonly beforeCreate?: (() => any) | undefined; readonly created?: (() => any) | undefined; readonly beforeMount?: (() => any) | undefined; readonly mounted?: (() => any) | undefined; readonly beforeUpdate?: (() => any) | undefined; readonly updated?: (() => any) | undefined; readonly activated?: (() => any) | undefined; readonly deactivated?: (() => any) | undefined; readonly beforeDestroy?: (() => any) | undefined; readonly beforeUnmount?: (() => any) | undefined; readonly destroyed?: (() => any) | undefined; readonly unmounted?: (() => any) | undefined; readonly renderTracked?: DebuggerHook | undefined; readonly renderTriggered?: DebuggerHook | undefined; readonly errorCaptured?: ErrorCapturedHook<unknown> | undefined; readonly delimiters?: readonly [string, string] | undefined; readonly __differentiator?: string | number | symbol | undefined; readonly __isBuiltIn?: boolean | undefined; readonly __file?: string | undefined; readonly __name?: string | undefined; readonly beforeRouteEnter?: (TypesConfig extends Record<\"beforeRouteEnter\", infer T> ? T : NavigationGuardWithThis<undefined>) | undefined; readonly beforeRouteUpdate?: (TypesConfig extends Record<\"beforeRouteUpdate\", infer T> ? T : NavigationGuard) | undefined; readonly beforeRouteLeave?: (TypesConfig extends Record<\"beforeRouteLeave\", infer T> ? T : NavigationGuard) | undefined; readonly head?: ((nuxtApp: NuxtApp) => UseHeadInput) | undefined; } | null>>; dashboardItems: globalThis.ComputedRef<DashboardPlugin[]>; landingPages: globalThis.ComputedRef<DashboardPluginPage[]>; headerPluginLabel: globalThis.ComputedRef<string>; activePageTitle: globalThis.ComputedRef<string>; openPlugin: (pluginId: string) => Promise<DashboardNavigationResult>; openPage: (pluginId: string, pageId: string) => Promise<DashboardNavigationResult>; goBack: () => void; reset: () => void; }",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 618,
+                "line": 759,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n);"
               }
@@ -1472,7 +1472,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 618,
+              "line": 759,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n);"
             }
@@ -1486,7 +1486,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 140,
+              "line": 206,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UseDashboardNavigationOptions {\n    baseItems?: DashboardPlugin[];\n}"
             }
@@ -1503,7 +1503,7 @@
               "resolvedReturnType": "globalThis.ComputedRef<DashboardPluginPage[]>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 456,
+                "line": 584,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
               }
@@ -1512,7 +1512,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 456,
+              "line": 584,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
             }
@@ -1529,7 +1529,7 @@
               "resolvedReturnType": "globalThis.ComputedRef<{ id: string; icon: string; label: string; description?: string | undefined; order?: number | undefined; handler?: ((ctx: { id: string; }) => void | Promise<void>) | undefined; pages?: { id: string; title: string; icon?: string | undefined; order?: number | undefined; description?: string | undefined; component: FunctionalComponent<any, {}, any, {}> | ComponentPublicInstanceConstructor<any, any, any, any, ComputedOptions, MethodOptions> | { [x: string]: any; setup?: ((this: void, props: LooseRequired<any>, ctx: { attrs: Data; slots: Readonly<InternalSlots>; emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void); expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void; }) => any) | undefined; name?: string | undefined; template?: string | object | undefined; render?: Function | undefined; components?: Record<string, Component> | undefined; directives?: Record<string, Directive<any, any, string, any>> | undefined; inheritAttrs?: boolean | undefined; emits?: any; slots?: {} | undefined; expose?: string[] | undefined; serverPrefetch?: (() => void | Promise<any>) | undefined; compilerOptions?: { isCustomElement?: ((tag: string) => boolean) | undefined; whitespace?: \"preserve\" | \"condense\" | undefined; comments?: boolean | undefined; delimiters?: [string, string] | undefined; } | undefined; call?: ((this: unknown, ...args: unknown[]) => never) | undefined; __isFragment?: never | undefined; __isTeleport?: never | undefined; __isSuspense?: never | undefined; __defaults?: {} | undefined; compatConfig?: { GLOBAL_MOUNT?: boolean | \"suppress-warning\" | undefined; GLOBAL_MOUNT_CONTAINER?: boolean | \"suppress-warning\" | undefined; GLOBAL_EXTEND?: boolean | \"suppress-warning\" | undefined; GLOBAL_PROTOTYPE?: boolean | \"suppress-warning\" | undefined; GLOBAL_SET?: boolean | \"suppress-warning\" | undefined; GLOBAL_DELETE?: boolean | \"suppress-warning\" | undefined; GLOBAL_OBSERVABLE?: boolean | \"suppress-warning\" | undefined; GLOBAL_PRIVATE_UTIL?: boolean | \"suppress-warning\" | undefined; CONFIG_SILENT?: boolean | \"suppress-warning\" | undefined; CONFIG_DEVTOOLS?: boolean | \"suppress-warning\" | undefined; CONFIG_KEY_CODES?: boolean | \"suppress-warning\" | undefined; CONFIG_PRODUCTION_TIP?: boolean | \"suppress-warning\" | undefined; CONFIG_IGNORED_ELEMENTS?: boolean | \"suppress-warning\" | undefined; CONFIG_WHITESPACE?: boolean | \"suppress-warning\" | undefined; CONFIG_OPTION_MERGE_STRATS?: boolean | \"suppress-warning\" | undefined; INSTANCE_SET?: boolean | \"suppress-warning\" | undefined; INSTANCE_DELETE?: boolean | \"suppress-warning\" | undefined; INSTANCE_DESTROY?: boolean | \"suppress-warning\" | undefined; INSTANCE_EVENT_EMITTER?: boolean | \"suppress-warning\" | undefined; INSTANCE_EVENT_HOOKS?: boolean | \"suppress-warning\" | undefined; INSTANCE_CHILDREN?: boolean | \"suppress-warning\" | undefined; INSTANCE_LISTENERS?: boolean | \"suppress-warning\" | undefined; INSTANCE_SCOPED_SLOTS?: boolean | \"suppress-warning\" | undefined; INSTANCE_ATTRS_CLASS_STYLE?: boolean | \"suppress-warning\" | undefined; OPTIONS_DATA_FN?: boolean | \"suppress-warning\" | undefined; OPTIONS_DATA_MERGE?: boolean | \"suppress-warning\" | undefined; OPTIONS_BEFORE_DESTROY?: boolean | \"suppress-warning\" | undefined; OPTIONS_DESTROYED?: boolean | \"suppress-warning\" | undefined; WATCH_ARRAY?: boolean | \"suppress-warning\" | undefined; PROPS_DEFAULT_THIS?: boolean | \"suppress-warning\" | undefined; V_ON_KEYCODE_MODIFIER?: boolean | \"suppress-warning\" | undefined; CUSTOM_DIR?: boolean | \"suppress-warning\" | undefined; ATTR_FALSE_VALUE?: boolean | \"suppress-warning\" | undefined; ATTR_ENUMERATED_COERCION?: boolean | \"suppress-warning\" | undefined; TRANSITION_CLASSES?: boolean | \"suppress-warning\" | undefined; TRANSITION_GROUP_ROOT?: boolean | \"suppress-warning\" | undefined; COMPONENT_ASYNC?: boolean | \"suppress-warning\" | undefined; COMPONENT_FUNCTIONAL?: boolean | \"suppress-warning\" | undefined; COMPONENT_V_MODEL?: boolean | \"suppress-warning\" | undefined; RENDER_FUNCTION?: boolean | \"suppress-warning\" | undefined; FILTERS?: boolean | \"suppress-warning\" | undefined; PRIVATE_APIS?: boolean | \"suppress-warning\" | undefined; MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined; } | undefined; data?: ((this: any, vm: any) => any) | undefined; computed?: ComputedOptions | undefined; methods?: MethodOptions | undefined; watch?: ComponentWatchOptions | undefined; provide?: ComponentProvideOptions | undefined; inject?: {} | string[] | undefined; filters?: Record<string, Function> | undefined; mixins?: any[] | undefined; extends?: any; beforeCreate?: (() => any) | undefined; created?: (() => any) | undefined; beforeMount?: (() => any) | undefined; mounted?: (() => any) | undefined; beforeUpdate?: (() => any) | undefined; updated?: (() => any) | undefined; activated?: (() => any) | undefined; deactivated?: (() => any) | undefined; beforeDestroy?: (() => any) | undefined; beforeUnmount?: (() => any) | undefined; destroyed?: (() => any) | undefined; unmounted?: (() => any) | undefined; renderTracked?: DebuggerHook | undefined; renderTriggered?: DebuggerHook | undefined; errorCaptured?: ErrorCapturedHook<unknown> | undefined; delimiters?: [string, string] | undefined; __differentiator?: string | number | symbol | undefined; __isBuiltIn?: boolean | undefined; __file?: string | undefined; __name?: string | undefined; beforeRouteEnter?: (TypesConfig extends Record<\"beforeRouteEnter\", infer T> ? T : NavigationGuardWithThis<undefined>) | undefined; beforeRouteUpdate?: (TypesConfig extends Record<\"beforeRouteUpdate\", infer T> ? T : NavigationGuard) | undefined; beforeRouteLeave?: (TypesConfig extends Record<\"beforeRouteLeave\", infer T> ? T : NavigationGuard) | undefined; head?: ((nuxtApp: NuxtApp) => UseHeadInput) | undefined; } | (() => Promise<{ default?: Component; } | Component>); access?: { authRequired?: boolean | undefined; requiredEntitlements?: string[] | undefined; requiredWorkspaceRoles?: (\"owner\" | \"editor\" | \"viewer\")[] | undefined; mode?: \"any\" | \"all\" | undefined; } | undefined; }[] | undefined; capabilities?: string[] | undefined; access?: { authRequired?: boolean | undefined; requiredEntitlements?: string[] | undefined; requiredWorkspaceRoles?: (\"owner\" | \"editor\" | \"viewer\")[] | undefined; mode?: \"any\" | \"all\" | undefined; } | undefined; }[]>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 315,
+                "line": 417,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPlugins();"
               }
@@ -1538,7 +1538,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 315,
+              "line": 417,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPlugins();"
             }
@@ -2466,7 +2466,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "b867595d7f93b1d3d00b4295e303de615404c42c6a398be440a53d705d96dbcf",
+      "apiSha256": "0361e0351acfbc076b52190daf2bd291219ab535a1892ffea433bfffef93b750",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2703,7 +2703,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 120,
+              "line": 186,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DashboardNavigationError {\n    code: DashboardNavigationErrorCode;\n    message: string;\n    pluginId?: string;\n    pageId?: string;\n    cause?: unknown;\n}"
             }
@@ -2717,7 +2717,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 114,
+              "line": 180,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DashboardNavigationErrorCode =\n    | 'missing-plugin'\n    | 'missing-page'\n    | 'handler-error'\n    | 'resolve-error';"
             }
@@ -2731,7 +2731,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 136,
+              "line": 202,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DashboardNavigationResult =\n    | { ok: true }\n    | { ok: false; error: DashboardNavigationError };"
             }
@@ -2745,7 +2745,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 128,
+              "line": 194,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DashboardNavigationState {\n    view: 'dashboard' | 'page';\n    activePluginId: string | null;\n    activePageId: string | null;\n    loadingPage: boolean;\n    error: DashboardNavigationError | null;\n}"
             }
@@ -2759,7 +2759,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 22,
+              "line": 24,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DashboardPlugin {\n    /** Unique id across all dashboard plugins */\n    id: string;\n    /** Icon name (Iconify) shown in the grid */\n    icon: string;\n    /** Short label shown under the icon */\n    label: string;\n    /** Optional longer description (tooltip or detail panel later) */\n    description?: string;\n    /** Optional order (lower = earlier). Defaults to 200. */\n    order?: number;\n    /** Optional click handler when user activates the icon. */\n    handler?: (ctx: { id: string }) => void | Promise<void>;\n    /** Optional pages declared inline on registration (normalized into page registry). */\n    pages?: DashboardPluginPage[];\n    /**\n     * Optional capability declarations for permission-based access control.\n     * Standard capabilities:\n     * - 'canReadMessages': Read chat messages/history\n     * - 'canWriteDocs': Create/modify documents\n     * - 'canSend': Send messages or trigger AI operations\n     * - 'canReadFiles': Access file attachments\n     * - 'canWriteFiles': Upload or modify files\n     * - 'canManageThreads': Create/delete/modify threads\n     * - 'canAccessSettings': Read or modify app settings\n     */\n    capabilities?: string[];\n    /** Optional access gate policy for this plugin. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -2773,7 +2773,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 53,
+              "line": 55,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DashboardPluginPage {\n    /** Unique within the plugin. */\n    id: string;\n    /** Display title. */\n    title: string;\n    /** Optional icon for page navigation lists. */\n    icon?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional description used in landing list. */\n    description?: string;\n    /** Component or async factory returning component (lazy loaded). */\n    component: Component | (() => Promise<{ default?: Component } | Component>);\n    /** Optional access gate policy for this page. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -2928,7 +2928,7 @@
               "resolvedReturnType": "DashboardPluginPage | undefined",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 512,
+                "line": 648,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
               }
@@ -2937,7 +2937,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 512,
+              "line": 648,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDashboardPluginPage(\n    pluginId: string,\n    pageId: string\n): DashboardPluginPage | undefined;"
             }
@@ -2980,7 +2980,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 888,
+                "line": 1029,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getPluginCapabilities(pluginId: string): string[];"
               }
@@ -2989,7 +2989,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 888,
+              "line": 1029,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getPluginCapabilities(pluginId: string): string[];"
             }
@@ -3006,7 +3006,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 915,
+                "line": 1056,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasAllCapabilities(\n    pluginId: string,\n    capabilities: string[]\n): boolean;"
               }
@@ -3015,7 +3015,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 915,
+              "line": 1056,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasAllCapabilities(\n    pluginId: string,\n    capabilities: string[]\n): boolean;"
             }
@@ -3032,7 +3032,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 942,
+                "line": 1083,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasAnyCapability(\n    pluginId: string,\n    capabilities: string[]\n): boolean;"
               }
@@ -3041,7 +3041,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 942,
+              "line": 1083,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasAnyCapability(\n    pluginId: string,\n    capabilities: string[]\n): boolean;"
             }
@@ -3058,7 +3058,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 861,
+                "line": 1002,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasCapability(pluginId: string, capability: string): boolean;"
               }
@@ -3067,7 +3067,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 861,
+              "line": 1002,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasCapability(pluginId: string, capability: string): boolean;"
             }
@@ -3180,7 +3180,7 @@
               "resolvedReturnType": "DashboardPluginPage[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 485,
+                "line": 617,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
               }
@@ -3189,7 +3189,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 485,
+              "line": 617,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listDashboardPluginPages(\n    pluginId: string\n): DashboardPluginPage[];"
             }
@@ -3310,7 +3310,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 343,
+                "line": 448,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredDashboardPluginIds(): string[];"
               }
@@ -3319,7 +3319,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 343,
+              "line": 448,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredDashboardPluginIds(): string[];"
             }
@@ -3936,7 +3936,7 @@
               "resolvedReturnType": "RegistrationHandle",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 234,
+                "line": 308,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
               }
@@ -3945,7 +3945,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 234,
+              "line": 308,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;"
             }
@@ -3962,7 +3962,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 372,
+                "line": 479,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
               }
@@ -3971,7 +3971,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 372,
+              "line": 479,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDashboardPluginPage(\n    pluginId: string,\n    page: DashboardPluginPage\n);"
             }
@@ -4340,7 +4340,7 @@
               "resolvedReturnType": "Promise<Component | undefined>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 553,
+                "line": 694,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
               }
@@ -4349,7 +4349,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 553,
+              "line": 694,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function resolveDashboardPluginPageComponent(\n    pluginId: string,\n    pageId: string\n): Promise<Component | undefined>;"
             }
@@ -4652,7 +4652,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 288,
+                "line": 387,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPlugin(id: string);"
               }
@@ -4661,7 +4661,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 288,
+              "line": 387,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPlugin(id: string);"
             }
@@ -4678,7 +4678,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 417,
+                "line": 519,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
               }
@@ -4687,7 +4687,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 417,
+              "line": 519,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDashboardPluginPage(\n    pluginId: string,\n    pageId?: string\n);"
             }
@@ -5146,7 +5146,7 @@
               "resolvedReturnType": "{ state: { readonly view: \"dashboard\" | \"page\"; readonly activePluginId: string | null; readonly activePageId: string | null; readonly loadingPage: boolean; readonly error: { readonly code: DashboardNavigationErrorCode; readonly message: string; readonly pluginId?: string | undefined; readonly pageId?: string | undefined; readonly cause?: Readonly<unknown> | undefined; } | null; }; resolvedPageComponent: Readonly<globalThis.Ref<FunctionalComponent<any, {}, any, {}> | ComponentPublicInstanceConstructor<any, any, any, any, ComputedOptions, MethodOptions> | { readonly [x: string]: any; readonly setup?: ((this: void, props: LooseRequired<any>, ctx: { attrs: Data; slots: Readonly<InternalSlots>; emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void); expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void; }) => any) | undefined; readonly name?: string | undefined; readonly template?: string | object | undefined; readonly render?: Function | undefined; readonly components?: { readonly [x: string]: FunctionalComponent<any, {}, any, {}> | ComponentPublicInstanceConstructor<any, any, any, any, ComputedOptions, MethodOptions> | any; } | undefined; readonly directives?: { readonly [x: string]: FunctionDirective<any, any, string, any> | { readonly created?: DirectiveHook<any, null, any, string, any> | undefined; readonly beforeMount?: DirectiveHook<any, null, any, string, any> | undefined; readonly mounted?: DirectiveHook<any, null, any, string, any> | undefined; readonly beforeUpdate?: DirectiveHook<any, globalThis.VNode<any, any, { [key: string]: any; }>, any, string, any> | undefined; readonly updated?: DirectiveHook<any, globalThis.VNode<any, any, { [key: string]: any; }>, any, string, any> | undefined; readonly beforeUnmount?: DirectiveHook<any, null, any, string, any> | undefined; readonly unmounted?: DirectiveHook<any, null, any, string, any> | undefined; readonly getSSRProps?: SSRDirectiveHook<any, string, any> | undefined; readonly deep?: boolean | undefined; }; } | undefined; readonly inheritAttrs?: boolean | undefined; readonly emits?: any; readonly slots?: {} | undefined; readonly expose?: readonly string[] | undefined; readonly serverPrefetch?: (() => void | Promise<any>) | undefined; readonly compilerOptions?: { readonly isCustomElement?: ((tag: string) => boolean) | undefined; readonly whitespace?: \"preserve\" | \"condense\" | undefined; readonly comments?: boolean | undefined; readonly delimiters?: readonly [string, string] | undefined; } | undefined; readonly call?: ((this: unknown, ...args: unknown[]) => never) | undefined; readonly __isFragment?: never | undefined; readonly __isTeleport?: never | undefined; readonly __isSuspense?: never | undefined; readonly __defaults?: {} | undefined; readonly compatConfig?: { readonly GLOBAL_MOUNT?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_MOUNT_CONTAINER?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_EXTEND?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_PROTOTYPE?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_SET?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_DELETE?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_OBSERVABLE?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_PRIVATE_UTIL?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_SILENT?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_DEVTOOLS?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_KEY_CODES?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_PRODUCTION_TIP?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_IGNORED_ELEMENTS?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_WHITESPACE?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_OPTION_MERGE_STRATS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_SET?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_DELETE?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_DESTROY?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_EVENT_EMITTER?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_EVENT_HOOKS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_CHILDREN?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_LISTENERS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_SCOPED_SLOTS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_ATTRS_CLASS_STYLE?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_DATA_FN?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_DATA_MERGE?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_BEFORE_DESTROY?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_DESTROYED?: boolean | \"suppress-warning\" | undefined; readonly WATCH_ARRAY?: boolean | \"suppress-warning\" | undefined; readonly PROPS_DEFAULT_THIS?: boolean | \"suppress-warning\" | undefined; readonly V_ON_KEYCODE_MODIFIER?: boolean | \"suppress-warning\" | undefined; readonly CUSTOM_DIR?: boolean | \"suppress-warning\" | undefined; readonly ATTR_FALSE_VALUE?: boolean | \"suppress-warning\" | undefined; readonly ATTR_ENUMERATED_COERCION?: boolean | \"suppress-warning\" | undefined; readonly TRANSITION_CLASSES?: boolean | \"suppress-warning\" | undefined; readonly TRANSITION_GROUP_ROOT?: boolean | \"suppress-warning\" | undefined; readonly COMPONENT_ASYNC?: boolean | \"suppress-warning\" | undefined; readonly COMPONENT_FUNCTIONAL?: boolean | \"suppress-warning\" | undefined; readonly COMPONENT_V_MODEL?: boolean | \"suppress-warning\" | undefined; readonly RENDER_FUNCTION?: boolean | \"suppress-warning\" | undefined; readonly FILTERS?: boolean | \"suppress-warning\" | undefined; readonly PRIVATE_APIS?: boolean | \"suppress-warning\" | undefined; readonly MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined; } | undefined; readonly data?: ((this: any, vm: any) => any) | undefined; readonly computed?: { readonly [x: string]: ComputedGetter<any> | { readonly get: ComputedGetter<any>; readonly set: ComputedSetter<any>; }; } | undefined; readonly methods?: { readonly [x: string]: Function; } | undefined; readonly watch?: { readonly [x: string]: string | WatchCallback | { readonly handler: WatchCallback | string; readonly immediate?: boolean | undefined; readonly deep?: boolean | number | undefined; readonly once?: boolean | undefined; readonly flush?: \"pre\" | \"post\" | \"sync\" | undefined; readonly onTrack?: ((event: DebuggerEvent) => void) | undefined; readonly onTrigger?: ((event: DebuggerEvent) => void) | undefined; } | readonly (string | WatchCallback | { readonly handler: WatchCallback | string; readonly immediate?: boolean | undefined; readonly deep?: boolean | number | undefined; readonly once?: boolean | undefined; readonly flush?: \"pre\" | \"post\" | \"sync\" | undefined; readonly onTrack?: ((event: DebuggerEvent) => void) | undefined; readonly onTrigger?: ((event: DebuggerEvent) => void) | undefined; })[]; } | undefined; readonly provide?: Function | { readonly [x: string]: Readonly<unknown>; readonly [x: symbol]: Readonly<unknown>; } | undefined; readonly inject?: readonly string[] | {} | undefined; readonly filters?: { readonly [x: string]: Function; } | undefined; readonly mixins?: readonly any[] | undefined; readonly extends?: any; readonly beforeCreate?: (() => any) | undefined; readonly created?: (() => any) | undefined; readonly beforeMount?: (() => any) | undefined; readonly mounted?: (() => any) | undefined; readonly beforeUpdate?: (() => any) | undefined; readonly updated?: (() => any) | undefined; readonly activated?: (() => any) | undefined; readonly deactivated?: (() => any) | undefined; readonly beforeDestroy?: (() => any) | undefined; readonly beforeUnmount?: (() => any) | undefined; readonly destroyed?: (() => any) | undefined; readonly unmounted?: (() => any) | undefined; readonly renderTracked?: DebuggerHook | undefined; readonly renderTriggered?: DebuggerHook | undefined; readonly errorCaptured?: ErrorCapturedHook<unknown> | undefined; readonly delimiters?: readonly [string, string] | undefined; readonly __differentiator?: string | number | symbol | undefined; readonly __isBuiltIn?: boolean | undefined; readonly __file?: string | undefined; readonly __name?: string | undefined; readonly beforeRouteEnter?: (TypesConfig extends Record<\"beforeRouteEnter\", infer T> ? T : NavigationGuardWithThis<undefined>) | undefined; readonly beforeRouteUpdate?: (TypesConfig extends Record<\"beforeRouteUpdate\", infer T> ? T : NavigationGuard) | undefined; readonly beforeRouteLeave?: (TypesConfig extends Record<\"beforeRouteLeave\", infer T> ? T : NavigationGuard) | undefined; readonly head?: ((nuxtApp: NuxtApp) => UseHeadInput) | undefined; } | null, FunctionalComponent<any, {}, any, {}> | ComponentPublicInstanceConstructor<any, any, any, any, ComputedOptions, MethodOptions> | { readonly [x: string]: any; readonly setup?: ((this: void, props: LooseRequired<any>, ctx: { attrs: Data; slots: Readonly<InternalSlots>; emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void); expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void; }) => any) | undefined; readonly name?: string | undefined; readonly template?: string | object | undefined; readonly render?: Function | undefined; readonly components?: { readonly [x: string]: FunctionalComponent<any, {}, any, {}> | ComponentPublicInstanceConstructor<any, any, any, any, ComputedOptions, MethodOptions> | any; } | undefined; readonly directives?: { readonly [x: string]: FunctionDirective<any, any, string, any> | { readonly created?: DirectiveHook<any, null, any, string, any> | undefined; readonly beforeMount?: DirectiveHook<any, null, any, string, any> | undefined; readonly mounted?: DirectiveHook<any, null, any, string, any> | undefined; readonly beforeUpdate?: DirectiveHook<any, globalThis.VNode<any, any, { [key: string]: any; }>, any, string, any> | undefined; readonly updated?: DirectiveHook<any, globalThis.VNode<any, any, { [key: string]: any; }>, any, string, any> | undefined; readonly beforeUnmount?: DirectiveHook<any, null, any, string, any> | undefined; readonly unmounted?: DirectiveHook<any, null, any, string, any> | undefined; readonly getSSRProps?: SSRDirectiveHook<any, string, any> | undefined; readonly deep?: boolean | undefined; }; } | undefined; readonly inheritAttrs?: boolean | undefined; readonly emits?: any; readonly slots?: {} | undefined; readonly expose?: readonly string[] | undefined; readonly serverPrefetch?: (() => void | Promise<any>) | undefined; readonly compilerOptions?: { readonly isCustomElement?: ((tag: string) => boolean) | undefined; readonly whitespace?: \"preserve\" | \"condense\" | undefined; readonly comments?: boolean | undefined; readonly delimiters?: readonly [string, string] | undefined; } | undefined; readonly call?: ((this: unknown, ...args: unknown[]) => never) | undefined; readonly __isFragment?: never | undefined; readonly __isTeleport?: never | undefined; readonly __isSuspense?: never | undefined; readonly __defaults?: {} | undefined; readonly compatConfig?: { readonly GLOBAL_MOUNT?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_MOUNT_CONTAINER?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_EXTEND?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_PROTOTYPE?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_SET?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_DELETE?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_OBSERVABLE?: boolean | \"suppress-warning\" | undefined; readonly GLOBAL_PRIVATE_UTIL?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_SILENT?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_DEVTOOLS?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_KEY_CODES?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_PRODUCTION_TIP?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_IGNORED_ELEMENTS?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_WHITESPACE?: boolean | \"suppress-warning\" | undefined; readonly CONFIG_OPTION_MERGE_STRATS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_SET?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_DELETE?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_DESTROY?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_EVENT_EMITTER?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_EVENT_HOOKS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_CHILDREN?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_LISTENERS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_SCOPED_SLOTS?: boolean | \"suppress-warning\" | undefined; readonly INSTANCE_ATTRS_CLASS_STYLE?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_DATA_FN?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_DATA_MERGE?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_BEFORE_DESTROY?: boolean | \"suppress-warning\" | undefined; readonly OPTIONS_DESTROYED?: boolean | \"suppress-warning\" | undefined; readonly WATCH_ARRAY?: boolean | \"suppress-warning\" | undefined; readonly PROPS_DEFAULT_THIS?: boolean | \"suppress-warning\" | undefined; readonly V_ON_KEYCODE_MODIFIER?: boolean | \"suppress-warning\" | undefined; readonly CUSTOM_DIR?: boolean | \"suppress-warning\" | undefined; readonly ATTR_FALSE_VALUE?: boolean | \"suppress-warning\" | undefined; readonly ATTR_ENUMERATED_COERCION?: boolean | \"suppress-warning\" | undefined; readonly TRANSITION_CLASSES?: boolean | \"suppress-warning\" | undefined; readonly TRANSITION_GROUP_ROOT?: boolean | \"suppress-warning\" | undefined; readonly COMPONENT_ASYNC?: boolean | \"suppress-warning\" | undefined; readonly COMPONENT_FUNCTIONAL?: boolean | \"suppress-warning\" | undefined; readonly COMPONENT_V_MODEL?: boolean | \"suppress-warning\" | undefined; readonly RENDER_FUNCTION?: boolean | \"suppress-warning\" | undefined; readonly FILTERS?: boolean | \"suppress-warning\" | undefined; readonly PRIVATE_APIS?: boolean | \"suppress-warning\" | undefined; readonly MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined; } | undefined; readonly data?: ((this: any, vm: any) => any) | undefined; readonly computed?: { readonly [x: string]: ComputedGetter<any> | { readonly get: ComputedGetter<any>; readonly set: ComputedSetter<any>; }; } | undefined; readonly methods?: { readonly [x: string]: Function; } | undefined; readonly watch?: { readonly [x: string]: string | WatchCallback | { readonly handler: WatchCallback | string; readonly immediate?: boolean | undefined; readonly deep?: boolean | number | undefined; readonly once?: boolean | undefined; readonly flush?: \"pre\" | \"post\" | \"sync\" | undefined; readonly onTrack?: ((event: DebuggerEvent) => void) | undefined; readonly onTrigger?: ((event: DebuggerEvent) => void) | undefined; } | readonly (string | WatchCallback | { readonly handler: WatchCallback | string; readonly immediate?: boolean | undefined; readonly deep?: boolean | number | undefined; readonly once?: boolean | undefined; readonly flush?: \"pre\" | \"post\" | \"sync\" | undefined; readonly onTrack?: ((event: DebuggerEvent) => void) | undefined; readonly onTrigger?: ((event: DebuggerEvent) => void) | undefined; })[]; } | undefined; readonly provide?: Function | { readonly [x: string]: Readonly<unknown>; readonly [x: symbol]: Readonly<unknown>; } | undefined; readonly inject?: readonly string[] | {} | undefined; readonly filters?: { readonly [x: string]: Function; } | undefined; readonly mixins?: readonly any[] | undefined; readonly extends?: any; readonly beforeCreate?: (() => any) | undefined; readonly created?: (() => any) | undefined; readonly beforeMount?: (() => any) | undefined; readonly mounted?: (() => any) | undefined; readonly beforeUpdate?: (() => any) | undefined; readonly updated?: (() => any) | undefined; readonly activated?: (() => any) | undefined; readonly deactivated?: (() => any) | undefined; readonly beforeDestroy?: (() => any) | undefined; readonly beforeUnmount?: (() => any) | undefined; readonly destroyed?: (() => any) | undefined; readonly unmounted?: (() => any) | undefined; readonly renderTracked?: DebuggerHook | undefined; readonly renderTriggered?: DebuggerHook | undefined; readonly errorCaptured?: ErrorCapturedHook<unknown> | undefined; readonly delimiters?: readonly [string, string] | undefined; readonly __differentiator?: string | number | symbol | undefined; readonly __isBuiltIn?: boolean | undefined; readonly __file?: string | undefined; readonly __name?: string | undefined; readonly beforeRouteEnter?: (TypesConfig extends Record<\"beforeRouteEnter\", infer T> ? T : NavigationGuardWithThis<undefined>) | undefined; readonly beforeRouteUpdate?: (TypesConfig extends Record<\"beforeRouteUpdate\", infer T> ? T : NavigationGuard) | undefined; readonly beforeRouteLeave?: (TypesConfig extends Record<\"beforeRouteLeave\", infer T> ? T : NavigationGuard) | undefined; readonly head?: ((nuxtApp: NuxtApp) => UseHeadInput) | undefined; } | null>>; dashboardItems: globalThis.ComputedRef<DashboardPlugin[]>; landingPages: globalThis.ComputedRef<DashboardPluginPage[]>; headerPluginLabel: globalThis.ComputedRef<string>; activePageTitle: globalThis.ComputedRef<string>; openPlugin: (pluginId: string) => Promise<DashboardNavigationResult>; openPage: (pluginId: string, pageId: string) => Promise<DashboardNavigationResult>; goBack: () => void; reset: () => void; }",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 618,
+                "line": 759,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n);"
               }
@@ -5155,7 +5155,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 618,
+              "line": 759,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardNavigation(\n    options: UseDashboardNavigationOptions = {}\n);"
             }
@@ -5169,7 +5169,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 140,
+              "line": 206,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UseDashboardNavigationOptions {\n    baseItems?: DashboardPlugin[];\n}"
             }
@@ -5186,7 +5186,7 @@
               "resolvedReturnType": "globalThis.ComputedRef<DashboardPluginPage[]>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 456,
+                "line": 584,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
               }
@@ -5195,7 +5195,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 456,
+              "line": 584,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPluginPages(pluginId: () => string | undefined);"
             }
@@ -5212,7 +5212,7 @@
               "resolvedReturnType": "globalThis.ComputedRef<{ id: string; icon: string; label: string; description?: string | undefined; order?: number | undefined; handler?: ((ctx: { id: string; }) => void | Promise<void>) | undefined; pages?: { id: string; title: string; icon?: string | undefined; order?: number | undefined; description?: string | undefined; component: FunctionalComponent<any, {}, any, {}> | ComponentPublicInstanceConstructor<any, any, any, any, ComputedOptions, MethodOptions> | { [x: string]: any; setup?: ((this: void, props: LooseRequired<any>, ctx: { attrs: Data; slots: Readonly<InternalSlots>; emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void); expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void; }) => any) | undefined; name?: string | undefined; template?: string | object | undefined; render?: Function | undefined; components?: Record<string, Component> | undefined; directives?: Record<string, Directive<any, any, string, any>> | undefined; inheritAttrs?: boolean | undefined; emits?: any; slots?: {} | undefined; expose?: string[] | undefined; serverPrefetch?: (() => void | Promise<any>) | undefined; compilerOptions?: { isCustomElement?: ((tag: string) => boolean) | undefined; whitespace?: \"preserve\" | \"condense\" | undefined; comments?: boolean | undefined; delimiters?: [string, string] | undefined; } | undefined; call?: ((this: unknown, ...args: unknown[]) => never) | undefined; __isFragment?: never | undefined; __isTeleport?: never | undefined; __isSuspense?: never | undefined; __defaults?: {} | undefined; compatConfig?: { GLOBAL_MOUNT?: boolean | \"suppress-warning\" | undefined; GLOBAL_MOUNT_CONTAINER?: boolean | \"suppress-warning\" | undefined; GLOBAL_EXTEND?: boolean | \"suppress-warning\" | undefined; GLOBAL_PROTOTYPE?: boolean | \"suppress-warning\" | undefined; GLOBAL_SET?: boolean | \"suppress-warning\" | undefined; GLOBAL_DELETE?: boolean | \"suppress-warning\" | undefined; GLOBAL_OBSERVABLE?: boolean | \"suppress-warning\" | undefined; GLOBAL_PRIVATE_UTIL?: boolean | \"suppress-warning\" | undefined; CONFIG_SILENT?: boolean | \"suppress-warning\" | undefined; CONFIG_DEVTOOLS?: boolean | \"suppress-warning\" | undefined; CONFIG_KEY_CODES?: boolean | \"suppress-warning\" | undefined; CONFIG_PRODUCTION_TIP?: boolean | \"suppress-warning\" | undefined; CONFIG_IGNORED_ELEMENTS?: boolean | \"suppress-warning\" | undefined; CONFIG_WHITESPACE?: boolean | \"suppress-warning\" | undefined; CONFIG_OPTION_MERGE_STRATS?: boolean | \"suppress-warning\" | undefined; INSTANCE_SET?: boolean | \"suppress-warning\" | undefined; INSTANCE_DELETE?: boolean | \"suppress-warning\" | undefined; INSTANCE_DESTROY?: boolean | \"suppress-warning\" | undefined; INSTANCE_EVENT_EMITTER?: boolean | \"suppress-warning\" | undefined; INSTANCE_EVENT_HOOKS?: boolean | \"suppress-warning\" | undefined; INSTANCE_CHILDREN?: boolean | \"suppress-warning\" | undefined; INSTANCE_LISTENERS?: boolean | \"suppress-warning\" | undefined; INSTANCE_SCOPED_SLOTS?: boolean | \"suppress-warning\" | undefined; INSTANCE_ATTRS_CLASS_STYLE?: boolean | \"suppress-warning\" | undefined; OPTIONS_DATA_FN?: boolean | \"suppress-warning\" | undefined; OPTIONS_DATA_MERGE?: boolean | \"suppress-warning\" | undefined; OPTIONS_BEFORE_DESTROY?: boolean | \"suppress-warning\" | undefined; OPTIONS_DESTROYED?: boolean | \"suppress-warning\" | undefined; WATCH_ARRAY?: boolean | \"suppress-warning\" | undefined; PROPS_DEFAULT_THIS?: boolean | \"suppress-warning\" | undefined; V_ON_KEYCODE_MODIFIER?: boolean | \"suppress-warning\" | undefined; CUSTOM_DIR?: boolean | \"suppress-warning\" | undefined; ATTR_FALSE_VALUE?: boolean | \"suppress-warning\" | undefined; ATTR_ENUMERATED_COERCION?: boolean | \"suppress-warning\" | undefined; TRANSITION_CLASSES?: boolean | \"suppress-warning\" | undefined; TRANSITION_GROUP_ROOT?: boolean | \"suppress-warning\" | undefined; COMPONENT_ASYNC?: boolean | \"suppress-warning\" | undefined; COMPONENT_FUNCTIONAL?: boolean | \"suppress-warning\" | undefined; COMPONENT_V_MODEL?: boolean | \"suppress-warning\" | undefined; RENDER_FUNCTION?: boolean | \"suppress-warning\" | undefined; FILTERS?: boolean | \"suppress-warning\" | undefined; PRIVATE_APIS?: boolean | \"suppress-warning\" | undefined; MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined; } | undefined; data?: ((this: any, vm: any) => any) | undefined; computed?: ComputedOptions | undefined; methods?: MethodOptions | undefined; watch?: ComponentWatchOptions | undefined; provide?: ComponentProvideOptions | undefined; inject?: {} | string[] | undefined; filters?: Record<string, Function> | undefined; mixins?: any[] | undefined; extends?: any; beforeCreate?: (() => any) | undefined; created?: (() => any) | undefined; beforeMount?: (() => any) | undefined; mounted?: (() => any) | undefined; beforeUpdate?: (() => any) | undefined; updated?: (() => any) | undefined; activated?: (() => any) | undefined; deactivated?: (() => any) | undefined; beforeDestroy?: (() => any) | undefined; beforeUnmount?: (() => any) | undefined; destroyed?: (() => any) | undefined; unmounted?: (() => any) | undefined; renderTracked?: DebuggerHook | undefined; renderTriggered?: DebuggerHook | undefined; errorCaptured?: ErrorCapturedHook<unknown> | undefined; delimiters?: [string, string] | undefined; __differentiator?: string | number | symbol | undefined; __isBuiltIn?: boolean | undefined; __file?: string | undefined; __name?: string | undefined; beforeRouteEnter?: (TypesConfig extends Record<\"beforeRouteEnter\", infer T> ? T : NavigationGuardWithThis<undefined>) | undefined; beforeRouteUpdate?: (TypesConfig extends Record<\"beforeRouteUpdate\", infer T> ? T : NavigationGuard) | undefined; beforeRouteLeave?: (TypesConfig extends Record<\"beforeRouteLeave\", infer T> ? T : NavigationGuard) | undefined; head?: ((nuxtApp: NuxtApp) => UseHeadInput) | undefined; } | (() => Promise<{ default?: Component; } | Component>); access?: { authRequired?: boolean | undefined; requiredEntitlements?: string[] | undefined; requiredWorkspaceRoles?: (\"owner\" | \"editor\" | \"viewer\")[] | undefined; mode?: \"any\" | \"all\" | undefined; } | undefined; }[] | undefined; capabilities?: string[] | undefined; access?: { authRequired?: boolean | undefined; requiredEntitlements?: string[] | undefined; requiredWorkspaceRoles?: (\"owner\" | \"editor\" | \"viewer\")[] | undefined; mode?: \"any\" | \"all\" | undefined; } | undefined; }[]>",
               "declaration": {
                 "source": "app/composables/dashboard/useDashboardPlugins.ts",
-                "line": 315,
+                "line": 417,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDashboardPlugins();"
               }
@@ -5221,7 +5221,7 @@
           "declarations": [
             {
               "source": "app/composables/dashboard/useDashboardPlugins.ts",
-              "line": 315,
+              "line": 417,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDashboardPlugins();"
             }

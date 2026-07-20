@@ -183,9 +183,26 @@ export class ContributionRegistry<
     }
 
     unregisterLegacy(id: string): boolean {
-        const record = this.#legacyById.get(id);
-        if (!record) return false;
-        return this.removeOwner(record.owner) > 0;
+        return this.unregisterLegacyBatch([id]) > 0;
+    }
+
+    unregisterLegacyBatch(ids: readonly string[]): number {
+        let removed = 0;
+        for (const id of new Set(ids)) {
+            const record = this.#legacyById.get(id);
+            if (!record) continue;
+            this.#legacyById.delete(id);
+            this.#legacyProjectionOrderById.delete(id);
+            this.#recordsByOwner.delete(record.owner);
+            removed += 1;
+        }
+        if (removed) this.#publishProjection();
+        return removed;
+    }
+
+    /** Emit a legacy compatibility projection when a V1 surface did so without a value change. */
+    publishLegacyProjection(): void {
+        this.#publishProjection();
     }
 
     listLegacyIds(): readonly string[] {

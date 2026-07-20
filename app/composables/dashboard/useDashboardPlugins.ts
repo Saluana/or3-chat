@@ -18,6 +18,8 @@ import {
     type RegistrationHandle,
 } from '~~/shared/plugins/registration-handle';
 import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 export interface DashboardPlugin {
     /** Unique id across all dashboard plugins */
@@ -74,6 +76,7 @@ type DashboardGlobals = typeof globalThis & {
         Map<string, DashboardPluginPage>
     >;
     __or3DashboardNavigationRuntime?: DashboardNavigationRuntime;
+    __or3DashboardV2PageBuckets?: Set<string>;
 };
 
 type OwnedDashboardPlugin = {
@@ -107,6 +110,69 @@ const reactivePages = reactive<{ [pluginId: string]: DashboardPluginPage[] }>(
 
 // Order constant (avoid magic number repetition)
 const DEFAULT_ORDER = 200;
+
+interface DashboardPageContribution {
+    readonly pluginId: string;
+    readonly page: DashboardPluginPage;
+}
+
+function normalizeDashboardPlugin(plugin: DashboardPlugin): DashboardPlugin {
+    return Object.freeze({
+        ...plugin,
+        pages: plugin.pages ? [...plugin.pages] : undefined,
+    }) as DashboardPlugin;
+}
+
+function normalizeDashboardPage(
+    page: DashboardPluginPage
+): DashboardPluginPage {
+    let component = page.component;
+    if (isReactive(component)) component = toRaw(component);
+    if (typeof component === 'object') {
+        component = markRaw(component) as typeof component;
+    }
+    return Object.freeze({ ...page, component });
+}
+
+function dashboardPageContributionId(pluginId: string, pageId: string): string {
+    return JSON.stringify([pluginId, pageId]);
+}
+
+const pluginV2Kernel = getContributionSurfaceKernel<DashboardPlugin>(
+    'dashboard',
+    {
+        getId: (plugin) => plugin.id,
+        normalize: normalizeDashboardPlugin,
+        compare: (left, right) =>
+            (left.order ?? DEFAULT_ORDER) -
+            (right.order ?? DEFAULT_ORDER),
+    },
+    'plugins'
+);
+const pageV2Kernel = getContributionSurfaceKernel<DashboardPageContribution>(
+    'dashboard',
+    {
+        getId: (entry) =>
+            dashboardPageContributionId(entry.pluginId, entry.page.id),
+        normalize: (entry) =>
+            Object.freeze({
+                pluginId: entry.pluginId,
+                page: normalizeDashboardPage(entry.page),
+            }),
+        compare: (left, right) =>
+            left.pluginId.localeCompare(right.pluginId) ||
+            (left.page.order ?? DEFAULT_ORDER) -
+                (right.page.order ?? DEFAULT_ORDER),
+    },
+    'pages'
+);
+const v2PageBuckets =
+    g.__or3DashboardV2PageBuckets ??
+    (g.__or3DashboardV2PageBuckets = new Set<string>());
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('dashboard');
+}
 
 // Component resolution cache
 const pageComponentCache = new Map<string, Component>();
@@ -181,10 +247,18 @@ function sync() {
     reactiveList.items = Array.from(registry.values());
 }
 
+function getRegisteredDashboardPlugin(
+    pluginId: string
+): DashboardPlugin | undefined {
+    return useV2Surface()
+        ? pluginV2Kernel.registry.get(pluginId, undefined)
+        : registry.get(pluginId);
+}
+
 function getDashboardPluginAccessPolicy(
     pluginId: string
 ): PluginGatePolicy | undefined {
-    const fromRegistry = registry.get(pluginId)?.access;
+    const fromRegistry = getRegisteredDashboardPlugin(pluginId)?.access;
     if (fromRegistry) return fromRegistry;
     return navigationRuntime.baseItems.value.find((item) => item.id === pluginId)
         ?.access;
@@ -236,16 +310,41 @@ export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHa
         import.meta.dev ||
         (typeof process !== 'undefined' &&
             (process as { dev?: boolean }).dev === true);
-    if (isDev && registry.has(plugin.id)) {
+    if (
+        isDev &&
+        (useV2Surface()
+            ? pluginV2Kernel.registry.get(plugin.id, undefined) !== undefined
+            : registry.has(plugin.id))
+    ) {
         console.warn(
             `[dashboard] Overwriting existing plugin id "${plugin.id}"`
         );
     }
+    if (useV2Surface()) {
+        const handle = pluginV2Kernel.registry.registerLegacy({ value: plugin });
+        if (plugin.pages) {
+            unregisterDashboardPluginPage(plugin.id);
+            for (const page of plugin.pages) {
+                registerDashboardPluginPage(plugin.id, page);
+            }
+        }
+        return {
+            id: plugin.id,
+            owner: handle.owner,
+            get disposed() {
+                return handle.disposed;
+            },
+            dispose() {
+                if (!handle.dispose()) return false;
+                unregisterDashboardPluginPage(plugin.id);
+                deleteAllPluginPageCache(plugin.id);
+                return true;
+            },
+        };
+    }
+
     // Freeze to prevent external mutation; copy pages array so later mutations by caller don't leak in.
-    const frozen = Object.freeze({
-        ...plugin,
-        pages: plugin.pages ? [...plugin.pages] : undefined,
-    }) as DashboardPlugin;
+    const frozen = normalizeDashboardPlugin(plugin);
     const owner = Symbol(`dashboard:${plugin.id}`);
     ownedRegistry.set(plugin.id, { plugin: frozen, owner });
     registry.set(plugin.id, frozen);
@@ -286,8 +385,11 @@ export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHa
  * ```
  */
 export function unregisterDashboardPlugin(id: string) {
-    ownedRegistry.delete(id);
-    if (registry.delete(id)) sync();
+    if (useV2Surface()) pluginV2Kernel.registry.unregisterLegacy(id);
+    else {
+        ownedRegistry.delete(id);
+        if (registry.delete(id)) sync();
+    }
     unregisterDashboardPluginPage(id); // also clears pages + cache + reactivePages entry
     deleteAllPluginPageCache(id);
     // Using computed property access to safely delete from reactive object
@@ -313,13 +415,16 @@ export function unregisterDashboardPlugin(id: string) {
  * ```
  */
 export function useDashboardPlugins() {
-    return computed(() =>
-        reactiveList.items
+    return computed(() => {
+        const items: typeof reactiveList.items = useV2Surface()
+            ? (pluginV2Kernel.items.value as typeof reactiveList.items)
+            : reactiveList.items;
+        return items
             .filter((plugin) => isDashboardPluginAllowed(plugin))
             .sort(
             (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
-            )
-    );
+            );
+    });
 }
 
 /**
@@ -341,7 +446,9 @@ export function useDashboardPlugins() {
  * ```
  */
 export function listRegisteredDashboardPluginIds(): string[] {
-    return Array.from(registry.keys());
+    return useV2Surface()
+        ? [...pluginV2Kernel.registry.listLegacyIds()]
+        : Array.from(registry.keys());
 }
 
 // ----- Pages API -----
@@ -373,25 +480,20 @@ export function registerDashboardPluginPage(
     pluginId: string,
     page: DashboardPluginPage
 ) {
+    deletePageCache(pluginId, page.id);
+    if (useV2Surface()) {
+        v2PageBuckets.add(pluginId);
+        pageV2Kernel.registry.registerLegacy({
+            value: { pluginId, page },
+        });
+        return;
+    }
     let m = pageRegistry.get(pluginId);
     if (!m) {
         m = new Map();
         pageRegistry.set(pluginId, m);
     }
-    // Invalidate any cached component for this page id prior to replacement
-    deletePageCache(pluginId, page.id);
-    let component = page.component;
-    if (isReactive(component)) {
-        component = toRaw(component);
-    }
-    if (typeof component === 'object') {
-        component = markRaw(component) as typeof component;
-    }
-
-    const frozen = Object.freeze({
-        ...page,
-        component,
-    });
+    const frozen = normalizeDashboardPage(page);
     m.set(page.id, frozen);
     syncPages(pluginId);
 }
@@ -418,6 +520,32 @@ export function unregisterDashboardPluginPage(
     pluginId: string,
     pageId?: string
 ) {
+    if (useV2Surface()) {
+        if (pageId) {
+            if (!v2PageBuckets.has(pluginId)) return;
+            const removed = pageV2Kernel.registry.unregisterLegacy(
+                dashboardPageContributionId(pluginId, pageId)
+            );
+            if (!removed) pageV2Kernel.registry.publishLegacyProjection();
+            deletePageCache(pluginId, pageId);
+        } else {
+            if (!v2PageBuckets.delete(pluginId)) return;
+            const ids: string[] = [];
+            for (const entry of pageV2Kernel.items.value) {
+                if (entry.pluginId !== pluginId) continue;
+                ids.push(
+                    dashboardPageContributionId(pluginId, entry.page.id)
+                );
+                deletePageCache(pluginId, entry.page.id);
+            }
+            const removed = pageV2Kernel.registry.unregisterLegacyBatch(ids);
+            // V1 deletes and then reinitializes its reactive plugin-page bucket.
+            pageV2Kernel.registry.publishLegacyProjection();
+            if (!removed) pageV2Kernel.registry.publishLegacyProjection();
+            deleteAllPluginPageCache(pluginId);
+        }
+        return;
+    }
     const m = pageRegistry.get(pluginId);
     if (!m) return;
     if (pageId) {
@@ -457,8 +585,12 @@ export function useDashboardPluginPages(pluginId: () => string | undefined) {
     return computed(() => {
         const id = pluginId();
         if (!id) return [] as DashboardPluginPage[];
-        const list = reactivePages[id] || [];
-        return list
+        const list = useV2Surface()
+            ? pageV2Kernel.items.value
+                  .filter((entry) => entry.pluginId === id)
+                  .map((entry) => entry.page)
+            : reactivePages[id] || [];
+        return [...list]
             .filter((page) => isDashboardPageAllowed(id, page))
             .sort((a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER));
     });
@@ -485,8 +617,12 @@ export function useDashboardPluginPages(pluginId: () => string | undefined) {
 export function listDashboardPluginPages(
     pluginId: string
 ): DashboardPluginPage[] {
-    const list = reactivePages[pluginId] || [];
-    return list
+    const list = useV2Surface()
+        ? pageV2Kernel.items.value
+              .filter((entry) => entry.pluginId === pluginId)
+              .map((entry) => entry.page)
+        : reactivePages[pluginId] || [];
+    return [...list]
         .filter((page) => isDashboardPageAllowed(pluginId, page))
         .sort((a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER));
 }
@@ -513,7 +649,12 @@ export function getDashboardPluginPage(
     pluginId: string,
     pageId: string
 ): DashboardPluginPage | undefined {
-    const page = pageRegistry.get(pluginId)?.get(pageId);
+    const page = useV2Surface()
+        ? pageV2Kernel.registry.get(
+              dashboardPageContributionId(pluginId, pageId),
+              undefined
+          )?.page
+        : pageRegistry.get(pluginId)?.get(pageId);
     if (!page) return undefined;
     return isDashboardPageAllowed(pluginId, page) ? page : undefined;
 }
@@ -859,7 +1000,7 @@ export function useDashboardNavigation(
  * ```
  */
 export function hasCapability(pluginId: string, capability: string): boolean {
-    const plugin = registry.get(pluginId);
+    const plugin = getRegisteredDashboardPlugin(pluginId);
     if (!plugin) return false;
     if (!plugin.capabilities || !Array.isArray(plugin.capabilities)) {
         return false;
@@ -886,7 +1027,7 @@ export function hasCapability(pluginId: string, capability: string): boolean {
  * ```
  */
 export function getPluginCapabilities(pluginId: string): string[] {
-    const plugin = registry.get(pluginId);
+    const plugin = getRegisteredDashboardPlugin(pluginId);
     if (!plugin || !plugin.capabilities) return [];
     return [...plugin.capabilities];
 }
@@ -916,7 +1057,7 @@ export function hasAllCapabilities(
     pluginId: string,
     capabilities: string[]
 ): boolean {
-    const plugin = registry.get(pluginId);
+    const plugin = getRegisteredDashboardPlugin(pluginId);
     if (!plugin || !plugin.capabilities) return false;
     return capabilities.every((cap) => plugin.capabilities!.includes(cap));
 }
@@ -943,7 +1084,7 @@ export function hasAnyCapability(
     pluginId: string,
     capabilities: string[]
 ): boolean {
-    const plugin = registry.get(pluginId);
+    const plugin = getRegisteredDashboardPlugin(pluginId);
     if (!plugin || !plugin.capabilities) return false;
     return capabilities.some((cap) => plugin.capabilities!.includes(cap));
 }

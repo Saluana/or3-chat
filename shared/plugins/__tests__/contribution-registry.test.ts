@@ -160,6 +160,24 @@ describe('ContributionRegistry', () => {
         expect(contributions.snapshot({ allowed: true })).toHaveLength(100);
     });
 
+    it('removes a legacy batch with one projection publication', () => {
+        const contributions = registry();
+        contributions.registerLegacy({
+            value: { id: 'one', order: 1, label: 'One' },
+        });
+        contributions.registerLegacy({
+            value: { id: 'two', order: 2, label: 'Two' },
+        });
+        const listener = vi.fn();
+        contributions.subscribe(listener);
+
+        expect(
+            contributions.unregisterLegacyBatch(['one', 'missing', 'two'])
+        ).toBe(2);
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(contributions.snapshot({ allowed: true })).toEqual([]);
+    });
+
     it('returns immutable inspection arrays and record wrappers', () => {
         const contributions = registry();
         contributions.registerLegacy({ value: { id: 'alpha', order: 1, label: 'A' } });
