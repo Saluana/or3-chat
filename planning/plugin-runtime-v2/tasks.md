@@ -266,7 +266,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R5.AC4
       Done when: focused invalidation and capacity eviction tests pass at high cardinality.
 
-- [ ] 5.3 Implement legacy serial action/filter executors over cached plans
+- [x] 5.3 Implement legacy serial action/filter executors over cached plans
       Requirements: R1.AC3, R1.AC4, R5.AC3, R5.AC9
       Done when: the full hook conformance suite passes without expected-value changes.
 

@@ -1,10 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createHookEngine } from '../hook-engine-core';
+import { createHookEngine as createV1HookEngine } from '../hook-engine-core';
+import { createHookEngineV2 } from '../hook-engine-v2';
 
-describe('hook-engine-core', () => {
+describe.each([
+    ['V1', createV1HookEngine],
+    ['V2', createHookEngineV2],
+] as const)('hook-engine-core (%s)', (_runtime, createHookEngine) => {
     it('rejects thenables from synchronous filters and keeps prior value', () => {
         const engine = createHookEngine();
-        engine.addFilter('demo:filter:value', () => Promise.resolve('async') as unknown as string);
+        engine.addFilter(
+            'demo:filter:value',
+            () => Promise.resolve('async') as unknown as string,
+        );
 
         const result = engine.applyFiltersSync('demo:filter:value', 'sync');
         expect(result).toBe('sync');
@@ -24,13 +31,21 @@ describe('hook-engine-core', () => {
 
     it('keeps earlier filter value when a later sync filter returns a thenable', () => {
         const engine = createHookEngine();
-        engine.addFilter('demo:filter:chain', (value) => `${String(value)}-a`, 5);
+        engine.addFilter(
+            'demo:filter:chain',
+            (value) => `${String(value)}-a`,
+            5,
+        );
         engine.addFilter(
             'demo:filter:chain',
             () => Promise.resolve('async') as unknown as string,
-            10
+            10,
         );
-        engine.addFilter('demo:filter:chain', (value) => `${String(value)}-b`, 15);
+        engine.addFilter(
+            'demo:filter:chain',
+            (value) => `${String(value)}-b`,
+            15,
+        );
 
         const result = engine.applyFiltersSync('demo:filter:chain', 'x');
         expect(result).toBe('x-a-b');
@@ -39,15 +54,23 @@ describe('hook-engine-core', () => {
 
     it('continues sync filter chain after a throwing callback', () => {
         const engine = createHookEngine();
-        engine.addFilter('demo:filter:throw', (value) => `${String(value)}-ok`, 5);
+        engine.addFilter(
+            'demo:filter:throw',
+            (value) => `${String(value)}-ok`,
+            5,
+        );
         engine.addFilter(
             'demo:filter:throw',
             () => {
                 throw new Error('boom');
             },
-            10
+            10,
         );
-        engine.addFilter('demo:filter:throw', (value) => `${String(value)}-after`, 15);
+        engine.addFilter(
+            'demo:filter:throw',
+            (value) => `${String(value)}-after`,
+            15,
+        );
 
         const result = engine.applyFiltersSync('demo:filter:throw', 'start');
         expect(result).toBe('start-ok-after');
@@ -73,7 +96,9 @@ describe('hook-engine-core', () => {
             throw new Error('boom');
         });
 
-        await expect(engine.doAction('demo:action:fail')).resolves.toBeUndefined();
+        await expect(
+            engine.doAction('demo:action:fail'),
+        ).resolves.toBeUndefined();
         expect(engine._diagnostics.errors['demo:action:fail']).toBe(1);
         expect(engine.hasAction('demo:action:fail')).toBe(false);
     });
@@ -109,17 +134,30 @@ describe('hook-engine-core', () => {
 
     it('awaited applyFilters accepts async filter results', async () => {
         const engine = createHookEngine();
-        engine.addFilter('demo:filter:async', async (value) => `${String(value)}-async`);
-        await expect(engine.applyFilters('demo:filter:async', 'x')).resolves.toBe('x-async');
+        engine.addFilter(
+            'demo:filter:async',
+            async (value) => `${String(value)}-async`,
+        );
+        await expect(
+            engine.applyFilters('demo:filter:async', 'x'),
+        ).resolves.toBe('x-async');
     });
 
     it('merges exact and wildcard callbacks by priority then registration order', async () => {
         const engine = createHookEngine();
         const calls: string[] = [];
         engine.addAction('demo.*', () => calls.push('wildcard-first'), 10);
-        engine.addAction('demo.action.order', () => calls.push('exact-second'), 10);
+        engine.addAction(
+            'demo.action.order',
+            () => calls.push('exact-second'),
+            10,
+        );
         engine.addAction('demo.action.order', () => calls.push('exact-low'), 5);
-        engine.addAction('*.action.order', () => calls.push('wildcard-high'), 20);
+        engine.addAction(
+            '*.action.order',
+            () => calls.push('wildcard-high'),
+            20,
+        );
 
         await engine.doAction('demo.action.order');
 
@@ -139,7 +177,12 @@ describe('hook-engine-core', () => {
         engine.addFilter('demo:filter:args', filter, 10, 1);
 
         await engine.doAction('demo:action:args', 'a', 'b', 'c');
-        const filtered = await engine.applyFilters('demo:filter:args', 'start', 'a', 'b');
+        const filtered = await engine.applyFilters(
+            'demo:filter:args',
+            'start',
+            'a',
+            'b',
+        );
 
         expect(action).toHaveBeenCalledWith('a', 'b', 'c');
         expect(filter).toHaveBeenCalledWith('start', 'a', 'b');
@@ -185,17 +228,44 @@ describe('hook-engine-core', () => {
         expect(engine.hasAction('demo:action:*', wildcard)).toBe(10);
     });
 
+    it('removes all callbacks or only callbacks at the requested priority', async () => {
+        const engine = createHookEngine();
+        const low = vi.fn();
+        const normal = vi.fn();
+        engine.addAction('demo:action:all', low, 5);
+        engine.addAction('demo:action:all', normal, 10);
+        engine.addFilter('demo:filter:all', (value) => value, 5);
+
+        engine.removeAllCallbacks(5);
+        await engine.doAction('demo:action:all');
+        expect(low).not.toHaveBeenCalled();
+        expect(normal).toHaveBeenCalledTimes(1);
+        expect(engine.hasFilter()).toBe(false);
+
+        engine.removeAllCallbacks();
+        expect(engine.hasAction()).toBe(false);
+        expect(engine._diagnostics.callbacks()).toBe(0);
+    });
+
     it('restores currentPriority across nested dispatch and resets it afterward', () => {
         const engine = createHookEngine();
         const observed: Array<number | false> = [];
-        engine.addAction('demo:action:inner', () => {
-            observed.push(engine.currentPriority());
-        }, 5);
-        engine.addAction('demo:action:outer', () => {
-            observed.push(engine.currentPriority());
-            engine.doActionSync('demo:action:inner');
-            observed.push(engine.currentPriority());
-        }, 20);
+        engine.addAction(
+            'demo:action:inner',
+            () => {
+                observed.push(engine.currentPriority());
+            },
+            5,
+        );
+        engine.addAction(
+            'demo:action:outer',
+            () => {
+                observed.push(engine.currentPriority());
+                engine.doActionSync('demo:action:inner');
+                observed.push(engine.currentPriority());
+            },
+            20,
+        );
 
         expect(engine.currentPriority()).toBe(false);
         engine.doActionSync('demo:action:outer');
@@ -212,7 +282,11 @@ describe('hook-engine-core', () => {
         engine.off(disposer);
         await engine.doAction('demo:action:off');
         const error = new Error('dispose failed');
-        expect(() => engine.off(() => { throw error; })).not.toThrow();
+        expect(() =>
+            engine.off(() => {
+                throw error;
+            }),
+        ).not.toThrow();
 
         expect(callback).not.toHaveBeenCalled();
         expect(onOffError).toHaveBeenCalledWith(error);

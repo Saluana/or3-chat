@@ -270,6 +270,59 @@ export class HookRecordStore {
         return removing.length;
     }
 
+    removeAllLegacy(priority?: number): number {
+        const removing = Array.from(this.#recordsByOwner.values()).flatMap(
+            (owned) =>
+                Array.from(owned).filter(
+                    (record) =>
+                        record.visibility === 'legacy-visible' &&
+                        (priority === undefined ||
+                            record.priority === priority),
+                ),
+        );
+        for (const record of removing) this.#removeRecord(record);
+        return removing.length;
+    }
+
+    has(kind: HookKind, name?: string, fn?: HookFn): boolean | number {
+        if (!name) return this.visibleCount(kind) > 0;
+        const buckets = this.#buckets[kind];
+        if (fn) {
+            const candidates = [
+                ...(buckets.exact.get(name) ?? []),
+                ...buckets.wildcards.filter((record) => record.name === name),
+            ]
+                .filter((record) => record.fn === fn && this.#isVisible(record))
+                .sort((left, right) => left.sequence - right.sequence);
+            return candidates[0]?.priority ?? false;
+        }
+        return (
+            (buckets.exact.get(name) ?? []).some((record) =>
+                this.#isVisible(record),
+            ) ||
+            buckets.wildcards.some(
+                (record) =>
+                    record.matcher!.test(name) && this.#isVisible(record),
+            )
+        );
+    }
+
+    visibleCount(kind?: HookKind): number {
+        const countBuckets = (buckets: KindBuckets) =>
+            Array.from(buckets.exact.values()).reduce(
+                (total, records) =>
+                    total +
+                    records.filter((record) => this.#isVisible(record)).length,
+                0,
+            ) +
+            buckets.wildcards.filter((record) => this.#isVisible(record))
+                .length;
+        return kind
+            ? countBuckets(this.#buckets[kind])
+            : countBuckets(this.#buckets.action) +
+                  countBuckets(this.#buckets.filter);
+    }
+
     count(kind?: HookKind): number {
         const countBuckets = (buckets: KindBuckets) =>
             Array.from(buckets.exact.values()).reduce(
