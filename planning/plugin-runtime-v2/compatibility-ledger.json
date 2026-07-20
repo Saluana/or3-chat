@@ -6,7 +6,7 @@
     "moduleManifest": "planning/plugin-runtime-v2/compatibility-ledger.modules.json",
     "moduleManifestSha256": "6964af291c26d9a715cdce7cc98483396ccd7f0db8f5768f85cffa5ff1b0fd35",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "ce447adff37ea0a4e108ac66ece72d02f5ac7d6ce5aa5e46da8816907f45c991",
+    "nuxtImportsDeclarationSha256": "4da8b901643d2e9f52761af8a560dd560515b3442cf13ce45e5d471518e6ddb5",
     "behaviorProfiles": "planning/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "3da04d48d16d44a8adda5742383a733e9797c57cc587d4fd713ca020309239d2"
   },

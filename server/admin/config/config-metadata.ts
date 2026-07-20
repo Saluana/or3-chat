@@ -604,32 +604,39 @@ export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
         order: 6,
         valueType: 'boolean',
     },
+    'OR3_PLUGIN_RUNTIME_SHADOW_ENABLED': {
+        label: 'Plugin Runtime Shadow Observer',
+        description: 'Observe V1 plugin outcomes without controlling imports, registration, or cleanup',
+        group: 'Admin',
+        order: 7,
+        valueType: 'boolean',
+    },
     'OR3_ADMIN_EXTENSION_MAX_ZIP_BYTES': {
         label: 'Max Extension Zip Size',
         description: 'Maximum size for uploaded extension ZIP files in bytes',
         group: 'Admin',
-        order: 7,
+        order: 8,
         valueType: 'number',
     },
     'OR3_ADMIN_EXTENSION_MAX_FILES': {
         label: 'Max Files Per Extension',
         description: 'Maximum number of files allowed in an extension package',
         group: 'Admin',
-        order: 8,
+        order: 9,
         valueType: 'number',
     },
     'OR3_ADMIN_EXTENSION_MAX_TOTAL_BYTES': {
         label: 'Max Total Extension Size',
         description: 'Maximum total size of all files in an extension package',
         group: 'Admin',
-        order: 9,
+        order: 10,
         valueType: 'number',
     },
     'OR3_ADMIN_EXTENSION_ALLOWED_EXTENSIONS': {
         label: 'Allowed File Extensions',
         description: 'Comma-separated list of allowed file extensions in plugins (e.g., .js,.ts,.vue)',
         group: 'Admin',
-        order: 10,
+        order: 11,
     },
 
     // External Services

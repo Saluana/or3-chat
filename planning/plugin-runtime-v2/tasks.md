@@ -116,7 +116,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R9.AC1, R9.AC2
       Done when: a boot test proves no non-core loader/import function is called in safe mode.
 
-- [ ] 2.11 Run and document the shadow rollback drill
+- [x] 2.11 Run and document the shadow rollback drill
       Requirements: R9.AC4, R9.AC8
       Done when: removing/disabling only the observer restores the exact V1 path and the Milestone 0 qualification remains green.
 

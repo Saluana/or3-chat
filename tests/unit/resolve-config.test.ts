@@ -504,6 +504,15 @@ describe('buildOr3CloudConfigFromEnv', () => {
         ).toBe(true);
     });
 
+    it('parses the startup-only shadow observer rollback flag', () => {
+        expect(buildOr3CloudConfigFromEnv({}).admin?.pluginRuntimeShadowEnabled).toBe(true);
+        expect(
+            buildOr3CloudConfigFromEnv({
+                OR3_PLUGIN_RUNTIME_SHADOW_ENABLED: 'false',
+            }).admin?.pluginRuntimeShadowEnabled
+        ).toBe(false);
+    });
+
     it('parses admin extension limits', () => {
         const config = buildOr3CloudConfigFromEnv({
             OR3_ADMIN_EXTENSION_MAX_ZIP_BYTES: '10485760',

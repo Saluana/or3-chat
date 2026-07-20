@@ -451,6 +451,14 @@ export interface Or3CloudConfig {
         disableNonCorePlugins?: boolean;
 
         /**
+         * Enables the read-only Plugin Runtime V2 shadow observer. Disabling
+         * this startup flag leaves the authoritative V1 loader active.
+         * @env OR3_PLUGIN_RUNTIME_SHADOW_ENABLED
+         * @default true
+         */
+        pluginRuntimeShadowEnabled?: boolean;
+
+        /**
          * Enables client workspace plugin runtime loader paths.
          * @default true
          */

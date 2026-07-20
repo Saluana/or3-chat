@@ -9,10 +9,9 @@ import {
     type Or3WorkspacePlugin,
 } from '~/composables/plugins/workspace-runtime';
 import { resolveBundledPluginArtifact } from '~~/shared/plugins/bundled-plugin-catalog';
-import { createDescriptorResolver } from '~~/shared/plugins/descriptor-resolver';
 import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
-import { getShadowPluginManager } from '~/composables/plugins/shadow-plugin-manager';
 import { discoverNonCorePlugins } from '~~/shared/plugins/safe-mode';
+import { createWorkspacePluginShadowObserver } from '~/composables/plugins/workspace-plugin-shadow-observer';
 
 function findLoader(
     modules: Record<string, () => Promise<unknown>>,
@@ -65,12 +64,13 @@ export default defineNuxtPlugin(() => {
     if (!modules) return;
 
     const session = useSessionContext();
-    const descriptorResolver = createDescriptorResolver(bundledPluginCatalog);
-    const shadowManager = getShadowPluginManager();
+    const shadowObserver = createWorkspacePluginShadowObserver({
+        enabled: runtimeConfig.public?.admin?.pluginRuntimeShadowEnabled !== false,
+        catalog: bundledPluginCatalog,
+    });
     let currentRevision = '';
     let syncToken = 0;
     const managedPluginIds = new Set<string>();
-    const shadowObservationTokens = new Map<string, symbol>();
 
     const syncManifest = async () => {
         const token = ++syncToken;
@@ -79,8 +79,7 @@ export default defineNuxtPlugin(() => {
             for (const id of Array.from(managedPluginIds)) {
                 unregisterWorkspacePluginInstance(id);
                 managedPluginIds.delete(id);
-                shadowObservationTokens.delete(id);
-                shadowManager.observeManagedStop(id);
+                shadowObserver?.observeStop(id);
             }
             currentRevision = '';
             return;
@@ -117,8 +116,7 @@ export default defineNuxtPlugin(() => {
             if (!enabledSet.has(id)) {
                 unregisterWorkspacePluginInstance(id);
                 managedPluginIds.delete(id);
-                shadowObservationTokens.delete(id);
-                shadowManager.observeManagedStop(id);
+                shadowObserver?.observeStop(id);
             }
         }
 
@@ -135,18 +133,10 @@ export default defineNuxtPlugin(() => {
             if (!loader) {
                 const clientEntry = manifest.runtime[pluginId]?.clientEntry;
                 const runtimeEntry = manifest.runtime[pluginId];
-                shadowManager.recordDivergence({
-                    kind:
-                        runtimeEntry?.descriptorStatus === 'rebuild-required'
-                            ? 'rebuild-required'
-                            : 'desired-not-observed',
-                    desiredPluginId: pluginId,
-                    desiredSource: 'extension',
-                    desiredWorkspaceId: manifest.workspaceId ?? workspaceId,
-                    rebuildRequiredReason:
-                        runtimeEntry?.descriptorStatus === 'rebuild-required'
-                            ? runtimeEntry.rebuildRequiredReason
-                            : undefined,
+                shadowObserver?.recordDivergence({
+                    pluginId,
+                    workspaceId: manifest.workspaceId ?? workspaceId,
+                    runtimeEntry,
                 });
                 if (clientEntry) {
                     console.warn(
@@ -190,60 +180,21 @@ export default defineNuxtPlugin(() => {
                     continue;
                 }
                 managedPluginIds.add(pluginId);
-                const shadowObservationToken = Symbol(pluginId);
-                shadowObservationTokens.set(pluginId, shadowObservationToken);
                 // Shadow-only: V1 has already imported and registered. Descriptor
                 // verification observes that outcome and never controls it.
-                void descriptorResolver
-                    .resolveBundled({
-                        pluginId,
-                        workspaceId: manifest.workspaceId ?? workspaceId,
-                        runtimeEntry: manifest.runtime[pluginId],
-                    })
-                    .then((resolution) => {
-                        if (
-                            shadowObservationTokens.get(pluginId) !== shadowObservationToken ||
-                            !managedPluginIds.has(pluginId)
-                        ) {
-                            return;
-                        }
-                        if (resolution.status !== 'ready') {
-                            shadowManager.recordDivergence({
-                                kind:
-                                    resolution.failure.code === 'rebuild-required'
-                                        ? 'rebuild-required'
-                                        : resolution.failure.code === 'workspace-id-mismatch'
-                                          ? 'workspace-mismatch'
-                                          : 'identity-mismatch',
-                                desiredPluginId: pluginId,
-                                observedPluginId: pluginId,
-                                desiredSource: 'extension',
-                                observedSource: 'extension',
-                                desiredWorkspaceId: manifest.workspaceId ?? workspaceId,
-                                observedWorkspaceId: workspaceId,
-                                rebuildRequiredReason:
-                                    manifest.runtime[pluginId]?.descriptorStatus ===
-                                    'rebuild-required'
-                                        ? manifest.runtime[pluginId]?.rebuildRequiredReason
-                                        : undefined,
-                            });
-                            return;
-                        }
-                        shadowManager.observeManagedActivation({
-                            descriptor: resolution.descriptor,
-                            lifecycleCoverage:
-                                manifest.runtime[pluginId]?.lifecycleCoverage ??
-                                'legacy-global-possible',
-                        });
-                    });
+                shadowObserver?.observeActivation({
+                    pluginId,
+                    workspaceId: manifest.workspaceId ?? workspaceId,
+                    runtimeEntry: manifest.runtime[pluginId],
+                    isStillManaged: () => managedPluginIds.has(pluginId),
+                });
                 dispose = null;
             } catch (error) {
                 hadFailure = true;
-                shadowManager.recordDivergence({
-                    kind: 'desired-not-observed',
-                    desiredPluginId: pluginId,
-                    desiredSource: 'extension',
-                    desiredWorkspaceId: manifest.workspaceId ?? workspaceId,
+                shadowObserver?.recordDivergence({
+                    pluginId,
+                    workspaceId: manifest.workspaceId ?? workspaceId,
+                    runtimeEntry: manifest.runtime[pluginId],
                 });
                 if (dispose) {
                     dispose();
@@ -284,8 +235,7 @@ export default defineNuxtPlugin(() => {
             window.removeEventListener('focus', onFocus);
             for (const id of Array.from(managedPluginIds)) {
                 unregisterWorkspacePluginInstance(id);
-                shadowObservationTokens.delete(id);
-                shadowManager.observeManagedStop(id);
+                shadowObserver?.observeStop(id);
             }
             managedPluginIds.clear();
         });

@@ -270,6 +270,8 @@ const adminConfig = {
     allowRestart: Boolean(or3CloudConfig.admin?.allowRestart),
     allowRebuild: Boolean(or3CloudConfig.admin?.allowRebuild),
     disableNonCorePlugins,
+    pluginRuntimeShadowEnabled:
+        or3CloudConfig.admin?.pluginRuntimeShadowEnabled !== false,
     pluginRuntimeLoaderEnabled:
         or3CloudConfig.admin?.pluginRuntimeLoaderEnabled !== false,
     pluginZipInstallEnabled:
@@ -505,6 +507,7 @@ export default defineNuxtConfig({
             admin: {
                 basePath: adminConfig.basePath,
                 disableNonCorePlugins: adminConfig.disableNonCorePlugins,
+                pluginRuntimeShadowEnabled: adminConfig.pluginRuntimeShadowEnabled,
                 pluginRuntimeLoaderEnabled: adminConfig.pluginRuntimeLoaderEnabled,
                 pluginRouteDispatcherEnabled: adminConfig.pluginRouteDispatcherEnabled,
             },

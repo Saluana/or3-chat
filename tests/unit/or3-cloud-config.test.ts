@@ -181,6 +181,7 @@ describe('defineOr3CloudConfig', () => {
         expect(config.admin?.basePath).toBe('/custom-admin');
         expect(config.admin?.allowRestart).toBe(false); // default preserved
         expect(config.admin?.disableNonCorePlugins).toBe(false);
+        expect(config.admin?.pluginRuntimeShadowEnabled).toBe(true);
         expect(config.admin?.pluginRuntimeLoaderEnabled).toBe(true);
         expect(config.admin?.pluginZipInstallEnabled).toBe(true);
         expect(config.admin?.pluginRouteDispatcherEnabled).toBe(true);
@@ -192,6 +193,7 @@ describe('defineOr3CloudConfig', () => {
             admin: {
                 pluginRuntimeLoaderEnabled: false,
                 disableNonCorePlugins: true,
+                pluginRuntimeShadowEnabled: false,
                 pluginZipInstallEnabled: false,
                 pluginRouteDispatcherEnabled: false,
             },
@@ -199,6 +201,7 @@ describe('defineOr3CloudConfig', () => {
 
         expect(config.admin?.pluginRuntimeLoaderEnabled).toBe(false);
         expect(config.admin?.disableNonCorePlugins).toBe(true);
+        expect(config.admin?.pluginRuntimeShadowEnabled).toBe(false);
         expect(config.admin?.pluginZipInstallEnabled).toBe(false);
         expect(config.admin?.pluginRouteDispatcherEnabled).toBe(false);
     });

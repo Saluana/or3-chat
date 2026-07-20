@@ -236,6 +236,7 @@ Admin routes are **disabled by default**. They become available only when `OR3_A
 | Key | Default | Description |
 |-----|---------|-------------|
 | `admin.disableNonCorePlugins` (`OR3_DISABLE_NON_CORE_PLUGINS`) | `false` | Boot-time safe mode; skips configured Nuxt plugin modules, admin/workspace plugin discovery, runtime manifests, and plugin server routes before plugin code executes |
+| `admin.pluginRuntimeShadowEnabled` (`OR3_PLUGIN_RUNTIME_SHADOW_ENABLED`) | `true` | Enables the read-only Milestone 1 observer; set to `false` and restart to restore the observer-free V1 path without disabling plugins |
 | `admin.pluginRuntimeLoaderEnabled` | `true` | Enables workspace plugin runtime manifest + client loader paths |
 | `admin.pluginZipInstallEnabled` | `true` | Enables/disables ZIP-based extension install endpoint |
 | `admin.pluginRouteDispatcherEnabled` | `true` | Enables/disables manifest-declared plugin server route dispatcher |

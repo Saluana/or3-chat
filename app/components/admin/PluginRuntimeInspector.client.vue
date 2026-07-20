@@ -31,7 +31,9 @@
         </div>
 
         <div class="flex flex-wrap gap-2 text-xs">
-            <UBadge color="neutral" variant="subtle">Manager: shadow observer</UBadge>
+            <UBadge :color="shadowObserverEnabled ? 'neutral' : 'warning'" variant="subtle">
+                Manager: {{ shadowObserverEnabled ? 'shadow observer' : 'V1 only (observer disabled)' }}
+            </UBadge>
             <UBadge color="neutral" variant="subtle">Module loader: bundled-v1</UBadge>
             <UBadge color="neutral" variant="subtle">Hook engine: V1</UBadge>
             <UBadge :color="safeModeEnabled ? 'warning' : 'neutral'" variant="subtle">
@@ -111,9 +113,12 @@
 import { getShadowPluginManager } from '~/composables/plugins/shadow-plugin-manager';
 
 const runtimeConfig = useRuntimeConfig();
-const manager = getShadowPluginManager();
-const records = shallowRef(manager.listRecords());
-const divergences = shallowRef(manager.listDivergences());
+const shadowObserverEnabled =
+    (runtimeConfig.public as { admin?: { pluginRuntimeShadowEnabled?: boolean } }).admin
+        ?.pluginRuntimeShadowEnabled !== false;
+const manager = shadowObserverEnabled ? getShadowPluginManager() : null;
+const records = shallowRef(manager?.listRecords() ?? []);
+const divergences = shallowRef(manager?.listDivergences() ?? []);
 const ssrAuthEnabled = runtimeConfig.public.ssrAuthEnabled === true;
 const safeModeEnabled =
     (runtimeConfig.public as { admin?: { disableNonCorePlugins?: boolean } }).admin
@@ -124,8 +129,8 @@ const runtimeLoaderEnabled =
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
 function refresh() {
-    records.value = manager.listRecords();
-    divergences.value = manager.listDivergences();
+    records.value = manager?.listRecords() ?? [];
+    divergences.value = manager?.listDivergences() ?? [];
 }
 
 onMounted(() => {
