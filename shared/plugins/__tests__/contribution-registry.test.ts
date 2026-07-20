@@ -82,6 +82,36 @@ describe('ContributionRegistry', () => {
         expect(contributions.snapshot({ allowed: true })).toEqual([]);
     });
 
+    it('preserves legacy insertion position when an order-only surface replaces an id', () => {
+        const contributions = new ContributionRegistry<Item, void>({
+            activationTable: new ActivationTable(),
+            getId: (value) => value.id,
+            compare: (left, right) => left.order - right.order,
+        });
+        contributions.registerLegacy({
+            value: { id: 'first', order: 200, label: 'original' },
+        });
+        contributions.registerLegacy({
+            value: { id: 'second', order: 200, label: 'second' },
+        });
+        contributions.registerLegacy({
+            value: { id: 'first', order: 200, label: 'replacement' },
+        });
+
+        expect(contributions.snapshot(undefined).map((value) => value.id)).toEqual([
+            'first',
+            'second',
+        ]);
+        contributions.unregisterLegacy('first');
+        contributions.registerLegacy({
+            value: { id: 'first', order: 200, label: 'new registration' },
+        });
+        expect(contributions.snapshot(undefined).map((value) => value.id)).toEqual([
+            'second',
+            'first',
+        ]);
+    });
+
     it('removing an old owner cannot remove the current same-id generation', () => {
         const table = new ActivationTable();
         const contributions = registry(table);

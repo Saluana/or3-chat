@@ -65,6 +65,7 @@ export class ContributionRegistry<
     readonly #now: () => number;
     readonly #recordsByOwner = new Map<symbol, Map<string, StoredRecord<T, TMetadata>>>();
     readonly #legacyById = new Map<string, StoredRecord<T, TMetadata>>();
+    readonly #legacyProjectionOrderById = new Map<string, number>();
     readonly #listeners = new Set<() => void>();
     readonly #unsubscribeActivation: () => void;
     #sequence = 0;
@@ -153,10 +154,14 @@ export class ContributionRegistry<
         const owner = input.owner ?? Symbol(`legacy:${id}`);
         const previous = this.#legacyById.get(id);
         if (previous) this.#recordsByOwner.delete(previous.owner);
+        const sequence = ++this.#sequence;
+        if (!this.#legacyProjectionOrderById.has(id)) {
+            this.#legacyProjectionOrderById.set(id, sequence);
+        }
         const record = Object.freeze({
             id,
             owner,
-            sequence: ++this.#sequence,
+            sequence,
             visibility: 'legacy-visible' as const,
             value,
             metadata: input.metadata ?? this.#defaultMetadata(),
@@ -196,6 +201,7 @@ export class ContributionRegistry<
         for (const record of records.values()) {
             if (record.visibility === 'legacy-visible' && this.#legacyById.get(record.id)?.owner === owner) {
                 this.#legacyById.delete(record.id);
+                this.#legacyProjectionOrderById.delete(record.id);
             }
         }
         this.#recordsByOwner.delete(owner);
@@ -261,8 +267,14 @@ export class ContributionRegistry<
         }
         return Array.from(byId.values()).sort((left, right) => {
             const compared = this.#compare(left.value, right.value);
-            return compared || left.sequence - right.sequence;
+            return compared || this.#projectionOrder(left) - this.#projectionOrder(right);
         });
+    }
+
+    #projectionOrder(record: StoredRecord<T, TMetadata>): number {
+        return record.visibility === 'legacy-visible'
+            ? (this.#legacyProjectionOrderById.get(record.id) ?? record.sequence)
+            : record.sequence;
     }
 
     #isAffectedByActivation(change: ActivationChange): boolean {

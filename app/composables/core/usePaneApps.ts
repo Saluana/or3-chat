@@ -10,6 +10,8 @@ import {
     createRegistrationHandle,
     type RegistrationHandle,
 } from '~~/shared/plugins/registration-handle';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 /**
  * Pane app definition: describes a custom pane application that can be registered
@@ -110,6 +112,30 @@ const reactiveRegistry = reactive({ registry });
 
 const DEFAULT_ORDER = 200;
 
+function normalizePaneApp(def: PaneAppDef): RegisteredPaneApp {
+    return {
+        ...def,
+        component: markRaw(
+            typeof def.component === 'function'
+                ? def.component
+                : markRaw(def.component)
+        ),
+        order: def.order ?? DEFAULT_ORDER,
+    };
+}
+
+const v2Kernel = getContributionSurfaceKernel<RegisteredPaneApp>('pane-apps', {
+    getId: (app) => app.id,
+    normalize: normalizePaneApp,
+    // Pane apps preserve registration order when order values tie.
+    compare: (left, right) =>
+        (left.order ?? DEFAULT_ORDER) - (right.order ?? DEFAULT_ORDER),
+});
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('pane-apps');
+}
+
 /**
  * `usePaneApps`
  *
@@ -152,16 +178,12 @@ export function usePaneApps() {
             );
         }
 
+        if (useV2Surface()) {
+            return v2Kernel.registry.registerLegacy({ value: def });
+        }
+
         const owner = Symbol(`pane-app:${def.id}`);
-        const normalized: RegisteredPaneApp = {
-            ...def,
-            component: markRaw(
-                typeof def.component === 'function'
-                    ? def.component
-                    : markRaw(def.component)
-            ),
-            order: def.order ?? DEFAULT_ORDER,
-        };
+        const normalized = normalizePaneApp(def);
         ownedRegistry.set(def.id, { app: normalized, owner });
         registry.set(def.id, normalized);
         // Trigger reactivity by mutating the reactive wrapper
@@ -183,6 +205,10 @@ export function usePaneApps() {
      * Unregister a pane app by id.
      */
     function unregisterPaneApp(id: string): void {
+        if (useV2Surface()) {
+            v2Kernel.registry.unregisterLegacy(id);
+            return;
+        }
         ownedRegistry.delete(id);
         registry.delete(id);
         // Trigger reactivity
@@ -193,13 +219,16 @@ export function usePaneApps() {
      * Get a registered pane app by id.
      */
     function getPaneApp(id: string): RegisteredPaneApp | undefined {
-        return registry.get(id);
+        return useV2Surface()
+            ? v2Kernel.registry.get(id, undefined)
+            : registry.get(id);
     }
 
     /**
      * List all registered pane apps, sorted by order (ascending).
      */
     const listPaneApps: ComputedRef<RegisteredPaneApp[]> = computed(() => {
+        if (useV2Surface()) return [...v2Kernel.items.value];
         // Access reactive registry to establish dependency
         const currentRegistry = reactiveRegistry.registry;
         const apps = Array.from(currentRegistry.values());

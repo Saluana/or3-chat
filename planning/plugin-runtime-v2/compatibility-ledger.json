@@ -6,7 +6,7 @@
     "moduleManifest": "planning/plugin-runtime-v2/compatibility-ledger.modules.json",
     "moduleManifestSha256": "67d56a581a19f5968bd170955bc317b8aba9afdd0878a30fb00f45dab767bbb1",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "27d37205822779732dbb4e42843b313ff46c292eb9c2b62702b028b0f36bb086",
+    "nuxtImportsDeclarationSha256": "9e2e3806f7e3ec7971f65e7cf66f0fc13071b778c97466e167b9f3185933b72e",
     "behaviorProfiles": "planning/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "7330e3f7e4e9c5d5ecbe7cf0c7485b51d25269f789b8940b23763bf0cedfc291"
   },
@@ -971,7 +971,7 @@
     },
     {
       "source": "app/composables/core/usePaneApps.ts",
-      "apiSha256": "2e08bee613d0dae78d33c8a96becdb4c006f1dc62d51db6d9cf66f4d642c065e",
+      "apiSha256": "3701b36cc82148a7d58da695e8623c962171ce6a0b215b6c5d8a6bd1d00b1256",
       "runtime": "client",
       "publicPaths": [
         "~/composables/core/usePaneApps"
@@ -992,7 +992,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 18,
+              "line": 20,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PaneAppDef {\n    /** Unique identifier for the pane app (used as the pane mode when opened). */\n    id: string;\n\n    /** Display label shown in UI (e.g., sidebar). */\n    label: string;\n\n    /** Optional Iconify icon name. */\n    icon?: string;\n\n    /** Vue component or async component factory. */\n    component: Component | (() => Promise<Component>);\n\n    /**\n     * Optional override for the postType stored in the posts table.\n     * If not provided, defaults to the app id.\n     */\n    postType?: string;\n\n    /**\n     * Optional callback to create an initial record when a new pane is opened.\n     * Return { id } to assign as the pane's documentId, or null for no record.\n     */\n    createInitialRecord?: (ctx: {\n        app: PaneAppDef;\n    }) => Promise<{ id: string } | null>;\n\n    /**\n     * Optional ordering (lower = earlier in sorted lists). Defaults to 200.\n     */\n    order?: number;\n}"
             }
@@ -1006,7 +1006,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 52,
+              "line": 54,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type RegisteredPaneApp = PaneAppDef;"
             }
@@ -1023,7 +1023,7 @@
               "resolvedReturnType": "{ registerPaneApp: (def: PaneAppDef) => RegistrationHandle; unregisterPaneApp: (id: string) => void; getPaneApp: (id: string) => RegisteredPaneApp | undefined; listPaneApps: ComputedRef<PaneAppDef[]>; }",
               "declaration": {
                 "source": "app/composables/core/usePaneApps.ts",
-                "line": 141,
+                "line": 167,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function usePaneApps();"
               }
@@ -1032,7 +1032,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 141,
+              "line": 167,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function usePaneApps();"
             }
@@ -2466,7 +2466,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "b50850db870fc28d072c575ad744dc6d4a660ea3873288583f1fbe900ca2cc29",
+      "apiSha256": "b867595d7f93b1d3d00b4295e303de615404c42c6a398be440a53d705d96dbcf",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3741,7 +3741,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 18,
+              "line": 20,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface PaneAppDef {\n    /** Unique identifier for the pane app (used as the pane mode when opened). */\n    id: string;\n\n    /** Display label shown in UI (e.g., sidebar). */\n    label: string;\n\n    /** Optional Iconify icon name. */\n    icon?: string;\n\n    /** Vue component or async component factory. */\n    component: Component | (() => Promise<Component>);\n\n    /**\n     * Optional override for the postType stored in the posts table.\n     * If not provided, defaults to the app id.\n     */\n    postType?: string;\n\n    /**\n     * Optional callback to create an initial record when a new pane is opened.\n     * Return { id } to assign as the pane's documentId, or null for no record.\n     */\n    createInitialRecord?: (ctx: {\n        app: PaneAppDef;\n    }) => Promise<{ id: string } | null>;\n\n    /**\n     * Optional ordering (lower = earlier in sorted lists). Defaults to 200.\n     */\n    order?: number;\n}"
             }
@@ -4115,7 +4115,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 52,
+              "line": 54,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type RegisteredPaneApp = PaneAppDef;"
             }
@@ -5604,7 +5604,7 @@
               "resolvedReturnType": "{ registerPaneApp: (def: PaneAppDef) => RegistrationHandle; unregisterPaneApp: (id: string) => void; getPaneApp: (id: string) => RegisteredPaneApp | undefined; listPaneApps: ComputedRef<PaneAppDef[]>; }",
               "declaration": {
                 "source": "app/composables/core/usePaneApps.ts",
-                "line": 141,
+                "line": 167,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function usePaneApps();"
               }
@@ -5613,7 +5613,7 @@
           "declarations": [
             {
               "source": "app/composables/core/usePaneApps.ts",
-              "line": 141,
+              "line": 167,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function usePaneApps();"
             }

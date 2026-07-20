@@ -220,7 +220,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC5, R4.AC4-R4.AC7
       Done when: placement grouping, default placement, access, component identity, and current return shapes match.
 
-- [ ] 4.11 Migrate pane apps behind its compatibility adapter
+- [x] 4.11 Migrate pane apps behind its compatibility adapter
       Requirements: R1.AC5, R4.AC4-R4.AC7
       Done when: Zod errors, `markRaw`, order-only ties, getters, and exact-owner replacement match.
 
