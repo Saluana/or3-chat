@@ -142,7 +142,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC7, R3.AC8
       Done when: fault-injection tests at each boundary prove a superseded generation cannot publish state or registrations.
 
-- [ ] 3.6 Implement a per-plugin lifecycle mutex and a serialized reconcile coordinator
+- [x] 3.6 Implement a per-plugin lifecycle mutex and a serialized reconcile coordinator
       Requirements: R2.AC7, R3.AC8, R7.AC6
       Done when: same-ID start/stop/replace operations serialize while unrelated plugin operations can progress.
 
