@@ -232,7 +232,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC5, R4.AC4-R4.AC7
       Done when: plugin/page replacement and reactive projections pass the differential suite.
 
-- [ ] 4.14 Migrate dashboard navigation/component caches behind the adapter
+- [x] 4.14 Migrate dashboard navigation/component caches behind the adapter
       Requirements: R1.AC5, R4.AC4
       Done when: resolve, retry, removal, replacement, active navigation, and cache invalidation tests match the V1 profile.
 

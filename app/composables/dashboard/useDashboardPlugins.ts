@@ -76,6 +76,7 @@ type DashboardGlobals = typeof globalThis & {
         Map<string, DashboardPluginPage>
     >;
     __or3DashboardNavigationRuntime?: DashboardNavigationRuntime;
+    __or3DashboardNavigationRuntimeV2?: DashboardNavigationRuntime;
     __or3DashboardV2PageBuckets?: Set<string>;
 };
 
@@ -174,8 +175,21 @@ function useV2Surface(): boolean {
     return getContributionSurfaceSelection().isSelected('dashboard');
 }
 
+function useNavigationV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected(
+        'dashboard-navigation'
+    );
+}
+
 // Component resolution cache
-const pageComponentCache = new Map<string, Component>();
+const legacyPageComponentCache = new Map<string, Component>();
+const v2PageComponentCache = new Map<string, Component>();
+
+function getPageComponentCache(): Map<string, Component> {
+    return useNavigationV2Surface()
+        ? v2PageComponentCache
+        : legacyPageComponentCache;
+}
 
 export type DashboardNavigationErrorCode =
     | 'missing-plugin'
@@ -214,18 +228,18 @@ interface DashboardNavigationRuntime {
 }
 
 function deletePageCache(pluginId: string, pageId: string) {
-    pageComponentCache.delete(`${pluginId}:${pageId}`);
+    getPageComponentCache().delete(`${pluginId}:${pageId}`);
 }
 
 function deleteAllPluginPageCache(pluginId: string) {
-    for (const key of pageComponentCache.keys()) {
-        if (key.startsWith(pluginId + ':')) pageComponentCache.delete(key);
+    const cache = getPageComponentCache();
+    for (const key of cache.keys()) {
+        if (key.startsWith(pluginId + ':')) cache.delete(key);
     }
 }
 
-const navigationRuntime: DashboardNavigationRuntime =
-    g.__or3DashboardNavigationRuntime ||
-    (g.__or3DashboardNavigationRuntime = {
+function createDashboardNavigationRuntime(): DashboardNavigationRuntime {
+    return {
         state: reactive<DashboardNavigationState>({
             view: 'dashboard',
             activePluginId: null,
@@ -235,7 +249,22 @@ const navigationRuntime: DashboardNavigationRuntime =
         }),
         resolvedComponent: shallowRef<Component | null>(null),
         baseItems: shallowRef<DashboardPlugin[]>([]),
-    });
+    };
+}
+
+const legacyNavigationRuntime: DashboardNavigationRuntime =
+    g.__or3DashboardNavigationRuntime ||
+    (g.__or3DashboardNavigationRuntime = createDashboardNavigationRuntime());
+const v2NavigationRuntime: DashboardNavigationRuntime =
+    g.__or3DashboardNavigationRuntimeV2 ??
+    (g.__or3DashboardNavigationRuntimeV2 =
+        createDashboardNavigationRuntime());
+
+function getDashboardNavigationRuntime(): DashboardNavigationRuntime {
+    return useNavigationV2Surface()
+        ? v2NavigationRuntime
+        : legacyNavigationRuntime;
+}
 
 function syncPages(pluginId: string) {
     const m = pageRegistry.get(pluginId);
@@ -260,7 +289,7 @@ function getDashboardPluginAccessPolicy(
 ): PluginGatePolicy | undefined {
     const fromRegistry = getRegisteredDashboardPlugin(pluginId)?.access;
     if (fromRegistry) return fromRegistry;
-    return navigationRuntime.baseItems.value.find((item) => item.id === pluginId)
+    return getDashboardNavigationRuntime().baseItems.value.find((item) => item.id === pluginId)
         ?.access;
 }
 
@@ -696,6 +725,7 @@ export async function resolveDashboardPluginPageComponent(
     pageId: string
 ): Promise<Component | undefined> {
     const key = `${pluginId}:${pageId}`;
+    const pageComponentCache = getPageComponentCache();
     if (pageComponentCache.has(key)) return pageComponentCache.get(key);
     const page = getDashboardPluginPage(pluginId, pageId);
     if (!page) return;
@@ -759,6 +789,7 @@ export async function resolveDashboardPluginPageComponent(
 export function useDashboardNavigation(
     options: UseDashboardNavigationOptions = {}
 ) {
+    const navigationRuntime = getDashboardNavigationRuntime();
     if (options.baseItems !== undefined) {
         navigationRuntime.baseItems.value = [...options.baseItems];
     }
