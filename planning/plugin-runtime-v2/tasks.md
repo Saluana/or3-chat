@@ -354,7 +354,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
 
 ## 7. Milestone 7 — Immutable packages and post-build loaders
 
-- [ ] 7.1 Implement safe canonical package-tree hashing and validation
+- [x] 7.1 Implement safe canonical package-tree hashing and validation
       Requirements: R7.AC2, R7.AC4
       Done when: traversal, symlink, device file, duplicate normalized path, case-fold collision, mode, length, and manifest-integrity vectors pass.
 
