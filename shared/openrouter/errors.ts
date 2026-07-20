@@ -15,7 +15,7 @@ import {
     ServiceUnavailableResponseError,
     EdgeNetworkTimeoutResponseError,
     ProviderOverloadedResponseError,
-    ChatError,
+    UnprocessableEntityResponseError,
 } from '@openrouter/sdk/models/errors';
 
 export type ErrorCode =
@@ -29,7 +29,6 @@ export type ErrorCode =
     | 'ERR_SERVER'
     | 'ERR_PROVIDER'
     | 'ERR_OVERLOADED'
-    | 'ERR_CHAT'
     | 'ERR_ABORTED'
     | 'ERR_UNKNOWN';
 
@@ -236,12 +235,12 @@ export function normalizeSDKError(error: unknown): NormalizedError {
         };
     }
 
-    if (error instanceof ChatError) {
+    if (error instanceof UnprocessableEntityResponseError) {
         const errData = error.error;
         return {
-            code: 'ERR_CHAT',
-            message: errData.message || 'Chat request failed.',
-            status: 400,
+            code: 'ERR_BAD_REQUEST',
+            message: errData.message || 'Invalid request parameters.',
+            status: 422,
             retryable: false,
             raw: error,
         };

@@ -1199,13 +1199,25 @@ export function useChat(
                 maybeParams
             );
         } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error);
             result = {
                 status: 'failed', requestId,
                 reason: error instanceof ToolIterationLimitError
                     ? 'tool_iteration_limit'
                     : 'stream_error',
-                error: error instanceof Error ? error.message : String(error),
+                error: message,
             };
+            if (import.meta.dev) {
+                console.warn('[useChat] sendMessage threw', error);
+            }
+            reportError(
+                err('ERR_INTERNAL', message || 'Failed to send message', {
+                    severity: 'error',
+                    tags: { domain: 'chat', stage: 'send' },
+                }),
+                { toast: true }
+            );
         } finally {
             if (activeRequestId === requestId) activeRequestId = null;
             if (activeRequestScope === requestScope) {

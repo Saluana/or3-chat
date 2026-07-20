@@ -13,6 +13,7 @@
  * - Rendering or formatting thread content
  * - Server-side sync logic
  */
+import { useRuntimeConfig } from '#imports';
 import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
@@ -50,7 +51,6 @@ export async function createThread(input: ThreadCreate): Promise<Thread> {
 
     // Check maxConversations limit (client-side enforcement)
     if (import.meta.client) {
-        const { useRuntimeConfig } = await import('#imports');
         const config = useRuntimeConfig();
         const limits = config.public.limits;
         if (limits.enabled !== false && limits.maxConversations > 0) {

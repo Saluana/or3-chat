@@ -25,7 +25,7 @@
         "theme:validate": "tsx scripts/cli/validate-theme.ts",
         "theme:create": "tsx scripts/cli/create-theme.ts",
         "theme:switch": "tsx scripts/cli/switch-theme.ts",
-        "theme:build-css": "bun run scripts/build-theme-css.ts",
+        "theme:build-css": "tsx scripts/build-theme-css.ts",
         "sandbox:fresh": "bun run scripts/cli/create-temp-sandbox.ts",
         "or3-cloud": "bun run scripts/cli/or3-cloud.ts",
         "or3-cloud:init": "bun run scripts/cli/or3-cloud.ts init",
@@ -71,7 +71,7 @@
     },
     "dependencies": {
         "@nuxt/ui": "^3.3.7",
-        "@openrouter/sdk": "^0.3.11",
+        "@openrouter/sdk": "^1.0.0",
         "@or3/plugin-sdk": "file:./packages/plugin-sdk",
         "@orama/orama": "^3.1.16",
         "@tiptap/core": "^3.13.0",

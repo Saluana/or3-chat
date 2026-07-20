@@ -35,7 +35,10 @@ import {
     CORE_APP_COMPONENT_DEFAULTS,
     createThemeComponentMap,
 } from '~/theme/_shared/theme-components-registry';
-import { ThemeActivationCoordinator } from '~/theme/_shared/activation-transaction';
+import {
+    shouldReleasePreviousThemeResources,
+    ThemeActivationCoordinator,
+} from '~/theme/_shared/activation-transaction';
 
 export type { ThemePlugin } from '~/theme/_shared/types';
 
@@ -439,6 +442,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
      */
     const setActiveTheme = async (themeName: string) => {
         const transaction = activationCoordinator.begin();
+        const previousThemeName = activeTheme.value;
         let target = sanitizeTheme(themeName) ?? DEFAULT_THEME;
 
         if (!themeManifest.has(target) && manifestEntries[0]) {
@@ -492,19 +496,24 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         }
         if (!transaction.isCurrent()) return;
 
-        // Remove classes and stylesheets from previous theme
-        const previousTheme = themeRegistry.get(activeTheme.value);
-        if (previousTheme?.cssSelectors) {
-            removeThemeClasses(previousTheme.name);
-        }
+        // A hydration re-apply may target the already-active theme. In that
+        // case the links above are the active resources, not stale resources.
+        if (
+            shouldReleasePreviousThemeResources(previousThemeName, target)
+        ) {
+            const previousTheme = themeRegistry.get(previousThemeName);
+            if (previousTheme?.cssSelectors) {
+                removeThemeClasses(previousTheme.name);
+            }
 
-        if (previousTheme?.hasStyleSelectors) {
-            unloadThemeCSS(previousTheme.name);
-        }
-        // Unload theme-specific stylesheets
-        const previousManifest = themeManifest.get(activeTheme.value);
-        if (previousManifest) {
-            unloadThemeStylesheets(previousManifest.name);
+            if (previousTheme?.hasStyleSelectors) {
+                unloadThemeCSS(previousTheme.name);
+            }
+
+            const previousManifest = themeManifest.get(previousThemeName);
+            if (previousManifest) {
+                unloadThemeStylesheets(previousManifest.name);
+            }
         }
 
         activeTheme.value = target;

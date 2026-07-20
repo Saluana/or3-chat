@@ -23,8 +23,8 @@ import {
     type HITLResponse,
     type WorkflowData,
 } from 'or3-workflow-core';
-import { OpenRouter } from '@openrouter/sdk';
 import { registerHitlRequest, clearHitlRequestsForJob } from './hitl-store';
+import { createWorkflowOpenRouterClient } from '~~/shared/openrouter';
 import { normalizeOpenRouterBaseUrl } from '~~/shared/openrouter/url';
 
 function logBgStream(
@@ -224,7 +224,7 @@ async function runWorkflowInBackground(
     });
 
     const runtimeConfig = useRuntimeConfig();
-    const client = new OpenRouter({
+    const client = createWorkflowOpenRouterClient({
         apiKey: params.apiKey,
         serverURL: normalizeOpenRouterBaseUrl(runtimeConfig.openrouterBaseUrl),
     });
@@ -266,7 +266,8 @@ async function runWorkflowInBackground(
             }),
     }));
 
-    const adapter = new OpenRouterExecutionAdapter(client, {
+    // workflow-core is typed against @openrouter/sdk@0.3; runtime shim handles v1.
+    const adapter = new OpenRouterExecutionAdapter(client as never, {
         defaultModel: 'openai/gpt-4o-mini',
         preflight: true,
         tools: workflowTools,

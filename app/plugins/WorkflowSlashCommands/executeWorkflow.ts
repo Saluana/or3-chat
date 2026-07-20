@@ -656,10 +656,12 @@ export function executeWorkflow(
         const { OpenRouterExecutionAdapter } = await import(
             'or3-workflow-core'
         );
-        const { OpenRouter } = await import('@openrouter/sdk');
+        const { createWorkflowOpenRouterClient } = await import(
+            '~~/shared/openrouter'
+        );
 
-        // Create OpenRouter client
-        const client = new OpenRouter({ apiKey });
+        // Workflow-core still uses the flat chat.send API; wrap for SDK v1.
+        const client = createWorkflowOpenRouterClient({ apiKey });
 
         const toolFallbackModel = pickToolFallbackModel(DEFAULT_TOOL_MODEL);
         const toolModelCheck = ensureToolCapableModels(

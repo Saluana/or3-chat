@@ -8,6 +8,7 @@
 // Client factory and configuration
 export {
     createOpenRouterClient,
+    createWorkflowOpenRouterClient,
     getRequestOptions,
     DEFAULT_HEADERS,
     type OpenRouterClientConfig,
@@ -25,7 +26,15 @@ export {
 } from './errors';
 
 // Type mapping utilities
-export { sdkModelToLocal } from './types';
+export { sdkModelToLocal, type OpenRouterModel } from './types';
+
+// SDK v1 compatibility helpers
+export {
+    collectModelsFromListPages,
+    wrapLegacyChatSendArgs,
+    wrapLegacyOAuthExchangeArgs,
+    patchOpenRouterClientForWorkflowCompat,
+} from './sdk-v1-compat';
 
 // SSE parsing (used for streaming)
 export {

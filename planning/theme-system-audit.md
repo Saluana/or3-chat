@@ -856,7 +856,8 @@ The Vite plugin sets `compiled = true` before compilation. `configResolved()` ca
 
 **Resolved:** deterministic metadata is generated at validation/build time;
 startup joins it to lazy definition/config/icon/style loaders without importing
-every theme, and UI consumes `$theme.availableThemes`.
+every theme, UI consumes `$theme.availableThemes`, and one discovery helper
+includes installed themes exposed through `app/theme` symlinks.
 
 `loadThemeManifest()` imports every theme definition in parallel to obtain metadata, and `app.config.ts` modules are globbed with `{ eager: true }`. It is called on every client boot, each SSR request, and again by dashboard/admin UI code. Active theme registration then imports the selected definition again.
 
@@ -939,7 +940,9 @@ unchanged generated files are not rewritten.
 ## ~~BUILD-07: stale generated CSS is not cleaned~~
 
 **Resolved:** the CSS builder deletes generated files outside the expected set;
-stale removal and current-file preservation are covered by tests.
+it first uses the shared symlink-aware source list so an installed theme is
+never mistaken for stale. Removal, alias importing, and preservation are
+covered by tests.
 
 `buildThemeCSSFiles()` writes current theme files but does not remove CSS for deleted or renamed themes.
 

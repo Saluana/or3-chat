@@ -541,25 +541,29 @@ async function generateImageCaption(
 
     if (!parts.length) return null;
 
-    const { OpenRouter } = await import('@openrouter/sdk');
-    const client = new OpenRouter({ apiKey });
+    const { createOpenRouterClient, wrapLegacyChatSendArgs } = await import(
+        '~~/shared/openrouter'
+    );
+    const client = createOpenRouterClient({ apiKey });
 
-    const result = await client.chat.send({
-        model: modelId,
-        messages: [
-            {
-                role: 'user',
-                content: [
-                    {
-                        type: 'text',
-                        text: 'Provide a concise, plain-text description of the image(s) for downstream text-only models.',
-                    },
-                    ...parts,
-                ],
-            },
-        ],
-        stream: false,
-    });
+    const result = await client.chat.send(
+        wrapLegacyChatSendArgs({
+            model: modelId,
+            messages: [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'Provide a concise, plain-text description of the image(s) for downstream text-only models.',
+                        },
+                        ...parts,
+                    ],
+                },
+            ],
+            stream: false as const,
+        })
+    );
 
     const messageContent = (result as any)?.choices?.[0]?.message?.content;
     const caption = extractTextFromMessageContent(messageContent);

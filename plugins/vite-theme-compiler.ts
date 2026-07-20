@@ -151,7 +151,7 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
 
                 // Rebuild CSS via subprocess (fresh process = no ESM cache)
                 const runtime = process.versions.bun ? process.execPath : 'bun';
-                await execFileAsync(runtime, ['run', 'scripts/build-theme-css.ts'], {
+                await execFileAsync(runtime, ['run', 'theme:build-css'], {
                     cwd: process.cwd(),
                 });
 

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildThemeCSS, buildThemeCSSFiles } from '../build-theme-css';
+import { buildThemeCSS, buildThemeCSSFiles, discoverThemes } from '../build-theme-css';
 import type { ThemeDefinition } from '../../app/theme/_shared/types';
 
 describe('buildThemeCSS', () => {
@@ -51,4 +51,21 @@ describe('buildThemeCSS', () => {
             '[data-theme="current-theme"] .current'
         );
     });
+
+    it('fails discovery instead of deleting CSS when a theme cannot load', async () => {
+        const themesDir = await mkdtemp(join(tmpdir(), 'or3-theme-load-failure-'));
+        temporaryDirectories.push(themesDir);
+        const brokenDir = join(themesDir, 'broken');
+        await mkdir(brokenDir);
+        await writeFile(
+            join(brokenDir, 'theme.ts'),
+            `import 'package-that-does-not-exist'; export default {};`,
+            'utf8'
+        );
+
+        await expect(discoverThemes(themesDir)).rejects.toThrow(
+            'Failed to load theme definition'
+        );
+    });
+
 });

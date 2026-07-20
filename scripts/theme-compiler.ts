@@ -21,6 +21,10 @@ import { DEFAULT_ICONS } from '../app/config/icon-tokens';
 import { compileThemeDefinition } from '../app/theme/_shared/compile-theme';
 import { generateThemeCssVariables } from '../app/theme/_shared/generate-css-variables';
 import { compileOverridesRuntime } from '../app/theme/_shared/runtime-compile';
+import {
+    discoverThemeSourceFiles,
+    importThemeSourceModule,
+} from './theme-discovery';
 
 /**
  * Theme Compiler
@@ -91,72 +95,7 @@ export class ThemeCompiler {
      * Discover all theme files
      */
     private async discoverThemes(): Promise<string[]> {
-        const { readdir, access } = await import('fs/promises');
-        const { constants } = await import('fs');
-        const { join } = await import('path');
-
-        const themeDir = join(process.cwd(), 'app/theme');
-        const entries = await readdir(themeDir, { withFileTypes: true });
-
-        const themes: string[] = [];
-        const { stat } = await import('fs/promises');
-
-        for (const entry of entries) {
-            if (entry.name.startsWith('_')) continue;
-
-            // Dirent.isDirectory() is false for symlinks even when the target is a
-            // directory (e.g. app/theme/cyberpunk -> extensions/themes/cyberpunk).
-            let isThemeDir = entry.isDirectory();
-            if (!isThemeDir && entry.isSymbolicLink()) {
-                try {
-                    isThemeDir = (await stat(join(themeDir, entry.name))).isDirectory();
-                } catch {
-                    isThemeDir = false;
-                }
-            }
-            if (!isThemeDir) continue;
-
-            const themePath = join(themeDir, entry.name, 'theme.ts');
-            try {
-                await access(themePath, constants.F_OK);
-                themes.push(themePath);
-            } catch {
-                if (process.env.NODE_ENV !== 'test') {
-                    console.warn(
-                        `[theme-compiler] Skipping directory "${entry.name}" (no theme.ts)`
-                    );
-                }
-            }
-        }
-
-        return themes;
-    }
-
-    /**
-     * Import a theme module with Nuxt-style `~` / `~~` aliases resolved.
-     * Required for extension themes that live outside `app/` via symlink.
-     */
-    private async importThemeModule(
-        modulePath: string
-    ): Promise<{ default?: ThemeDefinition } & Record<string, unknown>> {
-        const { createJiti } = await import('jiti');
-        const { join } = await import('path');
-        const { pathToFileURL } = await import('url');
-
-        const root = process.cwd();
-        const jiti = createJiti(import.meta.url, {
-            interopDefault: true,
-            alias: {
-                '~': join(root, 'app'),
-                '~~': root,
-                '@': join(root, 'app'),
-            },
-        });
-
-        const href = pathToFileURL(modulePath).href;
-        return (await jiti.import(href)) as {
-            default?: ThemeDefinition;
-        } & Record<string, unknown>;
+        return discoverThemeSourceFiles();
     }
 
     /**
@@ -167,8 +106,11 @@ export class ThemeCompiler {
     ): Promise<ThemeCompilationResult> {
         // Extension themes (and some core themes) import via Nuxt `~` aliases.
         // Plain dynamic import() cannot resolve those outside Vite.
-        const themeModule = await this.importThemeModule(themePath);
-        const definition: ThemeDefinition = themeModule.default || themeModule;
+        const themeModule = await importThemeSourceModule<
+            { default?: ThemeDefinition } & Record<string, unknown>
+        >(themePath);
+        const definition: ThemeDefinition = themeModule.default ??
+            (themeModule as unknown as ThemeDefinition);
 
         const errors: ValidationError[] = [];
         const warnings: ValidationError[] = [];
@@ -197,7 +139,9 @@ export class ThemeCompiler {
 
         if (existsSync(iconConfigPath)) {
             try {
-                const iconModule = await this.importThemeModule(iconConfigPath);
+                const iconModule = await importThemeSourceModule<
+                    { default?: Record<string, unknown> } & Record<string, unknown>
+                >(iconConfigPath);
                 const icons = iconModule.default || iconModule;
 
                 // Validate icon tokens

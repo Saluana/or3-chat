@@ -20,6 +20,7 @@
  * - Deep data redaction or structured error serialization
  */
 
+import { useToast } from '#imports';
 import { useHooks } from '~/core/hooks/useHooks';
 
 export type ErrorSeverity = 'info' | 'warn' | 'error' | 'fatal';
@@ -161,21 +162,21 @@ type ToastApi = {
     add: (toast: ToastPayload) => void;
 };
 
-async function resolveToastApi(): Promise<ToastApi | null> {
+function resolveToastApi(): ToastApi | null {
     if (!import.meta.client) return null;
     try {
-        const mod = (await import('#imports')) as {
-            useToast?: () => ToastApi;
-        };
-        return mod.useToast ? mod.useToast() : null;
+        // Must be a static import. Dynamic `import('#imports')` fails under Vite
+        // HMR with "Failed to fetch dynamically imported module .../imports.mjs",
+        // which silently disables toasts during chat send.
+        return useToast();
     } catch {
         return null;
     }
 }
 
 // Use Nuxt UI toast directly; no custom store.
-async function pushToast(error: AppError, retry?: () => void) {
-    const toast = await resolveToastApi();
+function pushToast(error: AppError, retry?: () => void) {
+    const toast = resolveToastApi();
     if (!toast) return;
     try {
         toast.add({
@@ -277,7 +278,7 @@ export function reportError(
             !opts.silent &&
             !(e.code === 'ERR_STREAM_ABORTED' && e.severity === 'info')
         ) {
-            if (opts.toast || e.severity !== 'info') void pushToast(e, opts.retry);
+            if (opts.toast || e.severity !== 'info') pushToast(e, opts.retry);
         }
         return e;
     } catch (inner) {

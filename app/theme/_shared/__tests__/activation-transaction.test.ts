@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { ThemeActivationCoordinator } from '../activation-transaction';
+import {
+    shouldReleasePreviousThemeResources,
+    ThemeActivationCoordinator,
+} from '../activation-transaction';
 
 describe('ThemeActivationCoordinator', () => {
     it('allows only the latest rapid activation to commit', async () => {
@@ -20,5 +23,14 @@ describe('ThemeActivationCoordinator', () => {
         await pendingA;
 
         expect(committed).toEqual(['b']);
+    });
+
+    it('preserves resources when hydration re-applies the active theme', () => {
+        expect(
+            shouldReleasePreviousThemeResources('cyberpunk', 'cyberpunk')
+        ).toBe(false);
+        expect(
+            shouldReleasePreviousThemeResources('blank', 'cyberpunk')
+        ).toBe(true);
     });
 });
