@@ -207,6 +207,8 @@
                 </div>
             </div>
         </div>
+
+        <PluginRuntimeInspector />
     </div>
 </template>
 

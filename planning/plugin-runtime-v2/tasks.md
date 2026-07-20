@@ -108,7 +108,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC3, R9.AC3, R9.AC5
       Done when: divergences are inspectable, capped, and contain no plugin payload/secrets.
 
-- [ ] 2.9 Add a read-only runtime inspector panel for shadow status and selected startup flags
+- [x] 2.9 Add a read-only runtime inspector panel for shadow status and selected startup flags
       Requirements: R9.AC1, R9.AC3
       Done when: the panel labels client/process/persisted scope, reports actual shadow data, and does not infer active state from workspace enablement.
 
