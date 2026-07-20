@@ -248,7 +248,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC2, R4.AC5, R4.AC8
       Done when: `RegisteredTool` identity, watchers, storage key, override, enabled refs, execution, and exact disposal remain unchanged.
 
-- [ ] 4.18 Adapt server tools to owner inspection without changing its public disposer or execution contract
+- [x] 4.18 Adapt server tools to owner inspection without changing its public disposer or execution contract
       Requirements: R1.AC2, R4.AC5, R4.AC8
       Done when: server tool contract/schema/timeout suites pass unchanged and owners appear only in internal inspection.
 

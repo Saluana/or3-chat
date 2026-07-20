@@ -20,6 +20,12 @@ import {
     MAX_TOOL_ARGUMENT_BYTES,
     MAX_TOOL_DURABLE_RESULT_BYTES,
 } from '~~/shared/chat/tool-limits';
+import { getServerContributionSurfaceSelection } from '../plugins/contribution-surface-selection';
+import {
+    recordServerToolOwnership,
+    removeServerToolOwner,
+    removeServerToolOwnership,
+} from './tool-ownership';
 
 export type LegacyToolHandler<TArgs = Record<string, unknown>> = (
     args: TArgs
@@ -49,6 +55,10 @@ export interface RegisterServerToolOptions {
 const DEFAULT_TIMEOUT_MS = 10000;
 
 const registry = new Map<string, RegisteredServerTool>();
+
+function useV2Surface(): boolean {
+    return getServerContributionSurfaceSelection().isSelected('server-tools');
+}
 
 async function withTimeout(
     handler: (signal: AbortSignal) => Promise<string> | string,
@@ -91,7 +101,7 @@ export function registerServerTool<
     const normalizedHandler: ContextualToolHandler<Record<string, unknown>> =
         (args, context) => (handler as ContextualToolHandler<TArgs>)(args as TArgs, context);
     const owner = Symbol(name);
-    registry.set(name, {
+    const tool: RegisteredServerTool = {
         definition: {
             ...definition,
             runtime,
@@ -100,16 +110,20 @@ export function registerServerTool<
         runtime,
         timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
         owner,
-    });
+    };
+    registry.set(name, tool);
+    if (useV2Surface()) recordServerToolOwnership(tool, owner);
     return () => {
         if (registry.get(name)?.owner !== owner) return false;
         registry.delete(name);
+        if (useV2Surface()) removeServerToolOwner(owner);
         return true;
     };
 }
 
 export function unregisterServerTool(name: string): void {
     registry.delete(name);
+    if (useV2Surface()) removeServerToolOwnership(name);
 }
 
 export function getServerTool(name: string): RegisteredServerTool | undefined {

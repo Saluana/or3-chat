@@ -10522,7 +10522,7 @@
     },
     {
       "source": "server/utils/chat/tool-registry.ts",
-      "apiSha256": "a04b5928a26ef3bf4677332b7619bbc54089dffbc7fb130a9cbaad3d6eb5b6c7",
+      "apiSha256": "7fe3427710bf7fc480425a6919aa9336f380ca2e0ddd842cc21d5ec285a75236",
       "runtime": "server",
       "publicPaths": [
         "~~/server/utils/chat/tool-registry"
@@ -10543,7 +10543,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 27,
+              "line": 33,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ContextualToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs,\n    context: ToolExecutionContext\n) => Promise<string> | string;"
             }
@@ -10560,7 +10560,7 @@
               "resolvedReturnType": "Promise<{ result: string | null; toolName: string; error?: string; timedOut: boolean; runtime?: ToolRuntime; }>",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 152,
+                "line": 166,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function executeServerTool(\n    toolName: string,\n    argsJson: string,\n    context?: ToolExecutionContext,\n    admission?: ToolExecutionAdmission\n): Promise<{\n    result: string | null;\n    toolName: string;\n    error?: string;\n    timedOut: boolean;\n    runtime?: ToolRuntime;\n}>;"
               }
@@ -10569,7 +10569,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 152,
+              "line": 166,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function executeServerTool(\n    toolName: string,\n    argsJson: string,\n    context?: ToolExecutionContext,\n    admission?: ToolExecutionAdmission\n): Promise<{\n    result: string | null;\n    toolName: string;\n    error?: string;\n    timedOut: boolean;\n    runtime?: ToolRuntime;\n}>;"
             }
@@ -10586,7 +10586,7 @@
               "resolvedReturnType": "RegisteredServerTool | undefined",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 115,
+                "line": 129,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getServerTool(name: string): RegisteredServerTool | undefined;"
               }
@@ -10595,7 +10595,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 115,
+              "line": 129,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getServerTool(name: string): RegisteredServerTool | undefined;"
             }
@@ -10609,7 +10609,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 24,
+              "line": 30,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type LegacyToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs\n) => Promise<string> | string;"
             }
@@ -10626,7 +10626,7 @@
               "resolvedReturnType": "RegisteredServerTool[]",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 119,
+                "line": 133,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listServerTools(): RegisteredServerTool[];"
               }
@@ -10635,7 +10635,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 119,
+              "line": 133,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listServerTools(): RegisteredServerTool[];"
             }
@@ -10649,7 +10649,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 35,
+              "line": 41,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisteredServerTool {\n    definition: ToolDefinition;\n    handler: ContextualToolHandler<Record<string, unknown>>;\n    runtime: ToolRuntime;\n    timeoutMs: number;\n    owner: symbol;\n}"
             }
@@ -10666,7 +10666,7 @@
               "resolvedReturnType": "() => boolean",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 74,
+                "line": 84,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerServerTool<\n    TArgs extends Record<string, unknown> = Record<string, unknown>\n>(\n    definition: ToolDefinition,\n    handler: ToolHandler<TArgs>,\n    opts: RegisterServerToolOptions = {}\n): () => boolean;"
               }
@@ -10675,7 +10675,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 74,
+              "line": 84,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerServerTool<\n    TArgs extends Record<string, unknown> = Record<string, unknown>\n>(\n    definition: ToolDefinition,\n    handler: ToolHandler<TArgs>,\n    opts: RegisterServerToolOptions = {}\n): () => boolean;"
             }
@@ -10689,7 +10689,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 43,
+              "line": 49,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisterServerToolOptions {\n    runtime?: ToolRuntime;\n    timeoutMs?: number;\n    override?: boolean;\n}"
             }
@@ -10703,7 +10703,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 33,
+              "line": 39,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;"
             }
@@ -10720,7 +10720,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 111,
+                "line": 124,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterServerTool(name: string): void;"
               }
@@ -10729,7 +10729,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 111,
+              "line": 124,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterServerTool(name: string): void;"
             }
@@ -10746,7 +10746,7 @@
               "resolvedReturnType": "{ valid: true; } | { valid: false; error: string; }",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 124,
+                "line": 138,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function validateServerToolRequest(\n    tools: unknown,\n    runtimeHints: unknown,\n    requireServerMatches: boolean\n): { valid: true } | { valid: false; error: string };"
               }
@@ -10755,7 +10755,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 124,
+              "line": 138,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function validateServerToolRequest(\n    tools: unknown,\n    runtimeHints: unknown,\n    requireServerMatches: boolean\n): { valid: true } | { valid: false; error: string };"
             }
