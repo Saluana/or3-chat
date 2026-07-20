@@ -1523,7 +1523,7 @@
     },
     {
       "source": "app/composables/documents/useDocumentHistoryActions.ts",
-      "apiSha256": "93b41e644477cde3dc71f725da8dc0579cc177adde2eac4972fc16253ba67560",
+      "apiSha256": "1fda4db0b158c4874bea626fdfe8d17892e08049d82b89c688b8cb5d580e3949",
       "runtime": "client",
       "publicPaths": [
         "~/composables/documents/useDocumentHistoryActions"
@@ -1544,7 +1544,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 70,
+              "line": 72,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentHistoryAction\n    extends HistoryActionRegistryItem<Post> {}"
             }
@@ -1561,7 +1561,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 170,
+                "line": 187,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredDocumentHistoryActionIds(): string[];"
               }
@@ -1570,7 +1570,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 170,
+              "line": 187,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredDocumentHistoryActionIds(): string[];"
             }
@@ -1587,7 +1587,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 104,
+                "line": 119,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDocumentHistoryAction(action: DocumentHistoryAction);"
               }
@@ -1596,7 +1596,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 104,
+              "line": 119,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentHistoryAction(action: DocumentHistoryAction);"
             }
@@ -1613,7 +1613,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 126,
+                "line": 142,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDocumentHistoryAction(id: string);"
               }
@@ -1622,7 +1622,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 126,
+              "line": 142,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDocumentHistoryAction(id: string);"
             }
@@ -1634,12 +1634,12 @@
           "nuxtAutoImport": true,
           "signatures": [
             {
-              "signature": "(): globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
+              "signature": "(): ShallowRef<readonly DocumentHistoryAction[]> | globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
               "declaredReturnType": null,
-              "resolvedReturnType": "globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
+              "resolvedReturnType": "ShallowRef<readonly DocumentHistoryAction[]> | globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 148,
+                "line": 165,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDocumentHistoryActions();"
               }
@@ -1648,7 +1648,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 148,
+              "line": 165,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDocumentHistoryActions();"
             }
@@ -2441,7 +2441,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "cad32a8d8b95bd45b53039217ead355b489f4277f2672443033e7fcd14ce6f28",
+      "apiSha256": "7850381d58ab0855ad30ddca4f250a9f9219b518d5ea038745a773b0f47bb274",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2582,7 +2582,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 117,
+              "line": 119,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ChromeActionColor =\n    | 'neutral'\n    | 'primary'\n    | 'secondary'\n    | 'success'\n    | 'warning'\n    | 'error'\n    | 'info'\n    | 'inverse-primary';"
             }
@@ -2790,7 +2790,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 70,
+              "line": 72,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentHistoryAction\n    extends HistoryActionRegistryItem<Post> {}"
             }
@@ -3311,7 +3311,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 170,
+                "line": 187,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredDocumentHistoryActionIds(): string[];"
               }
@@ -3320,7 +3320,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 170,
+              "line": 187,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredDocumentHistoryActionIds(): string[];"
             }
@@ -3519,7 +3519,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 402,
+                "line": 421,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredSidebarFooterActionIds(): string[];"
               }
@@ -3528,7 +3528,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 402,
+              "line": 421,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredSidebarFooterActionIds(): string[];"
             }
@@ -3545,7 +3545,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 383,
+                "line": 402,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredSidebarSectionIds(): string[];"
               }
@@ -3554,7 +3554,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 383,
+              "line": 402,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredSidebarSectionIds(): string[];"
             }
@@ -3571,7 +3571,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 93,
+                "line": 110,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredThreadHistoryActionIds(): string[];"
               }
@@ -3580,7 +3580,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 93,
+              "line": 110,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredThreadHistoryActionIds(): string[];"
             }
@@ -3963,7 +3963,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 104,
+                "line": 119,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDocumentHistoryAction(action: DocumentHistoryAction);"
               }
@@ -3972,7 +3972,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 104,
+              "line": 119,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentHistoryAction(action: DocumentHistoryAction);"
             }
@@ -4211,7 +4211,7 @@
               "resolvedReturnType": "globalThis.RegistrationHandle",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 268,
+                "line": 284,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerSidebarFooterAction(action: SidebarFooterAction);"
               }
@@ -4220,7 +4220,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 268,
+              "line": 284,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerSidebarFooterAction(action: SidebarFooterAction);"
             }
@@ -4237,7 +4237,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 230,
+                "line": 246,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerSidebarSection(section: SidebarSection);"
               }
@@ -4246,7 +4246,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 230,
+              "line": 246,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerSidebarSection(section: SidebarSection);"
             }
@@ -4263,7 +4263,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 78,
+                "line": 93,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerThreadHistoryAction(action: ThreadHistoryAction);"
               }
@@ -4272,7 +4272,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 78,
+              "line": 93,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerThreadHistoryAction(action: ThreadHistoryAction);"
             }
@@ -4458,7 +4458,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 142,
+              "line": 144,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarFooterAction extends RegistryItem {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Icon name rendered inside the footer button. */\n    icon: string;\n    /** Optional visible label (text inside button). */\n    label?: string;\n    /** Optional tooltip shown on hover/focus. */\n    tooltip?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional variant hint passed through to button components. */\n    color?: ChromeActionColor;\n    /** Execute when the footer button is clicked. */\n    handler: (ctx: SidebarFooterActionContext) => void | Promise<void>;\n    /** Optionally hide the action for a given context. */\n    visible?: (ctx: SidebarFooterActionContext) => boolean;\n    /** Optionally disable the action for a given context. */\n    disabled?: (ctx: SidebarFooterActionContext) => boolean;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this action. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -4472,7 +4472,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 96,
+              "line": 98,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarFooterActionContext {\n    /** ID of the currently active thread, if any */\n    activeThreadId?: string | null;\n    /** ID of the currently active document, if any */\n    activeDocumentId?: string | null;\n    /** Whether the sidebar is currently collapsed */\n    isCollapsed?: boolean;\n}"
             }
@@ -4486,7 +4486,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 208,
+              "line": 224,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarFooterActionEntry {\n    /** The footer action definition */\n    action: SidebarFooterAction;\n    /** Whether the action is currently disabled based on context */\n    disabled: boolean;\n}"
             }
@@ -4500,7 +4500,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 42,
+              "line": 44,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarSection extends RegistryItem {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Async or synchronous component rendered inside the sidebar stack. */\n    component: Component | (() => Promise<Component>);\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Where the section should render relative to built-ins. Defaults to `main`. */\n    placement?: SidebarSectionPlacement;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this section. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -4514,7 +4514,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 72,
+              "line": 74,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarSectionGroups {\n    /** Sections that appear at the top of the sidebar */\n    top: SidebarSection[];\n    /** Main sections in the middle of the sidebar */\n    main: SidebarSection[];\n    /** Sections that appear at the bottom of the sidebar */\n    bottom: SidebarSection[];\n}"
             }
@@ -4528,7 +4528,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 25,
+              "line": 27,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type SidebarSectionPlacement = 'top' | 'main' | 'bottom';"
             }
@@ -4570,7 +4570,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 70,
+              "line": 72,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ThreadHistoryAction\n    extends HistoryActionRegistryItem<Thread> {}"
             }
@@ -4679,7 +4679,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 126,
+                "line": 142,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDocumentHistoryAction(id: string);"
               }
@@ -4688,7 +4688,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 126,
+              "line": 142,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDocumentHistoryAction(id: string);"
             }
@@ -4913,7 +4913,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 287,
+                "line": 305,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterSidebarFooterAction(id: string);"
               }
@@ -4922,7 +4922,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 287,
+              "line": 305,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterSidebarFooterAction(id: string);"
             }
@@ -4939,7 +4939,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 249,
+                "line": 265,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterSidebarSection(id: string);"
               }
@@ -4948,7 +4948,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 249,
+              "line": 265,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterSidebarSection(id: string);"
             }
@@ -4965,7 +4965,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 83,
+                "line": 99,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterThreadHistoryAction(id: string);"
               }
@@ -4974,7 +4974,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 83,
+              "line": 99,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterThreadHistoryAction(id: string);"
             }
@@ -5234,12 +5234,12 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "(): globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
+              "signature": "(): ShallowRef<readonly DocumentHistoryAction[]> | globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
               "declaredReturnType": null,
-              "resolvedReturnType": "globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
+              "resolvedReturnType": "ShallowRef<readonly DocumentHistoryAction[]> | globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 148,
+                "line": 165,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDocumentHistoryActions();"
               }
@@ -5248,7 +5248,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 148,
+              "line": 165,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDocumentHistoryActions();"
             }
@@ -5803,7 +5803,7 @@
               "resolvedReturnType": "ComputedRef<SidebarFooterActionEntry[]>",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 348,
+                "line": 367,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarFooterActions(\n    context: () => SidebarFooterActionContext = () => ({})\n): ComputedRef<SidebarFooterActionEntry[]>;"
               }
@@ -5812,7 +5812,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 348,
+              "line": 367,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarFooterActions(\n    context: () => SidebarFooterActionContext = () => ({})\n): ComputedRef<SidebarFooterActionEntry[]>;"
             }
@@ -5855,7 +5855,7 @@
               "resolvedReturnType": "ComputedRef<SidebarSectionGroups>",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 306,
+                "line": 325,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarSections();"
               }
@@ -5864,7 +5864,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 306,
+              "line": 325,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarSections();"
             }
@@ -5902,12 +5902,12 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "(): globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
+              "signature": "(): ShallowRef<readonly ThreadHistoryAction[]> | globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
               "declaredReturnType": null,
-              "resolvedReturnType": "globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
+              "resolvedReturnType": "ShallowRef<readonly ThreadHistoryAction[]> | globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 88,
+                "line": 105,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useThreadHistoryActions();"
               }
@@ -5916,7 +5916,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 88,
+              "line": 105,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useThreadHistoryActions();"
             }
@@ -7650,7 +7650,7 @@
     },
     {
       "source": "app/composables/sidebar/useSidebarSections.ts",
-      "apiSha256": "f68e34d2bb2df1875df479f1f94dfa0733743b433f687f3b692fff110d87a579",
+      "apiSha256": "4e830a218446f88917fbe0d9d0eee3afc8607317211626ff3de42d7182b092e3",
       "runtime": "client",
       "publicPaths": [
         "~/composables/sidebar/useSidebarSections"
@@ -7671,7 +7671,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 117,
+              "line": 119,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ChromeActionColor =\n    | 'neutral'\n    | 'primary'\n    | 'secondary'\n    | 'success'\n    | 'warning'\n    | 'error'\n    | 'info'\n    | 'inverse-primary';"
             }
@@ -7688,7 +7688,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 402,
+                "line": 421,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredSidebarFooterActionIds(): string[];"
               }
@@ -7697,7 +7697,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 402,
+              "line": 421,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredSidebarFooterActionIds(): string[];"
             }
@@ -7714,7 +7714,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 383,
+                "line": 402,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredSidebarSectionIds(): string[];"
               }
@@ -7723,7 +7723,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 383,
+              "line": 402,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredSidebarSectionIds(): string[];"
             }
@@ -7740,7 +7740,7 @@
               "resolvedReturnType": "globalThis.RegistrationHandle",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 268,
+                "line": 284,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerSidebarFooterAction(action: SidebarFooterAction);"
               }
@@ -7749,7 +7749,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 268,
+              "line": 284,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerSidebarFooterAction(action: SidebarFooterAction);"
             }
@@ -7766,7 +7766,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 230,
+                "line": 246,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerSidebarSection(section: SidebarSection);"
               }
@@ -7775,7 +7775,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 230,
+              "line": 246,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerSidebarSection(section: SidebarSection);"
             }
@@ -7789,7 +7789,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 142,
+              "line": 144,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarFooterAction extends RegistryItem {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Icon name rendered inside the footer button. */\n    icon: string;\n    /** Optional visible label (text inside button). */\n    label?: string;\n    /** Optional tooltip shown on hover/focus. */\n    tooltip?: string;\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Optional variant hint passed through to button components. */\n    color?: ChromeActionColor;\n    /** Execute when the footer button is clicked. */\n    handler: (ctx: SidebarFooterActionContext) => void | Promise<void>;\n    /** Optionally hide the action for a given context. */\n    visible?: (ctx: SidebarFooterActionContext) => boolean;\n    /** Optionally disable the action for a given context. */\n    disabled?: (ctx: SidebarFooterActionContext) => boolean;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this action. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -7803,7 +7803,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 96,
+              "line": 98,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarFooterActionContext {\n    /** ID of the currently active thread, if any */\n    activeThreadId?: string | null;\n    /** ID of the currently active document, if any */\n    activeDocumentId?: string | null;\n    /** Whether the sidebar is currently collapsed */\n    isCollapsed?: boolean;\n}"
             }
@@ -7817,7 +7817,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 208,
+              "line": 224,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarFooterActionEntry {\n    /** The footer action definition */\n    action: SidebarFooterAction;\n    /** Whether the action is currently disabled based on context */\n    disabled: boolean;\n}"
             }
@@ -7831,7 +7831,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 42,
+              "line": 44,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarSection extends RegistryItem {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Async or synchronous component rendered inside the sidebar stack. */\n    component: Component | (() => Promise<Component>);\n    /** Ordering (lower first). Defaults to 200. */\n    order?: number;\n    /** Where the section should render relative to built-ins. Defaults to `main`. */\n    placement?: SidebarSectionPlacement;\n    /** Optional plugin id used for workspace policy lookup. */\n    pluginId?: string;\n    /** Optional access policy for this section. */\n    access?: PluginGatePolicy;\n}"
             }
@@ -7845,7 +7845,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 72,
+              "line": 74,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarSectionGroups {\n    /** Sections that appear at the top of the sidebar */\n    top: SidebarSection[];\n    /** Main sections in the middle of the sidebar */\n    main: SidebarSection[];\n    /** Sections that appear at the bottom of the sidebar */\n    bottom: SidebarSection[];\n}"
             }
@@ -7859,7 +7859,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 25,
+              "line": 27,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type SidebarSectionPlacement = 'top' | 'main' | 'bottom';"
             }
@@ -7876,7 +7876,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 287,
+                "line": 305,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterSidebarFooterAction(id: string);"
               }
@@ -7885,7 +7885,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 287,
+              "line": 305,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterSidebarFooterAction(id: string);"
             }
@@ -7902,7 +7902,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 249,
+                "line": 265,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterSidebarSection(id: string);"
               }
@@ -7911,7 +7911,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 249,
+              "line": 265,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterSidebarSection(id: string);"
             }
@@ -7928,7 +7928,7 @@
               "resolvedReturnType": "ComputedRef<SidebarFooterActionEntry[]>",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 348,
+                "line": 367,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarFooterActions(\n    context: () => SidebarFooterActionContext = () => ({})\n): ComputedRef<SidebarFooterActionEntry[]>;"
               }
@@ -7937,7 +7937,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 348,
+              "line": 367,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarFooterActions(\n    context: () => SidebarFooterActionContext = () => ({})\n): ComputedRef<SidebarFooterActionEntry[]>;"
             }
@@ -7954,7 +7954,7 @@
               "resolvedReturnType": "ComputedRef<SidebarSectionGroups>",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 306,
+                "line": 325,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarSections();"
               }
@@ -7963,7 +7963,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 306,
+              "line": 325,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarSections();"
             }
@@ -7973,7 +7973,7 @@
     },
     {
       "source": "app/composables/threads/useThreadHistoryActions.ts",
-      "apiSha256": "9007f8f136ee2f32f631e9c499b8d75fd41876ae22cce532bdb8b7b078574db7",
+      "apiSha256": "2f9194bdcda9d546a110b08b9d3dc4ea3d43719060c92e26232655e8bccfdfb9",
       "runtime": "client",
       "publicPaths": [
         "~/composables/threads/useThreadHistoryActions"
@@ -7997,7 +7997,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 93,
+                "line": 110,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredThreadHistoryActionIds(): string[];"
               }
@@ -8006,7 +8006,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 93,
+              "line": 110,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredThreadHistoryActionIds(): string[];"
             }
@@ -8023,7 +8023,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 78,
+                "line": 93,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerThreadHistoryAction(action: ThreadHistoryAction);"
               }
@@ -8032,7 +8032,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 78,
+              "line": 93,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerThreadHistoryAction(action: ThreadHistoryAction);"
             }
@@ -8046,7 +8046,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 70,
+              "line": 72,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ThreadHistoryAction\n    extends HistoryActionRegistryItem<Thread> {}"
             }
@@ -8063,7 +8063,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 83,
+                "line": 99,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterThreadHistoryAction(id: string);"
               }
@@ -8072,7 +8072,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 83,
+              "line": 99,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterThreadHistoryAction(id: string);"
             }
@@ -8084,12 +8084,12 @@
           "nuxtAutoImport": true,
           "signatures": [
             {
-              "signature": "(): globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
+              "signature": "(): ShallowRef<readonly ThreadHistoryAction[]> | globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
               "declaredReturnType": null,
-              "resolvedReturnType": "globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
+              "resolvedReturnType": "ShallowRef<readonly ThreadHistoryAction[]> | globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 88,
+                "line": 105,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useThreadHistoryActions();"
               }
@@ -8098,7 +8098,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 88,
+              "line": 105,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useThreadHistoryActions();"
             }

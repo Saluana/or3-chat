@@ -18,6 +18,8 @@ import { createRegistry } from '../_registry';
 import type { RegistryItem } from '../_registry';
 import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 /**
  * Placement options for sidebar sections relative to built-in sections.
@@ -189,6 +191,20 @@ const sectionRegistry = createRegistry<SidebarSection>(
 const footerRegistry = createRegistry<SidebarFooterAction>(
     '__or3SidebarFooterActionsRegistry'
 );
+const footerV2Kernel = getContributionSurfaceKernel<SidebarFooterAction>(
+    'sidebar-footer-actions',
+    {
+        getId: (action) => action.id,
+        normalize: (action) => Object.freeze({ ...action }),
+        compare: (left, right) =>
+            (left.order ?? DEFAULT_ORDER) - (right.order ?? DEFAULT_ORDER) ||
+            left.id.localeCompare(right.id),
+    }
+);
+
+function useFooterV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('sidebar-footer-actions');
+}
 
 /**
  * `SidebarFooterActionEntry`
@@ -266,7 +282,9 @@ export function unregisterSidebarSection(id: string) {
  * - Does not validate action handlers
  */
 export function registerSidebarFooterAction(action: SidebarFooterAction) {
-    return footerRegistry.register(action);
+    return useFooterV2Surface()
+        ? footerV2Kernel.registry.registerLegacy({ value: action })
+        : footerRegistry.register(action);
 }
 
 /**
@@ -285,7 +303,8 @@ export function registerSidebarFooterAction(action: SidebarFooterAction) {
  * - Does not run teardown hooks
  */
 export function unregisterSidebarFooterAction(id: string) {
-    footerRegistry.unregister(id);
+    if (useFooterV2Surface()) footerV2Kernel.registry.unregisterLegacy(id);
+    else footerRegistry.unregister(id);
 }
 
 /**
@@ -348,7 +367,7 @@ export function useSidebarSections() {
 export function useSidebarFooterActions(
     context: () => SidebarFooterActionContext = () => ({})
 ): ComputedRef<SidebarFooterActionEntry[]> {
-    const items = footerRegistry.useItems();
+    const items = useFooterV2Surface() ? footerV2Kernel.items : footerRegistry.useItems();
     return computed(() => {
         const ctx = context();
         return items.value
@@ -400,5 +419,7 @@ export function listRegisteredSidebarSectionIds(): string[] {
  * - Does not reflect visibility or ordering
  */
 export function listRegisteredSidebarFooterActionIds(): string[] {
-    return footerRegistry.listIds();
+    return useFooterV2Surface()
+        ? [...footerV2Kernel.registry.listLegacyIds()]
+        : footerRegistry.listIds();
 }
