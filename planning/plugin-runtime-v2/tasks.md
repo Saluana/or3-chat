@@ -252,7 +252,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC2, R4.AC5, R4.AC8
       Done when: server tool contract/schema/timeout suites pass unchanged and owners appear only in internal inspection.
 
-- [ ] 4.19 Run 1,000-cycle leak tests and one-surface-at-a-time rollback drills
+- [x] 4.19 Run 1,000-cycle leak tests and one-surface-at-a-time rollback drills
       Requirements: R4.AC6-R4.AC8, R9.AC4, R9.AC7
       Done when: disabled surfaces/plugins leave zero managed records/watchers and every surface flag has a tested revert result.
 

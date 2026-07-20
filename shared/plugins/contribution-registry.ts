@@ -93,6 +93,10 @@ export class ContributionRegistry<
         return this.#projectionRevision;
     }
 
+    get subscriberCount(): number {
+        return this.#listeners.size;
+    }
+
     stage(input: {
         owner: symbol;
         pluginId: string;

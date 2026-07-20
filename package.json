@@ -48,6 +48,8 @@
         "plugin-runtime:milestone-1:record": "bun run scripts/plugin-runtime/qualify-milestone-1.ts --record",
         "plugin-runtime:milestone-2-3:qualify": "bun run scripts/plugin-runtime/qualify-milestone-2-3.ts",
         "plugin-runtime:milestone-2-3:record": "bun run scripts/plugin-runtime/qualify-milestone-2-3.ts --record",
+        "plugin-runtime:milestone-4:qualify": "bun run scripts/plugin-runtime/qualify-milestone-4.ts",
+        "plugin-runtime:milestone-4:record": "bun run scripts/plugin-runtime/qualify-milestone-4.ts --record",
         "plugin-runtime:contracts:check": "bun x tsc --project tests/plugin-runtime/contracts/tsconfig.json",
         "dev:offline": "env SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false bun run dev"
     },

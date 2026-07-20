@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "qualificationVersion": "milestone-4-contributions-v1",
+  "milestone": "Milestone 4 — Atomic V2 publication and registry adapters",
+  "entryEvidence": [
+    "shared/plugins/activation-table.ts",
+    "shared/plugins/contribution-registry.ts",
+    "shared/plugins/contribution-surfaces.ts",
+    "shared/plugins/transactional-plugin-scope.ts",
+    "shared/plugins/__tests__/milestone-4-leak.test.ts",
+    "app/composables/plugins/contribution-surface-kernel.ts",
+    "app/composables/plugins/contribution-surface-selection.ts",
+    "app/composables/plugins/__tests__/contribution-surface-selection.test.ts",
+    "app/utils/chat/__tests__/client-tool-surface-adapter.test.ts",
+    "server/utils/chat/tool-ownership.ts",
+    "server/utils/chat/__tests__/server-tool-ownership-adapter.test.ts"
+  ],
+  "gates": [
+    {
+      "id": "atomic-publication-adapters-and-leaks",
+      "commands": [
+        [
+          "bun",
+          "x",
+          "vitest",
+          "run",
+          "shared/plugins/__tests__/activation-table.test.ts",
+          "shared/plugins/__tests__/contribution-registry.test.ts",
+          "shared/plugins/__tests__/transactional-plugin-scope.test.ts",
+          "shared/plugins/__tests__/milestone-4-leak.test.ts",
+          "app/composables/plugins/__tests__/contribution-surface-selection.test.ts",
+          "app/composables/__tests__/differential-surface-harness.test.ts",
+          "app/composables/__tests__/action-surface-adapters.test.ts",
+          "app/composables/__tests__/history-footer-surface-adapters.test.ts",
+          "app/composables/__tests__/project-editor-surface-adapters.test.ts",
+          "app/composables/__tests__/sidebar-sections-surface-adapter.test.ts",
+          "app/composables/__tests__/pane-apps-surface-adapter.test.ts",
+          "app/composables/__tests__/sidebar-pages-surface-adapter.test.ts",
+          "app/composables/__tests__/dashboard-records-surface-adapter.test.ts",
+          "app/composables/__tests__/dashboard-navigation-surface-adapter.test.ts",
+          "app/composables/__tests__/editor-extensions-surface-adapter.test.ts",
+          "app/composables/__tests__/admin-extensions-surface-adapter.test.ts",
+          "app/utils/chat/__tests__/client-tool-surface-adapter.test.ts",
+          "server/utils/chat/__tests__/server-tool-ownership-adapter.test.ts",
+          "app/composables/__tests__/registry-family-profiles.test.ts",
+          "app/composables/__tests__/sidebar-pane-profiles.test.ts",
+          "app/composables/__tests__/dashboard-profile.test.ts",
+          "app/composables/__tests__/editor-admin-profiles.test.ts",
+          "app/utils/chat/__tests__/tool-registry-profiles.test.ts",
+          "app/utils/chat/__tests__/tool-schema-parity.test.ts",
+          "app/utils/chat/__tests__/tools-public.contract.test.ts",
+          "server/utils/chat/__tests__/tool-registry.test.ts"
+        ]
+      ]
+    },
+    {
+      "id": "surface-rollback-and-public-contracts",
+      "commands": [["bun", "run", "plugin-runtime:compatibility:check"]]
+    },
+    {
+      "id": "frozen-v1-qualification",
+      "commands": [["bun", "run", "plugin-runtime:milestone-0:qualify"]]
+    }
+  ],
+  "rollback": {
+    "scope": "Remove only the affected contribution surface from the startup allowlist; keep the V1 public registry, installed plugins, settings, and all unrelated V2 surfaces unchanged.",
+    "procedure": [
+      "Remove the affected surface from OR3_PLUGIN_CONTRIBUTION_V2_SURFACES outside the plugin admin UI.",
+      "Restart the OR3 process before plugin discovery so the startup selector returns the V1 kernel for that surface.",
+      "Verify Runtime Inspector selection and exercise the surface's differential fixture plus the maintained V1 corpus.",
+      "Keep that surface on V1 if its differential, leak, compatibility, or frozen Milestone 0 gate is not green."
+    ],
+    "drill": "The surface selection matrix proves every contribution surface independently selects V2 and reverts to V1; 1,000-cycle tests prove managed records, subscriptions, tool watchers, and ownership inspection are empty after disposal."
+  }
+}

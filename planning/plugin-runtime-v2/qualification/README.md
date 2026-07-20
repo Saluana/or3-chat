@@ -25,3 +25,11 @@ bun run plugin-runtime:milestone-2-3:qualify
 ```
 
 The final gate invokes the complete Milestone 0 qualification. The exact startup-only rollback boundary is documented in [manager-canary-rollback.md](./manager-canary-rollback.md). Use `plugin-runtime:milestone-2-3:record` only to publish reviewed evidence under `results/milestone-2-3-manager-v1.json`.
+
+Run the Milestone 4 atomic contribution, leak, and per-surface rollback gates with:
+
+```sh
+bun run plugin-runtime:milestone-4:qualify
+```
+
+The final gate invokes the complete Milestone 0 qualification. The qualification manifest records the startup-only, one-surface rollback boundary. Use `plugin-runtime:milestone-4:record` only to publish reviewed evidence under `results/milestone-4-contributions-v1.json`.

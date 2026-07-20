@@ -25,6 +25,10 @@ export class ActivationTable {
         return this.#revision;
     }
 
+    get subscriberCount(): number {
+        return this.#listeners.size;
+    }
+
     current(pluginId: string): symbol | undefined {
         return this.#current.get(pluginId);
     }

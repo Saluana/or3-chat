@@ -150,4 +150,39 @@ describe('client tool contribution adapter', () => {
         select(false);
         vi.useRealTimers();
     });
+
+    it('leaves zero tool records and enabled-state watchers after 1,000 cycles', () => {
+        select(true);
+        vi.useFakeTimers();
+        const registry = useToolRegistry();
+        for (const tool of registry.listTools.value) {
+            registry.unregisterTool(tool.definition.function.name);
+        }
+        const kernel = getContributionSurfaceKernel<RegisteredTool>(
+            'client-tools',
+            { getId: (tool) => tool.definition.function.name }
+        );
+        let stoppedWatchers = 0;
+
+        for (let index = 0; index < 1_000; index++) {
+            const name = `adapter_leak_${index}`;
+            const tool = registry.registerTool(
+                definition(name),
+                () => 'ok'
+            );
+            const stop = tool._stopWatcher;
+            tool._stopWatcher = () => {
+                stoppedWatchers += 1;
+                stop();
+            };
+            expect(tool.dispose()).toBe(true);
+        }
+
+        expect(stoppedWatchers).toBe(1_000);
+        expect(registry.listTools.value).toEqual([]);
+        expect(kernel.registry.inspect()).toEqual([]);
+        vi.clearAllTimers();
+        vi.useRealTimers();
+        select(false);
+    });
 });

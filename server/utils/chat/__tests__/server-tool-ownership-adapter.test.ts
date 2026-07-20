@@ -159,4 +159,24 @@ describe('server tool ownership adapter', () => {
         });
         select(false);
     });
+
+    it('leaves zero server ownership records after 1,000 cycles', () => {
+        select(true);
+        for (const tool of listServerTools()) {
+            unregisterServerTool(tool.definition.function.name);
+        }
+
+        for (let index = 0; index < 1_000; index++) {
+            const dispose = registerServerTool(
+                definition(`adapter_server_leak_${index}`),
+                () => 'ok'
+            );
+            expect(dispose()).toBe(true);
+            expect(dispose()).toBe(false);
+        }
+
+        expect(listServerTools()).toEqual([]);
+        expect(inspectServerToolOwnership()).toEqual([]);
+        select(false);
+    });
 });
