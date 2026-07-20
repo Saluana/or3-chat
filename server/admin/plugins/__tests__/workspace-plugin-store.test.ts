@@ -4,9 +4,12 @@ import {
     bootstrapDefaultEnabledPlugins,
     getEnabledPlugins,
     getPluginAccessPolicy,
+    getPluginAccessPolicySnapshot,
+    getPluginGrantReview,
     getPluginSettings,
     setPluginAccessPolicy,
     setPluginEnabled,
+    setPluginGrantReview,
     setPluginSettings,
 } from '../workspace-plugin-store';
 
@@ -95,6 +98,124 @@ describe('workspace plugin store', () => {
                 >,
             })
         ).rejects.toThrow('Invalid access policy');
+    });
+
+    it('persists reviewed grants under a separate key with a content revision', async () => {
+        const { map, store } = createStore();
+        await setPluginSettings(store, 'ws-1', 'plugin.a', { theme: 'dark' });
+
+        const review = await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            requestedGrants: ['tools.register.client', 'documents.read'],
+            approvedGrants: ['documents.read'],
+            reviewedAt: 123,
+            reviewedBy: 'user-1',
+        });
+
+        expect(review).toMatchObject({
+            status: 'current',
+            requestedGrants: ['documents.read', 'tools.register.client'],
+            approvedGrants: ['documents.read'],
+        });
+        expect(review.revision).toMatch(/^sha256-[a-f0-9]{64}$/);
+        expect(map.get('ws-1:plugins.settings.plugin.a')).toBe(
+            JSON.stringify({ theme: 'dark' })
+        );
+        expect(JSON.parse(map.get('ws-1:plugins.grants.plugin.a')!)).toMatchObject({
+            schemaVersion: 1,
+            revision: review.revision,
+            reviewedAt: 123,
+            reviewedBy: 'user-1',
+        });
+
+        await expect(
+            getPluginGrantReview(store, 'ws-1', 'plugin.a', [
+                'documents.read',
+                'tools.register.client',
+            ])
+        ).resolves.toEqual(review);
+    });
+
+    it('revisions access policy and reviewed grants independently', async () => {
+        const { store } = createStore();
+        const initialPolicy = await getPluginAccessPolicySnapshot(
+            store,
+            'ws-1',
+            'plugin.a'
+        );
+        const initialGrants = await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            requestedGrants: ['documents.read'],
+            approvedGrants: [],
+            reviewedAt: 1,
+        });
+
+        await setPluginAccessPolicy(store, 'ws-1', 'plugin.a', {
+            authRequired: true,
+        });
+        const changedPolicy = await getPluginAccessPolicySnapshot(
+            store,
+            'ws-1',
+            'plugin.a'
+        );
+        const unchangedGrants = await getPluginGrantReview(
+            store,
+            'ws-1',
+            'plugin.a',
+            ['documents.read']
+        );
+        expect(changedPolicy.revision).not.toBe(initialPolicy.revision);
+        expect(unchangedGrants.revision).toBe(initialGrants.revision);
+
+        const changedGrants = await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            requestedGrants: ['documents.read'],
+            approvedGrants: ['documents.read'],
+            reviewedAt: 2,
+        });
+        const stillSamePolicy = await getPluginAccessPolicySnapshot(
+            store,
+            'ws-1',
+            'plugin.a'
+        );
+        expect(changedGrants.revision).not.toBe(initialGrants.revision);
+        expect(stillSamePolicy.revision).toBe(changedPolicy.revision);
+    });
+
+    it('fails closed when requested grants change or persisted review data is invalid', async () => {
+        const { map, store } = createStore();
+        await setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+            requestedGrants: ['documents.read'],
+            approvedGrants: ['documents.read'],
+            reviewedAt: 1,
+        });
+
+        await expect(
+            getPluginGrantReview(store, 'ws-1', 'plugin.a', [
+                'documents.read',
+                'documents.write',
+            ])
+        ).resolves.toMatchObject({
+            status: 'stale',
+            approvedGrants: [],
+        });
+
+        const persisted = JSON.parse(map.get('ws-1:plugins.grants.plugin.a')!);
+        persisted.approvedGrants = ['documents.write'];
+        map.set('ws-1:plugins.grants.plugin.a', JSON.stringify(persisted));
+        await expect(
+            getPluginGrantReview(store, 'ws-1', 'plugin.a', ['documents.read'])
+        ).resolves.toMatchObject({
+            status: 'unreviewed',
+            approvedGrants: [],
+        });
+    });
+
+    it('rejects approval for grants the plugin did not request', async () => {
+        const { store } = createStore();
+        await expect(
+            setPluginGrantReview(store, 'ws-1', 'plugin.a', {
+                requestedGrants: ['documents.read'],
+                approvedGrants: ['documents.write'],
+            })
+        ).rejects.toThrow('Invalid reviewed grants');
     });
 
     it('rejects invalid plugin settings payloads', async () => {

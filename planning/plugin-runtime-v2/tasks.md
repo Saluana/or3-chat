@@ -320,7 +320,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC2, R6.AC5, R6.AC8
       Done when: missing/incompatible required dependencies and cycles block before import, optional absence negotiates cleanly, and start/stop order is deterministic.
 
-- [ ] 6.5 Implement reviewed-grant persistence/revision separately from access policy revision
+- [x] 6.5 Implement reviewed-grant persistence/revision separately from access policy revision
       Requirements: R2.AC5, R6.AC3
       Done when: access changes and grant changes generate distinct descriptor-key inputs and mediated denials are tested.
 

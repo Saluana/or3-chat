@@ -12,45 +12,22 @@ import {
 } from '../../admin/plugins/workspace-plugin-store';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { checkPluginAccess } from '../../utils/plugins/access/require-plugin-access';
-import { canonicalJson, createDescriptorKey } from '../../../shared/plugins/descriptor-key';
+import { createDescriptorKey } from '../../../shared/plugins/descriptor-key';
 import { resolveBundledPluginArtifact } from '../../../shared/plugins/bundled-plugin-catalog';
-import {
-    mergePluginGatePolicy,
-    type PluginGatePolicyNormalized,
-} from '../../../shared/plugins/access-policy';
+import { mergePluginGatePolicy } from '../../../shared/plugins/access-policy';
 import type {
     BundledV1PluginDescriptor,
     PluginDescriptorIdentity,
-    Sha256,
 } from '../../../shared/plugins/runtime-descriptor';
 import type { PluginRuntimeManifestResponse } from '../../../shared/plugins/runtime-manifest';
 import { isNonCorePluginDiscoveryDisabled } from '../../../shared/plugins/safe-mode';
 import { LEGACY_LIFECYCLE_COVERAGE } from '../../../shared/plugins/legacy-plugin-scope';
+import {
+    createLegacyV1GrantsRevision,
+    createPluginPolicyRevision,
+} from '../../admin/plugins/plugin-revisions';
 
 export type { PluginRuntimeManifestResponse } from '../../../shared/plugins/runtime-manifest';
-
-function contentRevision(kind: 'policy' | 'legacy-v1-grants', value: unknown): Sha256 {
-    const source = canonicalJson({ kind, value });
-    return `sha256-${createHash('sha256').update(source).digest('hex')}`;
-}
-
-function policyRevision(policy: PluginGatePolicyNormalized): Sha256 {
-    return contentRevision('policy', {
-        authRequired: policy.authRequired,
-        mode: policy.mode,
-        requiredEntitlements: [...policy.requiredEntitlements].sort(),
-        requiredWorkspaceRoles: [...policy.requiredWorkspaceRoles].sort(),
-    });
-}
-
-function grantsRevision(capabilities: readonly string[]): Sha256 {
-    return contentRevision('legacy-v1-grants', {
-        // V1 runs as trusted host code. Capabilities are declarations, not an
-        // enforceable grant boundary, so preserve that truth in the identity.
-        enforcement: 'legacy-unrestricted-host',
-        declaredCapabilities: Array.from(new Set(capabilities)).sort(),
-    });
-}
 
 function buildRevision(payload: {
     workspaceId: string | null;
@@ -178,8 +155,8 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                 source: 'extension',
                 trust: 'trusted-host',
                 workspaceId,
-                policyRevision: policyRevision(effectivePolicy),
-                grantsRevision: grantsRevision(plugin.capabilities),
+                policyRevision: createPluginPolicyRevision(effectivePolicy),
+                grantsRevision: createLegacyV1GrantsRevision(plugin.capabilities),
                 resolvedDependencyKeys: [],
                 artifact: artifactResolution.artifact,
             };

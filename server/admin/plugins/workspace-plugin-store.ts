@@ -28,6 +28,11 @@ import {
     type PluginGatePolicy,
     type PluginGatePolicyNormalized,
 } from '~~/shared/plugins/access-policy';
+import type { PluginGrantReviewSnapshot } from '~~/shared/plugins/grant-review';
+import {
+    createPluginPolicyRevision,
+    createReviewedPluginGrantsRevision,
+} from './plugin-revisions';
 
 const PluginsEnabledSchema = z.array(z.string()).default([]);
 
@@ -126,6 +131,30 @@ const SettingsAccessSchema = z.object({
     access: StrictPluginGatePolicySchema.optional(),
 });
 
+const PluginGrantIdSchema = z
+    .string()
+    .min(1)
+    .regex(/^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)+$/);
+
+const PersistedPluginGrantReviewSchema = z
+    .object({
+        schemaVersion: z.literal(1),
+        requestedGrants: z.array(PluginGrantIdSchema),
+        approvedGrants: z.array(PluginGrantIdSchema),
+        revision: z.string().regex(/^sha256-[a-f0-9]{64}$/),
+        reviewedAt: z.number().int().min(0),
+        reviewedBy: z.string().min(1).optional(),
+    })
+    .strict();
+
+function normalizeGrantIds(grants: readonly string[]): string[] {
+    return Array.from(new Set(grants)).sort();
+}
+
+function sameStrings(left: readonly string[], right: readonly string[]): boolean {
+    return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 /**
  * Retrieves the settings for a specific plugin in a workspace.
  *
@@ -192,9 +221,22 @@ export async function getPluginAccessPolicy(
     pluginId: string,
     defaults?: PluginGatePolicy | null
 ): Promise<PluginGatePolicyNormalized> {
+    return (await getPluginAccessPolicySnapshot(store, workspaceId, pluginId, defaults)).policy;
+}
+
+export async function getPluginAccessPolicySnapshot(
+    store: WorkspaceSettingsStore,
+    workspaceId: string,
+    pluginId: string,
+    defaults?: PluginGatePolicy | null
+): Promise<{ policy: PluginGatePolicyNormalized; revision: string }> {
     const settings = await getPluginSettings(store, workspaceId, pluginId);
     const policy = readPluginAccessPolicy(settings);
-    return normalizePluginGatePolicy(policy ?? defaults ?? {});
+    const normalized = normalizePluginGatePolicy(policy ?? defaults ?? {});
+    return {
+        policy: normalized,
+        revision: createPluginPolicyRevision(normalized),
+    };
 }
 
 export async function setPluginAccessPolicy(
@@ -210,4 +252,100 @@ export async function setPluginAccessPolicy(
     await setPluginSettings(store, workspaceId, pluginId, {
         access: parsed.data,
     });
+}
+
+function emptyGrantReview(
+    requestedGrants: readonly string[],
+    status: 'unreviewed' | 'stale'
+): PluginGrantReviewSnapshot {
+    const requested = normalizeGrantIds(requestedGrants);
+    const approved: string[] = [];
+    return {
+        requestedGrants: Object.freeze(requested),
+        approvedGrants: Object.freeze(approved),
+        revision: createReviewedPluginGrantsRevision({
+            requestedGrants: requested,
+            approvedGrants: approved,
+        }),
+        status,
+    };
+}
+
+/** Reads the separately persisted reviewed-grant decision for one V2 plugin. */
+export async function getPluginGrantReview(
+    store: WorkspaceSettingsStore,
+    workspaceId: string,
+    pluginId: string,
+    requestedGrants: readonly string[]
+): Promise<PluginGrantReviewSnapshot> {
+    const requested = normalizeGrantIds(requestedGrants);
+    const raw = await store.get(workspaceId, `plugins.grants.${pluginId}`);
+    if (!raw) return emptyGrantReview(requested, 'unreviewed');
+    const parsed = PersistedPluginGrantReviewSchema.safeParse(safeJsonParse(raw));
+    if (!parsed.success) return emptyGrantReview(requested, 'unreviewed');
+    const storedRequested = normalizeGrantIds(parsed.data.requestedGrants);
+    const storedApproved = normalizeGrantIds(parsed.data.approvedGrants);
+    const expectedRevision = createReviewedPluginGrantsRevision({
+        requestedGrants: storedRequested,
+        approvedGrants: storedApproved,
+    });
+    const approvedIsSubset = storedApproved.every((grant) => storedRequested.includes(grant));
+    if (!approvedIsSubset || parsed.data.revision !== expectedRevision) {
+        return emptyGrantReview(requested, 'unreviewed');
+    }
+    if (!sameStrings(storedRequested, requested)) {
+        return emptyGrantReview(requested, 'stale');
+    }
+    return {
+        requestedGrants: Object.freeze(storedRequested),
+        approvedGrants: Object.freeze(storedApproved),
+        revision: expectedRevision,
+        status: 'current',
+    };
+}
+
+/** Replaces only the reviewed-grant record; access policy and plugin settings are untouched. */
+export async function setPluginGrantReview(
+    store: WorkspaceSettingsStore,
+    workspaceId: string,
+    pluginId: string,
+    input: {
+        requestedGrants: readonly string[];
+        approvedGrants: readonly string[];
+        reviewedBy?: string;
+        reviewedAt?: number;
+    }
+): Promise<PluginGrantReviewSnapshot> {
+    const requestedGrants = normalizeGrantIds(input.requestedGrants);
+    const approvedGrants = normalizeGrantIds(input.approvedGrants);
+    if (
+        !requestedGrants.every((grant) => PluginGrantIdSchema.safeParse(grant).success) ||
+        !approvedGrants.every((grant) => PluginGrantIdSchema.safeParse(grant).success) ||
+        !approvedGrants.every((grant) => requestedGrants.includes(grant))
+    ) {
+        throw new Error('Invalid reviewed grants');
+    }
+    const revision = createReviewedPluginGrantsRevision({
+        requestedGrants,
+        approvedGrants,
+    });
+    const persisted = PersistedPluginGrantReviewSchema.parse({
+        schemaVersion: 1,
+        requestedGrants,
+        approvedGrants,
+        revision,
+        reviewedAt: input.reviewedAt ?? Date.now(),
+        reviewedBy: input.reviewedBy,
+    });
+    await store.set(
+        workspaceId,
+        `plugins.grants.${pluginId}`,
+        JSON.stringify(persisted)
+    );
+    return {
+        requestedGrants: Object.freeze(requestedGrants),
+        approvedGrants: Object.freeze(approvedGrants),
+        revision,
+        status: 'current',
+    };
 }
