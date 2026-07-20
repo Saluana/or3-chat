@@ -262,7 +262,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R5.AC3-R5.AC5
       Done when: legacy records and hidden managed records reproduce the golden match order.
 
-- [ ] 5.2 Implement exact/wildcard/activation generations and the bounded 1,024-entry dispatch-plan LRU
+- [x] 5.2 Implement exact/wildcard/activation generations and the bounded 1,024-entry dispatch-plan LRU
       Requirements: R5.AC4
       Done when: focused invalidation and capacity eviction tests pass at high cardinality.
 
