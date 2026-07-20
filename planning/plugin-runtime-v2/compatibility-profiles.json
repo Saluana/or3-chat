@@ -73,6 +73,14 @@
       "globalKeys": ["__or3PaneAppsRegistry", "__or3PaneAppsOwnedRegistry"],
       "implementation": "legacy-equivalent",
       "behavior": { "duplicate": "replace-by-id", "validation": "zod-first-issue-message", "serverRegistration": "supported", "defaultOrder": 200, "equalOrderTie": "map-insertion", "component": "markRaw-without-async-wrapper", "projection": "computed-unfiltered", "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.dashboard",
+      "family": "dashboard plugins and pages",
+      "sources": ["app/composables/dashboard/useDashboardPlugins.ts"],
+      "globalKeys": ["__or3DashboardPluginsRegistry", "__or3DashboardPluginsOwnedRegistry", "__or3DashboardPluginPagesRegistry", "__or3DashboardNavigationRuntime"],
+      "implementation": "legacy-equivalent",
+      "behavior": { "pluginDuplicate": "replace-by-id", "pluginStoredValue": "shallow-frozen-copy-with-pages-array-copy", "inlinePages": "replace-all-when-present", "pageDuplicate": "replace-by-plugin-and-page-id", "pageStoredValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "map-insertion", "access": "page-fields-override-plugin-fields", "componentResolution": "sync-or-zero-arity-async", "componentCache": "plugin-and-page-id", "failedResolutionCache": "not-cached", "cacheInvalidation": ["page-replace", "page-remove", "plugin-inline-page-replace", "plugin-remove"], "navigation": "hmr-global-state-explicit-reset", "activeRemoval": "state-retained-until-next-navigation", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
     }
   ]
 }

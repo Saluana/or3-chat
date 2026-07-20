@@ -50,7 +50,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC5, R4.AC4
       Done when: profile tests distinguish these surfaces from the shared registry profile.
 
-- [ ] 1.9 Record dashboard plugin/page profile for inline replacement, shallow freeze, access merge, stable order ties, navigation state, component resolution, and cache invalidation
+- [x] 1.9 Record dashboard plugin/page profile for inline replacement, shallow freeze, access merge, stable order ties, navigation state, component resolution, and cache invalidation
       Requirements: R1.AC5, R4.AC4
       Done when: existing dashboard tests are mapped into the ledger and missing cache/navigation cases are added.
 

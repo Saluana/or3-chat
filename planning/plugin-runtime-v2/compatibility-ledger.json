@@ -4,11 +4,11 @@
   "generator": "scripts/plugin-runtime/generate-compatibility-ledger.ts",
   "inputs": {
     "moduleManifest": "planning/plugin-runtime-v2/compatibility-ledger.modules.json",
-    "moduleManifestSha256": "262542add3cc9735d92ede9bcb6753d63c8c0808610d2e1bc02c5b0fa50b9008",
+    "moduleManifestSha256": "783c8d0a0cc5487a97a31429bb73e462a28116fc486c4fd5d55c72e73c113ee3",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
     "nuxtImportsDeclarationSha256": "ce447adff37ea0a4e108ac66ece72d02f5ac7d6ce5aa5e46da8816907f45c991",
     "behaviorProfiles": "planning/plugin-runtime-v2/compatibility-profiles.json",
-    "behaviorProfilesSha256": "b0fc6e7741d707b8444996a5a9cb5db8199ffc99c8f4b209a51ee207ef96263e"
+    "behaviorProfilesSha256": "438bb0e82132a64fa5db3162caa250d01ab3dbdd8824ea7e2f5017c5e4c64595"
   },
   "coverage": {
     "moduleCount": 35,
@@ -37,6 +37,43 @@
         "projection": "computed-reactive-list-with-access-visible-disabled",
         "reactiveMutationNotifications": 1,
         "globalPersistence": "globalThis-map",
+        "registerReturn": "RegistrationHandle",
+        "disposal": "exact-owner"
+      }
+    },
+    {
+      "id": "registry.dashboard",
+      "family": "dashboard plugins and pages",
+      "sources": [
+        "app/composables/dashboard/useDashboardPlugins.ts"
+      ],
+      "globalKeys": [
+        "__or3DashboardPluginsRegistry",
+        "__or3DashboardPluginsOwnedRegistry",
+        "__or3DashboardPluginPagesRegistry",
+        "__or3DashboardNavigationRuntime"
+      ],
+      "implementation": "legacy-equivalent",
+      "behavior": {
+        "pluginDuplicate": "replace-by-id",
+        "pluginStoredValue": "shallow-frozen-copy-with-pages-array-copy",
+        "inlinePages": "replace-all-when-present",
+        "pageDuplicate": "replace-by-plugin-and-page-id",
+        "pageStoredValue": "shallow-frozen-copy",
+        "defaultOrder": 200,
+        "equalOrderTie": "map-insertion",
+        "access": "page-fields-override-plugin-fields",
+        "componentResolution": "sync-or-zero-arity-async",
+        "componentCache": "plugin-and-page-id",
+        "failedResolutionCache": "not-cached",
+        "cacheInvalidation": [
+          "page-replace",
+          "page-remove",
+          "plugin-inline-page-replace",
+          "plugin-remove"
+        ],
+        "navigation": "hmr-global-state-explicit-reset",
+        "activeRemoval": "state-retained-until-next-navigation",
         "registerReturn": "RegistrationHandle",
         "disposal": "exact-owner"
       }
@@ -604,7 +641,9 @@
         "docs/UI/dashboard-plugins.md",
         "public/_documentation/composables/useDashboardPlugins.md"
       ],
-      "behaviorProfileIds": [],
+      "behaviorProfileIds": [
+        "registry.dashboard"
+      ],
       "exports": [
         {
           "name": "DashboardNavigationError",
