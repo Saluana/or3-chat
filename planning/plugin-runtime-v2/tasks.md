@@ -180,15 +180,15 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
 
 ## 4. Milestone 4 — Atomic V2 publication and registry adapters
 
-- [ ] 4.1 Implement `ActivationTable` with synchronous expected-owner compare-and-swap and revision counter
+- [x] 4.1 Implement `ActivationTable` with synchronous expected-owner compare-and-swap and revision counter
       Requirements: R4.AC2, R4.AC3, R4.AC6
       Done when: winner/loser/stale-owner tests pass without an awaited gap in publication.
 
-- [ ] 4.2 Implement `ContributionRegistry` record storage, hidden staging, legacy-visible records, owner removal, inspection, and subscription
+- [x] 4.2 Implement `ContributionRegistry` record storage, hidden staging, legacy-visible records, owner removal, inspection, and subscription
       Requirements: R4.AC1, R4.AC2, R4.AC5
       Done when: unit tests cover conflicts, hidden/current visibility, exact-owner cleanup, and immutable inspection snapshots.
 
-- [ ] 4.3 Implement batched per-surface projection keyed by activation revision
+- [x] 4.3 Implement batched per-surface projection keyed by activation revision
       Requirements: R4.AC2, R4.AC7
       Done when: a 100-record commit emits one observable reactive publication for that surface.
 

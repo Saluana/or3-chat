@@ -16,7 +16,12 @@ const runtimeMocks = vi.hoisted(() => ({
         errors: [],
         durationMs: 0,
     })),
-    registerInstance: vi.fn(() => ({ accepted: true })),
+    registerInstance: vi.fn<
+        (id: string, source: string, dispose: () => unknown) => {
+            accepted: boolean;
+            replacedSource?: 'builtin' | 'extension';
+        }
+    >(() => ({ accepted: true })),
     unregisterInstance: vi.fn(),
 }));
 
