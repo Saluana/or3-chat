@@ -81,6 +81,22 @@
       "globalKeys": ["__or3DashboardPluginsRegistry", "__or3DashboardPluginsOwnedRegistry", "__or3DashboardPluginPagesRegistry", "__or3DashboardNavigationRuntime"],
       "implementation": "legacy-equivalent",
       "behavior": { "pluginDuplicate": "replace-by-id", "pluginStoredValue": "shallow-frozen-copy-with-pages-array-copy", "inlinePages": "replace-all-when-present", "pageDuplicate": "replace-by-plugin-and-page-id", "pageStoredValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "map-insertion", "access": "page-fields-override-plugin-fields", "componentResolution": "sync-or-zero-arity-async", "componentCache": "plugin-and-page-id", "failedResolutionCache": "not-cached", "cacheInvalidation": ["page-replace", "page-remove", "plugin-inline-page-replace", "plugin-remove"], "navigation": "hmr-global-state-explicit-reset", "activeRemoval": "state-retained-until-next-navigation", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.editor-extensions",
+      "family": "editor nodes, marks, and generic extensions",
+      "sources": ["app/composables/editor/useEditorNodes.ts", "app/composables/editor/useEditorExtensionLoader.ts"],
+      "globalKeys": ["__or3EditorNodesRegistry", "__or3EditorMarksRegistry", "__or3EditorExtensionsRegistry"],
+      "implementation": "legacy-equivalent",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "caller-object-identity", "publicListValue": "deep-reactive-proxy-of-caller-value", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "loadOrder": "sequential-by-family-node-mark-extension", "loadFailure": "warn-skip-continue", "eagerPrecedence": "extension-before-factory", "registerReturn": "void", "disposal": "id-only-public-api" }
+    },
+    {
+      "id": "registry.admin-extensions",
+      "family": "admin pages and widgets",
+      "sources": ["app/composables/admin/useAdminPlugins.ts"],
+      "globalKeys": [],
+      "implementation": "legacy-equivalent",
+      "behavior": { "duplicate": "replace-in-place-by-id", "storedValue": "normalized-caller-value", "pageDefaultPath": "id", "defaultOrder": 0, "equalOrderTie": "array-position", "pluginDiscovery": "loaded-once-per-module-instance", "loadFailure": "dev-error-skip-continue", "componentCacheKey": "shared-page-or-widget-id", "componentCacheMax": 50, "componentCacheEviction": "fifo-insertion", "replacementCacheInvalidation": "none", "registerReturn": "void", "disposal": "none" }
     }
   ]
 }

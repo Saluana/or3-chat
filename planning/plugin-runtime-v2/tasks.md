@@ -54,7 +54,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC5, R4.AC4
       Done when: existing dashboard tests are mapped into the ledger and missing cache/navigation cases are added.
 
-- [ ] 1.10 Record editor extension and admin page/widget profiles for value identity, ordering, load failures, replace-in-place position, loaded-once behavior, and component cache bounds
+- [x] 1.10 Record editor extension and admin page/widget profiles for value identity, ordering, load failures, replace-in-place position, loaded-once behavior, and component cache bounds
       Requirements: R1.AC5, R4.AC4
       Done when: both profile families have explicit golden tests and return-type entries.
 

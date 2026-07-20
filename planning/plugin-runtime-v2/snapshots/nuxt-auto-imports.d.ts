@@ -20,6 +20,7 @@ export { registerMessageAction, unregisterMessageAction, useMessageActions, list
 export { registerProjectTreeAction, unregisterProjectTreeAction, useProjectTreeActions, listRegisteredProjectTreeActionIds, ProjectTreeKind, ShowOnKind, ProjectTreeChild, ProjectTreeRoot, ProjectTreeRow, ProjectTreeHandlerCtx, ProjectTreeAction } from '../app/composables/projects/useProjectTreeActions';
 export { registerSidebarSection, unregisterSidebarSection, registerSidebarFooterAction, unregisterSidebarFooterAction, useSidebarSections, useSidebarFooterActions, listRegisteredSidebarSectionIds, listRegisteredSidebarFooterActionIds, SidebarSectionPlacement, SidebarSection, SidebarSectionGroups, SidebarFooterActionContext, ChromeActionColor, SidebarFooterAction, SidebarFooterActionEntry } from '../app/composables/sidebar/useSidebarSections';
 export { registerThreadHistoryAction, unregisterThreadHistoryAction, useThreadHistoryActions, listRegisteredThreadHistoryActionIds, ThreadHistoryAction } from '../app/composables/threads/useThreadHistoryActions';
+export { state, registerAdminPage, registerAdminWidget, useAdminPages, useAdminWidgets, resolveAdminComponent, createAdminPluginApi, loadAdminPlugins, AdminPageDef, AdminWidgetDef, AdminComponent, AdminPlugin, AdminPluginApi } from '../app/composables/admin/useAdminPlugins';
 export { typedOn, KnownHookKey, DbFamily, DbHookKey, HookKey, ChatOutgoingFilterReturn, ChatIncomingFilterReturn, FilesAttachFilterReturn } from '../app/core/hooks/hook-keys';
 export { useGlobalRegistry, createRegistry, RegistryItem, RegistryApi, RegistrationHandle } from '../app/composables/_registry';
 export { useHookEffect } from '../app/composables/core/useHookEffect';
@@ -31,6 +32,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
 // ---- .nuxt/types/imports.d.ts ----
     readonly SidebarEnvironmentKey: UnwrapRef<typeof import('../../app/composables/sidebar/useSidebarEnvironment')['SidebarEnvironmentKey']>
     readonly SidebarPageControlsKey: UnwrapRef<typeof import('../../app/composables/sidebar/useSidebarEnvironment')['SidebarPageControlsKey']>
+    readonly createAdminPluginApi: UnwrapRef<typeof import('../../app/composables/admin/useAdminPlugins')['createAdminPluginApi']>
     readonly createHistoryActionRegistry: UnwrapRef<typeof import('../../app/composables/history/createHistoryActionRegistry')['createHistoryActionRegistry']>
     readonly createHookEngine: UnwrapRef<typeof import('../../app/core/hooks/hooks')['createHookEngine']>
     readonly createLazyExtensionFactory: UnwrapRef<typeof import('../../app/composables/editor/useEditorExtensionLoader')['createLazyExtensionFactory']>
@@ -63,9 +65,12 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
     readonly listRegisteredSidebarSectionIds: UnwrapRef<typeof import('../../app/composables/sidebar/useSidebarSections')['listRegisteredSidebarSectionIds']>
     readonly listRegisteredThreadHistoryActionIds: UnwrapRef<typeof import('../../app/composables/threads/useThreadHistoryActions')['listRegisteredThreadHistoryActionIds']>
     readonly listWorkspacePluginInstances: UnwrapRef<typeof import('../../app/composables/plugins/workspace-runtime')['listWorkspacePluginInstances']>
+    readonly loadAdminPlugins: UnwrapRef<typeof import('../../app/composables/admin/useAdminPlugins')['loadAdminPlugins']>
     readonly loadEditorExtensions: UnwrapRef<typeof import('../../app/composables/editor/useEditorExtensionLoader')['loadEditorExtensions']>
     readonly provideSidebarEnvironment: UnwrapRef<typeof import('../../app/composables/sidebar/useSidebarEnvironment')['provideSidebarEnvironment']>
     readonly provideSidebarPageControls: UnwrapRef<typeof import('../../app/composables/sidebar/useSidebarEnvironment')['provideSidebarPageControls']>
+    readonly registerAdminPage: UnwrapRef<typeof import('../../app/composables/admin/useAdminPlugins')['registerAdminPage']>
+    readonly registerAdminWidget: UnwrapRef<typeof import('../../app/composables/admin/useAdminPlugins')['registerAdminWidget']>
     readonly registerComposerAction: UnwrapRef<typeof import('../../app/composables/sidebar/useComposerActions')['registerComposerAction']>
     readonly registerDashboardPlugin: UnwrapRef<typeof import('../../app/composables/dashboard/useDashboardPlugins')['registerDashboardPlugin']>
     readonly registerDashboardPluginPage: UnwrapRef<typeof import('../../app/composables/dashboard/useDashboardPlugins')['registerDashboardPluginPage']>
@@ -83,7 +88,9 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
     readonly registerSidebarSection: UnwrapRef<typeof import('../../app/composables/sidebar/useSidebarSections')['registerSidebarSection']>
     readonly registerThreadHistoryAction: UnwrapRef<typeof import('../../app/composables/threads/useThreadHistoryActions')['registerThreadHistoryAction']>
     readonly registerWorkspacePluginInstance: UnwrapRef<typeof import('../../app/composables/plugins/workspace-runtime')['registerWorkspacePluginInstance']>
+    readonly resolveAdminComponent: UnwrapRef<typeof import('../../app/composables/admin/useAdminPlugins')['resolveAdminComponent']>
     readonly resolveDashboardPluginPageComponent: UnwrapRef<typeof import('../../app/composables/dashboard/useDashboardPlugins')['resolveDashboardPluginPageComponent']>
+    readonly state: UnwrapRef<typeof import('../../app/composables/admin/useAdminPlugins')['state']>
     readonly typedOn: UnwrapRef<typeof import('../../app/core/hooks/hook-keys')['typedOn']>
     readonly unregisterComposerAction: UnwrapRef<typeof import('../../app/composables/sidebar/useComposerActions')['unregisterComposerAction']>
     readonly unregisterDashboardPlugin: UnwrapRef<typeof import('../../app/composables/dashboard/useDashboardPlugins')['unregisterDashboardPlugin']>
@@ -104,6 +111,8 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
     readonly useActivePageId: UnwrapRef<typeof import('../../app/composables/sidebar/useSidebarPageControls')['useActivePageId']>
     readonly useActiveSections: UnwrapRef<typeof import('../../app/composables/sidebar/useSidebarEnvironment')['useActiveSections']>
     readonly useActiveThreadIds: UnwrapRef<typeof import('../../app/composables/sidebar/useSidebarEnvironment')['useActiveThreadIds']>
+    readonly useAdminPages: UnwrapRef<typeof import('../../app/composables/admin/useAdminPlugins')['useAdminPages']>
+    readonly useAdminWidgets: UnwrapRef<typeof import('../../app/composables/admin/useAdminPlugins')['useAdminWidgets']>
     readonly useComposerActions: UnwrapRef<typeof import('../../app/composables/sidebar/useComposerActions')['useComposerActions']>
     readonly useDashboardNavigation: UnwrapRef<typeof import('../../app/composables/dashboard/useDashboardPlugins')['useDashboardNavigation']>
     readonly useDashboardPluginPages: UnwrapRef<typeof import('../../app/composables/dashboard/useDashboardPlugins')['useDashboardPluginPages']>
@@ -136,6 +145,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
     readonly useThreadHistoryActions: UnwrapRef<typeof import('../../app/composables/threads/useThreadHistoryActions')['useThreadHistoryActions']>
   const SidebarEnvironmentKey: typeof import('../../app/composables/sidebar/useSidebarEnvironment').SidebarEnvironmentKey
   const SidebarPageControlsKey: typeof import('../../app/composables/sidebar/useSidebarEnvironment').SidebarPageControlsKey
+  const createAdminPluginApi: typeof import('../../app/composables/admin/useAdminPlugins').createAdminPluginApi
   const createHistoryActionRegistry: typeof import('../../app/composables/history/createHistoryActionRegistry').createHistoryActionRegistry
   const createHookEngine: typeof import('../../app/core/hooks/hooks').createHookEngine
   const createLazyExtensionFactory: typeof import('../../app/composables/editor/useEditorExtensionLoader').createLazyExtensionFactory
@@ -168,9 +178,12 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
   const listRegisteredSidebarSectionIds: typeof import('../../app/composables/sidebar/useSidebarSections').listRegisteredSidebarSectionIds
   const listRegisteredThreadHistoryActionIds: typeof import('../../app/composables/threads/useThreadHistoryActions').listRegisteredThreadHistoryActionIds
   const listWorkspacePluginInstances: typeof import('../../app/composables/plugins/workspace-runtime').listWorkspacePluginInstances
+  const loadAdminPlugins: typeof import('../../app/composables/admin/useAdminPlugins').loadAdminPlugins
   const loadEditorExtensions: typeof import('../../app/composables/editor/useEditorExtensionLoader').loadEditorExtensions
   const provideSidebarEnvironment: typeof import('../../app/composables/sidebar/useSidebarEnvironment').provideSidebarEnvironment
   const provideSidebarPageControls: typeof import('../../app/composables/sidebar/useSidebarEnvironment').provideSidebarPageControls
+  const registerAdminPage: typeof import('../../app/composables/admin/useAdminPlugins').registerAdminPage
+  const registerAdminWidget: typeof import('../../app/composables/admin/useAdminPlugins').registerAdminWidget
   const registerComposerAction: typeof import('../../app/composables/sidebar/useComposerActions').registerComposerAction
   const registerDashboardPlugin: typeof import('../../app/composables/dashboard/useDashboardPlugins').registerDashboardPlugin
   const registerDashboardPluginPage: typeof import('../../app/composables/dashboard/useDashboardPlugins').registerDashboardPluginPage
@@ -188,7 +201,9 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
   const registerSidebarSection: typeof import('../../app/composables/sidebar/useSidebarSections').registerSidebarSection
   const registerThreadHistoryAction: typeof import('../../app/composables/threads/useThreadHistoryActions').registerThreadHistoryAction
   const registerWorkspacePluginInstance: typeof import('../../app/composables/plugins/workspace-runtime').registerWorkspacePluginInstance
+  const resolveAdminComponent: typeof import('../../app/composables/admin/useAdminPlugins').resolveAdminComponent
   const resolveDashboardPluginPageComponent: typeof import('../../app/composables/dashboard/useDashboardPlugins').resolveDashboardPluginPageComponent
+  const state: typeof import('../../app/composables/admin/useAdminPlugins').state
   const typedOn: typeof import('../../app/core/hooks/hook-keys').typedOn
   const unregisterComposerAction: typeof import('../../app/composables/sidebar/useComposerActions').unregisterComposerAction
   const unregisterDashboardPlugin: typeof import('../../app/composables/dashboard/useDashboardPlugins').unregisterDashboardPlugin
@@ -209,6 +224,8 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
   const useActivePageId: typeof import('../../app/composables/sidebar/useSidebarPageControls').useActivePageId
   const useActiveSections: typeof import('../../app/composables/sidebar/useSidebarEnvironment').useActiveSections
   const useActiveThreadIds: typeof import('../../app/composables/sidebar/useSidebarEnvironment').useActiveThreadIds
+  const useAdminPages: typeof import('../../app/composables/admin/useAdminPlugins').useAdminPages
+  const useAdminWidgets: typeof import('../../app/composables/admin/useAdminPlugins').useAdminWidgets
   const useComposerActions: typeof import('../../app/composables/sidebar/useComposerActions').useComposerActions
   const useDashboardNavigation: typeof import('../../app/composables/dashboard/useDashboardPlugins').useDashboardNavigation
   const useDashboardPluginPages: typeof import('../../app/composables/dashboard/useDashboardPlugins').useDashboardPluginPages
@@ -239,6 +256,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
   const useSidebarThreads: typeof import('../../app/composables/sidebar/useSidebarEnvironment').useSidebarThreads
   const useSwitchToPage: typeof import('../../app/composables/sidebar/useSidebarPageControls').useSwitchToPage
   const useThreadHistoryActions: typeof import('../../app/composables/threads/useThreadHistoryActions').useThreadHistoryActions
+  export type { AdminPageDef, AdminWidgetDef, AdminComponent, AdminPlugin, AdminPluginApi } from '../../app/composables/admin/useAdminPlugins'
   export type { ChatMessageAction } from '../../app/composables/chat/useMessageActions'
   export type { ComposerActionContext, ComposerAction, ComposerActionEntry } from '../../app/composables/sidebar/useComposerActions'
   export type { DashboardPlugin, DashboardPluginPage, DashboardNavigationErrorCode, DashboardNavigationError, DashboardNavigationState, DashboardNavigationResult, UseDashboardNavigationOptions } from '../../app/composables/dashboard/useDashboardPlugins'
@@ -262,6 +280,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
   export type { TypedHookEngine } from '../../app/core/hooks/typed-hooks'
   export type { WorkspacePluginSource, Or3WorkspacePluginApi, Or3WorkspacePlugin } from '../../app/composables/plugins/workspace-runtime'
   import('../../app/composables/_registry')
+  import('../../app/composables/admin/useAdminPlugins')
   import('../../app/composables/chat/useMessageActions')
   import('../../app/composables/core/usePaneApps')
   import('../../app/composables/dashboard/useDashboardPlugins')
