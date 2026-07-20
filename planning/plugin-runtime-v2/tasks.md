@@ -258,7 +258,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
 
 ## 5. Milestone 5 — Hook Runtime V2
 
-- [ ] 5.1 Implement owner-aware exact and wildcard hook record storage with sorted registration-time arrays
+- [x] 5.1 Implement owner-aware exact and wildcard hook record storage with sorted registration-time arrays
       Requirements: R5.AC3-R5.AC5
       Done when: legacy records and hidden managed records reproduce the golden match order.
 
