@@ -196,6 +196,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, reactive } from 'vue';
 import { useIcon } from '~/composables/useIcon';
+import {
+    readHookInspectorSnapshot,
+    resetHookInspectorDiagnostics,
+    type HookInspectorSnapshot,
+} from '~/core/hooks/hook-inspector-snapshot';
 
 const hooks = useHooks();
 const toast = useToast();
@@ -207,27 +212,27 @@ let refreshInterval: ReturnType<typeof setInterval> | null = null;
 // Reactive snapshot of diagnostics
 const diagnosticsSnapshot = reactive({
     timings: {} as Record<string, number[]>,
+    timingStats: {} as Record<
+        string,
+        { count: number; total: number; max: number }
+    >,
     errors: {} as Record<string, number>,
     totalActions: 0,
     totalFilters: 0,
 });
 
 // Update snapshot from hooks engine
-function updateSnapshot() {
-    // Deep clone timings to make it reactive
-    const timings = hooks._diagnostics.timings;
+function updateSnapshot(
+    snapshot: HookInspectorSnapshot = readHookInspectorSnapshot(hooks._engine),
+) {
     diagnosticsSnapshot.timings = {};
-    for (const [key, value] of Object.entries(timings)) {
+    for (const [key, value] of Object.entries(snapshot.timings)) {
         diagnosticsSnapshot.timings[key] = [...value];
     }
-
-    // Deep clone errors
-    const errors = hooks._diagnostics.errors;
-    diagnosticsSnapshot.errors = { ...errors };
-
-    // Update counts
-    diagnosticsSnapshot.totalActions = hooks._diagnostics.callbacks('action');
-    diagnosticsSnapshot.totalFilters = hooks._diagnostics.callbacks('filter');
+    diagnosticsSnapshot.timingStats = { ...snapshot.timingStats };
+    diagnosticsSnapshot.errors = { ...snapshot.errors };
+    diagnosticsSnapshot.totalActions = snapshot.totalActions;
+    diagnosticsSnapshot.totalFilters = snapshot.totalFilters;
 }
 
 // Toggle auto-refresh
@@ -265,8 +270,7 @@ function refresh() {
 
 // Clear timings
 function clearTimings() {
-    hooks._diagnostics.timings = {};
-    hooks._diagnostics.errors = {};
+    resetHookInspectorDiagnostics(hooks._engine);
     updateSnapshot();
     toast.add({
         title: 'Cleared hook diagnostics',
@@ -279,7 +283,7 @@ function clearTimings() {
 const stats = computed(() => {
     const totalErrors = Object.values(diagnosticsSnapshot.errors).reduce(
         (sum, count) => sum + count,
-        0
+        0,
     );
 
     return {
@@ -296,13 +300,19 @@ const hookDetails = computed(() => {
 
     const details = Object.entries(timings).map(([name, times]) => {
         const sorted = [...times].sort((a, b) => a - b);
-        const count = sorted.length;
-        const sum = sorted.reduce((acc, t) => acc + t, 0);
+        const aggregate = diagnosticsSnapshot.timingStats[name];
+        const count = aggregate?.count ?? sorted.length;
+        const sum = aggregate?.total ?? sorted.reduce((acc, t) => acc + t, 0);
         const avg = count > 0 ? (sum / count).toFixed(2) : '0.00';
-        const p95Index = Math.floor(count * 0.95);
-        const p95 = count > 0 ? sorted[p95Index]?.toFixed(2) ?? '0.00' : '0.00';
-        const max =
-            count > 0 ? sorted[count - 1]?.toFixed(2) ?? '0.00' : '0.00';
+        const p95Index = Math.min(
+            sorted.length - 1,
+            Math.floor(sorted.length * 0.95),
+        );
+        const p95 = sorted.length
+            ? (sorted[p95Index]?.toFixed(2) ?? '0.00')
+            : '0.00';
+        const maxValue = aggregate?.max ?? sorted[sorted.length - 1];
+        const max = count > 0 ? (maxValue?.toFixed(2) ?? '0.00') : '0.00';
         const errorCount = errors[name] || 0;
 
         return {
@@ -324,18 +334,13 @@ let passiveInterval: ReturnType<typeof setInterval> | null = null;
 let lastSnapshot = '';
 
 function checkForUpdates() {
-    // Create a signature of current diagnostics state
-    const timingKeys = Object.keys(hooks._diagnostics.timings).sort().join(',');
-    const timingCounts = Object.values(hooks._diagnostics.timings)
-        .map((arr) => arr.length)
-        .join(',');
-    const errorCounts = Object.values(hooks._diagnostics.errors).join(',');
-    const currentSnapshot = `${timingKeys}:${timingCounts}:${errorCounts}`;
+    const snapshot = readHookInspectorSnapshot(hooks._engine);
+    const currentSnapshot = snapshot.signature;
 
     // Only update if something actually changed
     if (currentSnapshot !== lastSnapshot) {
         lastSnapshot = currentSnapshot;
-        updateSnapshot();
+        updateSnapshot(snapshot);
     }
 }
 

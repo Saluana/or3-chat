@@ -2,10 +2,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createHookEngine } from '../../core/hooks/hooks';
+import { createTypedHookEngine } from '../../core/hooks/typed-hooks';
 import HookInspector from '../devtools/HookInspector.vue';
 
 // Mock composables
-const mockHooks = createHookEngine();
+const mockHooks = createTypedHookEngine(createHookEngine());
 const mockToast = { add: vi.fn() };
 
 // Stub UI components
@@ -55,7 +56,7 @@ describe('HookInspector', () => {
     it('displays hook statistics after hooks are executed', async () => {
         // Register some hooks
         mockHooks.addAction('test.action', () => {});
-        mockHooks.addFilter('test.filter', (v) => v);
+        mockHooks.addFilter('test.filter', () => undefined);
 
         const wrapper = mount(HookInspector, mountOptions);
         await flush();
@@ -142,7 +143,7 @@ describe('HookInspector', () => {
 
         // Stats shouldn't update automatically (passive polling is every 2s)
         expect(
-            wrapper.vm.diagnosticsSnapshot.timings['refresh.test']
+            wrapper.vm.diagnosticsSnapshot.timings['refresh.test'],
         ).toBeUndefined();
 
         // Click refresh button
@@ -151,7 +152,7 @@ describe('HookInspector', () => {
 
         // Now it should be updated
         expect(
-            wrapper.vm.diagnosticsSnapshot.timings['refresh.test']
+            wrapper.vm.diagnosticsSnapshot.timings['refresh.test'],
         ).toBeTruthy();
     });
 
@@ -164,7 +165,7 @@ describe('HookInspector', () => {
         await flush();
 
         expect(
-            Object.keys(wrapper.vm.diagnosticsSnapshot.timings).length
+            Object.keys(wrapper.vm.diagnosticsSnapshot.timings).length,
         ).toBeGreaterThan(0);
 
         // Find and click the Clear button (has trash icon)
@@ -197,7 +198,7 @@ describe('HookInspector', () => {
         expect(mockToast.add).toHaveBeenCalledWith(
             expect.objectContaining({
                 title: 'Auto-refresh enabled',
-            })
+            }),
         );
     });
 
@@ -208,7 +209,7 @@ describe('HookInspector', () => {
         await flush();
 
         expect(Object.keys(wrapper.vm.diagnosticsSnapshot.timings).length).toBe(
-            0
+            0,
         );
 
         // Add and execute a hook
@@ -221,10 +222,10 @@ describe('HookInspector', () => {
 
         // Should have detected the new hook
         expect(
-            wrapper.vm.diagnosticsSnapshot.timings['passive.test']
+            wrapper.vm.diagnosticsSnapshot.timings['passive.test'],
         ).toBeTruthy();
         expect(
-            wrapper.vm.diagnosticsSnapshot.timings['passive.test']!.length
+            wrapper.vm.diagnosticsSnapshot.timings['passive.test']!.length,
         ).toBe(1);
 
         // Execute the hook again
@@ -236,7 +237,7 @@ describe('HookInspector', () => {
 
         // Should have detected the new invocation
         expect(
-            wrapper.vm.diagnosticsSnapshot.timings['passive.test']!.length
+            wrapper.vm.diagnosticsSnapshot.timings['passive.test']!.length,
         ).toBe(2);
 
         vi.useRealTimers();

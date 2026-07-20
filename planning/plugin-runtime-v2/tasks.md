@@ -290,7 +290,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R5.AC1, R5.AC2
       Done when: lifetime isolation tests and declaration snapshots pass in client and SSR contexts.
 
-- [ ] 5.9 Migrate Hook Inspector to immutable snapshots while retaining the compatibility facade
+- [x] 5.9 Migrate Hook Inspector to immutable snapshots while retaining the compatibility facade
       Requirements: R1.AC7, R5.AC6, R9.AC3
       Done when: inspector refresh/reset works and no app code needs mutable internals.
 

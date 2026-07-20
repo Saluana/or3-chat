@@ -75,6 +75,7 @@ export interface HookEngineV2Runtime {
     readonly records: HookRecordStore;
     defineHook(input: DefineHookInput): HookDefinition;
     inspectDefinitions(): readonly HookDefinition[];
+    resetDiagnostics(): void;
 }
 
 export interface HookEngineV2 extends HookEngine {
@@ -593,6 +594,10 @@ export function createHookEngineV2(
             defineHook,
             inspectDefinitions: () =>
                 Object.freeze(Array.from(definitions.values())),
+            resetDiagnostics() {
+                diagnostics.timings = {};
+                diagnostics.errors = {};
+            },
         }),
     };
 
