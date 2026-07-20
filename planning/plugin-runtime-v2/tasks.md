@@ -76,7 +76,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
 
 ## 2. Milestone 1 — Descriptor contracts and shadow ownership
 
-- [ ] 2.1 Implement discriminated `bundled-v1` and `package-v2` artifact identity types
+- [x] 2.1 Implement discriminated `bundled-v1` and `package-v2` artifact identity types
       Requirements: R2.AC1, R2.AC3
       Done when: TypeScript prevents a bundled descriptor from claiming a package digest or post-build reload.
 
