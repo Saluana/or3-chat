@@ -19,127 +19,127 @@
       "id": "hooks.action.exact.0",
       "budgetClass": "exact",
       "repetitions": 65536,
-      "medianNsPerOperation": 8.762,
-      "p95NsPerOperation": 9.534
+      "medianNsPerOperation": 9.521,
+      "p95NsPerOperation": 10.461
     },
     {
       "id": "hooks.action.exact.1",
       "budgetClass": "exact",
       "repetitions": 65536,
-      "medianNsPerOperation": 60.209,
-      "p95NsPerOperation": 61.264
+      "medianNsPerOperation": 66.752,
+      "p95NsPerOperation": 68.425
     },
     {
       "id": "hooks.action.exact.10",
       "budgetClass": "exact",
       "repetitions": 65536,
-      "medianNsPerOperation": 540.648,
-      "p95NsPerOperation": 571.878
+      "medianNsPerOperation": 581.429,
+      "p95NsPerOperation": 615.361
     },
     {
       "id": "hooks.action.exact.100",
       "budgetClass": "exact",
       "repetitions": 4096,
-      "medianNsPerOperation": 4875.58,
-      "p95NsPerOperation": 5042.002
+      "medianNsPerOperation": 5250.204,
+      "p95NsPerOperation": 5495.341
     },
     {
       "id": "hooks.action.exact.1000",
       "budgetClass": "exact",
       "repetitions": 512,
-      "medianNsPerOperation": 48438.559,
-      "p95NsPerOperation": 50224.771
+      "medianNsPerOperation": 52085.205,
+      "p95NsPerOperation": 54357.504
     },
     {
       "id": "hooks.filter.chain.1",
       "budgetClass": "exact",
       "repetitions": 65536,
-      "medianNsPerOperation": 65.725,
-      "p95NsPerOperation": 69.027
+      "medianNsPerOperation": 71.024,
+      "p95NsPerOperation": 73.303
     },
     {
       "id": "hooks.filter.chain.10",
       "budgetClass": "exact",
       "repetitions": 65536,
-      "medianNsPerOperation": 551.153,
-      "p95NsPerOperation": 700.364
+      "medianNsPerOperation": 598.936,
+      "p95NsPerOperation": 691.832
     },
     {
       "id": "hooks.filter.chain.100",
       "budgetClass": "exact",
       "repetitions": 4096,
-      "medianNsPerOperation": 4978.129,
-      "p95NsPerOperation": 5154.795
+      "medianNsPerOperation": 5336.171,
+      "p95NsPerOperation": 5520.375
     },
     {
       "id": "hooks.filter.chain.1000",
       "budgetClass": "exact",
       "repetitions": 512,
-      "medianNsPerOperation": 49206.623,
-      "p95NsPerOperation": 51387.859
+      "medianNsPerOperation": 52786.865,
+      "p95NsPerOperation": 53502.197
     },
     {
       "id": "hooks.action.wildcard.0",
       "budgetClass": "wildcard",
       "repetitions": 65536,
-      "medianNsPerOperation": 10.572,
-      "p95NsPerOperation": 19.159
+      "medianNsPerOperation": 11.587,
+      "p95NsPerOperation": 21.563
     },
     {
       "id": "hooks.action.wildcard.10",
       "budgetClass": "wildcard",
       "repetitions": 32768,
-      "medianNsPerOperation": 665.435,
-      "p95NsPerOperation": 678.724
+      "medianNsPerOperation": 716.128,
+      "p95NsPerOperation": 723.731
     },
     {
       "id": "hooks.action.wildcard.100",
       "budgetClass": "wildcard",
       "repetitions": 4096,
-      "medianNsPerOperation": 6219.513,
-      "p95NsPerOperation": 7099.731
+      "medianNsPerOperation": 6734.243,
+      "p95NsPerOperation": 6916.728
     },
     {
       "id": "hooks.action.wildcard.1000",
       "budgetClass": "wildcard",
       "repetitions": 512,
-      "medianNsPerOperation": 64014.16,
-      "p95NsPerOperation": 65295.572
+      "medianNsPerOperation": 67970.051,
+      "p95NsPerOperation": 69361.979
     },
     {
       "id": "registry.commit-dispose.1",
       "budgetClass": "registry",
       "repetitions": 65536,
-      "medianNsPerOperation": 328.469,
-      "p95NsPerOperation": 384.86
+      "medianNsPerOperation": 357.238,
+      "p95NsPerOperation": 408.538
     },
     {
       "id": "registry.commit-dispose.100",
       "budgetClass": "registry",
       "repetitions": 512,
-      "medianNsPerOperation": 58342.611,
-      "p95NsPerOperation": 65175.373
+      "medianNsPerOperation": 61713.379,
+      "p95NsPerOperation": 65897.381
     },
     {
       "id": "runtime.reconcile.100",
       "budgetClass": "reconcile",
       "repetitions": 4096,
-      "medianNsPerOperation": 5552.338,
-      "p95NsPerOperation": 5758.667
+      "medianNsPerOperation": 5864.115,
+      "p95NsPerOperation": 6003.998
     },
     {
       "id": "runtime.enable-disable.1000",
       "budgetClass": "lifecycle",
       "repetitions": 512,
-      "medianNsPerOperation": 45322.834,
-      "p95NsPerOperation": 53352.213
+      "medianNsPerOperation": 48327.475,
+      "p95NsPerOperation": 56198.65
     },
     {
       "id": "diagnostics.long-session",
       "budgetClass": "diagnostics",
       "repetitions": 16,
-      "medianNsPerOperation": 1599494.813,
-      "p95NsPerOperation": 1733161.437,
+      "medianNsPerOperation": 1701291.687,
+      "p95NsPerOperation": 1869919.25,
       "observations": {
         "legacyTimingSeries": 2501,
         "legacyTimingSamples": 12500,

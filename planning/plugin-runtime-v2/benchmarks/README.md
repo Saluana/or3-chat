@@ -1,6 +1,6 @@
 # Plugin Runtime benchmark baseline
 
-`budgets.json` is the reviewed workload matrix and regression policy. `milestone-0-v1.json` is the first measured V1 baseline. The benchmark checker hashes the policy into the baseline and refuses to compare results when either the policy or selected runner differs.
+`budgets.json` is the reviewed workload matrix and regression policy. `milestone-0-v1.json` is the first measured V1 baseline, recorded in its production qualification context after the SSR/static build gates. The benchmark checker hashes the policy into the baseline and refuses to compare results when either the policy or selected runner differs.
 
 Run the gate on the selected runner with:
 

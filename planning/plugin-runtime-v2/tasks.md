@@ -70,7 +70,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R5.AC4, R5.AC6, R9.AC7
       Done when: results are reproducible on the selected runner and budgets are stored outside implementation code.
 
-- [ ] 1.14 Add a Milestone 0 qualification command and record the first green baseline artifact
+- [x] 1.14 Add a Milestone 0 qualification command and record the first green baseline artifact
       Requirements: R1.AC10, R9.AC4, R9.AC6, R9.AC7
       Done when: one Bun command runs declaration, corpus, behavior, build, and benchmark gates and publishes a versioned result.
 
