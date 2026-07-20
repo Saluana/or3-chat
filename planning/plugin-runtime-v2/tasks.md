@@ -66,7 +66,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC8, R1.AC10, R7.AC1, R7.AC9
       Done when: `bun run build` and `bun run generate:static` verify plugin presence/absence at the intended boundaries.
 
-- [ ] 1.13 Commit benchmark harnesses and initial budgets for hooks, registries, reconciliation, enable/disable cycles, and diagnostics memory
+- [x] 1.13 Commit benchmark harnesses and initial budgets for hooks, registries, reconciliation, enable/disable cycles, and diagnostics memory
       Requirements: R5.AC4, R5.AC6, R9.AC7
       Done when: results are reproducible on the selected runner and budgets are stored outside implementation code.
 

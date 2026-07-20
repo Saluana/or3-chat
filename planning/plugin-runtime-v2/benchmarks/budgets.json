@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "baselineId": "milestone-0-v1",
+  "selectedRunner": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpuModel": "Apple M4 Pro",
+    "nodeMajorMinor": "24.13"
+  },
+  "measurement": {
+    "warmupSamples": 3,
+    "measurementSamples": 9,
+    "targetSampleMs": 20,
+    "maxRepetitions": 65536
+  },
+  "budgetClasses": {
+    "exact": { "maxMedianRatio": 1.1 },
+    "registry": { "maxMedianRatio": 1.1 },
+    "wildcard": { "maxMedianRatio": 1.15 },
+    "reconcile": { "maxMedianRatio": 1.15 },
+    "lifecycle": { "maxMedianRatio": 1.15 },
+    "diagnostics": { "maxMedianRatio": 1.15 }
+  },
+  "workloads": [
+    { "id": "hooks.action.exact.0", "budgetClass": "exact" },
+    { "id": "hooks.action.exact.1", "budgetClass": "exact" },
+    { "id": "hooks.action.exact.10", "budgetClass": "exact" },
+    { "id": "hooks.action.exact.100", "budgetClass": "exact" },
+    { "id": "hooks.action.exact.1000", "budgetClass": "exact" },
+    { "id": "hooks.filter.chain.1", "budgetClass": "exact" },
+    { "id": "hooks.filter.chain.10", "budgetClass": "exact" },
+    { "id": "hooks.filter.chain.100", "budgetClass": "exact" },
+    { "id": "hooks.filter.chain.1000", "budgetClass": "exact" },
+    { "id": "hooks.action.wildcard.0", "budgetClass": "wildcard" },
+    { "id": "hooks.action.wildcard.10", "budgetClass": "wildcard" },
+    { "id": "hooks.action.wildcard.100", "budgetClass": "wildcard" },
+    { "id": "hooks.action.wildcard.1000", "budgetClass": "wildcard" },
+    { "id": "registry.commit-dispose.1", "budgetClass": "registry" },
+    { "id": "registry.commit-dispose.100", "budgetClass": "registry" },
+    { "id": "runtime.reconcile.100", "budgetClass": "reconcile" },
+    { "id": "runtime.enable-disable.1000", "budgetClass": "lifecycle" },
+    { "id": "diagnostics.long-session", "budgetClass": "diagnostics" }
+  ]
+}

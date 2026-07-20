@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "baselineId": "milestone-0-v1",
+  "budgetSha256": "688ae847acc3edfc924400c3da92e209b6ab54d876c7e7d6a4469c7c7774174d",
+  "runner": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpuModel": "Apple M4 Pro",
+    "nodeMajorMinor": "24.13"
+  },
+  "measurement": {
+    "warmupSamples": 3,
+    "measurementSamples": 9,
+    "targetSampleMs": 20,
+    "maxRepetitions": 65536
+  },
+  "results": [
+    {
+      "id": "hooks.action.exact.0",
+      "budgetClass": "exact",
+      "repetitions": 65536,
+      "medianNsPerOperation": 8.762,
+      "p95NsPerOperation": 9.534
+    },
+    {
+      "id": "hooks.action.exact.1",
+      "budgetClass": "exact",
+      "repetitions": 65536,
+      "medianNsPerOperation": 60.209,
+      "p95NsPerOperation": 61.264
+    },
+    {
+      "id": "hooks.action.exact.10",
+      "budgetClass": "exact",
+      "repetitions": 65536,
+      "medianNsPerOperation": 540.648,
+      "p95NsPerOperation": 571.878
+    },
+    {
+      "id": "hooks.action.exact.100",
+      "budgetClass": "exact",
+      "repetitions": 4096,
+      "medianNsPerOperation": 4875.58,
+      "p95NsPerOperation": 5042.002
+    },
+    {
+      "id": "hooks.action.exact.1000",
+      "budgetClass": "exact",
+      "repetitions": 512,
+      "medianNsPerOperation": 48438.559,
+      "p95NsPerOperation": 50224.771
+    },
+    {
+      "id": "hooks.filter.chain.1",
+      "budgetClass": "exact",
+      "repetitions": 65536,
+      "medianNsPerOperation": 65.725,
+      "p95NsPerOperation": 69.027
+    },
+    {
+      "id": "hooks.filter.chain.10",
+      "budgetClass": "exact",
+      "repetitions": 65536,
+      "medianNsPerOperation": 551.153,
+      "p95NsPerOperation": 700.364
+    },
+    {
+      "id": "hooks.filter.chain.100",
+      "budgetClass": "exact",
+      "repetitions": 4096,
+      "medianNsPerOperation": 4978.129,
+      "p95NsPerOperation": 5154.795
+    },
+    {
+      "id": "hooks.filter.chain.1000",
+      "budgetClass": "exact",
+      "repetitions": 512,
+      "medianNsPerOperation": 49206.623,
+      "p95NsPerOperation": 51387.859
+    },
+    {
+      "id": "hooks.action.wildcard.0",
+      "budgetClass": "wildcard",
+      "repetitions": 65536,
+      "medianNsPerOperation": 10.572,
+      "p95NsPerOperation": 19.159
+    },
+    {
+      "id": "hooks.action.wildcard.10",
+      "budgetClass": "wildcard",
+      "repetitions": 32768,
+      "medianNsPerOperation": 665.435,
+      "p95NsPerOperation": 678.724
+    },
+    {
+      "id": "hooks.action.wildcard.100",
+      "budgetClass": "wildcard",
+      "repetitions": 4096,
+      "medianNsPerOperation": 6219.513,
+      "p95NsPerOperation": 7099.731
+    },
+    {
+      "id": "hooks.action.wildcard.1000",
+      "budgetClass": "wildcard",
+      "repetitions": 512,
+      "medianNsPerOperation": 64014.16,
+      "p95NsPerOperation": 65295.572
+    },
+    {
+      "id": "registry.commit-dispose.1",
+      "budgetClass": "registry",
+      "repetitions": 65536,
+      "medianNsPerOperation": 328.469,
+      "p95NsPerOperation": 384.86
+    },
+    {
+      "id": "registry.commit-dispose.100",
+      "budgetClass": "registry",
+      "repetitions": 512,
+      "medianNsPerOperation": 58342.611,
+      "p95NsPerOperation": 65175.373
+    },
+    {
+      "id": "runtime.reconcile.100",
+      "budgetClass": "reconcile",
+      "repetitions": 4096,
+      "medianNsPerOperation": 5552.338,
+      "p95NsPerOperation": 5758.667
+    },
+    {
+      "id": "runtime.enable-disable.1000",
+      "budgetClass": "lifecycle",
+      "repetitions": 512,
+      "medianNsPerOperation": 45322.834,
+      "p95NsPerOperation": 53352.213
+    },
+    {
+      "id": "diagnostics.long-session",
+      "budgetClass": "diagnostics",
+      "repetitions": 16,
+      "medianNsPerOperation": 1599494.813,
+      "p95NsPerOperation": 1733161.437,
+      "observations": {
+        "legacyTimingSeries": 2501,
+        "legacyTimingSamples": 12500,
+        "legacyEstimatedSampleBytes": 100000
+      }
+    }
+  ]
+}
