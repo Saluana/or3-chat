@@ -87,7 +87,7 @@ type KindBuckets = {
 };
 
 type CachedDispatchPlan = HookDispatchPlanCacheEntry & {
-    readonly records: readonly StoredHookRecord[];
+    readonly records: readonly HookRecord[];
 };
 
 const DEFAULT_PRIORITY = 10;
@@ -146,6 +146,7 @@ export class HookRecordStore {
     readonly #planCache = new Map<string, CachedDispatchPlan>();
     readonly #planCacheCapacity: number;
     readonly #unsubscribeActivation: () => void;
+    #lastPlan: CachedDispatchPlan | undefined;
     #sequence = 0;
 
     constructor(options: {
@@ -167,6 +168,7 @@ export class HookRecordStore {
         );
         this.#unsubscribeActivation = this.#activationTable.subscribe(() => {
             this.#planCache.clear();
+            this.#lastPlan = undefined;
         });
     }
 
@@ -243,6 +245,9 @@ export class HookRecordStore {
     }
 
     matching(kind: HookKind, name: string): readonly HookRecord[] {
+        if (this.#lastPlan?.kind === kind && this.#lastPlan.name === name) {
+            return this.#lastPlan.records;
+        }
         const buckets = this.#buckets[kind];
         const exactGeneration = buckets.exactGenerations.get(name) ?? 0;
         const generation = {
@@ -252,20 +257,13 @@ export class HookRecordStore {
             wildcardGeneration: buckets.wildcardGeneration,
             activationRevision: this.#activationTable.revision,
         } as const;
-        const cacheKey = JSON.stringify([
-            kind,
-            name,
-            exactGeneration,
-            buckets.wildcardGeneration,
-            this.#activationTable.revision,
-        ]);
+        const cacheKey = `${kind === 'action' ? 'a' : 'f'}${name}`;
         const cached = this.#planCache.get(cacheKey);
         if (cached) {
             this.#planCache.delete(cacheKey);
             this.#planCache.set(cacheKey, cached);
-            return Object.freeze(
-                cached.records.map((record) => this.#publicRecord(record)),
-            );
+            this.#lastPlan = cached;
+            return cached.records;
         }
 
         const matches = (buckets.exact.get(name) ?? []).filter((record) =>
@@ -276,20 +274,22 @@ export class HookRecordStore {
                 matches.push(record);
         }
         matches.sort(compareRecords);
+        const records = Object.freeze(
+            matches.map((record) => this.#publicRecord(record)),
+        );
         const plan = Object.freeze({
             ...generation,
             callbackCount: matches.length,
-            records: Object.freeze(matches),
+            records,
         });
         this.#planCache.set(cacheKey, plan);
+        this.#lastPlan = plan;
         while (this.#planCache.size > this.#planCacheCapacity) {
             const oldest = this.#planCache.keys().next().value;
             if (oldest === undefined) break;
             this.#planCache.delete(oldest);
         }
-        return Object.freeze(
-            matches.map((record) => this.#publicRecord(record)),
-        );
+        return records;
     }
 
     removeLegacy(input: {
@@ -448,6 +448,7 @@ export class HookRecordStore {
     dispose(): void {
         this.#unsubscribeActivation();
         this.#planCache.clear();
+        this.#lastPlan = undefined;
     }
 
     #insert(input: {
@@ -517,9 +518,9 @@ export class HookRecordStore {
     #bumpExactGeneration(kind: HookKind, name: string): void {
         const generations = this.#buckets[kind].exactGenerations;
         generations.set(name, (generations.get(name) ?? 0) + 1);
-        for (const [key, plan] of this.#planCache) {
-            if (plan.kind === kind && plan.name === name)
-                this.#planCache.delete(key);
+        this.#planCache.delete(`${kind === 'action' ? 'a' : 'f'}${name}`);
+        if (this.#lastPlan?.kind === kind && this.#lastPlan.name === name) {
+            this.#lastPlan = undefined;
         }
     }
 
@@ -528,6 +529,7 @@ export class HookRecordStore {
         for (const [key, plan] of this.#planCache) {
             if (plan.kind === kind) this.#planCache.delete(key);
         }
+        if (this.#lastPlan?.kind === kind) this.#lastPlan = undefined;
     }
 
     #isVisible(record: StoredHookRecord): boolean {

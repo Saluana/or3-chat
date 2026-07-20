@@ -14,7 +14,9 @@ import {
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
-const disableNonCorePlugins = isNonCorePluginDiscoveryDisabled(or3CloudConfig.admin);
+const disableNonCorePlugins = isNonCorePluginDiscoveryDisabled(
+    or3CloudConfig.admin,
+);
 const isWizardUiProcess = process.env.OR3_WIZARD_UI_ENABLED === 'true';
 const isStaticGenerateBuild = process.argv.includes('generate');
 const isStaticCloudDisabledBuild = isStaticGenerateBuild && !isSsrAuthEnabled;
@@ -25,8 +27,10 @@ const or3NetHostUrl =
     process.env.NUXT_PUBLIC_OR3_NET_HOST_URL?.trim() ||
     '';
 const or3NetExchangeSecret = process.env.OR3_NET_EXCHANGE_SECRET?.trim() || '';
-const or3NetExchangeIssuer = process.env.OR3_NET_EXCHANGE_ISSUER?.trim() || 'or3-chat';
-const or3NetExchangeAudience = process.env.OR3_NET_EXCHANGE_AUDIENCE?.trim() || 'or3-net';
+const or3NetExchangeIssuer =
+    process.env.OR3_NET_EXCHANGE_ISSUER?.trim() || 'or3-chat';
+const or3NetExchangeAudience =
+    process.env.OR3_NET_EXCHANGE_AUDIENCE?.trim() || 'or3-net';
 const or3NetExchangeTtlMs = process.env.OR3_NET_EXCHANGE_TTL_MS
     ? Number(process.env.OR3_NET_EXCHANGE_TTL_MS)
     : 60_000;
@@ -37,12 +41,7 @@ const or3NetExchangeTimeoutMs = process.env.OR3_NET_EXCHANGE_TIMEOUT_MS
 const convexUrl = or3CloudConfig.sync.convex?.url || '';
 const convexAdminKey = or3CloudConfig.sync.convex?.adminKey || '';
 
-const LOCAL_PROVIDER_IDS = new Set([
-    'custom',
-    'memory',
-    'redis',
-    'postgres',
-]);
+const LOCAL_PROVIDER_IDS = new Set(['custom', 'memory', 'redis', 'postgres']);
 
 function providerIdToModuleId(providerId: string): string | null {
     const id = providerId.trim();
@@ -66,7 +65,10 @@ function loadGeneratedProviderModules(): string[] {
         return [];
     }
 
-    const generatedModulesPath = resolve(__dirname, 'or3.providers.generated.ts');
+    const generatedModulesPath = resolve(
+        __dirname,
+        'or3.providers.generated.ts',
+    );
     if (!existsSync(generatedModulesPath)) {
         return [];
     }
@@ -87,17 +89,19 @@ function loadGeneratedProviderModules(): string[] {
         const parsed = module.exports.or3ProviderModules;
         if (!Array.isArray(parsed)) {
             console.warn(
-                `[or3-provider] Could not parse generated provider modules from "${generatedModulesPath}".`
+                `[or3-provider] Could not parse generated provider modules from "${generatedModulesPath}".`,
             );
             return [];
         }
 
-        return parsed.filter((entry): entry is string => typeof entry === 'string');
+        return parsed.filter(
+            (entry): entry is string => typeof entry === 'string',
+        );
     } catch (error) {
         console.warn(
             `[or3-provider] Failed to read generated provider modules from "${generatedModulesPath}": ${
                 error instanceof Error ? error.message : String(error)
-            }`
+            }`,
         );
         return [];
     }
@@ -107,17 +111,25 @@ const or3ProviderModules = loadGeneratedProviderModules();
 
 const providerIdsFromConfig = new Set<string>();
 if (shouldLoadCloudProviderModules) {
-    if (or3CloudConfig.auth.enabled) providerIdsFromConfig.add(or3CloudConfig.auth.provider);
-    if (or3CloudConfig.sync.enabled) providerIdsFromConfig.add(or3CloudConfig.sync.provider);
-    if (or3CloudConfig.storage.enabled) providerIdsFromConfig.add(or3CloudConfig.storage.provider);
-    if (or3CloudConfig.limits?.enabled && or3CloudConfig.limits.storageProvider) {
+    if (or3CloudConfig.auth.enabled)
+        providerIdsFromConfig.add(or3CloudConfig.auth.provider);
+    if (or3CloudConfig.sync.enabled)
+        providerIdsFromConfig.add(or3CloudConfig.sync.provider);
+    if (or3CloudConfig.storage.enabled)
+        providerIdsFromConfig.add(or3CloudConfig.storage.provider);
+    if (
+        or3CloudConfig.limits?.enabled &&
+        or3CloudConfig.limits.storageProvider
+    ) {
         providerIdsFromConfig.add(or3CloudConfig.limits.storageProvider);
     }
     if (
         or3CloudConfig.backgroundStreaming?.enabled &&
         or3CloudConfig.backgroundStreaming.storageProvider
     ) {
-        providerIdsFromConfig.add(or3CloudConfig.backgroundStreaming.storageProvider);
+        providerIdsFromConfig.add(
+            or3CloudConfig.backgroundStreaming.storageProvider,
+        );
     }
 }
 
@@ -130,22 +142,26 @@ for (const providerId of providerIdsFromConfig) {
         providerModulesFromConfig.push(moduleId);
     } else {
         console.warn(
-            `[or3-provider] Configured provider "${providerId}" expects package "${pkgName}", but it is not installed.`
+            `[or3-provider] Configured provider "${providerId}" expects package "${pkgName}", but it is not installed.`,
         );
     }
 }
 
 const configuredPluginModules =
-    discoverNonCorePlugins(or3CloudConfig.admin, () =>
-        or3Config.extensions?.plugins?.modules?.filter((entry) =>
-            typeof entry === 'string' ? entry.trim().length > 0 : false
-        ) ?? []
+    discoverNonCorePlugins(
+        or3CloudConfig.admin,
+        () =>
+            or3Config.extensions?.plugins?.modules?.filter((entry) =>
+                typeof entry === 'string' ? entry.trim().length > 0 : false,
+            ) ?? [],
     ) ?? [];
 const pluginModulesFromConfig: string[] = [];
 for (const moduleId of configuredPluginModules) {
     const pkgName = moduleId.split('/')[0];
     if (!pkgName) {
-        console.warn(`[or3-plugin] Ignoring invalid plugin module id "${moduleId}".`);
+        console.warn(
+            `[or3-plugin] Ignoring invalid plugin module id "${moduleId}".`,
+        );
         continue;
     }
     if (isStaticCloudDisabledBuild && pkgName.startsWith('or3-provider-')) {
@@ -153,7 +169,7 @@ for (const moduleId of configuredPluginModules) {
     }
     if (!isPackageInstalled(pkgName)) {
         console.warn(
-            `[or3-plugin] Configured plugin module "${moduleId}" expects package "${pkgName}", but it is not installed.`
+            `[or3-plugin] Configured plugin module "${moduleId}" expects package "${pkgName}", but it is not installed.`,
         );
         continue;
     }
@@ -164,12 +180,14 @@ const generatedProviderModules: string[] = [];
 for (const moduleId of or3ProviderModules) {
     const pkgName = moduleId.split('/')[0];
     if (!pkgName) {
-        console.warn(`[or3-provider] Ignoring invalid generated provider module id "${moduleId}".`);
+        console.warn(
+            `[or3-provider] Ignoring invalid generated provider module id "${moduleId}".`,
+        );
         continue;
     }
     if (!isPackageInstalled(pkgName)) {
         console.warn(
-            `[or3-provider] Generated provider module "${moduleId}" expects package "${pkgName}", but it is not installed yet.`
+            `[or3-provider] Generated provider module "${moduleId}" expects package "${pkgName}", but it is not installed yet.`,
         );
         continue;
     }
@@ -181,15 +199,18 @@ const activeProviderModules = Array.from(
         ...generatedProviderModules,
         ...providerModulesFromConfig,
         ...pluginModulesFromConfig,
-    ])
+    ]),
 );
 
 const authProviderAvailable =
-    isStaticCloudDisabledBuild || isProviderAvailable(or3CloudConfig.auth.provider);
+    isStaticCloudDisabledBuild ||
+    isProviderAvailable(or3CloudConfig.auth.provider);
 const syncProviderAvailable =
-    isStaticCloudDisabledBuild || isProviderAvailable(or3CloudConfig.sync.provider);
+    isStaticCloudDisabledBuild ||
+    isProviderAvailable(or3CloudConfig.sync.provider);
 const storageProviderAvailable =
-    isStaticCloudDisabledBuild || isProviderAvailable(or3CloudConfig.storage.provider);
+    isStaticCloudDisabledBuild ||
+    isProviderAvailable(or3CloudConfig.storage.provider);
 
 const effectiveSsrAuthEnabled =
     isSsrAuthEnabled && authProviderAvailable && syncProviderAvailable;
@@ -212,22 +233,22 @@ const or3NetEnabled =
 
 if (isSsrAuthEnabled && !authProviderAvailable) {
     console.warn(
-        `[or3-provider] Auth provider "${or3CloudConfig.auth.provider}" is not available. Falling back to local-only auth mode.`
+        `[or3-provider] Auth provider "${or3CloudConfig.auth.provider}" is not available. Falling back to local-only auth mode.`,
     );
 }
 if (isSsrAuthEnabled && !syncProviderAvailable) {
     console.warn(
-        `[or3-provider] Sync provider "${or3CloudConfig.sync.provider}" is not available. SSR auth requires the matching AuthWorkspaceStore, so cloud auth and sync are disabled.`
+        `[or3-provider] Sync provider "${or3CloudConfig.sync.provider}" is not available. SSR auth requires the matching AuthWorkspaceStore, so cloud auth and sync are disabled.`,
     );
 }
 if (or3CloudConfig.storage.enabled && !storageProviderAvailable) {
     console.warn(
-        `[or3-provider] Storage provider "${or3CloudConfig.storage.provider}" is not available. Cloud storage is disabled.`
+        `[or3-provider] Storage provider "${or3CloudConfig.storage.provider}" is not available. Cloud storage is disabled.`,
     );
 }
 if (or3NetHostUrl && !or3NetExchangeSecret) {
     console.warn(
-        '[or3-net] OR3_NET_HOST_URL is set but OR3_NET_EXCHANGE_SECRET is missing. OR3 Network chat integration is disabled.'
+        '[or3-net] OR3_NET_HOST_URL is set but OR3_NET_EXCHANGE_SECRET is missing. OR3 Network chat integration is disabled.',
     );
 }
 
@@ -280,6 +301,7 @@ const adminConfig = {
         or3CloudConfig.admin?.pluginRuntimeV2WorkspaceIds ?? [],
     pluginContributionV2Surfaces:
         or3CloudConfig.admin?.pluginContributionV2Surfaces ?? [],
+    hookEngineV2Enabled: or3CloudConfig.admin?.hookEngineV2Enabled === true,
     pluginZipInstallEnabled:
         or3CloudConfig.admin?.pluginZipInstallEnabled !== false,
     pluginRouteDispatcherEnabled:
@@ -303,9 +325,13 @@ const adminConfig = {
         password: or3CloudConfig.admin?.auth?.password ?? '',
         jwtSecret: or3CloudConfig.admin?.auth?.jwtSecret ?? '',
         jwtExpiry: or3CloudConfig.admin?.auth?.jwtExpiry || '24h',
-        deletedWorkspaceRetentionDays: or3CloudConfig.admin?.auth?.deletedWorkspaceRetentionDays !== undefined
-            ? String(or3CloudConfig.admin?.auth?.deletedWorkspaceRetentionDays)
-            : '',
+        deletedWorkspaceRetentionDays:
+            or3CloudConfig.admin?.auth?.deletedWorkspaceRetentionDays !==
+            undefined
+                ? String(
+                      or3CloudConfig.admin?.auth?.deletedWorkspaceRetentionDays,
+                  )
+                : '',
     },
 };
 const lockPageConfig = {
@@ -345,7 +371,8 @@ export default defineNuxtConfig({
                 {
                     rel: 'icon',
                     type: 'image/svg+xml',
-                    href: or3Config.site.faviconUrl || '/logos/icon-logo-svg.svg',
+                    href:
+                        or3Config.site.faviconUrl || '/logos/icon-logo-svg.svg',
                 },
                 {
                     rel: 'icon',
@@ -408,8 +435,7 @@ export default defineNuxtConfig({
             enabled: effectiveStorageEnabled,
             provider: or3CloudConfig.storage.provider,
             allowedMimeTypes:
-                or3CloudConfig.storage.allowedMimeTypes ??
-                undefined,
+                or3CloudConfig.storage.allowedMimeTypes ?? undefined,
             workspaceQuotaBytes:
                 or3CloudConfig.storage.workspaceQuotaBytes !== undefined
                     ? String(or3CloudConfig.storage.workspaceQuotaBytes)
@@ -428,7 +454,9 @@ export default defineNuxtConfig({
         legal: legalConfig,
         plugins: {
             defaultEnabled:
-                or3Config.extensions?.plugins?.defaultEnabled?.filter(Boolean) ?? [],
+                or3Config.extensions?.plugins?.defaultEnabled?.filter(
+                    Boolean,
+                ) ?? [],
             modules:
                 or3Config.extensions?.plugins?.modules?.filter(Boolean) ?? [],
         },
@@ -437,8 +465,12 @@ export default defineNuxtConfig({
             forceHttps: or3CloudConfig.security!.forceHttps!,
             proxy: {
                 trustProxy: or3CloudConfig.security?.proxy?.trustProxy ?? false,
-                forwardedForHeader: or3CloudConfig.security?.proxy?.forwardedForHeader ?? 'x-forwarded-for',
-                forwardedHostHeader: or3CloudConfig.security?.proxy?.forwardedHostHeader ?? 'x-forwarded-host',
+                forwardedForHeader:
+                    or3CloudConfig.security?.proxy?.forwardedForHeader ??
+                    'x-forwarded-for',
+                forwardedHostHeader:
+                    or3CloudConfig.security?.proxy?.forwardedHostHeader ??
+                    'x-forwarded-host',
             },
         },
         admin: adminConfig,
@@ -462,12 +494,16 @@ export default defineNuxtConfig({
         // Background streaming configuration (SSR mode only)
         backgroundJobs: {
             enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
-            storageProvider: or3CloudConfig.backgroundStreaming?.storageProvider ?? 'memory',
-            maxConcurrentJobs: or3CloudConfig.backgroundStreaming?.maxConcurrentJobs ?? 20,
+            storageProvider:
+                or3CloudConfig.backgroundStreaming?.storageProvider ?? 'memory',
+            maxConcurrentJobs:
+                or3CloudConfig.backgroundStreaming?.maxConcurrentJobs ?? 20,
             maxConcurrentJobsPerUser:
                 or3CloudConfig.backgroundStreaming?.maxConcurrentJobsPerUser ??
                 5,
-            jobTimeoutMs: (or3CloudConfig.backgroundStreaming?.jobTimeoutSeconds ?? 300) * 1000,
+            jobTimeoutMs:
+                (or3CloudConfig.backgroundStreaming?.jobTimeoutSeconds ?? 300) *
+                1000,
             completedJobRetentionMs: 5 * 60 * 1000, // 5 minutes
         },
         public: {
@@ -481,10 +517,10 @@ export default defineNuxtConfig({
             lockPage: lockPageConfig,
             openRouter: {
                 allowUserOverride:
-                    or3CloudConfig.services.llm?.openRouter?.allowUserOverride ??
-                    true,
+                    or3CloudConfig.services.llm?.openRouter
+                        ?.allowUserOverride ?? true,
                 hasInstanceKey: Boolean(
-                    or3CloudConfig.services.llm?.openRouter?.instanceApiKey
+                    or3CloudConfig.services.llm?.openRouter?.instanceApiKey,
                 ),
                 requireUserKey:
                     or3CloudConfig.services.llm?.openRouter?.requireUserKey ??
@@ -508,17 +544,24 @@ export default defineNuxtConfig({
             backgroundStreaming: {
                 enabled: or3CloudConfig.backgroundStreaming?.enabled ?? false,
                 startMode:
-                    or3CloudConfig.backgroundStreaming?.startMode ?? 'foreground',
+                    or3CloudConfig.backgroundStreaming?.startMode ??
+                    'foreground',
             },
             admin: {
                 basePath: adminConfig.basePath,
                 disableNonCorePlugins: adminConfig.disableNonCorePlugins,
-                pluginRuntimeShadowEnabled: adminConfig.pluginRuntimeShadowEnabled,
-                pluginRuntimeLoaderEnabled: adminConfig.pluginRuntimeLoaderEnabled,
+                pluginRuntimeShadowEnabled:
+                    adminConfig.pluginRuntimeShadowEnabled,
+                pluginRuntimeLoaderEnabled:
+                    adminConfig.pluginRuntimeLoaderEnabled,
                 pluginRuntimeV2Enabled: adminConfig.pluginRuntimeV2Enabled,
-                pluginRuntimeV2WorkspaceIds: adminConfig.pluginRuntimeV2WorkspaceIds,
-                pluginContributionV2Surfaces: adminConfig.pluginContributionV2Surfaces,
-                pluginRouteDispatcherEnabled: adminConfig.pluginRouteDispatcherEnabled,
+                pluginRuntimeV2WorkspaceIds:
+                    adminConfig.pluginRuntimeV2WorkspaceIds,
+                pluginContributionV2Surfaces:
+                    adminConfig.pluginContributionV2Surfaces,
+                hookEngineV2Enabled: adminConfig.hookEngineV2Enabled,
+                pluginRouteDispatcherEnabled:
+                    adminConfig.pluginRouteDispatcherEnabled,
             },
             webhooks: {
                 enabled: webhooksConfig.enabled,
@@ -565,7 +608,8 @@ export default defineNuxtConfig({
                 },
                 limits: {
                     maxFileSizeBytes: or3Config.limits.maxFileSizeBytes,
-                    maxCloudFileSizeBytes: or3Config.limits.maxCloudFileSizeBytes,
+                    maxCloudFileSizeBytes:
+                        or3Config.limits.maxCloudFileSizeBytes,
                     maxFilesPerMessage: or3Config.limits.maxFilesPerMessage,
                     localStorageQuotaMB:
                         or3Config.limits.localStorageQuotaMB !== null
@@ -575,7 +619,8 @@ export default defineNuxtConfig({
                 ui: {
                     defaultPaneCount: or3Config.ui.defaultPaneCount,
                     maxPanes: or3Config.ui.maxPanes,
-                    sidebarCollapsedByDefault: or3Config.ui.sidebarCollapsedByDefault,
+                    sidebarCollapsedByDefault:
+                        or3Config.ui.sidebarCollapsedByDefault,
                 },
                 legal: {
                     termsUrl: or3Config.legal.termsUrl,
@@ -583,9 +628,13 @@ export default defineNuxtConfig({
                 },
                 plugins: {
                     defaultEnabled:
-                        or3Config.extensions?.plugins?.defaultEnabled?.filter(Boolean) ?? [],
+                        or3Config.extensions?.plugins?.defaultEnabled?.filter(
+                            Boolean,
+                        ) ?? [],
                     modules:
-                        or3Config.extensions?.plugins?.modules?.filter(Boolean) ?? [],
+                        or3Config.extensions?.plugins?.modules?.filter(
+                            Boolean,
+                        ) ?? [],
                 },
             },
             // Auto-mapped from NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
@@ -994,7 +1043,8 @@ export default defineNuxtConfig({
         listen(_server, listener) {
             if (isWizardUiProcess) return;
             const url =
-                listener && typeof (listener as { url?: unknown }).url === 'string'
+                listener &&
+                typeof (listener as { url?: unknown }).url === 'string'
                     ? (listener as { url: string }).url
                     : undefined;
             // Defer so this prints after Nuxt's own URL output.

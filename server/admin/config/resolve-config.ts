@@ -78,7 +78,10 @@ function envBool(val: string | undefined, defaultValue: boolean): boolean {
  * Uses the global `Number()` constructor. If the result is not a finite number,
  * it returns the provided `fallback`.
  */
-function envNum(val: string | undefined, fallback?: number): number | undefined {
+function envNum(
+    val: string | undefined,
+    fallback?: number,
+): number | undefined {
     if (val === undefined) return fallback;
     const parsed = Number(val);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -106,7 +109,7 @@ function envFirst(env: EnvMap, ...keys: string[]): string | undefined {
 }
 
 function parseSessionProvisioningFailureMode(
-    value: string | undefined
+    value: string | undefined,
 ): 'throw' | 'unauthenticated' | 'service-unavailable' | undefined {
     if (
         value === 'throw' ||
@@ -119,7 +122,7 @@ function parseSessionProvisioningFailureMode(
 }
 
 function parseAuthRegistrationMode(
-    value: string | undefined
+    value: string | undefined,
 ): 'open' | 'invite_only' | 'disabled' | undefined {
     if (value === 'open' || value === 'invite_only' || value === 'disabled') {
         return value;
@@ -128,7 +131,7 @@ function parseAuthRegistrationMode(
 }
 
 function parseRateLimitOverrides(
-    input: string | undefined
+    input: string | undefined,
 ): Record<string, { windowMs?: number; maxRequests?: number }> | undefined {
     if (!input) return undefined;
     try {
@@ -244,20 +247,32 @@ export function buildOr3ConfigFromEnv(env: EnvMap) {
  */
 export function buildOr3CloudConfigFromEnv(
     env: EnvMap,
-    options: BuildOr3CloudConfigFromEnvOptions = {}
+    options: BuildOr3CloudConfigFromEnvOptions = {},
 ) {
     const authEnabled = env.SSR_AUTH_ENABLED === 'true';
-    const syncEnabledFlag = envFirst(env, 'OR3_CLOUD_SYNC_ENABLED', 'OR3_SYNC_ENABLED');
-    const storageEnabledFlag = envFirst(env, 'OR3_CLOUD_STORAGE_ENABLED', 'OR3_STORAGE_ENABLED');
+    const syncEnabledFlag = envFirst(
+        env,
+        'OR3_CLOUD_SYNC_ENABLED',
+        'OR3_SYNC_ENABLED',
+    );
+    const storageEnabledFlag = envFirst(
+        env,
+        'OR3_CLOUD_STORAGE_ENABLED',
+        'OR3_STORAGE_ENABLED',
+    );
     const syncEnabled = authEnabled && syncEnabledFlag !== 'false';
     const storageEnabled = authEnabled && storageEnabledFlag !== 'false';
-    const authProvider = envFirst(env, 'OR3_AUTH_PROVIDER', 'AUTH_PROVIDER') ?? AUTH_PROVIDER_IDS.clerk;
+    const authProvider =
+        envFirst(env, 'OR3_AUTH_PROVIDER', 'AUTH_PROVIDER') ??
+        AUTH_PROVIDER_IDS.clerk;
     const syncProvider = env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID;
-    const storageProvider = env.NUXT_PUBLIC_STORAGE_PROVIDER ?? DEFAULT_STORAGE_PROVIDER_ID;
+    const storageProvider =
+        env.NUXT_PUBLIC_STORAGE_PROVIDER ?? DEFAULT_STORAGE_PROVIDER_ID;
     const strict =
         options.strict ??
         ((env.NODE_ENV ?? process.env.NODE_ENV) === 'production' ||
-            (env.OR3_STRICT_CONFIG ?? process.env.OR3_STRICT_CONFIG) === 'true');
+            (env.OR3_STRICT_CONFIG ?? process.env.OR3_STRICT_CONFIG) ===
+                'true');
 
     const config: Or3CloudConfig = {
         auth: {
@@ -266,17 +281,18 @@ export function buildOr3CloudConfigFromEnv(
             guestAccessEnabled: env.OR3_GUEST_ACCESS_ENABLED === 'true',
             autoProvision: env.OR3_AUTH_AUTO_PROVISION !== 'false',
             registrationMode: parseAuthRegistrationMode(
-                env.OR3_AUTH_REGISTRATION_MODE
+                env.OR3_AUTH_REGISTRATION_MODE,
             ),
             sessionProvisioningFailure: parseSessionProvisioningFailureMode(
-                env.OR3_SESSION_PROVISIONING_FAILURE
+                env.OR3_SESSION_PROVISIONING_FAILURE,
             ),
             lockPage: {
                 enabled: envBool(env.OR3_AUTH_LOCK_PAGE_ENABLED, false),
                 adapter: env.OR3_AUTH_LOCK_PAGE_ADAPTER || undefined,
             },
             clerk: {
-                publishableKey: env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY || undefined,
+                publishableKey:
+                    env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY || undefined,
                 secretKey: env.NUXT_CLERK_SECRET_KEY || undefined,
             },
         },
@@ -316,13 +332,25 @@ export function buildOr3CloudConfigFromEnv(
         },
         limits: {
             enabled: env.OR3_LIMITS_ENABLED !== 'false',
-            requestsPerMinute: envNum(env.OR3_REQUESTS_PER_MINUTE, DEFAULT_REQUESTS_PER_MINUTE) ?? DEFAULT_REQUESTS_PER_MINUTE,
-            maxConversations: envNum(env.OR3_MAX_CONVERSATIONS, DEFAULT_MAX_CONVERSATIONS) ?? DEFAULT_MAX_CONVERSATIONS,
-            maxMessagesPerDay: envNum(env.OR3_MAX_MESSAGES_PER_DAY, DEFAULT_MAX_MESSAGES_PER_DAY) ?? DEFAULT_MAX_MESSAGES_PER_DAY,
+            requestsPerMinute:
+                envNum(
+                    env.OR3_REQUESTS_PER_MINUTE,
+                    DEFAULT_REQUESTS_PER_MINUTE,
+                ) ?? DEFAULT_REQUESTS_PER_MINUTE,
+            maxConversations:
+                envNum(env.OR3_MAX_CONVERSATIONS, DEFAULT_MAX_CONVERSATIONS) ??
+                DEFAULT_MAX_CONVERSATIONS,
+            maxMessagesPerDay:
+                envNum(
+                    env.OR3_MAX_MESSAGES_PER_DAY,
+                    DEFAULT_MAX_MESSAGES_PER_DAY,
+                ) ?? DEFAULT_MAX_MESSAGES_PER_DAY,
             storageProvider: (env.OR3_LIMITS_STORAGE_PROVIDER ??
-                (syncEnabled ? syncProvider : LIMITS_PROVIDER_IDS.memory)) as LimitsProviderId,
+                (syncEnabled
+                    ? syncProvider
+                    : LIMITS_PROVIDER_IDS.memory)) as LimitsProviderId,
             operationRateLimits: parseRateLimitOverrides(
-                env.OR3_RATE_LIMIT_OVERRIDES_JSON
+                env.OR3_RATE_LIMIT_OVERRIDES_JSON,
             ),
         },
         security: {
@@ -333,7 +361,7 @@ export function buildOr3CloudConfigFromEnv(
                 : [],
             forceHttps: envBool(
                 env.OR3_FORCE_HTTPS,
-                env.NODE_ENV === 'production'
+                env.NODE_ENV === 'production',
             ),
             proxy: {
                 trustProxy: env.OR3_TRUST_PROXY === 'true',
@@ -355,78 +383,94 @@ export function buildOr3CloudConfigFromEnv(
             allowRebuild: env.OR3_ADMIN_ALLOW_REBUILD === 'true',
             disableNonCorePlugins: envBool(
                 env.OR3_DISABLE_NON_CORE_PLUGINS,
-                false
+                false,
             ),
             pluginRuntimeShadowEnabled: envBool(
                 env.OR3_PLUGIN_RUNTIME_SHADOW_ENABLED,
-                true
+                true,
             ),
             pluginRuntimeV2Enabled: envBool(
                 env.OR3_PLUGIN_RUNTIME_V2_ENABLED,
-                false
+                false,
             ),
             pluginRuntimeV2WorkspaceIds: env.OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS
                 ? env.OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS.split(',')
                       .map((workspaceId) => workspaceId.trim())
                       .filter(Boolean)
                 : [],
-            pluginContributionV2Surfaces: env.OR3_PLUGIN_CONTRIBUTION_V2_SURFACES
-                ? env.OR3_PLUGIN_CONTRIBUTION_V2_SURFACES.split(',')
-                      .map((surface) => surface.trim())
-                      .filter(Boolean)
-                : [],
-            rebuildCommand: env.OR3_ADMIN_REBUILD_COMMAND || DEFAULT_REBUILD_COMMAND,
+            pluginContributionV2Surfaces:
+                env.OR3_PLUGIN_CONTRIBUTION_V2_SURFACES
+                    ? env.OR3_PLUGIN_CONTRIBUTION_V2_SURFACES.split(',')
+                          .map((surface) => surface.trim())
+                          .filter(Boolean)
+                    : [],
+            hookEngineV2Enabled: envBool(env.OR3_HOOK_ENGINE_V2_ENABLED, false),
+            rebuildCommand:
+                env.OR3_ADMIN_REBUILD_COMMAND || DEFAULT_REBUILD_COMMAND,
             extensionMaxZipBytes: envNum(env.OR3_ADMIN_EXTENSION_MAX_ZIP_BYTES),
             extensionMaxFiles: envNum(env.OR3_ADMIN_EXTENSION_MAX_FILES),
-            extensionMaxTotalBytes: envNum(env.OR3_ADMIN_EXTENSION_MAX_TOTAL_BYTES),
-            extensionAllowedExtensions: env.OR3_ADMIN_EXTENSION_ALLOWED_EXTENSIONS
-                ? env.OR3_ADMIN_EXTENSION_ALLOWED_EXTENSIONS.split(',')
-                      .map((ext) => ext.trim())
-                      .filter(Boolean)
-                : undefined,
+            extensionMaxTotalBytes: envNum(
+                env.OR3_ADMIN_EXTENSION_MAX_TOTAL_BYTES,
+            ),
+            extensionAllowedExtensions:
+                env.OR3_ADMIN_EXTENSION_ALLOWED_EXTENSIONS
+                    ? env.OR3_ADMIN_EXTENSION_ALLOWED_EXTENSIONS.split(',')
+                          .map((ext) => ext.trim())
+                          .filter(Boolean)
+                    : undefined,
             auth: {
                 username: env.OR3_ADMIN_USERNAME || undefined,
                 password: env.OR3_ADMIN_PASSWORD || undefined,
                 jwtSecret: env.OR3_ADMIN_JWT_SECRET || undefined,
                 jwtExpiry: env.OR3_ADMIN_JWT_EXPIRY || undefined,
                 deletedWorkspaceRetentionDays: envNum(
-                    env.OR3_ADMIN_DELETED_WORKSPACE_RETENTION_DAYS
+                    env.OR3_ADMIN_DELETED_WORKSPACE_RETENTION_DAYS,
                 ),
             },
         },
         backgroundStreaming: {
             enabled: env.OR3_BACKGROUND_STREAMING_ENABLED === 'true',
             storageProvider: (env.OR3_BACKGROUND_STREAMING_PROVIDER ??
-                (syncEnabled ? syncProvider : DEFAULT_BACKGROUND_PROVIDER_ID)) as BackgroundProviderId,
-            maxConcurrentJobs: envNum(env.OR3_BACKGROUND_MAX_JOBS, DEFAULT_BACKGROUND_MAX_JOBS) ?? DEFAULT_BACKGROUND_MAX_JOBS,
+                (syncEnabled
+                    ? syncProvider
+                    : DEFAULT_BACKGROUND_PROVIDER_ID)) as BackgroundProviderId,
+            maxConcurrentJobs:
+                envNum(
+                    env.OR3_BACKGROUND_MAX_JOBS,
+                    DEFAULT_BACKGROUND_MAX_JOBS,
+                ) ?? DEFAULT_BACKGROUND_MAX_JOBS,
             maxConcurrentJobsPerUser:
                 envNum(
                     env.OR3_BACKGROUND_MAX_JOBS_PER_USER,
-                    DEFAULT_BACKGROUND_MAX_JOBS_PER_USER
+                    DEFAULT_BACKGROUND_MAX_JOBS_PER_USER,
                 ) ?? DEFAULT_BACKGROUND_MAX_JOBS_PER_USER,
-            jobTimeoutSeconds: envNum(env.OR3_BACKGROUND_JOB_TIMEOUT, DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS) ?? DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
+            jobTimeoutSeconds:
+                envNum(
+                    env.OR3_BACKGROUND_JOB_TIMEOUT,
+                    DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
+                ) ?? DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
         },
         webhooks: {
             enabled: authEnabled && env.OR3_WEBHOOKS_ENABLED !== 'false',
             maxPerUser:
                 envNum(
                     env.OR3_WEBHOOKS_MAX_PER_USER,
-                    DEFAULT_WEBHOOKS_MAX_PER_USER
+                    DEFAULT_WEBHOOKS_MAX_PER_USER,
                 ) ?? DEFAULT_WEBHOOKS_MAX_PER_USER,
             adminMax:
                 envNum(
                     env.OR3_WEBHOOKS_ADMIN_MAX,
-                    DEFAULT_WEBHOOKS_ADMIN_MAX
+                    DEFAULT_WEBHOOKS_ADMIN_MAX,
                 ) ?? DEFAULT_WEBHOOKS_ADMIN_MAX,
             rateLimitPerMinute:
                 envNum(
                     env.OR3_WEBHOOKS_RATE_LIMIT_PER_MINUTE,
-                    DEFAULT_WEBHOOKS_RATE_LIMIT_PER_MINUTE
+                    DEFAULT_WEBHOOKS_RATE_LIMIT_PER_MINUTE,
                 ) ?? DEFAULT_WEBHOOKS_RATE_LIMIT_PER_MINUTE,
             deliveryTimeoutMs:
                 envNum(
                     env.OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS,
-                    DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS
+                    DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
                 ) ?? DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
             blockPrivateIps: envBool(env.OR3_WEBHOOKS_BLOCK_PRIVATE_IPS, false),
             encryptionKey:
@@ -436,12 +480,12 @@ export function buildOr3CloudConfigFromEnv(
             maxRetryHours:
                 envNum(
                     env.OR3_WEBHOOKS_MAX_RETRY_HOURS,
-                    DEFAULT_WEBHOOKS_MAX_RETRY_HOURS
+                    DEFAULT_WEBHOOKS_MAX_RETRY_HOURS,
                 ) ?? DEFAULT_WEBHOOKS_MAX_RETRY_HOURS,
             logRetentionHours:
                 envNum(
                     env.OR3_WEBHOOKS_LOG_RETENTION_HOURS,
-                    DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS
+                    DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS,
                 ) ?? DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS,
         },
     };

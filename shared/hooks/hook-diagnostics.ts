@@ -39,6 +39,14 @@ interface HookMetricSeriesState {
     nextSample: number;
 }
 
+export interface HookDiagnosticsLegacySource {
+    read(): {
+        readonly timings: Readonly<Record<string, readonly number[]>>;
+        readonly errors: Readonly<Record<string, number>>;
+    };
+    reset(metric?: HookMetricKind): void;
+}
+
 function seriesKey(metric: HookMetricKind, name: string): string {
     return JSON.stringify([metric, name]);
 }
@@ -56,10 +64,15 @@ function recentSnapshot(state: HookMetricSeriesState): readonly number[] {
 /** Bounded metric storage for Hook Runtime V2. */
 export class HookDiagnostics {
     readonly #series = new Map<string, HookMetricSeriesState>();
+    readonly #legacySource?: HookDiagnosticsLegacySource;
     #overflowEventCount = 0;
     #overflowTimingCount = 0;
     #overflowErrorCount = 0;
     #overflowTimingTotal = 0;
+
+    constructor(options: { legacySource?: HookDiagnosticsLegacySource } = {}) {
+        this.#legacySource = options.legacySource;
+    }
 
     recordTiming(name: string, milliseconds: number): void {
         this.#record('timing', name, milliseconds);
@@ -70,6 +83,7 @@ export class HookDiagnostics {
     }
 
     snapshot(): HookDiagnosticsSnapshot {
+        if (this.#legacySource) return this.#legacySnapshot();
         const series = Array.from(this.#series.values(), (state) =>
             Object.freeze({
                 metric: state.metric,
@@ -101,6 +115,10 @@ export class HookDiagnostics {
     }
 
     reset(metric?: HookMetricKind): void {
+        if (this.#legacySource) {
+            this.#legacySource.reset(metric);
+            return;
+        }
         if (metric === undefined) {
             this.#series.clear();
             this.#overflowEventCount = 0;
@@ -123,6 +141,7 @@ export class HookDiagnostics {
     }
 
     #record(metric: HookMetricKind, name: string, value: number): void {
+        if (this.#legacySource) return;
         const key = seriesKey(metric, name);
         let state = this.#series.get(key);
         if (!state) {
@@ -161,5 +180,81 @@ export class HookDiagnostics {
             state.nextSample =
                 (state.nextSample + 1) % HOOK_DIAGNOSTIC_SAMPLE_CAPACITY;
         }
+    }
+
+    #legacySnapshot(): HookDiagnosticsSnapshot {
+        const source = this.#legacySource!.read();
+        const series: HookMetricSeriesSnapshot[] = [];
+        let overflowEventCount = 0;
+        let overflowTimingCount = 0;
+        let overflowErrorCount = 0;
+        let overflowTimingTotal = 0;
+        const append = (snapshot: HookMetricSeriesSnapshot) => {
+            if (series.length < HOOK_DIAGNOSTIC_SERIES_CAPACITY) {
+                series.push(Object.freeze(snapshot));
+                return;
+            }
+            overflowEventCount += snapshot.count;
+            if (snapshot.metric === 'timing') {
+                overflowTimingCount += snapshot.count;
+                overflowTimingTotal += snapshot.total;
+            } else {
+                overflowErrorCount += snapshot.count;
+            }
+        };
+        for (const [name, samples] of Object.entries(source.timings)) {
+            let total = 0;
+            let min = Number.POSITIVE_INFINITY;
+            let max = Number.NEGATIVE_INFINITY;
+            for (const sample of samples) {
+                total += sample;
+                min = Math.min(min, sample);
+                max = Math.max(max, sample);
+            }
+            const recent = Object.freeze(
+                samples.slice(-HOOK_DIAGNOSTIC_SAMPLE_CAPACITY),
+            );
+            append({
+                metric: 'timing',
+                name,
+                count: samples.length,
+                total,
+                min: samples.length ? min : 0,
+                max: samples.length ? max : 0,
+                recent,
+            });
+        }
+        for (const [name, count] of Object.entries(source.errors)) {
+            append({
+                metric: 'error',
+                name,
+                count,
+                total: count,
+                min: count ? 1 : 0,
+                max: count ? 1 : 0,
+                recent: Object.freeze(
+                    Array(
+                        Math.min(count, HOOK_DIAGNOSTIC_SAMPLE_CAPACITY),
+                    ).fill(1),
+                ),
+            });
+        }
+        series.sort(
+            (left, right) =>
+                left.metric.localeCompare(right.metric) ||
+                left.name.localeCompare(right.name),
+        );
+        return Object.freeze({
+            seriesCapacity: HOOK_DIAGNOSTIC_SERIES_CAPACITY,
+            sampleCapacity: HOOK_DIAGNOSTIC_SAMPLE_CAPACITY,
+            seriesCount: series.length,
+            series: Object.freeze(series),
+            overflow: Object.freeze({
+                eventCount: overflowEventCount,
+                timingCount: overflowTimingCount,
+                errorCount: overflowErrorCount,
+                timingTotal: overflowTimingTotal,
+            }),
+        });
     }
 }

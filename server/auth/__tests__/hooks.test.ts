@@ -16,6 +16,7 @@ import {
     type AuthAccessDecisionFilter,
 } from '../hooks';
 import { createHookEngine } from '../../hooks/hook-engine';
+import { createServerHookEngine } from '../../hooks/runtime-kernel';
 import type { AccessDecision, SessionContext } from '~/core/hooks/hook-types';
 
 describe('auth hooks and can() filter enforcement', () => {
@@ -39,14 +40,14 @@ describe('auth hooks and can() filter enforcement', () => {
     describe('no filters registered', () => {
         it('should return unchanged decision when no filters are registered', () => {
             const decision = can(mockSession, 'workspace.read');
-            
+
             expect(decision.allowed).toBe(true);
             expect(decision.permission).toBe('workspace.read');
         });
 
         it('should handle unauthenticated with no filters', () => {
             const decision = can(null, 'workspace.read');
-            
+
             expect(decision.allowed).toBe(false);
             expect(decision.reason).toBe('unauthenticated');
         });
@@ -55,45 +56,45 @@ describe('auth hooks and can() filter enforcement', () => {
     describe('filter can restrict access', () => {
         it('should allow filter to deny allowed=true -> false', () => {
             const engine = getAuthHookEngine();
-            
+
             // Add a filter that denies all workspace.read
             const restrictiveFilter: AuthAccessDecisionFilter = (decision) => ({
                 ...decision,
                 allowed: false,
                 reason: 'forbidden',
             });
-            
+
             engine.addAccessDecisionFilter(restrictiveFilter);
-            
+
             const decision = can(mockSession, 'workspace.read');
-            
+
             expect(decision.allowed).toBe(false);
             expect(decision.reason).toBe('forbidden');
         });
 
         it('should apply multiple filters in order', () => {
             const engine = getAuthHookEngine();
-            
+
             // First filter allows (but should be overridden by base)
             const allowFilter: AuthAccessDecisionFilter = (decision) => ({
                 ...decision,
                 allowed: true,
             });
-            
+
             // Second filter denies
             const denyFilter: AuthAccessDecisionFilter = (decision) => ({
                 ...decision,
                 allowed: false,
                 reason: 'forbidden',
             });
-            
-            engine.addAccessDecisionFilter(allowFilter, 5);  // Higher priority
-            engine.addAccessDecisionFilter(denyFilter, 10);  // Lower priority
-            
+
+            engine.addAccessDecisionFilter(allowFilter, 5); // Higher priority
+            engine.addAccessDecisionFilter(denyFilter, 10); // Lower priority
+
             // Start with allowed=true, first filter keeps it allowed,
             // second filter denies it
             const decision = can(mockSession, 'workspace.read');
-            
+
             // Should be denied by second filter
             expect(decision.allowed).toBe(false);
         });
@@ -102,24 +103,24 @@ describe('auth hooks and can() filter enforcement', () => {
     describe('cannot grant invariant', () => {
         it('should NOT allow filter to grant access (false -> true)', () => {
             const engine = getAuthHookEngine();
-            
+
             // A filter that tries to grant access when base decision is false
             const grantFilter: AuthAccessDecisionFilter = (decision) => ({
                 ...decision,
                 allowed: true,
                 reason: undefined,
             });
-            
+
             engine.addAccessDecisionFilter(grantFilter);
-            
+
             // Editor doesn't have plugins.manage permission, so base is false
             const editorSession: SessionContext = {
                 ...mockSession,
                 role: 'editor',
             };
-            
+
             const decision = can(editorSession, 'plugins.manage');
-            
+
             // Filter tried to grant, but should be overridden to false
             expect(decision.allowed).toBe(false);
             expect(decision.reason).toBe('forbidden');
@@ -127,20 +128,45 @@ describe('auth hooks and can() filter enforcement', () => {
 
         it('should allow filter to keep access granted', () => {
             const engine = getAuthHookEngine();
-            
+
             // Filter that keeps the original decision
-            const transparentFilter: AuthAccessDecisionFilter = (decision) => decision;
-            
+            const transparentFilter: AuthAccessDecisionFilter = (decision) =>
+                decision;
+
             engine.addAccessDecisionFilter(transparentFilter);
-            
+
             const decision = can(mockSession, 'workspace.read');
-            
+
             // Should remain allowed
             expect(decision.allowed).toBe(true);
         });
     });
 
     describe('filter error handling', () => {
+        it('keeps deny-only fail-closed constraints separate under Hook Runtime V2', () => {
+            _resetAuthHookEngineForTesting();
+            const hookEngine = createServerHookEngine('v2');
+            const authEngine = initializeAuthHookEngine(hookEngine);
+            const later = vi.fn(() => ({ allowed: true as const }));
+            authEngine.addAuthorizationConstraint({
+                id: 'v2-failure',
+                evaluate: () => {
+                    throw new Error('deny');
+                },
+            });
+            authEngine.addAuthorizationConstraint({
+                id: 'v2-later',
+                evaluate: later,
+            });
+
+            const decision = can(mockSession, 'workspace.read');
+
+            expect(decision.allowed).toBe(false);
+            expect(decision.reason).toBe('auth-constraint-error');
+            expect(later).not.toHaveBeenCalled();
+            expect('_runtimeV2' in hookEngine).toBe(true);
+        });
+
         it('should fail closed when a constraint throws', () => {
             _resetAuthHookEngineForTesting();
             const hookEngine = createHookEngine();
@@ -155,7 +181,9 @@ describe('auth hooks and can() filter enforcement', () => {
             expect(decision.allowed).toBe(false);
             expect(decision.reason).toBe('auth-constraint-error');
             expect(
-                hookEngine._diagnostics.errors['auth.access:constraint:error'] || 0
+                hookEngine._diagnostics.errors[
+                    'auth.access:constraint:error'
+                ] || 0,
             ).toBeGreaterThan(0);
         });
 
@@ -218,14 +246,14 @@ describe('auth hooks and can() filter enforcement', () => {
                         throw new Error('stop here');
                     },
                 },
-                5
+                5,
             );
             authEngine.addAuthorizationConstraint(
                 {
                     id: 'second',
                     evaluate: later,
                 },
-                10
+                10,
             );
 
             const decision = can(mockSession, 'workspace.read');
@@ -275,7 +303,7 @@ describe('auth hooks and can() filter enforcement', () => {
         it('should return same engine instance on multiple calls', () => {
             const engine1 = getAuthHookEngine();
             const engine2 = getAuthHookEngine();
-            
+
             expect(engine1).toBe(engine2);
         });
     });

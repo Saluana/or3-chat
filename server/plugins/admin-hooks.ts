@@ -1,9 +1,13 @@
 import { defineNitroPlugin } from 'nitropack/runtime';
-import { createHookEngine, createTypedAdminHookEngine } from '../hooks';
+import { createTypedAdminHookEngine } from '../hooks';
+import { createServerHookEngine } from '../hooks/runtime-kernel';
 
 export default defineNitroPlugin((nitroApp) => {
+    const runtimeConfig = useRuntimeConfig();
+    const version =
+        runtimeConfig.public?.admin?.hookEngineV2Enabled === true ? 'v2' : 'v1';
     nitroApp.hooks.hook('request', (event) => {
-        const engine = createHookEngine();
+        const engine = createServerHookEngine(version);
         const typed = createTypedAdminHookEngine(engine);
         const forwardAdminHook = nitroApp.hooks.callHook as (
             name: string,

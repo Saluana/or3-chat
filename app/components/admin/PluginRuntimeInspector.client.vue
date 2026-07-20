@@ -6,8 +6,9 @@
             <div>
                 <h3 class="text-lg font-medium">Runtime inspector</h3>
                 <p class="mt-1 text-xs opacity-70">
-                    Read-only shadow observations from this browser client. This is not fleet-wide
-                    server status and does not infer activity from workspace enablement.
+                    Read-only shadow observations from this browser client. This
+                    is not fleet-wide server status and does not infer activity
+                    from workspace enablement.
                 </p>
             </div>
             <UButton size="xs" color="neutral" variant="soft" @click="refresh">
@@ -18,35 +19,70 @@
         <div class="grid gap-2 text-xs sm:grid-cols-3">
             <div class="rounded border border-[var(--md-outline-variant)] p-3">
                 <div class="font-semibold">This client</div>
-                <div class="mt-1 opacity-75">{{ records.length }} observed active generation(s)</div>
+                <div class="mt-1 opacity-75">
+                    {{ records.length }} observed active generation(s)
+                </div>
             </div>
             <div class="rounded border border-[var(--md-outline-variant)] p-3">
                 <div class="font-semibold">This server process</div>
-                <div class="mt-1 opacity-75">Not observed by this client-only shadow manager</div>
+                <div class="mt-1 opacity-75">
+                    Not observed by this client-only shadow manager
+                </div>
             </div>
             <div class="rounded border border-[var(--md-outline-variant)] p-3">
                 <div class="font-semibold">Persisted package state</div>
-                <div class="mt-1 opacity-75">Not available until the V2 package catalog ships</div>
+                <div class="mt-1 opacity-75">
+                    Not available until the V2 package catalog ships
+                </div>
             </div>
         </div>
 
         <div class="flex flex-wrap gap-2 text-xs">
-            <UBadge :color="shadowObserverEnabled ? 'neutral' : 'warning'" variant="subtle">
-                Manager: {{ shadowObserverEnabled ? 'shadow observer' : 'V1 only (observer disabled)' }}
+            <UBadge
+                :color="shadowObserverEnabled ? 'neutral' : 'warning'"
+                variant="subtle"
+            >
+                Manager:
+                {{
+                    shadowObserverEnabled
+                        ? 'shadow observer'
+                        : 'V1 only (observer disabled)'
+                }}
             </UBadge>
-            <UBadge color="neutral" variant="subtle">Module loader: bundled-v1</UBadge>
-            <UBadge color="neutral" variant="subtle">Hook engine: V1</UBadge>
-            <UBadge :color="safeModeEnabled ? 'warning' : 'neutral'" variant="subtle">
+            <UBadge color="neutral" variant="subtle"
+                >Module loader: bundled-v1</UBadge
+            >
+            <UBadge
+                :color="hookEngineVersion === 'v2' ? 'success' : 'neutral'"
+                variant="subtle"
+            >
+                Hook engine: {{ hookEngineVersion.toUpperCase() }} (this client)
+            </UBadge>
+            <UBadge
+                :color="safeModeEnabled ? 'warning' : 'neutral'"
+                variant="subtle"
+            >
                 Safe mode: {{ safeModeEnabled ? 'enabled' : 'disabled' }}
             </UBadge>
-            <UBadge :color="ssrAuthEnabled ? 'success' : 'neutral'" variant="subtle">
+            <UBadge
+                :color="ssrAuthEnabled ? 'success' : 'neutral'"
+                variant="subtle"
+            >
                 SSR auth: {{ ssrAuthEnabled ? 'enabled' : 'disabled' }}
             </UBadge>
-            <UBadge :color="runtimeLoaderEnabled ? 'success' : 'neutral'" variant="subtle">
-                Workspace loader: {{ runtimeLoaderEnabled ? 'enabled' : 'disabled' }}
+            <UBadge
+                :color="runtimeLoaderEnabled ? 'success' : 'neutral'"
+                variant="subtle"
+            >
+                Workspace loader:
+                {{ runtimeLoaderEnabled ? 'enabled' : 'disabled' }}
             </UBadge>
-            <UBadge :color="managerV2Enabled ? 'success' : 'neutral'" variant="subtle">
-                V2 startup selector: {{ managerV2Enabled ? 'enabled' : 'disabled' }}
+            <UBadge
+                :color="managerV2Enabled ? 'success' : 'neutral'"
+                variant="subtle"
+            >
+                V2 startup selector:
+                {{ managerV2Enabled ? 'enabled' : 'disabled' }}
             </UBadge>
             <UBadge v-if="managerV2Enabled" color="neutral" variant="subtle">
                 Workspace canaries: {{ managerV2WorkspaceLabel }}
@@ -56,7 +92,10 @@
             </UBadge>
         </div>
 
-        <details v-if="managerV2Enabled" class="rounded border border-[var(--md-outline-variant)] p-3 text-xs">
+        <details
+            v-if="managerV2Enabled"
+            class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
+        >
             <summary class="cursor-pointer font-medium">
                 Manager-canary records ({{ managerV2Records.length }})
             </summary>
@@ -67,21 +106,29 @@
                     class="rounded bg-[var(--md-surface-container-low)] p-2"
                 >
                     <div class="font-medium">
-                        {{ record.descriptor.id }} · {{ record.status }} · generation {{ record.generation }}
+                        {{ record.descriptor.id }} · {{ record.status }} ·
+                        generation
+                        {{ record.generation }}
                     </div>
                     <div class="mt-1 break-all font-mono opacity-75">
                         {{ record.descriptor.descriptorKey }}
                     </div>
-                    <div v-if="record.lastError" class="mt-1 text-[var(--md-error)]">
-                        {{ record.lastError.code }}: {{ record.lastError.message }}
+                    <div
+                        v-if="record.lastError"
+                        class="mt-1 text-[var(--md-error)]"
+                    >
+                        {{ record.lastError.code }}:
+                        {{ record.lastError.message }}
                     </div>
                     <div v-if="record.nextRetryAt" class="mt-1 opacity-75">
-                        Retry after {{ new Date(record.nextRetryAt).toLocaleTimeString() }}
+                        Retry after
+                        {{ new Date(record.nextRetryAt).toLocaleTimeString() }}
                     </div>
                 </div>
             </div>
             <p v-else class="mt-3 opacity-70">
-                No manager record in this client. Startup selection does not by itself imply an active plugin.
+                No manager record in this client. Startup selection does not by
+                itself imply an active plugin.
             </p>
         </details>
 
@@ -92,7 +139,8 @@
                 class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
             >
                 <summary class="cursor-pointer font-medium">
-                    {{ record.descriptor.id }} · generation {{ record.generation }} ·
+                    {{ record.descriptor.id }} · generation
+                    {{ record.generation }} ·
                     {{ record.status }}
                 </summary>
                 <dl class="mt-3 grid gap-x-4 gap-y-1 sm:grid-cols-[10rem_1fr]">
@@ -102,36 +150,55 @@
                     <dd>{{ record.lifecycleCoverage }}</dd>
                     <dt class="opacity-65">Passed V1 API</dt>
                     <dd>
-                        managed-v1-api; direct imports, timers, listeners, and arbitrary side
-                        effects remain legacy-global-possible
+                        managed-v1-api; direct imports, timers, listeners, and
+                        arbitrary side effects remain legacy-global-possible
                     </dd>
                     <dt class="opacity-65">Trust / source</dt>
-                    <dd>{{ record.descriptor.trust }} / {{ record.descriptor.source }}</dd>
+                    <dd>
+                        {{ record.descriptor.trust }} /
+                        {{ record.descriptor.source }}
+                    </dd>
                     <dt class="opacity-65">Workspace</dt>
-                    <dd class="break-all font-mono">{{ record.descriptor.workspaceId }}</dd>
+                    <dd class="break-all font-mono">
+                        {{ record.descriptor.workspaceId }}
+                    </dd>
                     <dt class="opacity-65">Artifact</dt>
                     <dd class="break-all font-mono">
                         {{ record.descriptor.artifact.hostBuildId }} ·
                         {{ record.descriptor.artifact.moduleKey }}
                     </dd>
                     <dt class="opacity-65">Descriptor key</dt>
-                    <dd class="break-all font-mono">{{ record.descriptor.descriptorKey }}</dd>
+                    <dd class="break-all font-mono">
+                        {{ record.descriptor.descriptorKey }}
+                    </dd>
                     <dt class="opacity-65">Policy revision</dt>
-                    <dd class="break-all font-mono">{{ record.descriptor.policyRevision }}</dd>
+                    <dd class="break-all font-mono">
+                        {{ record.descriptor.policyRevision }}
+                    </dd>
                     <dt class="opacity-65">Grants revision</dt>
-                    <dd class="break-all font-mono">{{ record.descriptor.grantsRevision }}</dd>
+                    <dd class="break-all font-mono">
+                        {{ record.descriptor.grantsRevision }}
+                    </dd>
                     <dt class="opacity-65">Contributions / hooks</dt>
-                    <dd>{{ record.contributionCount }} / {{ record.hookCount }} (shadow-unattributed)</dd>
+                    <dd>
+                        {{ record.contributionCount }} /
+                        {{ record.hookCount }} (shadow-unattributed)
+                    </dd>
                     <dt class="opacity-65">Retry / rollback</dt>
                     <dd>Not owned in shadow mode; V1 remains authoritative</dd>
                 </dl>
             </details>
         </div>
-        <p v-else class="rounded border border-dashed border-[var(--md-outline-variant)] p-3 text-xs opacity-70">
+        <p
+            v-else
+            class="rounded border border-dashed border-[var(--md-outline-variant)] p-3 text-xs opacity-70"
+        >
             No active V1 generation has been observed in this client.
         </p>
 
-        <details class="rounded border border-[var(--md-outline-variant)] p-3 text-xs">
+        <details
+            class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
+        >
             <summary class="cursor-pointer font-medium">
                 Shadow divergences ({{ divergences.length }})
             </summary>
@@ -141,10 +208,17 @@
                     :key="item.sequence"
                     class="rounded bg-[var(--md-surface-container-low)] p-2 font-mono"
                 >
-                    #{{ item.sequence }} {{ item.kind }} · desired={{ item.desiredPluginId ?? '—' }}
-                    · observed={{ item.observedPluginId ?? '—' }} · source={{ item.desiredSource ?? '—' }}/{{ item.observedSource ?? '—' }}
-                    · workspace={{ item.desiredWorkspaceId ?? '—' }}/{{ item.observedWorkspaceId ?? '—' }}
-                    <span v-if="item.rebuildRequiredReason"> · {{ item.rebuildRequiredReason }}</span>
+                    #{{ item.sequence }} {{ item.kind }} · desired={{
+                        item.desiredPluginId ?? '—'
+                    }}
+                    · observed={{ item.observedPluginId ?? '—' }} · source={{
+                        item.desiredSource ?? '—'
+                    }}/{{ item.observedSource ?? '—' }} · workspace={{
+                        item.desiredWorkspaceId ?? '—'
+                    }}/{{ item.observedWorkspaceId ?? '—' }}
+                    <span v-if="item.rebuildRequiredReason">
+                        · {{ item.rebuildRequiredReason }}</span
+                    >
                 </div>
             </div>
             <p v-else class="mt-3 opacity-70">No bounded divergence records.</p>
@@ -159,24 +233,39 @@ import { getContributionSurfaceSelection } from '~/composables/plugins/contribut
 
 const runtimeConfig = useRuntimeConfig();
 const shadowObserverEnabled =
-    (runtimeConfig.public as { admin?: { pluginRuntimeShadowEnabled?: boolean } }).admin
-        ?.pluginRuntimeShadowEnabled !== false;
+    (
+        runtimeConfig.public as {
+            admin?: { pluginRuntimeShadowEnabled?: boolean };
+        }
+    ).admin?.pluginRuntimeShadowEnabled !== false;
 const manager = shadowObserverEnabled ? getShadowPluginManager() : null;
 const records = shallowRef(manager?.listRecords() ?? []);
 const divergences = shallowRef(manager?.listDivergences() ?? []);
 const ssrAuthEnabled = runtimeConfig.public.ssrAuthEnabled === true;
 const safeModeEnabled =
-    (runtimeConfig.public as { admin?: { disableNonCorePlugins?: boolean } }).admin
-        ?.disableNonCorePlugins === true;
+    (runtimeConfig.public as { admin?: { disableNonCorePlugins?: boolean } })
+        .admin?.disableNonCorePlugins === true;
 const runtimeLoaderEnabled =
-    (runtimeConfig.public as { admin?: { pluginRuntimeLoaderEnabled?: boolean } }).admin
-        ?.pluginRuntimeLoaderEnabled !== false;
+    (
+        runtimeConfig.public as {
+            admin?: { pluginRuntimeLoaderEnabled?: boolean };
+        }
+    ).admin?.pluginRuntimeLoaderEnabled !== false;
 const managerV2Enabled =
-    (runtimeConfig.public as { admin?: { pluginRuntimeV2Enabled?: boolean } }).admin
-        ?.pluginRuntimeV2Enabled === true;
+    (runtimeConfig.public as { admin?: { pluginRuntimeV2Enabled?: boolean } })
+        .admin?.pluginRuntimeV2Enabled === true;
+const hookEngineV2Enabled =
+    (runtimeConfig.public as { admin?: { hookEngineV2Enabled?: boolean } })
+        .admin?.hookEngineV2Enabled === true;
+const hookEngineVersion =
+    (globalThis as { __NUXT_HOOKS_VERSION__?: 'v1' | 'v2' })
+        .__NUXT_HOOKS_VERSION__ ?? (hookEngineV2Enabled ? 'v2' : 'v1');
 const managerV2WorkspaceIds = [
-    ...((runtimeConfig.public as { admin?: { pluginRuntimeV2WorkspaceIds?: string[] } }).admin
-        ?.pluginRuntimeV2WorkspaceIds ?? []),
+    ...((
+        runtimeConfig.public as {
+            admin?: { pluginRuntimeV2WorkspaceIds?: string[] };
+        }
+    ).admin?.pluginRuntimeV2WorkspaceIds ?? []),
 ];
 const managerV2WorkspaceLabel = managerV2WorkspaceIds.length
     ? managerV2WorkspaceIds.join(', ')

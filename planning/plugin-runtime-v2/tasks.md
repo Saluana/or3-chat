@@ -298,7 +298,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R5.AC7, R9.AC5
       Done when: a side-effect counter increments once while shadow plan differences remain inspectable.
 
-- [ ] 5.11 Wire startup-only `hookEngineV2Enabled` and run rollback/performance gates
+- [x] 5.11 Wire startup-only `hookEngineV2Enabled` and run rollback/performance gates
       Requirements: R9.AC1, R9.AC4, R9.AC7-R9.AC8
       Done when: reload with flag off restores V1 core, all conformance tests pass, and exact/wildcard budgets pass.
 

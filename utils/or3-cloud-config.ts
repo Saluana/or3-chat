@@ -108,6 +108,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         pluginRuntimeV2Enabled: false,
         pluginRuntimeV2WorkspaceIds: [],
         pluginContributionV2Surfaces: [],
+        hookEngineV2Enabled: false,
         pluginZipInstallEnabled: true,
         pluginRouteDispatcherEnabled: true,
         rebuildCommand: DEFAULT_REBUILD_COMMAND,
@@ -169,153 +170,159 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
     },
 };
 
-const cloudConfigSchema = z
-    .looseObject({
-        auth: z.object({
-            enabled: z.boolean(),
-            provider: z.string().min(1),
-            guestAccessEnabled: z.boolean().optional(),
-            autoProvision: z.boolean().optional(),
-            registrationMode: z
-                .enum(['open', 'invite_only', 'disabled'])
-                .optional(),
-            sessionProvisioningFailure: z
-                .enum(['throw', 'unauthenticated', 'service-unavailable'])
-                .optional(),
-            lockPage: z
-                .object({
-                    enabled: z.boolean().optional(),
-                    adapter: z.string().min(1).optional(),
-                })
-                .optional(),
-            clerk: z
-                .object({
-                    publishableKey: z.string().optional(),
-                    secretKey: z.string().optional(),
-                })
-                .optional(),
-        }),
-        sync: z.object({
-            enabled: z.boolean(),
-            provider: z.string().min(1),
-            convex: z
-                .object({
-                    url: z.string().optional(),
-                    adminKey: z.string().optional(),
-                })
-                .optional(),
-        }),
-        storage: z.object({
-            enabled: z.boolean(),
-            provider: z.string().min(1),
-            allowedMimeTypes: z.array(z.string().min(1)).optional(),
-            workspaceQuotaBytes: z.number().int().positive().optional(),
-            gcRetentionSeconds: z.number().int().min(0).optional(),
-            gcCooldownMs: z.number().int().min(0).optional(),
-        }),
-        services: z
-            .object({
-                llm: z
-                    .object({
-                        openRouter: z
-                            .object({
-                                instanceApiKey: z.string().optional(),
-                                allowUserOverride: z.boolean().optional(),
-                                requireUserKey: z.boolean().optional(),
-                                baseUrl: z.string().url().optional(),
-                            })
-                            .optional(),
-                    })
-                    .optional(),
-            })
-            .optional()
-            .default({}),
-        limits: z
+const cloudConfigSchema = z.looseObject({
+    auth: z.object({
+        enabled: z.boolean(),
+        provider: z.string().min(1),
+        guestAccessEnabled: z.boolean().optional(),
+        autoProvision: z.boolean().optional(),
+        registrationMode: z
+            .enum(['open', 'invite_only', 'disabled'])
+            .optional(),
+        sessionProvisioningFailure: z
+            .enum(['throw', 'unauthenticated', 'service-unavailable'])
+            .optional(),
+        lockPage: z
             .object({
                 enabled: z.boolean().optional(),
-                requestsPerMinute: z.number().int().min(1).optional(),
-                maxConversations: z.number().int().min(0).optional(),
-                maxMessagesPerDay: z.number().int().min(0).optional(),
-                storageProvider: z.string().min(1).optional(),
-                operationRateLimits: z
-                    .record(
-                        z.string(),
-                        z.object({
-                            windowMs: z.number().int().min(1).optional(),
-                            maxRequests: z.number().int().min(1).optional(),
+                adapter: z.string().min(1).optional(),
+            })
+            .optional(),
+        clerk: z
+            .object({
+                publishableKey: z.string().optional(),
+                secretKey: z.string().optional(),
+            })
+            .optional(),
+    }),
+    sync: z.object({
+        enabled: z.boolean(),
+        provider: z.string().min(1),
+        convex: z
+            .object({
+                url: z.string().optional(),
+                adminKey: z.string().optional(),
+            })
+            .optional(),
+    }),
+    storage: z.object({
+        enabled: z.boolean(),
+        provider: z.string().min(1),
+        allowedMimeTypes: z.array(z.string().min(1)).optional(),
+        workspaceQuotaBytes: z.number().int().positive().optional(),
+        gcRetentionSeconds: z.number().int().min(0).optional(),
+        gcCooldownMs: z.number().int().min(0).optional(),
+    }),
+    services: z
+        .object({
+            llm: z
+                .object({
+                    openRouter: z
+                        .object({
+                            instanceApiKey: z.string().optional(),
+                            allowUserOverride: z.boolean().optional(),
+                            requireUserKey: z.boolean().optional(),
+                            baseUrl: z.string().url().optional(),
                         })
-                    )
-                    .optional(),
-            })
-            .optional(),
-        security: z
-            .object({
-                allowedOrigins: z.array(z.string()).optional(),
-                forceHttps: z.boolean().optional(),
-                proxy: z
-                    .object({
-                        trustProxy: z.boolean().optional(),
-                        forwardedForHeader: z
-                            .enum(['x-forwarded-for', 'x-real-ip'])
-                            .optional(),
-                        forwardedHostHeader: z.enum(['x-forwarded-host']).optional(),
-                    })
-                    .optional(),
-            })
-            .optional(),
-        admin: z
-            .object({
-                basePath: z.string().optional(),
-                allowedHosts: z.array(z.string()).optional(),
-                allowRestart: z.boolean().optional(),
-                allowRebuild: z.boolean().optional(),
-                disableNonCorePlugins: z.boolean().optional(),
-                pluginRuntimeShadowEnabled: z.boolean().optional(),
-                pluginRuntimeLoaderEnabled: z.boolean().optional(),
-                pluginRuntimeV2Enabled: z.boolean().optional(),
-                pluginRuntimeV2WorkspaceIds: z.array(z.string().min(1)).optional(),
-                pluginContributionV2Surfaces: z.array(z.string().min(1)).optional(),
-                pluginZipInstallEnabled: z.boolean().optional(),
-                pluginRouteDispatcherEnabled: z.boolean().optional(),
-                rebuildCommand: z.string().optional(),
-                extensionMaxZipBytes: z.number().int().min(1).optional(),
-                extensionMaxFiles: z.number().int().min(1).optional(),
-                extensionMaxTotalBytes: z.number().int().min(1).optional(),
-                extensionAllowedExtensions: z.array(z.string()).optional(),
-                auth: z
-                    .object({
-                        username: z.string().optional(),
-                        password: z.string().optional(),
-                        jwtSecret: z.string().optional(),
-                        jwtExpiry: z.string().optional(),
-                        deletedWorkspaceRetentionDays: z.number().int().min(0).optional(),
-                    })
-                    .optional(),
-            })
-            .optional(),
-        backgroundStreaming: z
-            .object({
-                enabled: z.boolean().optional(),
-                storageProvider: z.string().min(1).optional(),
-                maxConcurrentJobs: z.number().int().min(1).optional(),
-                maxConcurrentJobsPerUser: z.number().int().min(1).optional(),
-                jobTimeoutSeconds: z.number().int().min(1).optional(),
-            })
-            .optional(),
-        webhooks: z
-            .object({
-                enabled: z.boolean().optional(),
-                maxPerUser: z.number().int().min(1).optional(),
-                adminMax: z.number().int().min(1).optional(),
-                rateLimitPerMinute: z.number().int().min(1).optional(),
-                deliveryTimeoutMs: z.number().int().min(1).optional(),
-                blockPrivateIps: z.boolean().optional(),
-                encryptionKey: z.string().min(1).optional(),
-                maxRetryHours: z.number().int().min(1).optional(),
-                logRetentionHours: z.number().int().min(1).optional(),
-            })
-            .optional(),
-    })
+                        .optional(),
+                })
+                .optional(),
+        })
+        .optional()
+        .default({}),
+    limits: z
+        .object({
+            enabled: z.boolean().optional(),
+            requestsPerMinute: z.number().int().min(1).optional(),
+            maxConversations: z.number().int().min(0).optional(),
+            maxMessagesPerDay: z.number().int().min(0).optional(),
+            storageProvider: z.string().min(1).optional(),
+            operationRateLimits: z
+                .record(
+                    z.string(),
+                    z.object({
+                        windowMs: z.number().int().min(1).optional(),
+                        maxRequests: z.number().int().min(1).optional(),
+                    }),
+                )
+                .optional(),
+        })
+        .optional(),
+    security: z
+        .object({
+            allowedOrigins: z.array(z.string()).optional(),
+            forceHttps: z.boolean().optional(),
+            proxy: z
+                .object({
+                    trustProxy: z.boolean().optional(),
+                    forwardedForHeader: z
+                        .enum(['x-forwarded-for', 'x-real-ip'])
+                        .optional(),
+                    forwardedHostHeader: z
+                        .enum(['x-forwarded-host'])
+                        .optional(),
+                })
+                .optional(),
+        })
+        .optional(),
+    admin: z
+        .object({
+            basePath: z.string().optional(),
+            allowedHosts: z.array(z.string()).optional(),
+            allowRestart: z.boolean().optional(),
+            allowRebuild: z.boolean().optional(),
+            disableNonCorePlugins: z.boolean().optional(),
+            pluginRuntimeShadowEnabled: z.boolean().optional(),
+            pluginRuntimeLoaderEnabled: z.boolean().optional(),
+            pluginRuntimeV2Enabled: z.boolean().optional(),
+            pluginRuntimeV2WorkspaceIds: z.array(z.string().min(1)).optional(),
+            pluginContributionV2Surfaces: z.array(z.string().min(1)).optional(),
+            hookEngineV2Enabled: z.boolean().optional(),
+            pluginZipInstallEnabled: z.boolean().optional(),
+            pluginRouteDispatcherEnabled: z.boolean().optional(),
+            rebuildCommand: z.string().optional(),
+            extensionMaxZipBytes: z.number().int().min(1).optional(),
+            extensionMaxFiles: z.number().int().min(1).optional(),
+            extensionMaxTotalBytes: z.number().int().min(1).optional(),
+            extensionAllowedExtensions: z.array(z.string()).optional(),
+            auth: z
+                .object({
+                    username: z.string().optional(),
+                    password: z.string().optional(),
+                    jwtSecret: z.string().optional(),
+                    jwtExpiry: z.string().optional(),
+                    deletedWorkspaceRetentionDays: z
+                        .number()
+                        .int()
+                        .min(0)
+                        .optional(),
+                })
+                .optional(),
+        })
+        .optional(),
+    backgroundStreaming: z
+        .object({
+            enabled: z.boolean().optional(),
+            storageProvider: z.string().min(1).optional(),
+            maxConcurrentJobs: z.number().int().min(1).optional(),
+            maxConcurrentJobsPerUser: z.number().int().min(1).optional(),
+            jobTimeoutSeconds: z.number().int().min(1).optional(),
+        })
+        .optional(),
+    webhooks: z
+        .object({
+            enabled: z.boolean().optional(),
+            maxPerUser: z.number().int().min(1).optional(),
+            adminMax: z.number().int().min(1).optional(),
+            rateLimitPerMinute: z.number().int().min(1).optional(),
+            deliveryTimeoutMs: z.number().int().min(1).optional(),
+            blockPrivateIps: z.boolean().optional(),
+            encryptionKey: z.string().min(1).optional(),
+            maxRetryHours: z.number().int().min(1).optional(),
+            logRetentionHours: z.number().int().min(1).optional(),
+        })
+        .optional(),
+});
 
 const formatConfigErrors = (errors: string[]) => {
     const heading = '[or3-cloud-config] Configuration validation failed:';
@@ -406,15 +413,20 @@ function validateConfig(config: Or3CloudConfig, strict: boolean): void {
         const errors = parsed.error.issues.map((issue) =>
             issue.path.length
                 ? `${issue.path.join('.')}: ${issue.message}`
-                : issue.message
+                : issue.message,
         );
         throw new Error(formatConfigErrors(errors));
     }
 
     const lockPage = config.auth.lockPage;
     const nonStrictErrors: string[] = [];
-    if (lockPage?.adapter !== undefined && lockPage.adapter.trim().length === 0) {
-        nonStrictErrors.push('auth.lockPage.adapter must not be empty when provided.');
+    if (
+        lockPage?.adapter !== undefined &&
+        lockPage.adapter.trim().length === 0
+    ) {
+        nonStrictErrors.push(
+            'auth.lockPage.adapter must not be empty when provided.',
+        );
     }
 
     if (!strict) {
@@ -428,19 +440,25 @@ function validateConfig(config: Or3CloudConfig, strict: boolean): void {
 
     if (config.auth.enabled && config.auth.provider === CLERK_PROVIDER_ID) {
         if (!config.auth.clerk?.publishableKey) {
-            errors.push('auth.clerk.publishableKey is required when auth is enabled.');
+            errors.push(
+                'auth.clerk.publishableKey is required when auth is enabled.',
+            );
         }
         if (!config.auth.clerk?.secretKey) {
-            errors.push('auth.clerk.secretKey is required when auth is enabled.');
+            errors.push(
+                'auth.clerk.secretKey is required when auth is enabled.',
+            );
         }
     }
 
     if (
         config.auth.registrationMode &&
-        !['open', 'invite_only', 'disabled'].includes(config.auth.registrationMode)
+        !['open', 'invite_only', 'disabled'].includes(
+            config.auth.registrationMode,
+        )
     ) {
         errors.push(
-            'auth.registrationMode must be one of: open, invite_only, disabled.'
+            'auth.registrationMode must be one of: open, invite_only, disabled.',
         );
     }
 
@@ -457,14 +475,17 @@ function validateConfig(config: Or3CloudConfig, strict: boolean): void {
     }
 
     const openRouter = config.services.llm?.openRouter;
-    if (openRouter?.requireUserKey === true && openRouter.allowUserOverride === false) {
+    if (
+        openRouter?.requireUserKey === true &&
+        openRouter.allowUserOverride === false
+    ) {
         errors.push(
-            'services.llm.openRouter.allowUserOverride must be true when requireUserKey is true.'
+            'services.llm.openRouter.allowUserOverride must be true when requireUserKey is true.',
         );
     }
     if (openRouter?.allowUserOverride === false && !openRouter.instanceApiKey) {
         errors.push(
-            'services.llm.openRouter.instanceApiKey is required when allowUserOverride is false.'
+            'services.llm.openRouter.instanceApiKey is required when allowUserOverride is false.',
         );
     }
 
@@ -475,11 +496,12 @@ function validateConfig(config: Or3CloudConfig, strict: boolean): void {
 
 export function defineOr3CloudConfig(
     config: Or3CloudConfig,
-    options: Or3CloudConfigOptions = {}
+    options: Or3CloudConfigOptions = {},
 ): Or3CloudConfig {
     const strict =
         options.strict ??
-        (process.env.NODE_ENV === 'production' || process.env.OR3_STRICT_CONFIG === 'true');
+        (process.env.NODE_ENV === 'production' ||
+            process.env.OR3_STRICT_CONFIG === 'true');
     const merged = mergeConfig(config);
     validateConfig(merged, strict);
     return merged;

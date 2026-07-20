@@ -213,7 +213,9 @@ describe('buildOr3CloudConfigFromEnv', () => {
 
         expect(config.auth.guestAccessEnabled).toBe(true);
         expect(config.auth.autoProvision).toBe(false);
-        expect(config.auth.sessionProvisioningFailure).toBe('service-unavailable');
+        expect(config.auth.sessionProvisioningFailure).toBe(
+            'service-unavailable',
+        );
     });
 
     it('maps lock page settings from env', () => {
@@ -289,14 +291,21 @@ describe('buildOr3CloudConfigFromEnv', () => {
         const config = buildOr3CloudConfigFromEnv({
             OR3_ADMIN_ALLOWED_HOSTS: 'admin.local , admin.prod ',
         });
-        expect(config.admin?.allowedHosts).toEqual(['admin.local', 'admin.prod']);
+        expect(config.admin?.allowedHosts).toEqual([
+            'admin.local',
+            'admin.prod',
+        ]);
     });
 
     it('parses extension allowed extensions from CSV', () => {
         const config = buildOr3CloudConfigFromEnv({
             OR3_ADMIN_EXTENSION_ALLOWED_EXTENSIONS: '.js,.ts, .vue ',
         });
-        expect(config.admin?.extensionAllowedExtensions).toEqual(['.js', '.ts', '.vue']);
+        expect(config.admin?.extensionAllowedExtensions).toEqual([
+            '.js',
+            '.ts',
+            '.vue',
+        ]);
     });
 
     it('throws in strict mode when Clerk keys missing', () => {
@@ -305,7 +314,7 @@ describe('buildOr3CloudConfigFromEnv', () => {
             buildOr3CloudConfigFromEnv({
                 SSR_AUTH_ENABLED: 'true',
                 AUTH_PROVIDER: 'clerk',
-            })
+            }),
         ).toThrow(/publishableKey/i);
     });
 
@@ -316,7 +325,7 @@ describe('buildOr3CloudConfigFromEnv', () => {
             buildOr3CloudConfigFromEnv({
                 SSR_AUTH_ENABLED: 'true',
                 AUTH_PROVIDER: 'clerk',
-            })
+            }),
         ).toThrow(/publishableKey/i);
     });
 
@@ -327,7 +336,7 @@ describe('buildOr3CloudConfigFromEnv', () => {
                 SSR_AUTH_ENABLED: 'true',
                 AUTH_PROVIDER: 'clerk',
                 NUXT_CLERK_SECRET_KEY: 'sk_test',
-            })
+            }),
         ).toThrow(/publishableKey/i);
     });
 
@@ -337,7 +346,7 @@ describe('buildOr3CloudConfigFromEnv', () => {
             buildOr3CloudConfigFromEnv({
                 SSR_AUTH_ENABLED: 'true',
                 AUTH_PROVIDER: 'clerk',
-            })
+            }),
         ).not.toThrow();
     });
 
@@ -350,7 +359,7 @@ describe('buildOr3CloudConfigFromEnv', () => {
                 NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test',
                 NUXT_CLERK_SECRET_KEY: 'sk_test',
                 OR3_SYNC_PROVIDER: 'convex',
-            })
+            }),
         ).toThrow(/convex\.url/i);
     });
 
@@ -454,7 +463,7 @@ describe('buildOr3CloudConfigFromEnv', () => {
             }),
         });
         expect(config.services.llm?.openRouter?.baseUrl).toBe(
-            'https://proxy.example.com/api/v1'
+            'https://proxy.example.com/api/v1',
         );
         expect(config.limits?.operationRateLimits?.['storage:upload']).toEqual({
             maxRequests: 7,
@@ -496,20 +505,24 @@ describe('buildOr3CloudConfigFromEnv', () => {
     });
 
     it('parses the boot-time non-core plugin safe-mode flag', () => {
-        expect(buildOr3CloudConfigFromEnv({}).admin?.disableNonCorePlugins).toBe(false);
+        expect(
+            buildOr3CloudConfigFromEnv({}).admin?.disableNonCorePlugins,
+        ).toBe(false);
         expect(
             buildOr3CloudConfigFromEnv({
                 OR3_DISABLE_NON_CORE_PLUGINS: 'true',
-            }).admin?.disableNonCorePlugins
+            }).admin?.disableNonCorePlugins,
         ).toBe(true);
     });
 
     it('parses the startup-only shadow observer rollback flag', () => {
-        expect(buildOr3CloudConfigFromEnv({}).admin?.pluginRuntimeShadowEnabled).toBe(true);
+        expect(
+            buildOr3CloudConfigFromEnv({}).admin?.pluginRuntimeShadowEnabled,
+        ).toBe(true);
         expect(
             buildOr3CloudConfigFromEnv({
                 OR3_PLUGIN_RUNTIME_SHADOW_ENABLED: 'false',
-            }).admin?.pluginRuntimeShadowEnabled
+            }).admin?.pluginRuntimeShadowEnabled,
         ).toBe(false);
     });
 
@@ -531,12 +544,26 @@ describe('buildOr3CloudConfigFromEnv', () => {
     });
 
     it('parses the startup-only contribution surface allowlist', () => {
-        expect(buildOr3CloudConfigFromEnv({}).admin?.pluginContributionV2Surfaces).toEqual([]);
+        expect(
+            buildOr3CloudConfigFromEnv({}).admin?.pluginContributionV2Surfaces,
+        ).toEqual([]);
         expect(
             buildOr3CloudConfigFromEnv({
-                OR3_PLUGIN_CONTRIBUTION_V2_SURFACES: 'message-actions, pane-apps',
-            }).admin?.pluginContributionV2Surfaces
+                OR3_PLUGIN_CONTRIBUTION_V2_SURFACES:
+                    'message-actions, pane-apps',
+            }).admin?.pluginContributionV2Surfaces,
         ).toEqual(['message-actions', 'pane-apps']);
+    });
+
+    it('parses the startup-only Hook Runtime V2 rollback flag', () => {
+        expect(buildOr3CloudConfigFromEnv({}).admin?.hookEngineV2Enabled).toBe(
+            false,
+        );
+        expect(
+            buildOr3CloudConfigFromEnv({
+                OR3_HOOK_ENGINE_V2_ENABLED: 'true',
+            }).admin?.hookEngineV2Enabled,
+        ).toBe(true);
     });
 
     it('parses admin extension limits', () => {
@@ -556,7 +583,7 @@ describe('buildOr3CloudConfigFromEnv', () => {
             buildOr3CloudConfigFromEnv({
                 OR3_OPENROUTER_REQUIRE_USER_KEY: 'true',
                 OR3_OPENROUTER_ALLOW_USER_OVERRIDE: 'false',
-            })
+            }),
         ).toThrow(/allowUserOverride must be true/i);
     });
 
@@ -565,7 +592,7 @@ describe('buildOr3CloudConfigFromEnv', () => {
         expect(() =>
             buildOr3CloudConfigFromEnv({
                 OR3_OPENROUTER_ALLOW_USER_OVERRIDE: 'false',
-            })
+            }),
         ).toThrow(/instanceApiKey is required/i);
     });
 
@@ -593,13 +620,17 @@ describe('buildOr3CloudConfigFromEnv', () => {
         const configNoSync = buildOr3CloudConfigFromEnv({
             NODE_ENV: 'development',
         });
-        expect(configNoSync.backgroundStreaming?.storageProvider).toBe('memory');
+        expect(configNoSync.backgroundStreaming?.storageProvider).toBe(
+            'memory',
+        );
 
         const configWithSync = buildOr3CloudConfigFromEnv({
             SSR_AUTH_ENABLED: 'true',
             NODE_ENV: 'development',
         });
-        expect(configWithSync.backgroundStreaming?.storageProvider).toBe('convex');
+        expect(configWithSync.backgroundStreaming?.storageProvider).toBe(
+            'convex',
+        );
     });
 
     it('allows overriding background streaming storage provider', () => {
@@ -616,7 +647,7 @@ describe('buildOr3CloudConfigFromEnv', () => {
             buildOr3CloudConfigFromEnv({
                 SSR_AUTH_ENABLED: 'true',
                 AUTH_PROVIDER: 'clerk',
-            })
+            }),
         ).toThrow(/publishableKey/i);
     });
 

@@ -41,6 +41,7 @@
         "plugin-runtime:external-v1:check": "bun run scripts/plugin-runtime/check-example-fixtures.ts tests/plugin-runtime/external-v1/tsconfig.json",
         "plugin-runtime:benchmarks": "bunx vite-node --config vitest.config.ts --mode production scripts/plugin-runtime/benchmark-v1.ts --report",
         "plugin-runtime:benchmarks:check": "bunx vite-node --config vitest.config.ts --mode production scripts/plugin-runtime/benchmark-v1.ts --check",
+        "plugin-runtime:hooks-v2:benchmarks:check": "bunx vite-node --config vitest.config.ts --mode production scripts/plugin-runtime/benchmark-v1.ts --v2 --check",
         "plugin-runtime:benchmarks:record": "bunx vite-node --config vitest.config.ts --mode production scripts/plugin-runtime/benchmark-v1.ts --record",
         "plugin-runtime:milestone-0:qualify": "bun run scripts/plugin-runtime/qualify-milestone-0.ts",
         "plugin-runtime:milestone-0:record": "bun run scripts/plugin-runtime/qualify-milestone-0.ts --record",
@@ -50,6 +51,8 @@
         "plugin-runtime:milestone-2-3:record": "bun run scripts/plugin-runtime/qualify-milestone-2-3.ts --record",
         "plugin-runtime:milestone-4:qualify": "bun run scripts/plugin-runtime/qualify-milestone-4.ts",
         "plugin-runtime:milestone-4:record": "bun run scripts/plugin-runtime/qualify-milestone-4.ts --record",
+        "plugin-runtime:milestone-5:qualify": "bun run scripts/plugin-runtime/qualify-milestone-5.ts",
+        "plugin-runtime:milestone-5:record": "bun run scripts/plugin-runtime/qualify-milestone-5.ts --record",
         "plugin-runtime:contracts:check": "bun x tsc --project tests/plugin-runtime/contracts/tsconfig.json",
         "dev:offline": "env SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false bun run dev"
     },

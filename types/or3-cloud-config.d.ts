@@ -43,7 +43,10 @@ export interface Or3CloudConfig {
          * - 'service-unavailable': throw 503 for session endpoint
          * @default 'throw'
          */
-        sessionProvisioningFailure?: 'throw' | 'unauthenticated' | 'service-unavailable';
+        sessionProvisioningFailure?:
+            | 'throw'
+            | 'unauthenticated'
+            | 'service-unavailable';
         /**
          * Optional deployment-level lock page for pre-auth entry.
          * When enabled, protected shell routes redirect unauthenticated visitors
@@ -485,6 +488,14 @@ export interface Or3CloudConfig {
          * @default []
          */
         pluginContributionV2Surfaces?: string[];
+
+        /**
+         * Selects Hook Runtime V2 at process/client startup. A restart is
+         * required to change the selected engine.
+         * @env OR3_HOOK_ENGINE_V2_ENABLED
+         * @default false
+         */
+        hookEngineV2Enabled?: boolean;
 
         /**
          * Enables admin ZIP-based extension install endpoint.

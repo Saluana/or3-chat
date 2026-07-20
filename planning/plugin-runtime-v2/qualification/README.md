@@ -33,3 +33,11 @@ bun run plugin-runtime:milestone-4:qualify
 ```
 
 The final gate invokes the complete Milestone 0 qualification. The qualification manifest records the startup-only, one-surface rollback boundary. Use `plugin-runtime:milestone-4:record` only to publish reviewed evidence under `results/milestone-4-contributions-v1.json`.
+
+Run the Milestone 5 Hook Runtime V2 conformance, rollback, performance, and compatibility gates with:
+
+```sh
+bun run plugin-runtime:milestone-5:qualify
+```
+
+The final gate invokes the complete Milestone 0 qualification. The manifest records the startup-only hook-engine rollback boundary and the single-execution drill. Use `plugin-runtime:milestone-5:record` only to publish reviewed evidence under `results/milestone-5-hooks-v1.json`.

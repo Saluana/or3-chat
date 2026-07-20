@@ -1,0 +1,72 @@
+{
+    "schemaVersion": 1,
+    "qualificationVersion": "milestone-5-hooks-v1",
+    "milestone": "Milestone 5 — Hook Runtime V2",
+    "entryEvidence": [
+        "shared/hooks/hook-record-store.ts",
+        "shared/hooks/hook-engine-v2.ts",
+        "shared/hooks/hook-diagnostics.ts",
+        "shared/hooks/hook-diagnostics-compat.ts",
+        "shared/hooks/hook-shadow.ts",
+        "shared/plugins/transactional-plugin-scope.ts",
+        "app/core/hooks/runtime-kernel.ts",
+        "app/core/hooks/hook-inspector-snapshot.ts",
+        "app/core/hooks/__tests__/hook-engine-rollback.test.ts",
+        "server/hooks/runtime-kernel.ts",
+        "scripts/plugin-runtime/benchmark-v1.ts",
+        "utils/or3-cloud-config.ts",
+        "server/admin/config/resolve-config.ts"
+    ],
+    "gates": [
+        {
+            "id": "hook-v2-conformance-and-rollback",
+            "commands": [
+                [
+                    "bun",
+                    "x",
+                    "vitest",
+                    "run",
+                    "shared/hooks/__tests__/hook-record-store.test.ts",
+                    "shared/hooks/__tests__/hook-engine-core.test.ts",
+                    "shared/hooks/__tests__/hook-engine-v2-policies.test.ts",
+                    "shared/hooks/__tests__/hook-diagnostics.test.ts",
+                    "shared/hooks/__tests__/v1-diagnostics-compat.test.ts",
+                    "shared/hooks/__tests__/hook-shadow.test.ts",
+                    "shared/plugins/__tests__/transactional-plugin-scope.test.ts",
+                    "app/core/hooks/__tests__/runtime-kernel.test.ts",
+                    "app/core/hooks/__tests__/hook-engine-rollback.test.ts",
+                    "app/core/hooks/__tests__/hook-inspector-snapshot.test.ts",
+                    "server/hooks/__tests__/runtime-kernel.test.ts",
+                    "app/plugins/__tests__/hookInspector.test.ts",
+                    "server/auth/__tests__/hooks.test.ts",
+                    "tests/unit/or3-cloud-config.test.ts",
+                    "tests/unit/resolve-config.test.ts"
+                ]
+            ]
+        },
+        {
+            "id": "hook-v2-performance",
+            "commands": [
+                ["bun", "run", "plugin-runtime:hooks-v2:benchmarks:check"]
+            ]
+        },
+        {
+            "id": "public-contracts",
+            "commands": [["bun", "run", "plugin-runtime:compatibility:check"]]
+        },
+        {
+            "id": "frozen-v1-qualification",
+            "commands": [["bun", "run", "plugin-runtime:milestone-0:qualify"]]
+        }
+    ],
+    "rollback": {
+        "scope": "Set only OR3_HOOK_ENGINE_V2_ENABLED=false and restart before plugin discovery or hook registration; keep plugin-manager, contribution-surface, package, settings, and data state unchanged.",
+        "procedure": [
+            "Set OR3_HOOK_ENGINE_V2_ENABLED=false outside the plugin admin UI.",
+            "Restart the OR3 process before plugin discovery or any hook registration so every lifetime selects the V1 engine.",
+            "Verify Runtime Inspector reports V1 and exercise hook conformance plus the frozen Milestone 0 corpus.",
+            "Keep Hook Runtime V2 disabled if rollback, conformance, compatibility, or performance qualification is not green."
+        ],
+        "drill": "The startup selection test proves an existing client lifetime cannot change engines live, a fresh flag-off lifetime restores V1, and callbacks execute exactly once in either selection."
+    }
+}

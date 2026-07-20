@@ -52,8 +52,8 @@ describe('defineOr3CloudConfig', () => {
                         },
                     },
                 },
-                { strict: true }
-            )
+                { strict: true },
+            ),
         ).toThrow(/instanceApiKey is required/i);
     });
 
@@ -68,8 +68,8 @@ describe('defineOr3CloudConfig', () => {
                         clerk: {},
                     },
                 },
-                { strict: true }
-            )
+                { strict: true },
+            ),
         ).toThrow(/clerk\.publishableKey/i);
     });
 
@@ -92,8 +92,8 @@ describe('defineOr3CloudConfig', () => {
                         convex: {},
                     },
                 },
-                { strict: true }
-            )
+                { strict: true },
+            ),
         ).toThrow(/convex\.url is required/i);
     });
 
@@ -111,8 +111,8 @@ describe('defineOr3CloudConfig', () => {
                         },
                     },
                 },
-                { strict: true }
-            )
+                { strict: true },
+            ),
         ).toThrow(/allowUserOverride must be true when requireUserKey/i);
     });
 
@@ -125,7 +125,7 @@ describe('defineOr3CloudConfig', () => {
                     provider: 'fake-provider',
                     clerk: {},
                 },
-            })
+            }),
         ).not.toThrow();
     });
 
@@ -146,7 +146,7 @@ describe('defineOr3CloudConfig', () => {
                     },
                 },
             },
-            { strict: false }
+            { strict: false },
         );
         // Should merge with defaults
         expect(config.services.llm?.openRouter?.allowUserOverride).toBe(true);
@@ -186,6 +186,7 @@ describe('defineOr3CloudConfig', () => {
         expect(config.admin?.pluginRuntimeV2Enabled).toBe(false);
         expect(config.admin?.pluginRuntimeV2WorkspaceIds).toEqual([]);
         expect(config.admin?.pluginContributionV2Surfaces).toEqual([]);
+        expect(config.admin?.hookEngineV2Enabled).toBe(false);
         expect(config.admin?.pluginZipInstallEnabled).toBe(true);
         expect(config.admin?.pluginRouteDispatcherEnabled).toBe(true);
     });
@@ -200,6 +201,7 @@ describe('defineOr3CloudConfig', () => {
                 pluginRuntimeV2Enabled: true,
                 pluginRuntimeV2WorkspaceIds: ['workspace-canary'],
                 pluginContributionV2Surfaces: ['message-actions'],
+                hookEngineV2Enabled: true,
                 pluginZipInstallEnabled: false,
                 pluginRouteDispatcherEnabled: false,
             },
@@ -209,8 +211,13 @@ describe('defineOr3CloudConfig', () => {
         expect(config.admin?.disableNonCorePlugins).toBe(true);
         expect(config.admin?.pluginRuntimeShadowEnabled).toBe(false);
         expect(config.admin?.pluginRuntimeV2Enabled).toBe(true);
-        expect(config.admin?.pluginRuntimeV2WorkspaceIds).toEqual(['workspace-canary']);
-        expect(config.admin?.pluginContributionV2Surfaces).toEqual(['message-actions']);
+        expect(config.admin?.pluginRuntimeV2WorkspaceIds).toEqual([
+            'workspace-canary',
+        ]);
+        expect(config.admin?.pluginContributionV2Surfaces).toEqual([
+            'message-actions',
+        ]);
+        expect(config.admin?.hookEngineV2Enabled).toBe(true);
         expect(config.admin?.pluginZipInstallEnabled).toBe(false);
         expect(config.admin?.pluginRouteDispatcherEnabled).toBe(false);
     });
@@ -222,7 +229,9 @@ describe('defineOr3CloudConfig', () => {
                 allowedOrigins: ['https://example.com'],
             },
         });
-        expect(config.security?.allowedOrigins).toEqual(['https://example.com']);
+        expect(config.security?.allowedOrigins).toEqual([
+            'https://example.com',
+        ]);
         expect(config.security?.forceHttps).toBeDefined(); // default preserved
     });
 
@@ -251,7 +260,7 @@ describe('or3-cloud-config error messages', () => {
                     ...baseConfig,
                     auth: { enabled: true, provider: 'clerk', clerk: {} },
                 },
-                { strict: true }
+                { strict: true },
             );
             expect.fail('should have thrown');
         } catch (err: any) {
@@ -274,7 +283,7 @@ describe('or3-cloud-config error messages', () => {
                         },
                     },
                 },
-                { strict: true }
+                { strict: true },
             );
             expect.fail('should have thrown');
         } catch (err: any) {

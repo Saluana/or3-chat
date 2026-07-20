@@ -48,6 +48,8 @@ export function getOrCreateClientHookEngine(
     if (!global.__NUXT_HOOKS__) {
         global.__NUXT_HOOKS__ = createAppHookEngine(version);
         global.__NUXT_HOOKS_VERSION__ = version;
+    } else if (!global.__NUXT_HOOKS_VERSION__) {
+        global.__NUXT_HOOKS_VERSION__ = 'v1';
     }
     return global.__NUXT_HOOKS__;
 }

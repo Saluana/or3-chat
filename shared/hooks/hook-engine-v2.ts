@@ -1,5 +1,5 @@
 import { ActivationTable } from '../plugins/activation-table';
-import { HookDiagnostics } from './hook-diagnostics';
+import type { HookDiagnostics } from './hook-diagnostics';
 import { createV1HookDiagnosticsAdapter } from './hook-diagnostics-compat';
 import { HookRecordStore, type HookRecord } from './hook-record-store';
 import type {
@@ -98,11 +98,10 @@ export function createHookEngineV2(
             explicitKind ?? 'action');
     const currentPriorityStack: number[] = [];
     const definitions = new Map<string, HookDefinition>();
-    const runtimeDiagnostics = new HookDiagnostics();
     const diagnosticsAdapter = createV1HookDiagnosticsAdapter({
-        diagnostics: runtimeDiagnostics,
         callbacks: (kind) => records.visibleCount(kind),
     });
+    const runtimeDiagnostics = diagnosticsAdapter.diagnostics;
     const diagnostics = diagnosticsAdapter.facade;
 
     function recordTiming(name: string, ms: number): void {
@@ -127,7 +126,7 @@ export function createHookEngineV2(
     }
 
     function definitionKey(kind: HookKind, name: string): string {
-        return JSON.stringify([kind, name]);
+        return `${kind === 'action' ? 'a' : 'f'}${name}`;
     }
 
     function defineHook(input: DefineHookInput): HookDefinition {
@@ -443,7 +442,9 @@ export function createHookEngineV2(
         async applyFilters(name, value, ...args) {
             const callbacks = records.matching('filter', name);
             if (callbacks.length === 0) return value;
-            const definition = getDefinition('filter', name);
+            const definition = definitions.size
+                ? getDefinition('filter', name)
+                : undefined;
             if (definition) {
                 return (await callPolicySerial(
                     callbacks,
@@ -465,7 +466,9 @@ export function createHookEngineV2(
         applyFiltersSync(name, value, ...args) {
             const callbacks = records.matching('filter', name);
             if (callbacks.length === 0) return value;
-            const definition = getDefinition('filter', name);
+            const definition = definitions.size
+                ? getDefinition('filter', name)
+                : undefined;
             if (definition) {
                 return callPolicySync(
                     callbacks,
@@ -493,7 +496,9 @@ export function createHookEngineV2(
         async doAction(name, ...args) {
             const callbacks = records.matching('action', name);
             if (callbacks.length === 0) return;
-            const definition = getDefinition('action', name);
+            const definition = definitions.size
+                ? getDefinition('action', name)
+                : undefined;
             if (definition) {
                 if (definition.policy.actionMode === 'parallel') {
                     await callPolicyParallelAction(
@@ -519,7 +524,9 @@ export function createHookEngineV2(
         doActionSync(name, ...args) {
             const callbacks = records.matching('action', name);
             if (callbacks.length === 0) return;
-            const definition = getDefinition('action', name);
+            const definition = definitions.size
+                ? getDefinition('action', name)
+                : undefined;
             if (definition) {
                 callPolicySync(
                     callbacks,
