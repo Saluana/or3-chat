@@ -1,0 +1,7 @@
+{
+  "kind": "plugin",
+  "id": "sample.legacy-v1",
+  "name": "Legacy V1 Sample",
+  "version": "1.0.0",
+  "runtime": { "client": { "entry": "plugin.client.ts" } }
+}

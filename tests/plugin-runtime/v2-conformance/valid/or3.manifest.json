@@ -1,0 +1,25 @@
+{
+  "manifestVersion": 2,
+  "kind": "plugin",
+  "id": "sample.conformant",
+  "name": "Conformant Sample",
+  "version": "2.0.0",
+  "engines": { "or3": "^0.3.0", "pluginApi": "^2.0.0" },
+  "runtime": {
+    "client": {
+      "entry": "dist/client.mjs",
+      "format": "esm",
+      "isolation": "host"
+    }
+  },
+  "requestedGrants": ["hooks.register"],
+  "features": { "required": [], "optional": [] },
+  "dependencies": { "required": [], "optional": [] },
+  "trust": "trusted-host",
+  "settings": { "version": 1 },
+  "stateCompatibility": {
+    "version": 1,
+    "reads": { "minimum": 1, "maximum": 1 },
+    "rollback": "safe"
+  }
+}

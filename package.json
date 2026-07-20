@@ -55,6 +55,7 @@
         "plugin-runtime:milestone-5:record": "bun run scripts/plugin-runtime/qualify-milestone-5.ts --record",
         "plugin-runtime:contracts:check": "bun x tsc --project tests/plugin-runtime/contracts/tsconfig.json",
         "plugin-runtime:sdk:check": "bun x tsc --project packages/plugin-sdk/tsconfig.json && bun x tsc --project tests/plugin-runtime/sdk-minimal/tsconfig.json",
+        "plugin-runtime:v2-conformance:check": "bun run scripts/plugin-runtime/check-v2-package-conformance.ts tests/plugin-runtime/v2-conformance/valid && bun x vitest run scripts/__tests__/plugin-runtime-v2-conformance.test.ts",
         "dev:offline": "env SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false bun run dev"
     },
     "bin": {

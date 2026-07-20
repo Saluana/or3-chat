@@ -1,6 +1,6 @@
 {
   "name": "@or3/plugin-sdk",
-  "version": "2.0.0-alpha.1",
+  "version": "2.0.0",
   "type": "module",
   "private": true,
   "sideEffects": false,

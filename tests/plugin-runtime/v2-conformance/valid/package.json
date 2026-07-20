@@ -1,0 +1,8 @@
+{
+  "name": "sample-conformant-plugin",
+  "version": "2.0.0",
+  "type": "module",
+  "dependencies": {
+    "@or3/plugin-sdk": "^2.0.0"
+  }
+}

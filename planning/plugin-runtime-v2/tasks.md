@@ -336,7 +336,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R6.AC4, R9.AC6
       Done when: plugin packages can test success, denied grant, stale generation, activation failure, and cleanup locally.
 
-- [ ] 6.9 Add V2 conformance checks for private aliases, Nuxt auto-imports, unresolved bare imports, and SDK range
+- [x] 6.9 Add V2 conformance checks for private aliases, Nuxt auto-imports, unresolved bare imports, and SDK range
       Requirements: R6.AC5, R6.AC6, R7.AC4
       Done when: V1 private-import fixture remains valid while the equivalent V2 fixture fails with a clear code.
 
