@@ -70,6 +70,12 @@ export interface PackageV2PluginDescriptor extends PluginDescriptorBase {
 
 export type PluginDescriptor = BundledV1PluginDescriptor | PackageV2PluginDescriptor;
 
+export type PluginDescriptorIdentity = PluginDescriptor extends infer Descriptor
+    ? Descriptor extends PluginDescriptor
+        ? Omit<Descriptor, 'descriptorKey'>
+        : never
+    : never;
+
 /** Narrows the only artifact kind whose bytes can change without rebuilding the host. */
 export function isPostBuildReloadableArtifact(
     artifact: PluginArtifactIdentity

@@ -80,7 +80,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC1, R2.AC3
       Done when: TypeScript prevents a bundled descriptor from claiming a package digest or post-build reload.
 
-- [ ] 2.2 Implement canonical JSON and SHA-256 descriptor-key generation with collision/ordering vectors
+- [x] 2.2 Implement canonical JSON and SHA-256 descriptor-key generation with collision/ordering vectors
       Requirements: R2.AC2
       Done when: reordered object keys hash identically, changed identity inputs hash differently, and delimiter-like values cannot collide.
 
