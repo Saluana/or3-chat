@@ -38,7 +38,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC3, R1.AC4, R5.AC9
       Done when: each listed behavior has a V1 expected-value test independent of V2 code.
 
-- [ ] 1.6 Add a `_diagnostics` compatibility fixture covering reads, array bounds expectation, `{}` assignment reset, error counts, and `callbacks()`
+- [x] 1.6 Add a `_diagnostics` compatibility fixture covering reads, array bounds expectation, `{}` assignment reset, error counts, and `callbacks()`
       Requirements: R1.AC7, R5.AC6
       Done when: the current Hook Inspector usage and a plugin-style direct consumer both pass.
 
