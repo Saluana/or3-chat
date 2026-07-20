@@ -68,6 +68,7 @@ describe('installExtensionFromZip', () => {
                     },
                 },
                 requestedGrants: [],
+                features: { required: [], optional: [] },
                 dependencies: { required: [], optional: [] },
                 trust: 'trusted-host',
                 settings: { version: 1 },

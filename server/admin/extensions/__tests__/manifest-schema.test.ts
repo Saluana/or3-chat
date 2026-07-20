@@ -2,6 +2,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { PluginV2CompatibilityManifest } from '../../../../shared/plugins/v2-compatibility';
 import {
     Or3ExtensionManifestSchema,
     Or3ExtensionManifestV1Schema,
@@ -40,6 +41,7 @@ function validV2Manifest(overrides: Record<string, unknown> = {}) {
             },
         },
         requestedGrants: [],
+        features: { required: [], optional: [] },
         dependencies: { required: [], optional: [] },
         trust: 'trusted-host',
         settings: { version: 1 },
@@ -124,7 +126,10 @@ describe('extension manifest version dispatch', () => {
             integrity: { package: `sha256-${'a'.repeat(64)}` },
         });
 
-        expect(Or3ExtensionManifestSchema.safeParse(manifest).success).toBe(true);
+        const parsed = Or3ExtensionManifestV2Schema.parse(manifest);
+        const compatibilityManifest: PluginV2CompatibilityManifest = parsed;
+
+        expect(compatibilityManifest.id).toBe('strict-v2-plugin');
     });
 
     it.each([
@@ -132,6 +137,8 @@ describe('extension manifest version dispatch', () => {
         ['uppercase id', { id: 'Acme.Plugin' }],
         ['missing OR3 engine range', { engines: { or3: '', pluginApi: '^2.0.0' } }],
         ['missing API engine range', { engines: { or3: '^0.2.0', pluginApi: '' } }],
+        ['invalid OR3 engine range', { engines: { or3: 'not a range', pluginApi: '^2.0.0' } }],
+        ['invalid plugin version', { version: 'next' }],
         ['no runtime entrypoint', { runtime: {} }],
         [
             'source runtime entrypoint',
@@ -159,6 +166,15 @@ describe('extension manifest version dispatch', () => {
         ],
         ['invalid grant', { requestedGrants: ['Documents Read'] }],
         ['duplicate grants', { requestedGrants: ['documents.read', 'documents.read'] }],
+        [
+            'overlapping required and optional features',
+            {
+                features: {
+                    required: ['host.storage'],
+                    optional: ['host.storage'],
+                },
+            },
+        ],
         [
             'duplicate dependency',
             {

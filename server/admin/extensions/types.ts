@@ -15,6 +15,7 @@
  * - All extensions must specify a `kind` to determine their storage and loading path.
  */
 import { z } from 'zod';
+import { valid, validRange } from 'semver';
 import { PluginGatePolicySchema } from '~~/shared/plugins/access-policy';
 
 /**
@@ -168,10 +169,44 @@ const V2FeatureSchema = z
     .min(1)
     .regex(/^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$/, 'Invalid dependency feature');
 
+const V2FeatureNegotiationSchema = z
+    .object({
+        required: z.array(V2FeatureSchema),
+        optional: z.array(V2FeatureSchema),
+    })
+    .strict()
+    .superRefine((value, ctx) => {
+        const required = new Set(value.required);
+        if (
+            required.size !== value.required.length ||
+            new Set(value.optional).size !== value.optional.length
+        ) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'Negotiated features must be unique',
+            });
+        }
+        for (const feature of value.optional) {
+            if (required.has(feature)) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ['optional'],
+                    message: `Feature cannot be both required and optional: ${feature}`,
+                });
+            }
+        }
+    });
+
+const SemverRangeSchema = z
+    .string()
+    .trim()
+    .min(1)
+    .refine((value) => validRange(value) !== null, 'Invalid semantic version range');
+
 const V2DependencySchema = z
     .object({
         id: V2PluginIdSchema,
-        range: z.string().trim().min(1),
+        range: SemverRangeSchema,
         features: z.array(V2FeatureSchema).default([]),
     })
     .strict()
@@ -314,14 +349,16 @@ export const Or3ExtensionManifestV2Schema = z
         ...Or3ExtensionManifestFields,
         kind: z.literal('plugin'),
         id: V2PluginIdSchema,
+        version: z.string().refine((value) => valid(value) !== null, 'Invalid semantic version'),
         engines: z
             .object({
-                or3: z.string().trim().min(1),
-                pluginApi: z.string().trim().min(1),
+                or3: SemverRangeSchema,
+                pluginApi: SemverRangeSchema,
             })
             .strict(),
         runtime: V2RuntimeSchema,
         requestedGrants: z.array(V2GrantSchema),
+        features: V2FeatureNegotiationSchema,
         dependencies: V2DependenciesSchema,
         trust: z.enum(['trusted-host', 'isolated-client', 'isolated-server']),
         settings: V2SettingsSchema,

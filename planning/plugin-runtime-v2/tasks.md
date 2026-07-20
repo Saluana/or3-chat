@@ -312,7 +312,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R6.AC2, R10.AC3
       Done when: schema tests cover valid/minimal and every incompatible/invalid state.
 
-- [ ] 6.3 Implement compatibility and feature-negotiation verification with machine-readable blocked reasons
+- [x] 6.3 Implement compatibility and feature-negotiation verification with machine-readable blocked reasons
       Requirements: R6.AC5
       Done when: host/API/dependency/feature/trust mismatches each block before loader invocation.
 
