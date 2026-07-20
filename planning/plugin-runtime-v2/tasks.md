@@ -34,7 +34,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC10, R9.AC6
       Done when: the corpus has a version/source record, contains no credentials, and compiles without compatibility edits.
 
-- [ ] 1.5 Add golden hook tests for exact/wildcard merge order, equal priority, filter-error prior value, sync thenables, `acceptedArgs`, `has*`, exact/wildcard removal, nested priority, `off`, and async `onceAction`
+- [x] 1.5 Add golden hook tests for exact/wildcard merge order, equal priority, filter-error prior value, sync thenables, `acceptedArgs`, `has*`, exact/wildcard removal, nested priority, `off`, and async `onceAction`
       Requirements: R1.AC3, R1.AC4, R5.AC9
       Done when: each listed behavior has a V1 expected-value test independent of V2 code.
 

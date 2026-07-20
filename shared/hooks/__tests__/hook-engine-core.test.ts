@@ -112,4 +112,109 @@ describe('hook-engine-core', () => {
         engine.addFilter('demo:filter:async', async (value) => `${String(value)}-async`);
         await expect(engine.applyFilters('demo:filter:async', 'x')).resolves.toBe('x-async');
     });
+
+    it('merges exact and wildcard callbacks by priority then registration order', async () => {
+        const engine = createHookEngine();
+        const calls: string[] = [];
+        engine.addAction('demo.*', () => calls.push('wildcard-first'), 10);
+        engine.addAction('demo.action.order', () => calls.push('exact-second'), 10);
+        engine.addAction('demo.action.order', () => calls.push('exact-low'), 5);
+        engine.addAction('*.action.order', () => calls.push('wildcard-high'), 20);
+
+        await engine.doAction('demo.action.order');
+
+        expect(calls).toEqual([
+            'exact-low',
+            'wildcard-first',
+            'exact-second',
+            'wildcard-high',
+        ]);
+    });
+
+    it('preserves the V1 acceptedArgs behavior of forwarding every argument', async () => {
+        const engine = createHookEngine();
+        const action = vi.fn();
+        const filter = vi.fn((value, ...args) => [value, ...args].join(':'));
+        engine.addAction('demo:action:args', action, 10, 1);
+        engine.addFilter('demo:filter:args', filter, 10, 1);
+
+        await engine.doAction('demo:action:args', 'a', 'b', 'c');
+        const filtered = await engine.applyFilters('demo:filter:args', 'start', 'a', 'b');
+
+        expect(action).toHaveBeenCalledWith('a', 'b', 'c');
+        expect(filter).toHaveBeenCalledWith('start', 'a', 'b');
+        expect(filtered).toBe('start:a:b');
+    });
+
+    it('freezes hasAction and hasFilter boolean and priority return values', () => {
+        const engine = createHookEngine();
+        const exactAction = vi.fn();
+        const wildcardAction = vi.fn();
+        const filter = vi.fn((value) => value);
+        engine.addAction('demo:action:has', exactAction, 0);
+        engine.addAction('demo:action:*', wildcardAction, 25);
+        engine.addFilter('demo:filter:has', filter, 15);
+
+        expect(engine.hasAction()).toBe(true);
+        expect(engine.hasAction('demo:action:has')).toBe(true);
+        expect(engine.hasAction('demo:action:has', exactAction)).toBe(0);
+        expect(engine.hasAction('demo:action:*', wildcardAction)).toBe(25);
+        expect(engine.hasAction('demo:action:missing')).toBe(true);
+        expect(engine.hasAction('demo:other:missing')).toBe(false);
+        expect(engine.hasFilter()).toBe(true);
+        expect(engine.hasFilter('demo:filter:has', filter)).toBe(15);
+        expect(engine.hasFilter('demo:filter:missing')).toBe(false);
+    });
+
+    it('preserves exact removal of all matches and wildcard removal of the first match', async () => {
+        const engine = createHookEngine();
+        const exact = vi.fn();
+        const wildcard = vi.fn();
+        engine.addAction('demo:action:remove', exact, 10);
+        engine.addAction('demo:action:remove', exact, 20);
+        engine.addAction('demo:action:*', wildcard, 10);
+        engine.addAction('demo:action:*', wildcard, 10);
+
+        engine.removeAction('demo:action:remove', exact);
+        engine.removeAction('demo:action:*', wildcard);
+        await engine.doAction('demo:action:remove');
+
+        expect(exact).not.toHaveBeenCalled();
+        expect(wildcard).toHaveBeenCalledTimes(1);
+        expect(engine.hasAction('demo:action:remove', exact)).toBe(false);
+        expect(engine.hasAction('demo:action:*', wildcard)).toBe(10);
+    });
+
+    it('restores currentPriority across nested dispatch and resets it afterward', () => {
+        const engine = createHookEngine();
+        const observed: Array<number | false> = [];
+        engine.addAction('demo:action:inner', () => {
+            observed.push(engine.currentPriority());
+        }, 5);
+        engine.addAction('demo:action:outer', () => {
+            observed.push(engine.currentPriority());
+            engine.doActionSync('demo:action:inner');
+            observed.push(engine.currentPriority());
+        }, 20);
+
+        expect(engine.currentPriority()).toBe(false);
+        engine.doActionSync('demo:action:outer');
+        expect(observed).toEqual([20, 5, 20]);
+        expect(engine.currentPriority()).toBe(false);
+    });
+
+    it('off invokes disposers and reports disposer errors through the configured callback', async () => {
+        const onOffError = vi.fn();
+        const engine = createHookEngine({ onOffError });
+        const callback = vi.fn();
+        const disposer = engine.on('demo:action:off', callback);
+
+        engine.off(disposer);
+        await engine.doAction('demo:action:off');
+        const error = new Error('dispose failed');
+        expect(() => engine.off(() => { throw error; })).not.toThrow();
+
+        expect(callback).not.toHaveBeenCalled();
+        expect(onOffError).toHaveBeenCalledWith(error);
+    });
 });
