@@ -18,7 +18,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
 
 ## 1. Milestone 0 — Freeze and qualify V1
 
-- [ ] 1.1 Create a machine-readable Compatibility Ledger listing every public plugin/hook module path, Nuxt auto-import, export, signature, overload, and declared return type
+- [x] 1.1 Create a machine-readable Compatibility Ledger listing every public plugin/hook module path, Nuxt auto-import, export, signature, overload, and declared return type
       Requirements: R1.AC1, R1.AC2, R5.AC1
       Done when: the ledger covers documented APIs plus exports found under plugin-facing composables/core/utils, and a reviewer can map every entry to its source file.
 

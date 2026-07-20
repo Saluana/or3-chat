@@ -32,6 +32,8 @@
         "or3-cloud:validate": "bun run scripts/cli/or3-cloud.ts validate",
         "or3-cloud:doctor": "bun run scripts/cli/or3-cloud.ts doctor",
         "or3-cloud:build": "bun build ./scripts/cli/or3-cloud.ts --target=node --format=esm --outfile ./dist/or3-cloud.mjs",
+        "plugin-runtime:ledger": "bun run scripts/plugin-runtime/generate-compatibility-ledger.ts",
+        "plugin-runtime:ledger:check": "bun run scripts/plugin-runtime/generate-compatibility-ledger.ts --check",
         "dev:offline": "env SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false bun run dev"
     },
     "bin": {
