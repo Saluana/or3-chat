@@ -8,19 +8,10 @@ import {
     unregisterWorkspacePluginInstance,
     type Or3WorkspacePlugin,
 } from '~/composables/plugins/workspace-runtime';
-import { resolveBundledPluginArtifact } from '~~/shared/plugins/bundled-plugin-catalog';
 import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
 import { discoverNonCorePlugins } from '~~/shared/plugins/safe-mode';
 import { createWorkspacePluginShadowObserver } from '~/composables/plugins/workspace-plugin-shadow-observer';
-
-function findLoader(
-    modules: Record<string, () => Promise<unknown>>,
-    pluginId: string,
-    entry?: string
-): (() => Promise<unknown>) | null {
-    const resolution = resolveBundledPluginArtifact(bundledPluginCatalog, pluginId, entry);
-    return resolution.status === 'bundled' ? modules[resolution.artifact.moduleKey] ?? null : null;
-}
+import { BundledV1Loader } from '~~/shared/plugins/bundled-v1-loader';
 
 function parseWorkspacePlugin(mod: unknown, pluginId: string): Or3WorkspacePlugin | null {
     const raw = ((mod as { default?: unknown })?.default ?? mod) as unknown;
@@ -62,6 +53,7 @@ export default defineNuxtPlugin(() => {
         ),
     })) as Record<string, () => Promise<unknown>> | undefined;
     if (!modules) return;
+    const bundledV1Loader = new BundledV1Loader(bundledPluginCatalog, modules);
 
     const session = useSessionContext();
     const shadowObserver = createWorkspacePluginShadowObserver({
@@ -129,8 +121,11 @@ export default defineNuxtPlugin(() => {
                 continue;
             }
 
-            const loader = findLoader(modules, pluginId, manifest.runtime[pluginId]?.clientEntry);
-            if (!loader) {
+            const loaderResolution = bundledV1Loader.resolve(
+                pluginId,
+                manifest.runtime[pluginId]?.clientEntry
+            );
+            if (loaderResolution.status !== 'ready') {
                 const clientEntry = manifest.runtime[pluginId]?.clientEntry;
                 const runtimeEntry = manifest.runtime[pluginId];
                 shadowObserver?.recordDivergence({
@@ -151,7 +146,7 @@ export default defineNuxtPlugin(() => {
 
             let dispose: (() => void) | null = null;
             try {
-                const mod = await loader();
+                const mod = await loaderResolution.load();
                 if (token !== syncToken) {
                     return;
                 }

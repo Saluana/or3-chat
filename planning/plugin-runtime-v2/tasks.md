@@ -146,7 +146,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC7, R3.AC8, R7.AC6
       Done when: same-ID start/stop/replace operations serialize while unrelated plugin operations can progress.
 
-- [ ] 3.7 Extract the current module lookup/fallback logic into `BundledV1Loader`
+- [x] 3.7 Extract the current module lookup/fallback logic into `BundledV1Loader`
       Requirements: R1.AC6, R7.AC1
       Done when: explicit entry and all three legacy filenames resolve exactly as the existing loader tests specify.
 
