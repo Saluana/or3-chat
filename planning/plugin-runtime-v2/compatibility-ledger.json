@@ -6,15 +6,15 @@
     "moduleManifest": "planning/plugin-runtime-v2/compatibility-ledger.modules.json",
     "moduleManifestSha256": "6964af291c26d9a715cdce7cc98483396ccd7f0db8f5768f85cffa5ff1b0fd35",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "4da8b901643d2e9f52761af8a560dd560515b3442cf13ce45e5d471518e6ddb5",
+    "nuxtImportsDeclarationSha256": "63674c939f87b3139298ac2c6c37b292469c47c47e4a1e6b73c02405a2aed643",
     "behaviorProfiles": "planning/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "3da04d48d16d44a8adda5742383a733e9797c57cc587d4fd713ca020309239d2"
   },
   "coverage": {
     "moduleCount": 36,
-    "exportCount": 513,
-    "callableExportCount": 228,
-    "nuxtAutoImportCount": 285
+    "exportCount": 515,
+    "callableExportCount": 229,
+    "nuxtAutoImportCount": 287
   },
   "behaviorProfiles": [
     {
@@ -6046,7 +6046,7 @@
     },
     {
       "source": "app/composables/plugins/workspace-runtime.ts",
-      "apiSha256": "c5da29a753347bf073f8d50c469c98ac87452bad7cff2c794d2f225a02f4fe43",
+      "apiSha256": "67f8c452629cb07073d4d5372f36121eacf702aeff3ea3bb478696d2eb69717f",
       "runtime": "client",
       "publicPaths": [
         "~/composables/plugins/workspace-runtime"
@@ -6058,6 +6058,32 @@
       "behaviorProfileIds": [],
       "exports": [
         {
+          "name": "createManagedWorkspacePluginRuntime",
+          "kind": "value",
+          "nuxtAutoImport": true,
+          "signatures": [
+            {
+              "signature": "(): ManagedWorkspacePluginRuntime",
+              "declaredReturnType": "ManagedWorkspacePluginRuntime",
+              "resolvedReturnType": "ManagedWorkspacePluginRuntime",
+              "declaration": {
+                "source": "app/composables/plugins/workspace-runtime.ts",
+                "line": 70,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export function createManagedWorkspacePluginRuntime(): ManagedWorkspacePluginRuntime;"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/plugins/workspace-runtime.ts",
+              "line": 70,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export function createManagedWorkspacePluginRuntime(): ManagedWorkspacePluginRuntime;"
+            }
+          ]
+        },
+        {
           "name": "createWorkspacePluginApi",
           "kind": "value",
           "nuxtAutoImport": true,
@@ -6068,7 +6094,7 @@
               "resolvedReturnType": "{ api: Or3WorkspacePluginApi; dispose: () => void; }",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 61,
+                "line": 140,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createWorkspacePluginApi(): {\n    api: Or3WorkspacePluginApi;\n    dispose: () => void;\n};"
               }
@@ -6077,7 +6103,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 61,
+              "line": 140,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createWorkspacePluginApi(): {\n    api: Or3WorkspacePluginApi;\n    dispose: () => void;\n};"
             }
@@ -6094,7 +6120,7 @@
               "resolvedReturnType": "{ id: string; source: WorkspacePluginSource; }[]",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 186,
+                "line": 203,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listWorkspacePluginInstances(): Array<{ id: string; source: WorkspacePluginSource }>;"
               }
@@ -6103,9 +6129,23 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 186,
+              "line": 203,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listWorkspacePluginInstances(): Array<{ id: string; source: WorkspacePluginSource }>;"
+            }
+          ]
+        },
+        {
+          "name": "ManagedWorkspacePluginRuntime",
+          "kind": "type",
+          "nuxtAutoImport": true,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "app/composables/plugins/workspace-runtime.ts",
+              "line": 64,
+              "syntaxKind": "InterfaceDeclaration",
+              "text": "export interface ManagedWorkspacePluginRuntime {\n    api: Or3WorkspacePluginApi;\n    dispose: (reason?: unknown) => Promise<LegacyCleanupReport>;\n}"
             }
           ]
         },
@@ -6117,7 +6157,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 30,
+              "line": 33,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface Or3WorkspacePlugin {\n    id: string;\n    register(api: Or3WorkspacePluginApi): void | Promise<void>;\n}"
             }
@@ -6131,7 +6171,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 21,
+              "line": 24,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface Or3WorkspacePluginApi {\n    registerDashboardPlugin: (plugin: DashboardPlugin) => RegistrationHandle;\n    registerSidebarPage: (def: SidebarPageDef) => () => void;\n    registerPaneApp: (def: PaneAppDef) => RegistrationHandle;\n    registerMessageAction: (action: ChatMessageAction) => RegistrationHandle;\n    registerTool: (def: ExtendedToolDefinition, handler: ToolHandler) => RegistrationHandle;\n    onCleanup: (fn: () => void | Promise<void>) => void;\n}"
             }
@@ -6148,7 +6188,7 @@
               "resolvedReturnType": "{ accepted: boolean; replacedSource?: WorkspacePluginSource; }",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 138,
+                "line": 155,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerWorkspacePluginInstance(\n    id: string,\n    source: WorkspacePluginSource,\n    dispose: () => void | Promise<void>\n): { accepted: boolean; replacedSource?: WorkspacePluginSource };"
               }
@@ -6157,7 +6197,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 138,
+              "line": 155,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerWorkspacePluginInstance(\n    id: string,\n    source: WorkspacePluginSource,\n    dispose: () => void | Promise<void>\n): { accepted: boolean; replacedSource?: WorkspacePluginSource };"
             }
@@ -6174,7 +6214,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/plugins/workspace-runtime.ts",
-                "line": 170,
+                "line": 187,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterWorkspacePluginInstance(id: string): void;"
               }
@@ -6183,7 +6223,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 170,
+              "line": 187,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterWorkspacePluginInstance(id: string): void;"
             }
@@ -6197,7 +6237,7 @@
           "declarations": [
             {
               "source": "app/composables/plugins/workspace-runtime.ts",
-              "line": 14,
+              "line": 17,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type WorkspacePluginSource = 'builtin' | 'extension';"
             }

@@ -151,4 +151,20 @@ describe('workspace plugin runtime registry', () => {
         expect(() => dispose()).not.toThrow();
         expect(later).toHaveBeenCalledTimes(1);
     });
+
+    it('exposes awaited cleanup reporting only through the internal manager adapter', async () => {
+        const mod = await import('../workspace-runtime');
+        const publicRuntime = mod.createWorkspacePluginApi();
+        expect(Object.keys(publicRuntime).sort()).toEqual(['api', 'dispose']);
+        expect(publicRuntime.dispose()).toBeUndefined();
+
+        const managed = mod.createManagedWorkspacePluginRuntime();
+        managed.api.onCleanup(async () => undefined);
+        await expect(managed.dispose()).resolves.toMatchObject({
+            status: 'clean',
+            timedOut: false,
+            invokedCount: 1,
+            settledThenableCount: 1,
+        });
+    });
 });

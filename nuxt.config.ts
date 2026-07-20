@@ -274,6 +274,10 @@ const adminConfig = {
         or3CloudConfig.admin?.pluginRuntimeShadowEnabled !== false,
     pluginRuntimeLoaderEnabled:
         or3CloudConfig.admin?.pluginRuntimeLoaderEnabled !== false,
+    pluginRuntimeV2Enabled:
+        or3CloudConfig.admin?.pluginRuntimeV2Enabled === true,
+    pluginRuntimeV2WorkspaceIds:
+        or3CloudConfig.admin?.pluginRuntimeV2WorkspaceIds ?? [],
     pluginZipInstallEnabled:
         or3CloudConfig.admin?.pluginZipInstallEnabled !== false,
     pluginRouteDispatcherEnabled:
@@ -509,6 +513,8 @@ export default defineNuxtConfig({
                 disableNonCorePlugins: adminConfig.disableNonCorePlugins,
                 pluginRuntimeShadowEnabled: adminConfig.pluginRuntimeShadowEnabled,
                 pluginRuntimeLoaderEnabled: adminConfig.pluginRuntimeLoaderEnabled,
+                pluginRuntimeV2Enabled: adminConfig.pluginRuntimeV2Enabled,
+                pluginRuntimeV2WorkspaceIds: adminConfig.pluginRuntimeV2WorkspaceIds,
                 pluginRouteDispatcherEnabled: adminConfig.pluginRouteDispatcherEnabled,
             },
             webhooks: {

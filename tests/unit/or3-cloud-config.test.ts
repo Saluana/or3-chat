@@ -183,6 +183,8 @@ describe('defineOr3CloudConfig', () => {
         expect(config.admin?.disableNonCorePlugins).toBe(false);
         expect(config.admin?.pluginRuntimeShadowEnabled).toBe(true);
         expect(config.admin?.pluginRuntimeLoaderEnabled).toBe(true);
+        expect(config.admin?.pluginRuntimeV2Enabled).toBe(false);
+        expect(config.admin?.pluginRuntimeV2WorkspaceIds).toEqual([]);
         expect(config.admin?.pluginZipInstallEnabled).toBe(true);
         expect(config.admin?.pluginRouteDispatcherEnabled).toBe(true);
     });
@@ -194,6 +196,8 @@ describe('defineOr3CloudConfig', () => {
                 pluginRuntimeLoaderEnabled: false,
                 disableNonCorePlugins: true,
                 pluginRuntimeShadowEnabled: false,
+                pluginRuntimeV2Enabled: true,
+                pluginRuntimeV2WorkspaceIds: ['workspace-canary'],
                 pluginZipInstallEnabled: false,
                 pluginRouteDispatcherEnabled: false,
             },
@@ -202,6 +206,8 @@ describe('defineOr3CloudConfig', () => {
         expect(config.admin?.pluginRuntimeLoaderEnabled).toBe(false);
         expect(config.admin?.disableNonCorePlugins).toBe(true);
         expect(config.admin?.pluginRuntimeShadowEnabled).toBe(false);
+        expect(config.admin?.pluginRuntimeV2Enabled).toBe(true);
+        expect(config.admin?.pluginRuntimeV2WorkspaceIds).toEqual(['workspace-canary']);
         expect(config.admin?.pluginZipInstallEnabled).toBe(false);
         expect(config.admin?.pluginRouteDispatcherEnabled).toBe(false);
     });

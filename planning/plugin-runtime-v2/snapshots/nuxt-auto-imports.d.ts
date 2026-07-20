@@ -6,8 +6,8 @@ export { EditorInstance, OpenRouterMessage, AiSendBeforePayload, AiSendAfterPayl
 export { SidebarPageControlsKey, provideSidebarPageControls, SidebarEnvironmentKey, createSidebarMultiPaneApi, provideSidebarEnvironment, useSidebarEnvironment, useSidebarProjects, useSidebarThreads, useSidebarDocuments, useSidebarQuery, useActiveSections, useExpandedProjects, useActiveThreadIds, useActiveDocumentIds, useSidebarMultiPane, useSidebarPostsApi, SidebarPageControls, SidebarMultiPaneApi, SidebarEnvironment } from '../app/composables/sidebar/useSidebarEnvironment';
 export { createHistoryActionRegistry, HistoryActionRegistryItem } from '../app/composables/history/createHistoryActionRegistry';
 export { createHookEngine, HookFn, HookEngine, HookKind, OnOptions, RegisterOptions } from '../app/core/hooks/hooks';
+export { createManagedWorkspacePluginRuntime, createWorkspacePluginApi, registerWorkspacePluginInstance, unregisterWorkspacePluginInstance, listWorkspacePluginInstances, WorkspacePluginSource, Or3WorkspacePluginApi, Or3WorkspacePlugin, ManagedWorkspacePluginRuntime } from '../app/composables/plugins/workspace-runtime';
 export { createTypedHookEngine, TypedHookEngine } from '../app/core/hooks/typed-hooks';
-export { createWorkspacePluginApi, registerWorkspacePluginInstance, unregisterWorkspacePluginInstance, listWorkspacePluginInstances, WorkspacePluginSource, Or3WorkspacePluginApi, Or3WorkspacePlugin } from '../app/composables/plugins/workspace-runtime';
 export { default as registerSidebarPage, registerSidebarPageWithPosts, RegisterSidebarPageOptions, RegisterSidebarPageWithPostsOptions } from '../app/composables/sidebar/registerSidebarPage';
 export { loadEditorExtensions, createLazyNodeFactory, createLazyMarkFactory, createLazyExtensionFactory, LazyEditorNodeFactory, LazyEditorMarkFactory, LazyEditorExtensionFactory, EditorNodeDescriptor, EditorMarkDescriptor, EditorExtensionDescriptor, LoadedExtensions } from '../app/composables/editor/useEditorExtensionLoader';
 export { registerComposerAction, unregisterComposerAction, useComposerActions, listRegisteredComposerActionIds, ComposerActionContext, ComposerAction, ComposerActionEntry } from '../app/composables/sidebar/useComposerActions';
@@ -38,6 +38,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
     readonly createLazyExtensionFactory: UnwrapRef<typeof import('../../app/composables/editor/useEditorExtensionLoader')['createLazyExtensionFactory']>
     readonly createLazyMarkFactory: UnwrapRef<typeof import('../../app/composables/editor/useEditorExtensionLoader')['createLazyMarkFactory']>
     readonly createLazyNodeFactory: UnwrapRef<typeof import('../../app/composables/editor/useEditorExtensionLoader')['createLazyNodeFactory']>
+    readonly createManagedWorkspacePluginRuntime: UnwrapRef<typeof import('../../app/composables/plugins/workspace-runtime')['createManagedWorkspacePluginRuntime']>
     readonly createRegistry: UnwrapRef<typeof import('../../app/composables/_registry')['createRegistry']>
     readonly createSidebarMultiPaneApi: UnwrapRef<typeof import('../../app/composables/sidebar/useSidebarEnvironment')['createSidebarMultiPaneApi']>
     readonly createTypedHookEngine: UnwrapRef<typeof import('../../app/core/hooks/typed-hooks')['createTypedHookEngine']>
@@ -151,6 +152,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
   const createLazyExtensionFactory: typeof import('../../app/composables/editor/useEditorExtensionLoader').createLazyExtensionFactory
   const createLazyMarkFactory: typeof import('../../app/composables/editor/useEditorExtensionLoader').createLazyMarkFactory
   const createLazyNodeFactory: typeof import('../../app/composables/editor/useEditorExtensionLoader').createLazyNodeFactory
+  const createManagedWorkspacePluginRuntime: typeof import('../../app/composables/plugins/workspace-runtime').createManagedWorkspacePluginRuntime
   const createRegistry: typeof import('../../app/composables/_registry').createRegistry
   const createSidebarMultiPaneApi: typeof import('../../app/composables/sidebar/useSidebarEnvironment').createSidebarMultiPaneApi
   const createTypedHookEngine: typeof import('../../app/core/hooks/typed-hooks').createTypedHookEngine
@@ -278,7 +280,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
   export type { SidebarSectionPlacement, SidebarSection, SidebarSectionGroups, SidebarFooterActionContext, ChromeActionColor, SidebarFooterAction, SidebarFooterActionEntry } from '../../app/composables/sidebar/useSidebarSections'
   export type { ThreadHistoryAction } from '../../app/composables/threads/useThreadHistoryActions'
   export type { TypedHookEngine } from '../../app/core/hooks/typed-hooks'
-  export type { WorkspacePluginSource, Or3WorkspacePluginApi, Or3WorkspacePlugin } from '../../app/composables/plugins/workspace-runtime'
+  export type { WorkspacePluginSource, Or3WorkspacePluginApi, Or3WorkspacePlugin, ManagedWorkspacePluginRuntime } from '../../app/composables/plugins/workspace-runtime'
   import('../../app/composables/_registry')
   import('../../app/composables/admin/useAdminPlugins')
   import('../../app/composables/chat/useMessageActions')

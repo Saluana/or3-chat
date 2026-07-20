@@ -45,7 +45,42 @@
             <UBadge :color="runtimeLoaderEnabled ? 'success' : 'neutral'" variant="subtle">
                 Workspace loader: {{ runtimeLoaderEnabled ? 'enabled' : 'disabled' }}
             </UBadge>
+            <UBadge :color="managerV2Enabled ? 'success' : 'neutral'" variant="subtle">
+                V2 startup selector: {{ managerV2Enabled ? 'enabled' : 'disabled' }}
+            </UBadge>
+            <UBadge v-if="managerV2Enabled" color="neutral" variant="subtle">
+                Workspace canaries: {{ managerV2WorkspaceLabel }}
+            </UBadge>
         </div>
+
+        <details v-if="managerV2Enabled" class="rounded border border-[var(--md-outline-variant)] p-3 text-xs">
+            <summary class="cursor-pointer font-medium">
+                Manager-canary records ({{ managerV2Records.length }})
+            </summary>
+            <div v-if="managerV2Records.length" class="mt-3 space-y-2">
+                <div
+                    v-for="record in managerV2Records"
+                    :key="`${record.descriptor.id}:${record.generation}:${record.updatedAt}`"
+                    class="rounded bg-[var(--md-surface-container-low)] p-2"
+                >
+                    <div class="font-medium">
+                        {{ record.descriptor.id }} · {{ record.status }} · generation {{ record.generation }}
+                    </div>
+                    <div class="mt-1 break-all font-mono opacity-75">
+                        {{ record.descriptor.descriptorKey }}
+                    </div>
+                    <div v-if="record.lastError" class="mt-1 text-[var(--md-error)]">
+                        {{ record.lastError.code }}: {{ record.lastError.message }}
+                    </div>
+                    <div v-if="record.nextRetryAt" class="mt-1 opacity-75">
+                        Retry after {{ new Date(record.nextRetryAt).toLocaleTimeString() }}
+                    </div>
+                </div>
+            </div>
+            <p v-else class="mt-3 opacity-70">
+                No manager record in this client. Startup selection does not by itself imply an active plugin.
+            </p>
+        </details>
 
         <div v-if="records.length" class="space-y-2">
             <details
@@ -116,6 +151,7 @@
 
 <script setup lang="ts">
 import { getShadowPluginManager } from '~/composables/plugins/shadow-plugin-manager';
+import { getBundledV1WorkspaceManager } from '~/composables/plugins/bundled-v1-manager-runtime';
 
 const runtimeConfig = useRuntimeConfig();
 const shadowObserverEnabled =
@@ -131,11 +167,24 @@ const safeModeEnabled =
 const runtimeLoaderEnabled =
     (runtimeConfig.public as { admin?: { pluginRuntimeLoaderEnabled?: boolean } }).admin
         ?.pluginRuntimeLoaderEnabled !== false;
+const managerV2Enabled =
+    (runtimeConfig.public as { admin?: { pluginRuntimeV2Enabled?: boolean } }).admin
+        ?.pluginRuntimeV2Enabled === true;
+const managerV2WorkspaceIds = [
+    ...((runtimeConfig.public as { admin?: { pluginRuntimeV2WorkspaceIds?: string[] } }).admin
+        ?.pluginRuntimeV2WorkspaceIds ?? []),
+];
+const managerV2WorkspaceLabel = managerV2WorkspaceIds.length
+    ? managerV2WorkspaceIds.join(', ')
+    : 'all';
+const managerV2 = managerV2Enabled ? getBundledV1WorkspaceManager() : null;
+const managerV2Records = shallowRef(managerV2?.listRecords() ?? []);
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
 function refresh() {
     records.value = manager?.listRecords() ?? [];
     divergences.value = manager?.listDivergences() ?? [];
+    managerV2Records.value = managerV2?.listRecords() ?? [];
 }
 
 onMounted(() => {

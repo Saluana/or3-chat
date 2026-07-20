@@ -6,30 +6,19 @@ import {
     createWorkspacePluginApi,
     registerWorkspacePluginInstance,
     unregisterWorkspacePluginInstance,
-    type Or3WorkspacePlugin,
 } from '~/composables/plugins/workspace-runtime';
 import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
 import { discoverNonCorePlugins } from '~~/shared/plugins/safe-mode';
 import { createWorkspacePluginShadowObserver } from '~/composables/plugins/workspace-plugin-shadow-observer';
 import { BundledV1Loader } from '~~/shared/plugins/bundled-v1-loader';
-
-function parseWorkspacePlugin(mod: unknown, pluginId: string): Or3WorkspacePlugin | null {
-    const raw = ((mod as { default?: unknown })?.default ?? mod) as unknown;
-    if (!raw || typeof raw !== 'object') return null;
-    const plugin = raw as Partial<Or3WorkspacePlugin>;
-    if (typeof plugin.register !== 'function') return null;
-
-    const resolvedId =
-        typeof plugin.id === 'string' && plugin.id.trim().length > 0 ? plugin.id : pluginId;
-    if (resolvedId !== pluginId) {
-        return null;
-    }
-
-    return {
-        id: pluginId,
-        register: plugin.register.bind(plugin),
-    };
-}
+import {
+    WORKSPACE_PLUGIN_RECONCILE_EVENT,
+    createWorkspaceManagerCanarySelector,
+    createBundledV1WorkspaceManager,
+    parseWorkspacePluginModule,
+    type WorkspacePluginReconcileEventDetail,
+    type WorkspacePluginReconcileReason,
+} from '~/composables/plugins/bundled-v1-manager-runtime';
 
 export default defineNuxtPlugin(() => {
     if (!process.client) return;
@@ -56,6 +45,23 @@ export default defineNuxtPlugin(() => {
     const bundledV1Loader = new BundledV1Loader(bundledPluginCatalog, modules);
 
     const session = useSessionContext();
+    // Snapshot startup-only cutover flags before any plugin code executes.
+    const managerFlags = Object.freeze({
+        enabled: runtimeConfig.public?.admin?.pluginRuntimeV2Enabled === true,
+        workspaceIds: Object.freeze([
+            ...(runtimeConfig.public?.admin?.pluginRuntimeV2WorkspaceIds ?? []),
+        ]),
+    });
+    const isManagerWorkspace = createWorkspaceManagerCanarySelector(managerFlags);
+    const v2Manager = createBundledV1WorkspaceManager({
+        loader: bundledV1Loader,
+        getWorkspaceId: () => session.data.value?.session?.workspace?.id,
+        fetchManifest: (signal) =>
+            $fetch<PluginRuntimeManifestResponse>('/api/plugins/runtime-manifest', {
+                cache: 'no-store',
+                signal,
+            }),
+    });
     const shadowObserver = createWorkspacePluginShadowObserver({
         enabled: runtimeConfig.public?.admin?.pluginRuntimeShadowEnabled !== false,
         catalog: bundledPluginCatalog,
@@ -151,7 +157,7 @@ export default defineNuxtPlugin(() => {
                     return;
                 }
 
-                const plugin = parseWorkspacePlugin(mod, pluginId);
+                const plugin = parseWorkspacePluginModule(mod, pluginId);
                 if (!plugin) {
                     throw new Error('Invalid plugin module export or plugin id mismatch');
                 }
@@ -211,28 +217,68 @@ export default defineNuxtPlugin(() => {
         }
     };
 
+    let workspaceTransition = 0;
+    const stopLegacyPlugins = () => {
+        ++syncToken;
+        currentRevision = '';
+        for (const id of Array.from(managedPluginIds)) {
+            unregisterWorkspacePluginInstance(id);
+            managedPluginIds.delete(id);
+            shadowObserver?.observeStop(id);
+        }
+    };
+    const reconcileWorkspace = async (
+        workspaceId: string | null,
+        reason: WorkspacePluginReconcileReason
+    ) => {
+        const transition = ++workspaceTransition;
+        // A workspace/session boundary must never retain the previous tenant's
+        // active generations if the next manifest fetch is unavailable.
+        await v2Manager.stopAll('workspace-session-change');
+        if (transition !== workspaceTransition) return;
+        if (isManagerWorkspace(workspaceId)) {
+            stopLegacyPlugins();
+            await v2Manager.schedule(reason);
+            return;
+        }
+        await syncManifest();
+    };
+
     const stopWatcher = watch(
         () => session.data.value?.session?.workspace?.id ?? null,
-        () => {
-            void syncManifest();
+        (workspaceId) => {
+            void reconcileWorkspace(workspaceId, 'workspace-session-change');
         },
         { immediate: true }
     );
 
     const onFocus = () => {
-        void syncManifest();
+        const workspaceId = session.data.value?.session?.workspace?.id;
+        if (isManagerWorkspace(workspaceId)) {
+            void v2Manager.schedule('focus-refresh');
+        } else {
+            void syncManifest();
+        }
+    };
+    const onRuntimeReconcile = (event: Event) => {
+        const detail = (event as CustomEvent<WorkspacePluginReconcileEventDetail>).detail;
+        const workspaceId = session.data.value?.session?.workspace?.id;
+        if (isManagerWorkspace(workspaceId)) {
+            void v2Manager.schedule(detail?.reason ?? 'local-admin-change');
+        } else {
+            void syncManifest();
+        }
     };
     window.addEventListener('focus', onFocus);
+    window.addEventListener(WORKSPACE_PLUGIN_RECONCILE_EVENT, onRuntimeReconcile);
 
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
             stopWatcher();
             window.removeEventListener('focus', onFocus);
-            for (const id of Array.from(managedPluginIds)) {
-                unregisterWorkspacePluginInstance(id);
-                shadowObserver?.observeStop(id);
-            }
-            managedPluginIds.clear();
+            window.removeEventListener(WORKSPACE_PLUGIN_RECONCILE_EVENT, onRuntimeReconcile);
+            stopLegacyPlugins();
+            void v2Manager.stopAll('hmr-dispose');
         });
     }
 });

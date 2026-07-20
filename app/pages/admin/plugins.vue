@@ -218,6 +218,7 @@ import { useAdminExtensions, useAdminWorkspace } from '~/composables/admin/useAd
 import { useAdminAuth } from '~/composables/admin/useAdminAuth';
 import { useExtensionManagement } from '~/composables/admin/useExtensionManagement';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
+import { requestWorkspacePluginReconcile } from '~/composables/plugins/bundled-v1-manager-runtime';
 import {
     createDefaultAccessEditor,
     deserializeAccessEditor,
@@ -347,6 +348,7 @@ async function setEnabled(pluginId: string, enabled: boolean) {
         }
     );
     enabledSet.value = new Set(res.enabled);
+    requestWorkspacePluginReconcile('local-admin-change');
 }
 
 async function togglePlugin(pluginId: string) {
@@ -419,6 +421,7 @@ async function saveSettings(pluginId: string) {
             },
             headers: ADMIN_HEADERS,
         });
+        requestWorkspacePluginReconcile('manifest-revision-change');
         toast.add({
             title: 'Settings saved',
             description: 'Plugin configuration has been updated.',

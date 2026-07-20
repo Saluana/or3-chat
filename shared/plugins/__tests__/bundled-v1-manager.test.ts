@@ -146,7 +146,7 @@ describe('BundledV1PluginManager', () => {
         });
     });
 
-    it('checks generation after fetch and applies only the newest desired state', async () => {
+    it('coalesces workspace, admin, focus, and manifest triggers into the newest fetch', async () => {
         const alpha = descriptor('alpha');
         const fetchGate = deferred<BundledV1ManagerDesiredState>();
         const fetchDesired = vi
@@ -156,9 +156,11 @@ describe('BundledV1PluginManager', () => {
         const load = vi.fn(async () => instance());
         const manager = new BundledV1PluginManager({ fetchDesired, load });
 
-        const fetchRun = manager.schedule('fetch-1');
+        const fetchRun = manager.schedule('workspace-session-change');
         await vi.waitFor(() => expect(fetchDesired).toHaveBeenCalledTimes(1));
-        manager.schedule('fetch-2');
+        manager.schedule('local-admin-change');
+        manager.schedule('focus-refresh');
+        manager.schedule('manifest-revision-change');
         fetchGate.resolve({ descriptors: [alpha], revision: 'stale-fetch' });
         await fetchRun;
 
@@ -257,6 +259,30 @@ describe('BundledV1PluginManager', () => {
             status: 'active',
             descriptor: { artifact: { hostBuildId: 'build-2' } },
         });
+    });
+
+    it('stops every active generation before a workspace context changes', async () => {
+        const stopped: string[] = [];
+        const manager = new BundledV1PluginManager({
+            fetchDesired: async () => ({
+                descriptors: [descriptor('alpha'), descriptor('beta', 'b')],
+                revision: 'workspace-1',
+            }),
+            load: async (entry) =>
+                instance({
+                    stop: async () => {
+                        stopped.push(entry.id);
+                        return report();
+                    },
+                }),
+        });
+        await manager.schedule('boot');
+
+        await manager.stopAll('workspace-session-change');
+
+        expect(stopped.sort()).toEqual(['alpha', 'beta']);
+        expect(manager.listActivePluginIds()).toEqual([]);
+        expect(manager.listRecords()).toEqual([]);
     });
 
     it('quarantines by descriptor key and lets a new descriptor retry independently', async () => {

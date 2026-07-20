@@ -361,6 +361,15 @@ export function buildOr3CloudConfigFromEnv(
                 env.OR3_PLUGIN_RUNTIME_SHADOW_ENABLED,
                 true
             ),
+            pluginRuntimeV2Enabled: envBool(
+                env.OR3_PLUGIN_RUNTIME_V2_ENABLED,
+                false
+            ),
+            pluginRuntimeV2WorkspaceIds: env.OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS
+                ? env.OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS.split(',')
+                      .map((workspaceId) => workspaceId.trim())
+                      .filter(Boolean)
+                : [],
             rebuildCommand: env.OR3_ADMIN_REBUILD_COMMAND || DEFAULT_REBUILD_COMMAND,
             extensionMaxZipBytes: envNum(env.OR3_ADMIN_EXTENSION_MAX_ZIP_BYTES),
             extensionMaxFiles: envNum(env.OR3_ADMIN_EXTENSION_MAX_FILES),

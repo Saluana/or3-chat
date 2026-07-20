@@ -465,6 +465,21 @@ export interface Or3CloudConfig {
         pluginRuntimeLoaderEnabled?: boolean;
 
         /**
+         * Selects the generation-safe bundled V1 manager at client startup.
+         * @env OR3_PLUGIN_RUNTIME_V2_ENABLED
+         * @default false
+         */
+        pluginRuntimeV2Enabled?: boolean;
+
+        /**
+         * Optional workspace allowlist for the V2 manager canary. An empty
+         * list selects every workspace when the manager flag is enabled.
+         * @env OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS
+         * @default []
+         */
+        pluginRuntimeV2WorkspaceIds?: string[];
+
+        /**
          * Enables admin ZIP-based extension install endpoint.
          * @default true
          */

@@ -9,7 +9,10 @@ import type { PaneAppDef } from '~/composables/core/usePaneApps';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import type { ExtendedToolDefinition, ToolHandler } from '~/utils/chat/tool-registry';
 import type { RegistrationHandle } from '~~/shared/plugins/registration-handle';
-import { LegacyPluginScope } from '~~/shared/plugins/legacy-plugin-scope';
+import {
+    LegacyPluginScope,
+    type LegacyCleanupReport,
+} from '~~/shared/plugins/legacy-plugin-scope';
 
 export type WorkspacePluginSource = 'builtin' | 'extension';
 
@@ -58,10 +61,13 @@ function toDisposer(
     };
 }
 
-export function createWorkspacePluginApi(): {
+export interface ManagedWorkspacePluginRuntime {
     api: Or3WorkspacePluginApi;
-    dispose: () => void;
-} {
+    dispose: (reason?: unknown) => Promise<LegacyCleanupReport>;
+}
+
+/** Internal manager adapter. The public V1 factory below intentionally hides its report. */
+export function createManagedWorkspacePluginRuntime(): ManagedWorkspacePluginRuntime {
     const scope = new LegacyPluginScope({
         onCleanupError({ error }) {
             if (import.meta.dev) {
@@ -127,10 +133,21 @@ export function createWorkspacePluginApi(): {
 
     return {
         api,
+        dispose: (reason) => scope.dispose(reason),
+    };
+}
+
+export function createWorkspacePluginApi(): {
+    api: Or3WorkspacePluginApi;
+    dispose: () => void;
+} {
+    const runtime = createManagedWorkspacePluginRuntime();
+    return {
+        api: runtime.api,
         dispose() {
             // Invocation remains synchronous/FIFO. Promise settlement is owned
             // by the compatibility scope without changing this V1 void return.
-            void scope.dispose();
+            void runtime.dispose();
         },
     };
 }

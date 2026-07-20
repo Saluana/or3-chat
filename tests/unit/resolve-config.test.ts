@@ -513,6 +513,22 @@ describe('buildOr3CloudConfigFromEnv', () => {
         ).toBe(false);
     });
 
+    it('parses startup-only manager and workspace canary flags', () => {
+        const defaults = buildOr3CloudConfigFromEnv({});
+        expect(defaults.admin?.pluginRuntimeV2Enabled).toBe(false);
+        expect(defaults.admin?.pluginRuntimeV2WorkspaceIds).toEqual([]);
+
+        const configured = buildOr3CloudConfigFromEnv({
+            OR3_PLUGIN_RUNTIME_V2_ENABLED: 'true',
+            OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS: 'workspace-a, workspace-b',
+        });
+        expect(configured.admin?.pluginRuntimeV2Enabled).toBe(true);
+        expect(configured.admin?.pluginRuntimeV2WorkspaceIds).toEqual([
+            'workspace-a',
+            'workspace-b',
+        ]);
+    });
+
     it('parses admin extension limits', () => {
         const config = buildOr3CloudConfigFromEnv({
             OR3_ADMIN_EXTENSION_MAX_ZIP_BYTES: '10485760',

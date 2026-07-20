@@ -56,6 +56,7 @@ type ActiveGeneration = {
 type ReconcileWork = {
     lease: PluginGenerationLease;
     trigger: string;
+    desiredState?: BundledV1ManagerDesiredState;
 };
 
 function serializeError(
@@ -105,6 +106,19 @@ export class BundledV1PluginManager {
         return this.#coordinator.request({ lease, trigger });
     }
 
+    /** Serialized context teardown used before a workspace/session boundary. */
+    stopAll(trigger = 'stop-all'): Promise<void> {
+        const lease = this.#generationClock.supersede('__reconcile__', trigger);
+        return this.#coordinator.request({
+            lease,
+            trigger,
+            desiredState: {
+                descriptors: [],
+                revision: `empty:${lease.generation}`,
+            },
+        });
+    }
+
     listRecords(): readonly BundledV1ManagerRecord[] {
         return Object.freeze(
             Array.from(this.#records.values())
@@ -148,16 +162,20 @@ export class BundledV1PluginManager {
 
     async #reconcile(work: ReconcileWork): Promise<void> {
         let desiredState: BundledV1ManagerDesiredState;
-        try {
-            desiredState = await work.lease.after(
-                'fetch',
-                this.#options.fetchDesired(work.lease.signal)
-            );
-        } catch (error) {
-            // Unknown/transient manifest failure or supersession preserves every
-            // healthy active generation. A later trigger retries.
-            if (error instanceof StalePluginGenerationError) return;
-            return;
+        if (work.desiredState) {
+            desiredState = work.desiredState;
+        } else {
+            try {
+                desiredState = await work.lease.after(
+                    'fetch',
+                    this.#options.fetchDesired(work.lease.signal)
+                );
+            } catch (error) {
+                // Unknown/transient manifest failure or supersession preserves every
+                // healthy active generation. A later trigger retries.
+                if (error instanceof StalePluginGenerationError) return;
+                return;
+            }
         }
         if (
             desiredState.revision === this.#lastManifestRevision &&

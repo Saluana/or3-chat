@@ -2583,6 +2583,7 @@ import type { PaneAppDef } from '~/composables/core/usePaneApps';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import type { ExtendedToolDefinition, ToolHandler } from '~/utils/chat/tool-registry';
 import type { RegistrationHandle } from '~~/shared/plugins/registration-handle';
+import { type LegacyCleanupReport } from '~~/shared/plugins/legacy-plugin-scope';
 export type WorkspacePluginSource = 'builtin' | 'extension';
 export interface Or3WorkspacePluginApi {
     registerDashboardPlugin: (plugin: DashboardPlugin) => RegistrationHandle;
@@ -2596,6 +2597,12 @@ export interface Or3WorkspacePlugin {
     id: string;
     register(api: Or3WorkspacePluginApi): void | Promise<void>;
 }
+export interface ManagedWorkspacePluginRuntime {
+    api: Or3WorkspacePluginApi;
+    dispose: (reason?: unknown) => Promise<LegacyCleanupReport>;
+}
+/** Internal manager adapter. The public V1 factory below intentionally hides its report. */
+export declare function createManagedWorkspacePluginRuntime(): ManagedWorkspacePluginRuntime;
 export declare function createWorkspacePluginApi(): {
     api: Or3WorkspacePluginApi;
     dispose: () => void;

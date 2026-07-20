@@ -158,7 +158,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R3.AC5, R3.AC6, R3.AC9
       Done when: replacement waits for bounded cleanup, does not overlap old/new mediated registrations, and refuses unsafe hot replacement after timeout when lifecycle coverage is `legacy-global-possible`.
 
-- [ ] 3.10 Add reconcile triggers for workspace/session changes, local admin enable/disable, focus refresh, and authoritative manifest revision changes
+- [x] 3.10 Add reconcile triggers for workspace/session changes, local admin enable/disable, focus refresh, and authoritative manifest revision changes
       Requirements: R2.AC7
       Done when: concurrent triggers coalesce and the latest authoritative state wins.
 
@@ -166,7 +166,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC8, R9.AC3
       Done when: one failing plugin does not block ten healthy plugins, retry is bounded, and a new descriptor key is independently eligible.
 
-- [ ] 3.12 Wire `pluginRuntimeV2Enabled` and workspace canaries as startup-only manager selection
+- [x] 3.12 Wire `pluginRuntimeV2Enabled` and workspace canaries as startup-only manager selection
       Requirements: R9.AC1, R9.AC8
       Done when: non-canary workspaces use the untouched V1 loader and a live flag mutation cannot switch an active kernel.
 
