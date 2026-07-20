@@ -4,9 +4,11 @@
   "generator": "scripts/plugin-runtime/generate-compatibility-ledger.ts",
   "inputs": {
     "moduleManifest": "planning/plugin-runtime-v2/compatibility-ledger.modules.json",
-    "moduleManifestSha256": "c87e49f199b18a80f117f041596fbb73d19ca43ee31db57a137a256f1462075e",
+    "moduleManifestSha256": "60ead50c1b4d19f5649352dce36772e3ed631bc19988cab5c9703edec9d03620",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "ce447adff37ea0a4e108ac66ece72d02f5ac7d6ce5aa5e46da8816907f45c991"
+    "nuxtImportsDeclarationSha256": "ce447adff37ea0a4e108ac66ece72d02f5ac7d6ce5aa5e46da8816907f45c991",
+    "behaviorProfiles": "planning/plugin-runtime-v2/compatibility-profiles.json",
+    "behaviorProfilesSha256": "6883aac80b131fcefe463b59071b87c49b57c6644bf2bf609ed85fb3e695c4df"
   },
   "coverage": {
     "moduleCount": 35,
@@ -14,6 +16,173 @@
     "callableExportCount": 221,
     "nuxtAutoImportCount": 272
   },
+  "behaviorProfiles": [
+    {
+      "id": "registry.composer-actions",
+      "family": "composer actions",
+      "sources": [
+        "app/composables/sidebar/useComposerActions.ts"
+      ],
+      "globalKeys": [
+        "__or3ComposerActionsRegistry",
+        "__or3ComposerActionsOwnedRegistry"
+      ],
+      "implementation": "legacy-equivalent",
+      "behavior": {
+        "duplicate": "replace-by-id",
+        "storedValue": "shallow-frozen-copy",
+        "defaultOrder": 200,
+        "equalOrderTie": "map-insertion",
+        "idSnapshotOrder": "map-insertion",
+        "projection": "computed-reactive-list-with-access-visible-disabled",
+        "reactiveMutationNotifications": 1,
+        "globalPersistence": "globalThis-map",
+        "registerReturn": "RegistrationHandle",
+        "disposal": "exact-owner"
+      }
+    },
+    {
+      "id": "registry.editor-toolbar",
+      "family": "editor toolbar buttons",
+      "sources": [
+        "app/composables/editor/useEditorToolbar.ts"
+      ],
+      "globalKeys": [
+        "__or3EditorToolbarRegistry"
+      ],
+      "implementation": "shared-createRegistry",
+      "behavior": {
+        "duplicate": "replace-by-id",
+        "storedValue": "shallow-frozen-copy",
+        "defaultOrder": 200,
+        "equalOrderTie": "id-ascending",
+        "idSnapshotOrder": "map-insertion",
+        "projection": "computed-copy-with-editor-visible-filter",
+        "reactiveMutationNotifications": 1,
+        "globalPersistence": "globalThis-map",
+        "registerReturn": "void",
+        "disposal": "id-only-public-api"
+      }
+    },
+    {
+      "id": "registry.header-actions",
+      "family": "header actions",
+      "sources": [
+        "app/composables/sidebar/useHeaderActions.ts"
+      ],
+      "globalKeys": [
+        "__or3HeaderActionsRegistry"
+      ],
+      "implementation": "shared-createRegistry",
+      "behavior": {
+        "duplicate": "replace-by-id",
+        "storedValue": "shallow-frozen-copy",
+        "defaultOrder": 200,
+        "equalOrderTie": "id-ascending",
+        "idSnapshotOrder": "map-insertion",
+        "projection": "computed-copy-with-access-visible-disabled",
+        "reactiveMutationNotifications": 1,
+        "globalPersistence": "globalThis-map",
+        "registerReturn": "RegistrationHandle",
+        "disposal": "exact-owner"
+      }
+    },
+    {
+      "id": "registry.history-actions",
+      "family": "document and thread history actions",
+      "sources": [
+        "app/composables/history/createHistoryActionRegistry.ts",
+        "app/composables/documents/useDocumentHistoryActions.ts",
+        "app/composables/threads/useThreadHistoryActions.ts"
+      ],
+      "globalKeys": [
+        "__or3DocumentHistoryActionsRegistry",
+        "__or3ThreadHistoryActionsRegistry"
+      ],
+      "implementation": "shared-createRegistry",
+      "behavior": {
+        "duplicate": "replace-by-id",
+        "storedValue": "shallow-frozen-copy",
+        "defaultOrder": 200,
+        "equalOrderTie": "id-ascending",
+        "idSnapshotOrder": "map-insertion",
+        "projection": "computed-copy",
+        "reactiveMutationNotifications": 1,
+        "globalPersistence": "globalThis-map",
+        "registerReturn": "void",
+        "disposal": "id-only-public-api"
+      }
+    },
+    {
+      "id": "registry.message-actions",
+      "family": "message actions",
+      "sources": [
+        "app/composables/chat/useMessageActions.ts"
+      ],
+      "globalKeys": [
+        "__or3MessageActionsRegistry"
+      ],
+      "implementation": "shared-createRegistry",
+      "behavior": {
+        "duplicate": "replace-by-id",
+        "storedValue": "shallow-frozen-copy",
+        "defaultOrder": 200,
+        "equalOrderTie": "id-ascending",
+        "idSnapshotOrder": "map-insertion",
+        "projection": "computed-copy",
+        "reactiveMutationNotifications": 1,
+        "globalPersistence": "globalThis-map",
+        "registerReturn": "RegistrationHandle",
+        "disposal": "exact-owner"
+      }
+    },
+    {
+      "id": "registry.project-tree-actions",
+      "family": "project tree actions",
+      "sources": [
+        "app/composables/projects/useProjectTreeActions.ts"
+      ],
+      "globalKeys": [
+        "__or3ProjectTreeActionsRegistry"
+      ],
+      "implementation": "shared-createRegistry",
+      "behavior": {
+        "duplicate": "replace-by-id",
+        "storedValue": "shallow-frozen-copy",
+        "defaultOrder": 200,
+        "equalOrderTie": "id-ascending",
+        "idSnapshotOrder": "map-insertion",
+        "projection": "computed-copy",
+        "reactiveMutationNotifications": 1,
+        "globalPersistence": "globalThis-map",
+        "registerReturn": "void",
+        "disposal": "id-only-public-api"
+      }
+    },
+    {
+      "id": "registry.sidebar-footer-actions",
+      "family": "sidebar footer actions",
+      "sources": [
+        "app/composables/sidebar/useSidebarSections.ts"
+      ],
+      "globalKeys": [
+        "__or3SidebarFooterActionsRegistry"
+      ],
+      "implementation": "shared-createRegistry",
+      "behavior": {
+        "duplicate": "replace-by-id",
+        "storedValue": "shallow-frozen-copy",
+        "defaultOrder": 200,
+        "equalOrderTie": "id-ascending",
+        "idSnapshotOrder": "map-insertion",
+        "projection": "computed-copy-with-access-visible-disabled",
+        "reactiveMutationNotifications": 1,
+        "globalPersistence": "globalThis-map",
+        "registerReturn": "RegistrationHandle",
+        "disposal": "exact-owner"
+      }
+    }
+  ],
   "modules": [
     {
       "source": "app/composables/_registry.ts",
@@ -26,6 +195,7 @@
       "docs": [
         "public/_documentation/types/composables.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "createRegistry",
@@ -133,6 +303,9 @@
       "nuxtAutoImportModule": "#imports",
       "docs": [
         "public/_documentation/composables/useMessageActions.md"
+      ],
+      "behaviorProfileIds": [
+        "registry.message-actions"
       ],
       "exports": [
         {
@@ -266,6 +439,7 @@
       "docs": [
         "public/_documentation/composables/useHookEffect.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "useHookEffect",
@@ -306,6 +480,7 @@
       "docs": [
         "docs/pane-plugin-api.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "PaneAppDef",
@@ -375,6 +550,7 @@
         "docs/UI/dashboard-plugins.md",
         "public/_documentation/composables/useDashboardPlugins.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "DashboardNavigationError",
@@ -877,6 +1053,9 @@
       "docs": [
         "public/_documentation/composables/useDocumentHistoryActions.md"
       ],
+      "behaviorProfileIds": [
+        "registry.history-actions"
+      ],
       "exports": [
         {
           "name": "DocumentHistoryAction",
@@ -1009,6 +1188,7 @@
       "docs": [
         "public/_documentation/composables/useEditorExtensionLoader.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "createLazyExtensionFactory",
@@ -1225,6 +1405,7 @@
       "docs": [
         "public/_documentation/composables/useEditorNodes.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "EditorExtension",
@@ -1593,6 +1774,9 @@
       "docs": [
         "public/_documentation/composables/useEditorToolbar.md"
       ],
+      "behaviorProfileIds": [
+        "registry.editor-toolbar"
+      ],
       "exports": [
         {
           "name": "EditorToolbarButton",
@@ -1726,6 +1910,9 @@
         "public/_documentation/composables/useDocumentHistoryActions.md",
         "public/_documentation/composables/useThreadHistoryActions.md"
       ],
+      "behaviorProfileIds": [
+        "registry.history-actions"
+      ],
       "exports": [
         {
           "name": "createHistoryActionRegistry",
@@ -1780,6 +1967,7 @@
       "docs": [
         "public/_documentation/start/plugin-quickstart.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "__hasPendingDocumentChanges",
@@ -5384,6 +5572,7 @@
       "docs": [
         "public/_documentation/start/plugin-quickstart.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "createWorkspacePluginApi",
@@ -5543,6 +5732,9 @@
       "nuxtAutoImportModule": "#imports",
       "docs": [
         "public/_documentation/composables/useProjectTreeActions.md"
+      ],
+      "behaviorProfileIds": [
+        "registry.project-tree-actions"
       ],
       "exports": [
         {
@@ -5761,6 +5953,7 @@
       "docs": [
         "public/_documentation/composables/registerSidebarPage.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "default",
@@ -5892,6 +6085,9 @@
       "nuxtAutoImportModule": "#imports",
       "docs": [
         "public/_documentation/composables/useComposerActions.md"
+      ],
+      "behaviorProfileIds": [
+        "registry.composer-actions"
       ],
       "exports": [
         {
@@ -6052,6 +6248,9 @@
       "nuxtAutoImportModule": "#imports",
       "docs": [
         "public/_documentation/composables/useHeaderActions.md"
+      ],
+      "behaviorProfileIds": [
+        "registry.header-actions"
       ],
       "exports": [
         {
@@ -6214,6 +6413,7 @@
       "docs": [
         "public/_documentation/composables/useSidebarEnvironment.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "createSidebarMultiPaneApi",
@@ -6663,6 +6863,7 @@
       "docs": [
         "public/_documentation/composables/useSidebarPageControls.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "useActivePageId",
@@ -6834,6 +7035,7 @@
       "docs": [
         "public/_documentation/composables/useSidebarPages.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "RegisteredSidebarPage",
@@ -6929,6 +7131,9 @@
       "nuxtAutoImportModule": "#imports",
       "docs": [
         "public/_documentation/composables/useSidebarSections.md"
+      ],
+      "behaviorProfileIds": [
+        "registry.sidebar-footer-actions"
       ],
       "exports": [
         {
@@ -7250,6 +7455,9 @@
       "docs": [
         "public/_documentation/composables/useThreadHistoryActions.md"
       ],
+      "behaviorProfileIds": [
+        "registry.history-actions"
+      ],
       "exports": [
         {
           "name": "listRegisteredThreadHistoryActionIds",
@@ -7382,6 +7590,7 @@
       "docs": [
         "public/_documentation/hooks/hook-keys.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "ChatIncomingFilterReturn",
@@ -7520,6 +7729,7 @@
       "docs": [
         "public/_documentation/types/hooks.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "AccessDecision",
@@ -8866,6 +9076,7 @@
         "docs/hooks.md",
         "public/_documentation/hooks/typed-hooks.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "createHookEngine",
@@ -8977,6 +9188,7 @@
         "docs/hooks-augmentation.md",
         "public/_documentation/hooks/typed-hooks.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "createTypedHookEngine",
@@ -9031,6 +9243,7 @@
       "docs": [
         "docs/hooks.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "useHooks",
@@ -9071,6 +9284,7 @@
       "docs": [
         "public/_documentation/start/plugin-quickstart.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "ContextualToolHandler",
@@ -9209,6 +9423,7 @@
       "docs": [
         "public/_documentation/start/plugin-quickstart.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "defineTool",
@@ -9387,6 +9602,7 @@
       "docs": [
         "docs/hooks.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "AdminActionHookName",
@@ -9485,6 +9701,7 @@
       "docs": [
         "docs/hooks.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "createHookEngine",
@@ -9595,6 +9812,7 @@
       "docs": [
         "docs/hooks.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "AdminActionHookName",
@@ -9703,6 +9921,7 @@
       "docs": [
         "docs/hooks.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "createTypedAdminHookEngine",
@@ -9757,6 +9976,7 @@
       "docs": [
         "public/_documentation/start/plugin-quickstart.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "ContextualToolHandler",
@@ -9997,6 +10217,7 @@
       "docs": [
         "docs/hooks.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "createHookEngine",
@@ -10135,6 +10356,7 @@
       "docs": [
         "public/_documentation/types/composables.md"
       ],
+      "behaviorProfileIds": [],
       "exports": [
         {
           "name": "createRegistrationHandle",

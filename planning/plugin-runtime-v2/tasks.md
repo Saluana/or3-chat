@@ -42,7 +42,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC7, R5.AC6
       Done when: the current Hook Inspector usage and a plugin-style direct consumer both pass.
 
-- [ ] 1.7 Record shared `createRegistry` family profiles for duplicate replacement, freeze, default order, tie by ID, snapshots, reactive notifications, global persistence, and return shape
+- [x] 1.7 Record shared `createRegistry` family profiles for duplicate replacement, freeze, default order, tie by ID, snapshots, reactive notifications, global persistence, and return shape
       Requirements: R1.AC5, R4.AC4, R4.AC7
       Done when: message/header/composer/footer/history/project/editor-toolbar profiles have golden tests and ledger entries.
 

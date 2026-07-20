@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Frozen observable V1 registry-family behavior used by Plugin Runtime V2 differential adapters.",
+  "profiles": [
+    {
+      "id": "registry.message-actions",
+      "family": "message actions",
+      "sources": ["app/composables/chat/useMessageActions.ts"],
+      "globalKeys": ["__or3MessageActionsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.header-actions",
+      "family": "header actions",
+      "sources": ["app/composables/sidebar/useHeaderActions.ts"],
+      "globalKeys": ["__or3HeaderActionsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy-with-access-visible-disabled", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.composer-actions",
+      "family": "composer actions",
+      "sources": ["app/composables/sidebar/useComposerActions.ts"],
+      "globalKeys": ["__or3ComposerActionsRegistry", "__or3ComposerActionsOwnedRegistry"],
+      "implementation": "legacy-equivalent",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "map-insertion", "idSnapshotOrder": "map-insertion", "projection": "computed-reactive-list-with-access-visible-disabled", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.sidebar-footer-actions",
+      "family": "sidebar footer actions",
+      "sources": ["app/composables/sidebar/useSidebarSections.ts"],
+      "globalKeys": ["__or3SidebarFooterActionsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy-with-access-visible-disabled", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.history-actions",
+      "family": "document and thread history actions",
+      "sources": ["app/composables/history/createHistoryActionRegistry.ts", "app/composables/documents/useDocumentHistoryActions.ts", "app/composables/threads/useThreadHistoryActions.ts"],
+      "globalKeys": ["__or3DocumentHistoryActionsRegistry", "__or3ThreadHistoryActionsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "void", "disposal": "id-only-public-api" }
+    },
+    {
+      "id": "registry.project-tree-actions",
+      "family": "project tree actions",
+      "sources": ["app/composables/projects/useProjectTreeActions.ts"],
+      "globalKeys": ["__or3ProjectTreeActionsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "void", "disposal": "id-only-public-api" }
+    },
+    {
+      "id": "registry.editor-toolbar",
+      "family": "editor toolbar buttons",
+      "sources": ["app/composables/editor/useEditorToolbar.ts"],
+      "globalKeys": ["__or3EditorToolbarRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy-with-editor-visible-filter", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "void", "disposal": "id-only-public-api" }
+    }
+  ]
+}

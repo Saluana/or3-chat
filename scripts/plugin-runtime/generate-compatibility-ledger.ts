@@ -11,12 +11,28 @@ interface ModuleConfig {
     runtime: Runtime;
     publicPaths: string[];
     docs: string[];
+    behaviorProfileIds?: string[];
 }
 
 interface LedgerConfig {
     version: 1;
     nuxtImportsDeclaration: string;
+    behaviorProfiles: string;
     modules: ModuleConfig[];
+}
+
+interface BehaviorProfile {
+    id: string;
+    family: string;
+    sources: string[];
+    globalKeys: string[];
+    implementation: 'shared-createRegistry' | 'legacy-equivalent';
+    behavior: Record<string, unknown>;
+}
+
+interface BehaviorProfileCatalog {
+    schemaVersion: 1;
+    profiles: BehaviorProfile[];
 }
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -63,6 +79,29 @@ function readConfig(): LedgerConfig {
         }
     }
     return config;
+}
+
+function readBehaviorProfiles(config: LedgerConfig): BehaviorProfileCatalog {
+    const profilePath = resolve(repoRoot, config.behaviorProfiles);
+    if (!existsSync(profilePath)) fail(`missing behavior profile catalog: ${config.behaviorProfiles}`);
+    const catalog = JSON.parse(readFileSync(profilePath, 'utf8')) as BehaviorProfileCatalog;
+    if (catalog.schemaVersion !== 1 || !Array.isArray(catalog.profiles) || !catalog.profiles.length) {
+        fail('behavior profile catalog must be schema version 1 and contain profiles');
+    }
+    const profileIds = new Set<string>();
+    for (const profile of catalog.profiles) {
+        if (profileIds.has(profile.id)) fail(`duplicate behavior profile: ${profile.id}`);
+        profileIds.add(profile.id);
+        for (const source of profile.sources) {
+            if (!existsSync(resolve(repoRoot, source))) fail(`missing behavior profile source: ${source}`);
+        }
+    }
+    for (const module of config.modules) {
+        for (const profileId of module.behaviorProfileIds ?? []) {
+            if (!profileIds.has(profileId)) fail(`unknown behavior profile ${profileId} on ${module.source}`);
+        }
+    }
+    return catalog;
 }
 
 function parseNuxtAutoImports(declarationPath: string): Map<string, Set<string>> {
@@ -128,6 +167,7 @@ function signatureRecord(checker: ts.TypeChecker, signature: ts.Signature) {
 
 function main() {
     const config = readConfig();
+    const behaviorProfileCatalog = readBehaviorProfiles(config);
     const absoluteModules = config.modules.map((module) => resolve(repoRoot, module.source));
     const autoImports = parseNuxtAutoImports(resolve(repoRoot, config.nuxtImportsDeclaration));
     const { checker, program } = loadProgram(absoluteModules);
@@ -159,6 +199,7 @@ function main() {
             publicPaths: module.publicPaths.slice().sort(),
             nuxtAutoImportModule: exports.some((entry) => entry.nuxtAutoImport) ? '#imports' : null,
             docs: module.docs.slice().sort(),
+            behaviorProfileIds: (module.behaviorProfileIds ?? []).slice().sort(),
             exports,
         };
     });
@@ -174,8 +215,11 @@ function main() {
             moduleManifestSha256: sha256(readFileSync(configPath, 'utf8')),
             nuxtImportsDeclaration: config.nuxtImportsDeclaration,
             nuxtImportsDeclarationSha256: sha256(readFileSync(resolve(repoRoot, config.nuxtImportsDeclaration), 'utf8')),
+            behaviorProfiles: config.behaviorProfiles,
+            behaviorProfilesSha256: sha256(readFileSync(resolve(repoRoot, config.behaviorProfiles), 'utf8')),
         },
         coverage: { moduleCount: modules.length, exportCount, callableExportCount: callableCount, nuxtAutoImportCount: autoImportCount },
+        behaviorProfiles: behaviorProfileCatalog.profiles.slice().sort((a, b) => a.id.localeCompare(b.id)),
         modules,
     };
     const serialized = `${JSON.stringify(ledger, null, 2)}\n`;
