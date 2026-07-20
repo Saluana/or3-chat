@@ -102,4 +102,22 @@ describe('HookDiagnostics', () => {
             { metric: 'timing', name: 'demo.action', count: 1 },
         ]);
     });
+
+    it('maps V1 reset assignments onto the matching bounded metric projection', () => {
+        const engine = createHookEngineV2();
+        engine.addAction('demo.action', () => {
+            throw new Error('record me');
+        });
+        engine.doActionSync('demo.action');
+        expect(engine._runtimeV2.diagnostics.snapshot().series).toHaveLength(2);
+
+        engine._diagnostics.timings = {};
+        expect(
+            engine._runtimeV2.diagnostics
+                .snapshot()
+                .series.map(({ metric }) => metric),
+        ).toEqual(['error']);
+        engine._diagnostics.errors = {};
+        expect(engine._runtimeV2.diagnostics.snapshot().series).toEqual([]);
+    });
 });

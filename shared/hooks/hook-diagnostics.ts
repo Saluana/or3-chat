@@ -100,12 +100,26 @@ export class HookDiagnostics {
         });
     }
 
-    reset(): void {
-        this.#series.clear();
-        this.#overflowEventCount = 0;
-        this.#overflowTimingCount = 0;
-        this.#overflowErrorCount = 0;
-        this.#overflowTimingTotal = 0;
+    reset(metric?: HookMetricKind): void {
+        if (metric === undefined) {
+            this.#series.clear();
+            this.#overflowEventCount = 0;
+            this.#overflowTimingCount = 0;
+            this.#overflowErrorCount = 0;
+            this.#overflowTimingTotal = 0;
+            return;
+        }
+        for (const [key, state] of this.#series) {
+            if (state.metric === metric) this.#series.delete(key);
+        }
+        if (metric === 'timing') {
+            this.#overflowEventCount -= this.#overflowTimingCount;
+            this.#overflowTimingCount = 0;
+            this.#overflowTimingTotal = 0;
+        } else {
+            this.#overflowEventCount -= this.#overflowErrorCount;
+            this.#overflowErrorCount = 0;
+        }
     }
 
     #record(metric: HookMetricKind, name: string, value: number): void {

@@ -1,5 +1,6 @@
 import { ActivationTable } from '../plugins/activation-table';
 import { HookDiagnostics } from './hook-diagnostics';
+import { createV1HookDiagnosticsAdapter } from './hook-diagnostics-compat';
 import { HookRecordStore, type HookRecord } from './hook-record-store';
 import type {
     HookEngine,
@@ -97,28 +98,18 @@ export function createHookEngineV2(
     const currentPriorityStack: number[] = [];
     const definitions = new Map<string, HookDefinition>();
     const runtimeDiagnostics = new HookDiagnostics();
-    const diagnostics = {
-        timings: {} as Record<string, number[]>,
-        errors: {} as Record<string, number>,
-        callbacks(kind?: HookKind) {
-            return records.visibleCount(kind);
-        },
-    };
+    const diagnosticsAdapter = createV1HookDiagnosticsAdapter({
+        diagnostics: runtimeDiagnostics,
+        callbacks: (kind) => records.visibleCount(kind),
+    });
+    const diagnostics = diagnosticsAdapter.facade;
 
     function recordTiming(name: string, ms: number): void {
-        runtimeDiagnostics.recordTiming(name, ms);
-        if (Object.hasOwn(diagnostics.timings, name)) {
-            diagnostics.timings[name]!.push(ms);
-            return;
-        }
-        diagnostics.timings[name] = [ms];
+        diagnosticsAdapter.recordTiming(name, ms);
     }
 
     function recordError(name: string): void {
-        runtimeDiagnostics.recordError(name);
-        diagnostics.errors[name] = Object.hasOwn(diagnostics.errors, name)
-            ? diagnostics.errors[name]! + 1
-            : 1;
+        diagnosticsAdapter.recordError(name);
     }
 
     function logCallbackError(

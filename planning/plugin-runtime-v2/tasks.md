@@ -282,7 +282,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R5.AC6, R9.AC7
       Done when: recent samples cap at 128, series cap at 2,048, overflow remains observable, snapshots cannot mutate runtime state, and high-cardinality tests stay within the committed bound.
 
-- [ ] 5.7 Implement the V1 `_diagnostics` compatibility facade
+- [x] 5.7 Implement the V1 `_diagnostics` compatibility facade
       Requirements: R1.AC7, R5.AC6
       Done when: direct reads, reset assignments, `callbacks()`, HMR reset, and current Hook Inspector fixtures pass.
 
