@@ -332,7 +332,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC5, R6.AC4, R10.AC3-R10.AC4
       Done when: identity is closed over by the host and cannot be replaced by plugin input in tests.
 
-- [ ] 6.8 Add SDK test harness and fake host with activation, grants, failures, and cleanup controls
+- [x] 6.8 Add SDK test harness and fake host with activation, grants, failures, and cleanup controls
       Requirements: R6.AC4, R9.AC6
       Done when: plugin packages can test success, denied grant, stale generation, activation failure, and cleanup locally.
 

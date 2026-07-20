@@ -12,7 +12,8 @@ export type PluginGrant =
     | 'network.http'
     | 'storage.read'
     | 'storage.write'
-    | 'settings.read';
+    | 'settings.read'
+    | 'settings.write';
 
 export interface PluginDependencyV2 {
     readonly id: string;
