@@ -70,3 +70,9 @@ jobs:
 
       - name: Compile immutable external V1 plugin corpus
         run: bun run plugin-runtime:external-v1:check
+
+      - name: Verify production SSR plugin boundaries
+        run: bun run build
+
+      - name: Verify static generation plugin boundaries
+        run: bun run generate:static

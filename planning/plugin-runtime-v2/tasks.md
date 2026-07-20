@@ -62,7 +62,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC5, R4.AC8
       Done when: preference round-trip and replacement watcher cleanup are tested in addition to current tool suites.
 
-- [ ] 1.12 Add production SSR-build and static-generate fixtures that load current built-ins and one bundled V1 workspace plugin
+- [x] 1.12 Add production SSR-build and static-generate fixtures that load current built-ins and one bundled V1 workspace plugin
       Requirements: R1.AC8, R1.AC10, R7.AC1, R7.AC9
       Done when: `bun run build` and `bun run generate:static` verify plugin presence/absence at the intended boundaries.
 

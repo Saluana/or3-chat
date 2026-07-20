@@ -89,6 +89,12 @@ export default defineNuxtPlugin(() => {
         ...import.meta.glob('~~/extensions/plugins/*/**/*.client.ts'),
         ...import.meta.glob('~~/extensions/plugins/*/**/*.client.js'),
         ...import.meta.glob('~~/extensions/plugins/*/**/*.client.mjs'),
+        // Production-build compatibility corpus. These modules are bundled so the
+        // V1 loader boundary is exercised, but they are outside the installed
+        // extension inventory and therefore can never be enabled at runtime.
+        ...import.meta.glob(
+            '~~/tests/plugin-runtime/build-fixtures/extensions/plugins/*/**/*.client.ts'
+        ),
     } as Record<string, () => Promise<unknown>>;
 
     const session = useSessionContext();
