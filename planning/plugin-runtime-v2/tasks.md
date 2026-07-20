@@ -138,7 +138,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC4, R3.AC7, R9.AC3
       Done when: all V1 packages default conservatively and the UI never labels arbitrary V1 code fully managed.
 
-- [ ] 3.5 Add generation checks after every awaited fetch/import/register/stop boundary in manager-owned flow
+- [x] 3.5 Add generation checks after every awaited fetch/import/register/stop boundary in manager-owned flow
       Requirements: R2.AC7, R3.AC8
       Done when: fault-injection tests at each boundary prove a superseded generation cannot publish state or registrations.
 
@@ -154,7 +154,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC1-R2.AC4
       Done when: workspace/policy/grant/build/module/source changes are classified, and disk-only byte changes report rebuild-required.
 
-- [ ] 3.9 Implement stop, replace, and start execution with V1 conservative old-stop-first behavior
+- [x] 3.9 Implement stop, replace, and start execution with V1 conservative old-stop-first behavior
       Requirements: R3.AC5, R3.AC6, R3.AC9
       Done when: replacement waits for bounded cleanup, does not overlap old/new mediated registrations, and refuses unsafe hot replacement after timeout when lifecycle coverage is `legacy-global-possible`.
 
@@ -162,7 +162,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC7
       Done when: concurrent triggers coalesce and the latest authoritative state wins.
 
-- [ ] 3.11 Implement structured retry/backoff and descriptor-keyed in-session quarantine
+- [x] 3.11 Implement structured retry/backoff and descriptor-keyed in-session quarantine
       Requirements: R2.AC8, R9.AC3
       Done when: one failing plugin does not block ten healthy plugins, retry is bounded, and a new descriptor key is independently eligible.
 

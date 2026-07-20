@@ -61,8 +61,8 @@ describe('bundled V1 descriptor diff', () => {
     });
 
     it.each([
-        ['host-build', { hostBuildId: 'build-2', moduleKey: 'module-1', rebuildRequired: true }],
-        ['module', { hostBuildId: 'build-1', moduleKey: 'module-2', rebuildRequired: true }],
+        ['host-build', { kind: 'bundled-v1' as const, hostBuildId: 'build-2', moduleKey: 'module-1', rebuildRequired: true }],
+        ['module', { kind: 'bundled-v1' as const, hostBuildId: 'build-1', moduleKey: 'module-2', rebuildRequired: true }],
     ] as const)('classifies %s executable replacement', (change, artifact) => {
         const active = descriptor();
         const desired = descriptor({
@@ -103,4 +103,3 @@ describe('bundled V1 descriptor diff', () => {
         });
     });
 });
-
