@@ -60,7 +60,7 @@ export class PackagePointerStoreError extends Error {
     constructor(
         readonly code: 'invalid-plugin-id' | 'pointer-invalid' | 'package-unavailable',
         message: string,
-        readonly cause?: unknown
+        override readonly cause?: unknown
     ) {
         super(message);
         this.name = 'PackagePointerStoreError';

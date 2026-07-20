@@ -21,7 +21,7 @@ export class PluginPackageStoreError extends Error {
     constructor(
         readonly code: PluginPackageStoreErrorCode,
         message: string,
-        readonly cause?: unknown
+        override readonly cause?: unknown
     ) {
         super(message);
         this.name = 'PluginPackageStoreError';

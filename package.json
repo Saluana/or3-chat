@@ -63,6 +63,7 @@
         "plugin-runtime:package-pointer:check": "bun x vitest run server/admin/plugins/__tests__/package-pointer-store.test.ts server/admin/plugins/__tests__/package-store.test.ts server/admin/plugins/__tests__/package-tree.test.ts",
         "plugin-runtime:package-candidate:check": "bun x vitest run server/admin/plugins/__tests__/package-candidate.test.ts server/admin/plugins/__tests__/package-pointer-store.test.ts server/admin/plugins/__tests__/package-store.test.ts",
         "plugin-runtime:package-canary:check": "bun x vitest run server/admin/plugins/__tests__/package-candidate-canary.test.ts server/admin/plugins/__tests__/package-candidate.test.ts",
+        "plugin-runtime:package-assets:check": "bun x vitest run server/admin/plugins/__tests__/package-assets.test.ts",
         "dev:offline": "env SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false bun run dev"
     },
     "bin": {

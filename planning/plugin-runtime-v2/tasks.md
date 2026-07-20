@@ -378,7 +378,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R7.AC8, R10.AC4-R10.AC5
       Done when: any failed candidate check leaves current code/state untouched and successful canary evidence is bound to the candidate digest.
 
-- [ ] 7.7 Implement the digest-addressed client module/asset route with containment, MIME, `nosniff`, cache, and access behavior
+- [x] 7.7 Implement the digest-addressed client module/asset route with containment, MIME, `nosniff`, cache, and access behavior
       Requirements: R7.AC3, R7.AC4, R7.AC10
       Done when: a multi-module fixture loads and every invalid path/content-type/access case is rejected.
 
