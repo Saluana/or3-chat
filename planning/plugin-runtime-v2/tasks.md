@@ -196,7 +196,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R3.AC2-R3.AC4, R4.AC2-R4.AC3
       Done when: failures before publish leave the old owner visible and rollback after a forced synchronous publish fault restores it first.
 
-- [ ] 4.5 Build a reusable differential surface-adapter test harness against Compatibility Ledger fixtures
+- [x] 4.5 Build a reusable differential surface-adapter test harness against Compatibility Ledger fixtures
       Requirements: R1.AC5, R9.AC6
       Done when: it compares values, returns, exceptions, object identity, order, and reactive notification count between V1 and adapter paths.
 

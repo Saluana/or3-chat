@@ -177,6 +177,12 @@ export class ContributionRegistry<
         });
     }
 
+    unregisterLegacy(id: string): boolean {
+        const record = this.#legacyById.get(id);
+        if (!record) return false;
+        return this.removeOwner(record.owner) > 0;
+    }
+
     removeOwner(owner: symbol): number {
         const records = this.#recordsByOwner.get(owner);
         if (!records) return 0;
