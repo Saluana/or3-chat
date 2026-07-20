@@ -274,7 +274,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R5.AC3, R5.AC8
       Done when: each policy has isolated result/error/timeout tests and unknown hooks never select it implicitly.
 
-- [ ] 5.5 Add scoped hook registration to `TransactionalPluginScope` and `ActivationTable`
+- [x] 5.5 Add scoped hook registration to `TransactionalPluginScope` and `ActivationTable`
       Requirements: R3.AC2-R3.AC4, R5.AC5
       Done when: hook callbacks and registry records from one V2 owner become visible on the same activation revision.
 

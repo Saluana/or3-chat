@@ -38,6 +38,23 @@ export interface ManagedHookRegistration<
     readonly generation: number;
 }
 
+export type StagedHook = Omit<
+    ManagedHookRegistration,
+    'owner' | 'pluginId' | 'generation'
+>;
+
+export type HookStageResult =
+    | { readonly ok: true; readonly count: number }
+    | {
+          readonly ok: false;
+          readonly code:
+              | 'owner-already-staged'
+              | 'invalid-kind'
+              | 'invalid-name'
+              | 'invalid-callback';
+          readonly index?: number;
+      };
+
 export interface HookDispatchPlanCacheEntry {
     readonly kind: HookKind;
     readonly name: string;
@@ -74,6 +91,7 @@ type CachedDispatchPlan = HookDispatchPlanCacheEntry & {
 };
 
 const DEFAULT_PRIORITY = 10;
+const VALID_HOOK_KINDS = new Set<unknown>(['action', 'filter']);
 export const HOOK_DISPATCH_PLAN_CACHE_CAPACITY = 1_024;
 
 function globToRegExp(glob: string): RegExp {
@@ -124,6 +142,7 @@ export class HookRecordStore {
         filter: createBuckets(),
     };
     readonly #recordsByOwner = new Map<symbol, Set<StoredHookRecord>>();
+    readonly #stagedOwners = new Set<symbol>();
     readonly #planCache = new Map<string, CachedDispatchPlan>();
     readonly #planCacheCapacity: number;
     readonly #unsubscribeActivation: () => void;
@@ -178,6 +197,49 @@ export class HookRecordStore {
             ...input,
             visibility: 'managed',
         }) as HookRecord<F>;
+    }
+
+    validateStage(input: {
+        owner: symbol;
+        values: readonly StagedHook[];
+    }): HookStageResult {
+        if (
+            this.#stagedOwners.has(input.owner) ||
+            this.#recordsByOwner.has(input.owner)
+        ) {
+            return { ok: false, code: 'owner-already-staged' };
+        }
+        for (let index = 0; index < input.values.length; index++) {
+            const value = input.values[index]!;
+            if (!VALID_HOOK_KINDS.has(value.kind)) {
+                return { ok: false, code: 'invalid-kind', index };
+            }
+            if (!value.name) return { ok: false, code: 'invalid-name', index };
+            if (typeof value.fn !== 'function') {
+                return { ok: false, code: 'invalid-callback', index };
+            }
+        }
+        return { ok: true, count: input.values.length };
+    }
+
+    stage(input: {
+        owner: symbol;
+        pluginId: string;
+        generation: number;
+        values: readonly StagedHook[];
+    }): HookStageResult {
+        const validation = this.validateStage(input);
+        if (!validation.ok) return validation;
+        this.#stagedOwners.add(input.owner);
+        for (const value of input.values) {
+            this.registerManaged({
+                ...value,
+                owner: input.owner,
+                pluginId: input.pluginId,
+                generation: input.generation,
+            });
+        }
+        return validation;
     }
 
     matching(kind: HookKind, name: string): readonly HookRecord[] {
@@ -264,6 +326,7 @@ export class HookRecordStore {
 
     removeOwner(owner: symbol): number {
         const records = this.#recordsByOwner.get(owner);
+        this.#stagedOwners.delete(owner);
         if (!records) return 0;
         const removing = Array.from(records);
         for (const record of removing) this.#removeRecord(record);

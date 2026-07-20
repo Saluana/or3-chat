@@ -4,11 +4,24 @@ import {
     type RegistryStageResult,
     type StagedContribution,
 } from './contribution-registry';
+import {
+    HookRecordStore,
+    type HookStageResult,
+    type StagedHook,
+} from '../hooks/hook-record-store';
 
-export type TransactionalPluginScopeState = 'open' | 'prepared' | 'published' | 'disposed';
+export type TransactionalPluginScopeState =
+    | 'open'
+    | 'prepared'
+    | 'published'
+    | 'disposed';
 
 export interface PluginPreparationError {
-    readonly code: 'invalid-state' | 'validation-failed' | 'pre-activation-failed' | 'stage-failed';
+    readonly code:
+        | 'invalid-state'
+        | 'validation-failed'
+        | 'pre-activation-failed'
+        | 'stage-failed';
     readonly phase: 'validation' | 'pre-activation' | 'stage';
     readonly message: string;
     readonly cause?: unknown;
@@ -37,13 +50,16 @@ export interface TransactionalCleanupReport {
 }
 
 type Callback = () => void | PromiseLike<void>;
-type StagedRegistryOperation = {
-    validate(): RegistryStageResult;
-    insert(): RegistryStageResult;
+type StagedRuntimeOperation = {
+    readonly subject: 'contribution' | 'hook';
+    validate(): RegistryStageResult | HookStageResult;
+    insert(): RegistryStageResult | HookStageResult;
     remove(): number;
 };
 
-function failure<E extends PluginPreparationError | StaleGenerationError>(error: E) {
+function failure<E extends PluginPreparationError | StaleGenerationError>(
+    error: E,
+) {
     return { ok: false as const, error: Object.freeze(error) };
 }
 
@@ -55,7 +71,7 @@ export class TransactionalPluginScope {
     readonly #activationTable: ActivationTable;
     readonly #pluginId: string;
     readonly #generation: number;
-    readonly #staged: StagedRegistryOperation[] = [];
+    readonly #staged: StagedRuntimeOperation[] = [];
     readonly #validationCallbacks: Callback[] = [];
     readonly #preActivationCallbacks: Callback[] = [];
     readonly #disposalCallbacks: Callback[] = [];
@@ -76,7 +92,9 @@ export class TransactionalPluginScope {
         this.#pluginId = options.pluginId;
         this.#generation = options.generation;
         this.#activationTable = options.activationTable;
-        this.owner = options.owner ?? Symbol(`${options.pluginId}:${options.generation}`);
+        this.owner =
+            options.owner ??
+            Symbol(`${options.pluginId}:${options.generation}`);
         this.signal = this.#controller.signal;
         this.#afterPublish = options.afterPublish;
     }
@@ -87,10 +105,12 @@ export class TransactionalPluginScope {
 
     stageContributions<T, TContext, TMetadata>(
         registry: ContributionRegistry<T, TContext, TMetadata>,
-        values: readonly StagedContribution<T, TMetadata>[]
+        values: readonly StagedContribution<T, TMetadata>[],
     ): void {
         if (this.#state !== 'open' || this.#validated) {
-            throw new Error('Contributions can only be staged before validation');
+            throw new Error(
+                'Contributions can only be staged before validation',
+            );
         }
         const input = {
             owner: this.owner,
@@ -99,9 +119,28 @@ export class TransactionalPluginScope {
             values,
         };
         this.#staged.push({
+            subject: 'contribution',
             validate: () => registry.validateStage(input),
             insert: () => registry.stage(input),
             remove: () => registry.removeOwner(this.owner),
+        });
+    }
+
+    stageHooks(store: HookRecordStore, values: readonly StagedHook[]): void {
+        if (this.#state !== 'open' || this.#validated) {
+            throw new Error('Hooks can only be staged before validation');
+        }
+        const input = {
+            owner: this.owner,
+            pluginId: this.#pluginId,
+            generation: this.#generation,
+            values,
+        };
+        this.#staged.push({
+            subject: 'hook',
+            validate: () => store.validateStage(input),
+            insert: () => store.stage(input),
+            remove: () => store.removeOwner(this.owner),
         });
     }
 
@@ -116,12 +155,14 @@ export class TransactionalPluginScope {
     }
 
     onDispose(callback: Callback): void {
-        if (this.#state === 'disposed') throw new Error('Scope is already disposed');
+        if (this.#state === 'disposed')
+            throw new Error('Scope is already disposed');
         this.#disposalCallbacks.push(callback);
     }
 
     async validate(): Promise<TransactionalResult<PluginPreparationError>> {
-        if (this.#state !== 'open') return this.#invalidPreparationState('validation');
+        if (this.#state !== 'open')
+            return this.#invalidPreparationState('validation');
         try {
             for (const operation of this.#staged) {
                 const result = operation.validate();
@@ -129,7 +170,7 @@ export class TransactionalPluginScope {
                     return failure({
                         code: 'validation-failed',
                         phase: 'validation',
-                        message: `Contribution validation failed: ${result.code}`,
+                        message: `${operation.subject} validation failed: ${result.code}`,
                         cause: result,
                     });
                 }
@@ -152,7 +193,8 @@ export class TransactionalPluginScope {
             return this.#invalidPreparationState('pre-activation');
         }
         try {
-            for (const callback of this.#preActivationCallbacks) await callback();
+            for (const callback of this.#preActivationCallbacks)
+                await callback();
             this.#state = 'prepared';
             return { ok: true };
         } catch (cause) {
@@ -165,7 +207,9 @@ export class TransactionalPluginScope {
         }
     }
 
-    publish(expectedOwner?: symbol): TransactionalResult<StaleGenerationError | PluginPreparationError> {
+    publish(
+        expectedOwner?: symbol,
+    ): TransactionalResult<StaleGenerationError | PluginPreparationError> {
         if (this.#state !== 'prepared') {
             return failure({
                 code: 'invalid-state',
@@ -173,7 +217,7 @@ export class TransactionalPluginScope {
                 message: `Cannot publish scope in ${this.#state} state`,
             });
         }
-        const inserted: StagedRegistryOperation[] = [];
+        const inserted: StagedRuntimeOperation[] = [];
         for (const operation of this.#staged) {
             const result = operation.insert();
             if (!result.ok) {
@@ -181,7 +225,7 @@ export class TransactionalPluginScope {
                 return failure({
                     code: 'stage-failed',
                     phase: 'stage',
-                    message: `Hidden contribution insert failed: ${result.code}`,
+                    message: `Hidden ${operation.subject} insert failed: ${result.code}`,
                     cause: result,
                 });
             }
@@ -200,7 +244,8 @@ export class TransactionalPluginScope {
                 return failure({
                     code: 'stale-generation',
                     phase: 'publication',
-                    message: 'A newer plugin generation already owns publication',
+                    message:
+                        'A newer plugin generation already owns publication',
                 });
             }
             this.#afterPublish?.();
@@ -208,7 +253,10 @@ export class TransactionalPluginScope {
             this.#state = 'published';
             return { ok: true };
         } catch (cause) {
-            if (swapped || this.#activationTable.current(this.#pluginId) === this.owner) {
+            if (
+                swapped ||
+                this.#activationTable.current(this.#pluginId) === this.owner
+            ) {
                 try {
                     this.#activationTable.compareAndSwap({
                         pluginId: this.#pluginId,
@@ -238,7 +286,10 @@ export class TransactionalPluginScope {
         return this.#dispose(reason, false);
     }
 
-    #dispose(reason: unknown, restorePrevious: boolean): Promise<TransactionalCleanupReport> {
+    #dispose(
+        reason: unknown,
+        restorePrevious: boolean,
+    ): Promise<TransactionalCleanupReport> {
         if (!this.#cleanupPromise) {
             this.#cleanupPromise = this.#runDisposal(reason, restorePrevious);
         }
@@ -247,20 +298,26 @@ export class TransactionalPluginScope {
 
     async #runDisposal(
         reason: unknown,
-        restorePrevious: boolean
+        restorePrevious: boolean,
     ): Promise<TransactionalCleanupReport> {
         this.#controller.abort(reason);
         if (this.#state === 'published') {
             this.#activationTable.compareAndSwap({
                 pluginId: this.#pluginId,
                 expected: this.owner,
-                next: restorePrevious ? this.#publishedPreviousOwner : undefined,
+                next: restorePrevious
+                    ? this.#publishedPreviousOwner
+                    : undefined,
             });
         }
         for (const operation of [...this.#staged].reverse()) operation.remove();
         const errors: TransactionalCleanupError[] = [];
         let disposedCount = 0;
-        for (let index = this.#disposalCallbacks.length - 1; index >= 0; index--) {
+        for (
+            let index = this.#disposalCallbacks.length - 1;
+            index >= 0;
+            index--
+        ) {
             const callback = this.#disposalCallbacks[index]!;
             try {
                 await callback();
@@ -280,12 +337,14 @@ export class TransactionalPluginScope {
 
     #assertOpenForRegistration(): void {
         if (this.#state !== 'open' || this.#validated) {
-            throw new Error('Scope callbacks can only be registered before validation');
+            throw new Error(
+                'Scope callbacks can only be registered before validation',
+            );
         }
     }
 
     #invalidPreparationState(
-        phase: PluginPreparationError['phase']
+        phase: PluginPreparationError['phase'],
     ): TransactionalResult<PluginPreparationError> {
         return failure({
             code: 'invalid-state',
