@@ -2,12 +2,14 @@ import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const projectArg = process.argv.find((arg) => arg.endsWith('.json'))
+    ?? 'tests/plugin-runtime/v1-examples/tsconfig.json';
 const command = [
     'bunx',
     'vue-tsc',
     '--noEmit',
     '-p',
-    'tests/plugin-runtime/v1-examples/tsconfig.json',
+    projectArg,
 ];
 
 function posixPath(path: string): string {
@@ -43,13 +45,10 @@ if (!diagnostics.length) {
     throw new Error(`[example-fixtures] vue-tsc failed with exit code ${result.exitCode} without parseable diagnostics`);
 }
 
-const relevant = diagnostics.filter(({ file }) =>
-    file.startsWith('app/plugins/examples/')
-    || file.startsWith('tests/plugin-runtime/v1-examples/'),
-);
+const relevant = diagnostics.filter(({ file }) => file.startsWith('app/plugins/examples/') || file.startsWith('tests/plugin-runtime/'));
 if (relevant.length) {
     console.error(relevant.map(({ text }) => text).join('\n'));
     throw new Error(`[example-fixtures] ${relevant.length} V1 example diagnostic(s) failed compatibility compilation`);
 }
 
-console.log(`[example-fixtures] all V1 examples compile; ignored ${diagnostics.length} pre-existing diagnostic(s) outside the fixture corpus`);
+console.log(`[example-fixtures] ${projectArg} compiles; ignored ${diagnostics.length} pre-existing diagnostic(s) outside the fixture corpus`);

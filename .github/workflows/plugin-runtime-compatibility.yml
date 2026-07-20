@@ -67,3 +67,6 @@ jobs:
 
       - name: Compile unchanged V1 example plugins
         run: bun run plugin-runtime:examples:check
+
+      - name: Compile immutable external V1 plugin corpus
+        run: bun run plugin-runtime:external-v1:check

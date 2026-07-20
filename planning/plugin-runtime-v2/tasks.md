@@ -30,7 +30,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC1, R1.AC10, R9.AC6
       Done when: fixtures compile through the Nuxt project context with the same explicit/auto imports as the source examples.
 
-- [ ] 1.4 Add immutable compile fixtures derived from every maintained external V1 plugin available to the team
+- [x] 1.4 Add immutable compile fixtures derived from every maintained external V1 plugin available to the team
       Requirements: R1.AC10, R9.AC6
       Done when: the corpus has a version/source record, contains no credentials, and compiles without compatibility edits.
 
