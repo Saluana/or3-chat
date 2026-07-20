@@ -35,6 +35,14 @@
       "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy-with-access-visible-disabled", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
     },
     {
+      "id": "registry.sidebar-sections",
+      "family": "sidebar sections",
+      "sources": ["app/composables/sidebar/useSidebarSections.ts"],
+      "globalKeys": ["__or3SidebarSectionsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "componentIdentity": "preserved", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "defaultPlacement": "main", "projection": "computed-access-filtered-placement-groups", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "void", "disposal": "id-only-public-api" }
+    },
+    {
       "id": "registry.history-actions",
       "family": "document and thread history actions",
       "sources": ["app/composables/history/createHistoryActionRegistry.ts", "app/composables/documents/useDocumentHistoryActions.ts", "app/composables/threads/useThreadHistoryActions.ts"],

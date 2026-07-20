@@ -61,6 +61,7 @@
  */
 
 import type { Thread } from '~/db';
+import { computed } from 'vue';
 import {
     createHistoryActionRegistry,
     type HistoryActionRegistryItem,
@@ -103,7 +104,9 @@ export function unregisterThreadHistoryAction(id: string) {
 
 /** Accessor for actions applicable to a specific message. */
 export function useThreadHistoryActions() {
-    return useV2Surface() ? v2Kernel.items : registry.useItems();
+    return useV2Surface()
+        ? computed(() => v2Kernel.items.value)
+        : registry.useItems();
 }
 
 /** Convenience for plugin authors to check existing action ids. */

@@ -61,6 +61,7 @@
  */
 
 import type { Post } from '~/db';
+import { computed } from 'vue';
 import {
     createHistoryActionRegistry,
     type HistoryActionRegistryItem,
@@ -163,7 +164,9 @@ export function unregisterDocumentHistoryAction(id: string) {
  * ```
  */
 export function useDocumentHistoryActions() {
-    return useV2Surface() ? v2Kernel.items : registry.useItems();
+    return useV2Surface()
+        ? computed(() => v2Kernel.items.value)
+        : registry.useItems();
 }
 
 /**

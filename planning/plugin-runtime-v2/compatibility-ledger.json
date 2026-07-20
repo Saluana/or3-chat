@@ -4,11 +4,11 @@
   "generator": "scripts/plugin-runtime/generate-compatibility-ledger.ts",
   "inputs": {
     "moduleManifest": "planning/plugin-runtime-v2/compatibility-ledger.modules.json",
-    "moduleManifestSha256": "6964af291c26d9a715cdce7cc98483396ccd7f0db8f5768f85cffa5ff1b0fd35",
+    "moduleManifestSha256": "67d56a581a19f5968bd170955bc317b8aba9afdd0878a30fb00f45dab767bbb1",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "9e2e3806f7e3ec7971f65e7cf66f0fc13071b778c97466e167b9f3185933b72e",
+    "nuxtImportsDeclarationSha256": "27d37205822779732dbb4e42843b313ff46c292eb9c2b62702b028b0f36bb086",
     "behaviorProfiles": "planning/plugin-runtime-v2/compatibility-profiles.json",
-    "behaviorProfilesSha256": "3da04d48d16d44a8adda5742383a733e9797c57cc587d4fd713ca020309239d2"
+    "behaviorProfilesSha256": "7330e3f7e4e9c5d5ecbe7cf0c7485b51d25269f789b8940b23763bf0cedfc291"
   },
   "coverage": {
     "moduleCount": 36,
@@ -372,6 +372,31 @@
         "globalPersistence": "globalThis-map",
         "registerReturn": "disposer-function",
         "disposal": "exact-normalized-value"
+      }
+    },
+    {
+      "id": "registry.sidebar-sections",
+      "family": "sidebar sections",
+      "sources": [
+        "app/composables/sidebar/useSidebarSections.ts"
+      ],
+      "globalKeys": [
+        "__or3SidebarSectionsRegistry"
+      ],
+      "implementation": "shared-createRegistry",
+      "behavior": {
+        "duplicate": "replace-by-id",
+        "storedValue": "shallow-frozen-copy",
+        "componentIdentity": "preserved",
+        "defaultOrder": 200,
+        "equalOrderTie": "id-ascending",
+        "idSnapshotOrder": "map-insertion",
+        "defaultPlacement": "main",
+        "projection": "computed-access-filtered-placement-groups",
+        "reactiveMutationNotifications": 1,
+        "globalPersistence": "globalThis-map",
+        "registerReturn": "void",
+        "disposal": "id-only-public-api"
       }
     }
   ],
@@ -1523,7 +1548,7 @@
     },
     {
       "source": "app/composables/documents/useDocumentHistoryActions.ts",
-      "apiSha256": "1fda4db0b158c4874bea626fdfe8d17892e08049d82b89c688b8cb5d580e3949",
+      "apiSha256": "79fbc8aad8b5f83c6b1ae081cb1c43a09d12a567346d5900c66622ea2994999a",
       "runtime": "client",
       "publicPaths": [
         "~/composables/documents/useDocumentHistoryActions"
@@ -1544,7 +1569,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 72,
+              "line": 73,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentHistoryAction\n    extends HistoryActionRegistryItem<Post> {}"
             }
@@ -1561,7 +1586,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 187,
+                "line": 190,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredDocumentHistoryActionIds(): string[];"
               }
@@ -1570,7 +1595,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 187,
+              "line": 190,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredDocumentHistoryActionIds(): string[];"
             }
@@ -1587,7 +1612,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 119,
+                "line": 120,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDocumentHistoryAction(action: DocumentHistoryAction);"
               }
@@ -1596,7 +1621,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 119,
+              "line": 120,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentHistoryAction(action: DocumentHistoryAction);"
             }
@@ -1613,7 +1638,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 142,
+                "line": 143,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDocumentHistoryAction(id: string);"
               }
@@ -1622,7 +1647,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 142,
+              "line": 143,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDocumentHistoryAction(id: string);"
             }
@@ -1634,12 +1659,12 @@
           "nuxtAutoImport": true,
           "signatures": [
             {
-              "signature": "(): ShallowRef<readonly DocumentHistoryAction[]> | globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
+              "signature": "(): globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
               "declaredReturnType": null,
-              "resolvedReturnType": "ShallowRef<readonly DocumentHistoryAction[]> | globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
+              "resolvedReturnType": "globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 165,
+                "line": 166,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDocumentHistoryActions();"
               }
@@ -1648,7 +1673,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 165,
+              "line": 166,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDocumentHistoryActions();"
             }
@@ -2441,7 +2466,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "45ff9194e6dcbd2dff194318a6eba9e1f8464fb01afb03b85bab839ae8a6aca7",
+      "apiSha256": "b50850db870fc28d072c575ad744dc6d4a660ea3873288583f1fbe900ca2cc29",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2790,7 +2815,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 72,
+              "line": 73,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentHistoryAction\n    extends HistoryActionRegistryItem<Post> {}"
             }
@@ -3311,7 +3336,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 187,
+                "line": 190,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredDocumentHistoryActionIds(): string[];"
               }
@@ -3320,7 +3345,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 187,
+              "line": 190,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredDocumentHistoryActionIds(): string[];"
             }
@@ -3493,7 +3518,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 86,
+                "line": 89,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredProjectTreeActionIds(): string[];"
               }
@@ -3502,7 +3527,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 86,
+              "line": 89,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredProjectTreeActionIds(): string[];"
             }
@@ -3519,7 +3544,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 421,
+                "line": 445,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredSidebarFooterActionIds(): string[];"
               }
@@ -3528,7 +3553,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 421,
+              "line": 445,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredSidebarFooterActionIds(): string[];"
             }
@@ -3545,7 +3570,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 402,
+                "line": 424,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredSidebarSectionIds(): string[];"
               }
@@ -3554,7 +3579,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 402,
+              "line": 424,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredSidebarSectionIds(): string[];"
             }
@@ -3571,7 +3596,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 110,
+                "line": 113,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredThreadHistoryActionIds(): string[];"
               }
@@ -3580,7 +3605,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 110,
+              "line": 113,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredThreadHistoryActionIds(): string[];"
             }
@@ -3798,7 +3823,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 39,
+              "line": 40,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeAction extends RegistryItem {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Label text. */\n    label: string;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    showOn?: ShowOnKind[]; // if present, limits visibility to these kinds\n    /** Handler invoked on click. */\n    handler: (ctx: ProjectTreeHandlerCtx) => void | Promise<void>;\n}"
             }
@@ -3812,7 +3837,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 10,
+              "line": 11,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeChild {\n    value: string; // id of the entry\n    label: string;\n    icon?: string;\n    kind?: ProjectTreeKind; // 'chat' | 'doc'\n    parentId?: string;\n    onSelect?: (e: Event) => void;\n}"
             }
@@ -3826,7 +3851,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 29,
+              "line": 30,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeHandlerCtx {\n    // The tree row this action was invoked for (root or child)\n    treeRow: ProjectTreeRow;\n    // legacy/alternate shapes seen in the wild may include a `child` property\n    // but prefer to use `treeRow`.\n    child?: ProjectTreeChild;\n    root?: ProjectTreeRoot;\n}"
             }
@@ -3840,7 +3865,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 7,
+              "line": 8,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ProjectTreeKind = 'chat' | 'doc';"
             }
@@ -3854,7 +3879,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 19,
+              "line": 20,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeRoot {\n    value: string; // project id\n    label: string; // project name\n    defaultExpanded?: boolean;\n    children?: ProjectTreeChild[];\n    onSelect?: (e: Event) => void;\n}"
             }
@@ -3868,7 +3893,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 27,
+              "line": 28,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ProjectTreeRow = ProjectTreeRoot | ProjectTreeChild;"
             }
@@ -3963,7 +3988,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 119,
+                "line": 120,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDocumentHistoryAction(action: DocumentHistoryAction);"
               }
@@ -3972,7 +3997,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 119,
+              "line": 120,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentHistoryAction(action: DocumentHistoryAction);"
             }
@@ -4185,7 +4210,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 69,
+                "line": 70,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerProjectTreeAction(action: ProjectTreeAction);"
               }
@@ -4194,7 +4219,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 69,
+              "line": 70,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerProjectTreeAction(action: ProjectTreeAction);"
             }
@@ -4211,7 +4236,7 @@
               "resolvedReturnType": "globalThis.RegistrationHandle",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 284,
+                "line": 304,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerSidebarFooterAction(action: SidebarFooterAction);"
               }
@@ -4220,7 +4245,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 284,
+              "line": 304,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerSidebarFooterAction(action: SidebarFooterAction);"
             }
@@ -4237,7 +4262,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 246,
+                "line": 261,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerSidebarSection(section: SidebarSection);"
               }
@@ -4246,7 +4271,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 246,
+              "line": 261,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerSidebarSection(section: SidebarSection);"
             }
@@ -4263,7 +4288,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 93,
+                "line": 94,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerThreadHistoryAction(action: ThreadHistoryAction);"
               }
@@ -4272,7 +4297,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 93,
+              "line": 94,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerThreadHistoryAction(action: ThreadHistoryAction);"
             }
@@ -4444,7 +4469,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 8,
+              "line": 9,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ShowOnKind = 'root' | 'all' | 'chat' | 'doc';"
             }
@@ -4486,7 +4511,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 224,
+              "line": 239,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarFooterActionEntry {\n    /** The footer action definition */\n    action: SidebarFooterAction;\n    /** Whether the action is currently disabled based on context */\n    disabled: boolean;\n}"
             }
@@ -4570,7 +4595,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 72,
+              "line": 73,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ThreadHistoryAction\n    extends HistoryActionRegistryItem<Thread> {}"
             }
@@ -4679,7 +4704,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 142,
+                "line": 143,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterDocumentHistoryAction(id: string);"
               }
@@ -4688,7 +4713,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 142,
+              "line": 143,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterDocumentHistoryAction(id: string);"
             }
@@ -4887,7 +4912,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 75,
+                "line": 76,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterProjectTreeAction(id: string);"
               }
@@ -4896,7 +4921,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 75,
+              "line": 76,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterProjectTreeAction(id: string);"
             }
@@ -4913,7 +4938,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 305,
+                "line": 325,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterSidebarFooterAction(id: string);"
               }
@@ -4922,7 +4947,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 305,
+              "line": 325,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterSidebarFooterAction(id: string);"
             }
@@ -4939,7 +4964,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 265,
+                "line": 284,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterSidebarSection(id: string);"
               }
@@ -4948,7 +4973,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 265,
+              "line": 284,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterSidebarSection(id: string);"
             }
@@ -4965,7 +4990,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 99,
+                "line": 100,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterThreadHistoryAction(id: string);"
               }
@@ -4974,7 +4999,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 99,
+              "line": 100,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterThreadHistoryAction(id: string);"
             }
@@ -5234,12 +5259,12 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "(): ShallowRef<readonly DocumentHistoryAction[]> | globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
+              "signature": "(): globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
               "declaredReturnType": null,
-              "resolvedReturnType": "ShallowRef<readonly DocumentHistoryAction[]> | globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
+              "resolvedReturnType": "globalThis.ComputedRef<readonly DocumentHistoryAction[]>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentHistoryActions.ts",
-                "line": 165,
+                "line": 166,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDocumentHistoryActions();"
               }
@@ -5248,7 +5273,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentHistoryActions.ts",
-              "line": 165,
+              "line": 166,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDocumentHistoryActions();"
             }
@@ -5720,12 +5745,12 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "(): ShallowRef<readonly ProjectTreeAction[]> | globalThis.ComputedRef<readonly ProjectTreeAction[]>",
+              "signature": "(): globalThis.ComputedRef<readonly ProjectTreeAction[]>",
               "declaredReturnType": null,
-              "resolvedReturnType": "ShallowRef<readonly ProjectTreeAction[]> | globalThis.ComputedRef<readonly ProjectTreeAction[]>",
+              "resolvedReturnType": "globalThis.ComputedRef<readonly ProjectTreeAction[]>",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 81,
+                "line": 82,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useProjectTreeActions();"
               }
@@ -5734,7 +5759,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 81,
+              "line": 82,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useProjectTreeActions();"
             }
@@ -5803,7 +5828,7 @@
               "resolvedReturnType": "ComputedRef<SidebarFooterActionEntry[]>",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 367,
+                "line": 389,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarFooterActions(\n    context: () => SidebarFooterActionContext = () => ({})\n): ComputedRef<SidebarFooterActionEntry[]>;"
               }
@@ -5812,7 +5837,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 367,
+              "line": 389,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarFooterActions(\n    context: () => SidebarFooterActionContext = () => ({})\n): ComputedRef<SidebarFooterActionEntry[]>;"
             }
@@ -5855,7 +5880,7 @@
               "resolvedReturnType": "ComputedRef<SidebarSectionGroups>",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 325,
+                "line": 345,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarSections();"
               }
@@ -5864,7 +5889,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 325,
+              "line": 345,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarSections();"
             }
@@ -5902,12 +5927,12 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "(): ShallowRef<readonly ThreadHistoryAction[]> | globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
+              "signature": "(): globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
               "declaredReturnType": null,
-              "resolvedReturnType": "ShallowRef<readonly ThreadHistoryAction[]> | globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
+              "resolvedReturnType": "globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 105,
+                "line": 106,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useThreadHistoryActions();"
               }
@@ -5916,7 +5941,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 105,
+              "line": 106,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useThreadHistoryActions();"
             }
@@ -6247,7 +6272,7 @@
     },
     {
       "source": "app/composables/projects/useProjectTreeActions.ts",
-      "apiSha256": "d5123fdf99e26456040bbe1785d8a65ab5f283a4ae0e411ce56fb94e4c7a109d",
+      "apiSha256": "c2dbb713b0340cc3964a3217bdcda0beb307fd622ea86ef7ca049d0ee376ecbc",
       "runtime": "client",
       "publicPaths": [
         "~/composables/projects/useProjectTreeActions"
@@ -6271,7 +6296,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 86,
+                "line": 89,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredProjectTreeActionIds(): string[];"
               }
@@ -6280,7 +6305,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 86,
+              "line": 89,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredProjectTreeActionIds(): string[];"
             }
@@ -6294,7 +6319,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 39,
+              "line": 40,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeAction extends RegistryItem {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Label text. */\n    label: string;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    showOn?: ShowOnKind[]; // if present, limits visibility to these kinds\n    /** Handler invoked on click. */\n    handler: (ctx: ProjectTreeHandlerCtx) => void | Promise<void>;\n}"
             }
@@ -6308,7 +6333,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 10,
+              "line": 11,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeChild {\n    value: string; // id of the entry\n    label: string;\n    icon?: string;\n    kind?: ProjectTreeKind; // 'chat' | 'doc'\n    parentId?: string;\n    onSelect?: (e: Event) => void;\n}"
             }
@@ -6322,7 +6347,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 29,
+              "line": 30,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeHandlerCtx {\n    // The tree row this action was invoked for (root or child)\n    treeRow: ProjectTreeRow;\n    // legacy/alternate shapes seen in the wild may include a `child` property\n    // but prefer to use `treeRow`.\n    child?: ProjectTreeChild;\n    root?: ProjectTreeRoot;\n}"
             }
@@ -6336,7 +6361,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 7,
+              "line": 8,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ProjectTreeKind = 'chat' | 'doc';"
             }
@@ -6350,7 +6375,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 19,
+              "line": 20,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeRoot {\n    value: string; // project id\n    label: string; // project name\n    defaultExpanded?: boolean;\n    children?: ProjectTreeChild[];\n    onSelect?: (e: Event) => void;\n}"
             }
@@ -6364,7 +6389,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 27,
+              "line": 28,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ProjectTreeRow = ProjectTreeRoot | ProjectTreeChild;"
             }
@@ -6381,7 +6406,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 69,
+                "line": 70,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerProjectTreeAction(action: ProjectTreeAction);"
               }
@@ -6390,7 +6415,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 69,
+              "line": 70,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerProjectTreeAction(action: ProjectTreeAction);"
             }
@@ -6404,7 +6429,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 8,
+              "line": 9,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ShowOnKind = 'root' | 'all' | 'chat' | 'doc';"
             }
@@ -6421,7 +6446,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 75,
+                "line": 76,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterProjectTreeAction(id: string);"
               }
@@ -6430,7 +6455,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 75,
+              "line": 76,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterProjectTreeAction(id: string);"
             }
@@ -6442,12 +6467,12 @@
           "nuxtAutoImport": true,
           "signatures": [
             {
-              "signature": "(): ShallowRef<readonly ProjectTreeAction[]> | globalThis.ComputedRef<readonly ProjectTreeAction[]>",
+              "signature": "(): globalThis.ComputedRef<readonly ProjectTreeAction[]>",
               "declaredReturnType": null,
-              "resolvedReturnType": "ShallowRef<readonly ProjectTreeAction[]> | globalThis.ComputedRef<readonly ProjectTreeAction[]>",
+              "resolvedReturnType": "globalThis.ComputedRef<readonly ProjectTreeAction[]>",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 81,
+                "line": 82,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useProjectTreeActions();"
               }
@@ -6456,7 +6481,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 81,
+              "line": 82,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useProjectTreeActions();"
             }
@@ -7650,7 +7675,7 @@
     },
     {
       "source": "app/composables/sidebar/useSidebarSections.ts",
-      "apiSha256": "4e830a218446f88917fbe0d9d0eee3afc8607317211626ff3de42d7182b092e3",
+      "apiSha256": "07e679308c65cfc4dabb7cdb100ce40f653ba0bfe0c42270e5bbe5cd1a4f729b",
       "runtime": "client",
       "publicPaths": [
         "~/composables/sidebar/useSidebarSections"
@@ -7660,7 +7685,8 @@
         "public/_documentation/composables/useSidebarSections.md"
       ],
       "behaviorProfileIds": [
-        "registry.sidebar-footer-actions"
+        "registry.sidebar-footer-actions",
+        "registry.sidebar-sections"
       ],
       "exports": [
         {
@@ -7688,7 +7714,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 421,
+                "line": 445,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredSidebarFooterActionIds(): string[];"
               }
@@ -7697,7 +7723,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 421,
+              "line": 445,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredSidebarFooterActionIds(): string[];"
             }
@@ -7714,7 +7740,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 402,
+                "line": 424,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredSidebarSectionIds(): string[];"
               }
@@ -7723,7 +7749,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 402,
+              "line": 424,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredSidebarSectionIds(): string[];"
             }
@@ -7740,7 +7766,7 @@
               "resolvedReturnType": "globalThis.RegistrationHandle",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 284,
+                "line": 304,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerSidebarFooterAction(action: SidebarFooterAction);"
               }
@@ -7749,7 +7775,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 284,
+              "line": 304,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerSidebarFooterAction(action: SidebarFooterAction);"
             }
@@ -7766,7 +7792,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 246,
+                "line": 261,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerSidebarSection(section: SidebarSection);"
               }
@@ -7775,7 +7801,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 246,
+              "line": 261,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerSidebarSection(section: SidebarSection);"
             }
@@ -7817,7 +7843,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 224,
+              "line": 239,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface SidebarFooterActionEntry {\n    /** The footer action definition */\n    action: SidebarFooterAction;\n    /** Whether the action is currently disabled based on context */\n    disabled: boolean;\n}"
             }
@@ -7876,7 +7902,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 305,
+                "line": 325,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterSidebarFooterAction(id: string);"
               }
@@ -7885,7 +7911,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 305,
+              "line": 325,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterSidebarFooterAction(id: string);"
             }
@@ -7902,7 +7928,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 265,
+                "line": 284,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterSidebarSection(id: string);"
               }
@@ -7911,7 +7937,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 265,
+              "line": 284,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterSidebarSection(id: string);"
             }
@@ -7928,7 +7954,7 @@
               "resolvedReturnType": "ComputedRef<SidebarFooterActionEntry[]>",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 367,
+                "line": 389,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarFooterActions(\n    context: () => SidebarFooterActionContext = () => ({})\n): ComputedRef<SidebarFooterActionEntry[]>;"
               }
@@ -7937,7 +7963,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 367,
+              "line": 389,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarFooterActions(\n    context: () => SidebarFooterActionContext = () => ({})\n): ComputedRef<SidebarFooterActionEntry[]>;"
             }
@@ -7954,7 +7980,7 @@
               "resolvedReturnType": "ComputedRef<SidebarSectionGroups>",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSections.ts",
-                "line": 325,
+                "line": 345,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarSections();"
               }
@@ -7963,7 +7989,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSections.ts",
-              "line": 325,
+              "line": 345,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarSections();"
             }
@@ -7973,7 +7999,7 @@
     },
     {
       "source": "app/composables/threads/useThreadHistoryActions.ts",
-      "apiSha256": "2f9194bdcda9d546a110b08b9d3dc4ea3d43719060c92e26232655e8bccfdfb9",
+      "apiSha256": "f7cebacc664cb10378f4ed4b9e120db5845ec3ca601371f6f265f399b2777d6c",
       "runtime": "client",
       "publicPaths": [
         "~/composables/threads/useThreadHistoryActions"
@@ -7997,7 +8023,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 110,
+                "line": 113,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredThreadHistoryActionIds(): string[];"
               }
@@ -8006,7 +8032,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 110,
+              "line": 113,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredThreadHistoryActionIds(): string[];"
             }
@@ -8023,7 +8049,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 93,
+                "line": 94,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerThreadHistoryAction(action: ThreadHistoryAction);"
               }
@@ -8032,7 +8058,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 93,
+              "line": 94,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerThreadHistoryAction(action: ThreadHistoryAction);"
             }
@@ -8046,7 +8072,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 72,
+              "line": 73,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ThreadHistoryAction\n    extends HistoryActionRegistryItem<Thread> {}"
             }
@@ -8063,7 +8089,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 99,
+                "line": 100,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterThreadHistoryAction(id: string);"
               }
@@ -8072,7 +8098,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 99,
+              "line": 100,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterThreadHistoryAction(id: string);"
             }
@@ -8084,12 +8110,12 @@
           "nuxtAutoImport": true,
           "signatures": [
             {
-              "signature": "(): ShallowRef<readonly ThreadHistoryAction[]> | globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
+              "signature": "(): globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
               "declaredReturnType": null,
-              "resolvedReturnType": "ShallowRef<readonly ThreadHistoryAction[]> | globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
+              "resolvedReturnType": "globalThis.ComputedRef<readonly ThreadHistoryAction[]>",
               "declaration": {
                 "source": "app/composables/threads/useThreadHistoryActions.ts",
-                "line": 105,
+                "line": 106,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useThreadHistoryActions();"
               }
@@ -8098,7 +8124,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadHistoryActions.ts",
-              "line": 105,
+              "line": 106,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useThreadHistoryActions();"
             }

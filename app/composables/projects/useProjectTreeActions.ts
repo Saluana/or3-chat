@@ -1,3 +1,4 @@
+import { computed } from 'vue';
 import { createRegistry, type RegistryItem } from '#imports';
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
 import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
@@ -79,7 +80,9 @@ export function unregisterProjectTreeAction(id: string) {
 
 /** Accessor for actions applicable to a specific message. */
 export function useProjectTreeActions() {
-    return useV2Surface() ? v2Kernel.items : registry.useItems();
+    return useV2Surface()
+        ? computed(() => v2Kernel.items.value)
+        : registry.useItems();
 }
 
 /** Convenience for plugin authors to check existing action ids. */

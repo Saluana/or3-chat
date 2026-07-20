@@ -184,6 +184,21 @@ function isEntryAllowed(
 const sectionRegistry = createRegistry<SidebarSection>(
     '__or3SidebarSectionsRegistry'
 );
+const sectionV2Kernel = getContributionSurfaceKernel<SidebarSection>(
+    'sidebar-sections',
+    {
+        getId: (section) => section.id,
+        normalize: (section) => Object.freeze({ ...section }),
+        compare: (left, right) =>
+            (left.order ?? DEFAULT_ORDER) -
+                (right.order ?? DEFAULT_ORDER) ||
+            left.id.localeCompare(right.id),
+    }
+);
+
+function useSectionV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('sidebar-sections');
+}
 
 /**
  * Global registry for sidebar footer actions using the factory pattern.
@@ -244,7 +259,11 @@ export interface SidebarFooterActionEntry {
  * - Does not validate component structure
  */
 export function registerSidebarSection(section: SidebarSection) {
-    sectionRegistry.register(section);
+    if (useSectionV2Surface()) {
+        sectionV2Kernel.registry.registerLegacy({ value: section });
+    } else {
+        sectionRegistry.register(section);
+    }
 }
 
 /**
@@ -263,7 +282,8 @@ export function registerSidebarSection(section: SidebarSection) {
  * - Does not run teardown hooks
  */
 export function unregisterSidebarSection(id: string) {
-    sectionRegistry.unregister(id);
+    if (useSectionV2Surface()) sectionV2Kernel.registry.unregisterLegacy(id);
+    else sectionRegistry.unregister(id);
 }
 
 /**
@@ -323,7 +343,9 @@ export function unregisterSidebarFooterAction(id: string) {
  * - Does not filter by visibility or permissions
  */
 export function useSidebarSections() {
-    const items = sectionRegistry.useItems();
+    const items = useSectionV2Surface()
+        ? computed(() => sectionV2Kernel.items.value)
+        : sectionRegistry.useItems();
     const allowed = computed(() =>
         items.value.filter((entry) => isEntryAllowed(entry.pluginId, entry.access))
     );
@@ -400,7 +422,9 @@ export function useSidebarFooterActions(
  * - Does not reflect visibility or placement
  */
 export function listRegisteredSidebarSectionIds(): string[] {
-    return sectionRegistry.listIds();
+    return useSectionV2Surface()
+        ? [...sectionV2Kernel.registry.listLegacyIds()]
+        : sectionRegistry.listIds();
 }
 
 /**
