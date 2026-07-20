@@ -9,7 +9,9 @@ import {
     type Or3WorkspacePlugin,
 } from '~/composables/plugins/workspace-runtime';
 import { resolveBundledPluginArtifact } from '~~/shared/plugins/bundled-plugin-catalog';
+import { createDescriptorResolver } from '~~/shared/plugins/descriptor-resolver';
 import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
+import { getShadowPluginManager } from '~/composables/plugins/shadow-plugin-manager';
 
 function findLoader(
     modules: Record<string, () => Promise<unknown>>,
@@ -61,9 +63,12 @@ export default defineNuxtPlugin(() => {
     } as Record<string, () => Promise<unknown>>;
 
     const session = useSessionContext();
+    const descriptorResolver = createDescriptorResolver(bundledPluginCatalog);
+    const shadowManager = getShadowPluginManager();
     let currentRevision = '';
     let syncToken = 0;
     const managedPluginIds = new Set<string>();
+    const shadowObservationTokens = new Map<string, symbol>();
 
     const syncManifest = async () => {
         const token = ++syncToken;
@@ -72,6 +77,8 @@ export default defineNuxtPlugin(() => {
             for (const id of Array.from(managedPluginIds)) {
                 unregisterWorkspacePluginInstance(id);
                 managedPluginIds.delete(id);
+                shadowObservationTokens.delete(id);
+                shadowManager.observeManagedStop(id);
             }
             currentRevision = '';
             return;
@@ -108,6 +115,8 @@ export default defineNuxtPlugin(() => {
             if (!enabledSet.has(id)) {
                 unregisterWorkspacePluginInstance(id);
                 managedPluginIds.delete(id);
+                shadowObservationTokens.delete(id);
+                shadowManager.observeManagedStop(id);
             }
         }
 
@@ -165,6 +174,31 @@ export default defineNuxtPlugin(() => {
                     continue;
                 }
                 managedPluginIds.add(pluginId);
+                const shadowObservationToken = Symbol(pluginId);
+                shadowObservationTokens.set(pluginId, shadowObservationToken);
+                // Shadow-only: V1 has already imported and registered. Descriptor
+                // verification observes that outcome and never controls it.
+                void descriptorResolver
+                    .resolveBundled({
+                        pluginId,
+                        workspaceId: manifest.workspaceId ?? workspaceId,
+                        runtimeEntry: manifest.runtime[pluginId],
+                    })
+                    .then((resolution) => {
+                        if (
+                            resolution.status !== 'ready' ||
+                            shadowObservationTokens.get(pluginId) !== shadowObservationToken ||
+                            !managedPluginIds.has(pluginId)
+                        ) {
+                            return;
+                        }
+                        shadowManager.observeManagedActivation({
+                            descriptor: resolution.descriptor,
+                            lifecycleCoverage:
+                                manifest.runtime[pluginId]?.lifecycleCoverage ??
+                                'legacy-global-possible',
+                        });
+                    });
                 dispose = null;
             } catch (error) {
                 hadFailure = true;
@@ -207,6 +241,8 @@ export default defineNuxtPlugin(() => {
             window.removeEventListener('focus', onFocus);
             for (const id of Array.from(managedPluginIds)) {
                 unregisterWorkspacePluginInstance(id);
+                shadowObservationTokens.delete(id);
+                shadowManager.observeManagedStop(id);
             }
             managedPluginIds.clear();
         });
