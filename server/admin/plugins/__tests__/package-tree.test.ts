@@ -119,6 +119,7 @@ describe('canonical package tree validation', () => {
             { path: 'or3.manifest.json', kind: 'file', mode: 0o644, bytes: withIntegrity },
         ]);
         expect(verified.digest).toBe(initial.digest);
+        expect(verified.manifestDigest).toBe(initial.manifestDigest);
         expect(verified.declaredManifestIntegrity).toBe(initial.digest);
 
         const wrongIntegrity = Buffer.from(withIntegrity.toString().replace(initial.digest, `sha256-${'f'.repeat(64)}`));

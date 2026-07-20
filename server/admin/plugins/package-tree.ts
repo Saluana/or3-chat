@@ -60,6 +60,7 @@ export interface PackageTreeLimits {
 
 export interface VerifiedPackageTree {
     readonly digest: Sha256;
+    readonly manifestDigest: Sha256;
     readonly entryCount: number;
     readonly totalBytes: number;
     readonly declaredManifestIntegrity: Sha256 | null;
@@ -259,6 +260,10 @@ export function verifyCanonicalPackageEntries(
         validationError('manifest-missing', `Package tree must contain ${MANIFEST_PATH}`);
     }
     const canonicalManifest = canonicalManifestBytes(manifestEntry.bytes ?? Buffer.alloc(0));
+    const manifestDigest = `sha256-${createHash('sha256')
+        .update('OR3_PLUGIN_MANIFEST_V1\0')
+        .update(canonicalManifest.bytes)
+        .digest('hex')}` as Sha256;
     const declaredManifestIntegrity = canonicalManifest.declaredIntegrity;
     let totalBytes = 0;
     const prepared: PreparedEntry[] = normalized.map(({ entry, path }) => {
@@ -314,6 +319,7 @@ export function verifyCanonicalPackageEntries(
     }
     return Object.freeze({
         digest,
+        manifestDigest,
         entryCount: prepared.length,
         totalBytes,
         declaredManifestIntegrity,

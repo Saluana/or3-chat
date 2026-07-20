@@ -60,6 +60,7 @@
         "plugin-runtime:host-esm-facade:check": "bun run scripts/plugin-runtime/check-host-esm-facade.ts && bun x vitest run shared/plugins/__tests__/host-esm-facade.test.ts scripts/__tests__/plugin-runtime-host-esm-facade.test.ts",
         "plugin-runtime:package-tree:check": "bun x vitest run server/admin/plugins/__tests__/package-tree.test.ts server/admin/plugins/__tests__/package-store.test.ts",
         "plugin-runtime:package-lock:check": "bun x vitest run server/admin/plugins/__tests__/package-operation-lock.test.ts server/admin/plugins/__tests__/package-operation-lock-process.test.ts server/admin/plugins/__tests__/package-store.test.ts",
+        "plugin-runtime:package-pointer:check": "bun x vitest run server/admin/plugins/__tests__/package-pointer-store.test.ts server/admin/plugins/__tests__/package-store.test.ts server/admin/plugins/__tests__/package-tree.test.ts",
         "dev:offline": "env SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false bun run dev"
     },
     "bin": {

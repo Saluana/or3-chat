@@ -366,7 +366,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R7.AC6
       Done when: two-process install/update/uninstall tests serialize one ID without deleting a live lock.
 
-- [ ] 7.4 Implement atomic per-plugin current/candidate/previous pointer writes and startup validation
+- [x] 7.4 Implement atomic per-plugin current/candidate/previous pointer writes and startup validation
       Requirements: R7.AC5, R7.AC8
       Done when: fault injection around temp write/flush/rename/restart always selects a complete verified tree.
 
