@@ -244,7 +244,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC2, R1.AC5, R4.AC4-R4.AC7
       Done when: replace-in-place positions, default order 0, loaded-once behavior, and cache bound match.
 
-- [ ] 4.17 Adapt client tools to the kernel without replacing the execution/persistence implementation
+- [x] 4.17 Adapt client tools to the kernel without replacing the execution/persistence implementation
       Requirements: R1.AC2, R4.AC5, R4.AC8
       Done when: `RegisteredTool` identity, watchers, storage key, override, enabled refs, execution, and exact disposal remain unchanged.
 

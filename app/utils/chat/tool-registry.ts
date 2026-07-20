@@ -28,6 +28,8 @@ import {
     MAX_TOOL_ARGUMENT_BYTES,
     MAX_TOOL_DURABLE_RESULT_BYTES,
 } from '~~/shared/chat/tool-limits';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 /**
  * `ToolHandler`
@@ -114,6 +116,17 @@ if (!g.__or3ToolRegistry) {
 }
 
 const registryState = g.__or3ToolRegistry;
+
+const toolV2Kernel = getContributionSurfaceKernel<RegisteredTool>(
+    'client-tools',
+    {
+        getId: (tool) => tool.definition.function.name,
+    }
+);
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('client-tools');
+}
 
 // HMR cleanup: clear the debounce timer on module disposal
 if (import.meta.hot) {
@@ -286,6 +299,7 @@ export function useToolRegistry() {
                 if (!current || current._owner !== owner) return false;
                 current._stopWatcher();
                 registryState.tools.delete(name);
+                if (useV2Surface()) toolV2Kernel.registry.removeOwner(owner);
                 persistEnabledStates();
                 return true;
             },
@@ -297,6 +311,9 @@ export function useToolRegistry() {
         );
 
         registryState.tools.set(name, tool);
+        if (useV2Surface()) {
+            toolV2Kernel.registry.registerLegacy({ value: tool, owner });
+        }
 
         return tool;
     }
@@ -307,6 +324,7 @@ export function useToolRegistry() {
     function unregisterTool(name: string): void {
         registryState.tools.get(name)?._stopWatcher();
         registryState.tools.delete(name);
+        if (useV2Surface()) toolV2Kernel.registry.unregisterLegacy(name);
         persistEnabledStates();
     }
 

@@ -6,7 +6,7 @@
     "moduleManifest": "planning/plugin-runtime-v2/compatibility-ledger.modules.json",
     "moduleManifestSha256": "67d56a581a19f5968bd170955bc317b8aba9afdd0878a30fb00f45dab767bbb1",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "dd66062ca65da90c16c9e490f83e47f81771dab6c4f56110b4ce39f14043cd27",
+    "nuxtImportsDeclarationSha256": "9e2e3806f7e3ec7971f65e7cf66f0fc13071b778c97466e167b9f3185933b72e",
     "behaviorProfiles": "planning/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "7330e3f7e4e9c5d5ecbe7cf0c7485b51d25269f789b8940b23763bf0cedfc291"
   },
@@ -9828,7 +9828,7 @@
     },
     {
       "source": "app/utils/chat/tool-registry.ts",
-      "apiSha256": "effe52199b2b225fe5cda5ca36ec1e785c9f2406e12a8d48f5c2cbf35224cc29",
+      "apiSha256": "e71438aaddee5a21ec5ed407dfb81b5e3efd15d5b1f5a85eddc902a2dd345c2f",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tool-registry"
@@ -9849,7 +9849,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 41,
+              "line": 43,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ContextualToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs,\n    context: ToolExecutionContext\n) => Promise<string> | string;"
             }
@@ -9863,7 +9863,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 55,
+              "line": 57,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ExtendedToolDefinition extends ToolDefinition {\n    description?: string; // human-readable summary for toggles or docs\n    icon?: string; // icon identifier (e.g., 'i-mdi:weather-partly-cloudy')\n    category?: string; // grouping category\n    defaultEnabled?: boolean; // default toggle state\n}"
             }
@@ -9877,7 +9877,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 38,
+              "line": 40,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type LegacyToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs\n) => Promise<string> | string;"
             }
@@ -9891,7 +9891,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 71,
+              "line": 73,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
             }
@@ -9905,7 +9905,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 47,
+              "line": 49,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;"
             }
@@ -9919,7 +9919,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 98,
+              "line": 100,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolRegistryState {\n    tools: Map<string, RegisteredTool>;\n    storageHydrated: boolean;\n    persistDebounceTimer: NodeJS.Timeout | null;\n}"
             }
@@ -9933,7 +9933,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 62,
+              "line": 64,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type TypedToolDefinition<TArgs extends Record<string, unknown>> =\n    ExtendedToolDefinition & { readonly __toolArgs?: TArgs };"
             }
@@ -9950,7 +9950,7 @@
               "resolvedReturnType": "{ registerTool: <TArgs extends Record<string, unknown> = Record<string, unknown>>(definition: TypedToolDefinition<TArgs>, handler: ToolHandler<TArgs>, opts?: RegisterOptions) => RegisteredTool; unregisterTool: (name: string) => void; listTools: globalThis.ComputedRef<RegisteredTool[]>; getTool: (name: string) => RegisteredTool | undefined; setEnabled: (name: string, enabled: boolean) => void; hydrate: (states: Record<string, boolean>) => void; getEnabledDefinitions: () => ToolDefinition[]; executeTool: (toolName: string, argumentsJson: string, context?: ToolExecutionContext, admission?: ToolExecutionAdmission) => Promise<{ result: string | null; toolName: string; error?: string; timedOut: boolean; }>; }",
               "declaration": {
                 "source": "app/utils/chat/tool-registry.ts",
-                "line": 217,
+                "line": 230,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useToolRegistry();"
               }
@@ -9959,7 +9959,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 217,
+              "line": 230,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useToolRegistry();"
             }
@@ -9969,7 +9969,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "fba211b5f77707680d0b4786123f3e04b47408df4d50564f64d3c419aaae2f9b",
+      "apiSha256": "cb9fda018417cbb46b93416131b674a663329b8d16dc281b100dd555e0678d08",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -10014,7 +10014,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 55,
+              "line": 57,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ExtendedToolDefinition extends ToolDefinition {\n    description?: string; // human-readable summary for toggles or docs\n    icon?: string; // icon identifier (e.g., 'i-mdi:weather-partly-cloudy')\n    category?: string; // grouping category\n    defaultEnabled?: boolean; // default toggle state\n}"
             }
@@ -10028,7 +10028,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 71,
+              "line": 73,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
             }
@@ -10084,7 +10084,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 47,
+              "line": 49,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;"
             }
@@ -10112,7 +10112,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 62,
+              "line": 64,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type TypedToolDefinition<TArgs extends Record<string, unknown>> =\n    ExtendedToolDefinition & { readonly __toolArgs?: TArgs };"
             }
@@ -10129,7 +10129,7 @@
               "resolvedReturnType": "{ registerTool: <TArgs extends Record<string, unknown> = Record<string, unknown>>(definition: TypedToolDefinition<TArgs>, handler: ToolHandler<TArgs>, opts?: RegisterOptions) => RegisteredTool; unregisterTool: (name: string) => void; listTools: globalThis.ComputedRef<RegisteredTool[]>; getTool: (name: string) => RegisteredTool | undefined; setEnabled: (name: string, enabled: boolean) => void; hydrate: (states: Record<string, boolean>) => void; getEnabledDefinitions: () => ToolDefinition[]; executeTool: (toolName: string, argumentsJson: string, context?: ToolExecutionContext, admission?: ToolExecutionAdmission) => Promise<{ result: string | null; toolName: string; error?: string; timedOut: boolean; }>; }",
               "declaration": {
                 "source": "app/utils/chat/tool-registry.ts",
-                "line": 217,
+                "line": 230,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useToolRegistry();"
               }
@@ -10138,7 +10138,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 217,
+              "line": 230,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useToolRegistry();"
             }
