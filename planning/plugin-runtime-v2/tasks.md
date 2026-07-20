@@ -96,7 +96,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC4, R2.AC8
       Done when: every legal transition and every rejected transition has a table-driven unit test.
 
-- [ ] 2.6 Implement `DescriptorResolver` validation and client recomputation of descriptor keys
+- [x] 2.6 Implement `DescriptorResolver` validation and client recomputation of descriptor keys
       Requirements: R2.AC2, R2.AC4
       Done when: malformed/mismatched descriptors become `blocked` before a loader is called.
 
