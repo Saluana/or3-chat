@@ -374,7 +374,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R7.AC2, R7.AC8, R10.AC4
       Done when: bad digest, compatibility, grants, dependency, loader, or state preflight leaves the prior pointer unchanged.
 
-- [ ] 7.6 Add candidate server dry-run, read-only/copied-state preflight, and designated client hidden-preparation canary
+- [x] 7.6 Add candidate server dry-run, read-only/copied-state preflight, and designated client hidden-preparation canary
       Requirements: R7.AC8, R10.AC4-R10.AC5
       Done when: any failed candidate check leaves current code/state untouched and successful canary evidence is bound to the candidate digest.
 
