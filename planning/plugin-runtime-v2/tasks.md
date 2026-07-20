@@ -240,7 +240,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC5, R4.AC4-R4.AC7
       Done when: ordering, stored identity, lazy factory failure, and list APIs match.
 
-- [ ] 4.16 Migrate admin pages/widgets and component cache behind adapters
+- [x] 4.16 Migrate admin pages/widgets and component cache behind adapters
       Requirements: R1.AC2, R1.AC5, R4.AC4-R4.AC7
       Done when: replace-in-place positions, default order 0, loaded-once behavior, and cache bound match.
 

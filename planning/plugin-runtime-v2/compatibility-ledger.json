@@ -6,7 +6,7 @@
     "moduleManifest": "planning/plugin-runtime-v2/compatibility-ledger.modules.json",
     "moduleManifestSha256": "67d56a581a19f5968bd170955bc317b8aba9afdd0878a30fb00f45dab767bbb1",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "9e2e3806f7e3ec7971f65e7cf66f0fc13071b778c97466e167b9f3185933b72e",
+    "nuxtImportsDeclarationSha256": "dd66062ca65da90c16c9e490f83e47f81771dab6c4f56110b4ce39f14043cd27",
     "behaviorProfiles": "planning/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "7330e3f7e4e9c5d5ecbe7cf0c7485b51d25269f789b8940b23763bf0cedfc291"
   },
@@ -512,7 +512,7 @@
     },
     {
       "source": "app/composables/admin/useAdminPlugins.ts",
-      "apiSha256": "902b345744317edb44c1c9796d5a08829562495ec6a38901aa34c9a41e233a0b",
+      "apiSha256": "924636e0eacae669e54388da97e5a38ed36b439bd146e2755685cd4276f752c0",
       "runtime": "client",
       "publicPaths": [
         "~/composables/admin/useAdminPlugins"
@@ -533,7 +533,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 18,
+              "line": 20,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AdminComponent =\n    | Component\n    | (() => Promise<Component | { default: Component }>);"
             }
@@ -547,7 +547,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 3,
+              "line": 5,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AdminPageDef = {\n    id: string;\n    label: string;\n    path?: string;\n    order?: number;\n    component: AdminComponent;\n};"
             }
@@ -561,7 +561,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 22,
+              "line": 24,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AdminPlugin {\n    id: string;\n    register: (api: AdminPluginApi) => void | Promise<void>;\n}"
             }
@@ -575,7 +575,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 27,
+              "line": 29,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AdminPluginApi {\n    registerAdminPage: (def: AdminPageDef) => void;\n    registerAdminWidget: (def: AdminWidgetDef) => void;\n}"
             }
@@ -589,7 +589,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 11,
+              "line": 13,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AdminWidgetDef = {\n    id: string;\n    slot: 'overview' | 'workspace' | 'plugins' | 'themes' | 'system';\n    order?: number;\n    component: AdminComponent;\n};"
             }
@@ -606,7 +606,7 @@
               "resolvedReturnType": "AdminPluginApi",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 105,
+                "line": 155,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createAdminPluginApi(): AdminPluginApi;"
               }
@@ -615,7 +615,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 105,
+              "line": 155,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createAdminPluginApi(): AdminPluginApi;"
             }
@@ -632,7 +632,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 114,
+                "line": 165,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function loadAdminPlugins();"
               }
@@ -641,7 +641,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 114,
+              "line": 165,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function loadAdminPlugins();"
             }
@@ -658,7 +658,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 55,
+                "line": 96,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerAdminPage(def: AdminPageDef);"
               }
@@ -667,7 +667,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 55,
+              "line": 96,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerAdminPage(def: AdminPageDef);"
             }
@@ -684,7 +684,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 65,
+                "line": 110,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerAdminWidget(def: AdminWidgetDef);"
               }
@@ -693,7 +693,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 65,
+              "line": 110,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerAdminWidget(def: AdminWidgetDef);"
             }
@@ -710,7 +710,7 @@
               "resolvedReturnType": "Component",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 89,
+                "line": 138,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function resolveAdminComponent(def: { id: string; component: AdminComponent });"
               }
@@ -719,7 +719,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 89,
+              "line": 138,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function resolveAdminComponent(def: { id: string; component: AdminComponent });"
             }
@@ -733,7 +733,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 32,
+              "line": 34,
               "syntaxKind": "VariableDeclaration",
               "text": "state = reactive({\n    pages: [] as AdminPageDef[],\n    widgets: [] as AdminWidgetDef[],\n})"
             }
@@ -750,7 +750,7 @@
               "resolvedReturnType": "globalThis.ComputedRef<{ id: string; label: string; path?: string | undefined; order?: number | undefined; component: FunctionalComponent<any, {}, any, {}> | ComponentPublicInstanceConstructor<any, any, any, any, ComputedOptions, MethodOptions> | (() => Promise<Component | { default: Component; }>) | { [x: string]: any; setup?: ((this: void, props: LooseRequired<any>, ctx: { attrs: Data; slots: Readonly<InternalSlots>; emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void); expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void; }) => any) | undefined; name?: string | undefined; template?: string | object | undefined; render?: Function | undefined; components?: Record<string, Component> | undefined; directives?: Record<string, Directive<any, any, string, any>> | undefined; inheritAttrs?: boolean | undefined; emits?: any; slots?: {} | undefined; expose?: string[] | undefined; serverPrefetch?: (() => void | Promise<any>) | undefined; compilerOptions?: { isCustomElement?: ((tag: string) => boolean) | undefined; whitespace?: \"preserve\" | \"condense\" | undefined; comments?: boolean | undefined; delimiters?: [string, string] | undefined; } | undefined; call?: ((this: unknown, ...args: unknown[]) => never) | undefined; __isFragment?: never | undefined; __isTeleport?: never | undefined; __isSuspense?: never | undefined; __defaults?: {} | undefined; compatConfig?: { GLOBAL_MOUNT?: boolean | \"suppress-warning\" | undefined; GLOBAL_MOUNT_CONTAINER?: boolean | \"suppress-warning\" | undefined; GLOBAL_EXTEND?: boolean | \"suppress-warning\" | undefined; GLOBAL_PROTOTYPE?: boolean | \"suppress-warning\" | undefined; GLOBAL_SET?: boolean | \"suppress-warning\" | undefined; GLOBAL_DELETE?: boolean | \"suppress-warning\" | undefined; GLOBAL_OBSERVABLE?: boolean | \"suppress-warning\" | undefined; GLOBAL_PRIVATE_UTIL?: boolean | \"suppress-warning\" | undefined; CONFIG_SILENT?: boolean | \"suppress-warning\" | undefined; CONFIG_DEVTOOLS?: boolean | \"suppress-warning\" | undefined; CONFIG_KEY_CODES?: boolean | \"suppress-warning\" | undefined; CONFIG_PRODUCTION_TIP?: boolean | \"suppress-warning\" | undefined; CONFIG_IGNORED_ELEMENTS?: boolean | \"suppress-warning\" | undefined; CONFIG_WHITESPACE?: boolean | \"suppress-warning\" | undefined; CONFIG_OPTION_MERGE_STRATS?: boolean | \"suppress-warning\" | undefined; INSTANCE_SET?: boolean | \"suppress-warning\" | undefined; INSTANCE_DELETE?: boolean | \"suppress-warning\" | undefined; INSTANCE_DESTROY?: boolean | \"suppress-warning\" | undefined; INSTANCE_EVENT_EMITTER?: boolean | \"suppress-warning\" | undefined; INSTANCE_EVENT_HOOKS?: boolean | \"suppress-warning\" | undefined; INSTANCE_CHILDREN?: boolean | \"suppress-warning\" | undefined; INSTANCE_LISTENERS?: boolean | \"suppress-warning\" | undefined; INSTANCE_SCOPED_SLOTS?: boolean | \"suppress-warning\" | undefined; INSTANCE_ATTRS_CLASS_STYLE?: boolean | \"suppress-warning\" | undefined; OPTIONS_DATA_FN?: boolean | \"suppress-warning\" | undefined; OPTIONS_DATA_MERGE?: boolean | \"suppress-warning\" | undefined; OPTIONS_BEFORE_DESTROY?: boolean | \"suppress-warning\" | undefined; OPTIONS_DESTROYED?: boolean | \"suppress-warning\" | undefined; WATCH_ARRAY?: boolean | \"suppress-warning\" | undefined; PROPS_DEFAULT_THIS?: boolean | \"suppress-warning\" | undefined; V_ON_KEYCODE_MODIFIER?: boolean | \"suppress-warning\" | undefined; CUSTOM_DIR?: boolean | \"suppress-warning\" | undefined; ATTR_FALSE_VALUE?: boolean | \"suppress-warning\" | undefined; ATTR_ENUMERATED_COERCION?: boolean | \"suppress-warning\" | undefined; TRANSITION_CLASSES?: boolean | \"suppress-warning\" | undefined; TRANSITION_GROUP_ROOT?: boolean | \"suppress-warning\" | undefined; COMPONENT_ASYNC?: boolean | \"suppress-warning\" | undefined; COMPONENT_FUNCTIONAL?: boolean | \"suppress-warning\" | undefined; COMPONENT_V_MODEL?: boolean | \"suppress-warning\" | undefined; RENDER_FUNCTION?: boolean | \"suppress-warning\" | undefined; FILTERS?: boolean | \"suppress-warning\" | undefined; PRIVATE_APIS?: boolean | \"suppress-warning\" | undefined; MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined; } | undefined; data?: ((this: any, vm: any) => any) | undefined; computed?: ComputedOptions | undefined; methods?: MethodOptions | undefined; watch?: ComponentWatchOptions | undefined; provide?: ComponentProvideOptions | undefined; inject?: {} | string[] | undefined; filters?: Record<string, Function> | undefined; mixins?: any[] | undefined; extends?: any; beforeCreate?: (() => any) | undefined; created?: (() => any) | undefined; beforeMount?: (() => any) | undefined; mounted?: (() => any) | undefined; beforeUpdate?: (() => any) | undefined; updated?: (() => any) | undefined; activated?: (() => any) | undefined; deactivated?: (() => any) | undefined; beforeDestroy?: (() => any) | undefined; beforeUnmount?: (() => any) | undefined; destroyed?: (() => any) | undefined; unmounted?: (() => any) | undefined; renderTracked?: DebuggerHook | undefined; renderTriggered?: DebuggerHook | undefined; errorCaptured?: ErrorCapturedHook<unknown> | undefined; delimiters?: [string, string] | undefined; __differentiator?: string | number | symbol | undefined; __isBuiltIn?: boolean | undefined; __file?: string | undefined; __name?: string | undefined; beforeRouteEnter?: (TypesConfig extends Record<\"beforeRouteEnter\", infer T> ? T : NavigationGuardWithThis<undefined>) | undefined; beforeRouteUpdate?: (TypesConfig extends Record<\"beforeRouteUpdate\", infer T> ? T : NavigationGuard) | undefined; beforeRouteLeave?: (TypesConfig extends Record<\"beforeRouteLeave\", infer T> ? T : NavigationGuard) | undefined; head?: ((nuxtApp: NuxtApp) => UseHeadInput) | undefined; }; }[]>",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 74,
+                "line": 123,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAdminPages();"
               }
@@ -759,7 +759,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 74,
+              "line": 123,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAdminPages();"
             }
@@ -776,7 +776,7 @@
               "resolvedReturnType": "globalThis.ComputedRef<{ id: string; slot: \"overview\" | \"workspace\" | \"plugins\" | \"themes\" | \"system\"; order?: number | undefined; component: FunctionalComponent<any, {}, any, {}> | ComponentPublicInstanceConstructor<any, any, any, any, ComputedOptions, MethodOptions> | (() => Promise<Component | { default: Component; }>) | { [x: string]: any; setup?: ((this: void, props: LooseRequired<any>, ctx: { attrs: Data; slots: Readonly<InternalSlots>; emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void); expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void; }) => any) | undefined; name?: string | undefined; template?: string | object | undefined; render?: Function | undefined; components?: Record<string, Component> | undefined; directives?: Record<string, Directive<any, any, string, any>> | undefined; inheritAttrs?: boolean | undefined; emits?: any; slots?: {} | undefined; expose?: string[] | undefined; serverPrefetch?: (() => void | Promise<any>) | undefined; compilerOptions?: { isCustomElement?: ((tag: string) => boolean) | undefined; whitespace?: \"preserve\" | \"condense\" | undefined; comments?: boolean | undefined; delimiters?: [string, string] | undefined; } | undefined; call?: ((this: unknown, ...args: unknown[]) => never) | undefined; __isFragment?: never | undefined; __isTeleport?: never | undefined; __isSuspense?: never | undefined; __defaults?: {} | undefined; compatConfig?: { GLOBAL_MOUNT?: boolean | \"suppress-warning\" | undefined; GLOBAL_MOUNT_CONTAINER?: boolean | \"suppress-warning\" | undefined; GLOBAL_EXTEND?: boolean | \"suppress-warning\" | undefined; GLOBAL_PROTOTYPE?: boolean | \"suppress-warning\" | undefined; GLOBAL_SET?: boolean | \"suppress-warning\" | undefined; GLOBAL_DELETE?: boolean | \"suppress-warning\" | undefined; GLOBAL_OBSERVABLE?: boolean | \"suppress-warning\" | undefined; GLOBAL_PRIVATE_UTIL?: boolean | \"suppress-warning\" | undefined; CONFIG_SILENT?: boolean | \"suppress-warning\" | undefined; CONFIG_DEVTOOLS?: boolean | \"suppress-warning\" | undefined; CONFIG_KEY_CODES?: boolean | \"suppress-warning\" | undefined; CONFIG_PRODUCTION_TIP?: boolean | \"suppress-warning\" | undefined; CONFIG_IGNORED_ELEMENTS?: boolean | \"suppress-warning\" | undefined; CONFIG_WHITESPACE?: boolean | \"suppress-warning\" | undefined; CONFIG_OPTION_MERGE_STRATS?: boolean | \"suppress-warning\" | undefined; INSTANCE_SET?: boolean | \"suppress-warning\" | undefined; INSTANCE_DELETE?: boolean | \"suppress-warning\" | undefined; INSTANCE_DESTROY?: boolean | \"suppress-warning\" | undefined; INSTANCE_EVENT_EMITTER?: boolean | \"suppress-warning\" | undefined; INSTANCE_EVENT_HOOKS?: boolean | \"suppress-warning\" | undefined; INSTANCE_CHILDREN?: boolean | \"suppress-warning\" | undefined; INSTANCE_LISTENERS?: boolean | \"suppress-warning\" | undefined; INSTANCE_SCOPED_SLOTS?: boolean | \"suppress-warning\" | undefined; INSTANCE_ATTRS_CLASS_STYLE?: boolean | \"suppress-warning\" | undefined; OPTIONS_DATA_FN?: boolean | \"suppress-warning\" | undefined; OPTIONS_DATA_MERGE?: boolean | \"suppress-warning\" | undefined; OPTIONS_BEFORE_DESTROY?: boolean | \"suppress-warning\" | undefined; OPTIONS_DESTROYED?: boolean | \"suppress-warning\" | undefined; WATCH_ARRAY?: boolean | \"suppress-warning\" | undefined; PROPS_DEFAULT_THIS?: boolean | \"suppress-warning\" | undefined; V_ON_KEYCODE_MODIFIER?: boolean | \"suppress-warning\" | undefined; CUSTOM_DIR?: boolean | \"suppress-warning\" | undefined; ATTR_FALSE_VALUE?: boolean | \"suppress-warning\" | undefined; ATTR_ENUMERATED_COERCION?: boolean | \"suppress-warning\" | undefined; TRANSITION_CLASSES?: boolean | \"suppress-warning\" | undefined; TRANSITION_GROUP_ROOT?: boolean | \"suppress-warning\" | undefined; COMPONENT_ASYNC?: boolean | \"suppress-warning\" | undefined; COMPONENT_FUNCTIONAL?: boolean | \"suppress-warning\" | undefined; COMPONENT_V_MODEL?: boolean | \"suppress-warning\" | undefined; RENDER_FUNCTION?: boolean | \"suppress-warning\" | undefined; FILTERS?: boolean | \"suppress-warning\" | undefined; PRIVATE_APIS?: boolean | \"suppress-warning\" | undefined; MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined; } | undefined; data?: ((this: any, vm: any) => any) | undefined; computed?: ComputedOptions | undefined; methods?: MethodOptions | undefined; watch?: ComponentWatchOptions | undefined; provide?: ComponentProvideOptions | undefined; inject?: {} | string[] | undefined; filters?: Record<string, Function> | undefined; mixins?: any[] | undefined; extends?: any; beforeCreate?: (() => any) | undefined; created?: (() => any) | undefined; beforeMount?: (() => any) | undefined; mounted?: (() => any) | undefined; beforeUpdate?: (() => any) | undefined; updated?: (() => any) | undefined; activated?: (() => any) | undefined; deactivated?: (() => any) | undefined; beforeDestroy?: (() => any) | undefined; beforeUnmount?: (() => any) | undefined; destroyed?: (() => any) | undefined; unmounted?: (() => any) | undefined; renderTracked?: DebuggerHook | undefined; renderTriggered?: DebuggerHook | undefined; errorCaptured?: ErrorCapturedHook<unknown> | undefined; delimiters?: [string, string] | undefined; __differentiator?: string | number | symbol | undefined; __isBuiltIn?: boolean | undefined; __file?: string | undefined; __name?: string | undefined; beforeRouteEnter?: (TypesConfig extends Record<\"beforeRouteEnter\", infer T> ? T : NavigationGuardWithThis<undefined>) | undefined; beforeRouteUpdate?: (TypesConfig extends Record<\"beforeRouteUpdate\", infer T> ? T : NavigationGuard) | undefined; beforeRouteLeave?: (TypesConfig extends Record<\"beforeRouteLeave\", infer T> ? T : NavigationGuard) | undefined; head?: ((nuxtApp: NuxtApp) => UseHeadInput) | undefined; }; }[]>",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 80,
+                "line": 129,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAdminWidgets(slot?: AdminWidgetDef['slot']);"
               }
@@ -785,7 +785,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 80,
+              "line": 129,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAdminWidgets(slot?: AdminWidgetDef['slot']);"
             }

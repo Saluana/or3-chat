@@ -1,4 +1,6 @@
 import { computed, reactive, shallowRef, defineAsyncComponent, type Component } from 'vue';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 export type AdminPageDef = {
     id: string;
@@ -35,9 +37,25 @@ export const state = reactive({
 });
 
 const MAX_CACHE_SIZE = 50;
-const componentCache = new Map<string, ReturnType<typeof defineAsyncComponent>>();
+const legacyComponentCache = new Map<
+    string,
+    ReturnType<typeof defineAsyncComponent>
+>();
+const v2ComponentCache = new Map<
+    string,
+    ReturnType<typeof defineAsyncComponent>
+>();
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('admin-extensions');
+}
+
+function getComponentCache() {
+    return useV2Surface() ? v2ComponentCache : legacyComponentCache;
+}
 
 function setComponentCache(id: string, component: ReturnType<typeof defineAsyncComponent>) {
+    const componentCache = getComponentCache();
     if (componentCache.size >= MAX_CACHE_SIZE) {
         const firstKey = componentCache.keys().next().value;
         if (firstKey) componentCache.delete(firstKey);
@@ -52,7 +70,34 @@ function normalizePage(def: AdminPageDef): AdminPageDef {
     };
 }
 
+const pageV2Kernel = getContributionSurfaceKernel<AdminPageDef>(
+    'admin-extensions',
+    {
+        getId: (page) => page.id,
+        normalize: normalizePage,
+    },
+    'pages'
+);
+const widgetV2Kernel = getContributionSurfaceKernel<AdminWidgetDef>(
+    'admin-extensions',
+    {
+        getId: (widget) => widget.id,
+    },
+    'widgets'
+);
+
+pageV2Kernel.registry.subscribe(() => {
+    if (useV2Surface()) state.pages = [...pageV2Kernel.items.value];
+});
+widgetV2Kernel.registry.subscribe(() => {
+    if (useV2Surface()) state.widgets = [...widgetV2Kernel.items.value];
+});
+
 export function registerAdminPage(def: AdminPageDef) {
+    if (useV2Surface()) {
+        pageV2Kernel.registry.registerLegacy({ value: def });
+        return;
+    }
     const normalized = normalizePage(def);
     const existingIndex = state.pages.findIndex((page) => page.id === normalized.id);
     if (existingIndex >= 0) {
@@ -63,6 +108,10 @@ export function registerAdminPage(def: AdminPageDef) {
 }
 
 export function registerAdminWidget(def: AdminWidgetDef) {
+    if (useV2Surface()) {
+        widgetV2Kernel.registry.registerLegacy({ value: def });
+        return;
+    }
     const existingIndex = state.widgets.findIndex((w) => w.id === def.id);
     if (existingIndex >= 0) {
         state.widgets.splice(existingIndex, 1, def);
@@ -87,6 +136,7 @@ export function useAdminWidgets(slot?: AdminWidgetDef['slot']) {
 }
 
 export function resolveAdminComponent(def: { id: string; component: AdminComponent }) {
+    const componentCache = getComponentCache();
     if (componentCache.has(def.id)) return componentCache.get(def.id)!;
 
     if (typeof def.component === 'function') {
@@ -110,10 +160,16 @@ export function createAdminPluginApi(): AdminPluginApi {
 }
 
 const loaded = shallowRef(false);
+const loadedV2 = shallowRef(false);
 
 export async function loadAdminPlugins() {
-    if (loaded.value) return;
-    loaded.value = true;
+    if (useV2Surface()) {
+        if (loadedV2.value) return;
+        loadedV2.value = true;
+    } else {
+        if (loaded.value) return;
+        loaded.value = true;
+    }
 
     const modules = import.meta.glob(
         '~~/extensions/admin-plugins/*/admin.plugin.ts'
