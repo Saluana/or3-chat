@@ -286,7 +286,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC7, R5.AC6
       Done when: direct reads, reset assignments, `callbacks()`, HMR reset, and current Hook Inspector fixtures pass.
 
-- [ ] 5.8 Wire V2 through client singleton, SSR request-local, and server/admin wrappers without changing public types
+- [x] 5.8 Wire V2 through client singleton, SSR request-local, and server/admin wrappers without changing public types
       Requirements: R5.AC1, R5.AC2
       Done when: lifetime isolation tests and declaration snapshots pass in client and SSR contexts.
 

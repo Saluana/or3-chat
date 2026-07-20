@@ -19,7 +19,7 @@
  * - Errors in callbacks are caught and logged, they do NOT crash the caller (unless fatal).
  * - Execution order is stable: Priority ASC, then Registration Order.
  */
-import { createHookEngine as createSharedHookEngine } from '~~/shared/hooks/hook-engine-core';
+import { createServerHookEngine } from './runtime-kernel';
 import type {
     HookEngine,
     HookKind,
@@ -31,16 +31,5 @@ export type { HookFn } from '~~/shared/hooks/hook-engine-core';
 export type { HookEngine, HookKind, OnOptions, RegisterOptions };
 
 export function createHookEngine(): HookEngine {
-    return createSharedHookEngine({
-        resolveOnKind(name, explicitKind) {
-            return explicitKind ?? (name.includes(':filter:') ? 'filter' : 'action');
-        },
-        logCallbackError({ error, name }) {
-            try {
-                console.error('[admin-hooks]', name, error);
-            } catch {
-                /* ignore */
-            }
-        },
-    });
+    return createServerHookEngine('v1');
 }

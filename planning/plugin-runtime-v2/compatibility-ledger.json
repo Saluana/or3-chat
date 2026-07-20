@@ -6,7 +6,7 @@
     "moduleManifest": "planning/plugin-runtime-v2/compatibility-ledger.modules.json",
     "moduleManifestSha256": "67d56a581a19f5968bd170955bc317b8aba9afdd0878a30fb00f45dab767bbb1",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "nuxtImportsDeclarationSha256": "9e2e3806f7e3ec7971f65e7cf66f0fc13071b778c97466e167b9f3185933b72e",
+    "nuxtImportsDeclarationSha256": "dc7bd409d1bed67aa2bf24ffa48894dd7214c546a7949758baf0f13c0cf2bddf",
     "behaviorProfiles": "planning/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "7330e3f7e4e9c5d5ecbe7cf0c7485b51d25269f789b8940b23763bf0cedfc291"
   },
@@ -9618,7 +9618,7 @@
     },
     {
       "source": "app/core/hooks/hooks.ts",
-      "apiSha256": "55555a8a8b29e81e1d2e4895357a29ed22c6c30b36a7cbb519f2b58246d6a345",
+      "apiSha256": "c163587d728a70a914dd20ae846a35b9b8f87556c041831be4cb280f5bfd867c",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks",
@@ -9642,7 +9642,7 @@
               "resolvedReturnType": "HookEngine",
               "declaration": {
                 "source": "app/core/hooks/hooks.ts",
-                "line": 49,
+                "line": 48,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createHookEngine(): HookEngine;"
               }
@@ -9651,7 +9651,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/hooks.ts",
-              "line": 49,
+              "line": 48,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createHookEngine(): HookEngine;"
             }

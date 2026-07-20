@@ -34,37 +34,25 @@
  * @see docs/core-hook-map.md for hook reference
  * @see core/hooks/hook-types.ts for type-safe hook payload map
  */
-import { createHookEngine as createSharedHookEngine } from '~~/shared/hooks/hook-engine-core';
+import { createAppHookEngine } from './runtime-kernel';
 import type {
     HookEngine,
     HookKind,
     OnOptions,
     RegisterOptions,
 } from '~~/shared/hooks/hook-engine-core';
-import { reportError, err } from '~/utils/errors';
 
 export type { HookFn } from '~~/shared/hooks/hook-engine-core';
 export type { HookEngine, HookKind, OnOptions, RegisterOptions };
 
 export function createHookEngine(): HookEngine {
-    return createSharedHookEngine({
-        logCallbackError({ error, isFilter, name }) {
-            console.error(
-                `[hooks] Error in ${isFilter ? 'filter' : 'action'} "${name}":`,
-                error
-            );
-        },
-        onOffError() {
-            reportError(err('ERR_INTERNAL', 'hook disposer failed'), {
-                silent: true,
-                tags: { domain: 'hooks', stage: 'off' },
-            });
-        },
-    });
+    return createAppHookEngine('v1');
 }
 
 // HMR cleanup: prevent diagnostics from growing unbounded across reloads
-const hot = (import.meta as ImportMeta & { hot?: { dispose: (cb: () => void) => void } }).hot;
+const hot = (
+    import.meta as ImportMeta & { hot?: { dispose: (cb: () => void) => void } }
+).hot;
 if (hot) {
     hot.dispose(() => {
         // No need to clear the singleton hook engine itself (it's meant to persist),
