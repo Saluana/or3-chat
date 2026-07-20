@@ -362,7 +362,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R7.AC5, R7.AC6
       Done when: verified trees are never mutated and unrelated plugin IDs do not share a mutex.
 
-- [ ] 7.3 Implement advisory multi-process lock with stale-lock ownership/recovery rules
+- [x] 7.3 Implement advisory multi-process lock with stale-lock ownership/recovery rules
       Requirements: R7.AC6
       Done when: two-process install/update/uninstall tests serialize one ID without deleting a live lock.
 

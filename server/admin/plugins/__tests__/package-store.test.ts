@@ -66,12 +66,15 @@ describe('immutable plugin package store', () => {
     it('serializes one plugin ID while an unrelated ID progresses independently', async () => {
         const store = new ImmutablePluginPackageStore(mkdtempSync(resolve(tmpdir(), 'or3-package-store-')));
         const alphaGate = deferred<void>();
+        const alphaStarted = deferred<void>();
         const trace: string[] = [];
         const alphaFirst = store.runPluginOperation('alpha', async () => {
             trace.push('alpha-1:start');
+            alphaStarted.resolve();
             await alphaGate.promise;
             trace.push('alpha-1:end');
         });
+        await alphaStarted.promise;
         const alphaSecond = store.runPluginOperation('alpha', () => trace.push('alpha-2'));
         const beta = store.runPluginOperation('beta', () => trace.push('beta'));
 

@@ -4,6 +4,7 @@ import { basename, resolve, sep } from 'node:path';
 import { PerPluginLifecycleMutex } from '../../../shared/plugins/lifecycle-coordinator';
 import type { Sha256 } from '../../../shared/plugins/runtime-descriptor';
 import { EXTENSIONS_BASE_DIR } from '../extensions/paths';
+import { AdvisoryPluginOperationLock } from './package-operation-lock';
 import {
     PackageTreeValidationError,
     verifyPackageTree,
@@ -106,9 +107,11 @@ async function removeStagingTree(path: string): Promise<void> {
 export class ImmutablePluginPackageStore {
     readonly #storeRoot: string;
     readonly #mutex = new PerPluginLifecycleMutex();
+    readonly #processLock: AdvisoryPluginOperationLock;
 
     constructor(extensionsRoot = EXTENSIONS_BASE_DIR) {
         this.#storeRoot = resolve(extensionsRoot, '.store');
+        this.#processLock = new AdvisoryPluginOperationLock(extensionsRoot);
     }
 
     get storeRoot(): string {
@@ -130,7 +133,14 @@ export class ImmutablePluginPackageStore {
         operation: () => T | PromiseLike<T>
     ): Promise<T> {
         assertPluginId(pluginId);
-        return this.#mutex.runExclusive(pluginId, operation);
+        return this.#mutex.runExclusive(pluginId, async () => {
+            const lease = await this.#processLock.acquire(pluginId);
+            try {
+                return await operation();
+            } finally {
+                await lease.release();
+            }
+        });
     }
 
     async verifyStoredPackage(pluginId: string, digest: Sha256): Promise<VerifiedPackageTree> {
