@@ -34,7 +34,7 @@ describe('Plugin V2 package conformance', () => {
     it('rejects OR3 private aliases', () => {
         const root = copyValidFixture();
         writeFileSync(
-            resolve(root, 'dist/client.mjs'),
+            resolve(root, 'client.mjs'),
             "import value from '~/app/private'; export default value;\n"
         );
         expect(issueCodes(root)).toContain('private-host-import');
@@ -43,7 +43,7 @@ describe('Plugin V2 package conformance', () => {
     it('rejects Nuxt auto-import usage even without an import declaration', () => {
         const root = copyValidFixture();
         writeFileSync(
-            resolve(root, 'dist/client.mjs'),
+            resolve(root, 'client.mjs'),
             "export default { setup() { const state = ref('unsafe'); return state; } };\n"
         );
         expect(issueCodes(root)).toContain('nuxt-auto-import');
@@ -52,7 +52,7 @@ describe('Plugin V2 package conformance', () => {
     it('allows a locally declared identifier that shares an auto-import name', () => {
         const root = copyValidFixture();
         writeFileSync(
-            resolve(root, 'dist/client.mjs'),
+            resolve(root, 'client.mjs'),
             "const ref = (value) => ({ value }); export default ref('local');\n"
         );
         expect(issueCodes(root)).not.toContain('nuxt-auto-import');
@@ -61,7 +61,7 @@ describe('Plugin V2 package conformance', () => {
     it('rejects unresolved bare imports outside the host external allowlist', () => {
         const root = copyValidFixture();
         writeFileSync(
-            resolve(root, 'dist/client.mjs'),
+            resolve(root, 'client.mjs'),
             "import leftPad from 'left-pad'; export default leftPad;\n"
         );
         expect(issueCodes(root)).toContain('unresolved-bare-import');

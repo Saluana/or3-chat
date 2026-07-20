@@ -7,7 +7,7 @@
   "engines": { "or3": "^0.3.0", "pluginApi": "^2.0.0" },
   "runtime": {
     "client": {
-      "entry": "dist/client.mjs",
+      "entry": "client.mjs",
       "format": "esm",
       "isolation": "host"
     }
