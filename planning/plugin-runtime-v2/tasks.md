@@ -324,7 +324,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R2.AC5, R6.AC3
       Done when: access changes and grant changes generate distinct descriptor-key inputs and mediated denials are tested.
 
-- [ ] 6.6 Scaffold `@or3/plugin-sdk` with define helper, host-created context, contribution/hook contracts, and feature negotiation
+- [x] 6.6 Scaffold `@or3/plugin-sdk` with define helper, host-created context, contribution/hook contracts, and feature negotiation
       Requirements: R6.AC4
       Done when: a minimal V2 plugin compiles using only SDK exports.
 

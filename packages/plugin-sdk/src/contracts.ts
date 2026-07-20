@@ -1,0 +1,91 @@
+import type { PluginGrant, PluginManifestV2, PluginTrustMode } from './manifest';
+
+export interface PluginRegistrationHandle {
+    readonly dispose: () => void;
+}
+
+export interface PluginLogger {
+    debug(message: string, context?: Readonly<Record<string, unknown>>): void;
+    info(message: string, context?: Readonly<Record<string, unknown>>): void;
+    warn(message: string, context?: Readonly<Record<string, unknown>>): void;
+    error(message: string, context?: Readonly<Record<string, unknown>>): void;
+}
+
+export interface PluginFeatureNegotiation {
+    has(feature: string): boolean;
+    require(feature: string): void;
+    optional(feature: string): boolean;
+    readonly available: ReadonlySet<string>;
+}
+
+export type PluginContributionKind =
+    | 'ui.dashboard.card'
+    | 'ui.sidebar.section'
+    | 'ui.pane.app'
+    | 'chat.action'
+    | 'chat.tool.client'
+    | 'chat.tool.server'
+    | 'editor.extension'
+    | 'admin.extension';
+
+export interface PluginContribution<TDefinition = unknown> {
+    readonly kind: PluginContributionKind;
+    readonly id: string;
+    readonly definition: TDefinition;
+    readonly priority?: number;
+}
+
+export interface PluginContributions {
+    register<TDefinition>(
+        contribution: PluginContribution<TDefinition>
+    ): PluginRegistrationHandle;
+}
+
+export interface PluginHookOptions {
+    readonly priority?: number;
+    readonly signal?: AbortSignal;
+}
+
+export interface PluginHooks {
+    onAction<TArgs extends readonly unknown[]>(
+        hookName: string,
+        callback: (...args: TArgs) => void | Promise<void>,
+        options?: PluginHookOptions
+    ): PluginRegistrationHandle;
+    onFilter<TValue, TArgs extends readonly unknown[]>(
+        hookName: string,
+        callback: (value: TValue, ...args: TArgs) => TValue | Promise<TValue>,
+        options?: PluginHookOptions
+    ): PluginRegistrationHandle;
+}
+
+declare const hostCreatedPluginContext: unique symbol;
+
+/** Context identity and authority are created by the host, never supplied by plugin input. */
+export interface PluginContext {
+    readonly [hostCreatedPluginContext]: true;
+    readonly pluginId: string;
+    readonly version: string;
+    readonly generation: number;
+    readonly trust: PluginTrustMode;
+    readonly grants: ReadonlySet<PluginGrant>;
+    readonly signal: AbortSignal;
+    readonly logger: PluginLogger;
+    readonly features: PluginFeatureNegotiation;
+    readonly hooks: PluginHooks;
+    readonly contributions: PluginContributions;
+    onCleanup(callback: () => void | Promise<void>): void;
+    onActivate(callback: () => void | Promise<void>): void;
+}
+
+export interface Or3PluginDefinition<TManifest extends PluginManifestV2 = PluginManifestV2> {
+    readonly manifest: TManifest;
+    setup(context: PluginContext): void | Promise<void>;
+}
+
+/** Identity helper: validation and context construction remain host responsibilities. */
+export function defineOr3Plugin<const TManifest extends PluginManifestV2>(
+    definition: Or3PluginDefinition<TManifest>
+): Or3PluginDefinition<TManifest> {
+    return Object.freeze(definition);
+}
