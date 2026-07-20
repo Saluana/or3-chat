@@ -100,7 +100,7 @@ export type ExtensionId = z.infer<typeof ExtensionIdSchema>;
  * - `version`: SemVer string.
  * - `capabilities`: Optional array of feature flags the extension requires.
  */
-export const Or3ExtensionManifestSchema = z.object({
+const Or3ExtensionManifestFields = {
     kind: ExtensionKindSchema,
     id: ExtensionIdSchema,
     name: z.string().min(1),
@@ -111,9 +111,44 @@ export const Or3ExtensionManifestSchema = z.object({
     runtime: RuntimeSchema.optional(),
     themeTrust: z.enum(['declarative', 'trusted-code']).optional(),
     componentContractVersion: z.literal(1).optional(),
-});
+};
+
+/**
+ * Frozen compatible parser for manifests created before Manifest V2.
+ *
+ * `manifestVersion` is a dispatcher input only: omitting it, setting it to
+ * `null`, or explicitly selecting `1` all preserve the prior normalized V1
+ * output. Unknown V1 keys continue to be stripped by Zod's default object
+ * behavior.
+ */
+export const Or3ExtensionManifestV1Schema = z
+    .object({
+        ...Or3ExtensionManifestFields,
+        manifestVersion: z.union([z.literal(1), z.null()]).optional(),
+    })
+    .transform(({ manifestVersion: _manifestVersion, ...manifest }) => manifest);
+
+/**
+ * Strict parser boundary for Manifest V2 packages.
+ * V2-only contract fields are added explicitly as the package contract grows;
+ * undeclared fields are rejected rather than silently stripped.
+ */
+export const Or3ExtensionManifestV2Schema = z
+    .object({
+        ...Or3ExtensionManifestFields,
+        manifestVersion: z.literal(2),
+    })
+    .strict();
+
+/** Dispatches with `manifestVersion ?? 1` while preventing V2 fallback to V1. */
+export const Or3ExtensionManifestSchema = z.union([
+    Or3ExtensionManifestV2Schema,
+    Or3ExtensionManifestV1Schema,
+]);
 
 export type Or3ExtensionManifest = z.infer<typeof Or3ExtensionManifestSchema>;
+export type Or3ExtensionManifestV1 = z.infer<typeof Or3ExtensionManifestV1Schema>;
+export type Or3ExtensionManifestV2 = z.infer<typeof Or3ExtensionManifestV2Schema>;
 
 /**
  * Purpose:

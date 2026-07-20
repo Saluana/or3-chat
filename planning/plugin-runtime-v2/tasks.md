@@ -304,7 +304,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
 
 ## 6. Milestone 6 — Manifest V2, SDK, and state contracts
 
-- [ ] 6.1 Split manifest parsing into compatible V1 and strict V2 schemas with `manifestVersion ?? 1` dispatch
+- [x] 6.1 Split manifest parsing into compatible V1 and strict V2 schemas with `manifestVersion ?? 1` dispatch
       Requirements: R1.AC6, R6.AC1
       Done when: all stored V1 manifest fixtures normalize identically and invalid V2 fields fail before import.
 

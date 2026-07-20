@@ -50,6 +50,26 @@ describe('installExtensionFromZip', () => {
         await expect(installExtensionFromZip(zip, false)).rejects.toThrow('Invalid manifest');
     });
 
+    it('rejects undeclared V2 manifest fields before installation', async () => {
+        const zip = makeZip({
+            'or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-plugin',
+                name: 'Strict V2',
+                version: '2.0.0',
+                capabilities: [],
+                manifestVersion: 2,
+                undeclaredV2Field: true,
+            }),
+            'index.js': 'throw new Error("must not execute")',
+        });
+
+        await expect(installExtensionFromZip(zip, false)).rejects.toThrow('Invalid manifest');
+        await expect(
+            fs.access(join(EXTENSIONS_BASE_DIR, 'plugins', 'test-plugin'))
+        ).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+
     it('rejects unsafe manifest ids', async () => {
         const zip = makeZip({
             'or3.manifest.json': JSON.stringify({
