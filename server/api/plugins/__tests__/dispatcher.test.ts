@@ -123,54 +123,69 @@ describe('plugin route dispatcher', () => {
         );
     });
 
-    it('requires workspace.write for mutating plugin routes', async () => {
-        getMethodMock.mockReturnValue('POST');
-        getRouterParamMock.mockImplementation((_event, key: string) => {
-            if (key === 'pluginId') return 'plugin.a';
-            if (key === 'path') return 'mutate';
-            return undefined;
-        });
+    it.each([
+        ['POST', 'workspace.write'],
+        ['PUT', 'workspace.write'],
+        ['PATCH', 'workspace.write'],
+        ['DELETE', 'workspace.write'],
+        ['GET', 'workspace.read'],
+        ['HEAD', 'workspace.read'],
+    ] as const)(
+        'maps %s plugin routes to %s',
+        async (method, permission) => {
+            getMethodMock.mockReturnValue(method);
+            getRouterParamMock.mockImplementation((_event, key: string) => {
+                if (key === 'pluginId') return 'plugin.a';
+                if (key === 'path') return 'resource';
+                return undefined;
+            });
 
-        mkdirSync(join(pluginDir, 'server'), { recursive: true });
-        writeFileSync(
-            join(pluginDir, 'server', 'mutate.post.mjs'),
-            'export default async () => ({ ok: true, mutated: true });',
-            'utf8'
-        );
+            mkdirSync(join(pluginDir, 'server'), { recursive: true });
+            const declaredMethod = method === 'HEAD' ? 'GET' : method;
+            const file = `resource.${declaredMethod.toLowerCase()}.mjs`;
+            writeFileSync(
+                join(pluginDir, 'server', file),
+                `export default async () => ({ ok: true, method: "${declaredMethod}" });`,
+                'utf8'
+            );
 
-        listInstalledExtensionsMock.mockResolvedValue([
-            {
-                kind: 'plugin',
-                id: 'plugin.a',
-                name: 'Plugin A',
-                version: '1.0.0',
-                capabilities: [],
-                path: pluginDir,
-                runtime: {
-                    server: {
-                        routes: [
-                            {
-                                method: 'POST',
-                                path: 'mutate',
-                                handler: 'server/mutate.post.mjs',
-                            },
-                        ],
+            listInstalledExtensionsMock.mockResolvedValue([
+                {
+                    kind: 'plugin',
+                    id: 'plugin.a',
+                    name: 'Plugin A',
+                    version: '1.0.0',
+                    capabilities: [],
+                    path: pluginDir,
+                    runtime: {
+                        server: {
+                            routes: [
+                                {
+                                    method: declaredMethod,
+                                    path: 'resource',
+                                    handler: `server/${file}`,
+                                },
+                            ],
+                        },
                     },
                 },
-            },
-        ]);
+            ]);
 
-        const handler = (await import('../[pluginId]/[...path]')).default as (
-            event: H3Event
-        ) => Promise<any>;
+            const handler = (await import('../[pluginId]/[...path]')).default as (
+                event: H3Event
+            ) => Promise<any>;
 
-        await expect(handler(makeEvent())).resolves.toEqual({ ok: true, mutated: true });
-        expect(requireCanMock).toHaveBeenCalledWith(
-            expect.anything(),
-            'workspace.write',
-            expect.anything()
-        );
-    });
+            await expect(handler(makeEvent())).resolves.toEqual({
+                ok: true,
+                method: declaredMethod,
+            });
+            expect(requireCanMock).toHaveBeenCalledWith(
+                expect.anything(),
+                permission,
+                expect.anything()
+            );
+        }
+    );
 
     it('returns 404 for undeclared routes', async () => {
         listInstalledExtensionsMock.mockResolvedValue([

@@ -6,7 +6,7 @@
  * - filter cannot grant allowed=false -> true (must be ignored/overridden)
  * - filter throws => fail closed (deny) + diagnostic increment
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { can } from '../can';
 import {
     initializeAuthHookEngine,
@@ -189,28 +189,81 @@ describe('auth hooks and can() filter enforcement', () => {
 
             expect(() => can(mockSession, 'workspace.read')).not.toThrow();
         });
+
+        it('should fail closed on invalid constraint return shapes', () => {
+            _resetAuthHookEngineForTesting();
+            const hookEngine = createHookEngine();
+            const authEngine = initializeAuthHookEngine(hookEngine);
+
+            authEngine.addAuthorizationConstraint({
+                id: 'invalid-shape',
+                evaluate: (() => ({ allowed: 'maybe' })) as never,
+            });
+
+            const decision = can(mockSession, 'workspace.read');
+            expect(decision.allowed).toBe(false);
+            expect(decision.reason).toBe('auth-constraint-invalid');
+        });
+
+        it('should stop evaluating later constraints after an earlier failure', () => {
+            _resetAuthHookEngineForTesting();
+            const hookEngine = createHookEngine();
+            const authEngine = initializeAuthHookEngine(hookEngine);
+            const later = vi.fn(() => ({ allowed: true as const }));
+
+            authEngine.addAuthorizationConstraint(
+                {
+                    id: 'first-throw',
+                    evaluate: () => {
+                        throw new Error('stop here');
+                    },
+                },
+                5
+            );
+            authEngine.addAuthorizationConstraint(
+                {
+                    id: 'second',
+                    evaluate: later,
+                },
+                10
+            );
+
+            const decision = can(mockSession, 'workspace.read');
+            expect(decision.allowed).toBe(false);
+            expect(later).not.toHaveBeenCalled();
+        });
     });
 
     describe('filter removal', () => {
-        it('should allow removing filters via disposer', () => {
+        it('should restore access after disposing a deny constraint', () => {
             const engine = getAuthHookEngine();
-            
-            const restrictiveFilter: AuthAccessDecisionFilter = (decision) => ({
+
+            const disposer = engine.addAccessDecisionFilter((decision) => ({
                 ...decision,
                 allowed: false,
-            });
-            
-            const disposer = engine.addAccessDecisionFilter(restrictiveFilter);
-            
-            // Initially denied
-            let decision = can(mockSession, 'workspace.read');
-            expect(decision.allowed).toBe(false);
-            
-            // Remove the filter
+                reason: 'temporary-deny',
+            }));
+
+            expect(can(mockSession, 'workspace.read').allowed).toBe(false);
             disposer();
-            
-            // Need to re-initialize since we can't actually remove from singleton
-            // This tests the disposer pattern works
+            expect(can(mockSession, 'workspace.read').allowed).toBe(true);
+        });
+
+        it('should keep remaining deny constraints after disposing one', () => {
+            const engine = getAuthHookEngine();
+            const first = engine.addAuthorizationConstraint({
+                id: 'deny-a',
+                evaluate: () => ({ allowed: false, reason: 'a' }),
+            });
+            engine.addAuthorizationConstraint({
+                id: 'deny-b',
+                evaluate: () => ({ allowed: false, reason: 'b' }),
+            });
+
+            first();
+            const decision = can(mockSession, 'workspace.read');
+            expect(decision.allowed).toBe(false);
+            expect(decision.reason).toBe('b');
         });
     });
 

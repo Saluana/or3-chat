@@ -65,11 +65,20 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });
     }
 
-    const route = resolveRouteDef(
-        plugin.runtime?.server?.routes as RuntimeRouteDef[] | undefined,
-        method,
-        requestPath
-    );
+    // HEAD may reuse a declared GET handler; permission still defaults to read.
+    const route =
+        resolveRouteDef(
+            plugin.runtime?.server?.routes as RuntimeRouteDef[] | undefined,
+            method,
+            requestPath
+        ) ??
+        (method === 'HEAD'
+            ? resolveRouteDef(
+                  plugin.runtime?.server?.routes as RuntimeRouteDef[] | undefined,
+                  'GET',
+                  requestPath
+              )
+            : null);
 
     if (!route) {
         throw createError({ statusCode: 404, statusMessage: 'Route not declared in plugin manifest' });
