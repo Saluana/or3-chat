@@ -9,10 +9,14 @@
  */
 
 import type { Ref } from 'vue';
-import type { ChatMessage, ContentPart } from './types';
-import { deriveMessageContent } from './messages';
+import type { ChatMessage } from './types';
 import { getDb } from '~/db/client';
 import type { Message } from '~/db/schema';
+import { compareMessageOrder } from '~/db/messages';
+import {
+    projectTranscriptForOpenRouter,
+    storedMessagesToCanonicalTranscript,
+} from './transcript';
 
 /**
  * `ensureThreadHistoryLoaded`
@@ -40,35 +44,11 @@ export async function ensureThreadHistoryLoaded(
             .filter((m: Message) => !m.deleted)
             .toArray();
 
-        all.sort((a: Message, b: Message) => (a.index || 0) - (b.index || 0));
+        all.sort(compareMessageOrder);
 
-        messages.value = all.map((dbMsg: Message) => {
-            const data = dbMsg.data as Record<string, unknown> | null | undefined;
-            const content = deriveMessageContent({
-                content: (dbMsg as { content?: string | ContentPart[] | null }).content,
-                data,
-            });
-            return {
-                role: dbMsg.role as ChatMessage['role'],
-                content,
-                id: dbMsg.id,
-                stream_id: dbMsg.stream_id ?? undefined,
-                file_hashes: dbMsg.file_hashes,
-                pending: dbMsg.pending ?? false,
-                error: dbMsg.error ?? null,
-                reasoning_text:
-                    typeof data?.reasoning_text === 'string'
-                        ? data.reasoning_text
-                        : null,
-                data: data || null,
-                index:
-                    typeof dbMsg.index === 'number'
-                        ? dbMsg.index
-                        : null,
-                created_at:
-                    typeof dbMsg.created_at === 'number' ? dbMsg.created_at : null,
-            };
-        });
+        messages.value = projectTranscriptForOpenRouter(
+            storedMessagesToCanonicalTranscript(all)
+        );
 
         historyLoadedFor.value = threadIdRef.value;
     } catch (e) {

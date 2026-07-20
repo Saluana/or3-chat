@@ -16,12 +16,20 @@ export {
 // Error handling utilities
 export {
     normalizeSDKError,
+    OpenRouterStreamError,
+    OpenRouterProtocolError,
+    OpenRouterProviderError,
     type NormalizedError,
     type ErrorCode,
+    type OpenRouterStreamFailureKind,
 } from './errors';
 
 // Type mapping utilities
 export { sdkModelToLocal } from './types';
 
 // SSE parsing (used for streaming)
-export { parseOpenRouterSSE } from './parseOpenRouterSSE';
+export {
+    parseOpenRouterSSE,
+    type ParseOpenRouterSSEOptions,
+    type StreamedFieldMode,
+} from './parseOpenRouterSSE';

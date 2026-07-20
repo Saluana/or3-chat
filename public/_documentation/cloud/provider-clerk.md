@@ -80,6 +80,12 @@ Set:
 - `NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `NUXT_CLERK_SECRET_KEY`
 
+### Session rejected despite a valid Clerk login
+
+OR3 requires the Clerk user's primary email address to exist and have
+verification status `verified`. An absent or unverified primary email is not
+accepted for email-bound workspace provisioning or invitations.
+
 ## Related
 
 - [providers](./providers)

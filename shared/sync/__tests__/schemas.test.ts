@@ -4,9 +4,23 @@ import {
     PostPayloadSchema,
     PushResultSchema,
     TABLE_PAYLOAD_SCHEMAS,
+    TombstoneSchema,
 } from '../schemas';
 
 describe('sync schemas', () => {
+    it('reads legacy tombstones and preserves full deterministic revisions', () => {
+        expect(TombstoneSchema.safeParse({
+            id: 'messages:m1', tableName: 'messages', pk: 'm1', deletedAt: 1, clock: 1,
+        }).success).toBe(true);
+        const current = TombstoneSchema.parse({
+            id: 'messages:m1', tableName: 'messages', pk: 'm1', deletedAt: 1, clock: 2,
+            hlc: '2:0:d', opId: 'op-2', serverVersion: 9, serverDeletedAt: 10,
+        });
+        expect(current).toMatchObject({
+            hlc: '2:0:d', opId: 'op-2', serverVersion: 9, serverDeletedAt: 10,
+        });
+    });
+
     it('includes notifications in TABLE_PAYLOAD_SCHEMAS', () => {
         expect(TABLE_PAYLOAD_SCHEMAS.notifications).toBe(NotificationPayloadSchema);
     });

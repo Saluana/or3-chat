@@ -34,6 +34,27 @@ export interface WorkspaceInviteRecord {
     updatedAt: number;
 }
 
+export type InviteAcceptanceFailureReason =
+    | 'not_found'
+    | 'expired'
+    | 'revoked'
+    | 'already_used'
+    | 'token_mismatch'
+    | 'email_mismatch';
+
+export type InviteValidationResult =
+    | { ok: true; role: WorkspaceRole }
+    | { ok: false; reason: InviteAcceptanceFailureReason };
+
+export type InviteProvisionResult =
+    | {
+          ok: true;
+          userId: string;
+          role: WorkspaceRole;
+          createdUser: boolean;
+      }
+    | { ok: false; reason: InviteAcceptanceFailureReason };
+
 /**
  * Purpose:
  * Interface for auth-related workspace and user persistence.
@@ -188,6 +209,32 @@ export interface AuthWorkspaceStore {
     }): Promise<void>;
 
     /**
+     * Validates the current persisted state of an invite without mutating it.
+     * Used by auth providers that must reject invalid invitations before they
+     * create a provider-owned login account or session.
+     */
+    validateInvite?(input: {
+        workspaceId: string;
+        email: string;
+        tokenHash: string;
+    }): Promise<InviteValidationResult>;
+
+    /**
+     * Atomically validates an invitation and provisions the internal user,
+     * auth-account mapping, workspace membership, active workspace, and invite
+     * consumption. Implementations must not emulate this with compensating
+     * deletes across separate operations.
+     */
+    acceptInviteAndProvisionUser?(input: {
+        provider: string;
+        providerUserId: string;
+        email: string;
+        displayName?: string;
+        workspaceId: string;
+        tokenHash: string;
+    }): Promise<InviteProvisionResult>;
+
+    /**
      * Purpose:
      * Consumes a matching invite when a new user registers.
      */
@@ -198,7 +245,7 @@ export interface AuthWorkspaceStore {
         acceptedUserId: string;
     }): Promise<
         | { ok: true; role: WorkspaceRole }
-        | { ok: false; reason: 'not_found' | 'expired' | 'revoked' | 'already_used' | 'token_mismatch' }
+        | { ok: false; reason: InviteAcceptanceFailureReason }
     >;
 }
 

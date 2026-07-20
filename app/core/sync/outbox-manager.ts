@@ -34,6 +34,7 @@ import { nowSec } from '~/db/util';
 import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
 import { markRecentOpId } from './recent-op-cache';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
+import { compareSyncRevision } from '~~/shared/sync/revision';
 
 /** Default retry delays in milliseconds */
 const DEFAULT_RETRY_DELAYS = [250, 1000, 3000, 5000];
@@ -82,10 +83,11 @@ export class OutboxManager {
     private circuitBreakerKey: string;
 
     private flushTimeout: ReturnType<typeof setTimeout> | null = null;
-    private isFlushing = false;
+    private flushOwner: symbol | null = null;
     private isRunning = false;
     private needsSyncingRecovery = true;
     private providerRateLimitedUntil = 0;
+    private lifecycleGeneration = 0;
 
     constructor(
         db: Or3DB,
@@ -109,21 +111,18 @@ export class OutboxManager {
      */
     start(): void {
         if (this.isRunning) return;
+        const generation = ++this.lifecycleGeneration;
         this.isRunning = true;
         this.needsSyncingRecovery = true;
         this.providerRateLimitedUntil = 0;
-        // Purge permanently failed ops on startup — they will never succeed
-        // and only generate noise (error notifications, wasted flush cycles).
-        this.purgeFailedOps().catch((err) =>
-            console.error('[OutboxManager] Failed to purge stale ops:', err)
-        );
-        this.scheduleNextFlush(0);
+        this.scheduleNextFlush(0, generation);
     }
 
     /**
      * Stop the flush loop
      */
     stop(): void {
+        this.lifecycleGeneration++;
         this.isRunning = false;
         if (this.flushTimeout) {
             clearTimeout(this.flushTimeout);
@@ -131,23 +130,23 @@ export class OutboxManager {
         }
     }
 
-    private scheduleNextFlush(delay: number): void {
-        if (!this.isRunning || this.flushTimeout) return;
+    private scheduleNextFlush(delay: number, generation: number): void {
+        if (!this.isRunning || generation !== this.lifecycleGeneration || this.flushTimeout) return;
 
         this.flushTimeout = setTimeout(async () => {
             this.flushTimeout = null;
-            if (!this.isRunning) return;
+            if (!this.isRunning || generation !== this.lifecycleGeneration) return;
 
             let didWork = false;
             try {
-                didWork = await this.flush();
+                didWork = await this.flush(generation);
             } catch (err) {
                 console.error('[OutboxManager] Flush error:', err);
             }
 
             // If work was found, retry quickly, otherwise behave like a heartbeat
             const nextDelay = didWork ? 100 : this.config.flushIntervalMs;
-            this.scheduleNextFlush(nextDelay);
+            this.scheduleNextFlush(nextDelay, generation);
         }, delay);
     }
 
@@ -155,8 +154,8 @@ export class OutboxManager {
      * Flush pending operations to the server
      * Returns true if operations were processed
      */
-    async flush(): Promise<boolean> {
-        if (this.isFlushing) return false;
+    async flush(generation = this.lifecycleGeneration): Promise<boolean> {
+        if (generation !== this.lifecycleGeneration || this.flushOwner) return false;
 
         // E2E Test Hook: Allow tests to simulate offline mode (dev only)
         if (import.meta.dev && (globalThis as { __OR3_TEST_OFFLINE?: boolean }).__OR3_TEST_OFFLINE) {
@@ -172,27 +171,34 @@ export class OutboxManager {
             return false;
         }
 
-        this.isFlushing = true;
-
+        const owner = Symbol('outbox-flush');
+        this.flushOwner = owner;
         try {
             const hooks = useHooks();
 
-            // Crash recovery: reset stale syncing ops once when the loop starts.
+            // Crash recovery: reset stale in-flight ops once when the loop starts.
             if (this.needsSyncingRecovery) {
                 await this.db.pending_ops
                     .where('status')
                     .equals('syncing')
                     .modify({ status: 'pending', nextAttemptAt: Date.now() });
+                if (generation !== this.lifecycleGeneration) return false;
+                await this.db.pending_ops
+                    .where('status')
+                    .equals('in_flight')
+                    .modify({ status: 'pending', nextAttemptAt: Date.now() });
+                if (generation !== this.lifecycleGeneration) return false;
                 this.needsSyncingRecovery = false;
             }
 
             // Get pending ops (limited to prevent O(N) memory usage)
             // We fetch more than maxBatchSize to allow for some coalescing
-            const pendingOps = await this.db.pending_ops
-                .where('status')
-                .equals('pending')
-                .limit(this.config.maxBatchSize * 10) 
-                .toArray();
+            const pendingOps = [
+                ...(await this.db.pending_ops.where('status').equals('pending').toArray()),
+                ...(await this.db.pending_ops.where('status').equals('retry_wait').toArray()),
+            ]
+                .slice(0, this.config.maxBatchSize * 10);
+            if (generation !== this.lifecycleGeneration) return false;
             
             // Sort by createdAt to ensure correct order
             pendingOps.sort((a, b) => a.createdAt - b.createdAt);
@@ -239,11 +245,13 @@ export class OutboxManager {
                 scope: this.scope,
                 count: batch.length,
             });
+            if (generation !== this.lifecycleGeneration) return false;
 
-            // Mark as syncing
+            // Persist ownership of this batch before crossing the network boundary.
             await this.db.pending_ops.bulkPut(
-                batch.map((op) => ({ ...op, status: 'syncing' as const }))
+                batch.map((op) => ({ ...op, status: 'in_flight' as const }))
             );
+            if (generation !== this.lifecycleGeneration) return false;
 
              try {
                  const sanitizedBatch = batch.map((op) => ({
@@ -261,6 +269,7 @@ export class OutboxManager {
                      scope: this.scope,
                      ops: sanitizedBatch,
                  });
+                if (generation !== this.lifecycleGeneration) return false;
 
                 // Process results
                 const resultsById = new Map(result.results.map((res) => [res.opId, res]));
@@ -276,10 +285,11 @@ export class OutboxManager {
                     }
 
                     if (res.success) {
-                        // Successfully synced - remove from outbox
+                        // Record the terminal transition before compacting the outbox.
                         if (op.operation === 'delete') {
-                            await this.markTombstoneSynced(op);
+                            await this.markTombstoneSynced(op, res.serverVersion);
                         }
+                        await this.db.pending_ops.put({ ...op, status: 'applied' });
                         await this.db.pending_ops.delete(op.id);
                         successCount += 1;
                     } else {
@@ -310,6 +320,7 @@ export class OutboxManager {
                     circuitBreaker.recordFailure();
                 }
             } catch (error) {
+                if (generation !== this.lifecycleGeneration) return false;
                 const deferredRetryDelayMs = this.getDeferredRetryDelayMs(error);
                 if (deferredRetryDelayMs !== null) {
                     await this.releaseBatchForDeferredRetry(batch, deferredRetryDelayMs);
@@ -348,7 +359,7 @@ export class OutboxManager {
             }
             return true;
         } finally {
-            this.isFlushing = false;
+            if (this.flushOwner === owner) this.flushOwner = null;
         }
     }
 
@@ -364,13 +375,20 @@ export class OutboxManager {
             const key = `${op.tableName}:${op.pk}`;
             const existing = byKey.get(key);
 
-            if (!existing || op.createdAt > existing.createdAt) {
+            if (
+                !existing ||
+                compareSyncRevision(op.stamp, existing.stamp) > 0
+            ) {
                 byKey.set(key, op);
             }
         }
 
-        // Return in original order (by createdAt)
-        return Array.from(byKey.values()).sort((a, b) => a.createdAt - b.createdAt);
+        return Array.from(byKey.values()).sort((a, b) => {
+            const captureOrder = a.createdAt - b.createdAt;
+            if (captureOrder) return captureOrder;
+            const revisionOrder = compareSyncRevision(a.stamp, b.stamp);
+            return revisionOrder || a.id.localeCompare(b.id);
+        });
     }
 
     /**
@@ -392,7 +410,7 @@ export class OutboxManager {
             this.providerRateLimitedUntil = Math.max(this.providerRateLimitedUntil, nextAttemptAt);
             const updatedOp = {
                 ...op,
-                status: 'pending' as const,
+                status: 'retry_wait' as const,
                 nextAttemptAt,
             };
             await this.db.pending_ops.put(updatedOp);
@@ -410,8 +428,14 @@ export class OutboxManager {
             // Max retries reached or permanent failure - mark as failed
             const updatedOp = {
                 ...op,
-                status: 'failed' as const,
+                status: isPermanent ? 'failed_permanent' as const : 'failed_retryable' as const,
                 attempts,
+                lastError: error,
+                lastErrorCode: errorCode as PendingOp['lastErrorCode'],
+                failureKind: isPermanent
+                    ? 'permanent' as const
+                    : 'retry_exhausted' as const,
+                failedAt: Date.now(),
             };
             await this.db.pending_ops.put(updatedOp);
             
@@ -435,7 +459,7 @@ export class OutboxManager {
             const delay = this.config.retryDelays[attempts - 1] ?? 0;
             const updatedOp = {
                 ...op,
-                status: 'pending' as const,
+                status: 'retry_wait' as const,
                 attempts,
                 nextAttemptAt: Date.now() + delay,
             };
@@ -538,13 +562,13 @@ export class OutboxManager {
         await this.db.pending_ops.bulkPut(
             batch.map((op) => ({
                 ...op,
-                status: 'pending' as const,
+                status: 'retry_wait' as const,
                 nextAttemptAt,
             }))
         );
     }
 
-    private async markTombstoneSynced(op: PendingOp): Promise<void> {
+    private async markTombstoneSynced(op: PendingOp, serverVersion?: number): Promise<void> {
         const id = `${op.tableName}:${op.pk}`;
         const existing = await this.db.tombstones.get(id);
         const syncedAt = nowSec();
@@ -556,13 +580,33 @@ export class OutboxManager {
                 pk: op.pk,
                 deletedAt: syncedAt,
                 clock: op.stamp.clock,
+                hlc: op.stamp.hlc,
+                opId: op.stamp.opId,
+                serverVersion,
                 syncedAt,
             });
             return;
         }
 
-        if (existing.clock <= op.stamp.clock) {
-            await this.db.tombstones.update(id, { clock: op.stamp.clock, syncedAt });
+        const shouldAdvance = existing.clock < op.stamp.clock || (
+            existing.clock === op.stamp.clock && (
+                !existing.hlc ||
+                !existing.opId ||
+                compareSyncRevision(op.stamp, {
+                    clock: existing.clock,
+                    hlc: existing.hlc,
+                    opId: existing.opId,
+                }) >= 0
+            )
+        );
+        if (shouldAdvance) {
+            await this.db.tombstones.update(id, {
+                clock: op.stamp.clock,
+                hlc: op.stamp.hlc,
+                opId: op.stamp.opId,
+                serverVersion: serverVersion ?? existing.serverVersion,
+                syncedAt,
+            });
         }
     }
 
@@ -570,24 +614,73 @@ export class OutboxManager {
      * Get current pending count
      */
     async getPendingCount(): Promise<number> {
-        return this.db.pending_ops.where('status').equals('pending').count();
+        const [pending, retryWait] = await Promise.all([
+            this.db.pending_ops.where('status').equals('pending').count(),
+            this.db.pending_ops.where('status').equals('retry_wait').count(),
+        ]);
+        return pending + retryWait;
     }
 
     /**
      * Get failed ops
      */
     async getFailedOps(): Promise<PendingOp[]> {
-        return this.db.pending_ops.where('status').equals('failed').toArray();
+        const [legacy, retryable, permanent] = await Promise.all([
+            this.db.pending_ops.where('status').equals('failed').toArray(),
+            this.db.pending_ops.where('status').equals('failed_retryable').toArray(),
+            this.db.pending_ops.where('status').equals('failed_permanent').toArray(),
+        ]);
+        return [...legacy, ...retryable, ...permanent];
     }
 
     /**
      * Retry failed ops
      */
-    async retryFailed(): Promise<void> {
-        await this.db.pending_ops
-            .where('status')
-            .equals('failed')
-            .modify({ status: 'pending', attempts: 0, nextAttemptAt: undefined });
+    async retryFailed(opId?: string): Promise<void> {
+        if (opId) {
+            const failed = (await this.getFailedOps()).find(
+                (op) => op.id === opId || op.stamp.opId === opId
+            );
+            if (!failed) return;
+            await this.db.pending_ops.put({
+                ...failed,
+                status: 'pending',
+                attempts: 0,
+                nextAttemptAt: undefined,
+                lastError: undefined,
+                lastErrorCode: undefined,
+                failureKind: undefined,
+                failedAt: undefined,
+            });
+            return;
+        }
+
+        const failed = await this.getFailedOps();
+        await this.db.pending_ops.bulkPut(failed.map((op) => ({
+            ...op,
+            status: 'pending' as const,
+            attempts: 0,
+            nextAttemptAt: undefined,
+            lastError: undefined,
+            lastErrorCode: undefined,
+            failureKind: undefined,
+            failedAt: undefined,
+        })));
+    }
+
+    /** Retain an auditable terminal record of an intentional user discard. */
+    async discardFailed(opId: string, reason = 'user_discarded'): Promise<boolean> {
+        const failed = (await this.getFailedOps()).find(
+            (op) => op.id === opId || op.stamp.opId === opId
+        );
+        if (!failed) return false;
+        await this.db.pending_ops.put({
+            ...failed,
+            status: 'discarded',
+            discardedAt: Date.now(),
+            discardReason: reason,
+        });
+        return true;
     }
 
     /**
@@ -629,16 +722,4 @@ export class OutboxManager {
         return corruptIds.length;
     }
 
-    /**
-     * Remove all permanently-failed ops from the outbox.
-     * These ops have exhausted retries or were classified as permanent failures.
-     * Leaving them pollutes future flush cycles and can re-trigger error notifications.
-     */
-    private async purgeFailedOps(): Promise<void> {
-        const count = await this.db.pending_ops.where('status').equals('failed').count();
-        if (count > 0) {
-            await this.db.pending_ops.where('status').equals('failed').delete();
-            console.log(`[OutboxManager] Purged ${count} permanently-failed ops on startup`);
-        }
-    }
 }

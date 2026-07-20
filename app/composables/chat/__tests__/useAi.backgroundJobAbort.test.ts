@@ -51,4 +51,31 @@ describe('primeBackgroundJobUpdate', () => {
         expect(updateArg.status.status).toBe('aborted');
         expect(updateArg.content).toBe('partial');
     });
+
+    it('isolates a throwing subscriber and still delivers terminal state', async () => {
+        vi.resetModules();
+        vi.doUnmock('~/utils/chat/useAi-internal/backgroundJobs');
+        const { primeBackgroundJobUpdate } = await import(
+            '~/utils/chat/useAi-internal/backgroundJobs'
+        );
+        const throwing = vi.fn(() => {
+            throw new Error('subscriber failed');
+        });
+        const delivered = vi.fn();
+        const tracker = {
+            jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', status: 'streaming', lastContent: '',
+            lastPersistedLength: 0, lastPersistAt: 0, polling: true,
+            streaming: false, active: true,
+            subscribers: new Set([{ onAbort: throwing }, { onAbort: delivered }]),
+            completion: Promise.resolve({} as any), resolveCompletion: vi.fn(),
+        };
+
+        await primeBackgroundJobUpdate(tracker as any);
+
+        expect(throwing).toHaveBeenCalledTimes(1);
+        expect(delivered).toHaveBeenCalledTimes(1);
+        expect(tracker.active).toBe(false);
+        expect(tracker.polling).toBe(false);
+    });
 });

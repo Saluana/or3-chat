@@ -25,7 +25,7 @@
 import { ref, computed, watch, onScopeDispose, getCurrentScope } from 'vue';
 import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
 import { nowSec, newId, getWriteTxTableNames } from '~/db/util';
-import { create, tx, upsert, type Message } from '~/db';
+import { create, tx, type Message } from '~/db';
 import { getDb } from '~/db/client';
 import { serializeFileHashes } from '~/db/files-util';
 import { normalizeFileUrl } from '~/utils/chat/useAi-internal/files';
@@ -38,13 +38,24 @@ import type {
     ContentPart,
     ChatMessage,
     SendMessageParams,
+    SendResult,
+    ChatRequestState,
 } from '~/utils/chat/types';
-import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
+import { ToolIterationLimitError } from '~~/shared/chat/stream-errors';
+import type { ToolLedgerEntry } from '~~/shared/chat/tool-ledger';
+import {
+    isStaleForegroundGeneration,
+    remainingForegroundLeaseMs,
+    createForegroundGenerationLease,
+} from '~/utils/chat/generation-lease';
+import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { reportError, err } from '~/utils/errors';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import {
     buildParts,
     deriveMessageContent,
+    shouldKeepAssistantMessage,
+    getChatModalities,
 } from '~/utils/chat/messages';
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
 import {
@@ -54,6 +65,7 @@ import {
     type BackgroundJobStatus,
     type OpenRouterReasoningConfig,
 } from '../../utils/chat/openrouterStream';
+import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { inferMimeFromUrl } from '~/utils/chat/files';
 import { createStreamAccumulator } from '~/composables/chat/useStreamAccumulator';
@@ -92,8 +104,16 @@ import {
     runForegroundStreamLoop,
     resolveSystemPromptText,
     buildSystemPromptMessage,
-    buildOpenRouterMessagesForSend, retryMessageImpl, continueMessageImpl
+    buildOpenRouterMessagesForSend,
+    retryMessageImpl,
+    continueMessageImpl,
+    makeAssistantPersister,
+    updateMessageRecord,
 } from '~/utils/chat/useAi-internal';
+import {
+    assistantTranscriptData,
+    userTranscriptData,
+} from '~/utils/chat/transcript';
 
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
@@ -104,35 +124,6 @@ function stripThinkingSuffix(modelId: string): string {
     return modelId.endsWith(THINKING_SUFFIX)
         ? modelId.slice(0, -THINKING_SUFFIX.length)
         : modelId;
-}
-
-function readSupportedParameters(model: ModelInfo | undefined): string[] {
-    if (!model || typeof model !== 'object') return [];
-    const raw = model.supported_parameters;
-    if (!Array.isArray(raw)) return [];
-    return raw.filter((value): value is string => typeof value === 'string');
-}
-
-function supportsThinkingByParams(params: string[]): boolean {
-    return params.some(
-        (parameter) =>
-            parameter === 'reasoning' ||
-            parameter.startsWith('reasoning.') ||
-            parameter === 'thinking'
-    );
-}
-
-function resolveReasoningPayload(
-    params: string[]
-): OpenRouterReasoningConfig | undefined {
-    if (!supportsThinkingByParams(params)) return undefined;
-    if (params.includes('reasoning.effort')) {
-        return { effort: 'medium' };
-    }
-    if (params.includes('reasoning.max_tokens')) {
-        return { max_tokens: 1024 };
-    }
-    return { enabled: true };
 }
 
 type GlobalWithPaneApi = typeof globalThis & {
@@ -196,6 +187,8 @@ export function useChat(
     const messages = ref<UiChatMessage[]>(msgs.map((m) => ensureUiMessage(m)));
     const rawMessages = ref<ChatMessage[]>([...msgs]);
     const loading = ref(false);
+    const requestState = ref<ChatRequestState>({ status: 'idle' });
+    let activeRequestId: string | null = null;
     const abortController = ref<AbortController | null>(null);
     const aborted = ref<boolean>(false);
     const { apiKey, setKey } = useUserApiKey();
@@ -273,6 +266,15 @@ export function useChat(
     const streamAcc = createStreamAccumulator();
     const streamState = streamAcc.state;
     const streamId = ref<string | undefined>(undefined);
+    type ChatRequestScope = {
+        requestId: string;
+        accumulator: typeof streamAcc;
+        streamId?: string;
+        abortController: AbortController | null;
+        toolLedger: Map<string, ToolLedgerEntry>;
+        persistAssistant?: ReturnType<typeof makeAssistantPersister>;
+    };
+    let activeRequestScope: ChatRequestScope | null = null;
     const backgroundJobId = ref<string | null>(null);
     const backgroundJobMode = ref<'none' | 'background'>('none');
     const backgroundJobInfo = ref<{
@@ -436,154 +438,6 @@ export function useChat(
         } catch {
             return null;
         }
-    }
-
-    /**
-     * Purpose:
-     * Applies a partial update to a stored message and keeps sync metadata consistent.
-     *
-     * Behavior:
-     * - Loads the current row if not provided
-     * - Mirrors error updates into data.error for reliable sync
-     * - Updates updated_at timestamp
-     *
-     * Constraints:
-     * - No-op if the message does not exist
-     */
-    async function updateMessageRecord(
-        id: string,
-        patch: Partial<StoredMessage>,
-        existing?: StoredMessage | null
-    ): Promise<void> {
-        const base =
-            existing ??
-            ((await getDb().messages.get(id)) as StoredMessage | undefined);
-        if (!base) return;
-
-        // If error is being updated, also update data.error for reliable sync
-        // (data uses v.any() and syncs reliably; top-level error may not)
-        let finalPatch = patch;
-        if ('error' in patch) {
-            const baseData = base.data && typeof base.data === 'object'
-                ? (base.data as Record<string, unknown>)
-                : {};
-            const patchData = patch.data && typeof patch.data === 'object'
-                ? (patch.data as Record<string, unknown>)
-                : {};
-            finalPatch = {
-                ...patch,
-                data: {
-                    ...baseData,
-                    ...patchData,
-                    error: patch.error, // Sync error to data.error
-                },
-            };
-        }
-
-        await upsert.message({
-            ...base,
-            ...finalPatch,
-            updated_at: finalPatch.updated_at ?? nowSec(),
-        });
-    }
-
-    /**
-     * Purpose:
-     * Creates a throttled assistant persister for streaming updates.
-     *
-     * Behavior:
-     * - Serializes file hashes only when changes occur
-     * - Updates content, reasoning, and tool call data
-     * - Clears pending flag on finalize
-     *
-     * Constraints:
-     * - Returned function is stateful and tied to the provided message row
-     */
-    function makeAssistantPersister(
-        assistantDbMsg: StoredMessage,
-        assistantFileHashes: string[]
-    ) {
-        // Cache last serialized file hashes to avoid recomputing on each write
-        let lastSerialized: string | null = assistantDbMsg.file_hashes || null;
-        return async function persist({
-            content,
-            reasoning,
-            toolCalls,
-            finalize = false, // When true, clears pending flag to trigger sync
-        }: {
-            content?: string;
-            reasoning?: string | null;
-            toolCalls?: ToolCallInfo[] | null;
-            finalize?: boolean;
-        }) {
-            const baseData =
-                assistantDbMsg.data && typeof assistantDbMsg.data === 'object'
-                    ? (assistantDbMsg.data as Record<string, unknown>)
-                    : {};
-            const serialized = assistantFileHashes.length
-                ? serializeFileHashes(assistantFileHashes)
-                : lastSerialized;
-            if (
-                serialized !== lastSerialized ||
-                content != null ||
-                reasoning != null ||
-                toolCalls != null ||
-                finalize
-            ) {
-                const payload: StoredMessage = {
-                    ...assistantDbMsg,
-                    pending: finalize ? false : assistantDbMsg.pending, // Clear pending on finalize
-                    data: {
-                        ...baseData,
-                        content:
-                            content ??
-                            (typeof baseData.content === 'string'
-                                ? baseData.content
-                                : ''),
-                        reasoning_text:
-                            reasoning ??
-                            (typeof baseData.reasoning_text === 'string'
-                                ? baseData.reasoning_text
-                                : null),
-                        ...(toolCalls
-                            ? {
-                                  tool_calls: toolCalls.map((t) => ({ ...t })),
-                              }
-                            : {}),
-                    },
-                    file_hashes: serialized,
-                    updated_at: nowSec(),
-                };
-                await upsert.message(payload);
-                lastSerialized = serialized ?? null;
-            }
-            return lastSerialized;
-        };
-    }
-
-    /**
-     * Purpose:
-     * Filters assistant messages to prevent empty placeholders in model input.
-     *
-     * Behavior:
-     * - Keeps non-empty text messages
-     * - Keeps image/file content parts
-     *
-     * Constraints:
-     * - Only applies to assistant role messages
-     */
-    function shouldKeepAssistantMessage(m: ChatMessage): boolean {
-        if (m.role !== 'assistant') return true;
-        const c = m.content;
-        if (typeof c === 'string') return c.trim().length > 0;
-        if (Array.isArray(c)) {
-            return c.some((p) => {
-                if (p.type === 'text') return p.text.trim().length > 0;
-                // image and file parts are always considered non-empty
-                return true;
-            });
-        }
-        return true;
     }
 
     /**
@@ -752,6 +606,7 @@ export function useChat(
                     .filter((m: ChatMessage) => m.role !== 'tool')
                     .map((m) => ensureUiMessage(m));
                 await reattachBackgroundJobs();
+                await reconcileForegroundGenerations();
                 logBgStream('history-sync-complete', {
                     threadId: threadIdRef.value,
                     rawCount: rawMessages.value.length,
@@ -1181,6 +1036,52 @@ export function useChat(
      * Constraints:
      * - No-op when background streaming is disabled
      */
+    async function reconcileForegroundGenerations(): Promise<void> {
+        if (!threadIdRef.value) return;
+        const persisted = (await messagesByThread(threadIdRef.value)) as
+            | StoredMessage[]
+            | undefined;
+        for (const row of persisted ?? []) {
+            const rowData = row.data as Record<string, unknown> | null;
+            if (
+                row.role !== 'assistant' ||
+                row.pending !== true ||
+                typeof rowData?.background_job_id === 'string'
+            ) continue;
+
+            const interrupt = async () => {
+                const latest = (await getDb().messages.get(row.id)) as
+                    | StoredMessage
+                    | undefined;
+                if (!latest || !isStaleForegroundGeneration(latest)) return;
+                await updateMessageRecord(
+                    row.id,
+                    {
+                        pending: false,
+                        error: 'stream_interrupted',
+                        data: { generation_state: 'interrupted' },
+                    },
+                    latest
+                );
+                const raw = rawMessages.value.find((message) => message.id === row.id);
+                if (raw) raw.error = 'stream_interrupted';
+                const ui = messages.value.find((message) => message.id === row.id);
+                if (ui) {
+                    ui.pending = false;
+                    ui.error = 'stream_interrupted';
+                }
+            };
+
+            const remaining = remainingForegroundLeaseMs(row);
+            if (remaining === 0 || isStaleForegroundGeneration(row)) {
+                await interrupt();
+            } else {
+                const timer = setTimeout(() => void interrupt(), remaining);
+                cleanupFns.push(() => clearTimeout(timer));
+            }
+        }
+    }
+
     async function reattachBackgroundJobs(): Promise<void> {
         if (!backgroundStreamingAllowed.value || !threadIdRef.value) {
             logBgStream('reattach-skip-disabled-or-missing-thread', {
@@ -1276,7 +1177,53 @@ export function useChat(
     async function sendMessage(
         contentOrParams: string | (SendMessageParams & { content: string }),
         maybeParams?: SendMessageParams
-    ) {
+    ): Promise<SendResult> {
+        if (activeRequestId) return { status: 'rejected', reason: 'busy' };
+        const requestId = newId();
+        const requestScope: ChatRequestScope = {
+            requestId,
+            accumulator: streamAcc,
+            abortController: null,
+            toolLedger: new Map(),
+        };
+        activeRequestId = requestId;
+        activeRequestScope = requestScope;
+        requestScope.accumulator.reset();
+        loading.value = true;
+        requestState.value = { status: 'admitted', requestId };
+        let result: SendResult;
+        try {
+            result = await executeSendMessage(
+                requestScope,
+                contentOrParams,
+                maybeParams
+            );
+        } catch (error) {
+            result = {
+                status: 'failed', requestId,
+                reason: error instanceof ToolIterationLimitError
+                    ? 'tool_iteration_limit'
+                    : 'stream_error',
+                error: error instanceof Error ? error.message : String(error),
+            };
+        } finally {
+            if (activeRequestId === requestId) activeRequestId = null;
+            if (activeRequestScope === requestScope) {
+                activeRequestScope = null;
+                abortController.value = null;
+            }
+            loading.value = false;
+        }
+        requestState.value = { status: 'terminal', requestId, result };
+        return result;
+    }
+
+    async function executeSendMessage(
+        requestScope: ChatRequestScope,
+        contentOrParams: string | (SendMessageParams & { content: string }),
+        maybeParams?: SendMessageParams
+    ): Promise<SendResult> {
+        const requestId = requestScope.requestId;
         let content: string;
         let sendMessagesParams: SendMessageParams;
 
@@ -1320,8 +1267,19 @@ export function useChat(
                     duration: 4000,
                 });
             }
-            return;
+            return { status: 'rejected', requestId, reason: 'missing_credentials' };
         }
+
+        // Extract extra text parts early so we can account for them in validation.
+        // Large pastes (>600 words) are captured into extraTextParts while the
+        // editor text field (content) is left empty — the send button and model
+        // must still accept the message.
+        const earlyExtraTextParts: string[] =
+            Array.isArray(sendMessagesParams.extraTextParts)
+                ? sendMessagesParams.extraTextParts.filter(
+                      (t): t is string => typeof t === 'string' && t.trim() !== ''
+                  )
+                : [];
 
         const outgoing = await hooks.applyFilters(
             'ui.chat.message:filter:outgoing',
@@ -1329,20 +1287,19 @@ export function useChat(
         );
 
         if (
-            !outgoing ||
-            typeof outgoing !== 'string' ||
-            outgoing.trim() === ''
+            (!outgoing || typeof outgoing !== 'string' || outgoing.trim() === '') &&
+            earlyExtraTextParts.length === 0
         ) {
             useToast().add({
                 title: 'Message blocked',
                 description: 'Your message was filtered out.',
                 duration: 3000,
             });
-            return;
+            return { status: 'rejected', requestId, reason: 'filtered' };
         }
 
         const canSend = await enforceClientLimits(!threadIdRef.value);
-        if (!canSend) return;
+        if (!canSend) return { status: 'rejected', requestId, reason: 'client_limit' };
 
         if (!threadIdRef.value) {
             let effectivePromptId: string | null = pendingPromptId || null;
@@ -1460,9 +1417,15 @@ export function useChat(
             ? parseHashes(prevAssistantRaw.file_hashes)
             : [];
 
-        streamAcc.reset();
+        requestScope.accumulator.reset();
         let { files, model, file_hashes } = sendMessagesParams;
-        const { extraTextParts, online, thinking, context_hashes } = sendMessagesParams;
+        const {
+            extraTextParts,
+            online,
+            thinking,
+            reasoningEffort,
+            context_hashes,
+        } = sendMessagesParams;
         const extendedParams = sendMessagesParams as ExtendedSendMessageParams;
         if (
             (!files || files.length === 0) &&
@@ -1498,11 +1461,14 @@ export function useChat(
             favoriteModels.value.find(
                 (m: ModelInfo) => m.id === normalizedModelId
             );
-        const supportedParameters = readSupportedParameters(modelMeta);
         const requestedThinking =
             thinking === true || originalModelId.endsWith(THINKING_SUFFIX);
         const reasoning = requestedThinking
-            ? resolveReasoningPayload(supportedParameters)
+            ? resolveReasoningConfig({
+                  model: modelMeta,
+                  enabled: true,
+                  effort: reasoningEffort,
+              })
             : undefined;
         model = normalizedModelId;
         if (online === true) model = model + ':online';
@@ -1514,26 +1480,42 @@ export function useChat(
             Array.isArray(files) ? files.map(normalizeFileUrl) : []
         );
 
-        const userDbMsg = await tx.appendMessage({
-            thread_id: threadIdRef.value,
-            role: 'user',
-            data: { content: outgoing, attachments: files ?? [] },
-            file_hashes: file_hashes.length
-                ? serializeFileHashes(file_hashes)
-                : undefined,
-        });
         const parts: ContentPart[] = buildParts(
             outgoing,
             hydratedFiles,
             extraTextParts
         );
+        // Persist the full user-visible text so reloads and retries keep pasted
+        // large-text blocks. The in-flight model input still uses `parts` so
+        // image/file parts are preserved for this request.
+        const persistedUserText = [outgoing, ...(extraTextParts ?? [])]
+            .filter(
+                (t): t is string => typeof t === 'string' && t.trim() !== ''
+            )
+            .join('\n\n');
+        const nextUserMessageId = newId();
+        const userDbMsg = await tx.appendMessage({
+            id: nextUserMessageId,
+            thread_id: threadIdRef.value,
+            role: 'user',
+            data: {
+                ...userTranscriptData(nextUserMessageId),
+                content: persistedUserText,
+                attachments: files ?? [],
+            },
+            file_hashes: file_hashes.length
+                ? serializeFileHashes(file_hashes)
+                : undefined,
+        });
+        requestState.value = {
+            status: 'persisted', requestId, userMessageId: userDbMsg.id,
+        };
         const rawUser: ChatMessage = {
             role: 'user',
             content: parts,
             id: userDbMsg.id,
             file_hashes: userDbMsg.file_hashes,
         };
-        recordRawMessage(rawUser);
         rawMessages.value.push(rawUser);
         messages.value.push(ensureUiMessage(rawUser));
 
@@ -1558,11 +1540,13 @@ export function useChat(
         }
 
         loading.value = true;
+        requestScope.streamId = undefined;
         streamId.value = undefined;
         backgroundJobId.value = null;
         detached.value = false;
 
         let currentModelId: string | undefined;
+        let terminalResult: SendResult | undefined;
         try {
             const startedAt = Date.now();
             const modelIdPromise = hooks.applyFilters(
@@ -1593,7 +1577,9 @@ export function useChat(
             currentModelId = modelId;
             const systemMessage = await systemMessagePromise;
 
-            const messagesWithSystemRaw = [...rawMessages.value];
+            const messagesWithSystemRaw = sendMessagesParams.historyOverride
+                ? [...sendMessagesParams.historyOverride, rawUser]
+                : [...rawMessages.value];
             if (systemMessage) {
                 messagesWithSystemRaw.unshift(systemMessage);
             }
@@ -1608,37 +1594,68 @@ export function useChat(
                 Array.isArray(effectiveMessages) ? effectiveMessages : []
             ).filter(shouldKeepAssistantMessage);
 
+            // Conservative input-token budget. Image parts are not counted here
+            // because their cost is model-specific; this prevents text-history
+            // explosions from hitting provider context limits.
+            const MAX_INPUT_TOKENS = 8000;
+
             let orMessages = await buildOpenRouterMessagesForSend({
                 effectiveMessages: sanitizedEffectiveMessages,
                 assistantHashes,
                 prevAssistantId: prevAssistant?.id,
                 contextHashes: context_hashes,
                 fileHashes: Array.isArray(file_hashes) ? file_hashes : [],
-                maxImageInputs: 16,
+                maxImageInputs: 5,
                 imageInclusionPolicy: 'all',
+                maxInputTokens: MAX_INPUT_TOKENS,
             });
-            if (orMessages.length === 0) return;
+            if (orMessages.length === 0) {
+                return {
+                    status: 'failed', requestId, reason: 'empty_context',
+                    error: 'No model input remained after message preparation.',
+                    userMessageId: userDbMsg.id,
+                };
+            }
 
             // modalities controls OUTPUT format, not input capability
-            // Only request image output for actual image generation models
-            const isImageGenerationModel = /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId);
-            const modalities = isImageGenerationModel ? ['image', 'text'] : ['text'];
+            const modalities = getChatModalities(modelId);
 
             const newStreamId = newId();
+            requestScope.streamId = newStreamId;
             streamId.value = newStreamId;
+            const nextAssistantId = newId();
             const assistantDbMsg = (await tx.appendMessage({
+                id: nextAssistantId,
                 thread_id: threadIdRef.value,
                 role: 'assistant',
                 stream_id: newStreamId,
                 pending: true, // Mark as streaming - HookBridge will skip sync until finalized
-                data: { content: '', attachments: [], reasoning_text: null },
+                data: {
+                    ...assistantTranscriptData({
+                        turnId: userDbMsg.id,
+                        requestId,
+                        generationId: newStreamId,
+                        mode: 'foreground',
+                    }),
+                    content: '',
+                    attachments: [],
+                    reasoning_text: null,
+                    generation_state: 'streaming',
+                    ...createForegroundGenerationLease(requestId),
+                },
             })) as StoredMessage;
+            requestState.value = {
+                status: 'streaming', requestId, userMessageId: userDbMsg.id,
+                assistantMessageId: assistantDbMsg.id,
+            };
             // Track file hashes across loop iterations
             const assistantFileHashes: string[] = [];
             const persistAssistant = makeAssistantPersister(
                 assistantDbMsg,
-                assistantFileHashes
+                assistantFileHashes,
+                requestId
             );
+            requestScope.persistAssistant = persistAssistant;
 
             await hooks.doAction('ai.chat.send:action:before', {
                 threadId: threadIdRef.value,
@@ -1657,6 +1674,7 @@ export function useChat(
             const activeToolCalls = new Map<string, ToolCallInfo>();
 
             aborted.value = false;
+            requestScope.abortController = null;
             abortController.value = null;
             backgroundJobId.value = null;
             backgroundJobMode.value = 'none';
@@ -1691,20 +1709,29 @@ export function useChat(
                     stream_id: newStreamId,
                     reasoning_text: null,
                 };
-                recordRawMessage(workflowAssistant);
                 rawMessages.value.push(workflowAssistant);
                 const uiAssistant = ensureUiMessage(workflowAssistant);
                 uiAssistant.pending = true;
                 messages.value.push(uiAssistant);
                 loading.value = false;
+                requestScope.abortController = null;
                 abortController.value = null;
-                return;
+                return {
+                    status: 'detached', requestId, reason: 'detached',
+                    userMessageId: userDbMsg.id,
+                    assistantMessageId: assistantDbMsg.id,
+                };
             }
 
             // Also skip if messages array is empty (e.g., workflow returned empty)
             if (orMessages.length === 0) {
                 loading.value = false;
-                return;
+                return {
+                    status: 'failed', requestId, reason: 'empty_context',
+                    error: 'No model input remained after request filters.',
+                    userMessageId: userDbMsg.id,
+                    assistantMessageId: assistantDbMsg.id,
+                };
             }
 
             const allowBackgroundStreaming =
@@ -1737,11 +1764,15 @@ export function useChat(
                     reasoning_text: null,
                 };
 
-                recordRawMessage(rawAssistant);
                 rawMessages.value.push(rawAssistant);
                 const uiAssistant = ensureUiMessage(rawAssistant);
                 uiAssistant.pending = true;
                 tailAssistant.value = uiAssistant;
+
+                // Background admission can block before a job ID exists. Keep it
+                // cancellable through the same request-scoped controller as foreground.
+                requestScope.abortController = new AbortController();
+                abortController.value = requestScope.abortController;
 
                 try {
                     const toolRuntime =
@@ -1772,6 +1803,7 @@ export function useChat(
                                 ? enabledToolDefs
                                 : undefined,
                         toolRuntime,
+                        signal: requestScope.abortController.signal,
                     });
 
                     backgroundJobId.value = result.jobId;
@@ -1803,6 +1835,8 @@ export function useChat(
                         data: {
                             background_job_id: result.jobId,
                             background_job_status: 'streaming',
+                            generation_mode: 'background',
+                            generation_state: 'streaming',
                         },
                     });
 
@@ -1820,12 +1854,27 @@ export function useChat(
                         threadId: threadIdRef.value!,
                         messageId: assistantDbMsg.id,
                     });
-                    await tracker.completion;
+                    const completion = await tracker.completion;
                     logBgStream('send-message-background-completed', {
                         jobId: tracker.jobId,
                         threadId: threadIdRef.value!,
                         messageId: assistantDbMsg.id,
                     });
+                    if (completion.status === 'aborted') {
+                        return {
+                            status: 'aborted', requestId, reason: 'aborted',
+                            userMessageId: userDbMsg.id,
+                            assistantMessageId: assistantDbMsg.id,
+                        };
+                    }
+                    if (completion.status === 'error') {
+                        return {
+                            status: 'failed', requestId, reason: 'stream_error',
+                            error: completion.error || 'Background stream failed',
+                            userMessageId: userDbMsg.id,
+                            assistantMessageId: assistantDbMsg.id,
+                        };
+                    }
                 } catch (error) {
                     const errMessage =
                         error instanceof Error
@@ -1842,17 +1891,53 @@ export function useChat(
                         target.error = errMessage;
                         messages.value = [...messages.value];
                     }
-                    streamAcc.finalize({ error: new Error(errMessage) });
+                    try {
+                        await persistAssistant({
+                            content: target?.text ?? '',
+                            reasoning: target?.reasoning_text ?? null,
+                            toolCalls: target?.toolCalls ?? null,
+                            finalize: true,
+                        });
+                        await updateMessageRecord(assistantDbMsg.id, {
+                            pending: false,
+                            error: errMessage,
+                            data: {
+                                background_job_status: 'error',
+                                background_job_error: errMessage,
+                                error: errMessage,
+                            },
+                        });
+                    } catch (persistError) {
+                        warnBgStream('background-start-finalize-failed', {
+                            threadId: threadIdRef.value || null,
+                            messageId: assistantDbMsg.id,
+                            error: persistError instanceof Error
+                                ? persistError.message
+                                : String(persistError),
+                        });
+                    }
+                    requestScope.accumulator.finalize({
+                        error: new Error(errMessage),
+                    });
                     loading.value = false;
                     backgroundJobId.value = null;
                     backgroundJobMode.value = 'none';
                     backgroundJobInfo.value = null;
+                    return {
+                        status: 'failed', requestId, reason: 'stream_error',
+                        error: errMessage, userMessageId: userDbMsg.id,
+                        assistantMessageId: assistantDbMsg.id,
+                    };
                 }
 
-                return;
+                return {
+                    status: 'complete', requestId, userMessageId: userDbMsg.id,
+                    assistantMessageId: assistantDbMsg.id,
+                };
             }
 
-            abortController.value = new AbortController();
+            requestScope.abortController = new AbortController();
+            abortController.value = requestScope.abortController;
 
             await runForegroundStreamLoop({
                 apiKey: effectiveApiKey.value,
@@ -1864,11 +1949,12 @@ export function useChat(
                     enabledToolDefs.length > 0
                         ? enabledToolDefs
                         : undefined,
-                abortSignal: abortController.value.signal,
+                abortSignal: requestScope.abortController.signal,
                 assistantId: assistantDbMsg.id,
+                parentTurnId: userDbMsg.id,
                 streamId: newStreamId,
                 threadId: threadIdRef.value!,
-                streamAcc,
+                streamAcc: requestScope.accumulator,
                 hooks,
                 toolRegistry,
                 persistAssistant,
@@ -1876,6 +1962,7 @@ export function useChat(
                 activeToolCalls,
                 tailAssistant,
                 rawMessages,
+                toolLedger: requestScope.toolLedger,
             });
 
             const current = tailAssistant.value!;
@@ -1947,15 +2034,29 @@ export function useChat(
                 },
                 aborted: false,
             });
-            streamAcc.finalize();
+            requestScope.accumulator.finalize();
             backgroundJobId.value = null;
             backgroundJobMode.value = 'none';
             backgroundJobInfo.value = null;
+            terminalResult = {
+                status: 'complete', requestId, userMessageId: userDbMsg.id,
+                assistantMessageId: assistantDbMsg.id,
+            };
         } catch (err) {
             if (err instanceof Error && err.name === 'AbortError') {
-                if (isDetached()) return;
+                if (isDetached()) {
+                    return {
+                        status: 'detached', requestId, reason: 'detached',
+                        userMessageId: userDbMsg.id,
+                    };
+                }
             }
             if (aborted.value) {
+                terminalResult = {
+                    status: 'aborted', requestId, reason: 'aborted',
+                    userMessageId: userDbMsg.id,
+                    assistantMessageId: tailAssistant.value?.id,
+                };
                 if (tailAssistant.value?.pending)
                     tailAssistant.value.pending = false;
                 try {
@@ -2061,6 +2162,15 @@ export function useChat(
                     tailAssistant.value = null;
                 }
             } else {
+                const terminalError = err instanceof Error ? err.message : String(err);
+                terminalResult = {
+                    status: 'failed', requestId,
+                    reason: err instanceof ToolIterationLimitError
+                        ? 'tool_iteration_limit'
+                        : 'stream_error',
+                    error: terminalError, userMessageId: userDbMsg.id,
+                    assistantMessageId: tailAssistant.value?.id,
+                };
                 const lastUser = [...messages.value]
                     .reverse()
                     .find((m) => m.role === 'user');
@@ -2075,7 +2185,7 @@ export function useChat(
                     tags: {
                         domain: 'chat',
                         threadId: threadIdRef.value || '',
-                        streamId: streamId.value || '',
+                        streamId: requestScope.streamId || '',
                         modelId: currentModelId || '',
                         stage: 'stream',
                     },
@@ -2084,10 +2194,10 @@ export function useChat(
                     retryable: !!retryFn,
                 });
                 const e = err instanceof Error ? err : new Error(String(err));
-                streamAcc.finalize({ error: e });
+                requestScope.accumulator.finalize({ error: e });
                 await hooks.doAction('ai.chat.stream:action:error', {
                     threadId: threadIdRef.value,
-                    streamId: streamId.value,
+                    streamId: requestScope.streamId,
                     error: e,
                     aborted: false,
                 });
@@ -2162,13 +2272,24 @@ export function useChat(
         } finally {
             loading.value = false;
             // CRITICAL: Ensure abort controller is cleaned up to prevent memory leak
-            if (abortController.value) {
+            if (activeRequestScope === requestScope && abortController.value) {
                 abortController.value = null;
             }
             setTimeout(() => {
-                if (!loading.value && streamState.finalized) resetStream();
+                if (
+                    activeRequestScope === null &&
+                    !loading.value &&
+                    requestScope.accumulator.state.finalized
+                ) {
+                    resetStream();
+                }
             }, 0);
         }
+        return terminalResult ?? {
+            status: 'failed', requestId, reason: 'stream_error',
+            error: 'Chat request ended without a terminal state.',
+            userMessageId: userDbMsg.id,
+        };
     }
 
     // END sendMessage
@@ -2185,7 +2306,7 @@ export function useChat(
      * - No-op if message or thread context is missing
      */
     async function retryMessage(messageId: string, modelOverride?: string) {
-        await retryMessageImpl(
+        return await retryMessageImpl(
             {
                 loading,
                 threadIdRef,
@@ -2253,8 +2374,9 @@ export function useChat(
      * Constraints:
      * - In background mode, detaches without stopping the job
      */
-    function clear() {
-        const disposeHooks = () => {
+    let disposed = false;
+
+    function disposeHooks() {
             if (!cleanupFns.length) return;
             for (const dispose of cleanupFns.splice(0, cleanupFns.length)) {
                 try {
@@ -2263,7 +2385,33 @@ export function useChat(
                     /* intentionally empty */
                 }
             }
-        };
+    }
+
+    /** Release listeners/subscriptions without mutating conversation state. */
+    function dispose() {
+        if (disposed) return;
+        disposed = true;
+        const keepTracking = Boolean(
+            backgroundJobId.value ||
+            backgroundJobMode.value !== 'none' ||
+            (loading.value && abortController.value)
+        );
+        if (keepTracking) detached.value = true;
+        clearBackgroundJobSubscriptions({ keepTracking });
+        disposeHooks();
+    }
+
+    /** Clear only in-memory conversation projections; durable rows are preserved. */
+    function clearConversation(options: { persistence?: 'preserve' } = {}) {
+        if ((options.persistence ?? 'preserve') !== 'preserve') {
+            throw new Error('Only persistence: "preserve" is supported');
+        }
+        rawMessages.value = [];
+        messages.value = [];
+        streamAcc.reset();
+    }
+
+    function clear() {
 
         const isBackgroundActive =
             backgroundStreamingAllowed.value &&
@@ -2284,8 +2432,7 @@ export function useChat(
                 loading: loading.value,
             });
             detached.value = true;
-            clearBackgroundJobSubscriptions({ keepTracking: true });
-            disposeHooks();
+            dispose();
             // Do NOT reset backgroundJobId, backgroundJobMode, or backgroundJobInfo
             // This allows reattachment or background processing to continue.
             // Foreground streams are also detached here so they can finish when
@@ -2309,14 +2456,8 @@ export function useChat(
             abortController.value = null;
         }
 
-        clearBackgroundJobSubscriptions();
-
-        // Clean up any registered hooks to avoid leaking listeners across threads
-        disposeHooks();
-
-        rawMessages.value = [];
-        messages.value = [];
-        streamAcc.reset();
+        dispose();
+        clearConversation({ persistence: 'preserve' });
         logBgStream('clear-full-reset', {
             threadId: threadIdRef.value || null,
         });
@@ -2362,6 +2503,16 @@ export function useChat(
             updated = true;
         }
         return updated;
+    }
+
+    /** Atomically replaces both provider and presentation history projections. */
+    function replaceCanonicalHistory(nextMessages: ChatMessage[]) {
+        const nextRaw = nextMessages.map((message) => ({ ...message }));
+        const nextUi = nextRaw
+            .filter((message) => message.role !== 'tool')
+            .map((message) => ensureUiMessage(message));
+        rawMessages.value = nextRaw;
+        messages.value = nextUi;
     }
 
     void reattachBackgroundJobs();
@@ -2424,7 +2575,10 @@ export function useChat(
             return;
         }
 
-        if (!loading.value || !abortController.value) {
+        const requestScope = activeRequestScope;
+        const requestAbortController =
+            requestScope?.abortController ?? abortController.value;
+        if (!loading.value || !requestAbortController) {
             logBgStream('abort-ignored-no-active-foreground', {
                 loading: loading.value,
                 hasAbortController: Boolean(abortController.value),
@@ -2438,11 +2592,11 @@ export function useChat(
         });
         aborted.value = true;
         try {
-            abortController.value.abort();
+            requestAbortController.abort();
         } catch {
             /* intentionally empty */
         }
-        streamAcc.finalize({ aborted: true });
+        (requestScope?.accumulator ?? streamAcc).finalize({ aborted: true });
         if (tailAssistant.value?.pending)
             tailAssistant.value.pending = false;
         try {
@@ -2477,6 +2631,7 @@ export function useChat(
         retryMessage,
         continueMessage,
         loading,
+        requestState,
         backgroundJobId,
         backgroundJobMode,
         threadId: threadIdRef,
@@ -2486,8 +2641,11 @@ export function useChat(
         tailAssistant,
         flushTailAssistant,
         applyLocalEdit,
+        replaceCanonicalHistory,
         ensureHistorySynced,
         abort: abortChat,
         clear,
+        clearConversation,
+        dispose,
     };
 }

@@ -31,6 +31,7 @@ const BodySchema = z.object({
     workspace_id: z.string(),
     hash: z.string(),
     storage_id: z.string(),
+    intent_id: z.string().min(1).optional(),
     storage_provider_id: z.string(),
     mime_type: z.string(),
     size_bytes: z.number(),

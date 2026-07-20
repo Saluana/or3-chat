@@ -462,6 +462,8 @@ export interface SessionContext {
     workspace?: { id: string; name: string };
     role?: WorkspaceRole;
     expiresAt?: string;
+    /** Monotonic revision for membership/role/workspace authorization state. */
+    authorizationRevision?: number;
     /**
      * Indicates if this user has deployment-wide admin access.
      * Set by the canonical store based on admin_users table.
@@ -495,7 +497,16 @@ export interface SyncPendingOpPayload {
     createdAt: number;
     attempts: number;
     nextAttemptAt?: number;
-    status: 'pending' | 'syncing' | 'failed';
+    status:
+        | 'pending'
+        | 'in_flight'
+        | 'retry_wait'
+        | 'failed_retryable'
+        | 'failed_permanent'
+        | 'applied'
+        | 'discarded'
+        | 'syncing'
+        | 'failed';
 }
 
 // ============================================================================

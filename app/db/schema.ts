@@ -75,6 +75,8 @@ export const ProjectSchema = z.object({
     updated_at: z.number().int(),
     deleted: z.boolean().default(false),
     clock: z.number().int(),
+    hlc: z.string().optional(),
+    op_id: z.string().optional(),
 });
 /**
  * Purpose:
@@ -123,6 +125,7 @@ export const ThreadSchema = z.object({
     pinned: z.boolean().default(false),
     clock: z.number().int(),
     hlc: z.string().optional(),
+    op_id: z.string().optional(),
     forked: z.boolean().default(false),
     project_id: z.string().nullable().optional(),
     system_prompt_id: z.string().nullable().optional(),
@@ -234,6 +237,7 @@ export const MessageSchema = z.object({
     order_key: z.string().optional(),
     clock: z.number().int(),
     hlc: z.string().optional(),
+    op_id: z.string().optional(),
     stream_id: z.string().nullable().optional(),
     // JSON serialized array of file content hashes (sha256/md5) or null/undefined when absent.
     // Kept as a string to avoid bloating indexed row size & allow lazy parsing.
@@ -283,6 +287,8 @@ export const PostSchema = z.object({
     updated_at: z.number().int(),
     deleted: z.boolean().default(false),
     clock: z.number().int().default(0),
+    hlc: z.string().optional(),
+    op_id: z.string().optional(),
     meta: z.union([
         z.string(),
         z.object({
@@ -432,6 +438,8 @@ export const KvSchema = z.object({
     created_at: z.number().int(),
     updated_at: z.number().int(),
     clock: z.number().int(),
+    hlc: z.string().optional(),
+    op_id: z.string().optional(),
 });
 /**
  * Purpose:
@@ -597,6 +605,8 @@ export const FileMetaSchema = z.object({
     deleted: z.boolean().default(false),
     deleted_at: z.number().int().optional(),
     clock: z.number().int(),
+    hlc: z.string().optional(),
+    op_id: z.string().optional(),
 });
 /**
  * Purpose:
@@ -729,6 +739,8 @@ export const NotificationSchema = z.object({
     created_at: z.number().int(),
     updated_at: z.number().int(),
     clock: z.number().int(),
+    hlc: z.string().optional(),
+    op_id: z.string().optional(),
 });
 /**
  * Purpose:

@@ -3,6 +3,7 @@
 
 import type { Model as SDKModel } from '@openrouter/sdk/models';
 import { z } from 'zod';
+import type { OpenRouterReasoningEffort } from './reasoning';
 
 // Define the OpenRouterModel interface here to avoid circular imports
 // This is the canonical snake_case representation matching the OpenRouter REST API
@@ -37,6 +38,13 @@ export interface OpenRouterModel {
     hugging_face_id?: string;
     per_request_limits?: Record<string, unknown>;
     supported_parameters?: string[];
+    reasoning?: {
+        supported_efforts?: OpenRouterReasoningEffort[] | null;
+        default_effort?: OpenRouterReasoningEffort | 'none';
+        default_enabled?: boolean;
+        supports_max_tokens?: boolean;
+        mandatory?: boolean;
+    };
 }
 
 export const openRouterModelSchema = z
@@ -80,6 +88,23 @@ export const openRouterModelSchema = z
         hugging_face_id: z.string().optional(),
         per_request_limits: z.record(z.string(), z.unknown()).optional(),
         supported_parameters: z.array(z.string()).optional(),
+        reasoning: z
+            .object({
+                supported_efforts: z
+                    .array(
+                        z.enum(['minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
+                    )
+                    .nullable()
+                    .optional(),
+                default_effort: z
+                    .enum(['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'none'])
+                    .optional(),
+                default_enabled: z.boolean().optional(),
+                supports_max_tokens: z.boolean().optional(),
+                mandatory: z.boolean().optional(),
+            })
+            .passthrough()
+            .optional(),
     })
     .passthrough();
 
@@ -93,6 +118,9 @@ export const openRouterModelListSchema = z.array(openRouterModelSchema);
  * uses snake_case to match the OpenRouter REST API directly.
  */
 export function sdkModelToLocal(model: SDKModel): OpenRouterModel {
+    const modelWithReasoning = model as SDKModel & {
+        reasoning?: OpenRouterModel['reasoning'];
+    };
     return {
         id: model.id,
         name: model.name,
@@ -139,5 +167,6 @@ export function sdkModelToLocal(model: SDKModel): OpenRouterModel {
         supported_parameters: model.supportedParameters.map((p) =>
             typeof p === 'string' ? p : String(p)
         ),
+        reasoning: modelWithReasoning.reasoning,
     };
 }

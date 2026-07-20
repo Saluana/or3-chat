@@ -77,12 +77,21 @@ describe('POST /api/sync/gc-change-log', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
     });
 
-    it('enforces workspace.settings.manage via requireCan', async () => {
+    it.each([1, 3599, 3600.5, 31536001])(
+        'returns 400 for unsafe retentionSeconds %s',
+        async (retentionSeconds) => {
+            const handler = (await import('../gc-change-log.post')).default as (event: H3Event) => Promise<unknown>;
+            readBodyMock.mockResolvedValue({ scope: { workspaceId: 'ws-1' }, retentionSeconds });
+            await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+        }
+    );
+
+    it('enforces workspace.settings.manage before reporting GC disabled', async () => {
         const handler = (await import('../gc-change-log.post')).default as (event: H3Event) => Promise<unknown>;
         const body = makeValidBody();
         readBodyMock.mockResolvedValue(body);
 
-        await handler(makeEvent());
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 503 });
 
         expect(requireCanMock).toHaveBeenCalledWith(
             expect.objectContaining({ authenticated: true }),
@@ -103,26 +112,28 @@ describe('POST /api/sync/gc-change-log', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 403 });
     });
 
-    it('returns 500 when adapter is not configured', async () => {
-        const handler = (await import('../gc-change-log.post')).default as (event: H3Event) => Promise<unknown>;
-        readBodyMock.mockResolvedValue(makeValidBody());
-        getActiveSyncGatewayAdapterMock.mockReturnValue(null);
-
-        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 500 });
-    });
-
-    it('returns 501 when adapter does not support gcChangeLog', async () => {
-        const handler = (await import('../gc-change-log.post')).default as (event: H3Event) => Promise<unknown>;
-        readBodyMock.mockResolvedValue(makeValidBody());
-        getActiveSyncGatewayAdapterMock.mockReturnValue({ id: 'adapter-1' });
-
-        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 501 });
-    });
-
-    it('calls adapter.gcChangeLog with exact arguments', async () => {
+    it('fails closed when the adapter omits the retention capability', async () => {
         const handler = (await import('../gc-change-log.post')).default as (event: H3Event) => Promise<unknown>;
         const body = makeValidBody();
         readBodyMock.mockResolvedValue(body);
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 503,
+            message: expect.stringContaining('snapshot-v1'),
+        });
+        expect(getActiveSyncGatewayAdapterMock).toHaveBeenCalled();
+        expect(gcChangeLogMock).not.toHaveBeenCalled();
+    });
+
+    it('dispatches only for an adapter declaring snapshot-v1 retention', async () => {
+        const handler = (await import('../gc-change-log.post')).default as (event: H3Event) => Promise<unknown>;
+        const body = makeValidBody();
+        readBodyMock.mockResolvedValue(body);
+        getActiveSyncGatewayAdapterMock.mockReturnValue({
+            id: 'verified-adapter',
+            capabilities: { snapshotBootstrap: 'snapshot-v1', historyRetention: 'snapshot-v1' },
+            gcChangeLog: gcChangeLogMock,
+        });
 
         await expect(handler(makeEvent())).resolves.toEqual({ deletedCount: 8 });
         expect(gcChangeLogMock).toHaveBeenCalledWith(expect.anything(), body);

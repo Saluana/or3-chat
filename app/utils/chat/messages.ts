@@ -99,6 +99,129 @@ export function mergeFileHashes(
 }
 
 /**
+ * `shouldKeepAssistantMessage`
+ *
+ * Purpose:
+ * Filters assistant messages to prevent empty placeholders in model input.
+ *
+ * Behavior:
+ * - Keeps non-empty text messages
+ * - Keeps image/file content parts
+ *
+ * Constraints:
+ * - Only applies to assistant role messages
+ */
+export function shouldKeepAssistantMessage(m: {
+    role: string;
+    content?: string | ContentPart[] | null;
+}): boolean {
+    if (m.role !== 'assistant') return true;
+    const c = m.content;
+    if (typeof c === 'string') return c.trim().length > 0;
+    if (Array.isArray(c)) {
+        return c.some((p) => {
+            if (p.type === 'text') return p.text.trim().length > 0;
+            // image and file parts are always considered non-empty
+            return true;
+        });
+    }
+    return true;
+}
+
+/**
+ * `getChatModalities`
+ *
+ * Purpose:
+ * Returns the output modalities to request for a given model id.
+ *
+ * Behavior:
+ * - Most models are text-only output
+ * - Known image-generation model families also request image output
+ *
+ * Constraints:
+ * - This decides OUTPUT format, not vision/input capability
+ */
+export function getChatModalities(modelId: string): string[] {
+    const isImageGenerationModel =
+        /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId);
+    return isImageGenerationModel ? ['image', 'text'] : ['text'];
+}
+
+/**
+ * `trimOrMessagesByTokenBudget`
+ *
+ * Purpose:
+ * Drops oldest non-system/non-user messages from an OpenRouter message array
+ * until the remaining text is within the provided token budget.
+ *
+ * Behavior:
+ * - Never removes the system message
+ * - Never removes the last user message
+ * - Counts only text parts; image/file parts are ignored (model-specific cost)
+ *
+ * Returns the trimmed array (may be unchanged if already under budget).
+ */
+export async function trimOrMessagesByTokenBudget<T extends { role: string; content?: { type: string; text?: string }[] | string }>(
+    messages: T[],
+    maxTokens: number,
+    countTokens: (text: string) => Promise<number>
+): Promise<T[]> {
+    const lastUserIndex = messages.findLastIndex((m) => m.role === 'user');
+
+    // Compute token counts once
+    const counts = await Promise.all(
+        messages.map(async (m) => {
+            const text =
+                typeof m.content === 'string'
+                    ? m.content
+                    : m.content
+                          ?.filter((p): p is { type: 'text'; text: string } =>
+                              p.type === 'text' && typeof p.text === 'string'
+                          )
+                          .map((p) => p.text)
+                          .join('\n') ?? '';
+            return countTokens(text);
+        })
+    );
+
+    let total = counts.reduce((a, b) => a + b, 0);
+    if (total <= maxTokens) return messages;
+
+    type Group = { indices: number[]; protected: boolean };
+    const groups: Group[] = [];
+    let currentTurn: number[] = [];
+    const flushTurn = () => {
+        if (!currentTurn.length) return;
+        groups.push({ indices: currentTurn, protected: false });
+        currentTurn = [];
+    };
+
+    for (let i = 0; i < messages.length; i += 1) {
+        const role = messages[i]?.role;
+        if (role === 'system' || i === lastUserIndex) {
+            flushTurn();
+            groups.push({ indices: [i], protected: true });
+            continue;
+        }
+        if (role === 'user') flushTurn();
+        currentTurn.push(i);
+    }
+    flushTurn();
+
+    const removed = new Set<number>();
+    for (const group of groups) {
+        if (total <= maxTokens) break;
+        if (group.protected) continue;
+        for (const index of group.indices) {
+            total -= counts[index] ?? 0;
+            removed.add(index);
+        }
+    }
+
+    return messages.filter((_m, i) => !removed.has(i));
+}
+
+/**
  * `trimOrMessagesImages`
  *
  * Purpose:

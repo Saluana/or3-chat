@@ -29,7 +29,13 @@
  * @see core/sync/recent-op-cache for echo filtering
  */
 import type { Or3DB } from '~/db/client';
-import type { SyncProvider, SyncScope, SyncChange, PullResponse } from '~~/shared/sync/types';
+import type {
+    SyncProvider,
+    SyncScope,
+    SyncChange,
+    PullResponse,
+    SnapshotResponse,
+} from '~~/shared/sync/types';
 import { ConflictResolver } from './conflict-resolver';
 import { getCursorManager, type CursorManager } from './cursor-manager';
 import { useHooks } from '~/core/hooks/useHooks';
@@ -37,6 +43,7 @@ import { getHookBridge } from './hook-bridge';
 import { isRecentOpId } from './recent-op-cache';
 import { isAbortLikeError } from './providers/gateway-sync-provider';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
+import { applySnapshotChain } from './snapshot-applier';
 
 /** Default tables to sync */
 const DEFAULT_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta', 'notifications'];
@@ -98,6 +105,8 @@ export class SubscriptionManager {
     private boundBeforeUnload: (() => void) | null = null;
     private lastSubscriptionCursor: number | null = null;
     private changeQueue: Promise<void> = Promise.resolve();
+    /** Invalidates every async continuation created by an older lifecycle. */
+    private lifecycleGeneration = 0;
 
     constructor(
         db: Or3DB,
@@ -138,35 +147,40 @@ export class SubscriptionManager {
             return;
         }
 
+        const generation = ++this.lifecycleGeneration;
         this.setStatus('connecting');
 
         try {
             // Check if bootstrap is needed
             const needsBootstrap = await this.cursorManager.isBootstrapNeeded();
+            if (!this.isCurrentGeneration(generation)) return;
             const cursorExpired =
                 !needsBootstrap &&
                 (await this.cursorManager.isCursorPotentiallyExpired());
+            if (!this.isCurrentGeneration(generation)) return;
 
             if (cursorExpired) {
-                await this.rescan();
+                await this.rescan(generation);
             }
 
             if (needsBootstrap) {
-                await this.bootstrap();
+                await this.bootstrap(generation);
             }
+            if (!this.isCurrentGeneration(generation)) return;
 
             // Subscribe to real-time changes
-            await this.subscribe();
+            await this.subscribe(generation);
+            if (!this.isCurrentGeneration(generation)) return;
 
             this.reconnectAttempts = 0;
             this.setStatus('connected');
         } catch (error) {
-            if (this.status === 'disconnected' || isAbortLikeError(error)) {
+            if (!this.isCurrentGeneration(generation) || isAbortLikeError(error)) {
                 return;
             }
             console.error('[SubscriptionManager] Failed to start:', error);
             this.setStatus('error');
-            this.scheduleReconnect();
+            this.scheduleReconnect(generation);
         }
     }
 
@@ -174,6 +188,7 @@ export class SubscriptionManager {
      * Stop the subscription
      */
     async stop(): Promise<void> {
+        this.lifecycleGeneration++;
         this.clearReconnectTimeout();
 
         if (this.unsubscribe) {
@@ -211,7 +226,7 @@ export class SubscriptionManager {
      * Uses prefetch overlap: while applying page N, the fetch for page N+1
      * is already in flight. This hides network latency behind IndexedDB writes.
      */
-    private async bootstrap(): Promise<void> {
+    private async bootstrap(generation: number): Promise<void> {
         // Check circuit breaker to prevent retry storm during outages
         const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
         if (!circuitBreaker.canRetry()) {
@@ -230,6 +245,14 @@ export class SubscriptionManager {
             await useHooks().doAction('sync.bootstrap:action:start', {
                 scope: this.scope,
             });
+            if (!this.isCurrentGeneration(generation)) return;
+
+            // Snapshot-capable providers bootstrap from materialized state so a
+            // fresh client never depends on retained operation history.
+            if (this.provider.snapshot) {
+                await this.bootstrapFromSnapshot(generation, startTime);
+                return;
+            }
 
             // Kick off the first fetch
             let pendingFetch: Promise<PullResponse> | null = this.provider.pull({
@@ -240,7 +263,7 @@ export class SubscriptionManager {
             });
 
             while (hasMore) {
-                if (this.status === 'disconnected') break;
+                if (!this.isCurrentGeneration(generation)) break;
 
                 // Check circuit breaker each iteration
                 if (!circuitBreaker.canRetry()) {
@@ -249,6 +272,7 @@ export class SubscriptionManager {
                 }
 
                 const response = await pendingFetch!;
+                if (!this.isCurrentGeneration(generation)) return;
 
                 // Loop guard: only error if backend says there is more data but cursor is stuck.
                 if (response.hasMore && response.nextCursor <= cursor) {
@@ -279,6 +303,7 @@ export class SubscriptionManager {
                     const filtered = this.filterRecentOps(response.changes);
                     if (filtered.length) {
                         await this.applyChanges(filtered);
+                        if (!this.isCurrentGeneration(generation)) return;
                     }
                     totalPulled += response.changes.length;
                 }
@@ -292,15 +317,18 @@ export class SubscriptionManager {
                     pulledCount: totalPulled,
                     hasMore,
                 });
+                if (!this.isCurrentGeneration(generation)) return;
             }
 
-            if (this.status === 'disconnected') {
+            if (!this.isCurrentGeneration(generation)) {
                 return;
             }
 
             // Update cursor after bootstrap
             await this.cursorManager.setCursor(cursor);
+            if (!this.isCurrentGeneration(generation)) return;
             await this.cursorManager.markSyncComplete();
+            if (!this.isCurrentGeneration(generation)) return;
 
             // Fire-and-forget: remote cursor update is best-effort;
             // the local cursor is already persisted above.
@@ -309,7 +337,7 @@ export class SubscriptionManager {
                 this.cursorManager.getDeviceId(),
                 cursor
             ).catch((err) => {
-                if (this.status === 'disconnected' || isAbortLikeError(err)) {
+                if (!this.isCurrentGeneration(generation) || isAbortLikeError(err)) {
                     return;
                 }
                 console.warn('[SubscriptionManager] Failed to update remote cursor after bootstrap:', err);
@@ -330,9 +358,104 @@ export class SubscriptionManager {
     }
 
     /**
+     * Install a bounded provider snapshot, then replay only changes committed
+     * after its high-watermark before opening the live subscription.
+     */
+    private async bootstrapFromSnapshot(
+        generation: number,
+        startTime: number
+    ): Promise<void> {
+        const snapshot = this.provider.snapshot?.bind(this.provider);
+        if (!snapshot) return;
+
+        const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
+        const pages: SnapshotResponse[] = [];
+        const seenPageTokens = new Set<string>();
+        let pageToken: string | undefined;
+        let totalPulled = 0;
+
+        while (true) {
+            if (!this.isCurrentGeneration(generation)) return;
+            if (!circuitBreaker.canRetry()) {
+                throw new Error('Circuit breaker opened during snapshot bootstrap');
+            }
+
+            const page = await snapshot({
+                scope: this.scope,
+                pageSize: this.config.bootstrapPageSize,
+                tables: this.config.tables,
+                ...(pageToken ? { pageToken } : {}),
+            });
+            if (!this.isCurrentGeneration(generation)) return;
+
+            pages.push(page);
+            totalPulled += page.items.length;
+            await useHooks().doAction('sync.bootstrap:action:progress', {
+                scope: this.scope,
+                cursor: page.highWatermark,
+                pulledCount: totalPulled,
+                hasMore: page.nextPageToken !== null,
+            });
+            if (!this.isCurrentGeneration(generation)) return;
+
+            if (page.nextPageToken === null) break;
+            if (seenPageTokens.has(page.nextPageToken)) {
+                throw new Error('Snapshot pagination token repeated before completion');
+            }
+            seenPageTokens.add(page.nextPageToken);
+            pageToken = page.nextPageToken;
+        }
+
+        const highWatermark = await applySnapshotChain(
+            this.db,
+            pages,
+            this.scope,
+            this.cursorManager.getDeviceId(),
+            () => this.isCurrentGeneration(generation)
+        );
+        if (!this.isCurrentGeneration(generation)) return;
+
+        // The watermark and materialized rows commit atomically. Pull semantics
+        // are exclusive, so the first incremental request starts exactly here.
+        const replay = await this.drainBacklog(highWatermark, generation);
+        if (!this.isCurrentGeneration(generation)) return;
+        totalPulled += replay.applied + replay.skipped;
+
+        await this.cursorManager.setCursor(replay.cursor);
+        if (!this.isCurrentGeneration(generation)) return;
+        await this.cursorManager.markSyncComplete();
+        if (!this.isCurrentGeneration(generation)) return;
+
+        this.provider.updateCursor(
+            this.scope,
+            this.cursorManager.getDeviceId(),
+            replay.cursor
+        ).catch((error) => {
+            if (!this.isCurrentGeneration(generation) || isAbortLikeError(error)) return;
+            console.warn(
+                '[SubscriptionManager] Failed to update remote cursor after snapshot bootstrap:',
+                error
+            );
+        });
+
+        const elapsedMs = Date.now() - startTime;
+        await useHooks().doAction('sync.bootstrap:action:complete', {
+            scope: this.scope,
+            cursor: replay.cursor,
+            totalPulled,
+            elapsedMs,
+        });
+        if (!this.isCurrentGeneration(generation)) return;
+
+        console.log(
+            `[SubscriptionManager] Snapshot bootstrap complete: ${totalPulled} records/changes in ${elapsedMs}ms`
+        );
+    }
+
+    /**
      * Perform a full rescan when cursor is expired
      */
-    private async rescan(): Promise<void> {
+    private async rescan(generation: number): Promise<void> {
         // Check circuit breaker to prevent retry storm during outages
         const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
         if (!circuitBreaker.canRetry()) {
@@ -346,14 +469,16 @@ export class SubscriptionManager {
             await useHooks().doAction('sync.rescan:action:starting', {
                 scope: this.scope,
             });
+            if (!this.isCurrentGeneration(generation)) return;
 
             await this.cursorManager.reset();
+            if (!this.isCurrentGeneration(generation)) return;
 
             let cursor = 0;
             let hasMore = true;
 
             while (hasMore) {
-                if (this.status === 'disconnected') break;
+                if (!this.isCurrentGeneration(generation)) break;
 
                 // Check circuit breaker each iteration
                 if (!circuitBreaker.canRetry()) {
@@ -367,11 +492,13 @@ export class SubscriptionManager {
                     limit: this.config.bootstrapPageSize,
                     tables: this.config.tables,
                 });
+                if (!this.isCurrentGeneration(generation)) return;
 
                 if (response.changes.length) {
                     const filtered = this.filterRecentOps(response.changes);
                     if (filtered.length) {
                         await this.conflictResolver.applyChanges(filtered);
+                        if (!this.isCurrentGeneration(generation)) return;
                     }
                 }
 
@@ -388,12 +515,14 @@ export class SubscriptionManager {
                 hasMore = response.hasMore;
             }
 
-            if (this.status === 'disconnected') {
+            if (!this.isCurrentGeneration(generation)) {
                 return;
             }
 
             await this.cursorManager.setCursor(cursor);
+            if (!this.isCurrentGeneration(generation)) return;
             await this.cursorManager.markSyncComplete();
+            if (!this.isCurrentGeneration(generation)) return;
 
             // Fire-and-forget: remote cursor update is best-effort
             this.provider.updateCursor(
@@ -401,13 +530,14 @@ export class SubscriptionManager {
                 this.cursorManager.getDeviceId(),
                 cursor
             ).catch((err) => {
-                if (this.status === 'disconnected' || isAbortLikeError(err)) {
+                if (!this.isCurrentGeneration(generation) || isAbortLikeError(err)) {
                     return;
                 }
                 console.warn('[SubscriptionManager] Failed to update remote cursor after rescan:', err);
             });
 
             await this.reapplyPendingOps();
+            if (!this.isCurrentGeneration(generation)) return;
 
             await useHooks().doAction('sync.rescan:action:completed', {
                 scope: this.scope,
@@ -447,8 +577,9 @@ export class SubscriptionManager {
     /**
      * Subscribe to real-time changes
      */
-    private async subscribe(): Promise<void> {
+    private async subscribe(generation: number): Promise<void> {
         const cursor = await this.cursorManager.getCursor();
+        if (!this.isCurrentGeneration(generation)) return;
 
         if (this.lastSubscriptionCursor === cursor && this.unsubscribe) {
             return;
@@ -459,26 +590,32 @@ export class SubscriptionManager {
             this.unsubscribe = null;
         }
 
-        this.lastSubscriptionCursor = cursor;
-        this.unsubscribe = await this.provider.subscribe(
+        const unsubscribe = await this.provider.subscribe(
             this.scope,
             this.config.tables,
-            (changes) => this.enqueueChanges(changes),
+            (changes) => this.enqueueChanges(changes, generation),
             { cursor, limit: this.config.bootstrapPageSize }
         );
+        if (!this.isCurrentGeneration(generation)) {
+            unsubscribe();
+            return;
+        }
+        this.lastSubscriptionCursor = cursor;
+        this.unsubscribe = unsubscribe;
     }
 
-    private enqueueChanges(changes: SyncChange[]): Promise<void> {
+    private enqueueChanges(changes: SyncChange[], generation: number): Promise<void> {
+        if (!this.isCurrentGeneration(generation)) return Promise.resolve();
         // Providers can emit change batches back-to-back (especially gateway polling).
         // Serialize apply cycles to keep cursor accounting correct and avoid races.
         this.changeQueue = this.changeQueue
-            .then(() => this.handleChanges(changes))
+            .then(() => this.handleChanges(changes, generation))
             .catch((err) => {
-                if (this.status === 'disconnected' || isAbortLikeError(err)) {
+                if (!this.isCurrentGeneration(generation) || isAbortLikeError(err)) {
                     return;
                 }
                 console.error('[SubscriptionManager] handleChanges error:', err);
-                this.handleError(err);
+                this.handleError(err, generation);
             });
 
         return this.changeQueue;
@@ -487,11 +624,12 @@ export class SubscriptionManager {
     /**
      * Handle incoming changes from subscription
      */
-    private async handleChanges(changes: SyncChange[]): Promise<void> {
-        if (changes.length === 0) return;
+    private async handleChanges(changes: SyncChange[], generation: number): Promise<void> {
+        if (changes.length === 0 || !this.isCurrentGeneration(generation)) return;
 
         // Filter out changes we've already seen to avoid reprocessing
         const currentCursor = await this.cursorManager.getCursor();
+        if (!this.isCurrentGeneration(generation)) return;
         const newChanges = changes.filter((c) => c.serverVersion > currentCursor);
         const filteredChanges = this.filterRecentOps(newChanges);
 
@@ -512,10 +650,12 @@ export class SubscriptionManager {
                 scope: this.scope,
                 changeCount: newChanges.length,
             });
+            if (!this.isCurrentGeneration(generation)) return;
 
             const result = filteredChanges.length
                 ? await this.applyChanges(filteredChanges)
                 : { applied: 0, skipped: 0, conflicts: 0 };
+            if (!this.isCurrentGeneration(generation)) return;
 
             // Update cursor to highest server version (loop-based to avoid spread stack overflow)
             let maxVersion = currentCursor;
@@ -539,7 +679,8 @@ export class SubscriptionManager {
             }
 
             const drainStartCursor = this.getBacklogDrainStartCursor(currentCursor, newChanges);
-            const drainResult = await this.drainBacklog(drainStartCursor);
+            const drainResult = await this.drainBacklog(drainStartCursor, generation);
+            if (!this.isCurrentGeneration(generation)) return;
             if (drainResult.cursor > maxVersion) {
                 maxVersion = drainResult.cursor;
                 await this.cursorManager.setCursor(maxVersion);
@@ -551,8 +692,10 @@ export class SubscriptionManager {
                 this.cursorManager.getDeviceId(),
                 maxVersion
             );
+            if (!this.isCurrentGeneration(generation)) return;
 
-            await this.subscribe();
+            await this.subscribe(generation);
+            if (!this.isCurrentGeneration(generation)) return;
 
             await useHooks().doAction('sync.pull:action:applied', {
                 scope: this.scope,
@@ -561,7 +704,7 @@ export class SubscriptionManager {
                 conflicts: result.conflicts + drainResult.conflicts,
             });
         } catch (error) {
-            if (this.status === 'disconnected' || isAbortLikeError(error)) {
+            if (!this.isCurrentGeneration(generation) || isAbortLikeError(error)) {
                 return;
             }
             console.error('[SubscriptionManager] Failed to apply changes:', error);
@@ -569,7 +712,7 @@ export class SubscriptionManager {
                 scope: this.scope,
                 error: error instanceof Error ? error.message : String(error),
             });
-            this.handleError(error);
+            this.handleError(error, generation);
         }
     }
 
@@ -619,14 +762,14 @@ export class SubscriptionManager {
         return versions[versions.length - 1] ?? currentCursor;
     }
 
-    private async drainBacklog(startCursor: number) {
+    private async drainBacklog(startCursor: number, generation: number) {
         let cursor = startCursor;
         let hasMore = true;
         const totals = { applied: 0, skipped: 0, conflicts: 0, cursor };
         const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
 
         while (hasMore) {
-            if (this.status === 'disconnected') break;
+            if (!this.isCurrentGeneration(generation)) break;
             if (!circuitBreaker.canRetry()) break;
 
             const response = await this.provider.pull({
@@ -635,19 +778,27 @@ export class SubscriptionManager {
                 limit: this.config.bootstrapPageSize,
                 tables: this.config.tables,
             });
+            if (!this.isCurrentGeneration(generation)) break;
 
-            if (response.changes.length) {
-                const filtered = this.filterRecentOps(response.changes);
+            const newChanges = response.changes.filter(
+                (change) => change.serverVersion > cursor
+            );
+            if (newChanges.length) {
+                const filtered = this.filterRecentOps(newChanges);
                 const result = filtered.length
                     ? await this.applyChanges(filtered)
                     : { applied: 0, skipped: 0, conflicts: 0 };
+                if (!this.isCurrentGeneration(generation)) break;
                 totals.applied += result.applied;
                 totals.skipped += result.skipped;
                 totals.conflicts += result.conflicts;
             }
 
             const previousCursor = cursor;
-            cursor = response.nextCursor;
+            cursor = Math.max(cursor, response.nextCursor);
+            for (const change of newChanges) {
+                cursor = Math.max(cursor, change.serverVersion);
+            }
             totals.cursor = cursor;
             hasMore = response.hasMore;
             if (hasMore && cursor <= previousCursor) {
@@ -665,8 +816,8 @@ export class SubscriptionManager {
     /**
      * Handle subscription error
      */
-    private handleError(error: unknown): void {
-        if (this.status === 'disconnected' || isAbortLikeError(error)) {
+    private handleError(error: unknown, generation: number): void {
+        if (!this.isCurrentGeneration(generation) || isAbortLikeError(error)) {
             return;
         }
         console.error('[SubscriptionManager] Subscription error:', error);
@@ -675,13 +826,14 @@ export class SubscriptionManager {
             this.unsubscribe = null;
         }
         this.setStatus('error');
-        this.scheduleReconnect();
+        this.scheduleReconnect(generation);
     }
 
     /**
      * Schedule reconnection attempt
      */
-    private scheduleReconnect(): void {
+    private scheduleReconnect(generation: number): void {
+        if (!this.isCurrentGeneration(generation)) return;
         this.clearReconnectTimeout();
 
         // Give up after max attempts to prevent infinite reconnection loop
@@ -705,11 +857,13 @@ export class SubscriptionManager {
         this.reconnectAttempts++;
 
         this.reconnectTimeout = setTimeout(async () => {
+            if (!this.isCurrentGeneration(generation)) return;
             try {
                 await this.start();
             } catch (error) {
+                if (!this.isCurrentGeneration(generation)) return;
                 console.error('[SubscriptionManager] Reconnect failed:', error);
-                this.scheduleReconnect();
+                this.scheduleReconnect(generation);
             }
         }, delay);
     }
@@ -748,6 +902,10 @@ export class SubscriptionManager {
         if (typeof globalThis === 'undefined') return null;
         const globalWithWindow = globalThis as { window?: Window & typeof globalThis };
         return globalWithWindow.window ?? null;
+    }
+
+    private isCurrentGeneration(generation: number): boolean {
+        return generation === this.lifecycleGeneration && this.status !== 'disconnected';
     }
 }
 

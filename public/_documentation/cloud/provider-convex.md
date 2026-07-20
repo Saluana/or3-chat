@@ -5,6 +5,7 @@ Dedicated install and wiring guide for the Convex sync/storage/backend provider 
 ## What It Provides
 
 - Convex sync provider (direct mode)
+- Consistent materialized snapshot pages pinned to one server high-watermark
 - Convex storage provider
 - Server sync gateway adapter
 - Server storage gateway adapter
@@ -34,7 +35,13 @@ OR3_SYNC_PROVIDER=convex
 OR3_STORAGE_ENABLED=true
 NUXT_PUBLIC_STORAGE_PROVIDER=convex
 VITE_CONVEX_URL=https://<deployment>.convex.cloud
+CONVEX_SELF_HOSTED_ADMIN_KEY=<server-only-admin-credential>
 ```
+
+The server-only Convex admin credential is required whenever the Convex
+provider backs auth/session resolution, background jobs, notifications,
+webhooks, or rate limiting. Keep it out of public runtime config and browser
+bundles.
 
 For Clerk + Convex, you also need Clerk provider config:
 
@@ -96,6 +103,61 @@ When using Clerk + Convex, there is an additional bridge used by the admin dashb
 
 See the detailed behavior here: [admin-access-bridge](./admin-access-bridge).
 
+## Direct API Authorization Guardrails
+
+Convex functions still enforce authorization even when a caller bypasses the
+Nuxt gateway and invokes the deployment directly:
+
+- Identity-mapping and session-resolution functions are internal Convex
+  functions, so direct public callers cannot enumerate them. The SSR auth store
+  calls them with the Convex admin key and a subject-bound server identity.
+- Public invite creation, listing, and revocation require workspace owner
+  membership (the Convex enforcement of the `users.manage` capability). The
+  inviter is derived from that authenticated membership.
+- Invite consumption verifies the authenticated subject's normalized email and
+  derives the accepting internal user ID; callers cannot provide either actor
+  ID as an authoritative mutation argument.
+- Sync reads accept owner, editor, and viewer memberships. Sync writes accept
+  owners and editors, keeping viewers read-only.
+- Sync GC entry points are internal-only, bounded, and require the verified
+  `snapshot-v1` retention contract.
+- Background-job persistence (including status reads and aborts), notification
+  persistence, webhook definition/delivery storage, and rate-limit storage are
+  internal Convex functions. Their SSR adapters use the admin credential;
+  direct callers cannot supply job-owner wildcards, cross-user notification
+  subjects, delivery-worker state, or rate-limit keys.
+- Generic sync remains public for authenticated workspace members, but
+  notification changes are owner-filtered on pull/watch and their `user_id` is
+  derived from the authenticated internal user on push.
+
+Trusted SSR provider calls authenticate with the Convex admin key and an
+explicit server marker. Client JWTs do not receive that marker.
+
+## Materialized Snapshot Pages
+
+Direct and gateway sync expose the shared `SnapshotRequest` / `SnapshotResponse`
+contract. The first page creates an expiring Convex snapshot session and captures
+one workspace server-version high-watermark. Continuation tokens are opaque,
+workspace- and table-filter-bound, and advance deterministic keyset scans across
+the canonical materialized tables and tombstones.
+
+Each request examines a bounded number of logical keys. Applied record
+pre-images reconstruct the state at the original watermark if a row changes
+between pages, so later writes do not enter the frozen page chain and remain
+available to incremental pull strictly after the watermark. Notification rows
+remain filtered to their authenticated owner. History retention runs only
+through admin-authenticated internal mutations after the snapshot-plus-replay
+gate.
+
+## Canonical Storage Pages
+
+The Convex sync gateway pages live materialized `file_meta` rows and reference
+edges from `messages.file_hashes` and `posts.file_hashes` with opaque,
+filter-bound cursors and a 500-record hard cap. Workspace quota and filesystem
+blob lifecycle consume these views directly; retained `change_log` entries are
+never used to infer liveness. Active reservation pages are an explicit empty
+view until upload-intent persistence is enabled.
+
 ## Common Issues
 
 ### Provider not loaded
@@ -109,6 +171,13 @@ Install the package or switch provider IDs.
 ### Convex URL missing
 
 When Convex sync is enabled, `VITE_CONVEX_URL` is required in strict mode.
+
+### Convex admin credential missing
+
+Internal server persistence cannot be invoked without
+`CONVEX_SELF_HOSTED_ADMIN_KEY`. Background jobs, notifications, and webhook
+storage fail closed; the rate-limit provider uses its existing in-memory
+fallback.
 
 ### Clerk not installed for Clerk auth + Convex
 

@@ -70,7 +70,7 @@ export function normalizeSyncPayload(
     tableName: string,
     pk: string,
     rawPayload: unknown,
-    stamp: { clock: number; hlc: string }
+    stamp: { clock: number; hlc: string; opId?: string }
 ): NormalizedPayload {
     const rawRecord = normalizeWirePayloadForTable(
         tableName,
@@ -85,6 +85,7 @@ export function normalizeSyncPayload(
     // Add clock and HLC metadata
     payload.clock = stamp.clock;
     payload.hlc = stamp.hlc;
+    if (stamp.opId) payload.op_id = stamp.opId;
 
     // Add order_key for messages if missing
     if (tableName === 'messages' && !payload.order_key) {
@@ -128,7 +129,7 @@ export function normalizeSyncPayloadForStaging(
     tableName: string,
     pk: string,
     rawPayload: unknown,
-    stamp: { clock: number; hlc: string }
+    stamp: { clock: number; hlc: string; opId?: string }
 ): Record<string, unknown> {
     const normalized = normalizeSyncPayload(tableName, pk, rawPayload, stamp);
     // For staging, we always return the payload even if validation fails

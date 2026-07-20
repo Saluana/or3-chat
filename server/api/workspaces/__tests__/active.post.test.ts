@@ -17,16 +17,14 @@ vi.mock('h3', () => ({
 
 const requireWorkspaceSessionMock = vi.fn();
 const setActiveWorkspaceMock = vi.fn();
+const listUserWorkspacesMock = vi.fn();
 const invalidateSharedSessionCacheForIdentityMock = vi.fn();
-const requireCanMock = vi.fn();
 vi.mock('../_helpers', () => ({
     requireWorkspaceSession: (...args: unknown[]) => requireWorkspaceSessionMock(...args),
     resolveWorkspaceStore: () => ({
         setActiveWorkspace: (...args: unknown[]) => setActiveWorkspaceMock(...args),
+        listUserWorkspaces: (...args: unknown[]) => listUserWorkspacesMock(...args),
     }),
-}));
-vi.mock('../../../auth/can', () => ({
-    requireCan: (...args: unknown[]) => requireCanMock(...args),
 }));
 vi.mock('../../../auth/session', () => ({
     invalidateSharedSessionCacheForIdentity: (...args: unknown[]) =>
@@ -47,12 +45,16 @@ describe('POST /api/workspaces/active', () => {
             authenticated: true,
             user: { id: 'user-1' },
             workspace: { id: 'ws-1' },
+            role: 'owner',
             provider: 'test-provider',
             providerUserId: 'provider-user-1',
         });
         setActiveWorkspaceMock.mockReset().mockResolvedValue(undefined);
+        listUserWorkspacesMock.mockReset().mockResolvedValue([
+            { id: 'ws-1', name: 'Workspace 1', role: 'owner' },
+            { id: 'ws-2', name: 'Workspace 2', role: 'viewer' },
+        ]);
         invalidateSharedSessionCacheForIdentityMock.mockReset();
-        requireCanMock.mockReset();
     });
 
     it('returns 400 when workspace id is missing', async () => {
@@ -75,11 +77,7 @@ describe('POST /api/workspaces/active', () => {
         readBodyMock.mockResolvedValue({ id: 'ws-2' });
 
         await expect(handler(makeEvent())).resolves.toEqual({ ok: true });
-        expect(requireCanMock).toHaveBeenCalledWith(
-            expect.objectContaining({ workspace: { id: 'ws-1' } }),
-            'workspace.read',
-            { kind: 'workspace', id: 'ws-2' }
-        );
+        expect(listUserWorkspacesMock).toHaveBeenCalledWith('user-1');
         expect(setActiveWorkspaceMock).toHaveBeenCalledWith({
             userId: 'user-1',
             workspaceId: 'ws-2',
@@ -89,6 +87,14 @@ describe('POST /api/workspaces/active', () => {
             providerUserId: 'provider-user-1',
             storeId: 'test-sync',
         });
+    });
+
+    it('rejects a target workspace where the user has no membership', async () => {
+        const handler = (await import('../active.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue({ id: 'ws-other' });
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 403 });
+        expect(setActiveWorkspaceMock).not.toHaveBeenCalled();
     });
 
     it('surfaces store rejection', async () => {

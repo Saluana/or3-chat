@@ -5,11 +5,13 @@
  * Resolve provider tokens via the configured ProviderTokenBroker.
  */
 import type { H3Event } from 'h3';
+import { createHash } from 'node:crypto';
 import { LRUCache } from 'lru-cache';
 import { useRuntimeConfig } from '#imports';
 import { CLERK_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import type { ProviderTokenRequest } from './types';
 import { getProviderTokenBroker } from './registry';
+import { resolveSessionContext } from '../session';
 
 const DEFAULT_PROVIDER_TOKEN_CACHE_TTL_MS = 55_000;
 const MAX_PROVIDER_TOKEN_CACHE_ENTRIES = 2_000;
@@ -34,15 +36,21 @@ function getConfiguredTokenCacheTtlMs(config: ReturnType<typeof useRuntimeConfig
     return Math.floor(candidate);
 }
 
-function getTokenCacheScope(event: H3Event): string | null {
+function getCredentialDigest(event: H3Event): string | null {
     const headers = (event as unknown as { node?: { req?: { headers?: Record<string, string | string[] | undefined> } } }).node?.req?.headers;
     const cookieHeader = headers?.cookie;
     if (typeof cookieHeader === 'string' && cookieHeader.length > 0) {
-        return `cookie:${cookieHeader}`;
+        return createHash('sha256')
+            .update('cookie\0')
+            .update(cookieHeader)
+            .digest('hex');
     }
     const authHeader = headers?.authorization;
     if (typeof authHeader === 'string' && authHeader.length > 0) {
-        return `authorization:${authHeader}`;
+        return createHash('sha256')
+            .update('authorization\0')
+            .update(authHeader)
+            .digest('hex');
     }
     return null;
 }
@@ -50,9 +58,24 @@ function getTokenCacheScope(event: H3Event): string | null {
 function getTokenCacheKey(
     brokerId: string,
     request: ProviderTokenRequest,
-    scope: string
+    credentialDigest: string,
+    subject: {
+        provider: string;
+        providerUserId: string;
+        workspaceId: string;
+        authorizationRevision: number;
+    }
 ): string {
-    return `${brokerId}:${request.providerId}:${request.template ?? ''}:${scope}`;
+    return [
+        'provider-token',
+        `broker=${brokerId}`,
+        `target=${request.providerId}`,
+        `template=${request.template ?? ''}`,
+        `subject=${subject.provider}:${subject.providerUserId}`,
+        `workspace=${subject.workspaceId}`,
+        `authorization-revision=${subject.authorizationRevision}`,
+        `credential-sha256=${credentialDigest}`,
+    ].join(':');
 }
 
 export async function resolveProviderToken(
@@ -66,9 +89,26 @@ export async function resolveProviderToken(
         return null;
     }
 
-    const scope = getTokenCacheScope(event);
-    if (scope) {
-        const cacheKey = getTokenCacheKey(brokerId, request, scope);
+    const credentialDigest = getCredentialDigest(event);
+    const session = credentialDigest ? await resolveSessionContext(event) : null;
+    const subject = session?.authenticated &&
+        session.provider &&
+        session.providerUserId &&
+        session.workspace
+        ? {
+              provider: session.provider,
+              providerUserId: session.providerUserId,
+              workspaceId: session.workspace.id,
+              authorizationRevision: session.authorizationRevision ?? 0,
+          }
+        : null;
+    if (credentialDigest && subject) {
+        const cacheKey = getTokenCacheKey(
+            brokerId,
+            request,
+            credentialDigest,
+            subject
+        );
         const cached = providerTokenCache.get(cacheKey);
         if (cached) {
             if (cached.expiresAtMs > Date.now()) {
@@ -79,8 +119,13 @@ export async function resolveProviderToken(
     }
 
     const token = await broker.getProviderToken(event, request);
-    if (token && scope) {
-        providerTokenCache.set(getTokenCacheKey(brokerId, request, scope), {
+    if (token && credentialDigest && subject) {
+        providerTokenCache.set(getTokenCacheKey(
+            brokerId,
+            request,
+            credentialDigest,
+            subject
+        ), {
             token,
             expiresAtMs: Date.now() + getConfiguredTokenCacheTtlMs(config),
         });
@@ -96,4 +141,9 @@ export async function resolveProviderToken(
  */
 export function _resetProviderTokenCache(): void {
     providerTokenCache.clear();
+}
+
+/** Internal test-only inspection that never exposes cached token values. */
+export function _getProviderTokenCacheKeysForTest(): string[] {
+    return [...providerTokenCache.keys()];
 }

@@ -21,7 +21,7 @@ import {
 
 const UpdateCursorSchema = z.object({
     scope: SyncScopeSchema,
-    deviceId: z.string(),
+    deviceId: z.string().trim().min(1).max(256),
     version: z.number().int().nonnegative(),
 });
 

@@ -11,7 +11,11 @@ import type {
     SyncSubscribeOptions,
 } from '~~/shared/sync/types';
 import { OutboxManager } from '../outbox-manager';
-import { createMockDb, createPendingOpsTable } from './sync-test-utils';
+import {
+    createMemoryTable,
+    createMockDb,
+    createPendingOpsTable,
+} from './sync-test-utils';
 
 const hookState = vi.hoisted(() => ({
     doAction: vi.fn(),
@@ -80,6 +84,12 @@ function createPendingOp(overrides: Partial<PendingOp> = {}): PendingOp {
         attempts: overrides.attempts ?? 0,
         status: overrides.status ?? 'pending',
         nextAttemptAt: overrides.nextAttemptAt,
+        lastError: overrides.lastError,
+        lastErrorCode: overrides.lastErrorCode,
+        failureKind: overrides.failureKind,
+        failedAt: overrides.failedAt,
+        discardedAt: overrides.discardedAt,
+        discardReason: overrides.discardReason,
     };
 }
 
@@ -125,6 +135,8 @@ describe('OutboxManager', () => {
         });
 
         const pendingOps = createPendingOpsTable([op1, op2, op3]);
+        const bulkPutSpy = vi.spyOn(pendingOps, 'bulkPut');
+        const putSpy = vi.spyOn(pendingOps, 'put');
         const db = createMockDb({ pending_ops: pendingOps });
         const provider = new SpyProvider();
         provider.push = vi.fn(async (batch: PushBatch) => ({
@@ -144,8 +156,65 @@ describe('OutboxManager', () => {
         expect(provider.push).toHaveBeenCalledTimes(1);
         const pushedOps = provider.push.mock.calls[0]![0].ops;
         expect(pushedOps.map((op) => op.stamp.opId)).toEqual(['op-2', 'op-3']);
+        expect(bulkPutSpy.mock.calls[0]![0].every((op) => op.status === 'in_flight')).toBe(true);
+        expect(putSpy.mock.calls.filter(([op]) => op.status === 'applied')).toHaveLength(2);
         expect(pendingOps.__rows.size).toBe(0);
     });
+
+    it.each([
+        { olderOperation: 'put', newerOperation: 'delete' },
+        { olderOperation: 'delete', newerOperation: 'put' },
+    ] as const)(
+        'keeps the later logical $newerOperation in a same-tick $olderOperation/$newerOperation sequence',
+        async ({ olderOperation, newerOperation }) => {
+            const older = createPendingOp({
+                id: 'same-tick-older',
+                operation: olderOperation,
+                createdAt: 1000,
+                stamp: {
+                    deviceId: 'device-1',
+                    opId: 'op-a',
+                    hlc: '0000000001000:0000:node',
+                    clock: 1,
+                },
+            });
+            const newer = createPendingOp({
+                id: 'same-tick-newer',
+                operation: newerOperation,
+                createdAt: 1000,
+                stamp: {
+                    deviceId: 'device-1',
+                    opId: 'op-b',
+                    hlc: '0000000001000:0001:node',
+                    clock: 2,
+                },
+            });
+            const pendingOps = createPendingOpsTable([older, newer]);
+            const provider = new SpyProvider();
+            provider.push = vi.fn(async (batch: PushBatch) => ({
+                results: batch.ops.map((op) => ({
+                    opId: op.stamp.opId,
+                    success: true,
+                })),
+                serverVersion: 1,
+            }));
+            const outbox = new OutboxManager(
+                createMockDb({
+                    pending_ops: pendingOps,
+                    tombstones: createMemoryTable('id'),
+                }) as any,
+                provider,
+                { workspaceId: 'workspace-1' }
+            );
+
+            await outbox.flush();
+
+            const pushed = provider.push.mock.calls[0]![0].ops;
+            expect(pushed).toHaveLength(1);
+            expect(pushed[0]!.operation).toBe(newerOperation);
+            expect(pushed[0]!.stamp.opId).toBe('op-b');
+        }
+    );
 
     it('schedules retry with exponential backoff on failure', async () => {
         const pendingOp = createPendingOp({
@@ -177,7 +246,7 @@ describe('OutboxManager', () => {
         await outbox.flush();
 
         const stored = pendingOps.__rows.get('pending-retry');
-        expect(stored?.status).toBe('pending');
+        expect(stored?.status).toBe('retry_wait');
         expect(stored?.attempts).toBe(1);
         expect(stored?.nextAttemptAt).toBe(1250);
         expect(
@@ -215,13 +284,92 @@ describe('OutboxManager', () => {
         await outbox.flush();
 
         const stored = pendingOps.__rows.get('pending-fail');
-        expect(stored?.status).toBe('failed');
+        expect(stored?.status).toBe('failed_retryable');
         expect(stored?.attempts).toBe(1);
+        expect(stored?.lastError).toBe('fail');
+        expect(stored?.failureKind).toBe('retry_exhausted');
         expect(
             hookState.doAction.mock.calls.some(
                 (call) => call[0] === 'sync.error:action'
             )
         ).toBe(true);
+    });
+
+    it('preserves failed operations and payload metadata across startup', async () => {
+        vi.useFakeTimers();
+        const failed = createPendingOp({
+            id: 'failed-before-reload',
+            payload: { id: 'm1', text: 'unsynced user text' },
+            status: 'failed_retryable',
+            attempts: 4,
+            lastError: 'network remained unavailable',
+            failureKind: 'retry_exhausted',
+            failedAt: 1234,
+        });
+        const pendingOps = createPendingOpsTable([failed]);
+        const outbox = new OutboxManager(
+            createMockDb({ pending_ops: pendingOps }) as any,
+            new SpyProvider(),
+            { workspaceId: 'workspace-1' }
+        );
+
+        outbox.start();
+        await vi.advanceTimersByTimeAsync(0);
+        outbox.stop();
+
+        expect(pendingOps.__rows.get(failed.id)).toEqual(failed);
+        vi.useRealTimers();
+    });
+
+    it('explicitly retries one retained failure without losing its payload', async () => {
+        const failed = createPendingOp({
+            id: 'failed-retry',
+            payload: { id: 'm1', text: 'retain me' },
+            status: 'failed_retryable',
+            attempts: 4,
+            lastError: 'offline',
+            failureKind: 'retry_exhausted',
+        });
+        const pendingOps = createPendingOpsTable([failed]);
+        const outbox = new OutboxManager(
+            createMockDb({ pending_ops: pendingOps }) as any,
+            new SpyProvider(),
+            { workspaceId: 'workspace-1' }
+        );
+
+        await outbox.retryFailed(failed.id);
+
+        expect(pendingOps.__rows.get(failed.id)).toMatchObject({
+            status: 'pending',
+            attempts: 0,
+            payload: failed.payload,
+        });
+        expect(pendingOps.__rows.get(failed.id)?.lastError).toBeUndefined();
+    });
+
+    it('records an intentional discard instead of deleting the failed operation', async () => {
+        vi.spyOn(Date, 'now').mockReturnValue(9000);
+        const failed = createPendingOp({
+            id: 'failed-discard',
+            status: 'failed_permanent',
+            lastError: 'invalid',
+            failureKind: 'permanent',
+        });
+        const pendingOps = createPendingOpsTable([failed]);
+        const outbox = new OutboxManager(
+            createMockDb({ pending_ops: pendingOps }) as any,
+            new SpyProvider(),
+            { workspaceId: 'workspace-1' }
+        );
+
+        await expect(outbox.discardFailed(failed.stamp.opId, 'confirmed')).resolves.toBe(true);
+        expect(pendingOps.__rows.get(failed.id)).toMatchObject({
+            status: 'discarded',
+            discardedAt: 9000,
+            discardReason: 'confirmed',
+            payload: failed.payload,
+            lastError: 'invalid',
+        });
     });
 
     it('defers retries on transport 429 without incrementing attempts', async () => {
@@ -260,7 +408,7 @@ describe('OutboxManager', () => {
 
         expect(didWork).toBe(false);
         const stored = pendingOps.__rows.get('pending-rate-limit');
-        expect(stored?.status).toBe('pending');
+        expect(stored?.status).toBe('retry_wait');
         expect(stored?.attempts).toBe(0);
         expect(stored?.nextAttemptAt).toBe(5000);
         expect(
@@ -306,7 +454,7 @@ describe('OutboxManager', () => {
 
         expect(didWork).toBe(false);
         const stored = pendingOps.__rows.get('pending-upstream-unavailable');
-        expect(stored?.status).toBe('pending');
+        expect(stored?.status).toBe('retry_wait');
         expect(stored?.attempts).toBe(0);
         expect(stored?.nextAttemptAt).toBe(5000);
         expect(
@@ -350,7 +498,7 @@ describe('OutboxManager', () => {
         await outbox.flush();
 
         const stored = pendingOps.__rows.get('pending-oversized');
-        expect(stored?.status).toBe('failed');
+        expect(stored?.status).toBe('failed_permanent');
         expect(stored?.attempts).toBe(1);
         expect(
             hookState.doAction.mock.calls.some(
@@ -359,7 +507,42 @@ describe('OutboxManager', () => {
         ).toBe(false);
     });
 
-    it('recovers syncing ops once per start cycle', async () => {
+    it('retains the original message when local sanitization rejects its size', async () => {
+        const content = 'x'.repeat(70 * 1024);
+        const oversized = createPendingOp({
+            id: 'local-oversized',
+            payload: {
+                id: 'm1',
+                thread_id: 'thread-1',
+                role: 'user',
+                index: 0,
+                order_key: '1:0:device',
+                content,
+                deleted: false,
+                created_at: 1,
+                updated_at: 1,
+                clock: 1,
+            },
+        });
+        const pendingOps = createPendingOpsTable([oversized]);
+        const provider = new SpyProvider();
+        const outbox = new OutboxManager(
+            createMockDb({ pending_ops: pendingOps }) as any,
+            provider,
+            { workspaceId: 'workspace-1' }
+        );
+
+        await outbox.flush();
+
+        expect(provider.push).not.toHaveBeenCalled();
+        const stored = pendingOps.__rows.get(oversized.id);
+        expect(stored?.status).toBe('failed_permanent');
+        expect(stored?.failureKind).toBe('permanent');
+        expect((stored?.payload as { content: string }).content).toBe(content);
+        expect(stored?.lastError).toMatch(/Payload too large for messages/);
+    });
+
+    it('recovers legacy syncing and current in-flight ops once per start cycle', async () => {
         const pendingOp = createPendingOp({
             id: 'pending-once',
             stamp: {
@@ -375,6 +558,10 @@ describe('OutboxManager', () => {
             const collection = originalWhere('status').equals('syncing');
             await collection.modify(patch);
         });
+        const inFlightModifySpy = vi.fn(async (patch: Partial<PendingOp>) => {
+            const collection = originalWhere('status').equals('in_flight');
+            await collection.modify(patch);
+        });
 
         pendingOps.where = ((field: keyof PendingOp) => {
             const chain = originalWhere(field);
@@ -385,6 +572,12 @@ describe('OutboxManager', () => {
                         return {
                             ...collection,
                             modify: syncingModifySpy,
+                        };
+                    }
+                    if (field === 'status' && value === 'in_flight') {
+                        return {
+                            ...collection,
+                            modify: inFlightModifySpy,
                         };
                     }
                     return collection;
@@ -408,6 +601,40 @@ describe('OutboxManager', () => {
         await outbox.flush();
 
         expect(syncingModifySpy).toHaveBeenCalledTimes(1);
+        expect(inFlightModifySpy).toHaveBeenCalledTimes(1);
+        outbox.stop();
+    });
+
+    it('ignores a push result after stop and recovers it on restart', async () => {
+        const pending = createPendingOp({ id: 'stopped-push' });
+        const pendingOps = createPendingOpsTable([pending]);
+        let releasePush: ((result: PushResult) => void) | undefined;
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async () => new Promise<PushResult>((resolve) => {
+            releasePush = resolve;
+        }));
+        const outbox = new OutboxManager(
+            createMockDb({ pending_ops: pendingOps }) as any,
+            provider,
+            { workspaceId: 'workspace-1' }
+        );
+
+        const flushing = outbox.flush();
+        for (let i = 0; i < 20 && !provider.push.mock.calls.length; i++) await Promise.resolve();
+        outbox.stop();
+        releasePush?.({ results: [{ opId: pending.stamp.opId, success: true }], serverVersion: 1 });
+        await flushing;
+
+        expect(pendingOps.__rows.get(pending.id)?.status).toBe('in_flight');
+
+        provider.push = vi.fn(async () => ({
+            results: [{ opId: pending.stamp.opId, success: true }],
+            serverVersion: 1,
+        }));
+        outbox.start();
+        await outbox.flush();
+        expect(pendingOps.__rows.has(pending.id)).toBe(false);
+        expect(provider.push).toHaveBeenCalledTimes(1);
         outbox.stop();
     });
 });

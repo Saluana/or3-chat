@@ -14,6 +14,7 @@ import type { ContentPart, ToolCall } from '~/utils/chat/types';
 import type { ToolCallInfo } from '~/utils/chat/uiMessages';
 import type { BackgroundJobStatus } from '~/utils/chat/openrouterStream';
 import type { ORMessage } from '~/core/auth/openrouter-build';
+import type { Or3DB } from '~/db/client';
 
 /** Background job update payload sent to subscribers */
 export type BackgroundJobUpdate = {
@@ -39,6 +40,8 @@ export type BackgroundJobTracker = {
     preferServerNotifications?: boolean;
     status: BackgroundJobStatus['status'];
     lastWorkflowVersion: number;
+    lastToolStateFingerprint?: string;
+    lastWorkflowFingerprint?: string;
     lastContent: string;
     lastPersistedLength: number;
     lastPersistAt: number;
@@ -47,9 +50,15 @@ export type BackgroundJobTracker = {
     active: boolean;
     preferSse?: boolean;
     pollRunId?: number;
+    pollAbortController?: AbortController;
+    consecutivePollFailures?: number;
+    notFoundPollFailures?: number;
+    authPollFailures?: number;
     streamUnsubscribe?: () => void;
     messageRecord?: StoredMessage | null;
     messageRecordDbName?: string | null;
+    originDb?: Or3DB;
+    originDbName?: string;
     subscribers: Set<BackgroundJobSubscriber>;
     completion: Promise<BackgroundJobStatus>;
     resolveCompletion: (status: BackgroundJobStatus) => void;

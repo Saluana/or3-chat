@@ -33,6 +33,13 @@ const authWorkspaceStoreMock = vi.hoisted(() => ({
     getOrCreateDefaultWorkspace: vi.fn().mockResolvedValue({ workspaceId: 'ws-1', workspaceName: 'Default' }),
     getWorkspaceRole: vi.fn().mockResolvedValue('owner'),
     listInvites: vi.fn().mockResolvedValue([]),
+    validateInvite: vi.fn().mockResolvedValue({ ok: true, role: 'viewer' }),
+    acceptInviteAndProvisionUser: vi.fn().mockResolvedValue({
+        ok: true,
+        userId: 'user-1',
+        role: 'viewer',
+        createdUser: true,
+    }),
     consumeInvite: vi.fn().mockResolvedValue({ ok: true, role: 'viewer' }),
 }));
 
@@ -66,12 +73,21 @@ registerAuthProvider({
 });
 
 function makeEvent(headers: Record<string, string> = {}): H3Event {
+    const responseHeaders: Record<string, string | string[]> = {};
     return {
         context: {},
         node: {
             req: {
                 headers,
                 socket: { remoteAddress: '127.0.0.1' },
+            },
+            res: {
+                getHeader(name: string) {
+                    return responseHeaders[name.toLowerCase()];
+                },
+                setHeader(name: string, value: string | string[]) {
+                    responseHeaders[name.toLowerCase()] = value;
+                },
             },
         },
     } as H3Event;
@@ -103,6 +119,16 @@ describe('resolveSessionContext provisioning and caching', () => {
         });
         authWorkspaceStoreMock.getWorkspaceRole.mockReset().mockResolvedValue('owner');
         authWorkspaceStoreMock.listInvites.mockReset().mockResolvedValue([]);
+        authWorkspaceStoreMock.validateInvite.mockReset().mockResolvedValue({
+            ok: true,
+            role: 'viewer',
+        });
+        authWorkspaceStoreMock.acceptInviteAndProvisionUser.mockReset().mockResolvedValue({
+            ok: true,
+            userId: 'user-1',
+            role: 'viewer',
+            createdUser: true,
+        });
         authWorkspaceStoreMock.consumeInvite.mockReset().mockResolvedValue({
             ok: true,
             role: 'viewer',
@@ -210,21 +236,6 @@ describe('resolveSessionContext provisioning and caching', () => {
             expiresAt: new Date(Date.now() + 60_000),
             claims: { exp: Math.floor(Date.now() / 1000) + 60 },
         });
-        authWorkspaceStoreMock.listInvites.mockResolvedValueOnce([
-            {
-                id: 'invite-1',
-                workspaceId: 'ws-1',
-                email: 'user@test.com',
-                role: 'viewer',
-                status: 'pending',
-                invitedByUserId: 'owner-1',
-                expiresAt: Date.now() + 60_000,
-                tokenHash: hashInviteToken(inviteToken),
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-            },
-        ]);
-
         await expect(
             resolveSessionContext(
                 makeEvent({
@@ -236,7 +247,86 @@ describe('resolveSessionContext provisioning and caching', () => {
             statusMessage: 'Invite token is invalid or expired.',
         });
         expect(authWorkspaceStoreMock.getOrCreateUser).not.toHaveBeenCalled();
+        expect(authWorkspaceStoreMock.acceptInviteAndProvisionUser).not.toHaveBeenCalled();
         expect(authWorkspaceStoreMock.consumeInvite).not.toHaveBeenCalled();
+    });
+
+    it('atomically provisions an invited user without the legacy split flow', async () => {
+        const inviteToken = createInviteToken(
+            {
+                workspaceId: 'ws-invite',
+                email: 'USER@test.com',
+                exp: Math.floor(Date.now() / 1000) + 3600,
+            },
+            'invite-secret'
+        );
+
+        testRuntimeConfig.value = {
+            ...testRuntimeConfig.value,
+            auth: {
+                ...testRuntimeConfig.value.auth,
+                registrationMode: 'invite_only',
+                invite: { tokenSecret: 'invite-secret' },
+            },
+        };
+        authWorkspaceStoreMock.acceptInviteAndProvisionUser.mockResolvedValueOnce({
+            ok: true,
+            userId: 'internal-invite-user',
+            role: 'viewer',
+            createdUser: true,
+        });
+        authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockResolvedValueOnce({
+            workspaceId: 'ws-invite',
+            workspaceName: 'Invited workspace',
+        });
+        authWorkspaceStoreMock.getWorkspaceRole.mockResolvedValueOnce('viewer');
+
+        const session = await resolveSessionContext(
+            makeEvent({ 'x-or3-invite-token': inviteToken })
+        );
+
+        expect(session.user?.id).toBe('internal-invite-user');
+        expect(authWorkspaceStoreMock.acceptInviteAndProvisionUser).toHaveBeenCalledWith({
+            provider: PROVIDER_ID,
+            providerUserId: 'user-1',
+            email: 'user@test.com',
+            displayName: 'User',
+            workspaceId: 'ws-invite',
+            tokenHash: hashInviteToken(inviteToken),
+        });
+        expect(authWorkspaceStoreMock.getOrCreateUser).not.toHaveBeenCalled();
+        expect(authWorkspaceStoreMock.listInvites).not.toHaveBeenCalled();
+        expect(authWorkspaceStoreMock.consumeInvite).not.toHaveBeenCalled();
+    });
+
+    it('does not create an internal user when atomic invite provisioning rejects', async () => {
+        const inviteToken = createInviteToken(
+            {
+                workspaceId: 'ws-invite',
+                email: 'user@test.com',
+                exp: Math.floor(Date.now() / 1000) + 3600,
+            },
+            'invite-secret'
+        );
+
+        testRuntimeConfig.value = {
+            ...testRuntimeConfig.value,
+            auth: {
+                ...testRuntimeConfig.value.auth,
+                registrationMode: 'invite_only',
+                invite: { tokenSecret: 'invite-secret' },
+            },
+        };
+        authWorkspaceStoreMock.acceptInviteAndProvisionUser.mockResolvedValueOnce({
+            ok: false,
+            reason: 'already_used',
+        });
+
+        await expect(
+            resolveSessionContext(makeEvent({ 'x-or3-invite-token': inviteToken }))
+        ).rejects.toMatchObject({ statusCode: 403 });
+        expect(authWorkspaceStoreMock.getOrCreateUser).not.toHaveBeenCalled();
+        expect(authWorkspaceStoreMock.getOrCreateDefaultWorkspace).not.toHaveBeenCalled();
     });
 
     it('returns unauthenticated when provider is not registered', async () => {
@@ -336,18 +426,22 @@ describe('resolveSessionContext provisioning and caching', () => {
             },
         };
 
-        await resolveSessionContext(makeEvent());
+        const beforeInvalidation = await resolveSessionContext(makeEvent());
 
         invalidateSharedSessionCacheForIdentity({
             provider: PROVIDER_ID,
             providerUserId: 'user-1',
         });
 
-        await resolveSessionContext(makeEvent());
+        const afterInvalidation = await resolveSessionContext(makeEvent());
 
         expect(authWorkspaceStoreMock.getOrCreateUser).toHaveBeenCalledTimes(2);
         expect(authWorkspaceStoreMock.getOrCreateDefaultWorkspace).toHaveBeenCalledTimes(2);
         expect(authWorkspaceStoreMock.getWorkspaceRole).toHaveBeenCalledTimes(2);
+        expect(beforeInvalidation.authorizationRevision).toBe(0);
+        expect(afterInvalidation.authorizationRevision).toBeGreaterThan(
+            beforeInvalidation.authorizationRevision ?? 0
+        );
     });
 
     it('throws when workspace store for provider is missing', async () => {

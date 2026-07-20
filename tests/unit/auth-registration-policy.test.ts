@@ -26,6 +26,13 @@ const mockStore = {
     removeWorkspace: async () => {},
     setActiveWorkspace: async () => {},
     consumeInvite: async () => ({ ok: true as const, role: 'viewer' as const }),
+    acceptInviteAndProvisionUser: async () => ({
+        ok: true as const,
+        userId: 'u1',
+        workspaceId: 'w1',
+        role: 'viewer' as const,
+        created: true,
+    }),
 };
 
 function makeEvent(): H3Event {

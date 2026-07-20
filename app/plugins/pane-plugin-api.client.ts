@@ -30,6 +30,7 @@ export type PaneApiErrorCode =
     | 'no_thread'
     | 'no_thread_bind'
     | 'append_failed'
+    | 'send_rejected'
     | 'no_document'
     | 'no_active_pane'
     | 'no_panes'
@@ -316,8 +317,11 @@ function makeApi(): PanePluginApi {
                 // Simplest non-duplicating behavior: if role is user & stream requested, use ChatInput bridge instead of manual append.
                 if (role === 'user' && stream) {
                     if (hasPane(p.id)) {
-                        const okBridge = programmaticSend(p.id, text);
-                        if (okBridge) {
+                        const sendResult = await programmaticSend(p.id, text);
+                        if (
+                            'userMessageId' in sendResult &&
+                            sendResult.userMessageId
+                        ) {
                             log('sendMessage-bridge', {
                                 source,
                                 paneId,
@@ -325,10 +329,20 @@ function makeApi(): PanePluginApi {
                             });
                             return {
                                 ok: true,
-                                messageId: 'bridge',
+                                messageId: sendResult.userMessageId,
                                 threadId,
                             };
                         }
+                        return err(
+                            'send_rejected',
+                            'error' in sendResult && sendResult.error
+                                ? sendResult.error
+                                : `chat send ${sendResult.status}${
+                                      'reason' in sendResult
+                                          ? `: ${sendResult.reason}`
+                                          : ''
+                                  }`
+                        );
                     }
                 }
                 // Fallback: direct append (no streaming)

@@ -8,17 +8,36 @@
  * - Server-only runtime; no Vue or localStorage.
  */
 
-import type { ToolDefinition, ToolRuntime } from '~/utils/chat/types';
+import type { ToolDefinition, ToolExecutionAdmission, ToolExecutionContext, ToolRuntime } from '~/utils/chat/types';
+import { toolDefinitionEquals } from '~~/shared/chat/tool-policy';
+import { validateToolArguments, validateToolDefinition, validateToolDefinitions } from '~~/shared/chat/tool-schema';
+import {
+    executeWithAbortTimeout,
+    ToolExecutionTimeoutError,
+} from '~~/shared/chat/tool-execution';
+import {
+    assertUtf8Limit,
+    MAX_TOOL_ARGUMENT_BYTES,
+    MAX_TOOL_DURABLE_RESULT_BYTES,
+} from '~~/shared/chat/tool-limits';
 
-export type ToolHandler<TArgs = Record<string, unknown>> = (
+export type LegacyToolHandler<TArgs = Record<string, unknown>> = (
     args: TArgs
 ) => Promise<string> | string;
+export type ContextualToolHandler<TArgs = Record<string, unknown>> = (
+    args: TArgs,
+    context: ToolExecutionContext
+) => Promise<string> | string;
+// A one-argument legacy handler remains assignable to this signature, while a
+// single contextual signature preserves contextual typing for inline handlers.
+export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;
 
 export interface RegisteredServerTool {
     definition: ToolDefinition;
-    handler: ToolHandler<Record<string, unknown>>;
+    handler: ContextualToolHandler<Record<string, unknown>>;
     runtime: ToolRuntime;
     timeoutMs: number;
+    owner: symbol;
 }
 
 export interface RegisterServerToolOptions {
@@ -31,72 +50,17 @@ const DEFAULT_TIMEOUT_MS = 10000;
 
 const registry = new Map<string, RegisteredServerTool>();
 
-function safeParse(
-    jsonString: string,
-    schema: {
-        type: string;
-        properties?: Record<string, unknown>;
-        required?: string[];
-    }
-): { valid: boolean; args: Record<string, unknown> | null; error?: string } {
-    try {
-        const parsed: unknown = JSON.parse(jsonString);
-
-        if (
-            typeof parsed !== 'object' ||
-            parsed === null ||
-            Array.isArray(parsed)
-        ) {
-            return {
-                valid: false,
-                args: null,
-                error: 'Arguments must be a JSON object.',
-            };
-        }
-
-        const args = parsed as Record<string, unknown>;
-
-        if (schema.required) {
-            const missing = schema.required.filter((key) => !(key in args));
-            if (missing.length > 0) {
-                return {
-                    valid: false,
-                    args: null,
-                    error: `Missing required parameters: ${missing.join(', ')}.`,
-                };
-            }
-        }
-
-        return { valid: true, args };
-    } catch (e) {
-        return {
-            valid: false,
-            args: null,
-            error: `Failed to parse JSON arguments: ${
-                e instanceof Error ? e.message : String(e)
-            }`,
-        };
-    }
-}
-
 async function withTimeout(
-    handler: () => Promise<string> | string,
+    handler: (signal: AbortSignal) => Promise<string> | string,
+    signal: AbortSignal,
     timeoutMs: number
 ): Promise<{ result: string | null; timedOut: boolean; error?: string }> {
     try {
-        const result = await Promise.race([
-            (async () => handler())(),
-            new Promise<string>((_, reject) =>
-                setTimeout(
-                    () => reject(new Error(`Handler timeout after ${timeoutMs}ms`)),
-                    timeoutMs
-                )
-            ),
-        ]);
+        const result = await executeWithAbortTimeout({ signal, timeoutMs, execute: handler });
 
         return { result, timedOut: false };
     } catch (error) {
-        if (error instanceof Error && error.message.includes('timeout')) {
+        if (error instanceof ToolExecutionTimeoutError) {
             return { result: null, timedOut: true, error: error.message };
         }
         return {
@@ -113,15 +77,20 @@ export function registerServerTool<
     definition: ToolDefinition,
     handler: ToolHandler<TArgs>,
     opts: RegisterServerToolOptions = {}
-): void {
+): () => boolean {
+    const validation = validateToolDefinition(definition);
+    if (!validation.valid) {
+        throw new Error(`Cannot register server tool: ${validation.error}`);
+    }
     const name = definition.function.name;
     if (registry.has(name) && !opts.override) {
         throw new Error(`Tool "${name}" is already registered.`);
     }
 
     const runtime = opts.runtime ?? definition.runtime ?? 'hybrid';
-    const normalizedHandler: ToolHandler<Record<string, unknown>> = (args) =>
-        handler(args as TArgs);
+    const normalizedHandler: ContextualToolHandler<Record<string, unknown>> =
+        (args, context) => (handler as ContextualToolHandler<TArgs>)(args as TArgs, context);
+    const owner = Symbol(name);
     registry.set(name, {
         definition: {
             ...definition,
@@ -130,7 +99,13 @@ export function registerServerTool<
         handler: normalizedHandler,
         runtime,
         timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        owner,
     });
+    return () => {
+        if (registry.get(name)?.owner !== owner) return false;
+        registry.delete(name);
+        return true;
+    };
 }
 
 export function unregisterServerTool(name: string): void {
@@ -145,9 +120,40 @@ export function listServerTools(): RegisteredServerTool[] {
     return Array.from(registry.values());
 }
 
+/** Validate provider-visible definitions and bind server/hybrid tools to handlers. */
+export function validateServerToolRequest(
+    tools: unknown,
+    runtimeHints: unknown,
+    requireServerMatches: boolean
+): { valid: true } | { valid: false; error: string } {
+    const definitions = validateToolDefinitions(tools);
+    if (!definitions.valid) return definitions;
+    if (!requireServerMatches) return { valid: true };
+
+    const hints = runtimeHints && typeof runtimeHints === 'object' && !Array.isArray(runtimeHints)
+        ? runtimeHints as Record<string, unknown>
+        : {};
+    for (const definition of definitions.value) {
+        if (hints[definition.function.name] === 'client') continue;
+        const registered = getServerTool(definition.function.name);
+        if (!registered) {
+            return { valid: false, error: `Server tool "${definition.function.name}" is not registered.` };
+        }
+        if (!toolDefinitionEquals(registered.definition, definition)) {
+            return {
+                valid: false,
+                error: `Server tool "${definition.function.name}" does not match the request definition.`,
+            };
+        }
+    }
+    return { valid: true };
+}
+
 export async function executeServerTool(
     toolName: string,
-    argsJson: string
+    argsJson: string,
+    context?: ToolExecutionContext,
+    admission?: ToolExecutionAdmission
 ): Promise<{
     result: string | null;
     toolName: string;
@@ -155,6 +161,11 @@ export async function executeServerTool(
     timedOut: boolean;
     runtime?: ToolRuntime;
 }> {
+    try {
+        assertUtf8Limit(argsJson, MAX_TOOL_ARGUMENT_BYTES, 'Tool arguments');
+    } catch (error) {
+        return { result: null, toolName, error: (error as Error).message, timedOut: false };
+    }
     const tool = getServerTool(toolName);
     if (!tool) {
         return {
@@ -175,20 +186,43 @@ export async function executeServerTool(
         };
     }
 
-    const schema = tool.definition.function.parameters;
-    const parsed = safeParse(argsJson, schema);
-    if (!parsed.valid) {
+    if (admission && !toolDefinitionEquals(tool.definition, admission.definition)) {
         return {
             result: null,
             toolName,
-            error: parsed.error ?? 'Invalid tool arguments',
+            error: `Tool "${toolName}" does not match its admitted definition.`,
             timedOut: false,
             runtime: tool.runtime,
         };
     }
 
+    const schema = tool.definition.function.parameters;
+    const parsed = validateToolArguments(argsJson, schema);
+    if (!parsed.valid) {
+        return {
+            result: null,
+            toolName,
+            error: parsed.error,
+            timedOut: false,
+            runtime: tool.runtime,
+        };
+    }
+
+    const baseContext = context ?? {
+        subject: null,
+        workspaceId: null,
+        threadId: null,
+        messageId: null,
+        callId: crypto.randomUUID(),
+        requestId: crypto.randomUUID(),
+        abortSignal: new AbortController().signal,
+    };
     const execution = await withTimeout(
-        () => tool.handler(parsed.args ?? {}),
+        (abortSignal) => tool.handler(
+            parsed.value,
+            { ...baseContext, abortSignal }
+        ),
+        baseContext.abortSignal,
         tool.timeoutMs
     );
 
@@ -199,6 +233,14 @@ export async function executeServerTool(
             error: execution.error,
             timedOut: execution.timedOut,
             runtime: tool.runtime,
+        };
+    }
+    try {
+        assertUtf8Limit(execution.result ?? '', MAX_TOOL_DURABLE_RESULT_BYTES, 'Tool result');
+    } catch (error) {
+        return {
+            result: null, toolName, error: (error as Error).message,
+            timedOut: false, runtime: tool.runtime,
         };
     }
 

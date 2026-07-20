@@ -58,6 +58,8 @@ const stream = openrouterStream({
     orMessages: conversationHistory,
     modalities: ['text', 'image'],
     signal: abortController.signal, // optional: for cancellation
+    // Only for adapters that emit whole tool fields on every event.
+    streamedFieldMode: 'cumulative-snapshot',
 });
 ```
 
@@ -146,14 +148,14 @@ interface ToolCall {
 ## How it works (under the hood)
 
 1. **Connect**: Opens fetch to OpenRouter API with streaming enabled
-2. **Parse SSE**: Reads `data: ` prefixed lines
+2. **Parse SSE**: Applies standard SSE framing, including multiline `data`, CRLF, comments, split UTF-8, and a final unterminated event
 3. **Accumulate**: Buffers partial chunks until complete JSON line
 4. **Detect tool calls**: Watches for `delta.tool_calls` in JSON
 5. **Accumulate tool calls**: Reconstructs fragmented tool calls across chunks
 6. **Emit events**: Yields normalized events as they arrive
 7. **Handle finish_reason**: When `finish_reason === 'tool_calls'`, emits tools
 8. **Extract images**: Handles multiple image formats
-9. **Yield done**: Sends final `done` event when stream ends
+9. **Yield done**: Sends exactly one final `done` event and stops immediately on `[DONE]`
 
 ---
 
@@ -163,8 +165,9 @@ interface ToolCall {
 ✅ **Multiple image formats**: OpenAI, Gemini, and inline formats
 ✅ **Reasoning support**: Extracts model reasoning
 ✅ **Cancellation**: Respects `AbortSignal`
-✅ **Error diagnostics**: Detailed error logging
+✅ **Typed failures**: Distinguishes transport, protocol, and provider failures
 ✅ **Memory efficient**: Deduplicates images
+✅ **Bounded waits**: Response-header deadlines and streaming idle watchdogs
 
 ---
 
@@ -239,6 +242,21 @@ for await (const event of stream) {
 -   Tool calls are complete when `finish_reason === 'tool_calls'`
 -   You must execute tools locally
 -   `useChat` handles tool flow automatically
+-   Standard providers concatenate streamed name/argument deltas. Adapters that
+    emit cumulative snapshots must explicitly set
+    `streamedFieldMode: 'cumulative-snapshot'`.
+
+### Stream failures
+
+Malformed SSE/JSON throws `OpenRouterProtocolError`. Provider error envelopes
+and error finish reasons throw `OpenRouterProviderError`. HTTP/network failures
+throw `OpenRouterStreamError` with `kind: 'transport'`. Failures do not emit a
+successful terminal event.
+
+The caller signal is composed with a response-header deadline for every upstream
+fetch. Once headers arrive, each body read is guarded by an idle watchdog. A caller
+abort stays an `AbortError`; response and idle deadlines throw
+`OpenRouterTimeoutError` with the corresponding phase.
 
 ### Modalities
 
@@ -304,6 +322,7 @@ export async function* openRouterStream(params: {
     orMessages: any[];
     modalities: string[];
     signal?: AbortSignal;
+    streamedFieldMode?: 'delta' | 'cumulative-snapshot';
 }): AsyncGenerator<ORStreamEvent, void, unknown>
 
 type ORStreamEvent =

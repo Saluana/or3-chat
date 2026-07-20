@@ -1,4 +1,4 @@
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -33,28 +33,41 @@ describe('or3 cloud wizard phase 1 enhancements', () => {
     });
 
     it('createSession supports env prefill opt-in and opt-out', async () => {
-        const api = new Or3CloudWizardApi();
+        const wizardHome = await mkdtemp(resolve(tmpdir(), 'or3-wizard-home-'));
+        const previousWizardHome = process.env.OR3_CLOUD_WIZARD_HOME;
+        process.env.OR3_CLOUD_WIZARD_HOME = wizardHome;
 
-        const prefills = await api.createSession({
-            instanceDir: '/tmp/or3',
-            existingEnvMap: {
-                AUTH_PROVIDER: 'clerk',
-                OR3_SYNC_PROVIDER: 'convex',
-                NUXT_PUBLIC_STORAGE_PROVIDER: 'convex',
-            },
-            prefillFromEnv: true,
-        });
-        expect(prefills.answers.authProvider).toBe('clerk');
-        expect(prefills.answers.syncProvider).toBe('convex');
+        try {
+            const api = new Or3CloudWizardApi();
 
-        const fresh = await api.createSession({
-            instanceDir: '/tmp/or3',
-            existingEnvMap: {
-                AUTH_PROVIDER: 'clerk',
-            },
-            prefillFromEnv: false,
-        });
-        expect(fresh.answers.authProvider).toBe('basic-auth');
+            const prefills = await api.createSession({
+                instanceDir: '/tmp/or3',
+                existingEnvMap: {
+                    AUTH_PROVIDER: 'clerk',
+                    OR3_SYNC_PROVIDER: 'convex',
+                    NUXT_PUBLIC_STORAGE_PROVIDER: 'convex',
+                },
+                prefillFromEnv: true,
+            });
+            expect(prefills.answers.authProvider).toBe('clerk');
+            expect(prefills.answers.syncProvider).toBe('convex');
+
+            const fresh = await api.createSession({
+                instanceDir: '/tmp/or3',
+                existingEnvMap: {
+                    AUTH_PROVIDER: 'clerk',
+                },
+                prefillFromEnv: false,
+            });
+            expect(fresh.answers.authProvider).toBe('basic-auth');
+        } finally {
+            if (previousWizardHome === undefined) {
+                delete process.env.OR3_CLOUD_WIZARD_HOME;
+            } else {
+                process.env.OR3_CLOUD_WIZARD_HOME = previousWizardHome;
+            }
+            await rm(wizardHome, { recursive: true, force: true });
+        }
     });
 
     it('generates cryptographically secure secrets at requested length', () => {

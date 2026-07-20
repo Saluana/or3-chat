@@ -23,6 +23,7 @@ describe('createGatewayStorageProvider', () => {
                 method: 'PUT',
                 headers: { 'x-upload': '1' },
                 storageId: 'sid-1',
+                intentId: 'intent-1',
             }))
             .mockResolvedValueOnce(okJson({
                 url: 'u2',
@@ -62,6 +63,7 @@ describe('createGatewayStorageProvider', () => {
             workspaceId: 'ws-1',
             hash: 'sha256:abc',
             storageId: 's1',
+            intentId: 'intent-1',
             meta: {
                 name: 'a.png',
                 mimeType: 'image/png',
@@ -97,12 +99,14 @@ describe('createGatewayStorageProvider', () => {
 
         const commitBody = JSON.parse((fetchMock.mock.calls[2]?.[1] as RequestInit).body as string);
         expect(commitBody.storage_provider_id).toBe('custom-gateway');
+        expect(commitBody.intent_id).toBe('intent-1');
         expect(uploadResult).toEqual({
             url: 'u1',
             expiresAt: 1,
             method: 'PUT',
             headers: { 'x-upload': '1' },
             storageId: 'sid-1',
+            intentId: 'intent-1',
         });
         expect(downloadResult).toEqual({
             url: 'u2',

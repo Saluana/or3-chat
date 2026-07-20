@@ -13,7 +13,7 @@ The tool registry provides:
 - **Centralized tool management** — Single source of truth for all available tools
 - **Reactive state** — Vue-powered reactivity for UI toggles and enabled states
 - **Persistent preferences** — User choices saved to localStorage
-- **Type safety** — Full TypeScript support with schema validation
+- **Type safety** — Full TypeScript support with shared JSON Schema draft-07 validation
 - **Lifecycle management** — Automatic cleanup on HMR and unmount
 - **Error handling** — Built-in timeout and error tracking per tool
 
@@ -148,7 +148,7 @@ function registerTool(
 ): RegisteredTool
 ```
 
-**Throws:** Error if tool name already exists and `options.override` is false.
+**Throws:** Error if the tool definition or parameter JSON Schema is malformed, or if the tool name already exists and `options.override` is false.
 
 ### `unregisterTool(name)`
 
@@ -168,12 +168,12 @@ function getTool(name: string): RegisteredTool | undefined
 
 Returns undefined if tool doesn't exist.
 
-### `listTools()`
+### `listTools`
 
 Get all registered tools as a computed array.
 
 ```ts
-function listTools(): ComputedRef<RegisteredTool[]>
+const listTools: ComputedRef<RegisteredTool[]>
 ```
 
 Reactive — automatically updates when tools are added/removed.
@@ -204,7 +204,7 @@ function executeTool(
 }>
 ```
 
-Handles parsing, validation, timeout, and error tracking automatically.
+Handles parsing, full JSON Schema validation, timeout, and error tracking automatically. The same validator is used by the browser and server registries, including nested requirements, types, enums, numeric/string bounds, and `additionalProperties`.
 
 ### `setEnabled(name, enabled)`
 
@@ -347,7 +347,7 @@ if (tool) {
 ### Listing enabled tools
 
 ```ts
-const enabled = registry.listTools().value
+const enabled = registry.listTools.value
     .filter(t => t.enabled.value)
     .map(t => t.definition.function.name);
 ```
@@ -517,8 +517,8 @@ function useToolRegistry(): {
     ) => RegisteredTool;
     unregisterTool: (name: string) => void;
     getTool: (name: string) => RegisteredTool | undefined;
-    listTools: () => ComputedRef<RegisteredTool[]>;
-    hydrate: () => Promise<void>;
+    listTools: ComputedRef<RegisteredTool[]>;
+    hydrate: (states: Record<string, boolean>) => void;
     getEnabledDefinitions: () => ToolDefinition[];
     executeTool: (
         name: string,

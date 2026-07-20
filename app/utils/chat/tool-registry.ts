@@ -16,7 +16,18 @@
  */
 
 import { markRaw, shallowReactive, ref, watch, computed, type Ref } from 'vue';
-import type { ToolDefinition, ToolRuntime } from './types';
+import type { ToolDefinition, ToolExecutionAdmission, ToolExecutionContext, ToolRuntime } from './types';
+import { toolDefinitionEquals } from '~~/shared/chat/tool-policy';
+import { validateToolArguments, validateToolDefinition } from '~~/shared/chat/tool-schema';
+import {
+    executeWithAbortTimeout,
+    ToolExecutionTimeoutError,
+} from '~~/shared/chat/tool-execution';
+import {
+    assertUtf8Limit,
+    MAX_TOOL_ARGUMENT_BYTES,
+    MAX_TOOL_DURABLE_RESULT_BYTES,
+} from '~~/shared/chat/tool-limits';
 
 /**
  * `ToolHandler`
@@ -24,9 +35,16 @@ import type { ToolDefinition, ToolRuntime } from './types';
  * Purpose:
  * Tool handler signature. Handlers run in the app context.
  */
-export type ToolHandler<TArgs = Record<string, unknown>> = (
+export type LegacyToolHandler<TArgs = Record<string, unknown>> = (
     args: TArgs
 ) => Promise<string> | string;
+export type ContextualToolHandler<TArgs = Record<string, unknown>> = (
+    args: TArgs,
+    context: ToolExecutionContext
+) => Promise<string> | string;
+// A one-argument legacy handler remains assignable to this signature, while a
+// single contextual signature preserves contextual typing for inline handlers.
+export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;
 
 /**
  * `ExtendedToolDefinition`
@@ -41,6 +59,9 @@ export interface ExtendedToolDefinition extends ToolDefinition {
     defaultEnabled?: boolean; // default toggle state
 }
 
+export type TypedToolDefinition<TArgs extends Record<string, unknown>> =
+    ExtendedToolDefinition & { readonly __toolArgs?: TArgs };
+
 /**
  * `RegisteredTool`
  *
@@ -49,10 +70,14 @@ export interface ExtendedToolDefinition extends ToolDefinition {
  */
 export interface RegisteredTool {
     definition: ExtendedToolDefinition;
-    handler: ToolHandler;
+    handler: ContextualToolHandler;
     enabled: Ref<boolean>;
     lastError: Ref<string | null>;
     runtime: ToolRuntime;
+    /** Removes this exact registration; returns false after replacement/disposal. */
+    dispose: () => boolean;
+    _owner: symbol;
+    _stopWatcher: () => void;
 }
 
 interface RegisterOptions {
@@ -152,77 +177,16 @@ function persistEnabledStates() {
  * Validate arguments against a JSON schema.
  * Returns { valid: true } on success, { valid: false, error: string } on failure.
  */
-function safeParse(
-    jsonString: string,
-    schema: {
-        type: string;
-        properties?: Record<string, unknown>;
-        required?: string[];
-    }
-): { valid: boolean; args: Record<string, unknown> | null; error?: string } {
-    try {
-        const parsed: unknown = JSON.parse(jsonString);
-
-        if (
-            typeof parsed !== 'object' ||
-            parsed === null ||
-            Array.isArray(parsed)
-        ) {
-            return {
-                valid: false,
-                args: null,
-                error: 'Arguments must be a JSON object.',
-            };
-        }
-
-        const args = parsed as Record<string, unknown>;
-
-        // Validate required fields
-        if (schema.required) {
-            const missing = schema.required.filter((key) => !(key in args));
-            if (missing.length > 0) {
-                return {
-                    valid: false,
-                    args: null,
-                    error: `Missing required parameters: ${missing.join(
-                        ', '
-                    )}.`,
-                };
-            }
-        }
-
-        return { valid: true, args };
-    } catch (e) {
-        return {
-            valid: false,
-            args: null,
-            error: `Failed to parse JSON arguments: ${
-                e instanceof Error ? e.message : String(e)
-            }`,
-        };
-    }
-}
-
 /**
  * Execute a handler with timeout protection.
  */
 async function withTimeout(
-    handler: () => Promise<string> | string,
+    handler: (signal: AbortSignal) => Promise<string> | string,
+    signal: AbortSignal,
     timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<{ result: string | null; timedOut: boolean; error?: string }> {
     try {
-        const result = await Promise.race([
-            (async () => handler())(),
-            new Promise<string>((_, reject) =>
-                setTimeout(
-                    () =>
-                        reject(
-                            new Error(`Handler timeout after ${timeoutMs}ms`)
-                        ),
-                    timeoutMs
-                )
-            ),
-        ]);
+        const result = await executeWithAbortTimeout({ signal, timeoutMs, execute: handler });
 
         // Ensure result is a string
         if (typeof result !== 'string') {
@@ -235,7 +199,7 @@ async function withTimeout(
 
         return { result, timedOut: false };
     } catch (e) {
-        const isTimeout = e instanceof Error && e.message.includes('timeout');
+        const isTimeout = e instanceof ToolExecutionTimeoutError;
         return {
             result: null,
             timedOut: isTimeout,
@@ -272,12 +236,17 @@ export function useToolRegistry() {
     /**
      * Register a new tool with metadata and handler.
      */
-    function registerTool(
-        definition: ExtendedToolDefinition,
-        handler: ToolHandler,
+    function registerTool<TArgs extends Record<string, unknown> = Record<string, unknown>>(
+        definition: TypedToolDefinition<TArgs>,
+        handler: ToolHandler<TArgs>,
         opts: RegisterOptions = {}
     ): RegisteredTool {
         ensureHydrated();
+
+        const validation = validateToolDefinition(definition);
+        if (!validation.valid) {
+            throw new Error(`Cannot register tool: ${validation.error}`);
+        }
 
         const { name } = definition.function;
 
@@ -296,25 +265,38 @@ export function useToolRegistry() {
             true;
 
         const runtime = opts.runtime ?? definition.runtime ?? 'hybrid';
+        const normalizedHandler: ContextualToolHandler = (args, context) =>
+            handler(args as TArgs, context);
+        const previous = registryState.tools.get(name);
+        previous?._stopWatcher();
+        const owner = Symbol(name);
         const tool: RegisteredTool = {
             definition: {
                 ...definition,
                 runtime,
             },
-            handler: markRaw(handler), // Prevent Vue from proxying the handler
+            handler: markRaw(normalizedHandler), // Prevent Vue from proxying the handler
             enabled: ref(initialEnabled),
             lastError: ref(null),
             runtime,
+            _owner: owner,
+            _stopWatcher: () => undefined,
+            dispose: () => {
+                const current = registryState.tools.get(name);
+                if (!current || current._owner !== owner) return false;
+                current._stopWatcher();
+                registryState.tools.delete(name);
+                persistEnabledStates();
+                return true;
+            },
         };
-
-        registryState.tools.set(name, tool);
-
-        // Watch for enablement changes and persist
-        watch(
+        tool._stopWatcher = watch(
             () => tool.enabled.value,
             () => persistEnabledStates(),
             { immediate: false }
         );
+
+        registryState.tools.set(name, tool);
 
         return tool;
     }
@@ -323,6 +305,7 @@ export function useToolRegistry() {
      * Unregister a tool by name.
      */
     function unregisterTool(name: string): void {
+        registryState.tools.get(name)?._stopWatcher();
         registryState.tools.delete(name);
         persistEnabledStates();
     }
@@ -377,13 +360,20 @@ export function useToolRegistry() {
      */
     async function executeTool(
         toolName: string,
-        argumentsJson: string
+        argumentsJson: string,
+        context?: ToolExecutionContext,
+        admission?: ToolExecutionAdmission
     ): Promise<{
         result: string | null;
         toolName: string;
         error?: string;
         timedOut: boolean;
     }> {
+        try {
+            assertUtf8Limit(argumentsJson, MAX_TOOL_ARGUMENT_BYTES, 'Tool arguments');
+        } catch (error) {
+            return { result: null, toolName, error: (error as Error).message, timedOut: false };
+        }
         const tool = getTool(toolName);
 
         if (!tool) {
@@ -395,8 +385,20 @@ export function useToolRegistry() {
             };
         }
 
+        if (admission) {
+            if (!tool.enabled.value) {
+                return { result: null, toolName, error: `Tool "${toolName}" is disabled.`, timedOut: false };
+            }
+            if (tool.runtime === 'server') {
+                return { result: null, toolName, error: `Tool "${toolName}" is server-only.`, timedOut: false };
+            }
+            if (!toolDefinitionEquals(tool.definition, admission.definition)) {
+                return { result: null, toolName, error: `Tool "${toolName}" no longer matches its admitted definition.`, timedOut: false };
+            }
+        }
+
         // Validate arguments
-        const parsed = safeParse(
+        const parsed = validateToolArguments(
             argumentsJson,
             tool.definition.function.parameters
         );
@@ -412,13 +414,32 @@ export function useToolRegistry() {
         }
 
         // Execute with timeout
+        const baseContext = context ?? {
+            subject: null,
+            workspaceId: null,
+            threadId: null,
+            messageId: null,
+            callId: crypto.randomUUID(),
+            requestId: crypto.randomUUID(),
+            abortSignal: new AbortController().signal,
+        };
         const execution = await withTimeout(
-            () => tool.handler(parsed.args ?? {}),
+            (abortSignal) => tool.handler(
+                parsed.value,
+                { ...baseContext, abortSignal }
+            ),
+            baseContext.abortSignal,
             DEFAULT_TIMEOUT_MS
         );
 
         if (execution.error) {
             tool.lastError.value = execution.error;
+        }
+
+        try {
+            assertUtf8Limit(execution.result ?? '', MAX_TOOL_DURABLE_RESULT_BYTES, 'Tool result');
+        } catch (error) {
+            return { result: null, toolName, error: (error as Error).message, timedOut: false };
         }
 
         if (execution.timedOut) {

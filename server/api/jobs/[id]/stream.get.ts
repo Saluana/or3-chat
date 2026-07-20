@@ -16,6 +16,7 @@ import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import {
     getJobLiveState,
+    registerJobReconciler,
     registerJobStream,
     registerJobViewer,
 } from '../../../utils/background-jobs/viewers';
@@ -50,9 +51,15 @@ type StreamEventPayload = {
     };
 };
 
-const ACTIVE_POLL_INTERVAL_MS = 80;
-const IDLE_POLL_INTERVAL_MS = 300;
 const KEEPALIVE_INTERVAL_MS = 15_000;
+export const MAX_SSE_VIEWER_QUEUE_BYTES = 256 * 1024;
+
+export function hasSseQueueCapacity(
+    availableBytes: number | null,
+    eventBytes: number
+): boolean {
+    return availableBytes === null || availableBytes >= eventBytes;
+}
 
 export function serializeJobStatus(
     job: BackgroundJob,
@@ -172,16 +179,12 @@ export default defineEventHandler(async (event) => {
 
     const encoder = new TextEncoder();
 
+    let cancelActiveStream: (() => void) | null = null;
     const stream = new ReadableStream<Uint8Array>({
         async start(controller) {
             let closed = false;
             let lastContentLength = initialOffset;
             let lastStatus: BackgroundJob['status'] = initialJob.status;
-            let pollInterval =
-                initialJob.status === 'streaming'
-                    ? ACTIVE_POLL_INTERVAL_MS
-                    : IDLE_POLL_INTERVAL_MS;
-
             const disposeViewer = registerJobViewer(jobId);
             logBgStream('jobs-stream-viewer-registered', {
                 jobId,
@@ -189,6 +192,8 @@ export default defineEventHandler(async (event) => {
                 initialStatus: initialJob.status,
             });
             let disposeLive: (() => void) | null = null;
+            let disposeReconciler: (() => void) | null = null;
+            let keepAlive: ReturnType<typeof setInterval> | null = null;
             const isClosed = () => closed;
 
             const closeStream = (reason: string) => {
@@ -210,8 +215,17 @@ export default defineEventHandler(async (event) => {
                     disposeLive();
                     disposeLive = null;
                 }
+                if (disposeReconciler) {
+                    disposeReconciler();
+                    disposeReconciler = null;
+                }
+                if (keepAlive) {
+                    clearInterval(keepAlive);
+                    keepAlive = null;
+                }
                 disposeViewer();
             };
+            cancelActiveStream = () => closeStream('consumer_cancel');
 
             event.node.req.on('close', () => {
                 closeStream('client_disconnect');
@@ -242,9 +256,21 @@ export default defineEventHandler(async (event) => {
                             typeof payload.status.content === 'string',
                     });
                 }
-                controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify(payload)}\n\n`)
+                const encoded = encoder.encode(
+                    `data: ${JSON.stringify(payload)}\n\n`
                 );
+                const available = controller.desiredSize;
+                if (!hasSseQueueCapacity(available, encoded.byteLength)) {
+                    warnBgStream('jobs-stream-slow-consumer', {
+                        jobId,
+                        userId,
+                        resumeOffset: lastContentLength,
+                        eventBytes: encoded.byteLength,
+                    });
+                    closeStream(`slow_consumer_offset_${lastContentLength}`);
+                    return;
+                }
+                controller.enqueue(encoded);
             };
 
             // Send initial snapshot
@@ -392,19 +418,48 @@ export default defineEventHandler(async (event) => {
                 }
             }
 
-            const keepAlive = setInterval(() => {
+            keepAlive = setInterval(() => {
                 if (isClosed()) return;
-                controller.enqueue(encoder.encode(': ping\n\n'));
+                const ping = encoder.encode(': ping\n\n');
+                const available = controller.desiredSize;
+                if (!hasSseQueueCapacity(available, ping.byteLength)) {
+                    closeStream(`slow_consumer_offset_${lastContentLength}`);
+                    return;
+                }
+                controller.enqueue(ping);
             }, KEEPALIVE_INTERVAL_MS);
 
-            try {
-                while (!isClosed()) {
-                    await new Promise((resolve) =>
-                        setTimeout(resolve, pollInterval)
-                    );
-                    if (isClosed()) break;
-
-                    const job = await provider.getJob(jobId, userId);
+            disposeReconciler = registerJobReconciler(
+                jobId,
+                () => provider.getJob(jobId, userId),
+                (job, pollError) => {
+                    if (isClosed()) return;
+                    if (pollError) {
+                        const message = pollError.message || 'Stream error';
+                        warnBgStream('jobs-stream-error', {
+                            jobId,
+                            userId,
+                            error: message,
+                        });
+                        write({
+                            event: 'status',
+                            status: {
+                                id: jobId,
+                                status: 'error',
+                                threadId: initialJob.threadId,
+                                messageId: initialJob.messageId,
+                                model: initialJob.model,
+                                chunksReceived: initialJob.chunksReceived,
+                                startedAt: initialJob.startedAt,
+                                completedAt: Date.now(),
+                                error: message,
+                                content: initialJob.content,
+                                content_length: initialJob.content.length,
+                            },
+                        });
+                        closeStream('reconcile_error');
+                        return;
+                    }
                     if (!job) {
                         warnBgStream('jobs-stream-poll-job-missing', {
                             jobId,
@@ -426,13 +481,9 @@ export default defineEventHandler(async (event) => {
                                 content_length: initialJob.content.length,
                             },
                         });
-                        break;
+                        closeStream('reconcile_job_missing');
+                        return;
                     }
-
-                    pollInterval =
-                        job.status === 'streaming'
-                            ? ACTIVE_POLL_INTERVAL_MS
-                            : IDLE_POLL_INTERVAL_MS;
 
                     const hasNewContent = job.content.length > lastContentLength;
                     const statusChanged = job.status !== lastStatus;
@@ -452,7 +503,6 @@ export default defineEventHandler(async (event) => {
                             hasNewContent,
                             statusChanged,
                             deltaLength,
-                            pollInterval,
                         });
                     }
 
@@ -493,44 +543,20 @@ export default defineEventHandler(async (event) => {
                                 }),
                             });
                         }
-                        break;
+                        closeStream('reconcile_terminal_status');
+                        return;
                     }
 
                     lastStatus = job.status;
                 }
-            } catch (err) {
-                if (isClosed()) return;
-                const message =
-                    err instanceof Error ? err.message : 'Stream error';
-                warnBgStream('jobs-stream-error', {
-                    jobId,
-                    userId,
-                    error: message,
-                });
-                write({
-                    event: 'status',
-                    status: {
-                        id: jobId,
-                        status: 'error',
-                        threadId: initialJob.threadId,
-                        messageId: initialJob.messageId,
-                        model: initialJob.model,
-                        chunksReceived: initialJob.chunksReceived,
-                        startedAt: initialJob.startedAt,
-                        completedAt: Date.now(),
-                        error: message,
-                        content: initialJob.content,
-                        content_length: initialJob.content.length,
-                    },
-                });
-            } finally {
-                clearInterval(keepAlive);
-                closeStream('finally_cleanup');
-            }
+            );
         },
         cancel() {
-            // Client disconnected
+            cancelActiveStream?.();
         },
+    }, {
+        highWaterMark: MAX_SSE_VIEWER_QUEUE_BYTES,
+        size: (chunk) => chunk?.byteLength ?? 0,
     });
 
     return sendStream(event, stream);

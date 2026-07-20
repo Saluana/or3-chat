@@ -34,6 +34,8 @@ A user can belong to multiple workspaces, but each request resolves exactly one 
 
 On first login, a default workspace is created automatically. On workspace switch, the session must be refreshed so the client and server agree on which workspace is in scope.
 
+Workspace selections are coordinated across tabs with a monotonic revision broadcast. A tab publishes its intent before the switch request, other tabs refresh toward the winning revision, and a late response from an older revision is rejected and repairs the server/client selection back to the newer workspace before local state is committed.
+
 ---
 
 ## Roles and what they can do
@@ -133,6 +135,7 @@ Start at the outermost layer and work inward:
 
 ## Related
 
+- [Cloud Capability Matrix](./capability-matrix)
 - [Authentication System](./auth-system)
 - [Plugin Access Gating](./plugin-access-gating)
 - [Cloud Providers](./providers)

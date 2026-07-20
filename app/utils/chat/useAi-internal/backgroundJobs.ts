@@ -36,17 +36,20 @@ import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import type { HookEngine } from '~/core/hooks/hooks';
 import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
 import { nowSec, newId } from '~/db/util';
-import { upsert } from '~/db';
 import { getDb } from '~/db/client';
 import { resolveNotificationUserId } from '~/core/notifications/notification-user';
 import {
     pollJobStatus,
     subscribeBackgroundJobStream,
     abortBackgroundJob,
+    BackgroundJobPollError,
     type BackgroundJobStatus,
 } from '~/utils/chat/openrouterStream';
 import { NotificationService } from '~/core/notifications/notification-service';
-import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
+import {
+    getCachedSessionContext,
+    refreshCachedSessionContext,
+} from '~/composables/auth/useSessionContext';
 import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
 import type {
     BackgroundJobTracker,
@@ -55,6 +58,7 @@ import type {
     StoredMessage,
     EnsureBackgroundJobTrackerParams,
 } from './types';
+import { abortableDelay } from '~~/shared/openrouter/deadlines';
 
 /**
  * Polling interval when no active subscribers (user navigated away).
@@ -73,6 +77,10 @@ export const BACKGROUND_JOB_POLL_INTERVAL_ACTIVE_MS = 80;
  * Prevents excessive database writes during high-frequency streaming.
  */
 export const BACKGROUND_JOB_PERSIST_INTERVAL_MS = 500;
+export const BACKGROUND_JOB_MAX_RETRYABLE_POLLS = 5;
+export const BACKGROUND_JOB_MAX_NOT_FOUND_POLLS = 3;
+export const BACKGROUND_JOB_MAX_AUTH_POLLS = 2;
+export const BACKGROUND_JOB_MAX_RETRY_DELAY_MS = 10_000;
 
 /**
  * KV store key for muted thread list.
@@ -113,11 +121,39 @@ function workflowVersionOf(value: unknown): number {
         : 0;
 }
 
+function notifyBackgroundSubscribers(
+    tracker: BackgroundJobTracker,
+    callback: keyof Pick<
+        BackgroundJobSubscriber,
+        'onUpdate' | 'onComplete' | 'onError' | 'onAbort'
+    >,
+    update: BackgroundJobUpdate
+): void {
+    for (const subscriber of [...tracker.subscribers]) {
+        try {
+            subscriber[callback]?.(update);
+        } catch (error) {
+            bgStreamWarn('subscriber-callback-failed', {
+                jobId: tracker.jobId,
+                callback,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
+}
+
 /**
  * Internal helper. Promise-based delay for polling loops.
  */
-function sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+function retryDelayMs(error: BackgroundJobPollError, attempt: number): number {
+    if (typeof error.retryAfterMs === 'number') {
+        return Math.min(BACKGROUND_JOB_MAX_RETRY_DELAY_MS, error.retryAfterMs);
+    }
+    const exponential = Math.min(
+        BACKGROUND_JOB_MAX_RETRY_DELAY_MS,
+        250 * 2 ** Math.max(0, attempt - 1)
+    );
+    return Math.floor(exponential * (0.75 + Math.random() * 0.5));
 }
 
 /**
@@ -359,14 +395,25 @@ async function persistBackgroundJobUpdate(
     const now = Date.now();
     const statusChanged = status.status !== tracker.status;
     const contentChanged = content.length > tracker.lastPersistedLength;
+    const toolStateFingerprint = JSON.stringify(status.tool_calls ?? []);
+    const workflowFingerprint = JSON.stringify(status.workflow_state ?? null);
+    const toolStateChanged =
+        toolStateFingerprint !== (tracker.lastToolStateFingerprint ?? '[]');
+    const workflowChanged =
+        workflowFingerprint !== (tracker.lastWorkflowFingerprint ?? 'null');
     const shouldPersistContent =
         contentChanged &&
         (now - tracker.lastPersistAt > BACKGROUND_JOB_PERSIST_INTERVAL_MS ||
             status.status !== 'streaming');
 
-    if (!statusChanged && !shouldPersistContent) return true;
+    if (
+        !statusChanged &&
+        !shouldPersistContent &&
+        !toolStateChanged &&
+        !workflowChanged
+    ) return true;
 
-    const currentDb = getDb();
+    const currentDb = tracker.originDb ?? getDb();
     const currentDbName = currentDb.name;
     const existing =
         tracker.messageRecord && tracker.messageRecordDbName === currentDbName
@@ -435,19 +482,15 @@ async function persistBackgroundJobUpdate(
         updated_at: nowSec(),
     };
 
-    await upsert.message(nextRecord);
-
-    if (getDb().name === currentDbName) {
-        tracker.messageRecord = nextRecord;
-        tracker.messageRecordDbName = currentDbName;
-    } else {
-        tracker.messageRecord = null;
-        tracker.messageRecordDbName = null;
-    }
+    await currentDb.messages.put(nextRecord);
+    tracker.messageRecord = nextRecord;
+    tracker.messageRecordDbName = currentDbName;
 
     tracker.status = status.status;
     tracker.lastPersistAt = now;
     tracker.lastPersistedLength = content.length;
+    tracker.lastToolStateFingerprint = toolStateFingerprint;
+    tracker.lastWorkflowFingerprint = workflowFingerprint;
     bgStreamLog('persist-complete', {
         jobId: tracker.jobId,
         messageId: tracker.messageId,
@@ -612,9 +655,7 @@ async function handleBackgroundStatus(
         delta,
     };
     const workflowVersion = workflowVersionOf(nextStatus.workflow_state);
-    for (const subscriber of tracker.subscribers) {
-        subscriber.onUpdate?.(update);
-    }
+    notifyBackgroundSubscribers(tracker, 'onUpdate', update);
     if (
         nextStatus.workflow_state &&
         typeof nextStatus.workflow_state === 'object' &&
@@ -624,15 +665,15 @@ async function handleBackgroundStatus(
     }
 
     if (nextStatus.status !== 'streaming') {
-        for (const subscriber of tracker.subscribers) {
-            if (nextStatus.status === 'complete') {
-                subscriber.onComplete?.(update);
-            } else if (nextStatus.status === 'aborted') {
-                subscriber.onAbort?.(update);
-            } else {
-                subscriber.onError?.(update);
-            }
-        }
+        notifyBackgroundSubscribers(
+            tracker,
+            nextStatus.status === 'complete'
+                ? 'onComplete'
+                : nextStatus.status === 'aborted'
+                    ? 'onAbort'
+                    : 'onError',
+            update
+        );
         await emitBackgroundComplete(tracker, nextStatus);
         if (nextStatus.workflow_state && typeof nextStatus.workflow_state === 'object') {
             const state = nextStatus.workflow_state;
@@ -750,9 +791,7 @@ export async function primeBackgroundJobUpdate(
             content: serverContent,
             delta: serverContent, // Full content as delta since baseline was empty
         };
-        for (const subscriber of tracker.subscribers) {
-            subscriber.onUpdate?.(update);
-        }
+        notifyBackgroundSubscribers(tracker, 'onUpdate', update);
     }
     // If server has less, keep our content and let normal polling continue
     // Normal polling will continue from here - no burst loop needed
@@ -765,6 +804,9 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
     if (tracker.polling) return;
     if (typeof tracker.pollRunId !== 'number') tracker.pollRunId = 0;
     const runId = tracker.pollRunId + 1;
+    tracker.pollAbortController?.abort();
+    const pollAbortController = new AbortController();
+    tracker.pollAbortController = pollAbortController;
     tracker.pollRunId = runId;
     tracker.polling = true;
     tracker.active = true;
@@ -776,13 +818,18 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
     });
     const isActive = () => tracker.active;
 
+    try {
     while (isActive() && tracker.pollRunId === runId) {
         let status: BackgroundJobStatus;
         try {
             status = await pollJobStatus(
                 tracker.jobId,
-                tracker.lastContent.length
+                tracker.lastContent.length,
+                pollAbortController.signal
             );
+            tracker.consecutivePollFailures = 0;
+            tracker.notFoundPollFailures = 0;
+            tracker.authPollFailures = 0;
         } catch (err) {
             const error = err instanceof Error ? err.message : 'Unknown error';
             bgStreamWarn('poll-status-failed', {
@@ -790,6 +837,41 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
                 runId,
                 error,
             });
+            if (err instanceof BackgroundJobPollError && err.retryable) {
+                tracker.consecutivePollFailures =
+                    (tracker.consecutivePollFailures ?? 0) + 1;
+                if (err.kind === 'not_found') {
+                    tracker.notFoundPollFailures =
+                        (tracker.notFoundPollFailures ?? 0) + 1;
+                }
+                if (err.kind === 'auth') {
+                    tracker.authPollFailures = (tracker.authPollFailures ?? 0) + 1;
+                    if (tracker.authPollFailures === 1) {
+                        try {
+                            await refreshCachedSessionContext();
+                        } catch {
+                            /* the bounded poll retry remains authoritative */
+                        }
+                    }
+                }
+                const withinGeneralBound =
+                    tracker.consecutivePollFailures <=
+                    BACKGROUND_JOB_MAX_RETRYABLE_POLLS;
+                const withinKindBound =
+                    (err.kind !== 'not_found' ||
+                        (tracker.notFoundPollFailures ?? 0) <=
+                            BACKGROUND_JOB_MAX_NOT_FOUND_POLLS) &&
+                    (err.kind !== 'auth' ||
+                        (tracker.authPollFailures ?? 0) <=
+                            BACKGROUND_JOB_MAX_AUTH_POLLS);
+                if (withinGeneralBound && withinKindBound) {
+                    await abortableDelay(
+                        retryDelayMs(err, tracker.consecutivePollFailures),
+                        pollAbortController.signal
+                    );
+                    continue;
+                }
+            }
             status = {
                 id: tracker.jobId,
                 status: 'error',
@@ -827,18 +909,23 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
             tracker.subscribers.size > 0
                 ? BACKGROUND_JOB_POLL_INTERVAL_ACTIVE_MS
                 : BACKGROUND_JOB_POLL_INTERVAL_MS;
-        await sleep(pollInterval);
+        await abortableDelay(pollInterval, pollAbortController.signal);
     }
-    if (tracker.pollRunId === runId) {
-        tracker.polling = false;
+    } catch (error) {
+        if (!pollAbortController.signal.aborted) throw error;
+    } finally {
+        if (tracker.pollRunId === runId) {
+            tracker.polling = false;
+            tracker.pollAbortController = undefined;
+        }
+        bgStreamLog('poll-stop', {
+            jobId: tracker.jobId,
+            runId,
+            active: tracker.active,
+            pollRunId: tracker.pollRunId,
+            status: tracker.status,
+        });
     }
-    bgStreamLog('poll-stop', {
-        jobId: tracker.jobId,
-        runId,
-        active: tracker.active,
-        pollRunId: tracker.pollRunId,
-        status: tracker.status,
-    });
 }
 
 /**
@@ -879,6 +966,8 @@ export function stopBackgroundJobTracking(
     });
     tracker.active = false;
     tracker.pollRunId = (tracker.pollRunId ?? 0) + 1;
+    tracker.pollAbortController?.abort();
+    tracker.pollAbortController = undefined;
     tracker.polling = false;
     tracker.streaming = false;
     if (tracker.streamUnsubscribe) {
@@ -1117,6 +1206,7 @@ export function ensureBackgroundJobTracker(
     });
     const seedContent =
         typeof params.initialContent === 'string' ? params.initialContent : '';
+    const originDb = getDb();
     const tracker: BackgroundJobTracker = {
         jobId: params.jobId,
         userId: params.userId,
@@ -1125,6 +1215,8 @@ export function ensureBackgroundJobTracker(
         status: 'streaming',
         preferServerNotifications: Boolean(params.preferServerNotifications),
         lastWorkflowVersion: -1,
+        lastToolStateFingerprint: '[]',
+        lastWorkflowFingerprint: 'null',
         lastContent: seedContent,
         lastPersistedLength: seedContent.length,
         lastPersistAt: 0,
@@ -1135,6 +1227,8 @@ export function ensureBackgroundJobTracker(
         pollRunId: 0,
         messageRecord: null,
         messageRecordDbName: null,
+        originDb,
+        originDbName: originDb.name,
         subscribers: new Set<BackgroundJobSubscriber>(),
         completion,
         resolveCompletion,
@@ -1212,6 +1306,8 @@ export function subscribeBackgroundJob(
     ) {
         if (tracker.polling) {
             tracker.pollRunId += 1;
+            tracker.pollAbortController?.abort();
+            tracker.pollAbortController = undefined;
             tracker.polling = false;
             bgStreamLog('subscriber-upgrade-cancel-poll', {
                 jobId: tracker.jobId,

@@ -42,6 +42,8 @@ export const SYNC_RATE_LIMITS: Record<string, RateLimitConfig> = {
     'sync:push': { windowMs: 60_000, maxRequests: 200 },
     // Pull: 120 requests per minute
     'sync:pull': { windowMs: 60_000, maxRequests: 120 },
+    // Snapshot pages: same read budget as incremental pulls
+    'sync:snapshot': { windowMs: 60_000, maxRequests: 120 },
     // Cursor updates: 60 requests per minute
     'sync:cursor': { windowMs: 60_000, maxRequests: 60 },
     // GC operations: 10 requests per minute (low limit for admin-only operations)

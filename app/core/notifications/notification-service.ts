@@ -116,7 +116,9 @@ export class NotificationService {
     }
 
     private getNotificationWriteTxTables(): string[] {
-        return getWriteTxTableNames(this.db, 'notifications');
+        return getWriteTxTableNames(this.db, 'notifications', {
+            includeTombstones: true,
+        });
     }
 
     private async runNotificationWriteTx<T>(fn: () => Promise<T>): Promise<T> {

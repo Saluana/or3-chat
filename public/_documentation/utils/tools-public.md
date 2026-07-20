@@ -99,7 +99,7 @@ registry.registerTool(tool, async (args) => {
 });
 ```
 
-**Returns**: The same tool definition object passed in (identity function for type inference only).
+**Returns**: The validated tool definition with a compile-time argument type. Invalid JSON Schemas throw before registration.
 
 ### Type Re-exports
 
@@ -318,7 +318,9 @@ import { parseToolArgs } from '~/utils/chat/internal-helpers';
 ```ts
 // Main exports
 export { useToolRegistry } from '~/utils/chat/tool-registry';
-export function defineTool<T = any>(def: ToolDefinition): ToolDefinition;
+export function defineTool<T extends Record<string, unknown>>(
+    def: ToolDefinition
+): TypedToolDefinition<T>;
 
 // Type exports
 export type {

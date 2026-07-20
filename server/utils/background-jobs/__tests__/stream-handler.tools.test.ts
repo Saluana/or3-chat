@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BackgroundJobProvider, BackgroundJob } from '../types';
+import type { BackgroundJobProvider, BackgroundJob, JobUpdate } from '../types';
 import {
     consumeBackgroundStreamWithTools,
 } from '../stream-handler';
@@ -8,6 +8,9 @@ import {
     unregisterServerTool,
 } from '../../chat/tool-registry';
 import type { ToolDefinition } from '~/utils/chat/types';
+import { toolCallFingerprint } from '~~/shared/chat/tool-ledger';
+import { canonicalToolResultData } from '~~/shared/chat/canonical-tool-transcript';
+import { toolResultTranscriptData } from '~/utils/chat/transcript';
 
 function makeSseStream(chunks: unknown[]): ReadableStream<Uint8Array> {
     const encoder = new TextEncoder();
@@ -22,7 +25,7 @@ function makeSseStream(chunks: unknown[]): ReadableStream<Uint8Array> {
     });
 }
 
-function makeToolCallResponse(): Response {
+function makeToolCallResponse(name = 'server_echo', args = '{"value":"ok"}'): Response {
     return new Response(
         makeSseStream([
             {
@@ -34,8 +37,8 @@ function makeToolCallResponse(): Response {
                                     index: 0,
                                     id: 'call-1',
                                     function: {
-                                        name: 'server_echo',
-                                        arguments: '{"value":"ok"}',
+                                        name,
+                                        arguments: args,
                                     },
                                 },
                             ],
@@ -64,8 +67,17 @@ function makeTextResponse(text: string): Response {
     );
 }
 
-function createProvider(statusRef: { status: BackgroundJob['status'] }) {
-    const updateJob = vi.fn(async () => {});
+function makeManyTextResponse(count: number): Response {
+    return new Response(makeSseStream(Array.from({ length: count }, () => ({
+        choices: [{ delta: { content: 'x' } }],
+    }))));
+}
+
+function createProvider(
+    statusRef: { status: BackgroundJob['status'] },
+    initialToolCalls?: BackgroundJob['tool_calls']
+) {
+    const updateJob = vi.fn(async (_jobId: string, _update: JobUpdate) => {});
     const completeJob = vi.fn(async () => {
         statusRef.status = 'complete';
     });
@@ -86,6 +98,7 @@ function createProvider(statusRef: { status: BackgroundJob['status'] }) {
                 content: '',
                 chunksReceived: 0,
                 startedAt: Date.now(),
+                tool_calls: initialToolCalls,
             };
         },
         updateJob,
@@ -132,6 +145,29 @@ describe('consumeBackgroundStreamWithTools', () => {
         vi.unstubAllGlobals();
     });
 
+    it('coalesces 500 provider text updates without losing terminal content', async () => {
+        const statusRef = { status: 'streaming' as const };
+        const { provider, updateJob, completeJob } = createProvider(statusRef);
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(makeManyTextResponse(500)));
+
+        await consumeBackgroundStreamWithTools({
+            jobId: 'job-1',
+            body: { model: 'test-model', messages: [], tools: [] },
+            apiKey: 'key', referer: 'http://localhost:3000', provider,
+            context: {
+                body: {}, apiKey: 'key', userId: 'user-1', workspaceId: 'ws-1',
+                threadId: 'thread-1', messageId: 'msg-1', referer: 'http://localhost:3000',
+            },
+        });
+
+        expect(updateJob.mock.calls.length).toBeLessThanOrEqual(10);
+        expect(completeJob).toHaveBeenCalledWith('job-1', 'x'.repeat(500));
+        const persisted = updateJob.mock.calls
+            .map((call) => (call[1] as { contentChunk?: string }).contentChunk ?? '')
+            .join('');
+        expect(persisted).toBe('x'.repeat(500));
+    });
+
     it('executes registered server tools and completes with follow-up text', async () => {
         const statusRef = { status: 'streaming' as const };
         const { provider, updateJob, completeJob } = createProvider(statusRef);
@@ -171,6 +207,171 @@ describe('consumeBackgroundStreamWithTools', () => {
             return Array.isArray(update?.tool_calls);
         });
         expect(hasToolCallUpdate).toBe(true);
+
+        const completedCall = updateJob.mock.calls
+            .flatMap((call) => (call[1] as JobUpdate).tool_calls ?? [])
+            .find((call) => call.id === 'call-1' && call.status === 'complete');
+        expect(completedCall?.transcript).toBeDefined();
+        expect(canonicalToolResultData(completedCall!.transcript!)).toEqual(
+            toolResultTranscriptData({
+                turnId: 'msg-1',
+                parentAssistantId: 'msg-1',
+                callId: 'call-1',
+                toolName: 'server_echo',
+                fingerprint: toolCallFingerprint(
+                    'server_echo',
+                    '{"value":"ok"}'
+                ),
+                status: 'complete',
+                result: 'ok',
+            })
+        );
+    });
+
+    it('never invokes a registered server tool that was not advertised', async () => {
+        const privileged = vi.fn(() => 'secret');
+        const privilegedDef: ToolDefinition = {
+            ...toolDef,
+            function: { ...toolDef.function, name: 'privileged_tool' },
+            runtime: 'server',
+        };
+        registerServerTool(privilegedDef, privileged, { override: true });
+        const statusRef = { status: 'streaming' as const };
+        const { provider, completeJob } = createProvider(statusRef);
+        vi.stubGlobal('fetch', vi.fn()
+            .mockResolvedValueOnce(makeToolCallResponse('privileged_tool'))
+            .mockResolvedValueOnce(makeTextResponse('safe')));
+
+        await consumeBackgroundStreamWithTools({
+            jobId: 'job-1',
+            body: { model: 'test-model', messages: [], tools: [toolDef] },
+            apiKey: 'key',
+            referer: 'http://localhost:3000',
+            provider,
+            context: {
+                body: {}, apiKey: 'key', userId: 'user-1', workspaceId: 'ws-1',
+                threadId: 'thread-1', messageId: 'msg-1', referer: 'http://localhost:3000',
+            },
+        });
+
+        expect(privileged).not.toHaveBeenCalled();
+        expect(completeJob).toHaveBeenCalledWith('job-1', 'safe');
+        unregisterServerTool('privileged_tool');
+    });
+
+    it('passes the exact authenticated job context into the admitted handler', async () => {
+        let received: unknown;
+        registerServerTool(toolDef, (_args, context) => {
+            received = context;
+            return 'ok';
+        }, { override: true });
+        const statusRef = { status: 'streaming' as const };
+        const { provider } = createProvider(statusRef);
+        vi.stubGlobal('fetch', vi.fn()
+            .mockResolvedValueOnce(makeToolCallResponse())
+            .mockResolvedValueOnce(makeTextResponse('done')));
+        const abortController = new AbortController();
+
+        await consumeBackgroundStreamWithTools({
+            jobId: 'job-1',
+            body: { model: 'test-model', messages: [], tools: [toolDef] },
+            apiKey: 'key', referer: 'http://localhost:3000', provider,
+            context: {
+                body: {}, apiKey: 'key', userId: 'user-1', workspaceId: 'ws-1',
+                threadId: 'thread-1', messageId: 'msg-1', referer: 'http://localhost:3000',
+            },
+            abortSignal: abortController.signal,
+        });
+
+        expect(received).toMatchObject({
+            subject: 'user-1', workspaceId: 'ws-1', threadId: 'thread-1',
+            messageId: 'msg-1', callId: 'call-1', requestId: 'job-1',
+            abortSignal: expect.any(AbortSignal),
+        });
+        expect((received as { abortSignal: AbortSignal }).abortSignal).not.toBe(abortController.signal);
+    });
+
+    it('logs only metadata for sensitive tool arguments and results', async () => {
+        const secretArgs = '{"value":"hunter2","email":"person@example.com","apiKey":"sk-test-secret"}';
+        const secretResult = 'person@example.com sk-result-secret';
+        registerServerTool(toolDef, () => secretResult, { override: true });
+        const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+        const statusRef = { status: 'streaming' as const };
+        const { provider } = createProvider(statusRef);
+        vi.stubGlobal('fetch', vi.fn()
+            .mockResolvedValueOnce(makeToolCallResponse('server_echo', secretArgs))
+            .mockResolvedValueOnce(makeTextResponse('done')));
+
+        await consumeBackgroundStreamWithTools({
+            jobId: 'job-1', body: { model: 'test-model', messages: [], tools: [toolDef] },
+            apiKey: 'key', referer: 'http://localhost:3000', provider,
+            context: {
+                body: {}, apiKey: 'key', userId: 'user-1', workspaceId: 'ws-1',
+                threadId: 'thread-1', messageId: 'msg-1', referer: 'http://localhost:3000',
+            },
+        });
+
+        const logs = info.mock.calls.flat().join('\n');
+        expect(logs).not.toContain('hunter2');
+        expect(logs).not.toContain('person@example.com');
+        expect(logs).not.toContain('sk-test-secret');
+        expect(logs).not.toContain('sk-result-secret');
+        expect(logs).toContain('argumentMetadata');
+        expect(logs).toContain('resultMetadata');
+
+        info.mockClear();
+        const oversizedMarker = 'OVERSIZED_SECRET_MARKER';
+        const oversizedArgs = JSON.stringify({ value: `${oversizedMarker}${'x'.repeat(1_000_000)}` });
+        const malformedMarker = 'MALFORMED_SECRET_MARKER';
+        vi.stubGlobal('fetch', vi.fn()
+            .mockResolvedValueOnce(makeToolCallResponse('server_echo', oversizedArgs))
+            .mockResolvedValueOnce(makeTextResponse('done'))
+            .mockResolvedValueOnce(makeToolCallResponse('server_echo', `{"value":"${malformedMarker}`))
+            .mockResolvedValueOnce(makeTextResponse('done')));
+        for (let index = 0; index < 2; index += 1) {
+            const nextStatus = { status: 'streaming' as const };
+            await consumeBackgroundStreamWithTools({
+                jobId: 'job-1', body: { model: 'test-model', messages: [], tools: [toolDef] },
+                apiKey: 'key', referer: 'http://localhost:3000', provider: createProvider(nextStatus).provider,
+                context: {
+                    body: {}, apiKey: 'key', userId: 'user-1', workspaceId: 'ws-1',
+                    threadId: 'thread-1', messageId: 'msg-1', referer: 'http://localhost:3000',
+                },
+            });
+        }
+        const adversarialLogs = info.mock.calls.flat().join('\n');
+        expect(adversarialLogs).not.toContain(oversizedMarker);
+        expect(adversarialLogs).not.toContain(malformedMarker);
+    });
+
+    it('reuses a persisted completed call and refuses a persisted running call', async () => {
+        const handler = vi.fn(() => 'must-not-run');
+        registerServerTool(toolDef, handler, { override: true });
+        const fingerprint = toolCallFingerprint('server_echo', '{"value":"ok"}');
+
+        for (const persisted of [
+            { status: 'complete' as const, result: 'persisted-result' },
+            { status: 'loading' as const, result: undefined },
+        ]) {
+            const statusRef = { status: 'streaming' as const };
+            const { provider } = createProvider(statusRef, [{
+                id: 'call-1', name: 'server_echo', status: persisted.status,
+                args: '{"value":"ok"}', result: persisted.result,
+                argument_fingerprint: fingerprint,
+            }]);
+            vi.stubGlobal('fetch', vi.fn()
+                .mockResolvedValueOnce(makeToolCallResponse())
+                .mockResolvedValueOnce(makeTextResponse('done')));
+            await consumeBackgroundStreamWithTools({
+                jobId: 'job-1', body: { model: 'test-model', messages: [], tools: [toolDef] },
+                apiKey: 'key', referer: 'http://localhost:3000', provider,
+                context: {
+                    body: {}, apiKey: 'key', userId: 'user-1', workspaceId: 'ws-1',
+                    threadId: 'thread-1', messageId: 'msg-1', referer: 'http://localhost:3000',
+                },
+            });
+        }
+        expect(handler).not.toHaveBeenCalled();
     });
 
     it('does not complete when job status is already aborted', async () => {

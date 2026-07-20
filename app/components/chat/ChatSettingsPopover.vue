@@ -30,10 +30,30 @@
             <UIcon :name="iconView" class="w-5 h-5" />
         </div>
         <div
+            v-if="thinkingSupported"
             class="chat-settings-switch flex justify-between w-full items-center py-1 px-3 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
         >
             <USwitch v-bind="thinkingSwitchProps" class="w-full" v-model="thinkingEnabled"></USwitch>
             <UIcon :name="iconReasoning" class="w-5 h-5" />
+        </div>
+        <div
+            v-if="thinkingSupported && thinkingEnabled && reasoningEffortOptions.length > 0"
+            class="chat-settings-reasoning-effort flex justify-between w-full items-center gap-3 py-1.5 px-3 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
+        >
+            <label
+                for="chat-reasoning-effort"
+                class="text-sm font-medium shrink-0"
+            >
+                Reasoning level
+            </label>
+            <USelect
+                id="chat-reasoning-effort"
+                v-model="reasoningEffort"
+                :items="reasoningEffortItems"
+                size="sm"
+                class="min-w-32"
+                :disabled="loading || streaming"
+            />
         </div>
 
         <!-- Tool Toggles Section -->
@@ -170,6 +190,7 @@ const props = defineProps<{
     loading?: boolean;
     streaming?: boolean;
     thinkingSupported?: boolean;
+    reasoningEfforts?: string[];
 }>();
 
 const emit = defineEmits<{
@@ -273,6 +294,7 @@ function getCategorySubtitle(category: string) {
 const selectedModel = defineModel<string>('model');
 const webSearchEnabled = defineModel<boolean>('webSearchEnabled');
 const thinkingEnabled = defineModel<boolean>('thinkingEnabled');
+const reasoningEffort = defineModel<string | undefined>('reasoningEffort');
 
 const iconView = useIcon('ui.view');
 const iconReasoning = useIcon('chat.reasoning');
@@ -335,10 +357,22 @@ const thinkingSwitchProps = computed(() => {
         color: 'primary' as const,
         size: 'sm' as const,
         label: 'Enable thinking',
-        disabled: props.thinkingSupported === false,
+        disabled:
+            props.thinkingSupported === false || props.loading || props.streaming,
         ...overrides.value,
     };
 });
+
+const reasoningEffortOptions = computed(() =>
+    Array.isArray(props.reasoningEfforts) ? props.reasoningEfforts : []
+);
+
+const reasoningEffortItems = computed(() =>
+    reasoningEffortOptions.value.map((value) => ({
+        label: value,
+        value,
+    }))
+);
 
 // Tool switch (dynamic per tool)
 const getToolSwitchProps = (toolName: string) => {

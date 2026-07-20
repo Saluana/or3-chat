@@ -4,27 +4,12 @@ import { getActiveSyncGatewayAdapter } from '../../sync/gateway/registry';
 
 export interface WorkspaceStorageUsageSnapshot {
     usedBytes: number;
+    reservedBytes: number;
     filesByHash: Map<string, number>;
 }
 
 function normalizeHash(value: string): string {
-    return value.replace(/^sha256:/i, '').trim().toLowerCase();
-}
-
-function isDeletedPayload(payload: unknown): boolean {
-    if (!payload || typeof payload !== 'object') return false;
-    const deleted = (payload as Record<string, unknown>).deleted;
-    return deleted === true || deleted === 1 || deleted === '1';
-}
-
-function readSizeBytes(payload: unknown): number | null {
-    if (!payload || typeof payload !== 'object') return null;
-    const row = payload as Record<string, unknown>;
-    const raw = row.size_bytes ?? row.sizeBytes;
-    if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) {
-        return null;
-    }
-    return Math.floor(raw);
+    return value.replace(/^sha256:/i, '').replace(/^md5:/i, '').trim().toLowerCase();
 }
 
 export async function getWorkspaceStorageUsageSnapshot(
@@ -40,44 +25,48 @@ export async function getWorkspaceStorageUsageSnapshot(
         });
     }
 
-    const filesByHash = new Map<string, number>();
-    let cursor = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-        const result = await syncAdapter.pull(event, {
-            scope: { workspaceId },
-            cursor,
-            limit: 1000,
-            tables: ['file_meta'],
+    if (!syncAdapter.queryCanonicalStorage) {
+        throw createError({
+            statusCode: 503,
+            statusMessage:
+                'Storage quota enforcement requires canonical materialized storage queries',
         });
-
-        for (const change of result.changes) {
-            if (change.tableName !== 'file_meta') continue;
-            if (typeof change.pk !== 'string' || !change.pk.trim()) continue;
-
-            const key = normalizeHash(change.pk);
-            if (change.op === 'delete' || isDeletedPayload(change.payload)) {
-                filesByHash.delete(key);
-                continue;
-            }
-
-            const sizeBytes = readSizeBytes(change.payload);
-            if (sizeBytes === null) {
-                continue;
-            }
-            filesByHash.set(key, sizeBytes);
-        }
-
-        cursor = result.nextCursor;
-        hasMore = result.hasMore;
     }
 
+    const filesByHash = new Map<string, number>();
     let usedBytes = 0;
-    for (const sizeBytes of filesByHash.values()) {
-        usedBytes += sizeBytes;
+    let reservedBytes = 0;
+
+    for (const kind of ['live_metadata', 'active_reservations'] as const) {
+        let cursor: string | undefined;
+        do {
+            const result = await syncAdapter.queryCanonicalStorage(event, {
+                scope: { workspaceId },
+                kind,
+                cursor,
+                limit: 500,
+                now: Math.floor(Date.now() / 1000),
+            });
+
+            for (const item of result.items) {
+                if (item.kind === 'metadata') {
+                    const key = normalizeHash(item.hash);
+                    filesByHash.set(key, item.sizeBytes);
+                    usedBytes += item.sizeBytes;
+                } else if (item.kind === 'reservation') {
+                    reservedBytes += item.sizeBytes;
+                }
+            }
+
+            if (result.hasMore && !result.nextCursor) {
+                throw createError({
+                    statusCode: 502,
+                    statusMessage: 'Canonical storage provider returned an invalid page',
+                });
+            }
+            cursor = result.nextCursor;
+        } while (cursor);
     }
 
-    return { usedBytes, filesByHash };
+    return { usedBytes, reservedBytes, filesByHash };
 }
-

@@ -87,7 +87,7 @@ export interface PromptRecord {
 
 const PROMPT_TABLE = 'prompts';
 
-async function putPromptPostRow(row: Post): Promise<void> {
+async function putPromptPostRow(row: Post, includeTombstones = false): Promise<void> {
     const db = getDb();
     if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
         await db.posts.put(row);
@@ -95,7 +95,7 @@ async function putPromptPostRow(row: Post): Promise<void> {
     }
     await db.transaction(
         'rw',
-        getWriteTxTableNames(db, 'posts'),
+        getWriteTxTableNames(db, 'posts', { includeTombstones }),
         async () => {
             await db.posts.put(row);
         }
@@ -496,6 +496,7 @@ export async function softDeletePrompt(id: string): Promise<void> {
     const hooks = useHooks();
     const existing = await getDb().posts.get(id);
     if (!isPromptPost(existing)) return;
+    if (existing.deleted) return;
     const existingRow: PromptRow = {
         id: existing.id,
         title: existing.title,
@@ -530,7 +531,7 @@ export async function softDeletePrompt(id: string): Promise<void> {
         meta: '',
         clock: updatedRow.clock,
     };
-    await putPromptPostRow(postRow);
+    await putPromptPostRow(postRow, true);
     await hooks.doAction('db.prompts.delete:action:soft:after', payload);
 }
 

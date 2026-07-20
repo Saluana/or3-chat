@@ -259,13 +259,17 @@ export function childThreads(parentThreadId: string) {
 export async function softDeleteThread(id: string): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'threads', { includeTombstones: true }),
+        async () => {
         const t = await dbTry(() => db.threads.get(id), {
             op: 'read',
             entity: 'threads',
             action: 'get',
         });
         if (!t) return;
+        if (t.deleted) return;
         await hooks.doAction('db.threads.delete:action:soft:before', {
             entity: t,
             id: t.id,
@@ -283,7 +287,8 @@ export async function softDeleteThread(id: string): Promise<void> {
             id: t.id,
             tableName: 'threads',
         });
-    });
+        }
+    );
 }
 
 /**

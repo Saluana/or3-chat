@@ -190,4 +190,20 @@ describe('POST /api/storage/gc/run', () => {
 
         await expect(handler(makeEvent())).resolves.toEqual({ deleted_count: 2 });
     });
+
+    it('passes through an adapter disabled status without inventing deletions', async () => {
+        gcMock.mockResolvedValueOnce({
+            deleted_count: 0,
+            status: 'disabled',
+            reason: 'canonical_reference_state_required',
+        });
+        const handler = await loadHandler();
+        readBodyMock.mockResolvedValue(makeBody());
+
+        await expect(handler(makeEvent())).resolves.toEqual({
+            deleted_count: 0,
+            status: 'disabled',
+            reason: 'canonical_reference_state_required',
+        });
+    });
 });

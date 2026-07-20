@@ -1,4 +1,11 @@
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import {
+    ACTIVE_WORKSPACE_REVISION_STORAGE_KEY,
+    activeWorkspaceRevisionCoordinator,
+    parseActiveWorkspaceRevision,
+    type ActiveWorkspaceRevision,
+} from '~/composables/workspace/activeWorkspaceRevision';
+import { useWorkspaceManagerSession } from '~/composables/workspace/useWorkspaceManagerSession';
 
 const AUTH_SESSION_STORAGE_KEY = 'or3:auth-session-changed';
 
@@ -9,6 +16,8 @@ export default defineNuxtPlugin(() => {
     if (!runtimeConfig.public.ssrAuthEnabled) return;
 
     const sessionContext = useSessionContext();
+    const { refreshSessionForActiveWorkspaceRevision } =
+        useWorkspaceManagerSession(sessionContext);
 
     const handleAuthSessionChanged = async (): Promise<void> => {
         try {
@@ -35,9 +44,39 @@ export default defineNuxtPlugin(() => {
         }
     };
 
+    const handleActiveWorkspaceRevision = async (
+        revision: ActiveWorkspaceRevision
+    ): Promise<void> => {
+        const previousWorkspaceId =
+            sessionContext.data.value?.session?.workspace?.id ?? null;
+        try {
+            const refreshed = await refreshSessionForActiveWorkspaceRevision(revision);
+            if (!refreshed) return;
+            const nextWorkspaceId =
+                sessionContext.data.value?.session?.workspace?.id ?? null;
+            if (previousWorkspaceId !== nextWorkspaceId) {
+                reloadNuxtApp({ ttl: 500 });
+            }
+        } catch (error) {
+            console.warn(
+                '[auth-session-refresh] Failed to apply active workspace revision:',
+                error
+            );
+        }
+    };
+
     const handleStorage = (event: StorageEvent): void => {
-        if (event.key !== AUTH_SESSION_STORAGE_KEY) return;
-        void handleAuthSessionChanged();
+        if (event.key === ACTIVE_WORKSPACE_REVISION_STORAGE_KEY) {
+            const revision = parseActiveWorkspaceRevision(event.newValue);
+            if (!revision || !activeWorkspaceRevisionCoordinator.observe(revision)) {
+                return;
+            }
+            void handleActiveWorkspaceRevision(revision);
+            return;
+        }
+        if (event.key === AUTH_SESSION_STORAGE_KEY) {
+            void handleAuthSessionChanged();
+        }
     };
 
     window.addEventListener('or3:auth-session-changed', handleAuthSessionChanged);

@@ -167,7 +167,16 @@ export class HookBridge {
                     }
                 }
 
-                this.captureWrite(transaction, tableName, 'put', primKey, merged);
+                const isSoftDelete =
+                    toRecord(obj).deleted !== true && merged.deleted === true;
+                return this.captureWrite(
+                    transaction,
+                    tableName,
+                    isSoftDelete ? 'delete' : 'put',
+                    primKey,
+                    merged,
+                    isSoftDelete
+                );
             });
 
             // Hook: Deleting
@@ -225,8 +234,9 @@ export class HookBridge {
         tableName: string,
         operation: 'put' | 'delete',
         primKey: unknown,
-        payload: unknown
-    ): void {
+        payload: unknown,
+        softDelete = false
+    ): Record<string, unknown> | void {
         // Safe record access pattern - payload can be undefined for delete operations
         const safePayload = (payload && typeof payload === 'object') 
             ? payload as Record<string, unknown> 
@@ -289,8 +299,26 @@ export class HookBridge {
             deviceId: this.deviceId,
             opId: crypto.randomUUID(),
             hlc,
-            clock: operation === 'delete' ? baseClock + 1 : baseClock,
+            // Soft-delete helpers already increment the materialized row clock.
+            // A physical delete has no new row revision, so advance it here.
+            clock: operation === 'delete' && !softDelete ? baseClock + 1 : baseClock,
         };
+
+        // Persist the same tuple that is queued in the outbox. Creating hooks
+        // mutate this object before IndexedDB sees it; updating hooks return
+        // the tuple below as additional modifications.
+        if (operation === 'put' || softDelete) {
+            safePayload.clock = stamp.clock;
+            safePayload.hlc = stamp.hlc;
+            safePayload.op_id = stamp.opId;
+            if (softDelete) {
+                safePayload.deleted = true;
+                safePayload.deleted_at =
+                    typeof safePayload.deleted_at === 'number'
+                        ? safePayload.deleted_at
+                        : nowSec();
+            }
+        }
 
         // Mark opId immediately to suppress echo before push completes
         markRecentOpId(stamp.opId);
@@ -313,13 +341,19 @@ export class HookBridge {
             operation,
             pk,
             // For delete, include deleted_at in payload (sanitized) to sync deletion time
-            payload: operation === 'put' 
+            payload: operation === 'put'
                 ? payloadForSync 
-                : sanitizePayloadForSync(tableName, { 
-                    [pkField]: pk, 
-                    deleted_at: nowSec(),
-                    deleted: true 
-                  }, 'delete'),
+                : sanitizePayloadForSync(
+                    tableName,
+                    softDelete
+                        ? safePayload
+                        : {
+                            [pkField]: pk,
+                            deleted_at: nowSec(),
+                            deleted: true,
+                        },
+                    'delete'
+                ),
             stamp,
             createdAt: Date.now(),
             attempts: 0,
@@ -342,7 +376,11 @@ export class HookBridge {
         }
 
         if (hasPendingOps) {
-            transaction.table('pending_ops').add(pendingOp);
+            const request = transaction.table('pending_ops').add(pendingOp);
+            void Promise.resolve(request).catch((error: unknown) => {
+                console.error('[HookBridge] Atomic outbox write failed; aborting transaction', error);
+                transaction.abort();
+            });
         } else {
             const message =
                 '[HookBridge] Non-atomic sync capture: pending_ops missing from transaction scope';
@@ -362,12 +400,18 @@ export class HookBridge {
                 pk,
                 deletedAt: nowSec(),
                 clock: stamp.clock,
+                hlc: stamp.hlc,
+                opId: stamp.opId,
             };
             if (!hasTombstonesTable) {
                 return;
             }
             if (hasTombstones) {
-                transaction.table('tombstones').put(tombstone);
+                const request = transaction.table('tombstones').put(tombstone);
+                void Promise.resolve(request).catch((error: unknown) => {
+                    console.error('[HookBridge] Atomic tombstone write failed; aborting transaction', error);
+                    transaction.abort();
+                });
             } else {
                 const message =
                     '[HookBridge] Non-atomic tombstone capture: tombstones missing from transaction scope';
@@ -387,6 +431,20 @@ export class HookBridge {
             .catch((error) => {
                 console.error('[HookBridge] Failed to emit capture hook', error);
             });
+
+        if (operation === 'put' || softDelete) {
+            return {
+                clock: stamp.clock,
+                hlc: stamp.hlc,
+                op_id: stamp.opId,
+                ...(softDelete
+                    ? {
+                        deleted: true,
+                        deleted_at: safePayload.deleted_at,
+                    }
+                    : {}),
+            };
+        }
     }
 
     /**

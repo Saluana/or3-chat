@@ -196,6 +196,8 @@
 import { StreamMarkdown } from 'streamdown-vue';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
 import type { ToolDefinition } from '~/utils/chat/types';
+import { MAX_TOOL_ITERATIONS } from '~/utils/chat/constants';
+import { ToolIterationLimitError } from '~~/shared/chat/stream-errors';
 import { useThrottleFn } from '@vueuse/core';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import { useIcon } from '~/composables/useIcon';
@@ -583,11 +585,13 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
 
         // Main loop for handling interleaved tool calls and responses
         let continueLoop = true;
+        let loopIteration = 0;
         let currentAssistantMessage: HelpChatMessage | null =
             reactiveAssistantMessage ?? null;
 
-        while (continueLoop) {
+        while (continueLoop && loopIteration < MAX_TOOL_ITERATIONS) {
             continueLoop = false;
+            loopIteration += 1;
 
             // On first iteration, get or create the assistant message
             // On subsequent iterations, reuse the same assistant message
@@ -793,6 +797,10 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                 if (!isAbort) {
                     throw err;
                 }
+            }
+
+            if (continueLoop && loopIteration >= MAX_TOOL_ITERATIONS) {
+                throw new ToolIterationLimitError(MAX_TOOL_ITERATIONS);
             }
         }
 

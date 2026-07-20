@@ -73,6 +73,7 @@ describe('createStreamAccumulator', () => {
         acc.append('hi', { kind: 'text' });
         acc.finalize({ aborted: true });
         expect(acc.state.error).toBeNull();
+        expect(acc.state.aborted).toBe(true);
         expect(acc.state.finalized).toBe(true);
     });
 
@@ -95,6 +96,7 @@ describe('createStreamAccumulator', () => {
         expect(acc.state.reasoningText).toBe('');
         expect(acc.state.isActive).toBe(true);
         expect(acc.state.finalized).toBe(false);
+        expect(acc.state.aborted).toBe(false);
         expect(acc.state.version).toBeGreaterThan(vBefore);
     });
 

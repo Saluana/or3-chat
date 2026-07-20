@@ -536,7 +536,8 @@ describe('SubscriptionManager', () => {
         const db = createMockDb({ messages, tombstones, pending_ops });
 
         const manager = new SubscriptionManager(db as any, provider, { workspaceId: 'ws-1' });
-        await (manager as unknown as { bootstrap: () => Promise<void> }).bootstrap();
+        (manager as unknown as { status: string }).status = 'connecting';
+        await (manager as unknown as { bootstrap: (generation: number) => Promise<void> }).bootstrap(0);
 
         expect(
             hookState.doAction.mock.calls.some(
@@ -576,10 +577,11 @@ describe('SubscriptionManager', () => {
         const result = await (
             manager as unknown as {
                 drainBacklog: (
-                    startCursor: number
+                    startCursor: number,
+                    generation: number
                 ) => Promise<{ applied: number; skipped: number; conflicts: number; cursor: number }>;
             }
-        ).drainBacklog(10);
+        ).drainBacklog(10, 0);
 
         expect(pull).toHaveBeenCalledTimes(1);
         expect(result.cursor).toBe(10);
@@ -742,5 +744,112 @@ describe('SubscriptionManager', () => {
 
         // Restore
         cursorApi.isBootstrapNeeded = vi.fn(async () => false) as any;
+    });
+
+    it('ignores a bootstrap pull that resolves after stop', async () => {
+        const cursorApi = (cursorManagerModule as unknown as { getCursorManager: () => { isBootstrapNeeded: ReturnType<typeof vi.fn> } }).getCursorManager();
+        cursorApi.isBootstrapNeeded = vi.fn(async () => true) as any;
+
+        let releasePull: ((response: PullResponse) => void) | undefined;
+        const pullBarrier = new Promise<PullResponse>((resolve) => {
+            releasePull = resolve;
+        });
+        const provider: SyncProvider = {
+            id: 'stopped-bootstrap',
+            mode: 'direct',
+            auth: undefined,
+            subscribe: vi.fn(async () => () => undefined),
+            pull: vi.fn(async () => pullBarrier),
+            push: vi.fn(async () => { throw new Error('push not used'); }),
+            updateCursor: vi.fn(async () => undefined),
+            dispose: vi.fn(async () => undefined),
+        };
+        const messages = createMemoryTable('id');
+        const manager = new SubscriptionManager(
+            createMockDb({ messages, tombstones: createMemoryTable('id'), pending_ops: createMemoryTable('id') }) as any,
+            provider,
+            { workspaceId: 'ws-1' }
+        );
+
+        const starting = manager.start();
+        for (let i = 0; i < 20 && !vi.mocked(provider.pull).mock.calls.length; i++) await Promise.resolve();
+        await manager.stop();
+        releasePull?.({ changes: [buildChange(1)], nextCursor: 1, hasMore: false });
+        await starting;
+
+        expect(await messages.get('m-1')).toBeUndefined();
+        expect(provider.subscribe).not.toHaveBeenCalled();
+        expect(manager.getStatus()).toBe('disconnected');
+        cursorApi.isBootstrapNeeded = vi.fn(async () => false) as any;
+    });
+
+    it('disposes a late subscription and starts exactly one replacement lifecycle', async () => {
+        let releaseSubscribe: ((unsubscribe: () => undefined) => void) | undefined;
+        const unsubscribe = vi.fn();
+        const provider = new SubscriptionProvider();
+        provider.subscribe.mockImplementationOnce(async () => new Promise<() => undefined>((resolve) => {
+            releaseSubscribe = resolve;
+        }));
+        const manager = new SubscriptionManager(
+            createMockDb({ messages: createMemoryTable('id'), tombstones: createMemoryTable('id'), pending_ops: createMemoryTable('id') }) as any,
+            provider,
+            { workspaceId: 'ws-1' }
+        );
+
+        const firstStart = manager.start();
+        for (let i = 0; i < 20 && !provider.subscribe.mock.calls.length; i++) await Promise.resolve();
+        await manager.stop();
+        releaseSubscribe?.(unsubscribe);
+        await firstStart;
+
+        expect(unsubscribe).toHaveBeenCalledTimes(1);
+        expect(manager.getStatus()).toBe('disconnected');
+
+        await manager.start();
+        expect(provider.subscribe).toHaveBeenCalledTimes(2);
+        expect(manager.getStatus()).toBe('connected');
+        await manager.stop();
+    });
+
+    it('ignores callbacks captured by a stopped lifecycle after restart', async () => {
+        const provider = new SubscriptionProvider();
+        const messages = createMemoryTable('id');
+        const manager = new SubscriptionManager(
+            createMockDb({ messages, tombstones: createMemoryTable('id'), pending_ops: createMemoryTable('id') }) as any,
+            provider,
+            { workspaceId: 'ws-1' }
+        );
+
+        await manager.start();
+        const staleCallback = provider.subscribe.mock.calls[0]![2] as (changes: SyncChange[]) => Promise<void>;
+        await manager.stop();
+        await manager.start();
+        await staleCallback([buildChange(121)]);
+
+        expect(await messages.get('m-121')).toBeUndefined();
+        expect(provider.subscribe).toHaveBeenCalledTimes(2);
+        await manager.stop();
+    });
+
+    it('cancels reconnect backoff on stop and restart creates one subscription', async () => {
+        const provider = new SubscriptionProvider();
+        provider.subscribe.mockRejectedValueOnce(new Error('offline'));
+        const manager = new SubscriptionManager(
+            createMockDb({ messages: createMemoryTable('id'), tombstones: createMemoryTable('id'), pending_ops: createMemoryTable('id') }) as any,
+            provider,
+            { workspaceId: 'ws-1' },
+            { reconnectDelays: [100] }
+        );
+
+        await manager.start();
+        expect(provider.subscribe).toHaveBeenCalledTimes(1);
+        await manager.stop();
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(provider.subscribe).toHaveBeenCalledTimes(1);
+
+        await manager.start();
+        expect(provider.subscribe).toHaveBeenCalledTimes(2);
+        expect(manager.getStatus()).toBe('connected');
+        await manager.stop();
     });
 });

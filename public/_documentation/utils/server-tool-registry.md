@@ -7,7 +7,7 @@ It is intentionally separate from the client Vue registry.
 ## Purpose
 
 - Register tool handlers on the server runtime
-- Execute tools with JSON arg parsing + required-field checks
+- Execute tools with the same JSON Schema draft-07 validator used by the client registry
 - Enforce runtime restrictions (`client` tools rejected on server)
 - Enforce per-tool timeout
 
@@ -51,7 +51,7 @@ Behavior:
 
 - Missing tool -> `error: Tool "..." is not registered on server.`
 - `runtime === 'client'` -> rejected with client-only error
-- Invalid JSON/required fields -> validation error
+- Invalid JSON or any parameter-schema violation -> validation error before the handler runs
 - Timeout -> `timedOut: true` with timeout error
 - Success -> string `result`
 
@@ -84,6 +84,7 @@ This keeps SSR boundaries intact and avoids client imports in server code.
 - Server-only module (no Vue refs/localStorage).
 - Handlers must return strings.
 - Tool name is the registry key; duplicate names require `override: true`.
+- Registration rejects malformed tool definitions and schemas. The OpenRouter server route also validates incoming definitions and binds background server/hybrid definitions to the registered provider-visible definition before creating a job or contacting the model provider.
 
 ## Related
 

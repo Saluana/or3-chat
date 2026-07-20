@@ -120,7 +120,15 @@ async function executeWorkflowToolCall(
         args,
     });
     try {
-        const execution = await executeServerTool(name, serialized);
+        const execution = await executeServerTool(name, serialized, {
+            subject: null,
+            workspaceId: null,
+            threadId: null,
+            messageId: null,
+            callId: `${context?.workflowId ?? 'workflow'}:${name}`,
+            requestId: context?.jobId ?? crypto.randomUUID(),
+            abortSignal: new AbortController().signal,
+        });
         if (execution.error) {
             logBackgroundEvent('warn', 'background.workflow.tool.failed', {
                 jobId: context?.jobId,

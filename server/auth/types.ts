@@ -126,3 +126,9 @@ export interface AuthProviderRegistryItem {
 // in app/core/hooks/hook-types.ts and should be imported from there when needed.
 // We re-export the types here for convenience in server code.
 export type { Permission, WorkspaceRole, AccessDecision, SessionContext } from '../../app/core/hooks/hook-types';
+export type {
+    AuthzContext,
+    AuthzResult,
+    Capability,
+    CapabilityResource,
+} from './capability-gate';

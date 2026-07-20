@@ -683,7 +683,7 @@ registry.registerTool(tool, async (args) => {
 
 ```typescript
 const registry = useToolRegistry();
-console.log('Registered tools:', registry.listTools());
+console.log('Registered tools:', registry.listTools.value);
 ```
 
 ### Reference Implementation

@@ -13,6 +13,7 @@ import type {
     ToolCall,
     SendMessageParams,
     ContentPart,
+    SendResult,
 } from '~/utils/chat/types';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 
@@ -85,13 +86,16 @@ export interface ChatInstance {
     streamId: Ref<string | undefined>;
     threadId: Ref<string | undefined>;
     tailAssistant?: Ref<UiChatMessage | null>;
-    send: (params: SendMessageParams & { content: string }) => Promise<void>;
-    retryMessage: (messageId: string, model?: string) => Promise<void>;
+    send: (params: SendMessageParams & { content: string }) => Promise<SendResult>;
+    retryMessage: (messageId: string, model?: string) => Promise<SendResult | undefined>;
     continueMessage?: (messageId: string, model?: string) => Promise<void>;
     abort: () => void;
     clear: () => void;
+    clearConversation?: (options?: { persistence?: 'preserve' }) => void;
+    dispose?: () => void;
     ensureHistorySynced?: () => Promise<void>;
     applyLocalEdit?: (messageId: string, content: string) => void;
+    replaceCanonicalHistory?: (messages: ChatMessage[]) => void;
     [key: string]: unknown;
 }
 
@@ -103,6 +107,7 @@ export interface StreamState {
     reasoningText: string;
     isActive: boolean;
     finalized: boolean;
+    aborted: boolean;
     error: Error | null;
     version: number;
     toolCalls?: ToolCall[];
@@ -199,9 +204,10 @@ export interface PaneContext {
  */
 export interface ModelInputMessage {
     id?: string;
-    role: 'user' | 'assistant' | 'system';
+    role: 'user' | 'assistant' | 'system' | 'tool';
     content: string | ContentPart[];
     name?: string;
     tool_call_id?: string;
     file_hashes?: string | null;
+    tool_calls?: ToolCall[];
 }

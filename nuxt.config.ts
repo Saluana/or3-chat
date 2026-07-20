@@ -10,6 +10,10 @@ import { or3Config } from './config.or3';
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
 const isWizardUiProcess = process.env.OR3_WIZARD_UI_ENABLED === 'true';
+const isStaticGenerateBuild = process.argv.includes('generate');
+const isStaticCloudDisabledBuild = isStaticGenerateBuild && !isSsrAuthEnabled;
+const shouldLoadCloudProviderModules =
+    !isWizardUiProcess && !isStaticCloudDisabledBuild;
 const or3NetHostUrl =
     process.env.OR3_NET_HOST_URL?.trim() ||
     process.env.NUXT_PUBLIC_OR3_NET_HOST_URL?.trim() ||
@@ -52,7 +56,7 @@ function isProviderAvailable(providerId: string): boolean {
 }
 
 function loadGeneratedProviderModules(): string[] {
-    if (isWizardUiProcess) {
+    if (!shouldLoadCloudProviderModules) {
         return [];
     }
 
@@ -96,7 +100,7 @@ function loadGeneratedProviderModules(): string[] {
 const or3ProviderModules = loadGeneratedProviderModules();
 
 const providerIdsFromConfig = new Set<string>();
-if (!isWizardUiProcess) {
+if (shouldLoadCloudProviderModules) {
     if (or3CloudConfig.auth.enabled) providerIdsFromConfig.add(or3CloudConfig.auth.provider);
     if (or3CloudConfig.sync.enabled) providerIdsFromConfig.add(or3CloudConfig.sync.provider);
     if (or3CloudConfig.storage.enabled) providerIdsFromConfig.add(or3CloudConfig.storage.provider);
@@ -136,6 +140,9 @@ for (const moduleId of configuredPluginModules) {
         console.warn(`[or3-plugin] Ignoring invalid plugin module id "${moduleId}".`);
         continue;
     }
+    if (isStaticCloudDisabledBuild && pkgName.startsWith('or3-provider-')) {
+        continue;
+    }
     if (!isPackageInstalled(pkgName)) {
         console.warn(
             `[or3-plugin] Configured plugin module "${moduleId}" expects package "${pkgName}", but it is not installed.`
@@ -169,9 +176,12 @@ const activeProviderModules = Array.from(
     ])
 );
 
-const authProviderAvailable = isProviderAvailable(or3CloudConfig.auth.provider);
-const syncProviderAvailable = isProviderAvailable(or3CloudConfig.sync.provider);
-const storageProviderAvailable = isProviderAvailable(or3CloudConfig.storage.provider);
+const authProviderAvailable =
+    isStaticCloudDisabledBuild || isProviderAvailable(or3CloudConfig.auth.provider);
+const syncProviderAvailable =
+    isStaticCloudDisabledBuild || isProviderAvailable(or3CloudConfig.sync.provider);
+const storageProviderAvailable =
+    isStaticCloudDisabledBuild || isProviderAvailable(or3CloudConfig.storage.provider);
 
 const effectiveSsrAuthEnabled =
     isSsrAuthEnabled && authProviderAvailable && syncProviderAvailable;
@@ -216,7 +226,6 @@ if (or3NetHostUrl && !or3NetExchangeSecret) {
 // Branding defaults (sourced from or3Config)
 const appName = or3Config.site.name;
 const appShortName = appName.length > 12 ? appName.slice(0, 12) : appName;
-const isStaticGenerateBuild = process.argv.includes('generate');
 const pwaNavigateFallback = isStaticGenerateBuild ? '/index.html' : null;
 const pwaOpenRouterCallbackFallback = isStaticGenerateBuild
     ? '/openrouter-callback/index.html'

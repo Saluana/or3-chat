@@ -2,6 +2,24 @@
 
 The OR3 Sync Layer provides offline-first, bidirectional synchronization between the local Dexie database and the Convex backend. It enables users to work offline and have their changes automatically synced when connectivity is restored, with support for multi-device synchronization and conflict resolution.
 
+## Materialized snapshot bootstrap contract
+
+Cold bootstrap uses a provider-neutral materialized snapshot instead of cursor
+zero change-log replay. Each page is bound to one workspace, opaque
+`snapshotId`, and `highWatermark`; continuation tokens are opaque and returned
+unchanged. Providers order canonical rows and tombstones by
+`(tableName, primaryKey, kind)`, use bounded reads, and preserve the same
+watermark across the complete page chain. The client applies the complete
+snapshot transactionally, then begins incremental replay strictly after the
+watermark.
+
+SQLite and Convex implement provider-side materialized snapshot page generators,
+and the client atomically installs their page chains before replaying strictly
+after the watermark. Cross-provider coverage verifies deterministic rows,
+tombstones, intervening writes, duplicate boundaries, and fresh-device recovery
+after the original log entries have been pruned. Retention remains fail-closed
+pending its explicit safety-gate activation and operational rollout.
+
 ---
 
 ## Architecture Overview
@@ -16,12 +34,21 @@ The sync layer operates on a "local-first" principle. All UI reads and writes ta
 | **OutboxManager** | Flushes pending operations to the server in batches, handling retries and failure strategies. |
 | **SubscriptionManager** | Manages real-time subscriptions to server changes and performs bootstrap/rescan operations. |
 | **ConflictResolver** | Applies remote changes to the local DB using Last-Write-Wins (LWW) and Hybrid Logical Clocks (HLC). |
-| **GcManager** | Periodically cleans up tombstones and old change logs to manage storage. |
+| **GcManager** | Client lifecycle shell; server retention is capability-gated and administrative. |
 | **CursorManager** | Tracks the sync cursor (server version) per workspace for incremental sync. |
 | **RecentOpCache** | Prevents echoing of recently pushed operations back from the server. |
 | **SyncPayloadNormalizer** | Handles snake_case/camelCase field mapping and payload validation. |
 | **ConvexSyncProvider** | Adapter that communicates with the Convex backend APIs using the shared Sync Protocol. |
 | **GatewaySyncProvider** | Alternative provider that routes sync through SSR server endpoints. |
+
+### Retention safety
+
+Sync `change_log` and tombstone garbage collection is available only when the
+active server adapter explicitly declares both `snapshotBootstrap` and
+`historyRetention` as `snapshot-v1`. Missing capabilities fail closed with
+`503`. SQLite and Convex collectors preserve history newer than the minimum
+registered-device cursor; fresh devices recover canonical state from a snapshot
+and replay strictly after its watermark.
 
 ---
 
@@ -52,10 +79,11 @@ The sync layer operates on a "local-first" principle. All UI reads and writes ta
 
 We use a **Last-Write-Wins (LWW)** strategy driven by **Hybrid Logical Clocks (HLC)**.
 
-*   Every record has a `clock` (counter) and `hlc` (timestamp-based string).
+*   Every materialized record and tombstone persists the same `(clock, hlc, op_id)` tuple as its outbox/change-log operation.
 *   When a change occurs, the clock is incremented.
 *   **Tombstones** are used to track deletions, ensuring that "delete wins" against older "put" operations.
-*   **Tie-Breaking**: If two changes have the exact same clock, the alphanumeric comparison of the HLC string determines the winner.
+*   **Tie-Breaking**: one total comparator orders clock, then HLC, then operation ID. Equal-clock legacy tombstones missing tie-break metadata fail closed.
+*   **Legacy repair**: the internal Convex `sync.repairLegacyTombstones` command repairs only tombstones with one uniquely matching delete in `change_log`. Missing or ambiguous history is reported and never guessed; the command is bounded and safe to repeat.
 
 ---
 
@@ -163,6 +191,14 @@ To support the OR3 Sync Protocol, your backend must:
     *   Else: Ignore (out of order).
 3.  **Tombstones**: Never hard-delete synced records. Mark them as `deleted=true` so the deletion can propagate to other clients.
 4.  **Batching**: Support atomic batches for both reads (`pull`) and writes (`push`).
+
+Push handlers validate each operation before allocating its server version. A
+malformed operation returns its own `VALIDATION_ERROR` while valid siblings
+continue; logical primary keys and workspace ownership fields cannot be changed
+through payload data. Repeated operation IDs are allocated and applied once only
+when their complete operation fingerprints match. Conflicting reuse of an ID,
+including a conflict with an already-processed operation, returns `CONFLICT`
+without consuming another version.
 
 ### 3. Implementation Example (Skeleton)
 

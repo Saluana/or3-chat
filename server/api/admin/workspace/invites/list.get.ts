@@ -61,7 +61,10 @@ export default defineEventHandler(async (event) => {
             limit: query.data.limit,
         });
     } catch (error) {
-        if (isMissingConvexFunctionError(error, 'workspaces:listInvites')) {
+        if (
+            isMissingConvexFunctionError(error, 'workspaces:listInvitesInternal') ||
+            isMissingConvexFunctionError(error, 'workspaces:listInvites')
+        ) {
             return {
                 invites: [],
                 unavailable: true,

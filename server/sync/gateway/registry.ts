@@ -34,7 +34,10 @@ const registry = createRuntimeConfigRegistry<
     warnLabel: 'sync:gateway:registry',
     cacheInstances: true,
     resolveActiveId(config) {
-        return config.public.sync.provider;
+        const publicConfig = config.public as {
+            sync?: { provider?: string };
+        };
+        return publicConfig.sync?.provider;
     },
 });
 

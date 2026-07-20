@@ -329,19 +329,7 @@ If any hydration fails:
 
 ## Decide modalities
 
-Helper to determine if response should include images:
-
-```ts
-import { decideModalities } from '~/core/auth/openrouter-build';
-
-const modalities = decideModalities(orMessages, 'gpt-4-vision');
-// Returns: ['text'] or ['text', 'image']
-```
-
-Checks:
-- If any input images exist
-- If prompt mentions "generate/create image"
-- Requested model capability
+Output modalities are chosen by the caller based on the model id (see `getChatModalities` in `~/utils/chat/messages`). This module only builds the message payload; it does not decide output format.
 
 ---
 
@@ -376,11 +364,6 @@ export async function buildOpenRouterMessages(
   messages: ChatMessageLike[],
   opts?: BuildOptions
 ): Promise<ORMessage[]>;
-
-export function decideModalities(
-  orMessages: ORMessage[],
-  requestedModel?: string
-): string[];
 ```
 
 ---

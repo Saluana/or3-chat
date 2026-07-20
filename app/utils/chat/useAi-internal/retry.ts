@@ -30,16 +30,14 @@
  */
 
 import type { Ref } from 'vue';
-import type { ChatMessage, ContentPart, SendMessageParams } from '~/utils/chat/types';
+import type { ChatMessage, ContentPart, SendMessageParams, SendResult } from '~/utils/chat/types';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { getDb } from '~/db/client';
-import { messagesByThread } from '~/db/messages';
+import { compareMessageOrder, messagesByThread } from '~/db/messages';
 import { parseFileHashes } from '~/db/files-util';
-import { getWriteTxTableNames } from '~/db/util';
 import { deriveMessageContent } from '~/utils/chat/messages';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { reportError, err } from '~/utils/errors';
-import type { Message } from '~/db';
 import type { StoredMessage } from './types';
 
 /**
@@ -82,7 +80,7 @@ export type RetryMessageContext = {
     rawMessages: Ref<ChatMessage[]>;
     messages: Ref<UiChatMessage[]>;
     hooks: HooksLike;
-    sendMessage: (text: string, params: SendMessageParams) => Promise<void>;
+    sendMessage: (text: string, params: SendMessageParams) => Promise<SendResult>;
     defaultModelId: string;
     suppressNextTailFlush: (assistantId: string) => void;
 };
@@ -204,54 +202,46 @@ export async function retryMessageImpl(
     ctx: RetryMessageContext,
     messageId: string,
     modelOverride?: string
-) {
-    if (ctx.loading.value || !ctx.threadIdRef.value) return;
+) : Promise<SendResult | undefined> {
+    if (ctx.loading.value || !ctx.threadIdRef.value) return undefined;
 
     try {
         const target = await getDb().messages.get(messageId);
-        if (!target || target.thread_id !== ctx.threadIdRef.value) return;
+        if (!target || target.thread_id !== ctx.threadIdRef.value) return undefined;
+
+        const dbMessages =
+            ((await messagesByThread(ctx.threadIdRef.value)) as
+                | StoredMessage[]
+                | undefined) || [];
+        const ordered = dbMessages
+            .filter((message) => !message.deleted)
+            .sort(compareMessageOrder);
 
         let userMsg = target.role === 'user' ? target : undefined;
         if (!userMsg && target.role === 'assistant') {
-            const DexieMod = (await import('dexie')).default;
-            userMsg = await getDb().messages
-                .where('[thread_id+index]')
-                .between(
-                    [target.thread_id, DexieMod.minKey],
-                    [target.thread_id, target.index]
-                )
-                .filter(
-                    (m: Message) =>
-                        m.role === 'user' &&
-                        !m.deleted &&
-                        m.index < target.index
-                )
-                .last();
+            userMsg = [...ordered]
+                .reverse()
+                .find(
+                    (message) =>
+                        message.role === 'user' &&
+                        (Number(message.index) || 0) < (Number(target.index) || 0)
+                );
         }
-        if (!userMsg) return;
+        if (!userMsg) return undefined;
 
-        const DexieMod2 = (await import('dexie')).default;
-        const assistant = await getDb().messages
-            .where('[thread_id+index]')
-            .between(
-                [
-                    userMsg.thread_id,
-                    (typeof userMsg.index === 'number' ? userMsg.index : 0) + 1,
-                ],
-                [userMsg.thread_id, DexieMod2.maxKey]
-            )
-            .filter((m: Message) => m.role === 'assistant' && !m.deleted)
-            .first();
-
-        // Suppress flushing of the previous tail assistant if it corresponds to the
-        // assistant we are removing for retry.
-        if (assistant && ctx.tailAssistant.value?.id === assistant.id) {
-            ctx.suppressNextTailFlush(assistant.id);
-            ctx.tailAssistant.value = null;
-        } else if (target.role === 'assistant' && ctx.tailAssistant.value?.id === target.id) {
-            ctx.suppressNextTailFlush(target.id);
-            ctx.tailAssistant.value = null;
-        }
+        const userIndex = Number(userMsg.index) || 0;
+        const nextUserIndex = ordered.find(
+            (message) =>
+                message.role === 'user' &&
+                (Number(message.index) || 0) > userIndex
+        )?.index;
+        const assistant = ordered.find(
+            (message) =>
+                message.role === 'assistant' &&
+                (Number(message.index) || 0) > userIndex &&
+                (nextUserIndex == null ||
+                    (Number(message.index) || 0) < (Number(nextUserIndex) || 0))
+        );
 
         await ctx.hooks.doAction('ai.chat.retry:action:before', {
             threadId: ctx.threadIdRef.value,
@@ -260,123 +250,112 @@ export async function retryMessageImpl(
             triggeredBy: target.role as 'user' | 'assistant',
         });
 
-        // Store original text and hashes before deletion
-        const originalText =
-            typeof (userMsg as StoredMessage).content === 'string'
-                ? (userMsg as StoredMessage).content
-                : userMsg.data &&
-                  typeof userMsg.data === 'object' &&
-                  'content' in userMsg.data &&
-                  typeof (userMsg.data as { content?: unknown }).content ===
-                      'string'
-                ? ((userMsg.data as { content?: string }).content as string)
-                : '';
+        // Store original text and hashes before deletion.
+        // extractUserText handles both string content and ContentPart[] arrays,
+        // so pass the raw content source rather than a collapsed string fallback.
+        const userContent = (userMsg as StoredMessage).content;
+        const dataContent =
+            userMsg.data &&
+            typeof userMsg.data === 'object' &&
+            'content' in userMsg.data
+                ? (userMsg.data as { content?: unknown }).content
+                : undefined;
+        const originalTextRaw = userContent ?? dataContent;
 
         let hashes: string[] = [];
         if (userMsg.file_hashes) {
             hashes = parseFileHashes(userMsg.file_hashes);
         }
 
-        // Before deleting, ensure in-memory state matches DB state.
-        const dbMessages =
-            ((await messagesByThread(ctx.threadIdRef.value)) as
-                | StoredMessage[]
-                | undefined) || [];
+        const toChatMessage = (m: StoredMessage): ChatMessage => {
+            const data = m.data && typeof m.data === 'object'
+                ? (m.data as Record<string, unknown>)
+                : null;
+            return {
+                role: m.role as ChatMessage['role'],
+                content: toContent(m),
+                id: m.id,
+                stream_id: m.stream_id ?? undefined,
+                file_hashes: m.file_hashes ?? undefined,
+                reasoning_text: toReasoning(m),
+                data,
+                name:
+                    typeof data?.tool_name === 'string'
+                        ? data.tool_name
+                        : undefined,
+                tool_call_id:
+                    typeof data?.tool_call_id === 'string'
+                        ? data.tool_call_id
+                        : undefined,
+                error: m.error ?? null,
+                index:
+                    typeof m.index === 'number'
+                        ? m.index
+                        : typeof m.index === 'string'
+                        ? Number(m.index) || null
+                        : null,
+                created_at: typeof m.created_at === 'number' ? m.created_at : null,
+            };
+        };
 
-        // If DB has more messages than our in-memory arrays, sync first.
-        if (dbMessages.length > ctx.rawMessages.value.length) {
-            if (import.meta.dev) {
-                console.warn('[retry] Syncing messages from DB before retry', {
-                    dbCount: dbMessages.length,
-                    memoryCount: ctx.rawMessages.value.length,
-                });
-            }
+        // Build a branch prefix ending immediately before the selected user turn.
+        // This retains complete earlier tool rows while excluding the selected
+        // response and every later turn from provider context.
+        const retryHistory = ordered
+            .filter((message) => (Number(message.index) || 0) < userIndex)
+            .map(toChatMessage);
 
-            ctx.rawMessages.value = dbMessages.map(
-                (m): ChatMessage => ({
-                    role: m.role as ChatMessage['role'],
-                    content: toContent(m),
-                    id: m.id,
-                    stream_id: m.stream_id ?? undefined,
-                    file_hashes: m.file_hashes ?? undefined,
-                    reasoning_text: toReasoning(m),
-                    data: m.data || null,
-                    error: m.error ?? null,
-                    index:
-                        typeof m.index === 'number'
-                            ? m.index
-                            : typeof m.index === 'string'
-                            ? Number(m.index) || null
-                            : null,
-                    created_at: typeof m.created_at === 'number' ? m.created_at : null,
-                })
-            );
+        ctx.rawMessages.value = ordered.map(toChatMessage);
 
-            const uiMessages = dbMessages.filter((m) => m.role !== 'tool');
-            ctx.messages.value = uiMessages.map((m) =>
-                ensureUiMessage({
-                    role: m.role as 'user' | 'assistant' | 'system' | 'tool',
-                    content: toContent(m),
-                    id: m.id,
-                    stream_id: m.stream_id ?? undefined,
-                    file_hashes: m.file_hashes ?? undefined,
-                    reasoning_text: toReasoning(m),
-                    error: m.error ?? null,
-                    data: m.data
-                        ? {
-                              ...m.data,
-                              tool_calls: m.data.tool_calls ?? undefined,
-                          }
-                        : m.data,
-                    index:
-                        typeof m.index === 'number'
-                            ? m.index
-                            : typeof m.index === 'string'
-                            ? Number(m.index) || null
-                            : null,
-                    created_at: typeof m.created_at === 'number' ? m.created_at : null,
-                })
-            );
-        }
-
-        // Delete from database with sync tables in scope for atomic outbox+tombstone capture.
-        const db = getDb();
-        await db.transaction(
-            'rw',
-            getWriteTxTableNames(db, 'messages', { includeTombstones: true }),
-            async () => {
-            await db.messages.delete(userMsg.id);
-            if (assistant) await db.messages.delete(assistant.id);
-        });
-
-        // Remove deleted messages from in-memory arrays
-        ctx.rawMessages.value = ctx.rawMessages.value.filter(
-            (m) => m.id !== userMsg.id && m.id !== assistant?.id
-        );
-        ctx.messages.value = ctx.messages.value.filter(
-            (m) => m.id !== userMsg.id && m.id !== assistant?.id
+        const uiMessages = dbMessages.filter((m) => m.role !== 'tool');
+        ctx.messages.value = uiMessages.map((m) =>
+            ensureUiMessage({
+                role: m.role as 'user' | 'assistant' | 'system' | 'tool',
+                content: toContent(m),
+                id: m.id,
+                stream_id: m.stream_id ?? undefined,
+                file_hashes: m.file_hashes ?? undefined,
+                reasoning_text: toReasoning(m),
+                error: m.error ?? null,
+                data: m.data
+                    ? {
+                          ...m.data,
+                          tool_calls: m.data.tool_calls ?? undefined,
+                      }
+                    : m.data,
+                index:
+                    typeof m.index === 'number'
+                        ? m.index
+                        : typeof m.index === 'string'
+                        ? Number(m.index) || null
+                        : null,
+                created_at: typeof m.created_at === 'number' ? m.created_at : null,
+            })
         );
 
-        const textToSend = extractUserText(originalText);
+        const textToSend = extractUserText(originalTextRaw);
 
-        await ctx.sendMessage(textToSend, {
+        const result = await ctx.sendMessage(textToSend, {
             model: modelOverride || ctx.defaultModelId,
             file_hashes: hashes,
             files: [],
             online: false,
+            historyOverride: retryHistory,
         });
 
-        const tail = ctx.messages.value.slice(-2);
-        const newUser = tail.find((m) => m.role === 'user');
-        const newAssistant = tail.find((m) => m.role === 'assistant');
-
-        await ctx.hooks.doAction('ai.chat.retry:action:after', {
-            threadId: ctx.threadIdRef.value,
-            originalUserId: userMsg.id,
-            originalAssistantId: assistant?.id,
-            newUserId: newUser?.id,
-            newAssistantId: newAssistant?.id,
-        });
+        if ('userMessageId' in result && result.userMessageId) {
+            await ctx.hooks.doAction('ai.chat.retry:action:after', {
+                threadId: ctx.threadIdRef.value,
+                originalUserId: userMsg.id,
+                originalAssistantId: assistant?.id,
+                newUserId: result.userMessageId,
+                newAssistantId:
+                    'assistantMessageId' in result
+                        ? result.assistantMessageId
+                        : undefined,
+            });
+        }
+        return result;
     } catch (e) {
         reportError(
             e instanceof Error
@@ -389,5 +368,6 @@ export async function retryMessageImpl(
                 tags: { domain: 'chat', op: 'retryMessage' },
             }
         );
+        return undefined;
     }
 }

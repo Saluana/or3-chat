@@ -26,6 +26,7 @@
  */
 import { getRequestIP, setResponseHeader } from 'h3';
 import { resolveSessionContext } from '../../auth/session';
+import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import {
     checkAndRecordLlmRequest,
@@ -42,6 +43,14 @@ import {
 import {
     mirrorForegroundStreamCompletion,
 } from '../../utils/webhooks/foreground-stream-monitor';
+import { validateServerToolRequest } from '../../utils/chat/tool-registry';
+import { sensitiveValueMetadata } from '~~/shared/logging/sensitive-metadata';
+import {
+    fetchWithResponseDeadline,
+    OpenRouterTimeoutError,
+    readResponseTextWithIdleDeadline,
+    withIdleWatchdog,
+} from '~~/shared/openrouter/deadlines';
 
 function logBgStream(
     _stage: string,
@@ -91,12 +100,23 @@ export default defineEventHandler(async (event) => {
         return 'Invalid request body';
     }
     const backgroundRequested = isBackgroundModeRequest(body);
+    if ('tools' in body) {
+        const toolValidation = validateServerToolRequest(
+            body.tools,
+            body._toolRuntime,
+            backgroundRequested
+        );
+        if (!toolValidation.valid) {
+            setResponseStatus(event, 400);
+            return { error: toolValidation.error };
+        }
+    }
     logBgStream('api-stream-request', {
         backgroundRequested,
         backgroundAvailable: isBackgroundStreamingAvailable(),
     });
 
-    // Req 1, 4: Select API key. Prefer user key when connected.
+    // Req 1, 4: Select API key. Prefer caller-owned credentials when allowed.
     const config = useRuntimeConfig(event);
     const openRouterUrl = getOpenRouterChatCompletionsUrl(
         config.openrouterBaseUrl
@@ -111,11 +131,39 @@ export default defineEventHandler(async (event) => {
             : undefined) ||
         (authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined);
 
-    const apiKey = requireUserKey
+    let sessionLoaded = false;
+    let cachedSession: Awaited<
+        ReturnType<typeof resolveSessionContext>
+    > | null = null;
+    const getSession = async () => {
+        if (!isSsrAuthEnabled(event)) return null;
+        if (!sessionLoaded) {
+            cachedSession = await resolveSessionContext(event);
+            sessionLoaded = true;
+        }
+        return cachedSession;
+    };
+
+    const managedKey =
+        config.openrouterApiKey || process.env.OPENROUTER_API_KEY;
+    const selectedClientKey = requireUserKey
         ? clientKey
-        : (allowUserOverride ? clientKey : undefined) ||
-          config.openrouterApiKey ||
-          process.env.OPENROUTER_API_KEY;
+        : allowUserOverride
+          ? clientKey
+          : undefined;
+
+    let apiKey = selectedClientKey;
+    if (!apiKey && managedKey && !requireUserKey) {
+        const session = await getSession();
+        requireCan(
+            session,
+            'workspace.write',
+            session?.workspace?.id
+                ? { kind: 'workspace', id: session.workspace.id }
+                : undefined
+        );
+        apiKey = managedKey;
+    }
 
     if (!apiKey && process.env.NODE_ENV !== 'production') {
         console.warn('[openrouter][stream] missing api key', {
@@ -158,19 +206,6 @@ export default defineEventHandler(async (event) => {
                   maxRequests: limits.maxMessagesPerDay,
               }
             : null;
-
-    let sessionLoaded = false;
-    let cachedSession: Awaited<
-        ReturnType<typeof resolveSessionContext>
-    > | null = null;
-    const getSession = async () => {
-        if (!isSsrAuthEnabled(event)) return null;
-        if (!sessionLoaded) {
-            cachedSession = await resolveSessionContext(event);
-            sessionLoaded = true;
-        }
-        return cachedSession;
-    };
 
     // Resolve user key for rate limiting (user ID or IP)
     let rateKey: string = 'anonymous';
@@ -282,6 +317,11 @@ export default defineEventHandler(async (event) => {
             return { error: 'Authentication required for background streaming' };
         }
 
+        requireCan(session, 'workspace.write', {
+            kind: 'workspace',
+            id: workspaceId,
+        });
+
         const validation = validateBackgroundParams(body);
         if (!validation.valid) {
             warnBgStream('api-stream-background-validation-failed', {
@@ -359,7 +399,7 @@ export default defineEventHandler(async (event) => {
         const host = getHeader(event, 'host') || 'localhost';
         const proto = resolveRequestProto(host, getHeader(event, 'x-forwarded-proto'));
 
-        upstream = await fetch(openRouterUrl, {
+        upstream = await fetchWithResponseDeadline(openRouterUrl, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${apiKey}`,
@@ -369,8 +409,7 @@ export default defineEventHandler(async (event) => {
                 'X-Title': 'or3.chat',
             },
             body: JSON.stringify(body),
-            signal: ac.signal,
-        });
+        }, { signal: ac.signal });
         logBgStream('api-stream-foreground-upstream-response', {
             ok: upstream.ok,
             status: upstream.status,
@@ -382,6 +421,14 @@ export default defineEventHandler(async (event) => {
             // Client disconnected
             logBgStream('api-stream-foreground-upstream-aborted', {});
             return;
+        }
+        if (e instanceof OpenRouterTimeoutError) {
+            warnBgStream('api-stream-foreground-upstream-timeout', {
+                phase: e.phase,
+                timeoutMs: e.timeoutMs,
+            });
+            setResponseStatus(event, 504);
+            return e.message;
         }
         // Other network error
         warnBgStream('api-stream-foreground-upstream-network-failed', {
@@ -395,14 +442,16 @@ export default defineEventHandler(async (event) => {
     if (!upstream.ok || !upstream.body) {
         let respText = '<no-body>';
         try {
-            respText = await upstream.text();
+            respText = await readResponseTextWithIdleDeadline(upstream, {
+                signal: ac.signal,
+            });
         } catch {
             respText = '<error-reading-body>';
         }
         warnBgStream('api-stream-foreground-upstream-non-ok', {
             status: upstream.status,
             hasBody: Boolean(upstream.body),
-            responsePreview: respText.slice(0, 300),
+            responseMetadata: sensitiveValueMetadata(respText),
         });
         setResponseStatus(event, upstream.status);
         return respText.slice(0, 2000);
@@ -450,7 +499,10 @@ export default defineEventHandler(async (event) => {
     const threadId = getOptionalBodyString(body, '_threadId');
     const messageId = getOptionalBodyString(body, '_messageId');
     const modelId = getOptionalBodyString(body, 'model');
-    const [clientStream, inspectionStream] = upstream.body.tee();
+    const guardedUpstream = withIdleWatchdog(upstream.body, {
+        signal: ac.signal,
+    });
+    const [clientStream, inspectionStream] = guardedUpstream.tee();
 
     void mirrorForegroundStreamCompletion({
         stream: inspectionStream,

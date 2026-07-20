@@ -144,47 +144,29 @@ function stripLargeDataUrls(data: unknown, depth = 0): unknown {
 function compactMessagePayloadForSync(
     payload: Record<string, unknown>
 ): Record<string, unknown> {
-    if (getPayloadSizeBytes(payload) <= MAX_SYNC_MESSAGE_PAYLOAD_BYTES) {
+    const sizeBytes = getPayloadSizeBytes(payload);
+    if (sizeBytes <= MAX_SYNC_MESSAGE_PAYLOAD_BYTES) {
         return payload;
     }
-
-    const compacted = { ...payload };
-    const data = toRecord(compacted.data);
-
-    if (data.type === 'workflow-execution') {
-        compacted.data = compactWorkflowDataForSync(data);
-    }
-
-    truncateStringField(compacted, 'content', 12000);
-    truncateStringField(compacted, 'reasoning_text', 8000);
-    truncateStringField(compacted, 'error', 2000);
-
-    if (getPayloadSizeBytes(compacted) <= MAX_SYNC_MESSAGE_PAYLOAD_BYTES) {
-        return compacted;
-    }
-
-    // Generic fallback: keep minimal data shape and final output summary only.
-    const finalOutput =
-        typeof data.finalOutput === 'string'
-            ? truncateString(data.finalOutput, 8000)
-            : undefined;
-    compacted.data = {
-        type: typeof data.type === 'string' ? data.type : 'message',
-        sync_compacted: true,
-        sync_compacted_reason: 'payload_too_large',
-        finalOutput,
-    };
-
-    if (getPayloadSizeBytes(compacted) <= MAX_SYNC_MESSAGE_PAYLOAD_BYTES) {
-        return compacted;
-    }
-
-    // Last resort: aggressively cap potentially unbounded top-level strings.
-    truncateStringField(compacted, 'content', 4000);
-    truncateStringField(compacted, 'reasoning_text', 2000);
-    truncateStringField(compacted, 'error', 1000);
-    return compacted;
+    throw new SyncPayloadTooLargeError('messages', sizeBytes, MAX_SYNC_MESSAGE_PAYLOAD_BYTES);
 }
+
+export class SyncPayloadTooLargeError extends Error {
+    readonly code = 'OVERSIZED' as const;
+
+    constructor(
+        readonly tableName: string,
+        readonly sizeBytes: number,
+        readonly maxBytes: number
+    ) {
+        super(`Payload too large for ${tableName}: ${sizeBytes} bytes exceeds ${maxBytes} bytes`);
+        this.name = 'SyncPayloadTooLargeError';
+    }
+}
+
+// Retained temporarily for compatibility with downstream imports while
+// oversized canonical messages use typed rejection instead of lossy compaction.
+void compactWorkflowDataForSync;
 
 function compactWorkflowDataForSync(
     data: Record<string, unknown>

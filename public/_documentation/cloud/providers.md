@@ -118,6 +118,14 @@ Result: Convex direct-mode clients and server gateway flows get provider tokens 
 - Default can be empty.
 - Config-driven discovery still auto-adds installed providers based on selected IDs.
 
+## Static Generation Boundary
+
+`bun run generate:static` disables SSR auth and cloud provider module loading.
+During that build, Nuxt does not read `or3.providers.generated.ts`, resolve installed
+`or3-provider-*` packages, or add those provider modules to the build. This keeps
+local-only static output independent from optional auth, database, and storage
+runtime dependencies. Ordinary non-provider extension modules remain available.
+
 ## Troubleshooting
 
 ### Warning: provider package not installed

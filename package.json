@@ -29,7 +29,8 @@
         "or3-cloud": "bun run scripts/cli/or3-cloud.ts",
         "or3-cloud:init": "bun run scripts/cli/or3-cloud.ts init",
         "or3-cloud:validate": "bun run scripts/cli/or3-cloud.ts validate",
-        "or3-cloud:build": "bun build ./scripts/cli/or3-cloud.ts --target=node --format=esm --outfile ./dist/or3-cloud.mjs"
+        "or3-cloud:build": "bun build ./scripts/cli/or3-cloud.ts --target=node --format=esm --outfile ./dist/or3-cloud.mjs",
+        "dev:offline": "env SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false bun run dev"
     },
     "bin": {
         "or3-cloud": "./bin/or3-cloud.js"
@@ -49,6 +50,7 @@
         "@types/streamsaver": "^2.0.5",
         "@vue-flow/core": "^1.48.0",
         "@vueuse/core": "^13.9.0",
+        "ajv": "^8.17.1",
         "bcryptjs": "^3.0.3",
         "better-sqlite3": "^12.6.2",
         "convex": "1.31.3",
