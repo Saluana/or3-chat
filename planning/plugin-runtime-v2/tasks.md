@@ -150,7 +150,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC6, R7.AC1
       Done when: explicit entry and all three legacy filenames resolve exactly as the existing loader tests specify.
 
-- [ ] 3.8 Implement descriptor-keyed desired/active diff for bundled artifacts
+- [x] 3.8 Implement descriptor-keyed desired/active diff for bundled artifacts
       Requirements: R2.AC1-R2.AC4
       Done when: workspace/policy/grant/build/module/source changes are classified, and disk-only byte changes report rebuild-required.
 
