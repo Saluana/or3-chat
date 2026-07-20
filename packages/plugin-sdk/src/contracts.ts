@@ -1,4 +1,5 @@
 import type { PluginGrant, PluginManifestV2, PluginTrustMode } from './manifest';
+import type { PluginHttpClient, PluginSettingsClient, PluginStorageClient } from './clients';
 
 export interface PluginRegistrationHandle {
     readonly dispose: () => void;
@@ -59,7 +60,7 @@ export interface PluginHooks {
     ): PluginRegistrationHandle;
 }
 
-declare const hostCreatedPluginContext: unique symbol;
+export const hostCreatedPluginContext = Symbol('or3.host-created-plugin-context');
 
 /** Context identity and authority are created by the host, never supplied by plugin input. */
 export interface PluginContext {
@@ -74,6 +75,9 @@ export interface PluginContext {
     readonly features: PluginFeatureNegotiation;
     readonly hooks: PluginHooks;
     readonly contributions: PluginContributions;
+    readonly settings: PluginSettingsClient;
+    readonly storage: PluginStorageClient;
+    readonly http: PluginHttpClient;
     onCleanup(callback: () => void | Promise<void>): void;
     onActivate(callback: () => void | Promise<void>): void;
 }

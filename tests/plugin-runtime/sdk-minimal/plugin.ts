@@ -42,6 +42,12 @@ export default defineOr3Plugin({
             id: 'sample.sdk-minimal.card',
             definition: { title: 'SDK-only card' },
         });
+        void context.settings.get('display-mode');
+        void context.storage.set('last-seen', { at: Date.now() });
+        void context.http.request({
+            url: 'https://example.invalid/status',
+            method: 'GET',
+        });
         context.onCleanup(() => undefined);
     },
 });

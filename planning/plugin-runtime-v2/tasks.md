@@ -328,7 +328,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R6.AC4
       Done when: a minimal V2 plugin compiles using only SDK exports.
 
-- [ ] 6.7 Add SDK settings/storage/HTTP clients and stable error result types
+- [x] 6.7 Add SDK settings/storage/HTTP clients and stable error result types
       Requirements: R2.AC5, R6.AC4, R10.AC3-R10.AC4
       Done when: identity is closed over by the host and cannot be replaced by plugin input in tests.
 

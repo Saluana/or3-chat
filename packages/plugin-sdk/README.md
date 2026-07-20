@@ -8,5 +8,6 @@ The default export surface provides:
 - a host-created, immutable-identity `PluginContext`
 - scoped contribution and hook registration handles
 - reviewed grant and feature-negotiation types
+- mediated settings, storage, and HTTP clients with stable result/error types
 
-Settings, storage, and HTTP clients are introduced as mediated context capabilities in the next SDK task. The host owns context construction, plugin identity, generation, grants, cancellation, and cleanup.
+The host owns context construction, plugin identity, generation, grants, cancellation, client scoping, and cleanup. Plugin-facing client calls never accept a plugin or workspace identity parameter.
