@@ -212,7 +212,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC2, R1.AC5, R4.AC4-R4.AC7
       Done when: visibility/disabled/order/access tests and differential fixtures pass.
 
-- [ ] 4.9 Migrate project-tree actions and editor-toolbar buttons behind their compatibility adapters
+- [x] 4.9 Migrate project-tree actions and editor-toolbar buttons behind their compatibility adapters
       Requirements: R1.AC2, R1.AC5, R4.AC4-R4.AC7
       Done when: thrown visibility behavior and order/ID ties match the ledger.
 

@@ -2248,7 +2248,7 @@
     },
     {
       "source": "app/composables/editor/useEditorToolbar.ts",
-      "apiSha256": "5e68e70f675605759ed761124ff37d80aa7823e270db0104e2f7934826c52dd9",
+      "apiSha256": "874e75f47d050aa0823edf6cff529b10a0a7a257f810f3af4963636c17ea071f",
       "runtime": "client",
       "publicPaths": [
         "~/composables/editor/useEditorToolbar"
@@ -2269,7 +2269,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorToolbar.ts",
-              "line": 38,
+              "line": 40,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface EditorToolbarButton {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Tooltip text. */\n    tooltip?: string;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    /** Check if button should be active/highlighted. */\n    isActive?: (editor: Editor) => boolean;\n    /** Handler invoked on click. */\n    onClick: (editor: Editor) => void | Promise<void>;\n    /** Optional visibility check. */\n    visible?: (editor: Editor) => boolean;\n}"
             }
@@ -2286,7 +2286,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/editor/useEditorToolbar.ts",
-                "line": 152,
+                "line": 166,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredEditorToolbarButtonIds(): string[];"
               }
@@ -2295,7 +2295,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorToolbar.ts",
-              "line": 152,
+              "line": 166,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredEditorToolbarButtonIds(): string[];"
             }
@@ -2312,7 +2312,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorToolbar.ts",
-                "line": 74,
+                "line": 86,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerEditorToolbarButton(button: EditorToolbarButton);"
               }
@@ -2321,7 +2321,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorToolbar.ts",
-              "line": 74,
+              "line": 86,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerEditorToolbarButton(button: EditorToolbarButton);"
             }
@@ -2338,7 +2338,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorToolbar.ts",
-                "line": 93,
+                "line": 106,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterEditorToolbarButton(id: string);"
               }
@@ -2347,7 +2347,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorToolbar.ts",
-              "line": 93,
+              "line": 106,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterEditorToolbarButton(id: string);"
             }
@@ -2364,7 +2364,7 @@
               "resolvedReturnType": "globalThis.ComputedRef<EditorToolbarButton[]>",
               "declaration": {
                 "source": "app/composables/editor/useEditorToolbar.ts",
-                "line": 114,
+                "line": 128,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useEditorToolbarButtons(editorRef: Ref<Editor | null>);"
               }
@@ -2373,7 +2373,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorToolbar.ts",
-              "line": 114,
+              "line": 128,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useEditorToolbarButtons(editorRef: Ref<Editor | null>);"
             }
@@ -2441,7 +2441,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "7850381d58ab0855ad30ddca4f250a9f9219b518d5ea038745a773b0f47bb274",
+      "apiSha256": "45ff9194e6dcbd2dff194318a6eba9e1f8464fb01afb03b85bab839ae8a6aca7",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2860,7 +2860,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorToolbar.ts",
-              "line": 38,
+              "line": 40,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface EditorToolbarButton {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Tooltip text. */\n    tooltip?: string;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    /** Check if button should be active/highlighted. */\n    isActive?: (editor: Editor) => boolean;\n    /** Handler invoked on click. */\n    onClick: (editor: Editor) => void | Promise<void>;\n    /** Optional visibility check. */\n    visible?: (editor: Editor) => boolean;\n}"
             }
@@ -3415,7 +3415,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/editor/useEditorToolbar.ts",
-                "line": 152,
+                "line": 166,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredEditorToolbarButtonIds(): string[];"
               }
@@ -3424,7 +3424,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorToolbar.ts",
-              "line": 152,
+              "line": 166,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredEditorToolbarButtonIds(): string[];"
             }
@@ -3493,7 +3493,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 72,
+                "line": 86,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredProjectTreeActionIds(): string[];"
               }
@@ -3502,7 +3502,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 72,
+              "line": 86,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredProjectTreeActionIds(): string[];"
             }
@@ -3798,7 +3798,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 37,
+              "line": 39,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeAction extends RegistryItem {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Label text. */\n    label: string;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    showOn?: ShowOnKind[]; // if present, limits visibility to these kinds\n    /** Handler invoked on click. */\n    handler: (ctx: ProjectTreeHandlerCtx) => void | Promise<void>;\n}"
             }
@@ -3812,7 +3812,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 8,
+              "line": 10,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeChild {\n    value: string; // id of the entry\n    label: string;\n    icon?: string;\n    kind?: ProjectTreeKind; // 'chat' | 'doc'\n    parentId?: string;\n    onSelect?: (e: Event) => void;\n}"
             }
@@ -3826,7 +3826,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 27,
+              "line": 29,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeHandlerCtx {\n    // The tree row this action was invoked for (root or child)\n    treeRow: ProjectTreeRow;\n    // legacy/alternate shapes seen in the wild may include a `child` property\n    // but prefer to use `treeRow`.\n    child?: ProjectTreeChild;\n    root?: ProjectTreeRoot;\n}"
             }
@@ -3840,7 +3840,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 5,
+              "line": 7,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ProjectTreeKind = 'chat' | 'doc';"
             }
@@ -3854,7 +3854,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 17,
+              "line": 19,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeRoot {\n    value: string; // project id\n    label: string; // project name\n    defaultExpanded?: boolean;\n    children?: ProjectTreeChild[];\n    onSelect?: (e: Event) => void;\n}"
             }
@@ -3868,7 +3868,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 25,
+              "line": 27,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ProjectTreeRow = ProjectTreeRoot | ProjectTreeChild;"
             }
@@ -4067,7 +4067,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorToolbar.ts",
-                "line": 74,
+                "line": 86,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerEditorToolbarButton(button: EditorToolbarButton);"
               }
@@ -4076,7 +4076,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorToolbar.ts",
-              "line": 74,
+              "line": 86,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerEditorToolbarButton(button: EditorToolbarButton);"
             }
@@ -4185,7 +4185,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 57,
+                "line": 69,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerProjectTreeAction(action: ProjectTreeAction);"
               }
@@ -4194,7 +4194,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 57,
+              "line": 69,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerProjectTreeAction(action: ProjectTreeAction);"
             }
@@ -4444,7 +4444,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 6,
+              "line": 8,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ShowOnKind = 'root' | 'all' | 'chat' | 'doc';"
             }
@@ -4783,7 +4783,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/editor/useEditorToolbar.ts",
-                "line": 93,
+                "line": 106,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterEditorToolbarButton(id: string);"
               }
@@ -4792,7 +4792,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorToolbar.ts",
-              "line": 93,
+              "line": 106,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterEditorToolbarButton(id: string);"
             }
@@ -4887,7 +4887,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 62,
+                "line": 75,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterProjectTreeAction(id: string);"
               }
@@ -4896,7 +4896,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 62,
+              "line": 75,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterProjectTreeAction(id: string);"
             }
@@ -5317,7 +5317,7 @@
               "resolvedReturnType": "globalThis.ComputedRef<EditorToolbarButton[]>",
               "declaration": {
                 "source": "app/composables/editor/useEditorToolbar.ts",
-                "line": 114,
+                "line": 128,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useEditorToolbarButtons(editorRef: Ref<Editor | null>);"
               }
@@ -5326,7 +5326,7 @@
           "declarations": [
             {
               "source": "app/composables/editor/useEditorToolbar.ts",
-              "line": 114,
+              "line": 128,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useEditorToolbarButtons(editorRef: Ref<Editor | null>);"
             }
@@ -5720,12 +5720,12 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "(): globalThis.ComputedRef<readonly ProjectTreeAction[]>",
+              "signature": "(): ShallowRef<readonly ProjectTreeAction[]> | globalThis.ComputedRef<readonly ProjectTreeAction[]>",
               "declaredReturnType": null,
-              "resolvedReturnType": "globalThis.ComputedRef<readonly ProjectTreeAction[]>",
+              "resolvedReturnType": "ShallowRef<readonly ProjectTreeAction[]> | globalThis.ComputedRef<readonly ProjectTreeAction[]>",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 67,
+                "line": 81,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useProjectTreeActions();"
               }
@@ -5734,7 +5734,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 67,
+              "line": 81,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useProjectTreeActions();"
             }
@@ -6247,7 +6247,7 @@
     },
     {
       "source": "app/composables/projects/useProjectTreeActions.ts",
-      "apiSha256": "ad1f0d8247e8663869d7dfbe6706c23e364f63244a2157f1e1db0a1e8d4caafc",
+      "apiSha256": "d5123fdf99e26456040bbe1785d8a65ab5f283a4ae0e411ce56fb94e4c7a109d",
       "runtime": "client",
       "publicPaths": [
         "~/composables/projects/useProjectTreeActions"
@@ -6271,7 +6271,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 72,
+                "line": 86,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredProjectTreeActionIds(): string[];"
               }
@@ -6280,7 +6280,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 72,
+              "line": 86,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredProjectTreeActionIds(): string[];"
             }
@@ -6294,7 +6294,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 37,
+              "line": 39,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeAction extends RegistryItem {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Label text. */\n    label: string;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    showOn?: ShowOnKind[]; // if present, limits visibility to these kinds\n    /** Handler invoked on click. */\n    handler: (ctx: ProjectTreeHandlerCtx) => void | Promise<void>;\n}"
             }
@@ -6308,7 +6308,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 8,
+              "line": 10,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeChild {\n    value: string; // id of the entry\n    label: string;\n    icon?: string;\n    kind?: ProjectTreeKind; // 'chat' | 'doc'\n    parentId?: string;\n    onSelect?: (e: Event) => void;\n}"
             }
@@ -6322,7 +6322,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 27,
+              "line": 29,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeHandlerCtx {\n    // The tree row this action was invoked for (root or child)\n    treeRow: ProjectTreeRow;\n    // legacy/alternate shapes seen in the wild may include a `child` property\n    // but prefer to use `treeRow`.\n    child?: ProjectTreeChild;\n    root?: ProjectTreeRoot;\n}"
             }
@@ -6336,7 +6336,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 5,
+              "line": 7,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ProjectTreeKind = 'chat' | 'doc';"
             }
@@ -6350,7 +6350,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 17,
+              "line": 19,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeRoot {\n    value: string; // project id\n    label: string; // project name\n    defaultExpanded?: boolean;\n    children?: ProjectTreeChild[];\n    onSelect?: (e: Event) => void;\n}"
             }
@@ -6364,7 +6364,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 25,
+              "line": 27,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ProjectTreeRow = ProjectTreeRoot | ProjectTreeChild;"
             }
@@ -6381,7 +6381,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 57,
+                "line": 69,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerProjectTreeAction(action: ProjectTreeAction);"
               }
@@ -6390,7 +6390,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 57,
+              "line": 69,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerProjectTreeAction(action: ProjectTreeAction);"
             }
@@ -6404,7 +6404,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 6,
+              "line": 8,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ShowOnKind = 'root' | 'all' | 'chat' | 'doc';"
             }
@@ -6421,7 +6421,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 62,
+                "line": 75,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterProjectTreeAction(id: string);"
               }
@@ -6430,7 +6430,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 62,
+              "line": 75,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterProjectTreeAction(id: string);"
             }
@@ -6442,12 +6442,12 @@
           "nuxtAutoImport": true,
           "signatures": [
             {
-              "signature": "(): globalThis.ComputedRef<readonly ProjectTreeAction[]>",
+              "signature": "(): ShallowRef<readonly ProjectTreeAction[]> | globalThis.ComputedRef<readonly ProjectTreeAction[]>",
               "declaredReturnType": null,
-              "resolvedReturnType": "globalThis.ComputedRef<readonly ProjectTreeAction[]>",
+              "resolvedReturnType": "ShallowRef<readonly ProjectTreeAction[]> | globalThis.ComputedRef<readonly ProjectTreeAction[]>",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 67,
+                "line": 81,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useProjectTreeActions();"
               }
@@ -6456,7 +6456,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 67,
+              "line": 81,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useProjectTreeActions();"
             }

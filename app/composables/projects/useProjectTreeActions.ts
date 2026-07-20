@@ -1,4 +1,6 @@
 import { createRegistry, type RegistryItem } from '#imports';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 // Local interfaces describing the tree rows printed in the console.
 // These mirror the shape produced by SidebarProjectTree.vue for root and child items.
@@ -52,25 +54,37 @@ export interface ProjectTreeAction extends RegistryItem {
 const registry = createRegistry<ProjectTreeAction>(
     '__or3ProjectTreeActionsRegistry'
 );
+const v2Kernel = getContributionSurfaceKernel<ProjectTreeAction>('project-tree-actions', {
+    getId: (action) => action.id,
+    normalize: (action) => Object.freeze({ ...action }),
+    compare: (left, right) =>
+        (left.order ?? 200) - (right.order ?? 200) || left.id.localeCompare(right.id),
+});
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('project-tree-actions');
+}
 
 /** Register (or replace) a message action. */
 export function registerProjectTreeAction(action: ProjectTreeAction) {
-    registry.register(action);
+    if (useV2Surface()) v2Kernel.registry.registerLegacy({ value: action });
+    else registry.register(action);
 }
 
 /** Unregister an action by id (optional utility). */
 export function unregisterProjectTreeAction(id: string) {
-    registry.unregister(id);
+    if (useV2Surface()) v2Kernel.registry.unregisterLegacy(id);
+    else registry.unregister(id);
 }
 
 /** Accessor for actions applicable to a specific message. */
 export function useProjectTreeActions() {
-    return registry.useItems();
+    return useV2Surface() ? v2Kernel.items : registry.useItems();
 }
 
 /** Convenience for plugin authors to check existing action ids. */
 export function listRegisteredProjectTreeActionIds(): string[] {
-    return registry.listIds();
+    return useV2Surface() ? [...v2Kernel.registry.listLegacyIds()] : registry.listIds();
 }
 
 // Note: Core (built-in) actions remain hard-coded in ChatProjectTree.vue so they always appear;

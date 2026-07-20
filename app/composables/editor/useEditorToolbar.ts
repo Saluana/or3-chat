@@ -1,6 +1,8 @@
 import { computed, type Ref } from 'vue';
 import type { Editor } from '@tiptap/vue-3';
 import { createRegistry } from '../_registry';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 /**
  * @module app/composables/editor/useEditorToolbar
@@ -55,6 +57,16 @@ export interface EditorToolbarButton {
 const registry = createRegistry<EditorToolbarButton>(
     '__or3EditorToolbarRegistry'
 );
+const v2Kernel = getContributionSurfaceKernel<EditorToolbarButton>('editor-toolbar', {
+    getId: (button) => button.id,
+    normalize: (button) => Object.freeze({ ...button }),
+    compare: (left, right) =>
+        (left.order ?? 200) - (right.order ?? 200) || left.id.localeCompare(right.id),
+});
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('editor-toolbar');
+}
 
 /**
  * Register or replace an editor toolbar button.
@@ -72,7 +84,8 @@ const registry = createRegistry<EditorToolbarButton>(
  * - Preventing id collisions across plugins
  */
 export function registerEditorToolbarButton(button: EditorToolbarButton) {
-    registry.register(button);
+    if (useV2Surface()) v2Kernel.registry.registerLegacy({ value: button });
+    else registry.register(button);
 }
 
 /**
@@ -91,7 +104,8 @@ export function registerEditorToolbarButton(button: EditorToolbarButton) {
  * - Cleaning up editor UI that already rendered the button
  */
 export function unregisterEditorToolbarButton(id: string) {
-    registry.unregister(id);
+    if (useV2Surface()) v2Kernel.registry.unregisterLegacy(id);
+    else registry.unregister(id);
 }
 
 /**
@@ -112,7 +126,7 @@ export function unregisterEditorToolbarButton(id: string) {
  * - Handling editor initialization timing
  */
 export function useEditorToolbarButtons(editorRef: Ref<Editor | null>) {
-    const allButtons = registry.useItems();
+    const allButtons = useV2Surface() ? v2Kernel.items : registry.useItems();
     return computed(() => {
         const editor = editorRef.value;
         if (!editor) return [];
@@ -150,7 +164,7 @@ export function useEditorToolbarButtons(editorRef: Ref<Editor | null>) {
  * - Providing reactive updates
  */
 export function listRegisteredEditorToolbarButtonIds(): string[] {
-    return registry.listIds();
+    return useV2Surface() ? [...v2Kernel.registry.listLegacyIds()] : registry.listIds();
 }
 
 // Note: Core (built-in) toolbar buttons remain hard-coded in DocumentEditor.vue;
