@@ -270,7 +270,7 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R1.AC3, R1.AC4, R5.AC3, R5.AC9
       Done when: the full hook conformance suite passes without expected-value changes.
 
-- [ ] 5.4 Implement explicit new-hook policies for parallel actions, timeout, stop, aggregate, rethrow, and fail-closed
+- [x] 5.4 Implement explicit new-hook policies for parallel actions, timeout, stop, aggregate, rethrow, and fail-closed
       Requirements: R5.AC3, R5.AC8
       Done when: each policy has isolated result/error/timeout tests and unknown hooks never select it implicitly.
 
