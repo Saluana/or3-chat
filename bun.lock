@@ -20,7 +20,7 @@
         "@vueuse/core": "^13.9.0",
         "ajv": "^8.20.0",
         "bcryptjs": "^3.0.3",
-        "dexie": "^4.2.1",
+        "dexie": "~4.3.0",
         "dexie-export-import": "^4.1.4",
         "gpt-tokenizer": "^3.4.0",
         "jsonwebtoken": "^9.0.3",
@@ -1659,7 +1659,7 @@
 
     "devlop": ["devlop@1.1.0", "", { "dependencies": { "dequal": "^2.0.0" } }, "sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA=="],
 
-    "dexie": ["dexie@4.2.1", "", {}, "sha512-Ckej0NS6jxQ4Po3OrSQBFddayRhTCic2DoCAG5zacOfOVB9P2Q5Xc5uL/nVa7ZVs+HdMnvUPzLFCB/JwpB6Csg=="],
+    "dexie": ["dexie@4.3.0", "", {}, "sha512-5EeoQpJvMKHe6zWt/FSIIuRa3CWlZeIl6zKXt+Lz7BU6RoRRLgX9dZEynRfXrkLcldKYCBiz7xekTEylnie1Ug=="],
 
     "dexie-export-import": ["dexie-export-import@4.1.4", "", { "peerDependencies": { "dexie": "^2.0.4 || ^3.0.0 || ^4.0.1" } }, "sha512-3bw171qUuOTWSYLXI7C/0M6p1X65Rho3tu1IvD9By8jn0+3t3dLSkDlZ1BC6MbABl3kRlhtGigzC+SF+qcS5Og=="],
 
