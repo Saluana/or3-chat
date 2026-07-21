@@ -139,7 +139,7 @@
         "@vitejs/plugin-vue": "^5.2.4",
         "@vitest/coverage-v8": "2.1.9",
         "@vue/test-utils": "^2.4.11",
-        "better-sqlite3": "^12.6.2",
+        "better-sqlite3": "^12.11.1",
         "convex": "1.31.3",
         "eslint": "^9.39.1",
         "fake-indexeddb": "^5.0.2",
@@ -151,6 +151,7 @@
         "vitest": "^2.1.9"
     },
     "trustedDependencies": [
-        "@parcel/watcher"
+        "@parcel/watcher",
+        "better-sqlite3"
     ]
 }
