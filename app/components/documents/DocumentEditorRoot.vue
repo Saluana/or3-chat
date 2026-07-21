@@ -81,7 +81,7 @@ import {
 import { Editor, EditorContent } from '@tiptap/vue-3';
 import type { JSONContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
-import { Placeholder } from '@tiptap/extensions';
+import { Placeholder } from '@tiptap/extensions/placeholder';
 import {
     useEditorToolbarButtons,
     listEditorNodes,

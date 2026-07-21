@@ -61,7 +61,7 @@ import {
 } from 'vue';
 import { Editor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
-import { Placeholder } from '@tiptap/extensions';
+import { Placeholder } from '@tiptap/extensions/placeholder';
 import { useDebounceFn } from '@vueuse/core';
 import { getPrompt, updatePrompt, type PromptRecord } from '~/db/prompts';
 import { useThemeOverrides } from '~/composables/useThemeResolver';

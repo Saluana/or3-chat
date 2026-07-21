@@ -343,7 +343,7 @@ import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachment
 import { Editor, EditorContent } from '@tiptap/vue-3';
 import { Extension, Node } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import { Placeholder } from '@tiptap/extensions';
+import { Placeholder } from '@tiptap/extensions/placeholder';
 import { isMobile, state } from '~/state/global';
 import {
     useToast,
