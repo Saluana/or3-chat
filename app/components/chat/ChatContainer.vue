@@ -18,6 +18,9 @@
                 :item-key="(m) => m.id || m.stream_id || ''"
                 :estimate-height="80"
                 :overscan="5500"
+                :prefetch-overscan="5500"
+                :content-key="props.threadId ?? 'new-thread'"
+                mutation-mode="append-prepend"
                 :maintain-bottom="!anyEditing"
                 :bottom-threshold="5"
                 :padding-bottom="bottomPad"
@@ -25,6 +28,7 @@
                 class="chat-message-list"
                 :style="scrollParentStyle"
                 @scroll="onScroll"
+                @prefetchRange="onPrefetchRange"
                 @reachTop="emit('reached-top')"
                 @reachBottom="emit('reached-bottom')"
             >
@@ -137,6 +141,8 @@ import {
 } from '~/composables/core/usePanePrompt';
 import type {
     ChatMessage as ChatMessageType,
+    ChatRequestState,
+    RegisterSendResult,
     SendResult,
 } from '~/utils/chat/types';
 import { Or3Scroll } from 'or3-scroll';
@@ -156,6 +162,7 @@ import {
 import { resolveOpenRouterKeyAvailability } from '~/core/auth/openRouterKeyAvailability';
 import ChatWelcomeCard from '~/components/chat/ChatWelcomeCard.vue';
 import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';
+import { createMessageMediaPrefetchController } from '~/composables/chat/useMessageMediaPrefetch';
 import type {
     ChatInstance,
     ImageAttachment,
@@ -533,8 +540,20 @@ const allMessages = computed(() => {
     return list;
 });
 
-// Detect images in assistant messages to boost overscan (Req: User Request)
-// Removed dynamic overscan in favor of static high overscan (6500px) for performance stability.
+// Media prefetch is intentionally separate from row mounting. Keep the proven
+// 5500px render overscan until the browser canary passes at 1200/5500.
+const mediaPrefetch = createMessageMediaPrefetchController({ concurrency: 4 });
+
+function onPrefetchRange(range: { startIndex: number; endIndex: number }) {
+    mediaPrefetch.updateRange(allMessages.value, range);
+}
+
+watch(
+    () => props.threadId,
+    () => mediaPrefetch.reset()
+);
+
+onBeforeUnmount(() => mediaPrefetch.dispose());
 
 // Scroll handling centralized in VirtualMessageList
 // Ref is now the VirtualMessageList component instance, not a raw element
@@ -669,8 +688,61 @@ type ChatInputSendPayload = {
     webSearchEnabled: boolean;
     thinkingEnabled: boolean;
     reasoningEffort?: string | null;
-    registerResult: (result: Promise<SendResult>) => void;
+    registerResult: RegisterSendResult;
 };
+
+function waitForDurableSendAcceptance(
+    activeChat: ChatInstance,
+    terminal: Promise<SendResult>
+): Promise<SendResult> {
+    const stateRef = activeChat.requestState;
+    if (!isRef(stateRef)) return terminal;
+
+    const initial = stateRef.value as ChatRequestState;
+    if (initial.status === 'idle' || initial.status === 'terminal') {
+        return terminal;
+    }
+    const requestId = initial.requestId;
+
+    return new Promise<SendResult>((resolve, reject) => {
+        let settled = false;
+        let stopWatcher: (() => void) | null = null;
+        const finish = (result: SendResult) => {
+            if (settled) return;
+            settled = true;
+            stopWatcher?.();
+            resolve(result);
+        };
+        const inspect = (state: ChatRequestState) => {
+            if (state.status === 'idle' || state.requestId !== requestId) return;
+            if (state.status === 'persisted') {
+                finish({
+                    status: 'accepted',
+                    requestId,
+                    userMessageId: state.userMessageId,
+                });
+            } else if (state.status === 'streaming') {
+                finish({
+                    status: 'accepted',
+                    requestId,
+                    userMessageId: state.userMessageId,
+                    assistantMessageId: state.assistantMessageId,
+                });
+            } else if (state.status === 'terminal') {
+                finish(state.result);
+            }
+        };
+
+        stopWatcher = watch(stateRef, inspect, { immediate: true });
+        if (settled) stopWatcher();
+        void terminal.then(finish, (error) => {
+            if (settled) return;
+            settled = true;
+            stopWatcher?.();
+            reject(error);
+        });
+    });
+}
 
 function onSend(payload: ChatInputSendPayload) {
     if (loading.value) return;
@@ -731,17 +803,20 @@ function onSend(payload: ChatInputSendPayload) {
     const activeChat = chat.value;
     if (!activeChat) return;
     const result = activeChat.send({
-            content: payload.text,
-            model: payload.model || model.value,
-            files,
-            file_hashes,
-            extraTextParts,
-            online: !!payload.webSearchEnabled,
-            thinking: !!payload.thinkingEnabled,
-            reasoningEffort: payload.reasoningEffort ?? null,
-            context_hashes,
-        });
-    payload.registerResult(result);
+        content: payload.text,
+        model: payload.model || model.value,
+        files,
+        file_hashes,
+        extraTextParts,
+        online: !!payload.webSearchEnabled,
+        thinking: !!payload.thinkingEnabled,
+        reasoningEffort: payload.reasoningEffort ?? null,
+        context_hashes,
+    });
+    payload.registerResult(
+        result,
+        waitForDurableSendAcceptance(activeChat, result)
+    );
     void result
         .then(() => {
             // Ensure layout is stable after sending (input shrink + new message)

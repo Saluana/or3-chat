@@ -18,6 +18,8 @@ const disableNonCorePlugins = isNonCorePluginDiscoveryDisabled(
     or3CloudConfig.admin,
 );
 const isWizardUiProcess = process.env.OR3_WIZARD_UI_ENABLED === 'true';
+const isScrollTestHarnessEnabled =
+    process.env.OR3_SCROLL_TEST_HARNESS === 'true';
 const isStaticGenerateBuild = process.argv.includes('generate');
 const isStaticCloudDisabledBuild = isStaticGenerateBuild && !isSsrAuthEnabled;
 const shouldLoadCloudProviderModules =
@@ -400,6 +402,9 @@ export default defineNuxtConfig({
     // Disable SSR for test pages to avoid hydration mismatches
     routeRules: {
         '/_tests/**': { ssr: false },
+        ...(isScrollTestHarnessEnabled
+            ? { '/__or3-scroll-test': { ssr: false } }
+            : {}),
     },
     compatibilityDate: '2025-07-15',
     runtimeConfig: {
@@ -1008,6 +1013,9 @@ export default defineNuxtConfig({
     },
     vite: {
         customLogger: viteLogger,
+        optimizeDeps: isScrollTestHarnessEnabled
+            ? { exclude: ['or3-scroll'] }
+            : undefined,
         server: {
             fs: {
                 allow: ['..'],
@@ -1061,6 +1069,17 @@ export default defineNuxtConfig({
         // at runtime via isAdminEnabled() check in server/middleware/admin-gate.ts.
     ].filter(Boolean) as string[],
     hooks: {
+        'pages:extend'(pages) {
+            if (!isScrollTestHarnessEnabled) return;
+            pages.push({
+                name: 'or3-scroll-test-harness',
+                path: '/__or3-scroll-test',
+                file: resolve(
+                    __dirname,
+                    'tests/e2e/fixtures/Or3ScrollCanary.vue'
+                ),
+            });
+        },
         listen(_server, listener) {
             if (isWizardUiProcess) return;
             const url =

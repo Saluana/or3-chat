@@ -8,6 +8,7 @@
                 :item-key="(item) => item.key"
                 :estimate-height="40"
                 :overscan="240"
+                mutation-mode="arbitrary"
                 :maintain-bottom="false"
                 class="flex-1 min-h-0 sidebar-scroll"
             >

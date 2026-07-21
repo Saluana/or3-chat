@@ -66,6 +66,17 @@
                         >
                             <img
                                 :src="thumbnails[hash]?.url"
+                                :data-file-hash="hash"
+                                :width="thumbnails[hash]?.width"
+                                :height="thumbnails[hash]?.height"
+                                :style="
+                                    thumbnails[hash]?.width &&
+                                    thumbnails[hash]?.height
+                                        ? {
+                                              aspectRatio: `${thumbnails[hash]?.width} / ${thumbnails[hash]?.height}`,
+                                          }
+                                        : undefined
+                                "
                                 :alt="'Attachment ' + (idx + 1)"
                                 class="attachment-thumb w-10 h-10 object-cover rounded-lg"
                                 draggable="false"
@@ -688,6 +699,11 @@ async function hydrateInlineImages() {
 
         const state = thumbnails[hash];
         if (state?.status === 'ready' && state.url) {
+            if (state.width && state.height) {
+                img.width = state.width;
+                img.height = state.height;
+                img.style.aspectRatio = `${state.width} / ${state.height}`;
+            }
             img.src = state.url;
             img.dataset.hydrated = 'true';
             img.dataset.fileHash = hash;

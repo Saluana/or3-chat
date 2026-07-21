@@ -40,6 +40,16 @@
                     <img
                         :id="`attachment-image-${index}`"
                         :src="thumbs[h].url"
+                        :data-file-hash="h"
+                        :width="thumbs[h].width"
+                        :height="thumbs[h].height"
+                        :style="
+                            thumbs[h].width && thumbs[h].height
+                                ? {
+                                      aspectRatio: `${thumbs[h].width} / ${thumbs[h].height}`,
+                                  }
+                                : undefined
+                        "
                         :alt="'file ' + h.slice(0, 8)"
                         class="message-attachment-image object-cover w-full h-full"
                         draggable="false"
@@ -132,6 +142,7 @@ async function ensure(h: string) {
         if (m) {
             meta[h] = m;
             if (m.name) fileNames[h] = m.name;
+            thumbUrlCache.setIntrinsicSize(h, m.width, m.height);
         }
         return blob;
     });

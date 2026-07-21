@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import ChatInputDropper from '../ChatInputDropper.vue';
 import { ref } from 'vue';
+import type { SendResult } from '~/utils/chat/types';
 
 // Mock VueUse core
 const mockOpen = vi.fn();
@@ -79,6 +80,13 @@ vi.mock('~/utils/errors', () => ({
     err: vi.fn()
 }));
 
+vi.mock('~/core/hooks/useHooks', () => ({
+    useHooks: () => ({
+        doAction: vi.fn().mockResolvedValue(undefined),
+        applyFilters: vi.fn(async (_name: string, value: unknown) => value),
+    }),
+}));
+
 vi.mock('../file-upload-utils', () => ({
     validateFile: () => ({ ok: true, kind: 'image' }),
     persistAttachment: vi.fn().mockResolvedValue({ hash: 'test-hash' })
@@ -103,6 +111,16 @@ const createThemeMock = () => ({
         },
     },
 });
+
+function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+    });
+    return { promise, resolve, reject };
+}
 
 describe('ChatInputDropper', () => {
     beforeEach(() => {
@@ -233,5 +251,72 @@ describe('ChatInputDropper', () => {
         mockIsOverDropZone.value = false;
         await wrapper.vm.$nextTick();
         expect(root.classes()).not.toContain('border-blue-500');
+    });
+
+    it('clears the draft after durable acceptance without waiting for the stream', async () => {
+        const terminal = deferred<SendResult>();
+        const accepted = deferred<SendResult>();
+        let sentText = '';
+        const wrapper = mount(ChatInputDropper, {
+            props: {
+                loading: false,
+                threadId: 'test-thread',
+            },
+            attrs: {
+                onSend: (payload: {
+                    text: string;
+                    registerResult: (
+                        terminalResult: Promise<SendResult>,
+                        durableAcceptance: Promise<SendResult>
+                    ) => void;
+                }) => {
+                    sentText = payload.text;
+                    payload.registerResult(terminal.promise, accepted.promise);
+                },
+            },
+            global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
+            },
+        });
+        const vm = wrapper.vm as unknown as {
+            setText: (text: string) => void;
+            triggerSend: () => Promise<SendResult>;
+        };
+        vm.setText('Bro');
+
+        let terminalSettled = false;
+        const send = vm.triggerSend().then((result) => {
+            terminalSettled = true;
+            return result;
+        });
+        await vi.waitFor(() => {
+            expect(wrapper.emitted('send')).toHaveLength(1);
+        });
+        expect(sentText).toBe('Bro');
+
+        accepted.resolve({
+            status: 'accepted',
+            requestId: 'request-1',
+            userMessageId: 'user-1',
+        });
+        await Promise.resolve();
+        await wrapper.vm.$nextTick();
+        await expect(vm.triggerSend()).resolves.toMatchObject({
+            status: 'rejected',
+            reason: 'filtered',
+        });
+        expect(wrapper.emitted('send')).toHaveLength(1);
+        expect(terminalSettled).toBe(false);
+
+        terminal.resolve({
+            status: 'complete',
+            requestId: 'request-1',
+            userMessageId: 'user-1',
+            assistantMessageId: 'assistant-1',
+        });
+        await expect(send).resolves.toMatchObject({ status: 'complete' });
+        wrapper.unmount();
     });
 });

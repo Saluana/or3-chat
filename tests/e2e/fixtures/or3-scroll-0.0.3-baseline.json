@@ -1,0 +1,21 @@
+{
+  "packageVersion": "0.0.3",
+  "browser": "Chromium",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "renderOverscan": 5500,
+  "prefetchOverscan": 0,
+  "renderedRows": 34,
+  "readyImages": 3,
+  "scrollTop": 17818,
+  "scrollHeight": 18472,
+  "trackHeight": 18472,
+  "visibleAnchor": "canary-thread-a-96",
+  "anchorOffset": -42,
+  "bottomDistance": 0,
+  "hasScrollApi": true,
+  "hasVisibleRows": true,
+  "ssrImport": "ResizeObserver is not defined"
+}

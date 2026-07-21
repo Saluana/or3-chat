@@ -95,6 +95,11 @@ export type ChatRequestState =
     | { status: 'streaming'; requestId: string; userMessageId: string; assistantMessageId: string }
     | { status: 'terminal'; requestId: string; result: SendResult };
 
+export type RegisterSendResult = (
+    terminal: Promise<SendResult>,
+    durableAcceptance?: Promise<SendResult>
+) => void;
+
 export interface ToolCall {
     id: string;
     type: 'function';

@@ -1,6 +1,13 @@
 export interface ThumbState {
     status: 'ready' | 'error';
     url?: string;
+    width?: number;
+    height?: number;
+}
+
+export interface ThumbIntrinsicSize {
+    width: number;
+    height: number;
 }
 
 type GlobalThumbCache = {
@@ -8,6 +15,7 @@ type GlobalThumbCache = {
     inflight: Map<string, Promise<void>>;
     refCounts: Map<string, number>;
     cleanupTimers: Map<string, ReturnType<typeof setTimeout>>;
+    intrinsicSizes: Map<string, ThumbIntrinsicSize>;
     graceMs: number;
 };
 
@@ -23,6 +31,7 @@ function getGlobalCache(graceMs: number): GlobalThumbCache {
             inflight: new Map<string, Promise<void>>(),
             refCounts: new Map<string, number>(),
             cleanupTimers: new Map<string, ReturnType<typeof setTimeout>>(),
+            intrinsicSizes: new Map<string, ThumbIntrinsicSize>(),
             graceMs,
         };
     } else {
@@ -77,6 +86,7 @@ export function useThumbnailUrlCache(opts: { graceMs?: number } = {}) {
             }
             globalCache.cache.delete(hash);
             globalCache.inflight.delete(hash);
+            globalCache.intrinsicSizes.delete(hash);
         }, globalCache.graceMs);
         globalCache.cleanupTimers.set(hash, timer);
     };
@@ -104,6 +114,27 @@ export function useThumbnailUrlCache(opts: { graceMs?: number } = {}) {
     const get = (hash: string): ThumbState | undefined =>
         globalCache.cache.get(hash);
 
+    const setIntrinsicSize = (
+        hash: string,
+        width: number | undefined,
+        height: number | undefined
+    ) => {
+        if (!width || !height || width <= 0 || height <= 0) return;
+        const size = { width, height };
+        globalCache.intrinsicSizes.set(hash, size);
+        const state = globalCache.cache.get(hash);
+        if (state) Object.assign(state, size);
+    };
+
+    const decodeImage = async (url: string, blob: Blob) => {
+        if (!blob.type.startsWith('image/') || typeof Image === 'undefined') {
+            return;
+        }
+        const image = new Image();
+        image.src = url;
+        if (typeof image.decode === 'function') await image.decode();
+    };
+
     const ensure = async (
         hash: string,
         loader: () => Promise<Blob | null | undefined>
@@ -122,7 +153,19 @@ export function useThumbnailUrlCache(opts: { graceMs?: number } = {}) {
                 const blob = await loader();
                 if (!blob) return;
                 const url = URL.createObjectURL(blob);
-                globalCache.cache.set(hash, { status: 'ready', url });
+                try {
+                    await decodeImage(url, blob);
+                } catch {
+                    URL.revokeObjectURL(url);
+                    globalCache.cache.set(hash, { status: 'error' });
+                    return;
+                }
+                const size = globalCache.intrinsicSizes.get(hash);
+                globalCache.cache.set(hash, {
+                    status: 'ready',
+                    url,
+                    ...size,
+                });
             } catch {
                 globalCache.cache.set(hash, { status: 'error' });
             } finally {
@@ -138,5 +181,5 @@ export function useThumbnailUrlCache(opts: { graceMs?: number } = {}) {
         return globalCache.cache.get(hash);
     };
 
-    return { get, ensure, retain, release };
+    return { get, ensure, retain, release, setIntrinsicSize };
 }

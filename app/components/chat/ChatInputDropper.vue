@@ -382,6 +382,7 @@ import type { OpenRouterReasoningEffort } from '~~/shared/openrouter/reasoning';
 import type { OpenRouterModel } from '~~/shared/openrouter/types';
 import {
     hasDurableSendAcceptance,
+    type RegisterSendResult,
     type SendResult,
 } from '~/utils/chat/types';
 
@@ -583,9 +584,7 @@ const emit = defineEmits<{
             webSearchEnabled: boolean;
             thinkingEnabled: boolean;
             reasoningEffort: string | null;
-            registerResult: (
-                result: Promise<SendResult>
-            ) => void;
+            registerResult: RegisterSendResult;
         }
     ): void;
     (e: 'prompt-change', value: string): void;
@@ -1041,6 +1040,7 @@ const handleSend = async (): Promise<SendResult> => {
         }
 
         let sendResult: Promise<SendResult> | null = null;
+        let durableAcceptance: Promise<SendResult> | null = null;
         emit('send', {
             text: promptText.value,
             images: attachments.value, // backward compatibility
@@ -1055,8 +1055,9 @@ const handleSend = async (): Promise<SendResult> => {
                 thinkingEnabled.value && modelSupportsThinking.value
                     ? reasoningEffort.value ?? null
                     : null,
-            registerResult: (result) => {
+            registerResult: (result, acceptance = result) => {
                 sendResult = result;
+                durableAcceptance = acceptance;
             },
         });
         // A parent that cannot accept the request leaves the draft untouched.
@@ -1068,9 +1069,9 @@ const handleSend = async (): Promise<SendResult> => {
                 error: 'No chat submission handler accepted the request.',
             };
         }
-        let result: SendResult;
+        let acceptance: SendResult;
         try {
-            result = await sendResult;
+            acceptance = await (durableAcceptance ?? sendResult);
         } catch (error) {
             return {
                 status: 'failed',
@@ -1079,7 +1080,7 @@ const handleSend = async (): Promise<SendResult> => {
                 error: error instanceof Error ? error.message : String(error),
             };
         }
-        if (!hasDurableSendAcceptance(result)) return result;
+        if (!hasDurableSendAcceptance(acceptance)) return acceptance;
         // Reset local state and editor content so placeholder shows again
         promptText.value = '';
         try {
@@ -1090,7 +1091,16 @@ const handleSend = async (): Promise<SendResult> => {
         // Release any blob URLs to avoid leaking when clearing attachments
         clearAll();
         autoResize();
-        return result;
+        try {
+            return await sendResult;
+        } catch (error) {
+            return {
+                status: 'failed',
+                requestId: 'composer-send',
+                reason: 'stream_error',
+                error: error instanceof Error ? error.message : String(error),
+            };
+        }
     }
     return { status: 'rejected', reason: 'filtered' };
 };

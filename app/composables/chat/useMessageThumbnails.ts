@@ -68,6 +68,11 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
                     pdfMeta[hash] = { name: meta.name, kind: meta.kind };
                     return null;
                 }
+                thumbUrlCache.setIntrinsicSize(
+                    hash,
+                    meta?.width,
+                    meta?.height
+                );
                 if (!blob) return null;
                 if (blob.type === 'application/pdf') {
                     pdfMeta[hash] = { name: meta?.name, kind: 'pdf' };

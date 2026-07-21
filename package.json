@@ -17,6 +17,7 @@
         "postinstall": "nuxt prepare",
         "test": "vitest run",
         "test:watch": "vitest",
+        "test:e2e:scroll": "OR3_SCROLL_TEST_HARNESS=true PW_PORT=3107 bunx playwright test tests/e2e/or3-scroll-canary.spec.ts",
         "analyze": "bun run build && npx vite-bundle-visualizer dist/stats.html",
         "eslint": "eslint",
         "lint": "echo 'Lint script would go here'",

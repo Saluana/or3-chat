@@ -10,6 +10,7 @@ import type {
 } from '~/composables/core/useMultiPane';
 import type {
     ChatMessage,
+    ChatRequestState,
     ToolCall,
     SendMessageParams,
     ContentPart,
@@ -85,6 +86,7 @@ export interface ChatInstance {
     streamState: StreamState;
     streamId: Ref<string | undefined>;
     threadId: Ref<string | undefined>;
+    requestState: Ref<ChatRequestState>;
     tailAssistant?: Ref<UiChatMessage | null>;
     send: (params: SendMessageParams & { content: string }) => Promise<SendResult>;
     retryMessage: (messageId: string, model?: string) => Promise<SendResult | undefined>;
