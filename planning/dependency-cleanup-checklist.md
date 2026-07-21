@@ -1,15 +1,17 @@
 # Dependency Cleanup and Upgrade Checklist
 
 **Scope:** `or3-chat` root package only  
-**Status:** Phases 1–3 implemented; phases 4 and later remain planning only
+**Status:** Phases 1–4 implemented; phases 5 and later remain planning only
 **Prepared:** 2026-07-21
 
-Implementation notes for phases 1–3:
+Implementation notes for phases 1–4:
 
 - Each phase was developed on a separate branch created from the latest local `or3-cloud` state and merged only after its validation gates passed.
-- The full unit suite passes with 3,083 tests; frozen installs, provider-boundary checks, theme validation, SSR builds, static generation, and plugin-runtime production checks pass.
+- The full unit suite passes with 3,086 tests; frozen installs, provider-boundary checks, theme validation, SSR builds, static generation, and plugin-runtime production checks pass.
 - The repository's pre-existing type-check and lint failures remain unchanged in scope. Two timing-sensitive scroll E2E assertions also reproduce on the exact pre-Phase-3 code, dependency set, and Chromium revision.
 - Manual UI checks and live-provider exercises remain unchecked below because they require an interactive environment or external provider state.
+- Phase 4 upgrades the complete Tiptap family from lock-resolved 3.15.1 to 3.28.0 and `tiptap-markdown` from 0.8.10 to 0.9.0. ProseMirror packages are explicitly deduplicated because multiple runtime copies have incompatible private types and can break editor plugins.
+- Phase 4 adds Markdown regression fixtures for headings, marks, links, lists, code blocks, unsupported inline HTML, empty content, Tiptap 3 command options, undo, and redo. The fixtures produce identical serialized Markdown before and after the 0.9 upgrade.
 
 This checklist is ordered so each phase can be implemented, tested, reviewed, and committed independently. Do not run an unrestricted `bun update`; keep the batches small enough that regressions can be attributed to one change.
 
@@ -200,16 +202,17 @@ This checklist is ordered so each phase can be implemented, tested, reviewed, an
 
 ### Tiptap 3 package family
 
-- [ ] Update all Tiptap packages in one batch.
-- [ ] Add or update `@tiptap/extensions`.
-- [ ] Keep `core`, `pm`, `starter-kit`, `suggestion`, and related packages compatible.
-- [ ] Run editor integration tests.
+- [x] Update all Tiptap packages in one batch.
+- [x] Add or update `@tiptap/extensions`.
+- [x] Keep `core`, `pm`, `starter-kit`, `suggestion`, and related packages compatible.
+- [x] Run editor integration tests.
 - [ ] Test document editing and autosave.
 - [ ] Test prompt editing.
 - [ ] Test chat input placeholder and autocomplete.
 - [ ] Test mentions and workflow slash commands.
-- [ ] Test message editing and Markdown conversion.
-- [ ] Test undo, redo, lists, links, and paste behavior.
+- [x] Test message editing and Markdown conversion.
+- [x] Test undo, redo, lists, and links.
+- [ ] Test browser paste behavior interactively.
 
 ### Tips
 
@@ -219,12 +222,14 @@ This checklist is ordered so each phase can be implemented, tested, reviewed, an
 
 ### `tiptap-markdown` 0.8 to 0.9
 
-- [ ] Upgrade to 0.9 for Tiptap 3 compatibility.
-- [ ] Compare Markdown output before and after.
-- [ ] Test headings, lists, links, code blocks, inline HTML, and empty documents.
-- [ ] Test Markdown-to-ProseMirror conversion in message actions.
-- [ ] Add regression fixtures for content users already have stored.
-- [ ] Open a follow-up task to migrate to official `@tiptap/markdown`.
+- [x] Upgrade to 0.9 for Tiptap 3 compatibility.
+- [x] Compare Markdown output before and after.
+- [x] Test headings, lists, links, code blocks, inline HTML, and empty documents.
+- [x] Test Markdown-to-ProseMirror conversion in message actions.
+- [x] Add regression fixtures for content users already have stored.
+- [x] Open a follow-up task to migrate to official `@tiptap/markdown`.
+
+**Follow-up:** Migrate from the maintenance-only `tiptap-markdown` package to official `@tiptap/markdown` in a separate phase. Compare parser and serializer fixtures before changing the production extension; do not combine that migration with another editor upgrade.
 
 ### Tips
 
