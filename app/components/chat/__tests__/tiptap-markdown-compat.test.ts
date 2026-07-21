@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import { Markdown } from 'tiptap-markdown';
+import { Markdown, type MarkdownStorage } from 'tiptap-markdown';
 
 const editors: Editor[] = [];
 
@@ -15,7 +15,10 @@ function createMarkdownEditor(content = '') {
 }
 
 function getMarkdown(editor: Editor): string {
-    return editor.storage.markdown.getMarkdown();
+    const storage = (
+        editor.storage as unknown as { markdown: MarkdownStorage }
+    ).markdown;
+    return storage.getMarkdown();
 }
 
 afterEach(() => {
