@@ -27,6 +27,8 @@ export type PluginContributionKind =
     | 'chat.tool.client'
     | 'chat.tool.server'
     | 'editor.extension'
+    | 'editor.inspector.panel'
+    | 'document.ai.action'
     | 'admin.extension';
 
 export interface PluginContribution<TDefinition = unknown> {

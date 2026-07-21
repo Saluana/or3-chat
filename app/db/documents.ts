@@ -26,6 +26,7 @@ import type {
 import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
 import type { TipTapDocument } from '~/types/database';
 import type { Post } from './schema';
+import { serializeDocumentFileHashes } from '~/utils/documents/document-content';
 
 /**
  * Type guard to check if a post is a document
@@ -63,6 +64,7 @@ export interface DocumentRow {
     updated_at: number; // seconds
     deleted: boolean;
     clock?: number;
+    file_hashes?: string | null;
 }
 
 /** Public facing record with content already parsed. */
@@ -86,6 +88,7 @@ export interface DocumentRecord {
     created_at: number;
     updated_at: number;
     deleted: boolean;
+    file_hashes?: string | null;
 }
 
 const DOCUMENT_TABLE = 'documents';
@@ -127,6 +130,7 @@ function toDocumentEntity(row: DocumentRow): DocumentEntity {
         content: row.content,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        file_hashes: row.file_hashes,
     };
 }
 
@@ -145,6 +149,7 @@ function documentEntityToRow(
             updated_at: entity.updated_at ?? nowSec(),
             deleted: false,
             clock: 0,
+            file_hashes: entity.file_hashes,
         } as DocumentRow);
 
     return {
@@ -157,6 +162,7 @@ function documentEntityToRow(
         postType: 'doc',
         deleted: fallback.deleted,
         clock: fallback.clock,
+        file_hashes: entity.file_hashes ?? fallback.file_hashes,
     };
 }
 
@@ -180,6 +186,9 @@ function buildDocumentUpdatePayload(
     };
     if (patch.title !== undefined) patchEntity.title = updatedRow.title;
     if (patch.content !== undefined) patchEntity.content = updatedRow.content;
+    if (patch.content !== undefined) {
+        patchEntity.file_hashes = updatedRow.file_hashes;
+    }
 
     return {
         existing: toDocumentEntity(existingRow),
@@ -246,6 +255,7 @@ function rowToRecord(row: DocumentRow): DocumentRecord {
         created_at: row.created_at,
         updated_at: row.updated_at,
         deleted: row.deleted,
+        file_hashes: row.file_hashes,
     };
 }
 
@@ -299,6 +309,7 @@ export async function createDocument(
         updated_at: nowSec(),
         deleted: false,
         clock: nextClock(),
+        file_hashes: serializeDocumentFileHashes(input.content),
     };
     const filteredEntity = await hooks.applyFilters(
         'db.documents.create:filter:input',
@@ -322,6 +333,7 @@ export async function createDocument(
         deleted: persistedRow.deleted,
         meta: '',
         clock: persistedRow.clock ?? 0,
+        file_hashes: persistedRow.file_hashes,
     };
     await dbTry(
         () => putDocumentPostRow(postRow),
@@ -368,6 +380,7 @@ export async function getDocument(
         updated_at: row.updated_at,
         deleted: row.deleted,
         clock: row.clock,
+        file_hashes: row.file_hashes,
     };
     const filteredEntity = await hooks.applyFilters(
         'db.documents.get:filter:output',
@@ -467,10 +480,11 @@ export async function updateDocument(
         updated_at: existing.updated_at,
         deleted: existing.deleted,
         clock: existing.clock,
+        file_hashes: existing.file_hashes,
     };
     const updatedRow: DocumentRow = {
         id: existingRow.id,
-        title: patch.title
+        title: patch.title !== undefined
             ? await resolveTitle(hooks, patch.title, {
                   phase: 'update',
                   id: existingRow.id,
@@ -478,7 +492,7 @@ export async function updateDocument(
                   existing: toDocumentEntity(existingRow),
               })
             : existingRow.title,
-        content: patch.content
+        content: patch.content !== undefined && patch.content !== null
             ? JSON.stringify(patch.content)
             : existingRow.content,
         postType: 'doc',
@@ -486,6 +500,10 @@ export async function updateDocument(
         updated_at: nowSec(),
         deleted: existingRow.deleted,
         clock: nextClock(existingRow.clock),
+        file_hashes:
+            patch.content !== undefined
+                ? serializeDocumentFileHashes(patch.content)
+                : existingRow.file_hashes,
     };
 
     const basePayload = buildDocumentUpdatePayload(
@@ -518,6 +536,7 @@ export async function updateDocument(
         deleted: persistedRow.deleted,
         meta: '',
         clock: persistedRow.clock ?? 0,
+        file_hashes: persistedRow.file_hashes,
     };
     await dbTry(
         () => putDocumentPostRow(postRow),
@@ -564,6 +583,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
         updated_at: existing.updated_at,
         deleted: existing.deleted,
         clock: existing.clock,
+        file_hashes: existing.file_hashes,
     };
     const payload: DbDeletePayload<DocumentEntity> = {
         entity: toDocumentEntity(existingRow),
@@ -588,6 +608,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
         deleted: updatedRow.deleted,
         meta: '',
         clock: updatedRow.clock,
+        file_hashes: updatedRow.file_hashes,
     };
     await dbTry(
         () => putDocumentPostRow(postRow, true),
@@ -627,6 +648,7 @@ export async function hardDeleteDocument(id: string): Promise<void> {
         updated_at: existing.updated_at,
         deleted: existing.deleted,
         clock: existing.clock,
+        file_hashes: existing.file_hashes,
     };
     const payload: DbDeletePayload<DocumentEntity> = {
         entity: toDocumentEntity(existingRow),

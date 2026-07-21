@@ -239,6 +239,7 @@ import {
     flush as flushDocument,
     newDocument as createNewDoc,
 } from '~/composables/documents/useDocumentsStore';
+import { captureDocumentEditor } from '~/composables/documents/useDocumentEditorSessions';
 import { usePaneDocuments } from '~/composables/documents/usePaneDocuments';
 import { useHeaderActions, type HeaderActionEntry } from '#imports';
 import type {
@@ -328,7 +329,10 @@ const {
 } = useMultiPane({
     initialThreadId: props.initialThreadId,
     maxPanes: 3,
-    onFlushDocument: (id) => flushDocument(id),
+    onFlushDocument: async (id) => {
+        await captureDocumentEditor(id);
+        await flushDocument(id);
+    },
     minPaneWidth: 280,
     maxPaneWidth: 2000,
 });
@@ -864,6 +868,7 @@ const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
     activePaneIndex,
     createNewDoc,
     flushDocument: async (id) => {
+        await captureDocumentEditor(id);
         await flushDocument(id); // central flush now emits saved
     },
 });

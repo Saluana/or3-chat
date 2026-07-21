@@ -213,6 +213,12 @@ export class Or3DB extends Dexie {
                         }
                     }
                 }));
+
+        // Version 14: Efficient lookup for internal document revision manifests
+        // and chunks stored in the already-synced posts table.
+        this.version(14).stores({
+            posts: 'id, title, postType, [postType+title], deleted, created_at, updated_at',
+        });
     }
 }
 

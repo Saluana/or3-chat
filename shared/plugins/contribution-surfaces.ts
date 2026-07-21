@@ -7,6 +7,8 @@ export const PLUGIN_CONTRIBUTION_SURFACES = [
     'thread-history-actions',
     'project-tree-actions',
     'editor-toolbar',
+    'editor-inspector-panels',
+    'document-ai-actions',
     'sidebar-sections',
     'pane-apps',
     'sidebar-pages',

@@ -1893,6 +1893,23 @@ export declare function useDocumentHistoryActions(): import("vue").ComputedRef<r
  */
 export declare function listRegisteredDocumentHistoryActionIds(): string[];
 
+// ---- app/composables/editor/useDocumentAiActions.ts ----
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
+export type DocumentAiScope = 'selection' | 'section' | 'document';
+export interface DocumentAiAction {
+    id: string;
+    label: string;
+    prompt: string;
+    icon?: string;
+    defaultScope?: DocumentAiScope;
+    order?: number;
+    pluginId?: string;
+    access?: PluginGatePolicy;
+}
+export declare function registerDocumentAiAction(action: DocumentAiAction): import("../_registry").RegistrationHandle;
+export declare function unregisterDocumentAiAction(id: string): void;
+export declare function useDocumentAiActions(): import("vue").ComputedRef<DocumentAiAction[]>;
+
 // ---- app/composables/editor/useEditorExtensionLoader.ts ----
 import type { Node, Mark, Extension } from '@tiptap/core';
 import type { EditorNode, EditorMark, EditorExtension } from './useEditorNodes';
@@ -2113,6 +2130,22 @@ export declare function createLazyMarkFactory(importFn: () => Promise<{
 export declare function createLazyExtensionFactory(importFn: () => Promise<{
     default: Extension;
 } | Extension>): LazyEditorExtensionFactory;
+
+// ---- app/composables/editor/useEditorInspectorPanels.ts ----
+import { type Component } from 'vue';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
+export interface EditorInspectorPanel {
+    id: string;
+    label: string;
+    icon?: string;
+    component: Component;
+    order?: number;
+    pluginId?: string;
+    access?: PluginGatePolicy;
+}
+export declare function registerEditorInspectorPanel(panel: EditorInspectorPanel): import("../_registry").RegistrationHandle;
+export declare function unregisterEditorInspectorPanel(id: string): void;
+export declare function useEditorInspectorPanels(): import("vue").ComputedRef<EditorInspectorPanel[]>;
 
 // ---- app/composables/editor/useEditorNodes.ts ----
 import type { Node, Mark, Extension } from '@tiptap/core';
@@ -2448,6 +2481,12 @@ export interface EditorToolbarButton {
     tooltip?: string;
     /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
     order?: number;
+    /** Visual group. Older registrations default to the plugin overflow group. */
+    group?: 'format' | 'insert' | 'history' | 'plugin-overflow' | string;
+    /** Priority within responsive overflow decisions. Higher stays visible longer. */
+    priority?: number;
+    /** Hint for compact layouts. Defaults to overflow for plugin buttons. */
+    responsive?: 'always' | 'compact' | 'overflow';
     /** Check if button should be active/highlighted. */
     isActive?: (editor: Editor) => boolean;
     /** Handler invoked on click. */
@@ -2552,8 +2591,14 @@ export * from './documents/useDocumentsStore';
 export * from './documents/useDocumentsList';
 export * from './documents/useDocumentHistoryActions';
 export * from './documents/usePaneDocuments';
+export * from './documents/useDocumentEditorSessions';
+export * from './documents/useDocumentInsights';
+export * from './documents/useDocumentAiSettings';
+export * from './documents/useDocumentAiAgent';
 export * from './editor/useEditorToolbar';
 export * from './editor/useEditorNodes';
+export * from './editor/useEditorInspectorPanels';
+export * from './editor/useDocumentAiActions';
 export * from './chat/useActivePrompt';
 export * from './chat/useAi';
 export * from './chat/useAiSettings';
@@ -4268,7 +4313,7 @@ import type { HookPayloadMap, FilesAttachInputPayload } from './hook-types';
  * Constraints:
  * - Keep this list stable; add only after a hook name is widely adopted
  */
-export type KnownHookKey = 'ui.chat.message:filter:outgoing' | 'ui.chat.message:filter:incoming' | 'ai.chat.model:filter:select' | 'ai.chat.messages:filter:input' | 'ai.chat.send:action:before' | 'ai.chat.send:action:after' | 'ai.chat.stream:action:delta' | 'ai.chat.stream:action:reasoning' | 'ai.chat.stream:action:complete' | 'ai.chat.stream:action:error' | 'ai.chat.retry:action:before' | 'ai.chat.retry:action:after' | 'ui.pane.active:action' | 'ui.pane.blur:action' | 'ui.pane.switch:action' | 'ui.pane.thread:filter:select' | 'ui.pane.thread:action:changed' | 'ui.pane.doc:filter:select' | 'ui.pane.doc:action:changed' | 'ui.pane.doc:action:saved' | 'ui.pane.msg:action:sent' | 'ui.pane.msg:action:received' | 'files.attach:filter:input' | 'sync.bootstrap:action:start' | 'sync.bootstrap:action:progress' | 'sync.bootstrap:action:complete' | 'sync.pull:action:received' | 'sync.pull:action:applied' | 'sync.pull:action:error' | 'sync.pull:action:after' | 'sync.subscription:action:statusChange' | 'sync.conflict:action:detected' | 'sync.op:action:captured' | 'sync.push:action:before' | 'sync.push:action:after' | 'sync.error:action' | 'sync.retry:action' | 'sync.queue:action:full' | 'sync.rescan:action:starting' | 'sync.rescan:action:progress' | 'sync.rescan:action:completed' | 'sync.stats:action' | 'notify:action:push' | 'notify:action:read' | 'notify:action:clicked' | 'notify:action:cleared' | 'notify:filter:before_store';
+export type KnownHookKey = 'ui.chat.message:filter:outgoing' | 'ui.chat.message:filter:incoming' | 'ai.chat.model:filter:select' | 'ai.chat.messages:filter:input' | 'ai.chat.send:action:before' | 'ai.chat.send:action:after' | 'ai.chat.stream:action:delta' | 'ai.chat.stream:action:reasoning' | 'ai.chat.stream:action:complete' | 'ai.chat.stream:action:error' | 'ai.chat.retry:action:before' | 'ai.chat.retry:action:after' | 'ai.document.edit:filter:request' | 'ai.document.edit:action:before' | 'ai.document.edit:action:after' | 'ai.document.edit:action:error' | 'ui.pane.active:action' | 'ui.pane.blur:action' | 'ui.pane.switch:action' | 'ui.pane.thread:filter:select' | 'ui.pane.thread:action:changed' | 'ui.pane.doc:filter:select' | 'ui.pane.doc:action:changed' | 'ui.pane.doc:action:saved' | 'ui.pane.msg:action:sent' | 'ui.pane.msg:action:received' | 'files.attach:filter:input' | 'sync.bootstrap:action:start' | 'sync.bootstrap:action:progress' | 'sync.bootstrap:action:complete' | 'sync.pull:action:received' | 'sync.pull:action:applied' | 'sync.pull:action:error' | 'sync.pull:action:after' | 'sync.subscription:action:statusChange' | 'sync.conflict:action:detected' | 'sync.op:action:captured' | 'sync.push:action:before' | 'sync.push:action:after' | 'sync.error:action' | 'sync.retry:action' | 'sync.queue:action:full' | 'sync.rescan:action:starting' | 'sync.rescan:action:progress' | 'sync.rescan:action:completed' | 'sync.stats:action' | 'notify:action:push' | 'notify:action:read' | 'notify:action:clicked' | 'notify:action:cleared' | 'notify:filter:before_store';
 /**
  * Purpose:
  * Enumerates Dexie tables that may emit DB-related hooks.
@@ -4462,6 +4507,20 @@ export interface AiRetryAfterPayload {
     newUserId?: string;
     newAssistantId?: string;
 }
+export interface DocumentAiEditRequestPayload {
+    documentId: string;
+    modelId: string;
+    prompt: string;
+    scope: 'selection' | 'section' | 'document';
+    context: string;
+    tokenEstimate: number;
+}
+export interface DocumentAiEditResultPayload {
+    request: DocumentAiEditRequestPayload;
+    operationCount?: number;
+    accepted?: boolean;
+    error?: unknown;
+}
 /** Current UI pane state (reuses the core MultiPane definition). */
 type PaneState = MultiPaneState;
 export interface UiPaneMsgBase {
@@ -4640,6 +4699,7 @@ export interface DocumentEntity {
     id: string;
     title?: string;
     content?: string;
+    file_hashes?: string | null;
     created_at?: number;
     updated_at?: number;
 }
@@ -4899,6 +4959,10 @@ export type CoreHookPayloadMap = {
     'ai.chat.stream:action:error': [AiStreamErrorPayload];
     'ai.chat.retry:action:before': [AiRetryBeforePayload];
     'ai.chat.retry:action:after': [AiRetryAfterPayload];
+    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];
+    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];
+    'ai.document.edit:action:after': [DocumentAiEditResultPayload];
+    'ai.document.edit:action:error': [DocumentAiEditResultPayload];
     'ui.pane.active:action': [UiPaneActivePayload];
     'ui.pane.blur:action': [UiPaneBlurPayload];
     'ui.pane.switch:action': [UiPaneSwitchPayload];

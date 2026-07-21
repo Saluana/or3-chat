@@ -46,6 +46,12 @@ export interface EditorToolbarButton {
     tooltip?: string;
     /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
     order?: number;
+    /** Visual group. Older registrations default to the plugin overflow group. */
+    group?: 'format' | 'insert' | 'history' | 'plugin-overflow' | string;
+    /** Priority within responsive overflow decisions. Higher stays visible longer. */
+    priority?: number;
+    /** Hint for compact layouts. Defaults to overflow for plugin buttons. */
+    responsive?: 'always' | 'compact' | 'overflow';
     /** Check if button should be active/highlighted. */
     isActive?: (editor: Editor) => boolean;
     /** Handler invoked on click. */

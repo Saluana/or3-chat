@@ -43,7 +43,14 @@ export interface TipTapDocument {
 /**
  * Supported post types in the posts table
  */
-export type PostType = 'doc' | 'prompt' | 'thread' | 'folder' | 'markdown';
+export type PostType =
+    | 'doc'
+    | 'prompt'
+    | 'thread'
+    | 'folder'
+    | 'markdown'
+    | 'or3:document-revision'
+    | 'or3:document-revision-chunk';
 
 /**
  * Base properties shared by all post types

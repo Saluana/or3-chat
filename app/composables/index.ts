@@ -14,10 +14,16 @@ export * from './documents/useDocumentsStore';
 export * from './documents/useDocumentsList';
 export * from './documents/useDocumentHistoryActions';
 export * from './documents/usePaneDocuments';
+export * from './documents/useDocumentEditorSessions';
+export * from './documents/useDocumentInsights';
+export * from './documents/useDocumentAiSettings';
+export * from './documents/useDocumentAiAgent';
 
 //Editor composables
 export * from './editor/useEditorToolbar';
 export * from './editor/useEditorNodes';
+export * from './editor/useEditorInspectorPanels';
+export * from './editor/useDocumentAiActions';
 
 // Chat composables
 export * from './chat/useActivePrompt';

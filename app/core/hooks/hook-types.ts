@@ -142,6 +142,22 @@ export interface AiRetryAfterPayload {
     newAssistantId?: string;
 }
 
+export interface DocumentAiEditRequestPayload {
+    documentId: string;
+    modelId: string;
+    prompt: string;
+    scope: 'selection' | 'section' | 'document';
+    context: string;
+    tokenEstimate: number;
+}
+
+export interface DocumentAiEditResultPayload {
+    request: DocumentAiEditRequestPayload;
+    operationCount?: number;
+    accepted?: boolean;
+    error?: unknown;
+}
+
 // Pane Hooks
 /** Current UI pane state (reuses the core MultiPane definition). */
 type PaneState = MultiPaneState;
@@ -355,6 +371,7 @@ export interface DocumentEntity {
     id: string;
     title?: string;
     content?: string;
+    file_hashes?: string | null;
     created_at?: number;
     updated_at?: number;
 }
@@ -737,6 +754,10 @@ export type CoreHookPayloadMap = {
     'ai.chat.stream:action:error': [AiStreamErrorPayload];
     'ai.chat.retry:action:before': [AiRetryBeforePayload];
     'ai.chat.retry:action:after': [AiRetryAfterPayload];
+    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];
+    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];
+    'ai.document.edit:action:after': [DocumentAiEditResultPayload];
+    'ai.document.edit:action:error': [DocumentAiEditResultPayload];
 
     // Pane Actions (now use named payloads)
     'ui.pane.active:action': [UiPaneActivePayload];

@@ -24,6 +24,15 @@ import {
 } from './schema';
 import type { PostEntity } from '../core/hooks/hook-types';
 
+export const INTERNAL_POST_TYPES = new Set([
+    'or3:document-revision',
+    'or3:document-revision-chunk',
+]);
+
+function isPublicPost(post: Post): boolean {
+    return !INTERNAL_POST_TYPES.has(post.postType);
+}
+
 // Convert Post schema type to PostEntity for hooks (where applicable)
 function toPostEntity(post: Post): PostEntity {
     return {
@@ -203,7 +212,7 @@ export function getPost(id: string) {
  */
 export function allPosts() {
     const hooks = useHooks();
-    return dbTry(() => getDb().posts.toArray(), {
+    return dbTry(() => getDb().posts.filter(isPublicPost).toArray(), {
         op: 'read',
         entity: 'posts',
         action: 'all',
@@ -230,7 +239,12 @@ export function searchPosts(term: string) {
     const hooks = useHooks();
     return dbTry(
         () =>
-            getDb().posts.filter((p) => p.title.toLowerCase().includes(q)).toArray(),
+            getDb().posts
+                .filter(
+                    (p) =>
+                        isPublicPost(p) && p.title.toLowerCase().includes(q)
+                )
+                .toArray(),
         { op: 'read', entity: 'posts', action: 'search' }
     ).then((res) =>
         res ? hooks.applyFilters('db.posts.search:filter:output', res) : []

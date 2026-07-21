@@ -67,6 +67,22 @@
       "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy-with-editor-visible-filter", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "void", "disposal": "id-only-public-api" }
     },
     {
+      "id": "registry.editor-inspector-panels",
+      "family": "editor inspector panels",
+      "sources": ["app/composables/editor/useEditorInspectorPanels.ts"],
+      "globalKeys": ["__or3EditorInspectorPanelsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "componentIdentity": "preserved", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy-with-access-filter", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.document-ai-actions",
+      "family": "document AI actions",
+      "sources": ["app/composables/editor/useDocumentAiActions.ts"],
+      "globalKeys": ["__or3DocumentAiActionsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy-with-access-filter", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
       "id": "registry.sidebar-pages",
       "family": "sidebar pages",
       "sources": ["app/composables/sidebar/useSidebarPages.ts", "app/composables/sidebar/registerSidebarPage.ts"],
