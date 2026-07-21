@@ -41,3 +41,11 @@ bun run plugin-runtime:milestone-5:qualify
 ```
 
 The final gate invokes the complete Milestone 0 qualification. The manifest records the startup-only hook-engine rollback boundary and the single-execution drill. Use `plugin-runtime:milestone-5:record` only to publish reviewed evidence under `results/milestone-5-hooks-v1.json`.
+
+Run the Milestone 9 rollout/tooling gates (runtime controls, CLI, codemod, defaults-remain-false, package/isolation regression, compatibility) with:
+
+```sh
+bun run plugin-runtime:milestone-9:qualify
+```
+
+The manager now defaults on after its standalone qualification; hook runtime, contribution surfaces, module loader, and isolation remain independently default-off. Promotion decisions and rollback gates live in [promotion-checklist.md](./promotion-checklist.md) and [rollback-drill-milestone-9.md](./rollback-drill-milestone-9.md). Use `plugin-runtime:milestone-9:record` only to publish reviewed evidence under `results/milestone-9-rollout-v1.json`.

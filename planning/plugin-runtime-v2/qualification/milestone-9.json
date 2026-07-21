@@ -1,0 +1,120 @@
+{
+    "schemaVersion": 1,
+    "qualificationVersion": "milestone-9-rollout-v1",
+    "milestone": "Milestone 9 — Rollout, tooling, and deprecation",
+    "entryEvidence": [
+        "shared/plugins/runtime-controls.ts",
+        "scripts/plugin-runtime/cli/index.ts",
+        "scripts/plugin-runtime/codemod-v1-private-imports.ts",
+        "scripts/plugin-runtime/qualify-milestone-9.ts",
+        "packages/plugin-sdk/templates/minimal-v2/or3.manifest.json",
+        "planning/plugin-runtime-v2/v1-support-and-migration.md",
+        "planning/plugin-runtime-v2/trust-model-and-safe-mode.md",
+        "planning/plugin-runtime-v2/qualification/promotion-checklist.md",
+        "planning/plugin-runtime-v2/qualification/rollback-drill-milestone-9.md",
+        "public/_documentation/plugins/runtime-v2-overview.md",
+        "app/composables/plugins/__tests__/manager-canary-rollback.test.ts",
+        "app/composables/plugins/__tests__/bundled-v1-manager-runtime.test.ts",
+        "public/_documentation/docmap.json"
+    ],
+    "gates": [
+        {
+            "id": "runtime-controls-and-cli",
+            "commands": [
+                [
+                    "bun",
+                    "x",
+                    "vitest",
+                    "run",
+                    "shared/plugins/__tests__/runtime-controls.test.ts",
+                    "scripts/__tests__/plugin-runtime-cli.test.ts",
+                    "scripts/__tests__/plugin-runtime-v1-codemod.test.ts"
+                ]
+            ]
+        },
+        {
+            "id": "v2-conformance-and-sdk",
+            "commands": [
+                ["bun", "run", "plugin-runtime:v2-conformance:check"],
+                ["bun", "run", "plugin-runtime:sdk:check"]
+            ]
+        },
+        {
+            "id": "package-and-isolation-regression",
+            "commands": [
+                ["bun", "run", "plugin-runtime:package-promotion:check"],
+                ["bun", "run", "plugin-runtime:isolation:check"]
+            ]
+        },
+        {
+            "id": "public-contracts",
+            "commands": [["bun", "run", "plugin-runtime:compatibility:check"]]
+        },
+        {
+            "id": "manager-only-default-promotion",
+            "commands": [
+                ["bun", "run", "scripts/plugin-runtime/check-milestone-9-defaults.ts"],
+                [
+                    "bun",
+                    "x",
+                    "vitest",
+                    "run",
+                    "app/composables/plugins/__tests__/manager-canary-rollback.test.ts",
+                    "app/composables/plugins/__tests__/bundled-v1-manager-runtime.test.ts"
+                ]
+            ]
+        },
+        {
+            "id": "frozen-v1-qualification",
+            "commands": [["bun", "run", "plugin-runtime:milestone-0:qualify"]]
+        }
+    ],
+    "rollback": {
+        "scope": "Set OR3_PLUGIN_RUNTIME_V2_ENABLED=false and restart to restore the V1 authority path. Hook Runtime V2, ModuleV2Loader, and isolation remain default-off and independently rollbackable.",
+        "procedure": [
+            "Confirm only the manager production default is true via check-milestone-9-defaults.",
+            "Set OR3_PLUGIN_RUNTIME_V2_ENABLED=false outside the plugin UI and restart before discovery.",
+            "Use safe-mode (OR3_DISABLE_NON_CORE_PLUGINS=true + restart) if non-core plugins must be blocked immediately.",
+            "Package pointer rollback uses server promotion preflight; it never claims incompatible migrated state was restored."
+        ],
+        "drill": "See rollback-drill-milestone-9.md. The automated manager rollback test restores the V1 import/register authority path with the startup flag false."
+    },
+    "releaseReport": {
+        "flags": {
+            "pluginRuntimeV2Enabled": true,
+            "hookEngineV2Enabled": false,
+            "pluginModuleLoaderV2Enabled": false,
+            "pluginIsolationEnabled": false,
+            "promotionStatus": "manager-promoted; hook/surfaces/module-loader/isolation independently evaluated and deferred"
+        },
+        "corpusVersions": {
+            "compatibilityLedger": "planning/plugin-runtime-v2/compatibility-ledger.json",
+            "externalV1": "tests/plugin-runtime/external-v1",
+            "v1Examples": "tests/plugin-runtime/v1-examples",
+            "v2Conformance": "tests/plugin-runtime/v2-conformance",
+            "sdkTemplate": "packages/plugin-sdk/templates/minimal-v2"
+        },
+        "benchmarks": [
+            "plugin-runtime:benchmarks:check",
+            "plugin-runtime:hooks-v2:benchmarks:check"
+        ],
+        "faultTests": [
+            "server/admin/plugins/__tests__/package-promotion.test.ts",
+            "server/admin/plugins/__tests__/package-promotion-e2e.test.ts",
+            "shared/plugins/isolation/__tests__",
+            "server/admin/plugins/isolation/__tests__"
+        ],
+        "rollbackDrills": [
+            "planning/plugin-runtime-v2/qualification/rollback-drill-milestone-9.md",
+            "planning/plugin-runtime-v2/qualification/manager-canary-rollback.md",
+            "planning/plugin-runtime-v2/qualification/shadow-rollback.md"
+        ],
+        "knownLifecycleLimitations": [
+            "trusted-host grants are not a sandbox",
+            "activation is not fleet-atomic across clients/processes",
+            "disable retains immutable package digests and host-managed settings/data",
+            "code rollback never claims incompatible migrated state was restored",
+            "V1 lifecycle coverage remains legacy-global-possible"
+        ]
+    }
+}

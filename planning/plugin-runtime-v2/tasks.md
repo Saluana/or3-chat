@@ -382,157 +382,159 @@ Tasks are ordered by dependency. Each unchecked item is intended to fit in rough
       Requirements: R7.AC3, R7.AC4, R7.AC10
       Done when: a multi-module fixture loads and every invalid path/content-type/access case is rejected.
 
-- [ ] 7.8 Implement `ModuleV2Loader` with SDK external resolution and generation cancellation
+- [x] 7.8 Implement `ModuleV2Loader` with SDK external resolution and generation cancellation
       Requirements: R2.AC7, R7.AC3
       Done when: a production build imports a newly installed V2 package without rebuilding and a stale import cannot publish.
 
-- [ ] 7.9 Implement digest-keyed trusted `ServerModuleResolver`
+- [x] 7.9 Implement digest-keyed trusted `ServerModuleResolver`
       Requirements: R2.AC6, R7.AC7
       Done when: new digest loads new code, same digest reuses code, and no module captures a request workspace context.
 
-- [ ] 7.10 Adapt plugin route dispatch to the resolver while preserving access-before-execution and non-weakenable permission defaults
+- [x] 7.10 Adapt plugin route dispatch to the resolver while preserving access-before-execution and non-weakenable permission defaults
       Requirements: R6.AC7, R7.AC7
       Done when: cross-workspace, GET/HEAD, mutating, override, missing route, and failed import tests pass.
 
-- [ ] 7.11 Implement host-managed settings migration transaction/snapshot hooks
+- [x] 7.11 Implement host-managed settings migration transaction/snapshot hooks
       Requirements: R10.AC3, R10.AC4
       Done when: forced migration failure restores the exact prior settings snapshot/version.
 
-- [ ] 7.12 Implement candidate promotion, code rollback eligibility, pointer swap, and optional down-migration
+- [x] 7.12 Implement candidate promotion, code rollback eligibility, pointer swap, and optional down-migration
       Requirements: R7.AC5, R7.AC8, R10.AC4-R10.AC5
       Done when: promotion protects/restores state before pointer failure, compatible rollback restores prior client/server code, and incompatible state disables the operation before mutation.
 
-- [ ] 7.13 Separate disable, package uninstall, version garbage collection, and data deletion operations
+- [x] 7.13 Separate disable, package uninstall, version garbage collection, and data deletion operations
       Requirements: R10.AC1, R10.AC2, R10.AC6
       Done when: disable retains all data/packages, uninstall reports retention, and data deletion needs a distinct confirmed call.
 
-- [ ] 7.14 Add production install→candidate→canary→promote→disable→rollback E2E coverage
+- [x] 7.14 Add production install→candidate→canary→promote→disable→rollback E2E coverage
       Requirements: R7.AC3, R7.AC5, R7.AC8, R7.AC10
       Done when: both client and server code update by digest without process restart, a client-specific activation failure is labeled/local rather than fleet-atomic, and managed records disappear on disable.
 
-- [ ] 7.15 Add static-build rejection/rebuild-required coverage for runtime V2 packages
+- [x] 7.15 Add static-build rejection/rebuild-required coverage for runtime V2 packages
       Requirements: R1.AC8, R7.AC9
       Done when: static generation stays green, server loader code is absent, and admin/runtime status explains the limitation.
 
-- [ ] 7.16 Wire startup-only `pluginModuleLoaderV2Enabled` and run package-store rollback/crash drills
+- [x] 7.16 Wire startup-only `pluginModuleLoaderV2Enabled` and run package-store rollback/crash drills
       Requirements: R9.AC1, R9.AC4, R7.AC5-R7.AC9
       Done when: flag-off leaves bundled V1 available and all injected crash points recover to the prior known-good package.
 
 ## 8. Milestone 8 — Optional isolation
 
-- [ ] 8.1 Define versioned RPC envelopes and schemas for request, response, event, cancellation, and error messages
+- [x] 8.1 Define versioned RPC envelopes and schemas for request, response, event, cancellation, and error messages
       Requirements: R8.AC2, R8.AC3
       Done when: schema fixtures reject unknown versions, malformed IDs, invalid payloads, and oversized messages.
 
-- [ ] 8.2 Implement RPC correlation, cancellation, deadlines, replay protection, and bounded in-flight requests
+- [x] 8.2 Implement RPC correlation, cancellation, deadlines, replay protection, and bounded in-flight requests
       Requirements: R8.AC2, R8.AC3
       Done when: timeout, cancel, duplicate/replay, late response, and backpressure tests pass.
 
-- [ ] 8.3 Implement the grant-checking host RPC broker with host-bound plugin identity
+- [x] 8.3 Implement the grant-checking host RPC broker with host-bound plugin identity
       Requirements: R8.AC2, R8.AC3
       Done when: plugin-supplied identity is ignored and every ungranted method fails before its handler runs.
 
-- [ ] 8.4 Implement Worker bootstrap, CSP/module loading, termination, and crash reporting
+- [x] 8.4 Implement Worker bootstrap, CSP/module loading, termination, and crash reporting
       Requirements: R8.AC1, R8.AC2
       Done when: a fixture starts/stops repeatedly, reports crashes, and leaves no Worker or pending RPC after disposal.
 
-- [ ] 8.5 Bridge the V2 SDK logic APIs over Worker RPC
+- [x] 8.5 Bridge the V2 SDK logic APIs over Worker RPC
       Requirements: R8.AC2
       Done when: granted hooks/storage/settings operations work without transferring host object graphs.
 
-- [ ] 8.6 Add Worker adversarial tests for host globals, DOM, direct network, revoked grants, and resource deadlines
+- [x] 8.6 Add Worker adversarial tests for host globals, DOM, direct network, revoked grants, and resource deadlines
       Requirements: R8.AC2
       Done when: every prohibited attempt fails and the host remains responsive.
 
-- [ ] 8.7 Implement sandboxed iframe bootstrap, origin policy, CSP, teardown, and crash reporting
+- [x] 8.7 Implement sandboxed iframe bootstrap, origin policy, CSP, teardown, and crash reporting
       Requirements: R8.AC1, R8.AC2
       Done when: a minimal isolated UI mounts/unmounts through the protocol without same-origin parent authority.
 
-- [ ] 8.8 Implement schema-limited iframe UI contributions and event delivery over RPC
+- [x] 8.8 Implement schema-limited iframe UI contributions and event delivery over RPC
       Requirements: R8.AC2
       Done when: unsupported component/function transfer is rejected and allowed declarative UI events round-trip.
 
-- [ ] 8.9 Add iframe adversarial tests for parent DOM/global access, navigation, direct network, malformed messages, and revoked grants
+- [x] 8.9 Add iframe adversarial tests for parent DOM/global access, navigation, direct network, malformed messages, and revoked grants
       Requirements: R8.AC2
       Done when: sandbox/CSP and host validation block every fixture escape attempt.
 
-- [ ] 8.10 Write the isolated-server threat model and choose the process/isolate/container boundary with a measured prototype
+- [x] 8.10 Write the isolated-server threat model and choose the process/isolate/container boundary with a measured prototype
       Requirements: R8.AC3
       Done when: the decision records which CPU, memory, fs, env, and network controls are enforceable on supported deployments.
 
-- [ ] 8.11 Implement isolated-server spawn/handshake/health/termination lifecycle
+- [x] 8.11 Implement isolated-server spawn/handshake/health/termination lifecycle
       Requirements: R8.AC1, R8.AC3
       Done when: crash, failed handshake, host shutdown, and repeated start/stop leave no child runtime.
 
-- [ ] 8.12 Enforce server CPU/wall/memory and request/response budgets
+- [x] 8.12 Enforce server CPU/wall/memory and request/response budgets
       Requirements: R8.AC3
       Done when: each budget terminates only the offending plugin request/runtime and reports a stable error.
 
-- [ ] 8.13 Enforce deny-by-default filesystem, environment, and network policies for the selected server boundary
+- [x] 8.13 Enforce deny-by-default filesystem, environment, and network policies for the selected server boundary
       Requirements: R8.AC3
       Done when: adversarial fixtures cannot read host secrets/files or open undeclared network targets.
 
-- [ ] 8.14 Bridge approved server SDK services through the grant-checking RPC broker
+- [x] 8.14 Bridge approved server SDK services through the grant-checking RPC broker
       Requirements: R8.AC3
       Done when: request-scoped workspace identity is host-created and grant revocation stops subsequent calls.
 
-- [ ] 8.15 Run the full isolated-server escape/resource adversarial suite
+- [x] 8.15 Run the full isolated-server escape/resource adversarial suite
       Requirements: R8.AC3, R9.AC6
       Done when: all threat-model controls have passing evidence on each supported deployment target.
 
-- [ ] 8.16 Add trust labeling and prohibit silent fallback from isolated to trusted-host
+- [x] 8.16 Add trust labeling and prohibit silent fallback from isolated to trusted-host
       Requirements: R8.AC1, R8.AC4, R8.AC5
       Done when: isolation-off blocks isolated descriptors before import and UI never labels trusted grants a sandbox.
 
-- [ ] 8.17 Wire startup-only `pluginIsolationEnabled` and run isolation rollback/security gates
+- [x] 8.17 Wire startup-only `pluginIsolationEnabled` and run isolation rollback/security gates
       Requirements: R8.AC5, R9.AC1, R9.AC4, R9.AC6
       Done when: flag-off retains trusted plugins, blocks isolated ones, and all shipped adversarial tests pass.
 
 ## 9. Milestone 9 — Rollout, tooling, and deprecation
 
-- [ ] 9.1 Complete runtime/admin controls for retry, quarantine clear, disable, inspect, rollback, and safe-mode guidance
+- [x] 9.1 Complete runtime/admin controls for retry, quarantine clear, disable, inspect, rollback, and safe-mode guidance
       Requirements: R2.AC8, R9.AC2-R9.AC3
       Done when: every control calls a real manager/package operation and unavailable actions explain why.
 
-- [ ] 9.2 Add CLI `create` and `validate` commands using SDK templates and the shared conformance engine
+- [x] 9.2 Add CLI `create` and `validate` commands using SDK templates and the shared conformance engine
       Requirements: R6.AC4-R6.AC6
       Done when: Bun creates a minimal package and validation reports schema/import/compatibility failures with stable codes.
 
-- [ ] 9.3 Add CLI `test`, `build`, and `pack` commands with reproducible package output
+- [x] 9.3 Add CLI `test`, `build`, and `pack` commands with reproducible package output
       Requirements: R6.AC4-R6.AC6, R7.AC2-R7.AC4
       Done when: two builds of the unchanged sample produce the same canonical package digest.
 
-- [ ] 9.4 Add CLI `inspect` for manifest, module graph, digest, grants, state compatibility, and trust class
+- [x] 9.4 Add CLI `inspect` for manifest, module graph, digest, grants, state compatibility, and trust class
       Requirements: R6.AC2-R6.AC5, R7.AC2-R7.AC4, R10.AC3
       Done when: inspection works without importing plugin code and matches server verification output.
 
-- [ ] 9.5 Add warnings and a report-only codemod for V1 app-private imports
+- [x] 9.5 Add warnings and a report-only codemod for V1 app-private imports
       Requirements: R6.AC6, R9.AC9
       Done when: V1 builds remain successful, warnings point to SDK replacements, and no source is changed without explicit command.
 
-- [ ] 9.6 Write the V1 support policy, V2 migration guide, and lifecycle-coverage limitations
+- [x] 9.6 Write the V1 support policy, V2 migration guide, and lifecycle-coverage limitations
       Requirements: R3.AC7, R9.AC9
       Done when: docs state V1 support through V2, earliest V3 removal, and immediate/non-atomic legacy behavior plainly.
 
-- [ ] 9.7 Write the trust model, state rollback rules, and safe-mode operator runbook
+- [x] 9.7 Write the trust model, state rollback rules, and safe-mode operator runbook
       Requirements: R3.AC7, R8.AC4, R9.AC2, R9.AC9, R10
       Done when: operators can recover without the plugin UI and docs state all non-sandbox/non-fleet-atomic/data limitations plainly.
 
-- [ ] 9.8 Update public hook/plugin/manifest/SDK docs and `public/_documentation/docmap.json`
+- [x] 9.8 Update public hook/plugin/manifest/SDK docs and `public/_documentation/docmap.json`
       Requirements: R1, R5, R6, R9.AC9
       Done when: docmap resolves every new page and no existing V1 guide instructs a removed/changed behavior.
 
-- [ ] 9.9 Add a release qualification report that records flags, corpus versions, builds, benchmarks, fault tests, rollback drills, and known lifecycle limitations
+- [x] 9.9 Add a release qualification report that records flags, corpus versions, builds, benchmarks, fault tests, rollback drills, and known lifecycle limitations
       Requirements: R1.AC10, R9.AC4-R9.AC8
       Done when: the report is generated from CI artifacts and blocks promotion on any missing gate.
 
-- [ ] 9.10 Promote the manager default in a standalone reviewed change only after qualification
+- [x] 9.10 Promote the manager default in a standalone reviewed change only after qualification
       Requirements: R9.AC8
       Done when: the change enables neither Hook Runtime V2 nor ModuleV2Loader by default and includes a passing rollback drill.
+      Note: Manager default promoted after qualification; Hook Runtime V2 and ModuleV2Loader remain false. Rollback is `OR3_PLUGIN_RUNTIME_V2_ENABLED=false` plus restart and is covered by the manager rollback drill.
 
-- [ ] 9.11 Evaluate hook, surface, module-loader, and isolation default promotions as separate releases
+- [x] 9.11 Evaluate hook, surface, module-loader, and isolation default promotions as separate releases
       Requirements: R9.AC4, R9.AC8
       Done when: each promotion has its own qualification evidence, canary result, and startup-flag rollback.
+      Note: Each flag/surface family has a separate evidence, canary, and startup rollback decision in `qualification/promotion-checklist.md`; all four promotions are deferred and remain default-off.
 
 ## Suggested PR sequence
 

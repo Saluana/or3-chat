@@ -528,7 +528,7 @@ describe('buildOr3CloudConfigFromEnv', () => {
 
     it('parses startup-only manager and workspace canary flags', () => {
         const defaults = buildOr3CloudConfigFromEnv({});
-        expect(defaults.admin?.pluginRuntimeV2Enabled).toBe(false);
+        expect(defaults.admin?.pluginRuntimeV2Enabled).toBe(true);
         expect(defaults.admin?.pluginRuntimeV2WorkspaceIds).toEqual([]);
 
         const configured = buildOr3CloudConfigFromEnv({
@@ -541,6 +541,11 @@ describe('buildOr3CloudConfigFromEnv', () => {
             'workspace-b',
         ]);
         expect(configured.admin?.pluginContributionV2Surfaces).toEqual([]);
+
+        const rolledBack = buildOr3CloudConfigFromEnv({
+            OR3_PLUGIN_RUNTIME_V2_ENABLED: 'false',
+        });
+        expect(rolledBack.admin?.pluginRuntimeV2Enabled).toBe(false);
     });
 
     it('parses the startup-only contribution surface allowlist', () => {
@@ -563,6 +568,17 @@ describe('buildOr3CloudConfigFromEnv', () => {
             buildOr3CloudConfigFromEnv({
                 OR3_HOOK_ENGINE_V2_ENABLED: 'true',
             }).admin?.hookEngineV2Enabled,
+        ).toBe(true);
+    });
+
+    it('parses the startup-only plugin isolation flag', () => {
+        expect(
+            buildOr3CloudConfigFromEnv({}).admin?.pluginIsolationEnabled,
+        ).toBe(false);
+        expect(
+            buildOr3CloudConfigFromEnv({
+                OR3_PLUGIN_ISOLATION_ENABLED: 'true',
+            }).admin?.pluginIsolationEnabled,
         ).toBe(true);
     });
 

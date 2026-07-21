@@ -32,7 +32,9 @@
             <div class="rounded border border-[var(--md-outline-variant)] p-3">
                 <div class="font-semibold">Persisted package state</div>
                 <div class="mt-1 opacity-75">
-                    Not available until the V2 package catalog ships
+                    Disable/rollback require server package lifecycle/promotion
+                    surfaces; this client explains unavailability instead of
+                    inventing fleet status
                 </div>
             </div>
         </div>
@@ -49,9 +51,19 @@
                         : 'V1 only (observer disabled)'
                 }}
             </UBadge>
-            <UBadge color="neutral" variant="subtle"
-                >Module loader: bundled-v1</UBadge
+            <UBadge
+                :color="moduleLoaderV2Status.packagesSupported ? 'success' : 'neutral'"
+                variant="subtle"
             >
+                Module loader:
+                {{
+                    moduleLoaderV2Status.packagesSupported
+                        ? 'module-v2'
+                        : moduleLoaderV2Status.reason === 'static-build-unsupported'
+                          ? 'static unsupported'
+                          : 'bundled-v1'
+                }}
+            </UBadge>
             <UBadge
                 :color="hookEngineVersion === 'v2' ? 'success' : 'neutral'"
                 variant="subtle"
@@ -185,7 +197,11 @@
                         {{ record.hookCount }} (shadow-unattributed)
                     </dd>
                     <dt class="opacity-65">Retry / rollback</dt>
-                    <dd>Not owned in shadow mode; V1 remains authoritative</dd>
+                    <dd>
+                        Shadow records are observe-only. Use Runtime controls
+                        with the V2 manager for retry/quarantine; package
+                        rollback stays on the server promotion service
+                    </dd>
                 </dl>
             </details>
         </div>
@@ -195,6 +211,78 @@
         >
             No active V1 generation has been observed in this client.
         </p>
+
+        <details
+            class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
+            open
+        >
+            <summary class="cursor-pointer font-medium">
+                Runtime controls ({{ controls.length }})
+            </summary>
+            <p class="mt-2 opacity-70">
+                Controls call real manager/package operations when available.
+                Unavailable actions explain why. This panel is not fleet-wide.
+            </p>
+            <div class="mt-3 space-y-2">
+                <div
+                    v-for="control in controls"
+                    :key="control.id"
+                    class="rounded bg-[var(--md-surface-container-low)] p-2"
+                >
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <div class="font-medium">{{ control.label }}</div>
+                            <div class="opacity-75">{{ control.description }}</div>
+                            <div class="mt-1 opacity-65">
+                                Scope: {{ control.scope }} ·
+                                {{
+                                    control.availability.available
+                                        ? 'available'
+                                        : 'unavailable'
+                                }}
+                            </div>
+                            <div
+                                v-if="control.availability.reason"
+                                class="mt-1 opacity-70"
+                            >
+                                {{ control.availability.reason }}
+                            </div>
+                        </div>
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="soft"
+                            :disabled="controlBusy === control.id"
+                            @click="runControl(control.id)"
+                        >
+                            {{
+                                control.availability.available ? 'Run' : 'Explain'
+                            }}
+                        </UButton>
+                    </div>
+                </div>
+            </div>
+            <p
+                v-if="controlMessage"
+                class="mt-3 rounded border border-[var(--md-outline-variant)] p-2"
+                :class="
+                    controlMessage.status === 'failed'
+                        ? 'text-[var(--md-error)]'
+                        : ''
+                "
+            >
+                {{ controlMessage.controlId }}:
+                {{ controlMessage.message }}
+            </p>
+            <div v-if="safeModeSteps.length" class="mt-3 space-y-1 opacity-80">
+                <div class="font-medium">Safe-mode steps</div>
+                <ol class="list-decimal space-y-1 pl-4">
+                    <li v-for="(step, index) in safeModeSteps" :key="index">
+                        {{ step }}
+                    </li>
+                </ol>
+            </div>
+        </details>
 
         <details
             class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
@@ -230,6 +318,14 @@
 import { getShadowPluginManager } from '~/composables/plugins/shadow-plugin-manager';
 import { getBundledV1WorkspaceManager } from '~/composables/plugins/bundled-v1-manager-runtime';
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { resolveModuleLoaderV2Status } from '~~/shared/plugins/module-loader-v2-status';
+import {
+    executeRuntimeControl,
+    listRuntimeControls,
+    type RuntimeControlId,
+    type RuntimeControlResult,
+} from '~~/shared/plugins/runtime-controls';
+import type { Sha256 } from '~~/shared/plugins/runtime-descriptor';
 
 const runtimeConfig = useRuntimeConfig();
 const shadowObserverEnabled =
@@ -257,6 +353,17 @@ const managerV2Enabled =
 const hookEngineV2Enabled =
     (runtimeConfig.public as { admin?: { hookEngineV2Enabled?: boolean } })
         .admin?.hookEngineV2Enabled === true;
+const pluginModuleLoaderV2Enabled =
+    (
+        runtimeConfig.public as {
+            admin?: { pluginModuleLoaderV2Enabled?: boolean };
+        }
+    ).admin?.pluginModuleLoaderV2Enabled === true;
+const moduleLoaderV2Status = resolveModuleLoaderV2Status({
+    enabled: pluginModuleLoaderV2Enabled,
+    mode: ssrAuthEnabled ? 'ssr' : 'static',
+    safeMode: safeModeEnabled,
+});
 const hookEngineVersion =
     (globalThis as { __NUXT_HOOKS_VERSION__?: 'v1' | 'v2' })
         .__NUXT_HOOKS_VERSION__ ?? (hookEngineV2Enabled ? 'v2' : 'v1');
@@ -276,12 +383,55 @@ const contributionSurfaces = getContributionSurfaceSelection().listSelected();
 const contributionSurfaceLabel = contributionSurfaces.length
     ? contributionSurfaces.join(', ')
     : 'V1 only';
+const selectedDescriptorKey = shallowRef<Sha256 | undefined>(undefined);
+const controlMessage = shallowRef<RuntimeControlResult | null>(null);
+const controlBusy = shallowRef<RuntimeControlId | null>(null);
+const safeModeSteps = shallowRef<string[]>([]);
+const controls = computed(() =>
+    listRuntimeControls({
+        managerV2Enabled,
+        safeModeEnabled,
+        manager: managerV2,
+        descriptorKey: selectedDescriptorKey.value,
+    })
+);
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
 function refresh() {
     records.value = manager?.listRecords() ?? [];
     divergences.value = manager?.listDivergences() ?? [];
     managerV2Records.value = managerV2?.listRecords() ?? [];
+    if (!selectedDescriptorKey.value && managerV2Records.value[0]) {
+        selectedDescriptorKey.value =
+            managerV2Records.value[0].descriptor.descriptorKey;
+    }
+}
+
+async function runControl(controlId: RuntimeControlId) {
+    controlBusy.value = controlId;
+    try {
+        const result = await executeRuntimeControl(controlId, {
+            managerV2Enabled,
+            safeModeEnabled,
+            manager: managerV2,
+            descriptorKey: selectedDescriptorKey.value,
+        });
+        controlMessage.value = result;
+        if (
+            result.status === 'ok' &&
+            result.detail &&
+            typeof result.detail === 'object' &&
+            'steps' in result.detail &&
+            Array.isArray((result.detail as { steps: unknown }).steps)
+        ) {
+            safeModeSteps.value = (
+                result.detail as { steps: string[] }
+            ).steps.slice();
+        }
+        refresh();
+    } finally {
+        controlBusy.value = null;
+    }
 }
 
 onMounted(() => {

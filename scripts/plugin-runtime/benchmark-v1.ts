@@ -157,8 +157,9 @@ function calibratedRepetitions(testCase: BenchmarkCase): number {
 function benchmark(
     testCase: BenchmarkCase,
     budgetClass: BudgetClass,
+    fixedRepetitions?: number,
 ): BenchmarkResult {
-    const repetitions = calibratedRepetitions(testCase);
+    const repetitions = fixedRepetitions ?? calibratedRepetitions(testCase);
     for (let sample = 0; sample < budgets.measurement.warmupSamples; sample++) {
         const state = testCase.create();
         timedRun(state, repetitions);
@@ -481,8 +482,21 @@ if (selectedRunnerMismatches.length) {
     );
 }
 
+const checkBaseline =
+    mode === '--check'
+        ? (JSON.parse(
+              readFileSync(baselinePath, 'utf8'),
+          ) as BenchmarkArtifact)
+        : undefined;
+const checkRepetitions = new Map(
+    checkBaseline?.results.map((result) => [result.id, result.repetitions]) ?? [],
+);
 const results = cases.map((testCase) =>
-    benchmark(testCase, configured.get(testCase.id)!),
+    benchmark(
+        testCase,
+        configured.get(testCase.id)!,
+        checkRepetitions.get(testCase.id),
+    ),
 );
 const artifact: BenchmarkArtifact = {
     schemaVersion: 1,
@@ -500,10 +514,7 @@ if (mode === '--record') {
         `[plugin-runtime-benchmarks] recorded ${relative(repoRoot, baselinePath)}`,
     );
 } else if (mode === '--check') {
-    const baseline = JSON.parse(
-        readFileSync(baselinePath, 'utf8'),
-    ) as BenchmarkArtifact;
-    checkResults(artifact, baseline);
+    checkResults(artifact, checkBaseline!);
     console.log(
         `[plugin-runtime-benchmarks] ${results.length} workloads are within the Milestone 0 budgets`,
     );

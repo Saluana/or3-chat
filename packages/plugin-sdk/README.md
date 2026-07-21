@@ -13,3 +13,16 @@ The default export surface provides:
 The host owns context construction, plugin identity, generation, grants, cancellation, client scoping, and cleanup. Plugin-facing client calls never accept a plugin or workspace identity parameter.
 
 Plugin packages can import `@or3/plugin-sdk/testing` for the local fake host. It supports activation, reviewed-grant denial, feature negotiation, one-shot service failures, stale generations, and cleanup/activation-failure assertions without importing OR3 application internals.
+
+## Scaffold and validate
+
+From the OR3 Chat repo:
+
+```sh
+bun run plugin-runtime:cli -- create --id or3.example --dir ./example
+bun run plugin-runtime:cli -- validate ./example
+bun run plugin-runtime:cli -- pack ./example
+bun run plugin-runtime:cli -- inspect ./example
+```
+
+The `create` command copies `packages/plugin-sdk/templates/minimal-v2`.

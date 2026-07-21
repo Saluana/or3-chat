@@ -17,7 +17,7 @@
                     "name": "plugin-quickstart.md",
                     "path": "/start/plugin-quickstart",
                     "category": "Tutorial",
-                    "summary": "Hands-on tutorial showing how to create plugins for OR3. Covers dashboard pages, chat message actions, sidebar extensions, installation methods (file upload, URL import, API), and the installable package contract with complete working examples and best practices."
+                    "summary": "Hands-on tutorial showing how to create V1 plugins for OR3. Covers dashboard pages, chat message actions, sidebar extensions, installation methods (file upload, URL import, API), and the installable package contract. Points to Plugin Runtime V2 SDK/docs for digest-addressed packages while keeping V1 APIs supported."
                 },
                 {
                     "name": "development-setup.md",
@@ -305,7 +305,7 @@
                     "name": "hooks.md",
                     "path": "/hooks/hooks",
                     "category": "Core",
-                    "summary": "Lightweight hook engine powering OR3's action/filter system with priority scheduling, async support, and diagnostics. Register side-effect listeners (actions) or value transformers (filters), match with wildcards, and track execution timing."
+                    "summary": "Lightweight hook engine powering OR3's action/filter system with priority scheduling, async support, and diagnostics. Register side-effect listeners (actions) or value transformers (filters), match with wildcards, and track execution timing. Notes Hook Runtime V2 startup selection and SDK context.hooks for V2 packages."
                 },
                 {
                     "name": "typed-hooks.md",
@@ -798,6 +798,42 @@
                     "path": "/cloud/troubleshooting",
                     "category": "Guide",
                     "summary": "Comprehensive troubleshooting guide for OR3 Cloud features. Covers authentication issues (login, session persistence), sync problems (changes not syncing, conflict notifications, bootstrap delays), storage failures (uploads, downloads, quotas), notification issues, and build/deployment problems. Includes diagnostic checklists, debug logging, and common error messages."
+                }
+            ]
+        },
+        {
+            "title": "Plugins",
+            "path": "/plugins",
+            "files": [
+                {
+                    "name": "runtime-v2-overview.md",
+                    "path": "/plugins/runtime-v2-overview",
+                    "category": "Guide",
+                    "summary": "Overview of Plugin Runtime V2: frozen V1 compatibility, digest-addressed packages, @or3/plugin-sdk authoring, CLI tooling, operator limitations (non-sandbox trusted-host, non-fleet-atomic activation, data retention on disable), and default-off startup flags."
+                },
+                {
+                    "name": "v1-support-and-migration.md",
+                    "path": "/plugins/v1-support-and-migration",
+                    "category": "Guide",
+                    "summary": "V1 support policy through the V2 line, earliest V3 removal posture, migration steps to Manifest V2 / SDK packages, import replacement map, and lifecycle-coverage limitations."
+                },
+                {
+                    "name": "trust-and-safe-mode.md",
+                    "path": "/plugins/trust-and-safe-mode",
+                    "category": "Operations",
+                    "summary": "Trust classes (trusted-host vs isolated), state rollback rules, and the safe-mode operator runbook using OR3_DISABLE_NON_CORE_PLUGINS without the plugin UI."
+                },
+                {
+                    "name": "plugin-sdk.md",
+                    "path": "/plugins/plugin-sdk",
+                    "category": "Reference",
+                    "summary": "Authoring reference for @or3/plugin-sdk: defineOr3Plugin, host-created PluginContext, mediated clients, testing harness, and CLI validate/create commands."
+                },
+                {
+                    "name": "manifest-v2.md",
+                    "path": "/plugins/manifest-v2",
+                    "category": "Reference",
+                    "summary": "Manifest V2 contract: engines, runtime entrypoints, grants, trust, settings/stateCompatibility, and canonical package digests via plugin-runtime CLI inspect/pack."
                 }
             ]
         }

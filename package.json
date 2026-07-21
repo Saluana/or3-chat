@@ -53,6 +53,10 @@
         "plugin-runtime:milestone-4:record": "bun run scripts/plugin-runtime/qualify-milestone-4.ts --record",
         "plugin-runtime:milestone-5:qualify": "bun run scripts/plugin-runtime/qualify-milestone-5.ts",
         "plugin-runtime:milestone-5:record": "bun run scripts/plugin-runtime/qualify-milestone-5.ts --record",
+        "plugin-runtime:milestone-9:qualify": "bun run scripts/plugin-runtime/qualify-milestone-9.ts",
+        "plugin-runtime:milestone-9:record": "bun run scripts/plugin-runtime/qualify-milestone-9.ts --record",
+        "plugin-runtime:cli": "bun run scripts/plugin-runtime/cli/index.ts",
+        "plugin-runtime:v1-imports:warn": "bun run scripts/plugin-runtime/codemod-v1-private-imports.ts",
         "plugin-runtime:contracts:check": "bun x tsc --project tests/plugin-runtime/contracts/tsconfig.json",
         "plugin-runtime:sdk:check": "bun x tsc --project packages/plugin-sdk/tsconfig.json && bun x tsc --project tests/plugin-runtime/sdk-minimal/tsconfig.json",
         "plugin-runtime:v2-conformance:check": "bun run scripts/plugin-runtime/check-v2-package-conformance.ts tests/plugin-runtime/v2-conformance/valid && bun x vitest run scripts/__tests__/plugin-runtime-v2-conformance.test.ts",
@@ -64,6 +68,12 @@
         "plugin-runtime:package-candidate:check": "bun x vitest run server/admin/plugins/__tests__/package-candidate.test.ts server/admin/plugins/__tests__/package-pointer-store.test.ts server/admin/plugins/__tests__/package-store.test.ts",
         "plugin-runtime:package-canary:check": "bun x vitest run server/admin/plugins/__tests__/package-candidate-canary.test.ts server/admin/plugins/__tests__/package-candidate.test.ts",
         "plugin-runtime:package-assets:check": "bun x vitest run server/admin/plugins/__tests__/package-assets.test.ts",
+        "plugin-runtime:module-v2-loader:check": "bun x vitest run shared/plugins/__tests__/module-v2-loader.test.ts shared/plugins/__tests__/module-loader-v2-status.test.ts shared/plugins/__tests__/route-permissions.test.ts",
+        "plugin-runtime:server-module-resolver:check": "bun x vitest run server/admin/plugins/__tests__/server-module-resolver.test.ts server/api/plugins/__tests__/dispatcher.test.ts",
+        "plugin-runtime:package-promotion:check": "bun x vitest run server/admin/plugins/__tests__/package-promotion.test.ts server/admin/plugins/__tests__/settings-migration.test.ts server/admin/plugins/__tests__/package-lifecycle.test.ts server/admin/plugins/__tests__/package-promotion-e2e.test.ts",
+        "plugin-runtime:isolation:check": "bun x vitest run shared/plugins/isolation/__tests__ server/admin/plugins/isolation/__tests__",
+        "plugin-runtime:runtime-controls:check": "bun x vitest run shared/plugins/__tests__/runtime-controls.test.ts",
+        "plugin-runtime:cli:check": "bun x vitest run scripts/__tests__/plugin-runtime-cli.test.ts scripts/__tests__/plugin-runtime-v1-codemod.test.ts",
         "dev:offline": "env SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false bun run dev"
     },
     "bin": {

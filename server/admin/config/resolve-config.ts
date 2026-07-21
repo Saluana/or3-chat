@@ -391,7 +391,7 @@ export function buildOr3CloudConfigFromEnv(
             ),
             pluginRuntimeV2Enabled: envBool(
                 env.OR3_PLUGIN_RUNTIME_V2_ENABLED,
-                false,
+                true,
             ),
             pluginRuntimeV2WorkspaceIds: env.OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS
                 ? env.OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS.split(',')
@@ -405,6 +405,14 @@ export function buildOr3CloudConfigFromEnv(
                           .filter(Boolean)
                     : [],
             hookEngineV2Enabled: envBool(env.OR3_HOOK_ENGINE_V2_ENABLED, false),
+            pluginModuleLoaderV2Enabled: envBool(
+                env.OR3_PLUGIN_MODULE_LOADER_V2_ENABLED,
+                false,
+            ),
+            pluginIsolationEnabled: envBool(
+                env.OR3_PLUGIN_ISOLATION_ENABLED,
+                false,
+            ),
             rebuildCommand:
                 env.OR3_ADMIN_REBUILD_COMMAND || DEFAULT_REBUILD_COMMAND,
             extensionMaxZipBytes: envNum(env.OR3_ADMIN_EXTENSION_MAX_ZIP_BYTES),

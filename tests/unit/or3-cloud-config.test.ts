@@ -183,10 +183,12 @@ describe('defineOr3CloudConfig', () => {
         expect(config.admin?.disableNonCorePlugins).toBe(false);
         expect(config.admin?.pluginRuntimeShadowEnabled).toBe(true);
         expect(config.admin?.pluginRuntimeLoaderEnabled).toBe(true);
-        expect(config.admin?.pluginRuntimeV2Enabled).toBe(false);
+        expect(config.admin?.pluginRuntimeV2Enabled).toBe(true);
         expect(config.admin?.pluginRuntimeV2WorkspaceIds).toEqual([]);
         expect(config.admin?.pluginContributionV2Surfaces).toEqual([]);
         expect(config.admin?.hookEngineV2Enabled).toBe(false);
+        expect(config.admin?.pluginModuleLoaderV2Enabled).toBe(false);
+        expect(config.admin?.pluginIsolationEnabled).toBe(false);
         expect(config.admin?.pluginZipInstallEnabled).toBe(true);
         expect(config.admin?.pluginRouteDispatcherEnabled).toBe(true);
     });
@@ -202,6 +204,8 @@ describe('defineOr3CloudConfig', () => {
                 pluginRuntimeV2WorkspaceIds: ['workspace-canary'],
                 pluginContributionV2Surfaces: ['message-actions'],
                 hookEngineV2Enabled: true,
+                pluginModuleLoaderV2Enabled: true,
+                pluginIsolationEnabled: true,
                 pluginZipInstallEnabled: false,
                 pluginRouteDispatcherEnabled: false,
             },
@@ -218,6 +222,8 @@ describe('defineOr3CloudConfig', () => {
             'message-actions',
         ]);
         expect(config.admin?.hookEngineV2Enabled).toBe(true);
+        expect(config.admin?.pluginModuleLoaderV2Enabled).toBe(true);
+        expect(config.admin?.pluginIsolationEnabled).toBe(true);
         expect(config.admin?.pluginZipInstallEnabled).toBe(false);
         expect(config.admin?.pluginRouteDispatcherEnabled).toBe(false);
     });

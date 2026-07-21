@@ -470,7 +470,7 @@ export interface Or3CloudConfig {
         /**
          * Selects the generation-safe bundled V1 manager at client startup.
          * @env OR3_PLUGIN_RUNTIME_V2_ENABLED
-         * @default false
+         * @default true
          */
         pluginRuntimeV2Enabled?: boolean;
 
@@ -496,6 +496,23 @@ export interface Or3CloudConfig {
          * @default false
          */
         hookEngineV2Enabled?: boolean;
+
+        /**
+         * Enables digest-addressed ModuleV2Loader / ServerModuleResolver paths.
+         * Startup-only; a restart is required to change the selected loader.
+         * @env OR3_PLUGIN_MODULE_LOADER_V2_ENABLED
+         * @default false
+         */
+        pluginModuleLoaderV2Enabled?: boolean;
+
+        /**
+         * Enables isolated-client / isolated-server plugin runtimes.
+         * Startup-only; when false, isolated descriptors are blocked before
+         * import and never silently downgraded to trusted-host.
+         * @env OR3_PLUGIN_ISOLATION_ENABLED
+         * @default false
+         */
+        pluginIsolationEnabled?: boolean;
 
         /**
          * Enables admin ZIP-based extension install endpoint.

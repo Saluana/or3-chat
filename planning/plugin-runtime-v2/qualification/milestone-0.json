@@ -63,15 +63,15 @@
       ]
     },
     {
+      "id": "benchmarks",
+      "commands": [["bun", "run", "plugin-runtime:benchmarks:check"]]
+    },
+    {
       "id": "production-builds",
       "commands": [
         ["bun", "run", "build"],
         ["bun", "run", "generate:static"]
       ]
-    },
-    {
-      "id": "benchmarks",
-      "commands": [["bun", "run", "plugin-runtime:benchmarks:check"]]
     }
   ],
   "rollback": {

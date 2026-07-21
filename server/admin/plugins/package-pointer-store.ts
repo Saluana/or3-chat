@@ -194,6 +194,10 @@ export class PluginPackagePointerStore {
         return resolve(this.#activeRoot, `${pluginId}.json`);
     }
 
+    async readPointer(pluginId: string): Promise<PluginPackagePointer | null> {
+        return this.#readPersistedPointer(pluginId);
+    }
+
     async #readPersistedPointer(pluginId: string): Promise<PluginPackagePointer | null> {
         const path = this.pointerPath(pluginId);
         let handle;

@@ -82,6 +82,10 @@ Diagnostics live under `_diagnostics` with per-hook timing arrays and error coun
 
 ---
 
+## Plugin Runtime V2
+
+Hook Runtime V2 is selected only when `OR3_HOOK_ENGINE_V2_ENABLED` is set at process start. The public `useHooks()` / `HookEngine` surface above remains the V1-compatible API. V2 packages register through `@or3/plugin-sdk` `context.hooks` instead of app-private imports. See [Plugin Runtime V2](/plugins/runtime-v2-overview) and [Plugin SDK](/plugins/plugin-sdk).
+
 ## Sync hook keys
 
 High-signal sync hooks used by the DB sync layer:

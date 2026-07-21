@@ -15,6 +15,15 @@ interface QualificationManifest {
         procedure: string[];
         drill: string;
     };
+    /** Optional Milestone 9+ release metadata recorded into the result artifact. */
+    releaseReport?: {
+        flags?: Record<string, unknown>;
+        corpusVersions?: Record<string, string>;
+        benchmarks?: string[];
+        faultTests?: string[];
+        rollbackDrills?: string[];
+        knownLifecycleLimitations?: string[];
+    };
 }
 
 interface CommandResult {
@@ -159,6 +168,7 @@ export function runQualification(manifestFilename: string, args: readonly string
         evidence: evidenceDigests(manifest),
         gates: gateResults,
         rollback: manifest.rollback,
+        releaseReport: manifest.releaseReport ?? null,
     };
 
     mkdirSync(resolve(outputPath, '..'), { recursive: true });

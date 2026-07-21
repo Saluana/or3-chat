@@ -2,6 +2,8 @@
 
 This guide shows you how to create plugins for OR3 to extend the dashboard, chat messages, and sidebar. OR3's plugin system is built on Nuxt's plugin architecture with reactive registries that survive hot module replacement.
 
+> **Plugin Runtime V2:** Digest-addressed SDK packages (`@or3/plugin-sdk`, Manifest V2) are documented under [Runtime V2 overview](/plugins/runtime-v2-overview). V1 APIs in this guide remain supported through the V2 line; production V2 flags stay off by default.
+
 ## Plugin Basics
 
 All OR3 plugins are Nuxt client plugins placed in the `app/plugins/` folder with a `.client.ts` extension. They register actions, components, or pages into global registries that the UI reads reactively.
