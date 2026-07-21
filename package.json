@@ -150,6 +150,9 @@
         "vite-bundle-visualizer": "^1.2.1",
         "vitest": "^2.1.9"
     },
+    "overrides": {
+        "vue": "3.5.40"
+    },
     "trustedDependencies": [
         "@parcel/watcher",
         "better-sqlite3"
