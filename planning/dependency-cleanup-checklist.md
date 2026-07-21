@@ -1,8 +1,15 @@
 # Dependency Cleanup and Upgrade Checklist
 
 **Scope:** `or3-chat` root package only  
-**Status:** Planning only — no dependency or lockfile changes have been made  
+**Status:** Phases 1–3 implemented; phases 4 and later remain planning only
 **Prepared:** 2026-07-21
+
+Implementation notes for phases 1–3:
+
+- Each phase was developed on a separate branch created from the latest local `or3-cloud` state and merged only after its validation gates passed.
+- The full unit suite passes with 3,083 tests; frozen installs, provider-boundary checks, theme validation, SSR builds, static generation, and plugin-runtime production checks pass.
+- The repository's pre-existing type-check and lint failures remain unchanged in scope. Two timing-sensitive scroll E2E assertions also reproduce on the exact pre-Phase-3 code, dependency set, and Chromium revision.
+- Manual UI checks and live-provider exercises remain unchecked below because they require an interactive environment or external provider state.
 
 This checklist is ordered so each phase can be implemented, tested, reviewed, and committed independently. Do not run an unrestricted `bun update`; keep the batches small enough that regressions can be attributed to one change.
 
