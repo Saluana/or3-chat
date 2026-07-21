@@ -33,8 +33,8 @@
         "or3-provider-s3": "file:../or3-provider-s3",
         "or3-provider-sqlite": "file:../or3-provider-sqlite",
         "or3-scroll": "0.0.3",
-        "or3-workflow-core": "^0.1.1",
-        "or3-workflow-vue": "^0.1.3",
+        "or3-workflow-core": "^0.1.2",
+        "or3-workflow-vue": "^0.1.4",
         "semver": "^7.8.5",
         "spark-md5": "^3.0.2",
         "streamdown-vue": "1.0.29",
@@ -2469,9 +2469,9 @@
 
     "or3-scroll": ["or3-scroll@0.0.3", "", { "peerDependencies": { "vue": "^3.3.0" } }, "sha512-Pw7ed4ukQG9IXBf80UGmuF5UbGVJIuuUp6K7rYSzHeZNnXeXalaYXPgpjsfxyAwWsPWaP5GZfWream1Hlgu/4g=="],
 
-    "or3-workflow-core": ["or3-workflow-core@0.1.1", "", { "dependencies": { "@openrouter/sdk": "^0.3.11", "zod": "^4.0.0" } }, "sha512-Lg021r+lPkAu1WMm5Z5H4CmJfKZuW27T2YtzEabvl4LYc4XljgRS3wu0eocsRcHCy1C2EkT5UWQLuYZag+xYdA=="],
+    "or3-workflow-core": ["or3-workflow-core@0.1.2", "", { "dependencies": { "@openrouter/sdk": "^0.3.11", "zod": "^4.0.0" } }, "sha512-+q6Vy/X+RQn8PkQpdgQjuHnzqI3OT8vgB5fU1Pa1wzgGl6C4nCorkvJyCSxGJRZd6lHfS5d17ZrOAZrf7/R0wA=="],
 
-    "or3-workflow-vue": ["or3-workflow-vue@0.1.3", "", { "dependencies": { "@vue-flow/background": "^1.3.0", "@vue-flow/controls": "^1.1.1", "@vue-flow/core": "^1.33.2", "@vue-flow/minimap": "^1.5.4", "@vueuse/core": "^10.0.0", "or3-workflow-core": "^0.1.0" }, "peerDependencies": { "vue": "^3.4.0" } }, "sha512-0TRzMKJ8VqOLZMW7UyayEcl2iPGj8MEgCGvTWNQhu5qwbqsMC+6PRq0oKvsCkIcfNPsKLLtudKtqBoNoyjGwUg=="],
+    "or3-workflow-vue": ["or3-workflow-vue@0.1.4", "", { "dependencies": { "@vue-flow/background": "^1.3.0", "@vue-flow/controls": "^1.1.1", "@vue-flow/core": "^1.33.2", "@vue-flow/minimap": "^1.5.4", "@vueuse/core": "^10.0.0", "or3-workflow-core": "^0.1.0" }, "peerDependencies": { "vue": "^3.4.0" } }, "sha512-WJK+TIzIlzg8I9+lBCeXmMdtGFzgikTEugygjzXXb6hg0nelNea/feEOz8kW3XjbFqpODZxfSUcfCOXEs9/n5Q=="],
 
     "orderedmap": ["orderedmap@2.1.1", "", {}, "sha512-TvAWxi0nDe1j/rtMcWcIj94+Ffe6n7zhow33h40SKxmsmozs6dz/e+EajymfoFcHd7sxNn8yHM8839uixMOV6g=="],
 
@@ -3701,10 +3701,6 @@
 
     "or3-workflow-core/@openrouter/sdk": ["@openrouter/sdk@0.3.11", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-lXhyY+AFvrOjAqg6fktd/3S/6J5u5yp1nYyP6yluqVTzgnsfZs8/QM3rGa0kZdhB4d/fzJhyT+4oGNM55fH31g=="],
 
-    "or3-workflow-core/zod": ["zod@4.3.5", "", {}, "sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g=="],
-
-    "or3-workflow-vue/@vue-flow/core": ["@vue-flow/core@1.48.1", "", { "dependencies": { "@vueuse/core": "^10.5.0", "d3-drag": "^3.0.0", "d3-interpolate": "^3.0.1", "d3-selection": "^3.0.0", "d3-zoom": "^3.0.0" }, "peerDependencies": { "vue": "^3.3.0" } }, "sha512-3IxaMBLvWRbznZ4CuK0kVhp4Y4lCDQx9nhi48Swp6PwPw29KNhmiKd2kaBogYeWjGLb/tLjlE9V0s3jEmKCYWw=="],
-
     "or3-workflow-vue/@vueuse/core": ["@vueuse/core@10.11.1", "", { "dependencies": { "@types/web-bluetooth": "^0.0.20", "@vueuse/metadata": "10.11.1", "@vueuse/shared": "10.11.1", "vue-demi": ">=0.14.8" } }, "sha512-guoy26JQktXPcz+0n3GukWIy/JDNKti9v6VEMu6kV2sYBsWuGiTU8OWdg+ADfUbHg3/3DlqySDe7JmdHrktiww=="],
 
     "path-scurry/lru-cache": ["lru-cache@10.4.3", "", {}, "sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ=="],
@@ -4370,6 +4366,8 @@
     "or3-provider-sqlite/vitest/tinyexec": ["tinyexec@1.0.2", "", {}, "sha512-W/KYk+NFhkmsYpuHq5JykngiOCnxeVL8v8dFnqxSD8qEEdRfXk1SDM6JzNqcERbcGYj9tMrDQBYV9cjgnunFIg=="],
 
     "or3-provider-sqlite/vitest/tinyrainbow": ["tinyrainbow@3.0.3", "", {}, "sha512-PSkbLUoxOFRzJYjjxHJt9xro7D+iilgMX/C9lawzVuYiIdcihh9DXmVibBe8lmcFrRi/VzlPjBxbN7rH24q8/Q=="],
+
+    "or3-workflow-core/@openrouter/sdk/zod": ["zod@4.3.5", "", {}, "sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g=="],
 
     "or3-workflow-vue/@vueuse/core/@types/web-bluetooth": ["@types/web-bluetooth@0.0.20", "", {}, "sha512-g9gZnnXVq7gM7v3tJCWV/qw7w+KeOlSHAhgF9RytFyifW6AF61hdT2ucrYhPq9hLs5JIryeupHV3qGk95dH9ow=="],
 
