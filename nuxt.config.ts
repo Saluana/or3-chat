@@ -688,6 +688,20 @@ export default defineNuxtConfig({
     },
     // Load Tailwind + theme variables globally
     css: ['~/assets/css/main.css'],
+    icon: {
+        serverBundle: {
+            // Only bundle the iconify collections we actually use
+            // (pixelarticons = theme tokens, tabler/lucide/carbon = inline
+            // prefixes, simple-icons = provider brand logos).
+            collections: [
+                'pixelarticons',
+                'lucide',
+                'carbon',
+                'tabler',
+                'simple-icons',
+            ],
+        },
+    },
     fonts: {
         defaults: {
             // Only emit the latin subset + normal style to keep the global font CSS lightweight

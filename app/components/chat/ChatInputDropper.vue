@@ -875,6 +875,30 @@ watch(selectedModel, (newModel) => {
     }
 });
 
+// React to "Use model" selections made in the model catalog modal.
+function onCatalogModelSelected(e: Event) {
+    const modelId = (e as CustomEvent<{ modelId?: string }>).detail?.modelId;
+    if (!modelId || modelId === selectedModel.value) return;
+    // The selectedModel watcher persists to LAST_MODEL_KEY automatically.
+    selectedModel.value = modelId;
+}
+
+onMounted(() => {
+    if (!process.client) return;
+    window.addEventListener(
+        'or3:model-selected',
+        onCatalogModelSelected as EventListener
+    );
+});
+
+onBeforeUnmount(() => {
+    if (!process.client) return;
+    window.removeEventListener(
+        'or3:model-selected',
+        onCatalogModelSelected as EventListener
+    );
+});
+
 const autoResize = async () => {
     await nextTick();
     if (textareaRef.value) {
