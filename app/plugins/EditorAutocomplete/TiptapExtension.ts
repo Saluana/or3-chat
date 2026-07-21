@@ -1,6 +1,6 @@
 import { Extension, Editor } from '@tiptap/core';
-import { Plugin, PluginKey, EditorState, Transaction } from 'prosemirror-state';
-import { Decoration, DecorationSet, EditorView } from 'prosemirror-view';
+import { Plugin, PluginKey, EditorState, Transaction } from '@tiptap/pm/state';
+import { Decoration, DecorationSet, EditorView } from '@tiptap/pm/view';
 import { useDebounceFn } from '@vueuse/core';
 import { state, isMobile } from '~/state/global';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
