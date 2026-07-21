@@ -140,7 +140,7 @@
         "@vitest/coverage-v8": "2.1.9",
         "@vue/test-utils": "^2.4.11",
         "better-sqlite3": "^12.11.1",
-        "convex": "1.31.3",
+        "convex": "1.32.0",
         "eslint": "^9.39.1",
         "fake-indexeddb": "^5.0.2",
         "jsdom": "^25.0.1",
