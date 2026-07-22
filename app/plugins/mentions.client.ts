@@ -100,13 +100,28 @@ export default defineNuxtPlugin(() => {
     const hooks = useHooks();
     let indexInitialized = false;
     let mentionsModule: MentionsModule | null = null;
+    let mentionsModulePromise: Promise<MentionsModule | null> | null = null;
     let lastEditorContent: Record<string, unknown> | null = null; // captured TipTap JSON before send
     let extensionsRegistered = false; // Prevent duplicate registrations
 
     // Lazy load the mentions module
-    async function loadMentionsModule(): Promise<MentionsModule | null> {
-        if (mentionsModule) return mentionsModule;
+    function loadMentionsModule(): Promise<MentionsModule | null> {
+        if (mentionsModule) return Promise.resolve(mentionsModule);
+        if (mentionsModulePromise) return mentionsModulePromise;
 
+        const pending = initializeMentionsModule();
+        mentionsModulePromise = pending;
+        const clearPending = () => {
+            if (mentionsModulePromise === pending) {
+                mentionsModulePromise = null;
+            }
+        };
+        void pending.then(clearPending, clearPending);
+
+        return pending;
+    }
+
+    async function initializeMentionsModule(): Promise<MentionsModule | null> {
         try {
             const [
                 MentionModule,

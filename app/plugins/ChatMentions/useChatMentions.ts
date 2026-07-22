@@ -182,6 +182,8 @@ export function setMentionsConfig(config: {
 // ============================================================================
 let mentionsDb: Awaited<ReturnType<typeof createDb>> | null = null;
 let indexReady = false;
+let initPromise: Promise<void> | null = null;
+let initGeneration = 0;
 
 /**
  * Initializes the mentions Orama index.
@@ -202,13 +204,29 @@ let indexReady = false;
  * - Must be called before search/resolve operations
  * - SSR-safe (dynamically imports ~/db)
  */
-export async function initMentionsIndex() {
+export function initMentionsIndex(): Promise<void> {
+    if (indexReady) return Promise.resolve();
+    if (initPromise) return initPromise;
+
+    const generation = initGeneration;
+    const pending = initializeMentionsIndex(generation);
+    initPromise = pending;
+
+    const clearPending = () => {
+        if (initPromise === pending) initPromise = null;
+    };
+    void pending.then(clearPending, clearPending);
+
+    return pending;
+}
+
+async function initializeMentionsIndex(generation: number): Promise<void> {
     try {
         const { db } = await import('~/db');
 
         // IMPORTANT: Do not include 'id' in the schema to avoid clashes with Orama's identity field.
         // We'll still pass our own IDs to Orama (so hit.id === our id), but we won't index/store it as a document field.
-        mentionsDb = await createDb({
+        const nextDb = await createDb({
             title: 'string',
             source: 'string',
             snippet: 'string',
@@ -240,7 +258,10 @@ export async function initMentionsIndex() {
             })),
         ];
 
-        await buildIndex(mentionsDb, records);
+        await buildIndex(nextDb, records);
+        if (generation !== initGeneration) return;
+
+        mentionsDb = nextDb;
         indexReady = true;
     } catch (error) {
         reportError(error, {
@@ -748,6 +769,8 @@ export async function removeThread(payload: { id?: string; entity?: { id?: strin
  * After calling, `initMentionsIndex()` must be called again to use the index
  */
 export function resetIndex() {
+    initGeneration += 1;
+    initPromise = null;
     mentionsDb = null;
     indexReady = false;
 }
