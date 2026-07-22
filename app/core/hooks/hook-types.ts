@@ -148,6 +148,12 @@ export interface DocumentAiEditRequestPayload {
     prompt: string;
     scope: 'selection' | 'section' | 'document';
     context: string;
+    references: Array<{
+        id: string;
+        source: 'document' | 'chat';
+        label: string;
+    }>;
+    referenceContext: string;
     tokenEstimate: number;
 }
 

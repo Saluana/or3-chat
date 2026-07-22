@@ -81,6 +81,23 @@ describe('openrouterStream', () => {
         expect(parseMock).toHaveBeenCalledTimes(1);
     });
 
+    it('omits optional output modalities when a provider does not accept them', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(createStreamResponse());
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+
+        for await (const _event of openRouterStream({
+            apiKey: 'key-1',
+            model: 'text-provider/model',
+            orMessages: [{ role: 'user', content: 'hi' }],
+        })) {
+            // drain
+        }
+
+        const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+        const body = JSON.parse(String(request?.body)) as Record<string, unknown>;
+        expect(body).not.toHaveProperty('modalities');
+    });
+
     it('hands the explicit streamed-field mode to the shared parser', async () => {
         const fetchMock = vi.fn().mockResolvedValue(createStreamResponse());
         (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;

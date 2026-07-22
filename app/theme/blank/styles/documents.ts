@@ -54,6 +54,91 @@ export const documentsStyles = {
             boxShadow: '0 18px 48px color-mix(in srgb, var(--md-on-surface) 12%, transparent)',
         },
     },
+    '.document-editor-root .setting-card': {
+        style: {
+            border: '1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
+            borderRadius: '14px',
+            boxShadow: 'none',
+        },
+    },
+    '.document-editor-root .quick-action-row': {
+        style: {
+            border: '1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
+            borderRadius: '14px',
+            boxShadow: 'none',
+        },
+    },
+    '.document-editor-root .quick-action-fields': {
+        style: {
+            border: '1px solid color-mix(in srgb, var(--md-on-surface) 8%, transparent)',
+            borderRadius: '12px',
+        },
+    },
+    '.document-editor-root .quick-action-empty': {
+        style: {
+            border: '1px dashed color-mix(in srgb, var(--md-on-surface) 14%, transparent)',
+            borderRadius: '14px',
+        },
+    },
+    '.document-editor-root .attachment-chip': {
+        style: {
+            border: '1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
+            borderRadius: '12px',
+        },
+    },
+    '.document-editor-root .selection-context': {
+        style: {
+            borderRadius: '12px',
+        },
+    },
+    '.document-editor-root .scope-control [role="tablist"]': {
+        style: {
+            border: '0',
+            borderRadius: '999px',
+        },
+    },
+    '.document-editor-root .revision-item': {
+        style: {
+            border: '1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
+            borderRadius: '14px',
+            boxShadow: '0 1px 1px color-mix(in srgb, var(--md-on-surface) 4%, transparent)',
+        },
+    },
+    '.document-editor-root .outline-item': {
+        style: {
+            borderRadius: '14px',
+        },
+    },
+    '.document-editor-root .preview-body': {
+        style: {
+            border: '1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
+            borderRadius: '12px',
+        },
+    },
+    '.document-editor-root .info-grid > div': {
+        style: {
+            border: '1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
+            borderRadius: '14px',
+        },
+    },
+    '.document-editor-root .outline-empty': {
+        style: {
+            border: '1px dashed color-mix(in srgb, var(--md-on-surface) 14%, transparent)',
+            borderRadius: '14px',
+        },
+    },
+    '.document-editor-root .send-button': {
+        style: {
+            borderRadius: '999px',
+            boxShadow: 'none',
+        },
+    },
+    '.document-editor-root .attachment-button': {
+        style: {
+            border: '1px solid color-mix(in srgb, var(--md-on-surface) 12%, transparent)',
+            borderRadius: '999px',
+        },
+    },
     '.document-editor-shell:not(:last-child)': {
         style: {
             borderRight: '1px solid var(--md-border-color)',

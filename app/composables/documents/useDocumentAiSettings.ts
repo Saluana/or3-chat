@@ -22,7 +22,7 @@ export interface DocumentAiSettingsV1 {
 export const DEFAULT_DOCUMENT_AI_SETTINGS: DocumentAiSettingsV1 = {
     version: 1,
     modelId: null,
-    systemInstruction: 'Edit with restraint. Preserve the author’s meaning, voice, structure, and supported document node types unless the request requires a change.',
+    systemInstruction: 'Preserve the author’s intent, voice, and factual meaning. Make the smallest complete change requested, keeping unrelated structure and formatting intact.',
     quickActions: [
         { id: 'improve', label: 'Improve writing', prompt: 'Improve clarity, flow, and precision.', defaultScope: 'section' },
         { id: 'shorten', label: 'Make concise', prompt: 'Make this more concise without losing important meaning.', defaultScope: 'selection' },

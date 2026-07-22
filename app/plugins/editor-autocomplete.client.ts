@@ -1,6 +1,5 @@
 import {
     registerEditorToolbarButton,
-    listRegisteredEditorToolbarButtonIds,
     registerEditorExtension,
 } from '~/composables';
 import type { Editor } from '@tiptap/vue-3';

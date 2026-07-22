@@ -94,7 +94,7 @@ interface ServerRouteCacheEntry {
 type OpenRouterRequestBody = {
     model: string;
     messages: ORMessage[];
-    modalities: string[];
+    modalities?: string[];
     stream: true;
     reasoning?: OpenRouterReasoningConfig;
     cache_control?: OpenRouterCacheControl;
@@ -192,7 +192,7 @@ export async function* openRouterStream(params: {
     apiKey?: string | null;
     model: string;
     orMessages: ORMessage[];
-    modalities: string[];
+    modalities?: string[];
     threadId?: string;
     messageId?: string;
     tools?: ToolDefinition[];
@@ -226,9 +226,9 @@ export async function* openRouterStream(params: {
     const body: OpenRouterRequestBody = {
         model,
         messages: orMessages,
-        modalities,
         stream: true,
     };
+    if (modalities?.length) body.modalities = modalities;
 
     if (params.threadId) {
         body._threadId = params.threadId;

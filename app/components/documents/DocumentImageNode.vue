@@ -94,7 +94,7 @@ function setWidth(value: number | number[] | undefined) {
     display: block;
     width: 100%;
     min-height: 8rem;
-    border-radius: 0.875rem;
+    border-radius: var(--md-border-radius);
     object-fit: contain;
     background: color-mix(in oklab, var(--md-surface-container), transparent 20%);
 }
@@ -108,7 +108,7 @@ function setWidth(value: number | number[] | undefined) {
     display: grid;
     place-items: center;
     color: var(--md-on-surface-variant);
-    border: 1px dashed var(--md-outline-variant);
+    border: var(--md-border-width) dashed var(--md-border-color);
 }
 
 .image-controls {
@@ -123,8 +123,8 @@ function setWidth(value: number | number[] | undefined) {
     align-items: center;
     gap: 0.5rem;
     padding: 0.375rem;
-    border: 1px solid var(--md-outline-variant);
-    border-radius: 0.75rem;
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
     background: color-mix(in oklab, var(--md-surface), transparent 4%);
     box-shadow: 0 8px 24px rgb(0 0 0 / 14%);
 }

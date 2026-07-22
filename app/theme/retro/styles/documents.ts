@@ -5,10 +5,43 @@ export const documentsOverrides = {
         class: 'text-[var(--md-primary-shade)] dark:text-[var(--md-primary-tint)]',
     },
 };
+const documentReadingFont =
+    '"IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+const documentCodeFont = '"IBM Plex Mono", ui-monospace, monospace';
+
 export const documentsStyles = {
     '.document-editor-root': {
         style: {
             fontFamily: 'var(--font-sans)',
+        },
+    },
+    // Keep chrome/UI on the retro face; use the same readable stack as chat for the writing surface.
+    '.document-editor-root .document-canvas': {
+        style: {
+            fontFamily: `${documentReadingFont} !important`,
+        },
+    },
+    '.document-editor-root .document-title-field textarea': {
+        style: {
+            fontFamily: `${documentReadingFont} !important`,
+            letterSpacing: '-0.02em',
+        },
+    },
+    '.document-editor-root .document-content': {
+        style: {
+            fontFamily: `${documentReadingFont} !important`,
+        },
+    },
+    '.document-editor-root .document-content h1, .document-editor-root .document-content h2, .document-editor-root .document-content h3':
+        {
+            style: {
+                fontFamily: `${documentReadingFont} !important`,
+                letterSpacing: '-0.015em',
+            },
+        },
+    '.document-editor-root .document-content pre, .document-editor-root .document-content code': {
+        style: {
+            fontFamily: `${documentCodeFont} !important`,
         },
     },
     '.document-editor-root .editor-topbar': {
@@ -55,6 +88,91 @@ export const documentsStyles = {
             border: 'var(--md-border-width) solid var(--md-border-color)',
             borderRadius: 'var(--md-border-radius)',
             boxShadow: '3px 3px 0 color-mix(in srgb, var(--md-border-color) 70%, transparent)',
+        },
+    },
+    '.document-editor-root .setting-card': {
+        style: {
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius)',
+            boxShadow: '2px 2px 0 color-mix(in srgb, var(--md-border-color) 45%, transparent)',
+        },
+    },
+    '.document-editor-root .quick-action-row': {
+        style: {
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius)',
+            boxShadow: '2px 2px 0 color-mix(in srgb, var(--md-border-color) 35%, transparent)',
+        },
+    },
+    '.document-editor-root .quick-action-fields': {
+        style: {
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius)',
+        },
+    },
+    '.document-editor-root .quick-action-empty': {
+        style: {
+            border: 'var(--md-border-width) dashed var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius)',
+        },
+    },
+    '.document-editor-root .attachment-chip': {
+        style: {
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius)',
+        },
+    },
+    '.document-editor-root .selection-context': {
+        style: {
+            borderRadius: 'var(--md-border-radius)',
+        },
+    },
+    '.document-editor-root .scope-control [role="tablist"]': {
+        style: {
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius)',
+        },
+    },
+    '.document-editor-root .revision-item': {
+        style: {
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius)',
+            boxShadow: '2px 2px 0 color-mix(in srgb, var(--md-border-color) 35%, transparent)',
+        },
+    },
+    '.document-editor-root .outline-item': {
+        style: {
+            borderRadius: 'var(--md-border-radius)',
+        },
+    },
+    '.document-editor-root .preview-body': {
+        style: {
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius)',
+        },
+    },
+    '.document-editor-root .info-grid > div': {
+        style: {
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius)',
+        },
+    },
+    '.document-editor-root .outline-empty': {
+        style: {
+            border: 'var(--md-border-width) dashed var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius)',
+        },
+    },
+    '.document-editor-root .send-button': {
+        style: {
+            borderRadius: 'var(--md-border-radius)',
+            boxShadow: '2px 2px 0 color-mix(in srgb, var(--md-border-color) 55%, transparent)',
+        },
+    },
+    '.document-editor-root .attachment-button': {
+        style: {
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius)',
         },
     },
     // Chat container vertical dividers: apply a right border to every chat container except the last one

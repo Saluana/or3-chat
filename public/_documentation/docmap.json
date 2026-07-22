@@ -104,6 +104,12 @@
                     "summary": "Frame-batched accumulator for AI streaming tokens. It receives partial text/reasoning deltas, buffers them, and flushes at most once per animation frame so the UI stays smooth.\\n\\n`useStreamAccumulator` replaces ad-hoc refs for building assistant responses. It normalises streaming flow with a single API:\\n\\n-   `append()` collects text or reasoning deltas without immediate DOM churn\\n-   `finalize()` seals the stream and records errors/abort state\\n-   `reset()` prepares for the next stream\\n-   `state` exposes reactive fields (`text`, `reasoningText`, `isActive`, etc.) any component can watch\\n\\nThe accumulator automatically batches writes via `requestAnimationFrame` when available, falling back to microtasks in environments without rAF (tests, SSR stubs)."
                 },
                 {
+                    "name": "useDocumentAiAgent.md",
+                    "path": "/composables/useDocumentAiAgent",
+                    "category": "Documents",
+                    "summary": "Build bounded, reviewable document edit proposals with a TipTap prompt composer. Supports saved and plugin `/` prompt commands, `@` references to workspace documents and chats, read-only context injection, attachments, token estimation, and validated edit operations."
+                },
+                {
                     "name": "useDocumentHistoryActions.md",
                     "path": "/composables/useDocumentHistoryActions",
                     "category": "Documents",

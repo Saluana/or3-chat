@@ -36,8 +36,27 @@ describe('premium document editor Nuxt UI contract', () => {
         const history = readComponent('../DocumentHistoryPanel.vue');
         expect(inspector).toContain('class="info-overview"');
         expect(inspector).toContain('class="info-grid"');
-        expect(history).toContain('height: auto; min-height: 4.5rem');
+        expect(history).toContain('min-height: 4.5rem');
         expect(history).toContain('class="revision-meta"');
+    });
+
+    it('opens revision preview in a modal instead of pinning it above the list', () => {
+        const history = readComponent('../DocumentHistoryPanel.vue');
+        expect(history).toContain('<UModal');
+        expect(history).toContain('label="Restore this version"');
+        expect(history).toContain('openPreview(revision)');
+        expect(history).not.toContain('class="revision-preview"');
+        expect(history).toContain('var(--md-border-width)');
+        expect(history).toContain('var(--md-border-radius)');
+        expect(history).not.toContain('rounded-xl!');
+    });
+
+    it('uses theme border tokens on document AI surfaces', () => {
+        const source = readComponent('../DocumentAiPanel.vue');
+        expect(source).toContain('border: var(--md-border-width) solid var(--md-border-color)');
+        expect(source).toContain('border-radius: var(--md-border-radius)');
+        expect(source).not.toContain('border: 1px solid var(--md-outline-variant)');
+        expect(source).not.toContain('border-radius: 0.8rem');
     });
 
     it('renders the document outline as an accessible hierarchy', () => {
@@ -87,6 +106,17 @@ describe('premium document editor Nuxt UI contract', () => {
         expect(agent).toContain("type: 'file'");
     });
 
+    it('document AI model picker uses favorites, a non-empty inherit value, and untruncated menu labels', () => {
+        const source = readComponent('../DocumentAiPanel.vue');
+
+        expect(source).toContain("INHERIT_MODEL_VALUE = 'inherit'");
+        expect(source).toContain('favoriteToolModels');
+        expect(source).toContain('getFavoriteModels');
+        expect(source).toContain("itemLabel: 'whitespace-nowrap overflow-visible! text-clip!'");
+        expect(source).not.toContain("value: ''");
+        expect(source).not.toContain('catalog.value.filter((model) => model.supported_parameters?.includes(\'tools\'))');
+    });
+
     it('presents quick actions as scannable summaries with a structured edit form', () => {
         const source = readComponent('../DocumentAiPanel.vue');
 
@@ -99,5 +129,21 @@ describe('premium document editor Nuxt UI contract', () => {
         expect(source).toContain('Changes save automatically.');
         expect(source).toContain('label="Use"');
         expect(source).toContain('class="quick-action-empty"');
+    });
+
+    it('uses a structured TipTap composer for Document AI commands and references', () => {
+        const panel = readComponent('../DocumentAiPanel.vue');
+        const editor = readComponent('../DocumentAiPromptEditor.vue');
+        const agent = readComponent('../../../composables/documents/useDocumentAiAgent.ts');
+
+        expect(panel).toContain('<DocumentAiPromptEditor');
+        expect(panel).toContain('@update:references="references = $event"');
+        expect(editor).toContain('DocumentAiSlashCommand.configure');
+        expect(editor).toContain('MentionWithAttrs.configure');
+        expect(editor).toContain("'Mod-Enter'");
+        expect(editor).toContain('class="context-chips"');
+        expect(agent).toContain('Read-only reference context:');
+        expect(agent).toContain('referenceContext(submission.references, true)');
+        expect(agent).not.toContain("modalities: ['text']");
     });
 });

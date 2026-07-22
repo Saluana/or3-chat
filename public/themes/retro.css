@@ -225,6 +225,31 @@
   font-family: var(--font-sans);
 }
 
+[data-theme="retro"] .document-editor-root .document-canvas {
+  font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+[data-theme="retro"] .document-editor-root .document-title-field textarea {
+  font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  letter-spacing: -0.02em;
+}
+
+[data-theme="retro"] .document-editor-root .document-content {
+  font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+[data-theme="retro"] .document-editor-root .document-content h1,
+[data-theme="retro"] .document-editor-root .document-content h2,
+[data-theme="retro"] .document-editor-root .document-content h3 {
+  font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  letter-spacing: -0.015em;
+}
+
+[data-theme="retro"] .document-editor-root .document-content pre,
+[data-theme="retro"] .document-editor-root .document-content code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace !important;
+}
+
 [data-theme="retro"] .document-editor-root .editor-topbar {
   border-bottom: var(--md-border-width) solid var(--md-border-color);
 }
@@ -262,6 +287,77 @@
   border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius);
   box-shadow: 3px 3px 0 color-mix(in srgb, var(--md-border-color) 70%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .setting-card {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--md-border-color) 45%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .quick-action-row {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--md-border-color) 35%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .quick-action-fields {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .quick-action-empty {
+  border: var(--md-border-width) dashed var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .attachment-chip {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .selection-context {
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .scope-control [role="tablist"] {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .revision-item {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--md-border-color) 35%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .outline-item {
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .preview-body {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .info-grid > div {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .outline-empty {
+  border: var(--md-border-width) dashed var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .send-button {
+  border-radius: var(--md-border-radius);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--md-border-color) 55%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .attachment-button {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
 }
 
 [data-theme="retro"] .document-editor-shell:not(:last-child) {

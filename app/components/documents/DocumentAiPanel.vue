@@ -29,7 +29,19 @@
 
         <template v-else>
             <div class="composer-row">
-                <UTextarea ref="promptInput" v-model="prompt" class="composer-prompt" :rows="1" :maxrows="7" autoresize variant="none" :placeholder="selectionAvailable ? 'Describe what to change in the selection…' : 'Describe what you want to change, improve, or create…'" aria-label="Document AI prompt" @keydown.meta.enter.prevent="send" @keydown.ctrl.enter.prevent="send" />
+                <DocumentAiPromptEditor
+                    ref="promptInput"
+                    v-model="prompt"
+                    class="composer-prompt"
+                    :document-id="documentId"
+                    :placeholder="selectionAvailable ? 'Describe what to change in the selection…' : 'Describe what you want to change, improve, or create…'"
+                    :saved-actions="settings.quickActions"
+                    :plugin-actions="pluginActions"
+                    :disabled="status === 'streaming'"
+                    @update:references="references = $event"
+                    @select-action="selectSuggestedAction"
+                    @submit="send"
+                />
                 <UButton v-if="status === 'streaming'" :icon="icons.stop" color="error" size="sm" square class="send-button" aria-label="Stop AI" @click="$emit('abort')" />
                 <UButton v-else :icon="icons.send" color="primary" size="sm" square class="send-button" aria-label="Send to document AI" :disabled="!prompt.trim() || attachments.some((attachment) => attachment.loading)" @click="send" />
             </div>
@@ -71,7 +83,25 @@
                                 <strong>Model</strong>
                                 <span>Choose the AI used for document edits.</span>
                             </div>
-                            <USelectMenu :model-value="settings.modelId || ''" :items="modelItems" value-key="value" label-key="label" searchable class="w-full" aria-label="Document AI model" @update:model-value="setModel" />
+                            <USelectMenu
+                                :model-value="selectedModelValue"
+                                :items="modelItems"
+                                value-key="value"
+                                label-key="label"
+                                searchable
+                                class="w-full model-select"
+                                :content="{ align: 'start', sideOffset: 6 }"
+                                :ui="{
+                                    content: 'w-max! min-w-[var(--reka-combobox-trigger-width)] max-w-[min(28rem,calc(100vw-2rem))]!',
+                                    item: 'min-h-9 px-3',
+                                    itemLabel: 'whitespace-nowrap overflow-visible! text-clip!',
+                                }"
+                                aria-label="Document AI model"
+                                @update:model-value="setModel"
+                            />
+                            <p v-if="!favoriteToolModels.length" class="model-select-hint">
+                                Favorite a tool-capable model in chat to choose one here.
+                            </p>
                         </section>
 
                         <section class="setting-card">
@@ -196,9 +226,16 @@ import { useToast } from '#imports';
 import type { DocumentAiAction, DocumentAiScope } from '~/composables/editor/useDocumentAiActions';
 import { useIcon } from '~/composables/useIcon';
 import { useDocumentAiSettings } from '~/composables/documents/useDocumentAiSettings';
-import type { DocumentAiAttachment } from '~/composables/documents/useDocumentAiAgent';
+import type {
+    DocumentAiAttachment,
+    DocumentAiEstimateRequest,
+    DocumentAiSubmission,
+} from '~/composables/documents/useDocumentAiAgent';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { validateFile } from '~/components/chat/file-upload-utils';
+import DocumentAiPromptEditor from './DocumentAiPromptEditor.vue';
+import type { DocumentAiPromptAction } from '~/plugins/DocumentAiCommands/slashCommandExtension';
+import type { DocumentAiContextReference } from '~/utils/documents/document-ai-context';
 
 interface PendingDocumentAiAttachment extends DocumentAiAttachment {
     id: string;
@@ -225,6 +262,7 @@ const props = defineProps<{
     stale: boolean;
     selectionAvailable: boolean;
     selectedText: string;
+    documentId: string;
     pluginActions: readonly DocumentAiAction[];
     focusNonce: number;
     autocomplete: { enabled: boolean; loading: boolean; error: string | null };
@@ -242,17 +280,18 @@ const icons = reactive({
 });
 
 const emit = defineEmits<{
-    submit: [prompt: string, scope: DocumentAiScope, attachments: DocumentAiAttachment[]];
-    estimate: [prompt: string, scope: DocumentAiScope];
+    submit: [payload: DocumentAiSubmission];
+    estimate: [payload: DocumentAiEstimateRequest];
     accept: [];
     reject: [];
     abort: [];
     'toggle-autocomplete': [];
 }>();
 
-const promptInput = ref<{ textareaRef?: HTMLTextAreaElement | null }>();
+const promptInput = ref<{ focus: () => void }>();
 const attachmentInput = ref<HTMLInputElement>();
 const prompt = ref('');
+const references = ref<DocumentAiContextReference[]>([]);
 const attachments = ref<PendingDocumentAiAttachment[]>([]);
 const scope = ref<DocumentAiScope>(props.selectionAvailable ? 'selection' : 'section');
 const customizeOpen = ref(false);
@@ -262,10 +301,31 @@ const scopes: Array<{ label: string; value: DocumentAiScope }> = [
     { label: 'Section', value: 'section' },
     { label: 'Document', value: 'document' },
 ];
+const INHERIT_MODEL_VALUE = 'inherit';
 const { settings, update } = useDocumentAiSettings();
-const { catalog, fetchModels } = useModelStore();
-const toolModels = computed(() => catalog.value.filter((model) => model.supported_parameters?.includes('tools')));
-const modelItems = computed(() => [{ label: 'Inherit chat default', value: '' }, ...toolModels.value.map((model) => ({ label: model.name, value: model.id }))]);
+const { catalog, favoriteModels, fetchModels, getFavoriteModels } = useModelStore();
+const favoriteToolModels = computed(() =>
+    favoriteModels.value.filter((model) => model.supported_parameters?.includes('tools'))
+);
+const modelItems = computed(() => {
+    const favorites = favoriteToolModels.value.map((model) => ({
+        label: model.name || model.id,
+        value: model.id,
+    }));
+    const currentId = settings.value.modelId;
+    if (currentId && !favorites.some((item) => item.value === currentId)) {
+        const current = catalog.value.find((model) => model.id === currentId)
+            ?? favoriteModels.value.find((model) => model.id === currentId);
+        if (current?.id) {
+            favorites.unshift({ label: current.name || current.id, value: current.id });
+        }
+    }
+    return [
+        { label: 'Inherit chat default', value: INHERIT_MODEL_VALUE },
+        ...favorites,
+    ];
+});
+const selectedModelValue = computed(() => settings.value.modelId ?? INHERIT_MODEL_VALUE);
 const scopeItems = computed(() =>
     scopes.map((option) => ({
         ...option,
@@ -277,7 +337,8 @@ const autocompleteLabel = computed(() => (props.autocomplete.loading ? 'Updating
 const tokenLabel = computed(() => {
     const estimate = props.tokenEstimate ? `~${props.tokenEstimate.toLocaleString()} tokens` : scopeLabel.value;
     const files = attachments.value.length ? ` · ${attachments.value.length} ${attachments.value.length === 1 ? 'file' : 'files'}` : '';
-    return `${estimate}${files}`;
+    const context = references.value.length ? ` · ${references.value.length} ${references.value.length === 1 ? 'reference' : 'references'}` : '';
+    return `${estimate}${files}${context}`;
 });
 let estimateTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -292,7 +353,7 @@ watch(
     () => props.focusNonce,
     async () => {
         await nextTick();
-        promptInput.value?.textareaRef?.focus();
+        promptInput.value?.focus();
     },
 );
 watch(
@@ -303,8 +364,12 @@ watch(
 );
 watch(scope, scheduleEstimate);
 watch(prompt, scheduleEstimate);
+watch(references, scheduleEstimate, { deep: true });
 onMounted(() => {
-    void fetchModels().catch(() => []);
+    void Promise.all([
+        fetchModels().catch(() => []),
+        getFavoriteModels().catch(() => []),
+    ]);
 });
 onBeforeUnmount(() => {
     if (estimateTimer) clearTimeout(estimateTimer);
@@ -317,16 +382,26 @@ function clip(value: string, length = 160) {
 function scheduleEstimate() {
     if (estimateTimer) clearTimeout(estimateTimer);
     if (!prompt.value.trim()) return;
-    estimateTimer = setTimeout(() => emit('estimate', prompt.value, scope.value), 250);
+    estimateTimer = setTimeout(() => emit('estimate', {
+        prompt: prompt.value,
+        scope: scope.value,
+        references: references.value,
+    }), 250);
 }
 function send() {
     if (!prompt.value.trim() || attachments.value.some((attachment) => attachment.loading)) return;
-    emit(
-        'submit',
-        prompt.value,
-        scope.value,
-        attachments.value.map(({ id: _id, loading: _loading, ...attachment }) => attachment),
-    );
+    emit('submit', {
+        prompt: prompt.value,
+        scope: scope.value,
+        references: references.value,
+        attachments: attachments.value.map(({ id: _id, loading: _loading, ...attachment }) => attachment),
+    });
+}
+function selectSuggestedAction(action: DocumentAiPromptAction) {
+    if (!action.defaultScope) return;
+    scope.value = action.defaultScope === 'selection' && !props.selectionAvailable
+        ? 'section'
+        : action.defaultScope;
 }
 function runAction(action: DocumentAiAction) {
     prompt.value = action.prompt;
@@ -338,7 +413,7 @@ function setScope(value: string | number) {
     if (value === 'selection' || value === 'document' || value === 'section') scope.value = value;
 }
 function setModel(value: string) {
-    void update({ modelId: value || null });
+    void update({ modelId: !value || value === INHERIT_MODEL_VALUE ? null : value });
 }
 function setInstruction(event: Event) {
     void update({
@@ -467,8 +542,8 @@ function removeAttachment(id: string) {
     gap: 0.65rem;
     width: 100%;
     padding: 0.7rem;
-    border: 1px solid var(--md-outline-variant);
-    border-radius: 1rem;
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
     background: color-mix(in oklab, var(--md-surface), transparent 2%);
     box-shadow: 0 10px 32px rgb(0 0 0 / 9%);
     backdrop-filter: blur(18px);
@@ -477,7 +552,7 @@ function removeAttachment(id: string) {
         border-color 220ms ease;
 }
 .document-ai-composer:focus-within {
-    border-color: color-mix(in oklab, var(--md-primary), var(--md-outline-variant) 55%);
+    border-color: color-mix(in oklab, var(--md-primary), var(--md-border-color) 55%);
     box-shadow: 0 14px 38px rgb(0 0 0 / 12%);
 }
 .selection-context {
@@ -486,7 +561,7 @@ function removeAttachment(id: string) {
     align-items: center;
     gap: 0.45rem;
     padding: 0.35rem 0.5rem;
-    border-radius: 0.65rem;
+    border-radius: var(--md-border-radius);
     color: var(--md-on-surface-variant);
     background: var(--md-surface-container-low);
     font-size: 0.72rem;
@@ -512,28 +587,13 @@ function removeAttachment(id: string) {
 .composer-prompt {
     min-width: 0;
 }
-.composer-prompt :deep(textarea) {
-    min-height: 2.7rem;
-    max-height: 11rem;
-    resize: none;
-    border: 0;
-    padding: 0.65rem 0.35rem;
-    background: transparent;
-    color: var(--md-on-surface);
-    line-height: 1.45;
-    outline: none;
-    box-shadow: none;
-}
-.composer-prompt :deep(textarea::placeholder) {
-    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 16%);
-}
 .send-button {
     align-self: end;
     justify-content: center;
     width: 2.6rem;
     height: 2.6rem;
     padding: 0 !important;
-    border-radius: 50%;
+    border-radius: var(--md-border-radius);
     text-align: center;
 }
 .send-button :deep(svg) {
@@ -547,8 +607,8 @@ function removeAttachment(id: string) {
 }
 .attachment-button {
     flex: 0 0 auto;
-    border: 1px solid var(--md-outline-variant);
-    border-radius: 50%;
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
 }
 .scope-label {
     color: var(--md-on-surface-variant);
@@ -560,7 +620,7 @@ function removeAttachment(id: string) {
 .scope-control :deep([role='tablist']) {
     min-height: 2rem;
     padding: 0.15rem;
-    border-radius: 0.6rem;
+    border-radius: var(--md-border-radius);
     background: var(--md-surface-container-low);
 }
 .scope-control :deep([role='tab']) {
@@ -593,8 +653,8 @@ function removeAttachment(id: string) {
     align-items: center;
     gap: 0.4rem;
     padding: 0.25rem 0.3rem 0.25rem 0.25rem;
-    border: 1px solid var(--md-outline-variant);
-    border-radius: 0.65rem;
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
     background: var(--md-surface-container-low);
     font-size: 0.68rem;
 }
@@ -603,7 +663,7 @@ function removeAttachment(id: string) {
     width: 1.8rem;
     height: 1.8rem;
     flex: 0 0 auto;
-    border-radius: 0.4rem;
+    border-radius: var(--md-border-radius);
     object-fit: cover;
 }
 .attachment-type {
@@ -656,7 +716,7 @@ function removeAttachment(id: string) {
     display: grid;
     gap: 0.2rem;
     padding: 0.5rem;
-    border-radius: 0.5rem;
+    border-radius: var(--md-border-radius);
     background: var(--md-surface-container-low);
     font-size: 0.72rem;
 }
@@ -692,7 +752,7 @@ ins {
     overflow-x: hidden;
     overflow-y: auto;
     padding: 1rem 0.2rem 0.15rem;
-    border-top: 1px solid var(--md-outline-variant);
+    border-top: var(--md-border-width) solid var(--md-border-color);
     scrollbar-width: thin;
 }
 .settings-intro,
@@ -727,9 +787,18 @@ ins {
     justify-content: space-between;
     gap: 0.8rem;
     padding: 0.8rem;
-    border: 1px solid var(--md-outline-variant);
-    border-radius: 0.8rem;
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
     background: color-mix(in oklab, var(--md-surface-container-low), transparent 24%);
+}
+.model-select-hint {
+    margin: 0;
+    color: var(--md-on-surface-variant);
+    font-size: 0.64rem;
+    line-height: 1.35;
+}
+.model-select :deep([data-slot='base']) {
+    max-width: 100%;
 }
 .setting-card :deep(textarea) {
     font-size: 0.72rem;
@@ -752,8 +821,8 @@ ins {
 .quick-action-row {
     min-width: 0;
     padding: 0.55rem 0.65rem;
-    border: 1px solid var(--md-outline-variant);
-    border-radius: 0.8rem;
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
     background: color-mix(in oklab, var(--md-surface), transparent 2%);
     transition:
         border-color 180ms ease,
@@ -765,7 +834,7 @@ ins {
 }
 .quick-action-row.is-editing {
     padding: 0.8rem;
-    border-color: color-mix(in oklab, var(--md-primary), var(--md-outline-variant) 62%);
+    border-color: color-mix(in oklab, var(--md-primary), var(--md-border-color) 62%);
     background: color-mix(in oklab, var(--md-primary-container), var(--md-surface) 88%);
     box-shadow: 0 10px 28px rgb(0 0 0 / 7%);
 }
@@ -782,7 +851,7 @@ ins {
     display: grid;
     place-items: center;
     flex: 0 0 auto;
-    border-radius: 0.55rem;
+    border-radius: var(--md-border-radius);
     color: var(--md-on-surface-variant);
     background: var(--md-surface-container);
     font-size: 0.64rem;
@@ -858,8 +927,8 @@ ins {
     grid-template-columns: minmax(0, 1fr) minmax(9rem, 0.3fr);
     gap: 0.7rem;
     padding: 0.75rem;
-    border: 1px solid color-mix(in oklab, var(--md-outline-variant), transparent 22%);
-    border-radius: 0.7rem;
+    border: var(--md-border-width) solid color-mix(in oklab, var(--md-border-color), transparent 22%);
+    border-radius: var(--md-border-radius);
     background: color-mix(in oklab, var(--md-surface), transparent 4%);
 }
 .quick-action-fields > * {
@@ -895,8 +964,8 @@ ins {
     justify-content: space-between;
     gap: 1rem;
     padding: 1rem;
-    border: 1px dashed var(--md-outline-variant);
-    border-radius: 0.8rem;
+    border: var(--md-border-width) dashed var(--md-border-color);
+    border-radius: var(--md-border-radius);
     background: color-mix(in oklab, var(--md-surface-container-low), transparent 45%);
 }
 .quick-action-empty > div {
@@ -1018,7 +1087,7 @@ ins {
     .action-buttons {
         grid-column: 1 / -1;
         padding-top: 0.45rem;
-        border-top: 1px solid color-mix(in oklab, var(--md-outline-variant), transparent 38%);
+        border-top: var(--md-border-width) solid color-mix(in oklab, var(--md-border-color), transparent 38%);
         justify-content: flex-end;
     }
     .quick-action-edit-header .action-buttons {

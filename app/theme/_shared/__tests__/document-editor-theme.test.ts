@@ -41,6 +41,35 @@ describe('document editor theme contract', () => {
         expect(styles).toHaveProperty('.document-editor-root .document-ai-composer');
         expect(styles).toHaveProperty('.document-editor-root .selection-menu');
         expect(styles).toHaveProperty('.document-editor-root .slash-menu');
+        expect(styles).toHaveProperty('.document-editor-root .setting-card');
+        expect(styles).toHaveProperty('.document-editor-root .quick-action-row');
+        expect(styles).toHaveProperty('.document-editor-root .revision-item');
+    });
+
+    it('retro document surfaces use shared border tokens', () => {
+        const composer = retroDocumentStyles['.document-editor-root .document-ai-composer']?.style;
+        const settingCard = retroDocumentStyles['.document-editor-root .setting-card']?.style;
+        const revisionItem = retroDocumentStyles['.document-editor-root .revision-item']?.style;
+
+        expect(composer?.border).toContain('var(--md-border-width)');
+        expect(composer?.borderRadius).toBe('var(--md-border-radius)');
+        expect(settingCard?.border).toContain('var(--md-border-width)');
+        expect(settingCard?.borderRadius).toBe('var(--md-border-radius)');
+        expect(revisionItem?.border).toContain('var(--md-border-width)');
+        expect(revisionItem?.borderRadius).toBe('var(--md-border-radius)');
+    });
+
+    it('retro keeps chrome pixel fonts but uses a readable stack for the writing canvas', () => {
+        const root = retroDocumentStyles['.document-editor-root']?.style;
+        const canvas = retroDocumentStyles['.document-editor-root .document-canvas']?.style;
+        const content = retroDocumentStyles['.document-editor-root .document-content']?.style;
+        const title = retroDocumentStyles['.document-editor-root .document-title-field textarea']?.style;
+
+        expect(root?.fontFamily).toBe('var(--font-sans)');
+        expect(canvas?.fontFamily).toContain('IBM Plex Sans');
+        expect(content?.fontFamily).toContain('IBM Plex Sans');
+        expect(title?.fontFamily).toContain('IBM Plex Sans');
+        expect(content?.fontFamily).not.toContain('VT323');
     });
 
     it.each([
@@ -54,6 +83,14 @@ describe('document editor theme contract', () => {
         expect(config.ui).toHaveProperty('selectMenu');
         expect(config.ui).toHaveProperty('tabs');
         expect(config.ui).toHaveProperty('card');
+    });
+
+    it('retro modal titles use a readable face and truncate instead of wrapping awkwardly', () => {
+        const title = retroAppConfig.ui.modal.slots.title;
+        expect(title).toContain('font-vt323');
+        expect(title).toContain('truncate');
+        expect(title).toContain('min-w-0');
+        expect(title).not.toContain('text-lg!');
     });
 
     it.each([

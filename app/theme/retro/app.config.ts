@@ -21,10 +21,11 @@ export default {
                 content:
                     'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none ',
                 body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)]  p-4',
-                header: 'relative border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-[var(--md-on-primary)]!',
-                title: 'text-[var(--md-on-primary)] font-semibold text-lg!',
+                header: 'relative border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center gap-2 text-[var(--md-on-primary)]!',
+                // Press Start wraps poorly at modal widths; keep the readable retro face and clip overflow.
+                title: 'text-[var(--md-on-primary)] font-vt323 font-semibold text-base! leading-tight min-w-0 flex-1 truncate',
                 description: 'hidden',
-                close: 'relative! top-auto! end-auto! flex items-center justify-center',
+                close: 'relative! top-auto! end-auto! flex items-center justify-center shrink-0',
             },
         },
         button: {

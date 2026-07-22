@@ -13,7 +13,8 @@ export type OpenRouterReasoningEffort =
     (typeof OPENROUTER_REASONING_EFFORTS)[number];
 
 export type OpenRouterReasoningConfig = {
-    effort?: OpenRouterReasoningEffort;
+    /** OpenRouter also accepts `"none"` to disable reasoning for a request. */
+    effort?: OpenRouterReasoningEffort | 'none';
     enabled?: boolean;
     max_tokens?: number;
     exclude?: boolean;
