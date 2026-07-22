@@ -44,6 +44,16 @@ vi.mock(
 
 const mocks = getMocks();
 
+function stubObjectUrl(
+    createObjectURL: ReturnType<typeof vi.fn>,
+    revokeObjectURL: ReturnType<typeof vi.fn>
+) {
+    const NativeURL = globalThis.URL;
+    class URLMock extends NativeURL {}
+    Object.assign(URLMock, { createObjectURL, revokeObjectURL });
+    vi.stubGlobal('URL', URLMock);
+}
+
 async function mountGrid(items: FileMeta[]) {
     const GalleryGrid = (await import('../GalleryGrid.vue')).default;
     return mount(GalleryGrid, {
@@ -80,10 +90,7 @@ describe('GalleryGrid lifecycle management', () => {
     it('revokes object URLs when items are removed', async () => {
         const createObjectURL = vi.fn(() => 'blob://meta-a');
         const revokeObjectURL = vi.fn();
-        vi.stubGlobal('URL', {
-            createObjectURL,
-            revokeObjectURL,
-        });
+        stubObjectUrl(createObjectURL, revokeObjectURL);
 
         const idleCallbacks = new Map<number, any>();
         let idleHandle = 1;
@@ -112,7 +119,9 @@ describe('GalleryGrid lifecycle management', () => {
         const disconnect = vi.fn();
         vi.stubGlobal(
             'IntersectionObserver',
-            vi.fn(() => ({ observe, disconnect }))
+            vi.fn(function () {
+                return { observe, disconnect };
+            })
         );
 
         mocks.getFileBlob.mockResolvedValue(
@@ -174,7 +183,9 @@ describe('GalleryGrid lifecycle management', () => {
 
         const observe = vi.fn();
         const disconnect = vi.fn();
-        const IntersectionObserverMock = vi.fn(() => ({ observe, disconnect }));
+        const IntersectionObserverMock = vi.fn(function () {
+            return { observe, disconnect };
+        });
         vi.stubGlobal('IntersectionObserver', IntersectionObserverMock);
 
         mocks.getFileBlob.mockResolvedValue(
@@ -247,7 +258,9 @@ describe('GalleryGrid lifecycle management', () => {
         const disconnect = vi.fn();
         vi.stubGlobal(
             'IntersectionObserver',
-            vi.fn(() => ({ observe, disconnect }))
+            vi.fn(function () {
+                return { observe, disconnect };
+            })
         );
 
         mocks.getFileBlob.mockResolvedValue(

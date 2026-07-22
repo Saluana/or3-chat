@@ -140,7 +140,7 @@
         "@typescript-eslint/parser": "^8.65.0",
         "@vite-pwa/nuxt": "^1.1.1",
         "@vitejs/plugin-vue": "6.0.8",
-        "@vitest/coverage-v8": "2.1.9",
+        "@vitest/coverage-v8": "4.1.10",
         "@vue/test-utils": "^2.4.11",
         "better-sqlite3": "^12.11.1",
         "convex": "1.32.0",
@@ -152,7 +152,7 @@
         "typescript": "^5.9.3",
         "vite": "8.1.5",
         "vite-bundle-visualizer": "^1.2.1",
-        "vitest": "^2.1.9"
+        "vitest": "4.1.10"
     },
     "overrides": {
         "prosemirror-model": "1.25.11",

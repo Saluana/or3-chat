@@ -2,15 +2,8 @@ import { defineConfig } from 'vitest/config';
 import path from 'path';
 import vue from '@vitejs/plugin-vue';
 
-// Duplicate vite type trees (root vs vitest's bundled) cause overload mismatch.
-// We intentionally cast the plugin to any to bypass structural mismatch.
-// No dependency version changes per instruction.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const vueAny: any = vue;
-
 export default defineConfig({
-    // Casted plugin to avoid TS 2769 noise only in editor; runtime unaffected.
-    plugins: [vueAny()],
+    plugins: [vue()],
     resolve: {
         // Prevent Vite from following symlinks to real paths, which would move
         // linked provider packages outside the project root and break bare imports.
@@ -55,7 +48,7 @@ export default defineConfig({
             provider: 'v8',
             reportsDirectory: './coverage',
             reporter: ['text', 'html'],
-            include: ['app/composables/useStreamAccumulator.ts'],
+            include: ['app/composables/chat/useStreamAccumulator.ts'],
             thresholds: {
                 lines: 90,
                 statements: 90,

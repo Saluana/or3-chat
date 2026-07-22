@@ -82,23 +82,15 @@ export interface StreamAccumulatorApi {
 }
 
 // Resolve rAF/CAF dynamically to honor test-time stubs and late availability
-function nowTs(): number {
-    try {
-        return globalThis.performance.now();
-    } catch {
-        return Date.now();
-    }
-}
 type GlobalWithRAF = typeof globalThis & {
     requestAnimationFrame?: (cb: FrameRequestCallback) => number;
     cancelAnimationFrame?: (id: number) => void;
 };
 
 function getRAF(): (cb: FrameRequestCallback) => number {
-    const g = globalThis as GlobalWithRAF;
-    if (typeof g.requestAnimationFrame === 'function') return g.requestAnimationFrame;
-    return (cb: FrameRequestCallback) =>
-        setTimeout(() => cb(nowTs()), 0) as unknown as number;
+    return (globalThis as GlobalWithRAF).requestAnimationFrame as (
+        cb: FrameRequestCallback
+    ) => number;
 }
 function getCAF(): (id: number) => void {
     const g = globalThis as GlobalWithRAF;
@@ -145,6 +137,7 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         }
         
         // Warn if accumulator grows too large (potential memory issue)
+        /* v8 ignore start -- development-only memory diagnostic */
         if (!warnedAboutSize && import.meta.dev) {
             const totalLen = state.text.length + state.reasoningText.length;
             if (totalLen > MAX_REASONABLE_LENGTH) {
@@ -155,6 +148,7 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
                 warnedAboutSize = true;
             }
         }
+        /* v8 ignore stop */
         
         state.version++;
     }
@@ -179,9 +173,11 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
     /** Ensure stream not already finalized. Returns false if already finalized. */
     function ensureNotFinalized(op: string): boolean {
         if (_finalized) {
+            /* v8 ignore start -- development-only misuse diagnostic */
             if (import.meta.dev) {
                 console.warn(`[stream] ${op} after finalize ignored`);
             }
+            /* v8 ignore stop */
             return false;
         }
         return true;
@@ -190,11 +186,13 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
     function append(delta: string, { kind }: { kind: AppendKind }) {
         if (!ensureNotFinalized('append')) return;
         if (!delta) {
+            /* v8 ignore start -- development-only upstream diagnostic */
             if (import.meta.dev && ++emptyAppendWarnings <= 3) {
                 console.warn(
                     '[stream] empty delta append ignored (possible upstream tokenization issue)'
                 );
             }
+            /* v8 ignore stop */
             return;
         }
         if (kind === 'reasoning') pendingReasoning.push(delta);

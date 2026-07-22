@@ -19,6 +19,16 @@ vi.mock('~/db/files', () => ({ getFileBlob: factory.getFileBlob }));
 vi.mock('~/utils/errors', () => ({ reportError: factory.reportError }));
 vi.mock('@vueuse/core', () => ({ onKeyStroke: factory.onKeyStroke }));
 
+function stubObjectUrl(
+    createObjectURL: ReturnType<typeof vi.fn>,
+    revokeObjectURL: ReturnType<typeof vi.fn>
+) {
+    const NativeURL = globalThis.URL;
+    class URLMock extends NativeURL {}
+    Object.assign(URLMock, { createObjectURL, revokeObjectURL });
+    vi.stubGlobal('URL', URLMock);
+}
+
 describe('ImageViewer preview cache reuse', () => {
     beforeEach(async () => {
         factory.toastAdd.mockReset();
@@ -60,10 +70,7 @@ describe('ImageViewer preview cache reuse', () => {
     it('reuses cached previews when reopening with the same hash', async () => {
         const createObjectURL = vi.fn(() => 'blob://viewer');
         const revokeObjectURL = vi.fn();
-        vi.stubGlobal('URL', {
-            createObjectURL,
-            revokeObjectURL,
-        });
+        stubObjectUrl(createObjectURL, revokeObjectURL);
 
         factory.getFileBlob.mockResolvedValue(
             new Blob(['primary'], { type: 'image/png' })
@@ -94,10 +101,7 @@ describe('ImageViewer preview cache reuse', () => {
             () => `blob://viewer-${createObjectURL.mock.calls.length}`
         );
         const revokeObjectURL = vi.fn();
-        vi.stubGlobal('URL', {
-            createObjectURL,
-            revokeObjectURL,
-        });
+        stubObjectUrl(createObjectURL, revokeObjectURL);
 
         factory.getFileBlob.mockImplementation(
             async (hash: string) => new Blob([hash], { type: 'image/png' })
