@@ -82,10 +82,10 @@ export default {
                         trailingIcon: 'shrink-0 h-6 w-6',
                         leadingIcon: 'shrink-0 h-6 w-6',
                     },
-                    square: {
-                        true: 'px-0! aspect-square!',
-                        false: '',
-                    },
+                },
+                square: {
+                    true: 'px-0! aspect-square! justify-center text-center',
+                    false: '',
                 },
                 buttonGroup: {
                     horizontal:
@@ -121,6 +121,37 @@ export default {
                     md: { base: 'h-[40px] text-[14px]!' },
                     lg: { base: 'h-[48px] text-[16px]!' },
                 },
+            },
+        },
+        select: {
+            slots: {
+                base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! retro-shadow focus:ring-1 focus:ring-[color:var(--md-primary)]',
+                content: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! theme-shadow',
+                item: 'rounded-[var(--md-border-radius)] data-highlighted:before:bg-[var(--md-surface-hover)]',
+            },
+        },
+        tabs: {
+            slots: {
+                trigger: 'text-[var(--md-on-surface-variant)] data-[state=active]:text-[var(--md-on-surface)]',
+            },
+            variants: {
+                variant: {
+                    pill: {
+                        list: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface-container-low)]',
+                        indicator: 'rounded-[var(--md-border-radius)] theme-shadow',
+                        trigger: 'rounded-[var(--md-border-radius)]',
+                    },
+                    link: {
+                        list: 'rounded-none bg-transparent',
+                        indicator: 'rounded-none shadow-none',
+                        trigger: 'rounded-none border-0! shadow-none!',
+                    },
+                },
+            },
+        },
+        card: {
+            slots: {
+                root: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface-container-low)] ring-0! theme-shadow',
             },
         },
         checkbox: {

@@ -76,10 +76,10 @@ export default {
                         trailingIcon: 'shrink-0 h-5 w-5',
                         leadingIcon: 'shrink-0 h-5 w-5',
                     },
-                    square: {
-                        true: 'px-0! aspect-square!',
-                        false: '',
-                    },
+                },
+                square: {
+                    true: 'px-0! aspect-square! justify-center text-center',
+                    false: '',
                 },
                 buttonGroup: {
                     horizontal:
@@ -100,6 +100,37 @@ export default {
                     sm: { base: 'h-[32px] px-[12px]! text-[14px]' },
                     md: { base: 'h-[36px] px-[14px]! text-[14px]' },
                 },
+            },
+        },
+        select: {
+            slots: {
+                base: 'rounded-xl border border-[rgba(0,0,0,0.15)] bg-transparent text-[var(--md-on-surface)] ring-0! hover:border-[rgba(0,0,0,0.25)] focus:ring-1 focus:ring-[var(--md-primary)] dark:border-[rgba(255,255,255,0.15)] dark:hover:border-[rgba(255,255,255,0.25)]',
+                content: 'rounded-xl border border-[rgba(0,0,0,0.08)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! shadow-lg dark:border-[rgba(255,255,255,0.08)]',
+                item: 'rounded-lg data-highlighted:before:bg-[var(--md-surface-hover)]',
+            },
+        },
+        tabs: {
+            slots: {
+                trigger: 'text-[var(--md-on-surface-variant)] data-[state=active]:text-[var(--md-on-surface)]',
+            },
+            variants: {
+                variant: {
+                    pill: {
+                        list: 'rounded-xl bg-[var(--md-surface-container-low)]',
+                        indicator: 'rounded-lg shadow-sm',
+                        trigger: 'rounded-lg',
+                    },
+                    link: {
+                        list: 'rounded-none bg-transparent',
+                        indicator: 'rounded-full shadow-none',
+                        trigger: 'rounded-none',
+                    },
+                },
+            },
+        },
+        card: {
+            slots: {
+                root: 'rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[var(--md-surface-container-low)] ring-0! shadow-sm dark:border-[rgba(255,255,255,0.08)]',
             },
         },
         formField: {

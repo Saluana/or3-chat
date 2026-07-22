@@ -4,8 +4,16 @@ The OR3 document editor is a local-first Tiptap surface split into four concerns
 
 - `DocumentEditorRoot.vue` owns the live editor, idle capture, responsive chrome, and lifecycle coordination.
 - `useDocumentsStore.ts` owns generation-stamped persistence. A write can clear only the generations included in its snapshot, so edits made during an in-flight save remain dirty.
-- `DocumentInspector.vue` hosts lazy AI and history panels plus derived outline and document information.
+- `DocumentInspector.vue` hosts lazy history and plugin panels plus derived outline and document information. AI lives in a compact in-canvas composer so the document stays visible while prompting and reviewing edits.
 - `document-revisions.ts` stores compressed, synced rolling history as internal posts.
+
+## Theme contract
+
+The editor root publishes the canonical `document` theme context and stable targets for its header, toolbar, canvas, AI composer, inspector, menus, and primary actions. Editor chrome resolves semantic `editor.*` icon tokens through `useIcon`, so installed themes can replace the complete icon language without patching components. Typography, colors, surfaces, outlines, and state colors consume generated theme tokens; Tiptap and floating surfaces are customized through each bundled theme's `documentsStyles` selectors.
+
+All visible editor controls use Nuxt UI primitives: buttons, inputs, textareas, selects, searchable model selection, tabs, dropdown menus, badges, cards, sliders, form fields, and modals. Their shared configuration lives in the base app config and the bundled theme app-config patches. Raw DOM controls are reserved for Tiptap's editable surface and the visually hidden native file picker required for uploads.
+
+The bundled `blank` profile supplies clean Tabler icons, soft borders, and elevated floating surfaces. The `retro` profile uses the default pixel icon language, theme border width/radius, and offset shadows. Both profiles support their light and dark palettes without editor-specific color constants; installed themes inherit safe defaults for any editor icon tokens they do not override.
 
 ## Persistence contract
 
@@ -25,6 +33,6 @@ Retention keeps the newest 20 complete checkpoints plus one per UTC day for the 
 
 AI runs only after explicit submission. The request freezes a selection, top-level section, or explicitly chosen document scope and assigns stable block references. The model must call the forced `propose_document_edits` tool with no more than 32 operations.
 
-Operations are applied to the frozen snapshot off-screen. Unknown references, unsafe links, unsupported nodes, invalid nesting, oversized output, and schema-invalid content are rejected. The inspector previews an accept-all/reject-all candidate. Every editor transaction increments a content version; a proposal becomes unacceptably stale if the document changes before acceptance. Accepting creates a pre-AI checkpoint and applies the candidate as one editor transaction.
+Operations are applied to the frozen snapshot off-screen. Unknown references, unsafe links, unsupported nodes, invalid nesting, oversized output, and schema-invalid content are rejected. The in-canvas composer previews an accept-all/reject-all candidate and shows the exact selected text when selection scope is available. Every editor transaction increments a content version; a proposal becomes unacceptably stale if the document changes before acceptance. Accepting creates a pre-AI checkpoint and applies the candidate as one editor transaction.
 
 User settings are synced in `document_ai_settings.v1`, including the selected model, system instruction, and up to 12 quick actions. Only tool-capable models are listed.

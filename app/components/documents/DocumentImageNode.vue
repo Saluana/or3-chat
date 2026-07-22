@@ -16,8 +16,9 @@
         <div v-if="selected" class="image-controls" contenteditable="false">
             <label>
                 <span class="sr-only">Image alt text</span>
-                <input
-                    :value="node.attrs.alt || ''"
+                <UInput
+                    :model-value="node.attrs.alt || ''"
+                    size="sm"
                     aria-label="Image alt text"
                     placeholder="Describe this image"
                     @change="setAlt"
@@ -25,19 +26,17 @@
             </label>
             <label class="image-size">
                 <span class="sr-only">Image width</span>
-                <input
-                    type="range"
-                    min="25"
-                    max="100"
-                    step="5"
-                    :value="node.attrs.width || 100"
+                <USlider
+                    :min="25"
+                    :max="100"
+                    :step="5"
+                    :model-value="Number(node.attrs.width || 100)"
+                    tooltip
                     aria-label="Image width"
-                    @input="setWidth"
+                    @update:model-value="setWidth"
                 />
             </label>
-            <button type="button" aria-label="Remove image" @click="deleteNode">
-                Remove
-            </button>
+            <UButton color="error" variant="ghost" size="sm" label="Remove" aria-label="Remove image" @click="deleteNode" />
         </div>
     </NodeViewWrapper>
 </template>
@@ -77,8 +76,9 @@ function setAlt(event: Event) {
     props.updateAttributes({ alt: (event.target as HTMLInputElement).value });
 }
 
-function setWidth(event: Event) {
-    props.updateAttributes({ width: Number((event.target as HTMLInputElement).value) });
+function setWidth(value: number | number[] | undefined) {
+    const width = Array.isArray(value) ? value[0] : value;
+    if (typeof width === 'number') props.updateAttributes({ width });
 }
 </script>
 
@@ -129,16 +129,11 @@ function setWidth(event: Event) {
     box-shadow: 0 8px 24px rgb(0 0 0 / 14%);
 }
 
-.image-controls input:not([type='range']) {
+.image-controls label:first-child {
     width: min(15rem, 42vw);
-    padding: 0.35rem 0.5rem;
-    border-radius: 0.45rem;
-    background: var(--md-surface-container-low);
-    outline: none;
 }
 
-.image-controls button {
-    padding: 0.35rem 0.55rem;
-    color: var(--md-error);
+.image-size {
+    width: min(9rem, 28vw);
 }
 </style>

@@ -1,47 +1,58 @@
 <template>
-    <div class="history-panel">
+    <div v-theme="'document.history'" class="history-panel" data-context="document">
         <div class="history-heading">
             <div>
+                <span>Document timeline</span>
                 <strong>Revision history</strong>
-                <p>Synced, compressed checkpoints</p>
+                <p>Review and restore compressed checkpoints synced with this workspace.</p>
             </div>
-            <button type="button" :disabled="busy" @click="checkpoint">Create checkpoint</button>
+            <UButton :icon="plusIcon" color="neutral" variant="outline" size="sm" block class="checkpoint-button rounded-xl!" label="Create checkpoint" :loading="busy" @click="checkpoint" />
         </div>
 
-        <div v-if="selected" class="revision-preview">
-            <div class="preview-title">
-                <div>
-                    <strong>{{ selected.snapshot.title }}</strong>
-                    <span>{{ formatDate(selected.manifest.createdAt) }}</span>
+        <UCard v-if="selected" class="revision-preview">
+            <template #header>
+                <div class="preview-title">
+                    <div>
+                        <strong>{{ selected.snapshot.title }}</strong>
+                        <span>{{ formatDate(selected.manifest.createdAt) }}</span>
+                    </div>
+                    <UButton :icon="closeIcon" color="neutral" variant="ghost" size="xs" square aria-label="Close revision preview" @click="selected = null" />
                 </div>
-                <button type="button" aria-label="Close revision preview" @click="selected = null">×</button>
-            </div>
+            </template>
             <div class="preview-body">
                 <p v-for="(line, index) in previewLines(selected.snapshot.content)" :key="index">{{ line }}</p>
             </div>
-            <button type="button" class="restore-button" :disabled="busy" @click="restoreSelected">Restore this version</button>
-        </div>
+            <template #footer>
+                <UButton color="primary" block class="rounded-xl!" label="Restore this version" :disabled="busy" @click="restoreSelected" />
+            </template>
+        </UCard>
 
         <div v-if="loading" class="empty-state">Loading history…</div>
         <div v-else-if="!revisions.length" class="empty-state">
-            <UIcon name="lucide:history" />
+            <UIcon :name="historyIcon" />
             <strong>No checkpoints yet</strong>
             <span>History appears after 30 seconds of inactivity or when you create one.</span>
         </div>
         <div v-else class="revision-list">
-            <button
+            <UButton
                 v-for="revision in revisions"
                 :key="revision.manifest.revisionId"
-                type="button"
+                color="neutral"
+                variant="ghost"
+                class="revision-item h-auto! min-h-[4.5rem]! rounded-xl! px-3! py-2.5!"
+                :class="{ selected: selected?.manifest.revisionId === revision.manifest.revisionId }"
                 @click="selected = revision"
             >
-                <span class="revision-dot" />
+                <span class="revision-icon"><UIcon :name="historyIcon" /></span>
                 <span class="revision-copy">
                     <strong>{{ sourceLabel(revision.manifest.source) }}</strong>
-                    <small>{{ formatDate(revision.manifest.createdAt) }}</small>
+                    <span class="revision-meta">
+                        <small>{{ formatDate(revision.manifest.createdAt) }}</small>
+                        <UBadge color="neutral" variant="soft" size="xs">{{ formatSize(revision.manifest.encodedBytes) }}</UBadge>
+                    </span>
                 </span>
-                <span class="revision-size">{{ formatSize(revision.manifest.encodedBytes) }}</span>
-            </button>
+                <UIcon :name="chevronIcon" class="revision-chevron" />
+            </UButton>
         </div>
         <p v-if="error" class="history-error" role="alert">{{ error }}</p>
     </div>
@@ -50,6 +61,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
 import type { JSONContent } from '@tiptap/core';
+import { useIcon } from '~/composables/useIcon';
 import {
     listCompleteDocumentRevisions,
     type CompleteDocumentRevision,
@@ -60,6 +72,10 @@ const props = defineProps<{
     createCheckpoint: () => Promise<void>;
 }>();
 const emit = defineEmits<{ restore: [revision: CompleteDocumentRevision] }>();
+const historyIcon = useIcon('editor.history');
+const closeIcon = useIcon('editor.close');
+const plusIcon = useIcon('ui.plus');
+const chevronIcon = useIcon('ui.chevron.right');
 
 const revisions = ref<CompleteDocumentRevision[]>([]);
 const selected = ref<CompleteDocumentRevision | null>(null);
@@ -131,24 +147,31 @@ onMounted(load);
 </script>
 
 <style scoped>
-.history-panel { display: grid; gap: 1rem; }
-.history-heading { display: flex; align-items: start; justify-content: space-between; gap: .75rem; }
-.history-heading p { margin: .2rem 0 0; color: var(--md-on-surface-variant); font-size: .75rem; }
-.history-heading button, .restore-button { min-height: 2.25rem; padding: .4rem .65rem; border-radius: .6rem; background: var(--md-primary); color: var(--md-on-primary); font-size: .72rem; font-weight: 600; }
+.history-panel { display: grid; gap: 1.1rem; }
+.history-heading { display: grid; gap: .85rem; }
+.history-heading > div { display: grid; gap: .2rem; }
+.history-heading > div > span { color: var(--md-primary); font-size: .62rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.history-heading strong { font-size: 1.05rem; line-height: 1.25; }
+.history-heading p { margin: 0; color: var(--md-on-surface-variant); font-size: .72rem; line-height: 1.45; }
+.checkpoint-button { justify-content: center; }
 .empty-state { min-height: 12rem; display: grid; place-content: center; justify-items: center; gap: .45rem; text-align: center; color: var(--md-on-surface-variant); font-size: .78rem; }
 .empty-state svg { width: 1.5rem; height: 1.5rem; }
-.revision-list { display: grid; }
-.revision-list > button { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .65rem; min-height: 3.75rem; padding: .5rem .25rem; border-bottom: 1px solid var(--md-outline-variant); text-align: left; }
-.revision-dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--md-primary); }
-.revision-copy { display: grid; gap: .15rem; }
-.revision-copy strong { font-size: .78rem; }
-.revision-copy small, .revision-size { color: var(--md-on-surface-variant); font-size: .68rem; }
-.revision-preview { display: grid; gap: .75rem; padding: .8rem; border: 1px solid var(--md-outline-variant); border-radius: .8rem; background: var(--md-surface-container-low); }
-.preview-title { display: flex; justify-content: space-between; }
+.revision-list { display: grid; gap: .65rem; }
+.revision-item { width: 100%; height: auto; min-height: 4.5rem; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; justify-content: stretch; gap: .65rem; padding: .65rem .75rem; border: 1px solid var(--md-outline-variant); background: var(--md-surface-container-low) !important; text-align: left; white-space: normal; box-shadow: 0 1px 1px color-mix(in oklab, var(--md-on-surface), transparent 96%); }
+.revision-item:hover { border-color: color-mix(in oklab, var(--md-primary), var(--md-outline-variant) 55%); background: var(--md-surface-container) !important; }
+.revision-item.selected { border-color: var(--md-primary); background: color-mix(in oklab, var(--md-primary-container), transparent 60%) !important; box-shadow: 0 0 0 2px color-mix(in oklab, var(--md-primary), transparent 88%); }
+.revision-icon { width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: calc(var(--md-border-radius) + .1rem); color: var(--md-primary); background: color-mix(in oklab, var(--md-primary-container), transparent 38%); }
+.revision-icon svg { width: 1rem; height: 1rem; }
+.revision-copy { min-width: 0; display: grid; gap: .28rem; }
+.revision-copy strong { overflow: hidden; font-size: .76rem; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.revision-meta { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+.revision-copy small { min-width: 0; overflow: hidden; color: var(--md-on-surface-variant); font-size: .66rem; text-overflow: ellipsis; white-space: nowrap; }
+.revision-chevron { width: .9rem; height: .9rem; color: var(--md-on-surface-variant); }
+.revision-preview { overflow: hidden; border-color: color-mix(in oklab, var(--md-primary), var(--md-outline-variant) 55%); }
+.preview-title { display: flex; justify-content: space-between; gap: .75rem; }
 .preview-title > div { display: grid; }
 .preview-title span { color: var(--md-on-surface-variant); font-size: .7rem; }
-.preview-title button { font-size: 1.2rem; }
-.preview-body { max-height: 14rem; overflow: auto; padding: .7rem; border-radius: .55rem; background: var(--md-surface); }
+.preview-body { min-height: 4rem; max-height: 14rem; overflow: auto; padding: .8rem; border-radius: calc(var(--md-border-radius) + .2rem); background: var(--md-surface); }
 .preview-body p { margin: 0 0 .45rem; font-size: .76rem; line-height: 1.45; }
 .history-error { color: var(--md-error); font-size: .78rem; }
 </style>

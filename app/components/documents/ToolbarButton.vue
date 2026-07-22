@@ -1,6 +1,7 @@
 <template>
     <UTooltip :text="label" :placement="'bottom'">
         <UButton
+            v-theme="'document.toolbar'"
             v-bind="toolbarButtonProps"
             :title="label"
             :aria-pressed="active ? 'true' : 'false'"

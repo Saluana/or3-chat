@@ -53,7 +53,7 @@ export default defineAppConfig({
                     lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
                 },
                 square: {
-                    true: 'px-0! aspect-square!',
+                    true: 'px-0! aspect-square! justify-center text-center',
                 },
                 buttonGroup: {
                     horizontal:
@@ -76,6 +76,34 @@ export default defineAppConfig({
                     md: { base: 'h-[40px] px-[16px]! text-[17px]' },
                     lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
                 },*/
+            },
+        },
+        select: {
+            slots: {
+                base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)]',
+                content: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! theme-shadow',
+                item: 'rounded-[var(--md-border-radius)] data-highlighted:before:bg-[var(--md-surface-hover)]',
+            },
+        },
+        tabs: {
+            slots: {
+                trigger: 'text-[var(--md-on-surface-variant)] data-[state=active]:text-[var(--md-on-surface)]',
+            },
+            variants: {
+                variant: {
+                    pill: {
+                        list: 'bg-[var(--md-surface-container-low)]',
+                    },
+                    link: {
+                        list: 'bg-transparent rounded-none',
+                        indicator: 'shadow-none',
+                    },
+                },
+            },
+        },
+        card: {
+            slots: {
+                root: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface-container-low)] ring-0! theme-shadow',
             },
         },
         formField: {
