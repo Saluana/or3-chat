@@ -42,7 +42,7 @@ async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
     try {
         for await (const event of openRouterStream({
             apiKey: orKey,
-            model: AutocompleteState.value.aiModel || 'openai/gpt-4o-mini',
+            model: AutocompleteState.value.aiModel || 'openai/gpt-5.6-luna',
             orMessages: [
                 {
                     role: 'system',

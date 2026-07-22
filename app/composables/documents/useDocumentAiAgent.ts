@@ -30,7 +30,7 @@ import {
     type DocumentAiContextReference,
 } from '~/utils/documents/document-ai-context';
 
-const FALLBACK_DOCUMENT_MODEL = 'openai/gpt-oss-120b';
+const FALLBACK_DOCUMENT_MODEL = 'openai/gpt-5.6-luna';
 
 export const DOCUMENT_AI_WORKFLOW_INSTRUCTION = `You are OR3's document-editing planner. Convert the request into one reviewable TipTap operation batch for the current frozen snapshot.
 
