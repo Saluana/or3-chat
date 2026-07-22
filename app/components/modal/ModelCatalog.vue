@@ -191,25 +191,32 @@
                             Indexing models…
                         </div>
                         <template v-else>
-                            <VList
-                                v-if="visibleModels.length"
-                                :key="listKey"
-                                :data="visibleModels"
-                                style="height: 100%"
-                                class="model-catalog-list__rows px-2 sm:px-3 py-2.5 [scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin]"
-                                :overscan="6"
-                                #default="{ item: m }"
-                            >
-                                <div class="pb-2">
-                                    <ModelCatalogCard
-                                        :model="m"
-                                        :selected="selectedId === m.id"
-                                        :favorite="isFavorite(m)"
-                                        @select="onSelectModel(m)"
-                                        @toggle-favorite="toggleFavorite(m)"
-                                    />
-                                </div>
-                            </VList>
+                            <ClientOnly v-if="visibleModels.length">
+                                <Or3Scroll
+                                    :key="listKey"
+                                    :items="visibleModels"
+                                    :item-key="(model) => model.id"
+                                    :estimate-height="72"
+                                    :overscan="520"
+                                    :maintain-bottom="false"
+                                    class="model-catalog-list__rows px-2 sm:px-3 py-2.5 [scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin]"
+                                >
+                                    <template #default="{ item: m }">
+                                        <div class="pb-2">
+                                            <ModelCatalogCard
+                                                :model="m"
+                                                :selected="selectedId === m.id"
+                                                :favorite="isFavorite(m)"
+                                                @select="onSelectModel(m)"
+                                                @toggle-favorite="toggleFavorite(m)"
+                                            />
+                                        </div>
+                                    </template>
+                                </Or3Scroll>
+                                <template #fallback>
+                                    <div class="p-6 text-sm text-[var(--md-on-surface-variant)]">Loading models…</div>
+                                </template>
+                            </ClientOnly>
                             <div
                                 v-else
                                 class="absolute inset-0 flex flex-col items-center justify-center gap-1.5 p-6 text-center"
@@ -379,7 +386,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
 import { useToast } from '#imports';
-import { VList } from 'virtua/vue';
+import { Or3Scroll } from 'or3-scroll';
+import 'or3-scroll/style.css';
 import { useModelSearch } from '~/core/search/useModelSearch';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 import { useModelStore } from '~/composables/chat/useModelStore';
@@ -694,10 +702,10 @@ const visibleModels = computed<OpenRouterModel[]>(() => {
     return sortModels(filtered, sort.value);
 });
 
-/** Forces VList to re-measure when the result set identity changes. */
+/** Remounts the scroller so a new result set starts measured from the top. */
 const listKey = computed(
     () =>
-        `${scope.value}|${selectedProvider.value ?? ''}|${capability.value}|${sort.value}`
+        `${searchQuery.value.trim()}|${scope.value}|${selectedProvider.value ?? ''}|${capability.value}|${sort.value}`
 );
 
 const selectedModel = computed<OpenRouterModel | undefined>(() => {

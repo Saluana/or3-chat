@@ -73,6 +73,13 @@ export interface DocumentAiProposal {
     scope: DocumentAiScope;
 }
 
+export interface DocumentAiAttachment {
+    name: string;
+    mime: string;
+    kind: 'image' | 'pdf';
+    dataUrl: string;
+}
+
 function currentSectionBlocks(editor: Editor, snapshot: DocumentAiFrozenSnapshot) {
     let selectedIndex = 0;
     const selection = editor.state.selection.from;
@@ -125,7 +132,7 @@ export function useDocumentAiAgent(options: {
         proposal.value && proposal.value.requestVersion !== options.contentVersion.value
     ));
 
-    async function resolveModel(): Promise<OpenRouterModel> {
+    async function resolveModel(attachments: readonly DocumentAiAttachment[] = []): Promise<OpenRouterModel> {
         await ensureLoaded();
         if (!catalog.value.length) await fetchModels().catch(() => []);
         let inherited = FALLBACK_DOCUMENT_MODEL;
@@ -133,17 +140,20 @@ export function useDocumentAiAgent(options: {
             inherited = localStorage.getItem('last_selected_model') || inherited;
         } catch { /* localStorage may be unavailable */ }
         const preferred = settings.value.modelId || inherited;
-        const selected = catalog.value.find((model) => model.id === preferred && toolCapable(model))
-            ?? catalog.value.find(toolCapable);
+        const needsVision = attachments.some((attachment) => attachment.kind === 'image');
+        const acceptsAttachments = (model: OpenRouterModel) => !needsVision || model.architecture?.input_modalities?.includes('image') === true;
+        const selected = catalog.value.find((model) => model.id === preferred && toolCapable(model) && acceptsAttachments(model)) ?? catalog.value.find((model) => toolCapable(model) && acceptsAttachments(model));
         if (catalog.value.length && !selected) {
-            throw new Error('No tool-capable model is available. Choose one in document AI settings.');
+            throw new Error(needsVision ? 'No model that supports both images and document tools is available. Choose a vision-capable model in document AI settings.' : 'No tool-capable model is available. Choose one in document AI settings.');
         }
-        return selected ?? {
-            id: preferred,
-            name: preferred,
-            context_length: 32_000,
-            supported_parameters: ['tools'],
-        };
+        return (
+            selected ?? {
+                id: preferred,
+                name: preferred,
+                context_length: 32_000,
+                supported_parameters: ['tools'],
+            }
+        );
     }
 
     function scopeContext(editor: Editor, snapshot: DocumentAiFrozenSnapshot, scope: DocumentAiScope) {
@@ -184,7 +194,7 @@ export function useDocumentAiAgent(options: {
         }
     }
 
-    async function submit(prompt: string, requestedScope: DocumentAiScope) {
+    async function submit(prompt: string, requestedScope: DocumentAiScope, attachments: readonly DocumentAiAttachment[] = []) {
         const editor = options.editor.value;
         if (!editor || !prompt.trim() || status.value === 'streaming') return;
         abort();
@@ -195,7 +205,7 @@ export function useDocumentAiAgent(options: {
             ? 'section'
             : requestedScope;
         const context = scopeContext(editor, snapshot, scope);
-        const model = await resolveModel();
+        const model = await resolveModel(attachments);
         tokenEstimate.value = await countTokens(`${prompt}\n${context.text}`);
         const contextLimit = model.top_provider?.context_length ?? model.context_length ?? 32_000;
         if (tokenEstimate.value + 4096 > contextLimit) {
@@ -235,7 +245,26 @@ export function useDocumentAiAgent(options: {
                     },
                     {
                         role: 'user',
-                        content: `Request: ${request.prompt}\nScope: ${request.scope}\nFrozen content:\n${request.context}`,
+                        content: [
+                            {
+                                type: 'text',
+                                text: `Request: ${request.prompt}\nScope: ${request.scope}\nFrozen content:\n${request.context}`,
+                            },
+                            ...attachments.map((attachment) =>
+                                attachment.kind === 'image'
+                                    ? {
+                                          type: 'image_url',
+                                          image_url: { url: attachment.dataUrl },
+                                      }
+                                    : {
+                                          type: 'file',
+                                          file: {
+                                              filename: attachment.name,
+                                              file_data: attachment.dataUrl,
+                                          },
+                                      },
+                            ),
+                        ],
                     },
                 ],
             })) {

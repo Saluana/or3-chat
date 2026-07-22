@@ -261,13 +261,14 @@ This checklist is ordered so each phase can be implemented, tested, reviewed, an
 
 ### Virtua
 
-- [ ] Update separately.
-- [ ] Test the model catalog with an empty list.
-- [ ] Test a large model list.
-- [ ] Test filtering while scrolled.
-- [ ] Test selection and scroll restoration.
-- [ ] Check row height and overscan behavior.
-- [ ] Verify there is no blank content during rapid scrolling.
+- [x] Replace the sole Virtua list with the shared `or3-scroll` component.
+- [x] Remove `virtua` from direct dependencies.
+- [x] Test the model catalog with an empty list.
+- [x] Test a large model list.
+- [x] Test filtering while scrolled.
+- [x] Test selection and scroll restoration.
+- [x] Check row height and overscan behavior.
+- [x] Verify there is no blank content during rapid scrolling.
 
 **Tip:** Only one application component imports Virtua, so a focused component test plus manual scrolling is more useful than broad unrelated tests.
 
