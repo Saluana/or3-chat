@@ -6,7 +6,6 @@
  */
 
 import type { Plugin } from 'vite';
-import type { PluginContext } from 'rollup';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { ThemeCompiler } from '../scripts/theme-compiler';
@@ -20,6 +19,11 @@ export interface ThemePluginOptions {
 
     /** Whether to show warnings (default: true) */
     showWarnings?: boolean;
+}
+
+interface ThemeCompilerContext {
+    error(message: string): never;
+    warn(message: string): void;
 }
 
 /**
@@ -38,7 +42,7 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
      * Compile themes
      */
     async function compileThemes(
-        context: (PluginContext & { warn?: (msg: string) => void }) | null
+        context: ThemeCompilerContext | null
     ) {
         if (!compiler) {
             compiler = new ThemeCompiler();
@@ -76,7 +80,7 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
             // Handle warnings
             if (showWarnings && result.totalWarnings > 0) {
                 const warningMessage = formatWarnings(result);
-                if (context && context.warn) {
+                if (context) {
                     context.warn(warningMessage);
                 } else {
                     console.warn(warningMessage);

@@ -104,7 +104,7 @@
         "gpt-tokenizer": "^3.4.0",
         "jsonwebtoken": "^9.0.3",
         "lru-cache": "^11.5.2",
-        "nuxt": "4.4.8",
+        "nuxt": "4.5.0",
         "or3-provider-basic-auth": "file:../or3-provider-basic-auth",
         "or3-provider-clerk": "file:../or3-provider-clerk",
         "or3-provider-convex": "file:../or3-provider-convex",
@@ -139,7 +139,7 @@
         "@typescript-eslint/eslint-plugin": "^8.65.0",
         "@typescript-eslint/parser": "^8.65.0",
         "@vite-pwa/nuxt": "^1.1.1",
-        "@vitejs/plugin-vue": "^5.2.4",
+        "@vitejs/plugin-vue": "6.0.8",
         "@vitest/coverage-v8": "2.1.9",
         "@vue/test-utils": "^2.4.11",
         "better-sqlite3": "^12.11.1",
@@ -150,7 +150,7 @@
         "tailwindcss": "4.3.3",
         "tsx": "^4.22.3",
         "typescript": "^5.9.3",
-        "vite": "^7.2.0",
+        "vite": "8.1.5",
         "vite-bundle-visualizer": "^1.2.1",
         "vitest": "^2.1.9"
     },
@@ -158,6 +158,7 @@
         "prosemirror-model": "1.25.11",
         "prosemirror-transform": "1.12.0",
         "prosemirror-view": "1.42.1",
+        "vite-plugin-pwa": "1.3.0",
         "vue": "3.5.40"
     },
     "trustedDependencies": [

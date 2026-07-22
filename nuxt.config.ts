@@ -1040,12 +1040,15 @@ export default defineNuxtConfig({
             format: 'es',
         },
         build: {
-            rollupOptions: {
+            rolldownOptions: {
                 output: {
-                    manualChunks(id) {
-                        if (id.includes('/node_modules/gpt-tokenizer/')) {
-                            return 'gpt-tokenizer';
-                        }
+                    codeSplitting: {
+                        groups: [
+                            {
+                                name: 'gpt-tokenizer',
+                                test: /[\\/]node_modules[\\/]gpt-tokenizer[\\/]/,
+                            },
+                        ],
                     },
                 },
             },
