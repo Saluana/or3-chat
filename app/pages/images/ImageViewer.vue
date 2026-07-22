@@ -201,7 +201,7 @@ const imageProps = computed(() => {
     };
 });
 
-const buttonGroupWrapperProps = computed(() => {
+const fieldGroupWrapperProps = computed(() => {
     const overrides = useThemeOverrides({
         component: 'div',
         context: 'image-viewer',
@@ -311,8 +311,8 @@ watch(
         >
             <div v-bind="topBarProps">
                 <div v-bind="innerTopBarProps">
-                    <div v-bind="buttonGroupWrapperProps">
-                        <UButtonGroup v-if="!props.trashMode">
+                    <div v-bind="fieldGroupWrapperProps">
+                        <UFieldGroup v-if="!props.trashMode">
                             <UButton
                                 v-bind="downloadButtonProps"
                                 :icon="iconDownload"
@@ -336,8 +336,8 @@ watch(
                             >
                                 Delete
                             </UButton>
-                        </UButtonGroup>
-                        <UButtonGroup v-else>
+                        </UFieldGroup>
+                        <UFieldGroup v-else>
                             <UButton
                                 v-bind="restoreButtonProps"
                                 :icon="iconRepeat"
@@ -352,7 +352,7 @@ watch(
                             >
                                 Delete permanently
                             </UButton>
-                        </UButtonGroup>
+                        </UFieldGroup>
                     </div>
                     <UButton
                         v-bind="closeButtonProps"

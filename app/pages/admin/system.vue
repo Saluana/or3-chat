@@ -92,7 +92,8 @@
 	                                />
 	                                <UInput
 	                                    v-else
-	                                    v-model="entry.value"
+	                                    :model-value="entry.value ?? undefined"
+	                                    @update:model-value="entry.value = $event ?? null"
 	                                    size="sm"
 	                                    :disabled="!isOwner"
 	                                    :type="entry.valueType === 'number' ? 'number' : 'text'"

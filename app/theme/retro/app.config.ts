@@ -87,7 +87,7 @@ export default {
                     true: 'px-0! aspect-square! justify-center text-center',
                     false: '',
                 },
-                buttonGroup: {
+                fieldGroup: {
                     horizontal:
                         'first:rounded-l-[var(--md-border-radius)]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[var(--md-border-radius)]!',
                     vertical:
@@ -191,7 +191,7 @@ export default {
                 help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
             },
         },
-        buttonGroup: {
+        fieldGroup: {
             base: 'relative border-none',
             variants: {
                 orientation: {

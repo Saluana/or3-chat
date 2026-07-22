@@ -49,7 +49,7 @@ describe('ImageViewer preview cache reuse', () => {
                         template: '<div><slot /></div>',
                     },
                     UButton: true,
-                    UButtonGroup: true,
+                    UFieldGroup: true,
                     UIcon: true,
                     teleport: true,
                 },

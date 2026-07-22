@@ -13,7 +13,7 @@ Upgrade the `or3-chat` Nuxt, Vue, and Vite dependency family without regressing 
 - The scope is the root `or3-chat` package, matching `planning/dependency-cleanup-checklist.md`; example packages, the plugin SDK package, and sibling provider packages change only if a root compatibility failure requires it.
 - “All Nuxt, Vue, and Vite dependencies” includes the direct framework packages, Nuxt UI, Vue Router, VueUse, the Vue Vite plugin, and the Vite-based Vitest stack. Already-current packages are verified and retained rather than changed cosmetically.
 - Stable releases are used; Nuxt 5, Vue 4, release candidates, and nightly channels are excluded.
-- Nuxt 4.4.8 is an intentional intermediate checkpoint before Nuxt 4.5.0 so Vue Router 5 behavior can be separated from the Vite 8/Rolldown migration.
+- Nuxt 4.4.8 is an intentional intermediate checkpoint before Nuxt 4.5.0 so Router/UI behavior can be separated from the Vite 8/Rolldown migration. Nuxt 4.4 requires Vue Router 5, while Nuxt UI 3 only accepts Vue Router 4, so Nuxt UI 4 and VueUse 14 belong to the same peer-compatible checkpoint.
 - The existing user-owned autocomplete work in the primary checkout is not part of this migration. Work occurs in the isolated `chore/nuxt-vue-vite-upgrades` worktree.
 - Manual browser verification is required before merge, but lack of external provider credentials does not justify changing provider behavior or storing test credentials.
 
@@ -44,12 +44,12 @@ Upgrade the `or3-chat` Nuxt, Vue, and Vite dependency family without regressing 
 - R2.AC2: IF a package is already current THEN its version SHALL remain unchanged unless a peer constraint requires a different declaration.
 - R2.AC3: WHEN lockfile installation completes THEN Vue, Vue Router, VueUse, Nuxt, and Vite runtime trees SHALL not contain avoidable incompatible duplicate majors.
 
-### R3: Establish the Nuxt 4.4 and Vue Router 5 checkpoint
+### R3: Establish the Nuxt 4.4, Vue Router 5, and UI 4 checkpoint
 
 **User Story:** As a maintainer, I want routing changes isolated from bundler changes, so that navigation regressions have a narrow cause.
 
 **Acceptance Criteria:**
-- R3.AC1: WHEN the first framework batch is installed THEN Nuxt SHALL resolve to 4.4.8 and Vue Router SHALL resolve to 5.2.0 while Vite remains on 7.x.
+- R3.AC1: WHEN the first framework batch is installed THEN Nuxt SHALL resolve to 4.4.8, Vue Router to 5.2.0, Nuxt UI to 4.10.0, and VueUse to 14.3.0 while Vite remains on 7.x.
 - R3.AC2: WHEN the checkpoint is validated THEN route generation, auth/admin redirects, dynamic plugin routes, SSR build, and static generation SHALL behave no worse than baseline.
 - R3.AC3: IF direct `unplugin-vue-router` usage is found THEN its imports SHALL be migrated according to the Vue Router 5 guide before the checkpoint is accepted.
 
@@ -58,7 +58,7 @@ Upgrade the `or3-chat` Nuxt, Vue, and Vite dependency family without regressing 
 **User Story:** As a user, I want the interface to retain its behavior and themes after Nuxt UI 4 and VueUse 14, so that the framework refresh does not become a redesign.
 
 **Acceptance Criteria:**
-- R4.AC1: WHEN Nuxt UI 4 is installed THEN `tailwindcss` SHALL be declared directly and all removed or renamed Nuxt UI components and configuration keys SHALL be migrated.
+- R4.AC1: WHEN Nuxt UI 4 is installed THEN current stable `tailwindcss` SHALL be declared directly and all removed or renamed Nuxt UI components and configuration keys SHALL be migrated.
 - R4.AC2: WHEN `UButtonGroup` is removed THEN every use and every `buttonGroup` theme configuration SHALL be represented by the Nuxt UI 4 `FieldGroup` equivalent.
 - R4.AC3: WHEN forms are reviewed THEN `nullify`, nested-form state, submit transformations, and form names SHALL conform to Nuxt UI 4 behavior.
 - R4.AC4: WHEN VueUse 14 is installed THEN debouncing, persistent state, resize observers, keyboard handling, clipboard, drag/drop, and lifecycle cleanup SHALL retain their tested behavior.

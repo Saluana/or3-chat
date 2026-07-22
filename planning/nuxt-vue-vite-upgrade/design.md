@@ -11,21 +11,18 @@ The implementation keeps the primary `or3-cloud` checkout untouched and uses `ch
 ```mermaid
 flowchart LR
     A[Baseline Gate] --> B[Dependency Inventory]
-    B --> C[Router Checkpoint<br/>Nuxt 4.4 + Router 5]
-    C --> D[UI Migration<br/>Nuxt UI 4 + VueUse 14]
-    D --> E[Rolldown Migration<br/>Nuxt 4.5 + Vite 8]
+    B --> C[Framework Checkpoint<br/>Nuxt 4.4 + Router 5<br/>Nuxt UI 4 + VueUse 14]
+    C --> E[Rolldown Migration<br/>Nuxt 4.5 + Vite 8]
     E --> F[Test Stack Migration<br/>Vitest 4]
     F --> G[Final Validation Ledger]
     C -. rollback .-> B
-    D -. rollback .-> C
-    E -. rollback .-> D
+    E -. rollback .-> C
     F -. rollback .-> E
 ```
 
 - **Baseline Gate (R8, R9):** captures install, imports, themes, tests, type-check diagnostics, SSR build, and static build before dependency edits.
 - **Dependency Inventory (R2, R6):** owns current/target versions, peer constraints, duplicate-major checks, and packages intentionally left unchanged.
-- **Router Checkpoint (R3):** moves Nuxt to 4.4.8 and Vue Router to 5.2.0 while Vite stays on 7.x.
-- **UI Migration (R4):** moves Nuxt UI to 4.10.0 and VueUse to 14.3.0, adds direct Tailwind CSS, and migrates removed UI APIs.
+- **Framework Checkpoint (R3, R4):** moves Nuxt to 4.4.8, Vue Router to 5.2.0, Nuxt UI to 4.10.0, and VueUse to 14.3.0 while Vite stays on 7.x. These packages form one peer-compatible unit because Nuxt 4.4 requires Router 5 while Nuxt UI 3 only accepts Router 4.
 - **Rolldown Migration (R5):** moves Nuxt to 4.5.0, Vite to 8.1.5, and the Vue Vite plugin to 6.0.8; it owns custom bundler configuration compatibility.
 - **Test Stack Migration (R7):** moves Vitest and its V8 coverage provider together only after application builds are green.
 - **Final Validation Ledger (R1, R8):** records evidence, distinguishes baseline failures from regressions, and leaves manual or credentialed checks open.
@@ -36,14 +33,14 @@ flowchart LR
 
 | Package | Baseline | Target | Batch | Compatibility owner |
 |---|---:|---:|---|---|
-| `nuxt` | 4.2.2 | 4.4.8, then 4.5.0 | Router, Rolldown | Nuxt configuration and Nitro output |
-| `@nuxt/ui` | 3.3.7 | 4.10.0 | UI | Components, forms, theme config |
+| `nuxt` | 4.2.2 | 4.4.8, then 4.5.0 | Framework, Rolldown | Nuxt configuration and Nitro output |
+| `@nuxt/ui` | 3.3.7 | 4.10.0 | Framework | Components, forms, theme config |
 | `vue` | 3.5.40 | 3.5.40 | Verify only | Shared runtime identity |
-| `vue-router` | 4.6.4 | 5.2.0 | Router | Guards, redirects, generated routes |
-| `@vueuse/core` | 13.9.0 | 14.3.0 | UI | Reactive utilities and cleanup |
+| `vue-router` | 4.6.4 | 5.2.0 | Framework | Guards, redirects, generated routes |
+| `@vueuse/core` | 13.9.0 | 14.3.0 | Framework | Reactive utilities and cleanup |
 | `vite` | 7.3.0 | 8.1.5 | Rolldown | Dev/build pipeline and chunking |
 | `@vitejs/plugin-vue` | 5.2.4 | 6.0.8 | Rolldown | Vue SFC compilation |
-| `tailwindcss` | transitive | 4.3.2 direct | UI | Nuxt UI 4 peer requirement |
+| `tailwindcss` | transitive | 4.3.3 direct | Framework | Nuxt UI 4 peer requirement |
 | `vitest` | 2.1.9 | 4.1.10 | Test stack | Test runner and configuration |
 | `@vitest/coverage-v8` | 2.1.9 | 4.1.10 | Test stack | Coverage remapping |
 | `@vite-pwa/nuxt` | 1.1.1 | unchanged | Verify only | Service-worker build |
@@ -56,7 +53,7 @@ The migration ledger uses small typed records so each checkpoint has an explicit
 type ValidationState = 'pass' | 'baseline-failure' | 'regression' | 'manual'
 
 interface DependencyCheckpoint {
-  name: 'router' | 'ui' | 'rolldown' | 'test-stack'
+  name: 'framework' | 'rolldown' | 'test-stack'
   packages: Record<string, string>
   prerequisites: string[]
   validations: ValidationResult[]
@@ -105,8 +102,8 @@ Each checkpoint runs a focused layer first and the broader gates second:
 
 ## Design Decisions
 
-- **Nuxt 4.4.8 is an intermediate checkpoint.** Vue Router 5 can be diagnosed without Vite 8/Rolldown in the same diff.
-- **Nuxt UI and VueUse move together.** Nuxt UI 4 already depends on VueUse 14, so declaring mismatched direct versions would create avoidable duplicate or peer-resolution ambiguity.
+- **Nuxt 4.4.8 is an intermediate checkpoint.** Router and UI regressions can be diagnosed without Vite 8/Rolldown in the same diff.
+- **Nuxt, Router, Nuxt UI, and VueUse form one checkpoint.** Nuxt 4.4 requires Router 5, Nuxt UI 3 accepts only Router 4, and Nuxt UI 4 uses VueUse 14. Separating those installs would deliberately create an invalid peer graph.
 - **Nuxt 4.5 and Vite 8 move together.** Nuxt 4.5 officially adopts Vite 8; separating them would test a less representative dependency graph.
 - **Vitest moves last.** Application runtime/build failures remain attributable to framework changes, while test-runner behavior is isolated.
 - **Vue stays pinned to the current stable patch.** Version churn without a newer release provides no benefit and risks duplicate runtime identity.

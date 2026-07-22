@@ -75,7 +75,7 @@ describe('GalleryGrid preview errors', () => {
                 stubs: {
                     UButton: true,
                     UIcon: true,
-                    UButtonGroup: true,
+                    UFieldGroup: true,
                 },
             },
         });

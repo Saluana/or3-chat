@@ -58,7 +58,7 @@ async function mountGrid(items: FileMeta[]) {
             stubs: {
                 UButton: true,
                 UIcon: true,
-                UButtonGroup: true,
+                UFieldGroup: true,
             },
         },
     });
