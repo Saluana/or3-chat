@@ -20,7 +20,6 @@
  * - Deep data redaction or structured error serialization
  */
 
-import { useToast } from '#imports';
 import { useHooks } from '~/core/hooks/useHooks';
 
 export type ErrorSeverity = 'info' | 'warn' | 'error' | 'fatal';
@@ -154,29 +153,35 @@ type ToastPayload = {
     title?: string;
     description?: string;
     actions?: ToastAction[];
-    color?: string;
+    color?:
+        | 'primary'
+        | 'secondary'
+        | 'error'
+        | 'success'
+        | 'warning'
+        | 'info'
+        | 'neutral';
     duration?: number;
 };
 
-type ToastApi = {
+export type ErrorToastApi = {
     add: (toast: ToastPayload) => void;
 };
 
-function resolveToastApi(): ToastApi | null {
-    if (!import.meta.client) return null;
-    try {
-        // Must be a static import. Dynamic `import('#imports')` fails under Vite
-        // HMR with "Failed to fetch dynamically imported module .../imports.mjs",
-        // which silently disables toasts during chat send.
-        return useToast();
-    } catch {
-        return null;
-    }
+let errorToastApi: ErrorToastApi | null = null;
+
+/**
+ * Registers the Nuxt UI toast instance captured while a client plugin has an
+ * active Vue injection context. Error reporting often runs later from async
+ * hooks, where calling `useToast()` directly would trigger a Vue warning.
+ */
+export function setErrorToastApi(api: ErrorToastApi | null): void {
+    errorToastApi = api;
 }
 
 // Use Nuxt UI toast directly; no custom store.
 function pushToast(error: AppError, retry?: () => void) {
-    const toast = resolveToastApi();
+    const toast = errorToastApi;
     if (!toast) return;
     try {
         toast.add({
@@ -215,7 +220,7 @@ export interface ReportOptions {
     code?: ErrorCode;
     message?: string;
     tags?: Record<string, string | number | boolean | undefined>;
-    toast?: boolean; // force toast even if info
+    toast?: boolean; // override the severity-based toast default
     silent?: boolean; // never show toast
     retry?: () => void; // optional retry closure
     severity?: ErrorSeverity; // override severity if wrapping non-error
@@ -274,11 +279,13 @@ export function reportError(
         if (domain) void hooks.doAction('error:' + domain, e);
         if (domain === 'chat')
             void hooks.doAction('ai.chat.error:action', { error: e });
+        const shouldToast = opts.toast ?? e.severity !== 'info';
         if (
             !opts.silent &&
+            shouldToast &&
             !(e.code === 'ERR_STREAM_ABORTED' && e.severity === 'info')
         ) {
-            if (opts.toast || e.severity !== 'info') pushToast(e, opts.retry);
+            pushToast(e, opts.retry);
         }
         return e;
     } catch (inner) {
