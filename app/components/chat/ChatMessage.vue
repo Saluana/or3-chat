@@ -278,7 +278,7 @@
                     `cm-actions-${roleVariant}`,
                 ]"
             >
-                <UButtonGroup
+                <UFieldGroup
                     class="bg-(--md-surface) rounded-(--md-border-radius) cm-action-group"
                 >
                     <UTooltip
@@ -348,7 +348,7 @@
                             ></UButton>
                         </UTooltip>
                     </template>
-                </UButtonGroup>
+                </UFieldGroup>
             </div>
         </template>
     </div>

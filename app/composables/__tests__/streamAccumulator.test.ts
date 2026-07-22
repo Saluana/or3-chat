@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createStreamAccumulator } from '../chat/useStreamAccumulator';
+import {
+    createStreamAccumulator,
+    useStreamAccumulator,
+} from '../chat/useStreamAccumulator';
 
 // Helper to flush queued microtasks / rAF fallback
 async function nextFrame() {
@@ -38,6 +41,15 @@ describe('createStreamAccumulator', () => {
         await nextFrame();
         expect(acc.state.text).toBe('main1main2');
         expect(acc.state.reasoningText).toBe('r1');
+    });
+
+    it('flushes a reasoning-only frame', async () => {
+        const acc = createStreamAccumulator();
+        acc.append('thought', { kind: 'reasoning' });
+        await nextFrame();
+
+        expect(acc.state.text).toBe('');
+        expect(acc.state.reasoningText).toBe('thought');
     });
 
     it('finalize flushes pending tokens (R4)', async () => {
@@ -145,19 +157,59 @@ describe('createStreamAccumulator', () => {
         expect(acc.state.version).toBe(v1 + 1); // only finalize bump
     });
 
-    it('fallback no-raf path flushes via timeout (simulated)', async () => {
+    it('fallback no-raf path flushes via a microtask', async () => {
         const realRaf = (global as any).requestAnimationFrame;
         const realCaf = (global as any).cancelAnimationFrame;
         (global as any).requestAnimationFrame = undefined;
         (global as any).cancelAnimationFrame = undefined;
-        // Re-import module so HAS_RAF snapshot is false
-        vi.resetModules();
-        const mod = await import('../chat/useStreamAccumulator');
-        const acc = mod.createStreamAccumulator();
+        const acc = createStreamAccumulator();
         acc.append('Z', { kind: 'text' });
-        await new Promise((r) => setTimeout(r, 2));
+        await Promise.resolve();
         expect(acc.state.text).toBe('Z');
         (global as any).requestAnimationFrame = realRaf;
         (global as any).cancelAnimationFrame = realCaf;
+    });
+
+    it('finalize cancels a queued fallback microtask before flushing', async () => {
+        const realRaf = (global as any).requestAnimationFrame;
+        const realCaf = (global as any).cancelAnimationFrame;
+        (global as any).requestAnimationFrame = undefined;
+        (global as any).cancelAnimationFrame = undefined;
+
+        const acc = createStreamAccumulator();
+        acc.append('queued', { kind: 'text' });
+        acc.finalize();
+        const finalizedVersion = acc.state.version;
+        await Promise.resolve();
+
+        expect(acc.state.text).toBe('queued');
+        expect(acc.state.version).toBe(finalizedVersion);
+        (global as any).requestAnimationFrame = realRaf;
+        (global as any).cancelAnimationFrame = realCaf;
+    });
+
+    it('uses the timeout cancellation fallback when cancelAnimationFrame is missing', () => {
+        const realRaf = (global as any).requestAnimationFrame;
+        const realCaf = (global as any).cancelAnimationFrame;
+        const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+        (global as any).requestAnimationFrame = vi.fn(() => 42);
+        (global as any).cancelAnimationFrame = undefined;
+
+        const acc = createStreamAccumulator();
+        acc.append('queued', { kind: 'text' });
+        acc.finalize();
+
+        expect(clearTimeoutSpy).toHaveBeenCalledWith(42);
+        expect(acc.state.text).toBe('queued');
+        (global as any).requestAnimationFrame = realRaf;
+        (global as any).cancelAnimationFrame = realCaf;
+        clearTimeoutSpy.mockRestore();
+    });
+
+    it('provides the convenience accumulator factory', () => {
+        const acc = useStreamAccumulator();
+
+        expect(acc.state.isActive).toBe(true);
+        expect(acc.state.text).toBe('');
     });
 });

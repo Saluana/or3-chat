@@ -410,6 +410,7 @@ describe('useMultiPane - message loading with validation', () => {
 
     it('skips invalid message rows without crashing', async () => {
         // Mock db with mixed valid/invalid messages
+        vi.doUnmock('~/db/client');
         vi.doMock('~/db/client', () => ({
             getDb: () => ({
                 messages: {
@@ -467,6 +468,7 @@ describe('useMultiPane - message loading with validation', () => {
     });
 
     it('skips deleted messages even if they pass initial filter', async () => {
+        vi.doUnmock('~/db/client');
         vi.doMock('~/db/client', () => ({
             getDb: () => ({
                 messages: {
@@ -504,6 +506,7 @@ describe('useMultiPane - message loading with validation', () => {
     });
 
     it('handles completely invalid data without crashing', async () => {
+        vi.doUnmock('~/db/client');
         vi.doMock('~/db/client', () => ({
             getDb: () => ({
                 messages: {

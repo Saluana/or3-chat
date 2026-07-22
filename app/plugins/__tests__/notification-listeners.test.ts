@@ -40,7 +40,9 @@ vi.mock('~/core/hooks/useHooks', () => ({
 }));
 
 vi.mock('~/core/notifications/notification-service', () => ({
-    NotificationService: vi.fn(() => ({ create: createMock })),
+    NotificationService: vi.fn(function () {
+        return { create: createMock };
+    }),
 }));
 
 vi.mock('~/core/notifications/notification-user', () => ({

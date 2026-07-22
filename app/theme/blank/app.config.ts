@@ -81,7 +81,7 @@ export default {
                     true: 'px-0! aspect-square! justify-center text-center',
                     false: '',
                 },
-                buttonGroup: {
+                fieldGroup: {
                     horizontal:
                         'first:rounded-l-full! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-full!',
                     vertical:
@@ -140,7 +140,7 @@ export default {
                 help: 'mt-[4px] text-xs text-[var(--md-on-surface-variant)] px-1!',
             },
         },
-        buttonGroup: {
+        fieldGroup: {
             base: 'relative',
             variants: {
                 orientation: {

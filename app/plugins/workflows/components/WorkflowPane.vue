@@ -434,7 +434,7 @@ watch(
     <div ref="paneRef" :class="{'border-t border-(--md-border-color) not-last:border-r': !isSinglePane}" class="workflow-app flex flex-col flex-1 min-h-0 h-full w-full">
         <div v-if="canEdit" :class="toolbarClass">
             <!-- Undo/Redo group -->
-            <UButtonGroup class="shrink-0">
+            <UFieldGroup class="shrink-0">
                 <UTooltip text="Undo (⌘Z)">
                     <UButton
                         :size="buttonSize"
@@ -459,10 +459,10 @@ watch(
                         @click="handleRedo"
                     />
                 </UTooltip>
-            </UButtonGroup>
+            </UFieldGroup>
 
             <!-- Clear/Download group -->
-            <UButtonGroup class="shrink-0">
+            <UFieldGroup class="shrink-0">
                 <UTooltip text="Clear workflow">
                     <UButton
                         :size="buttonSize"
@@ -487,10 +487,10 @@ watch(
                         @click="handleDownload"
                     />
                 </UTooltip>
-            </UButtonGroup>
+            </UFieldGroup>
 
             <!-- Mode toggle -->
-            <UButtonGroup class="shrink-0">
+            <UFieldGroup class="shrink-0">
                 <UButton
                     :size="buttonSize"
                     :variant="interactionMode === 'drag' ? 'solid' : 'basic'"
@@ -533,7 +533,7 @@ watch(
                         Select
                     </template>
                 </UButton>
-            </UButtonGroup>
+            </UFieldGroup>
 
             <!-- Validation toggle -->
             <UTooltip text="Toggle validation" class="shrink-0">
@@ -558,7 +558,7 @@ watch(
                 <UBadge v-if="!isVeryCompact" color="error" variant="soft" size="xs">
                     Conflict
                 </UBadge>
-                <UButtonGroup>
+                <UFieldGroup>
                     <UTooltip text="Reload from database">
                         <UButton
                             size="xs"
@@ -579,7 +579,7 @@ watch(
                             @click="handleConflictOverwrite"
                         />
                     </UTooltip>
-                </UButtonGroup>
+                </UFieldGroup>
             </div>
         </div>
 

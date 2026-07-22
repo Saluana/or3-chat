@@ -42,7 +42,7 @@ describe('ImageViewer error handling', () => {
                 stubs: {
                     UModal: ModalStub,
                     UButton: true,
-                    UButtonGroup: true,
+                    UFieldGroup: true,
                     UIcon: true,
                     teleport: true,
                 },

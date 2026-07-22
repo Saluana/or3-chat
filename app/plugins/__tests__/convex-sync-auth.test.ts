@@ -136,7 +136,7 @@ vi.mock('~/core/sync/hook-bridge', () => ({
 }));
 
 vi.mock('~/core/sync/outbox-manager', () => ({
-    OutboxManager: vi.fn(() => {
+    OutboxManager: vi.fn(function () {
         const instance: OutboxInstance = {
             start: vi.fn(),
             stop: vi.fn(),
@@ -162,7 +162,7 @@ vi.mock('~/core/sync/subscription-manager', () => ({
 }));
 
 vi.mock('~/core/sync/gc-manager', () => ({
-    GcManager: vi.fn(() => {
+    GcManager: vi.fn(function () {
         const instance: GcInstance = {
             start: vi.fn(),
             stop: vi.fn(),

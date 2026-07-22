@@ -3,7 +3,7 @@ import { applyThemeBackgrounds } from '../backgrounds';
 import type { ThemeBackgrounds } from '~/theme/_shared/types';
 
 describe('Theme Backgrounds', () => {
-    let mockResolveToken: ReturnType<typeof vi.fn>;
+    let mockResolveToken: (token: string) => Promise<string | null>;
     let originalDocument: Document;
 
     beforeEach(() => {

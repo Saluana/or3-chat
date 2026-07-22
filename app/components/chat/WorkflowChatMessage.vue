@@ -40,7 +40,7 @@
         <div
             class="flex justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity"
         >
-            <UButtonGroup
+            <UFieldGroup
                 class="bg-(--md-surface) rounded-(--md-border-radius) shadow-sm border border-(--md-outline-variant) overflow-hidden"
             >
                 <UTooltip
@@ -70,7 +70,7 @@
                     />
                 </UTooltip>
                 <!-- Add more actions like Retry/Stop here if needed in future -->
-            </UButtonGroup>
+            </UFieldGroup>
         </div>
     </div>
 </template>

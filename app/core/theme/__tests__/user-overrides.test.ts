@@ -43,10 +43,12 @@ const setupBrowserMocks = () => {
         writable: true,
     });
     // Mock MutationObserver
-    global.MutationObserver = vi.fn().mockImplementation(() => ({
-        observe: vi.fn(),
-        disconnect: vi.fn(),
-    }));
+  global.MutationObserver = vi.fn().mockImplementation(function () {
+    return {
+      observe: vi.fn(),
+      disconnect: vi.fn(),
+    };
+  });
 };
 
 describe('useUserThemeOverrides', () => {
