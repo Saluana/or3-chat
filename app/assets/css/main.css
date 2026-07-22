@@ -300,3 +300,52 @@ html {
 	);
 	box-sizing: border-box;
 }
+
+/* TipTap inline autocomplete -------------------------------------------------
+ * The active text block receives a node decoration so its empty-state
+ * placeholder never competes with the caret-anchored ghost continuation. */
+.ProseMirror .has-autocomplete-suggestion.is-empty::before,
+.ProseMirror .has-autocomplete-suggestion.is-editor-empty::before {
+	display: none !important;
+	content: none !important;
+}
+
+.autocomplete-suggestion {
+	pointer-events: none;
+	user-select: none;
+}
+
+.autocomplete-suggestion__text {
+	color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
+	font: inherit;
+}
+
+.autocomplete-suggestion__hint,
+.suggestion-accept-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin-inline-start: 0.55em;
+	padding: 0.16em 0.42em;
+	border: 1px solid var(--md-outline-variant);
+	border-radius: calc(var(--md-border-radius) * 0.65);
+	background: var(--md-surface-container-low);
+	color: var(--md-on-surface-variant);
+	font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+	font-size: 0.58em;
+	font-weight: 650;
+	letter-spacing: 0.02em;
+	line-height: 1.2;
+	vertical-align: 0.12em;
+}
+
+.suggestion-accept-btn {
+	pointer-events: auto;
+	cursor: pointer;
+}
+
+.suggestion-accept-btn:hover {
+	border-color: var(--md-primary);
+	color: var(--md-primary);
+	background: var(--md-primary-container);
+}
