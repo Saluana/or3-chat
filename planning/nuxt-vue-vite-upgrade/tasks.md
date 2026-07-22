@@ -43,32 +43,55 @@
 
 ## 4. Migrate Nuxt 4.5 and Vite 8
 
-- [ ] 4.1 Set Nuxt to 4.5.0, Vite to 8.1.5, and `@vitejs/plugin-vue` to 6.0.8. (R5)
-- [ ] 4.2 Replace deprecated Rollup-facing manual chunk configuration with supported Rolldown code splitting. (R5)
-- [ ] 4.3 Compile and exercise the custom theme compiler hooks with Vite 8-compatible public types. (R5)
-- [ ] 4.4 Inspect resolved Vue/Vite trees and all peer warnings. (R2, R5, R6)
-- [ ] 4.5 Run dev-server smoke, available unit, type-check comparison, SSR/static/PWA, and plugin-runtime gates. (R5, R8)
-- [ ] 4.6 Commit the green Rolldown checkpoint independently. (R8)
+- [x] 4.1 Set Nuxt to 4.5.0, Vite to 8.1.5, and `@vitejs/plugin-vue` to 6.0.8. (R5)
+- [x] 4.2 Replace deprecated Rollup-facing manual chunk configuration with supported Rolldown code splitting. (R5)
+- [x] 4.3 Compile and exercise the custom theme compiler hooks with Vite 8-compatible public types. (R5)
+- [x] 4.4 Inspect resolved Vue/Vite trees and all peer warnings. (R2, R5, R6)
+- [x] 4.5 Run dev-server smoke, available unit, type-check comparison, SSR/static/PWA, and plugin-runtime gates. (R5, R8)
+- [x] 4.6 Commit the green Rolldown checkpoint independently. (R8)
 
 **Done when:** Nuxt 4.5 and Vite 8 build both deployment modes, custom Vite integrations run, and no new peer or runtime regression exists.
 
+### Rolldown checkpoint evidence
+
+- Resolved host versions: Nuxt 4.5.0, Vite 8.1.5, `@vitejs/plugin-vue` 6.0.8, Vue 3.5.40, and Vue Router 5.2.0.
+- The tokenizer chunk rule now uses `build.rolldownOptions.output.codeSplitting.groups`; the theme compiler uses a narrow structural context instead of Rollup's `PluginContext`.
+- `vite-plugin-pwa` is overridden to 1.3.0 because it is the first stable release declaring Vite 8 support. A frozen install resolves only that version, and static generation reports PWA 1.3.0.
+- Available suite remained identical to baseline: 441 files and 3,083 tests passed; 56 tests are intentionally skipped. The same two unavailable local-fixture suites remain excluded.
+- Type-check reproduced the recorded baseline diagnostics without a new Vite configuration or theme-plugin type failure.
+- Import boundaries, three theme compiles, SSR build, static/PWA build, and both plugin-runtime production validators passed.
+- Computer Use verified the welcome flow, home/chat shell, and light/dark interaction. A harmless theme-file touch exercised the Vite 8 HMR hook, regenerated theme CSS, issued a full reload, and left the UI rendered.
+- Vite 8's stricter CSS minifier now reports pre-existing `:deep(...)` selectors in the global `or3-prose.css`; this is recorded as a separate styling cleanup rather than mixed into the framework upgrade.
+- Checkpoint commit: `d083c1a8` (`[Update] Upgrade Nuxt and Vite build stack`).
+
 ## 5. Upgrade the Vitest stack
 
-- [ ] 5.1 Confirm all application framework checkpoints are green before changing test tooling. (R7)
-- [ ] 5.2 Set `vitest` and `@vitest/coverage-v8` to the same 4.1.10 version. (R7)
-- [ ] 5.3 Migrate only documented configuration, mock, coverage, or snapshot incompatibilities. (R7)
-- [ ] 5.4 Run focused configuration tests, the available full suite, and coverage. (R7, R8)
-- [ ] 5.5 Re-run SSR/static/PWA and plugin-runtime gates to catch test-config dependency-tree effects. (R8)
-- [ ] 5.6 Commit the green test-stack checkpoint independently. (R8)
+- [x] 5.1 Confirm all application framework checkpoints are green before changing test tooling. (R7)
+- [x] 5.2 Set `vitest` and `@vitest/coverage-v8` to the same 4.1.10 version. (R7)
+- [x] 5.3 Migrate only documented configuration, mock, coverage, or snapshot incompatibilities. (R7)
+- [x] 5.4 Run focused configuration tests, the available full suite, and coverage. (R7, R8)
+- [x] 5.5 Re-run SSR/static/PWA and plugin-runtime gates to catch test-config dependency-tree effects. (R8)
+- [x] 5.6 Commit the green test-stack checkpoint independently. (R8)
 
 **Done when:** Runner and provider match, available tests and coverage pass, and no snapshots were accepted without review.
 
+### Test-stack checkpoint evidence
+
+- Resolved root versions: Vitest 4.1.10 and `@vitest/coverage-v8` 4.1.10, both using the host Vite 8.1.5 line. Linked provider packages retain their package-owned development trees and do not alter the host runner.
+- Vitest 4 constructor and module-mock lifecycle changes were handled only in affected tests; no snapshots were updated or accepted.
+- The coverage include typo was corrected to the real stream accumulator source. Focused tests cover the fallback scheduler and cancellation paths instead of lowering the existing thresholds.
+- Available suite with coverage: 441 files and 3,087 tests passed; 56 tests are intentionally skipped. The same two unavailable untracked-fixture suites remain excluded.
+- Coverage passes at 98.83% statements, 97.43% branches, 100% functions, and 100% lines.
+- Type-check returned to the recorded baseline diagnostic set after narrowing one Vitest 4 mock type; no new runner or configuration errors remain.
+- Import boundaries, three theme compiles, SSR build, static/PWA build, and both plugin-runtime production validators passed.
+- Checkpoint commit: `0e8fc664` (`[Update] Upgrade Vitest test stack`).
+
 ## 6. Final verification and handoff
 
-- [ ] 6.1 Run a fresh frozen install and inspect direct and transitive framework versions. (R2, R6, R8)
-- [ ] 6.2 Run the complete validation ledger and compare every result with baseline. (R8)
-- [ ] 6.3 Verify the primary checkout's pre-existing editor changes are untouched. (R9)
-- [ ] 6.4 Check off completed upgrade tasks and leave manual, unavailable-fixture, or credentialed checks explicitly open. (R1)
+- [x] 6.1 Run a fresh frozen install and inspect direct and transitive framework versions. (R2, R6, R8)
+- [x] 6.2 Run the complete validation ledger and compare every result with baseline. (R8)
+- [x] 6.3 Verify the primary checkout's pre-existing editor changes are untouched. (R9)
+- [x] 6.4 Check off completed upgrade tasks and leave manual, unavailable-fixture, or credentialed checks explicitly open. (R1)
 - [ ] 6.5 Review commit scopes and merge only after the branch is green. (R8, R9)
 
 **Done when:** The branch is reproducible from a frozen install, all available gates are green or identical to baseline, open manual checks are explicit, and unrelated work is intact.

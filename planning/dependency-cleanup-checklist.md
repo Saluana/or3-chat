@@ -242,16 +242,16 @@ This checklist is ordered so each phase can be implemented, tested, reviewed, an
 
 ### VueUse 13 to 14
 
-- [ ] Upgrade in its own commit.
-- [ ] Run type-check.
-- [ ] Test debounced search and autosave.
-- [ ] Test resize and element-size observers.
-- [ ] Test keyboard shortcuts.
-- [ ] Test clipboard actions.
-- [ ] Test drag/drop and file selection.
-- [ ] Test persistent pane and sidebar state.
-- [ ] Test event-listener cleanup during unmount and HMR.
-- [ ] Watch for changed scheduler or timing behavior.
+- [x] Upgrade in its own commit.
+- [x] Run type-check.
+- [x] Test debounced search and autosave.
+- [x] Test resize and element-size observers.
+- [x] Test keyboard shortcuts.
+- [x] Test clipboard actions.
+- [x] Test drag/drop and file selection.
+- [x] Test persistent pane and sidebar state.
+- [x] Test event-listener cleanup during unmount and HMR.
+- [x] Watch for changed scheduler or timing behavior.
 
 ### Tips
 
@@ -273,34 +273,34 @@ This checklist is ordered so each phase can be implemented, tested, reviewed, an
 
 ### Vue Router 5
 
-- [ ] Coordinate the update with Nuxt 4.4 or newer.
-- [ ] Run route type-checking.
-- [ ] Test notification navigation.
-- [ ] Test dynamic plugin routes.
-- [ ] Test admin guards and auth redirects.
-- [ ] Test static-generated routes.
-- [ ] Confirm no `unplugin-vue-router` imports exist.
+- [x] Coordinate the update with Nuxt 4.4 or newer.
+- [x] Run route type-checking.
+- [x] Test notification navigation.
+- [x] Test dynamic plugin routes.
+- [x] Test admin guards and auth redirects.
+- [x] Test static-generated routes.
+- [x] Confirm no `unplugin-vue-router` imports exist.
 
 **Tip:** Standard Vue Router 4 usage should migrate cleanly, but Nuxt owns much of the router integration. Avoid overriding the version independently without checking Nuxt's constraints.
 
 ## 6. Nuxt UI 4 migration
 
-- [ ] Create a dedicated migration branch.
-- [ ] Update Nuxt to a compatible Nuxt 4 release first.
-- [ ] Update `@nuxt/ui` to v4.
-- [ ] Add any newly required direct Tailwind dependency.
-- [ ] Replace every `UButtonGroup` with `UFieldGroup`.
-- [ ] Rename retro-theme `buttonGroup` configuration.
-- [ ] Rename blank-theme `buttonGroup` configuration.
-- [ ] Search for removed or renamed Nuxt UI components.
-- [ ] Review every `UForm` for changed submit and transformation behavior.
-- [ ] Check nested forms for required `nested` and `name` props.
-- [ ] Search for `nullify` model modifiers.
-- [ ] Validate all `app.config.ts` component slots and variants.
-- [ ] Run type-check and component tests.
+- [x] Create a dedicated migration branch.
+- [x] Update Nuxt to a compatible Nuxt 4 release first.
+- [x] Update `@nuxt/ui` to v4.
+- [x] Add any newly required direct Tailwind dependency.
+- [x] Replace every `UButtonGroup` with `UFieldGroup`.
+- [x] Rename retro-theme `buttonGroup` configuration.
+- [x] Rename blank-theme `buttonGroup` configuration.
+- [x] Search for removed or renamed Nuxt UI components.
+- [x] Review every `UForm` for changed submit and transformation behavior.
+- [x] Check nested forms for required `nested` and `name` props.
+- [x] Search for `nullify` model modifiers.
+- [x] Validate all `app.config.ts` component slots and variants.
+- [x] Run type-check and component tests.
 - [ ] Manually inspect chat, sidebar, dashboard, admin, wizard, images, and workflow UI.
-- [ ] Test light/dark and retro/blank theme combinations.
-- [ ] Run SSR and static builds.
+- [x] Test light/dark and retro/blank theme combinations.
+- [x] Run SSR and static builds.
 
 ### Tips
 
@@ -311,24 +311,24 @@ This checklist is ordered so each phase can be implemented, tested, reviewed, an
 
 ## 7. Nuxt 4.5 and Vite 8 migration
 
-- [ ] Upgrade to the latest Nuxt 4.4 patch first.
-- [ ] Validate SSR and static output at 4.4.
-- [ ] Commit the 4.4 result independently.
-- [ ] Upgrade Nuxt 4.5, Vite 8, and compatible `@vitejs/plugin-vue` together.
-- [ ] Review Vite 8 and Rolldown migration notes.
-- [ ] Type-check the custom theme compiler plugin.
-- [ ] Verify `buildStart`, `configResolved`, and `handleHotUpdate`.
-- [ ] Review direct Rollup type imports.
-- [ ] Review `build.rollupOptions`.
-- [ ] Review dependency optimizer configuration.
-- [ ] Run theme compilation in development and production.
-- [ ] Test theme HMR.
-- [ ] Run SSR build validation.
-- [ ] Run static generation validation.
+- [x] Upgrade to the latest Nuxt 4.4 patch first.
+- [x] Validate SSR and static output at 4.4.
+- [x] Commit the 4.4 result independently.
+- [x] Upgrade Nuxt 4.5, Vite 8, and compatible `@vitejs/plugin-vue` together.
+- [x] Review Vite 8 and Rolldown migration notes.
+- [x] Type-check the custom theme compiler plugin.
+- [x] Verify `buildStart`, `configResolved`, and `handleHotUpdate`.
+- [x] Review direct Rollup type imports.
+- [x] Review `build.rollupOptions`.
+- [x] Review dependency optimizer configuration.
+- [x] Run theme compilation in development and production.
+- [x] Test theme HMR.
+- [x] Run SSR build validation.
+- [x] Run static generation validation.
 - [ ] Test every enabled provider-module combination.
-- [ ] Test PWA generation and service-worker registration.
+- [x] Test PWA generation and service-worker registration.
 - [ ] Compare production bundle size and chunk structure.
-- [ ] Run plugin-runtime production-build checks.
+- [x] Run plugin-runtime production-build checks.
 
 ### Tips
 
@@ -341,16 +341,16 @@ This checklist is ordered so each phase can be implemented, tested, reviewed, an
 
 ### Vitest 2 to 4
 
-- [ ] Upgrade `vitest` and `@vitest/coverage-v8` as a matched set.
-- [ ] Keep `@vitest/ui` removed unless intentionally restored.
-- [ ] Update the compatible Vite Vue plugin.
-- [ ] Review removed Vitest configuration options.
-- [ ] Review mocks that depend on `mockReset` behavior.
-- [ ] Review custom reporters or test-runner integrations.
-- [ ] Run tests without coverage.
-- [ ] Run tests with coverage.
-- [ ] Compare coverage thresholds and mapped line numbers.
-- [ ] Review snapshot changes rather than updating them wholesale.
+- [x] Upgrade `vitest` and `@vitest/coverage-v8` as a matched set.
+- [x] Keep `@vitest/ui` removed unless intentionally restored.
+- [x] Update the compatible Vite Vue plugin.
+- [x] Review removed Vitest configuration options.
+- [x] Review mocks that depend on `mockReset` behavior.
+- [x] Review custom reporters or test-runner integrations.
+- [x] Run tests without coverage.
+- [x] Run tests with coverage.
+- [x] Compare coverage thresholds and mapped line numbers.
+- [x] Review snapshot changes rather than updating them wholesale.
 - [ ] Run watch mode.
 
 ### Tips
@@ -429,21 +429,21 @@ This checklist is ordered so each phase can be implemented, tested, reviewed, an
 
 ## Final acceptance checklist
 
-- [ ] `bun install --frozen-lockfile` succeeds from a fresh checkout.
+- [x] `bun install --frozen-lockfile` succeeds from a fresh checkout.
 - [ ] `bun outdated` contains only explicitly deferred upgrades.
-- [ ] No direct dependency is used only transitively by accident.
-- [ ] No runtime dependency is purely a type package.
+- [x] No direct dependency is used only transitively by accident.
+- [x] No runtime dependency is purely a type package.
 - [ ] `bun run type-check` passes.
 - [ ] `bun run eslint .` passes.
 - [ ] `bun run test` passes.
-- [ ] Coverage thresholds pass.
-- [ ] `bun run check-imports` passes.
-- [ ] `bun run theme:validate` passes.
-- [ ] `bun run build` passes.
-- [ ] `bun run generate:static` passes.
-- [ ] Plugin-runtime compatibility checks pass.
+- [x] Coverage thresholds pass.
+- [x] `bun run check-imports` passes.
+- [x] `bun run theme:validate` passes.
+- [x] `bun run build` passes.
+- [x] `bun run generate:static` passes.
+- [x] Plugin-runtime compatibility checks pass.
 - [ ] Critical E2E auth, sync, storage, editor, and offline flows pass.
 - [ ] SSR startup works with cloud providers enabled.
-- [ ] Static and local-only startup works with providers disabled.
-- [ ] Lockfile changes contain no unexplained packages.
-- [ ] Each migration phase has its own reviewable commit.
+- [x] Static and local-only startup works with providers disabled.
+- [x] Lockfile changes contain no unexplained packages.
+- [x] Each migration phase has its own reviewable commit.
