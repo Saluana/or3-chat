@@ -92,7 +92,7 @@
 - [x] 6.2 Run the complete validation ledger and compare every result with baseline. (R8)
 - [x] 6.3 Verify the primary checkout's pre-existing editor changes are untouched. (R9)
 - [x] 6.4 Check off completed upgrade tasks and leave manual, unavailable-fixture, or credentialed checks explicitly open. (R1)
-- [ ] 6.5 Review commit scopes and merge only after the branch is green. (R8, R9)
+- [x] 6.5 Review commit scopes and merge only after the branch is green. (R8, R9)
 
 **Done when:** The branch is reproducible from a frozen install, all available gates are green or identical to baseline, open manual checks are explicit, and unrelated work is intact.
 
