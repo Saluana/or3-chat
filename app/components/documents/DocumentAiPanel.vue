@@ -1,30 +1,41 @@
 <template>
-    <section v-theme="'document.ai'" class="document-ai-composer" :class="{ expanded: proposal || customizeOpen }" data-context="document" aria-label="Document AI">
-        <div v-if="selectionAvailable" class="selection-context" aria-live="polite">
+    <section v-theme="'document.ai'" class="document-ai-composer" :class="{ expanded: customizeOpen, reviewing: Boolean(proposal) }" data-context="document" aria-label="Document AI">
+        <div v-if="selectionAvailable && !proposal" class="selection-context" aria-live="polite">
             <span><strong>Selection</strong> “{{ clip(selectedText, 180) }}”</span>
             <UButton :icon="icons.close" color="neutral" variant="ghost" size="xs" square aria-label="Use current section instead" @click="scope = 'section'" />
         </div>
 
-        <div v-if="proposal" class="proposal-card" aria-live="polite">
-            <div class="proposal-heading">
-                <div>
-                    <strong>Review proposed edit</strong>
-                    <span>{{ proposal.diff.changed }} changed · {{ proposal.diff.added }} added · {{ proposal.diff.removed }} removed</span>
+        <div v-if="proposal" class="review-bar" aria-live="polite">
+            <div class="review-bar-top">
+                <div class="review-bar-heading">
+                    <strong>Review changes</strong>
+                    <span class="review-bar-progress">Change {{ activeHunkOrdinal }} of {{ pendingHunkCount }}</span>
                 </div>
-                <UButton :icon="icons.close" color="neutral" variant="ghost" size="xs" square aria-label="Reject proposed edit" @click="$emit('reject')" />
+                <div class="review-bar-legend" aria-hidden="true">
+                    <span class="legend-removed">Removed</span>
+                    <span class="legend-added">Added</span>
+                </div>
+                <UButton :icon="icons.close" color="neutral" variant="ghost" size="xs" square aria-label="Discard all changes" @click="$emit('reject')" />
             </div>
-            <div class="diff-list">
-                <div v-for="(entry, index) in proposal.diff.entries" :key="index" :class="`diff-${entry.kind}`">
-                    <span>{{ entry.kind }}</span>
-                    <del v-if="entry.before">{{ clip(entry.before) }}</del>
-                    <ins v-if="entry.after">{{ clip(entry.after) }}</ins>
+            <p class="review-bar-title">
+                <span class="review-bar-title-num">{{ activeHunkOrdinal }}</span>
+                {{ activeHunk?.label || 'Suggested edit' }}
+            </p>
+            <div class="review-bar-progress-track" aria-hidden="true">
+                <div class="review-bar-progress-fill" :style="{ width: reviewProgressPercent }" />
+            </div>
+            <div class="review-bar-actions">
+                <div class="review-bar-nav">
+                    <UButton color="neutral" variant="outline" size="sm" label="Previous" :disabled="pendingHunkCount < 2" @click="goPrevHunk" />
+                    <UButton color="neutral" variant="outline" size="sm" label="Next" :disabled="pendingHunkCount < 2" @click="goNextHunk" />
+                </div>
+                <div class="review-bar-decisions">
+                    <UButton color="neutral" variant="outline" size="sm" label="Reject" :disabled="!activeHunk" @click="discardActiveHunk" />
+                    <UButton class="review-accept" color="primary" size="sm" label="Accept" :disabled="stale || !activeHunk" @click="acceptActiveHunk" />
+                    <UButton class="review-accept-all" color="neutral" size="sm" label="Accept all" :disabled="stale || pendingHunkCount === 0" @click="$emit('accept')" />
                 </div>
             </div>
-            <p v-if="stale" class="error-message">The document changed. Regenerate this proposal from the latest version.</p>
-            <div class="proposal-actions">
-                <UButton color="neutral" variant="soft" size="sm" label="Reject" @click="$emit('reject')" />
-                <UButton color="primary" size="sm" label="Accept edit" :disabled="stale" @click="$emit('accept')" />
-            </div>
+            <p v-if="stale" class="error-message review-bar-error">The document changed. Regenerate from the latest version.</p>
         </div>
 
         <template v-else>
@@ -127,7 +138,91 @@
                             </div>
                             <USwitch :model-value="autocomplete.enabled" :label="autocompleteLabel" :disabled="autocomplete.loading" @update:model-value="setAutocomplete" />
                         </section>
+
+                        <section class="setting-card">
+                            <div class="setting-card-copy">
+                                <strong>Max iterations</strong>
+                                <span>How many tool-loop turns the agent may take ({{ MIN_DOCUMENT_AI_MAX_ITERATIONS }}–{{ MAX_DOCUMENT_AI_MAX_ITERATIONS }}).</span>
+                            </div>
+                            <UInput
+                                type="number"
+                                :model-value="settings.maxIterations"
+                                :min="MIN_DOCUMENT_AI_MAX_ITERATIONS"
+                                :max="MAX_DOCUMENT_AI_MAX_ITERATIONS"
+                                class="w-full"
+                                aria-label="Document AI max iterations"
+                                @change="setMaxIterations"
+                            />
+                        </section>
+
+                        <section class="setting-card">
+                            <div class="setting-card-copy">
+                                <strong>Chunk size</strong>
+                                <span>Target words per read_blocks chunk (default 5000).</span>
+                            </div>
+                            <UInput
+                                type="number"
+                                :model-value="settings.chunkWordLimit"
+                                :min="MIN_DOCUMENT_AI_CHUNK_WORDS"
+                                :max="MAX_DOCUMENT_AI_CHUNK_WORDS"
+                                step="500"
+                                class="w-full"
+                                aria-label="Document AI chunk word limit"
+                                @change="setChunkWordLimit"
+                            />
+                        </section>
                     </div>
+
+                    <section class="tool-settings">
+                        <div class="settings-heading">
+                            <div>
+                                <strong>Tools</strong>
+                                <span>Choose which tools the document agent may use. Chat tools come from the same registry as chat.</span>
+                            </div>
+                        </div>
+
+                        <div
+                            v-for="group in toolToggleGroups"
+                            :key="group.key"
+                            class="tool-group"
+                        >
+                            <button
+                                type="button"
+                                class="tool-group-header"
+                                :aria-expanded="!isToolGroupCollapsed(group.key)"
+                                @click="toggleToolGroup(group.key)"
+                            >
+                                <div class="tool-group-copy">
+                                    <strong>{{ group.label }}</strong>
+                                    <span>{{ group.hint }}</span>
+                                </div>
+                                <span class="tool-group-count">{{ group.tools.length }}</span>
+                            </button>
+                            <div v-show="!isToolGroupCollapsed(group.key)" class="tool-group-list">
+                                <div
+                                    v-for="tool in group.tools"
+                                    :key="tool.name"
+                                    class="tool-row"
+                                >
+                                    <div class="tool-row-main">
+                                        <USwitch
+                                            :model-value="tool.enabled"
+                                            :label="tool.label"
+                                            :disabled="status === 'streaming'"
+                                            @update:model-value="(value: boolean) => setToolEnabled(tool.name, value)"
+                                        />
+                                        <UIcon
+                                            v-if="tool.icon"
+                                            :name="tool.icon"
+                                            class="tool-row-icon"
+                                        />
+                                    </div>
+                                    <p v-if="tool.description" class="tool-row-desc">{{ tool.description }}</p>
+                                </div>
+                                <p v-if="!group.tools.length" class="tool-group-empty">{{ group.empty }}</p>
+                            </div>
+                        </div>
+                    </section>
 
                     <section class="quick-action-settings">
                         <div class="settings-heading">
@@ -216,7 +311,10 @@
         </Transition>
 
         <p v-if="error" class="error-message" role="alert">{{ error }}</p>
-        <div v-if="status === 'streaming'" class="stream-status" aria-live="polite"><span class="status-dot" /> Building a reviewable proposal…</div>
+        <div v-if="status === 'streaming'" class="stream-status" aria-live="polite">
+            <span class="status-dot" />
+            {{ agentStatus || 'Working on your document…' }}
+        </div>
     </section>
 </template>
 
@@ -225,7 +323,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useToast } from '#imports';
 import type { DocumentAiAction, DocumentAiScope } from '~/composables/editor/useDocumentAiActions';
 import { useIcon } from '~/composables/useIcon';
-import { useDocumentAiSettings } from '~/composables/documents/useDocumentAiSettings';
+import {
+    MAX_DOCUMENT_AI_MAX_ITERATIONS,
+    MIN_DOCUMENT_AI_MAX_ITERATIONS,
+    useDocumentAiSettings,
+} from '~/composables/documents/useDocumentAiSettings';
 import type {
     DocumentAiAttachment,
     DocumentAiEstimateRequest,
@@ -236,6 +338,14 @@ import { validateFile } from '~/components/chat/file-upload-utils';
 import DocumentAiPromptEditor from './DocumentAiPromptEditor.vue';
 import type { DocumentAiPromptAction } from '~/plugins/DocumentAiCommands/slashCommandExtension';
 import type { DocumentAiContextReference } from '~/utils/documents/document-ai-context';
+import {
+    MAX_DOCUMENT_AI_CHUNK_WORDS,
+    MIN_DOCUMENT_AI_CHUNK_WORDS,
+} from '~/utils/documents/document-ai-index';
+import type { DocumentAiHunk } from '~/utils/documents/document-ai-hunks';
+import { clipDocumentAiPreview } from '~/utils/documents/document-ai-hunks';
+import { useToolRegistry } from '~/utils/chat/tool-registry';
+import { buildDocumentAiToolToggleRows } from '~/utils/documents/document-ai-registry-tools';
 
 interface PendingDocumentAiAttachment extends DocumentAiAttachment {
     id: string;
@@ -247,6 +357,9 @@ const props = defineProps<{
     status: string;
     error: string;
     tokenEstimate: number;
+    agentStatus?: string;
+    pendingHunkCount?: number;
+    focusedHunkId?: string | null;
     proposal: {
         readonly diff: {
             readonly changed: number;
@@ -258,6 +371,7 @@ const props = defineProps<{
                 readonly after?: string;
             }[];
         };
+        readonly hunks?: readonly DocumentAiHunk[];
     } | null;
     stale: boolean;
     selectionAvailable: boolean;
@@ -283,6 +397,11 @@ const emit = defineEmits<{
     submit: [payload: DocumentAiSubmission];
     estimate: [payload: DocumentAiEstimateRequest];
     accept: [];
+    'accept-hunk': [hunkId: string];
+    'discard-hunk': [hunkId: string];
+    'focus-hunk': [hunkId: string];
+    'focus-next-hunk': [];
+    'focus-prev-hunk': [];
     reject: [];
     abort: [];
     'toggle-autocomplete': [];
@@ -303,7 +422,49 @@ const scopes: Array<{ label: string; value: DocumentAiScope }> = [
 ];
 const INHERIT_MODEL_VALUE = 'inherit';
 const { settings, update } = useDocumentAiSettings();
+const toolRegistry = useToolRegistry();
 const { catalog, favoriteModels, fetchModels, getFavoriteModels } = useModelStore();
+const toolToggleRows = computed(() =>
+    buildDocumentAiToolToggleRows(settings.value.enabledTools, toolRegistry.listTools.value),
+);
+const toolToggleGroups = computed(() => {
+    const documentTools = toolToggleRows.value.filter((tool) => tool.source === 'document');
+    const chatTools = toolToggleRows.value.filter((tool) => tool.source === 'chat');
+    return [
+        {
+            key: 'document',
+            label: 'Document tools',
+            hint: 'Built-in reading and editing tools for this document.',
+            empty: 'No document tools available.',
+            tools: documentTools,
+        },
+        {
+            key: 'chat',
+            label: 'Chat tools',
+            hint: 'Same registry as chat. Enable ones this agent may call.',
+            empty: 'No chat tools registered yet.',
+            tools: chatTools,
+        },
+    ];
+});
+const collapsedToolGroups = ref(new Set<string>(['chat']));
+function isToolGroupCollapsed(key: string) {
+    return collapsedToolGroups.value.has(key);
+}
+function toggleToolGroup(key: string) {
+    const next = new Set(collapsedToolGroups.value);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    collapsedToolGroups.value = next;
+}
+async function setToolEnabled(name: string, enabled: boolean) {
+    await update({
+        enabledTools: {
+            ...settings.value.enabledTools,
+            [name]: enabled,
+        },
+    });
+}
 const favoriteToolModels = computed(() =>
     favoriteModels.value.filter((model) => model.supported_parameters?.includes('tools'))
 );
@@ -339,6 +500,22 @@ const tokenLabel = computed(() => {
     const files = attachments.value.length ? ` · ${attachments.value.length} ${attachments.value.length === 1 ? 'file' : 'files'}` : '';
     const context = references.value.length ? ` · ${references.value.length} ${references.value.length === 1 ? 'reference' : 'references'}` : '';
     return `${estimate}${files}${context}`;
+});
+const pendingHunks = computed(() =>
+    (props.proposal?.hunks ?? []).filter((hunk) => hunk.status === 'pending'),
+);
+const pendingHunkCount = computed(() => props.pendingHunkCount ?? pendingHunks.value.length);
+const agentStatus = computed(() => props.agentStatus ?? '');
+const activeHunk = computed(() =>
+    pendingHunks.value.find((hunk) => hunk.id === props.focusedHunkId) ?? pendingHunks.value[0] ?? null,
+);
+const activeHunkOrdinal = computed(() => {
+    const index = pendingHunks.value.findIndex((hunk) => hunk.id === activeHunk.value?.id);
+    return index >= 0 ? index + 1 : 0;
+});
+const reviewProgressPercent = computed(() => {
+    if (!pendingHunkCount.value) return '0%';
+    return `${Math.round((activeHunkOrdinal.value / pendingHunkCount.value) * 100)}%`;
 });
 let estimateTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -377,7 +554,21 @@ onBeforeUnmount(() => {
 
 function clip(value: string, length = 160) {
     const text = value.trim().replace(/\s+/gu, ' ');
-    return text.length > length ? `${text.slice(0, length)}…` : text || '(empty block)';
+    return clipDocumentAiPreview(text || '(empty block)', length);
+}
+function goPrevHunk() {
+    emit('focus-prev-hunk');
+}
+function goNextHunk() {
+    emit('focus-next-hunk');
+}
+function acceptActiveHunk() {
+    if (!activeHunk.value) return;
+    emit('accept-hunk', activeHunk.value.id);
+}
+function discardActiveHunk() {
+    if (!activeHunk.value) return;
+    emit('discard-hunk', activeHunk.value.id);
 }
 function scheduleEstimate() {
     if (estimateTimer) clearTimeout(estimateTimer);
@@ -390,12 +581,16 @@ function scheduleEstimate() {
 }
 function send() {
     if (!prompt.value.trim() || attachments.value.some((attachment) => attachment.loading)) return;
-    emit('submit', {
+    const payload = {
         prompt: prompt.value,
         scope: scope.value,
         references: references.value,
         attachments: attachments.value.map(({ id: _id, loading: _loading, ...attachment }) => attachment),
-    });
+    };
+    emit('submit', payload);
+    prompt.value = '';
+    references.value = [];
+    attachments.value = [];
 }
 function selectSuggestedAction(action: DocumentAiPromptAction) {
     if (!action.defaultScope) return;
@@ -418,6 +613,16 @@ function setModel(value: string) {
 function setInstruction(event: Event) {
     void update({
         systemInstruction: (event.target as HTMLTextAreaElement).value,
+    });
+}
+function setMaxIterations(event: Event) {
+    void update({
+        maxIterations: Number((event.target as HTMLInputElement).value),
+    });
+}
+function setChunkWordLimit(event: Event) {
+    void update({
+        chunkWordLimit: Number((event.target as HTMLInputElement).value),
     });
 }
 function setAutocomplete(value: boolean) {
@@ -684,59 +889,154 @@ function removeAttachment(id: string) {
     color: var(--md-on-surface-variant);
     font-size: 0.6rem;
 }
-.proposal-card {
-    display: grid;
-    gap: 0.65rem;
-    padding: 0.35rem;
+.document-ai-composer.reviewing {
+    padding: 0.85rem 1rem;
+    border: 1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--md-surface) 92%, transparent);
+    box-shadow:
+        0 12px 32px color-mix(in srgb, var(--md-on-surface) 10%, transparent),
+        0 1px 0 color-mix(in srgb, var(--md-on-surface) 6%, transparent);
+    backdrop-filter: blur(10px);
 }
-.proposal-heading {
+.review-bar {
+    display: grid;
+    gap: 0.6rem;
+}
+.review-bar-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0.55rem;
+}
+.review-bar-heading {
     display: flex;
-    align-items: start;
-    justify-content: space-between;
-    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.45rem 0.65rem;
+    min-width: 0;
 }
-.proposal-heading > div {
-    display: grid;
+.review-bar-heading strong {
+    font-size: 0.95rem;
+    letter-spacing: -0.01em;
 }
-.proposal-heading span {
+.review-bar-progress {
     color: var(--md-on-surface-variant);
-    font-size: 0.7rem;
+    font-size: 0.74rem;
+    font-variant-numeric: tabular-nums;
 }
-.proposal-heading :deep(button) {
-    flex: 0 0 auto;
+.review-bar-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
+    color: var(--md-on-surface-variant);
+    font-size: 0.68rem;
 }
-.diff-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-    gap: 0.4rem;
-    max-height: 12rem;
-    overflow: auto;
+.legend-removed,
+.legend-added {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
 }
-.diff-list > div {
-    display: grid;
-    gap: 0.2rem;
-    padding: 0.5rem;
-    border-radius: var(--md-border-radius);
-    background: var(--md-surface-container-low);
-    font-size: 0.72rem;
+.legend-removed::before,
+.legend-added::before {
+    content: '';
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
 }
-.diff-list span {
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-size: 0.58rem;
-    opacity: 0.55;
+.legend-removed::before {
+    background: color-mix(in srgb, var(--md-error) 80%, #c45b5b);
 }
-del {
-    color: var(--md-error);
+.legend-added::before {
+    background: #2f9d6a;
 }
-ins {
-    color: var(--md-primary);
-    text-decoration: none;
-}
-.proposal-actions {
+.review-bar-title {
     display: flex;
-    justify-content: flex-end;
-    gap: 0.45rem;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--md-on-surface);
+    font-size: 0.84rem;
+    font-weight: 550;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.review-bar-title-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: var(--md-primary);
+    color: var(--md-on-primary);
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+.review-bar-progress-track {
+    width: 100%;
+    height: 0.22rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--md-on-surface) 10%, transparent);
+    overflow: hidden;
+}
+.review-bar-progress-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: var(--md-primary);
+    transition: width 180ms ease;
+}
+.review-bar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.55rem;
+}
+.review-bar-nav,
+.review-bar-decisions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+.review-accept :deep(button),
+.review-accept {
+    --ui-primary: #2f9d6a;
+}
+.review-accept-all :deep(button),
+.review-accept-all {
+    background: color-mix(in srgb, var(--md-on-surface) 88%, transparent) !important;
+    color: var(--md-surface) !important;
+    border-color: transparent !important;
+}
+.review-bar-error {
+    margin: 0;
+}
+@media (max-width: 720px) {
+    .review-bar-top {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .review-bar-legend {
+        display: none;
+    }
+    .review-bar-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .review-bar-nav,
+    .review-bar-decisions {
+        justify-content: stretch;
+    }
+    .review-bar-nav > *,
+    .review-bar-decisions > * {
+        flex: 1 1 auto;
+    }
 }
 .settings-panel-shell {
     min-height: 0;
@@ -761,6 +1061,81 @@ ins {
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
+}
+.tool-settings {
+    display: grid;
+    gap: 0.65rem;
+}
+.tool-group {
+    border: 1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent);
+    border-radius: 12px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--md-surface) 88%, transparent);
+}
+.tool-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.7rem 0.8rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.tool-group-copy {
+    display: grid;
+    gap: 0.1rem;
+    min-width: 0;
+}
+.tool-group-copy strong {
+    font-size: 0.82rem;
+}
+.tool-group-copy span {
+    color: var(--md-on-surface-variant);
+    font-size: 0.66rem;
+    line-height: 1.35;
+}
+.tool-group-count {
+    flex: 0 0 auto;
+    color: var(--md-on-surface-variant);
+    font-size: 0.68rem;
+    font-variant-numeric: tabular-nums;
+}
+.tool-group-list {
+    display: grid;
+    gap: 0.35rem;
+    padding: 0 0.65rem 0.7rem;
+}
+.tool-row {
+    display: grid;
+    gap: 0.15rem;
+    padding: 0.45rem 0.35rem;
+    border-top: 1px solid color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+}
+.tool-row-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.tool-row-icon {
+    width: 1.05rem;
+    height: 1.05rem;
+    color: var(--md-on-surface-variant);
+    flex: 0 0 auto;
+}
+.tool-row-desc,
+.tool-group-empty {
+    margin: 0;
+    color: var(--md-on-surface-variant);
+    font-size: 0.66rem;
+    line-height: 1.35;
+}
+.tool-group-empty {
+    padding: 0.35rem 0.35rem 0.15rem;
 }
 .settings-intro > div,
 .settings-heading > div,

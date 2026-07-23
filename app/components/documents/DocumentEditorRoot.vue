@@ -103,7 +103,26 @@
 
                 <div class="ai-composer-dock">
                     <Suspense>
-                        <DocumentAiPanel v-bind="aiPanelState" :document-id="documentId" :selection-available="selectionAvailable" :selected-text="selectedText" :plugin-actions="documentAiActions" :focus-nonce="aiFocusNonce" :autocomplete="autocompleteStatus" @submit="runAi" @estimate="estimateAi" @accept="acceptAi" @reject="ai.reject" @abort="ai.abort" @toggle-autocomplete="toggleAutocomplete" />
+                        <DocumentAiPanel
+                            v-bind="aiPanelState"
+                            :document-id="documentId"
+                            :selection-available="selectionAvailable"
+                            :selected-text="selectedText"
+                            :plugin-actions="documentAiActions"
+                            :focus-nonce="aiFocusNonce"
+                            :autocomplete="autocompleteStatus"
+                            @submit="runAi"
+                            @estimate="estimateAi"
+                            @accept="acceptAi"
+                            @accept-hunk="(id) => void ai.acceptHunk(id)"
+                            @discard-hunk="ai.discardHunk"
+                            @focus-hunk="ai.focusHunk"
+                            @focus-next-hunk="ai.focusNextHunk(1)"
+                            @focus-prev-hunk="ai.focusNextHunk(-1)"
+                            @reject="ai.reject"
+                            @abort="ai.abort"
+                            @toggle-autocomplete="toggleAutocomplete"
+                        />
                         <template #fallback><div class="ai-composer-loading">Loading document AI…</div></template>
                     </Suspense>
                 </div>
@@ -172,6 +191,7 @@ import DocumentInspector from './DocumentInspector.vue';
 import { useIcon } from '~/composables/useIcon';
 import AutocompleteState from '~/plugins/EditorAutocomplete/state';
 import { Or3DocumentImage } from '~/extensions/or3-document-image';
+import { DocumentAiHunks } from '~/plugins/DocumentAiHunks/TiptapExtension';
 import { flush, loadDocument, setDocumentContent, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { registerDocumentEditorSession } from '~/composables/documents/useDocumentEditorSessions';
 import { useDocumentInsights } from '~/composables/documents/useDocumentInsights';
@@ -293,6 +313,9 @@ const aiPanelState = computed(() => ({
     tokenEstimate: ai.tokenEstimate.value,
     proposal: ai.proposal.value,
     stale: ai.stale.value,
+    agentStatus: ai.agentStatus.value,
+    pendingHunkCount: ai.pendingHunkCount.value,
+    focusedHunkId: ai.focusedHunkId.value,
 }));
 const autocompleteStatus = computed(() => ({
     enabled: AutocompleteState.value.isEnabled,
@@ -398,6 +421,7 @@ async function makeEditor() {
             TaskItem.configure({ nested: true }),
             TableKit.configure({ table: { resizable: true } }),
             Or3DocumentImage,
+            DocumentAiHunks,
             Placeholder.configure({
                 placeholder: ({ node }) => (node.type.name === 'heading' ? 'Heading' : "Write, or press '/' for commands…"),
                 showOnlyCurrent: true,

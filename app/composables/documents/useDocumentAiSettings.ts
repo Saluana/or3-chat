@@ -2,8 +2,16 @@ import { computed, ref } from 'vue';
 import { getDb } from '~/db/client';
 import { getKvByName, setKvByName } from '~/db/kv';
 import type { DocumentAiScope } from '~/composables/editor/useDocumentAiActions';
+import {
+    clampDocumentAiChunkWords,
+    DEFAULT_DOCUMENT_AI_CHUNK_WORDS,
+} from '~/utils/documents/document-ai-index';
 
 export const DOCUMENT_AI_SETTINGS_KEY = 'document_ai_settings.v1';
+
+export const DEFAULT_DOCUMENT_AI_MAX_ITERATIONS = 8;
+export const MIN_DOCUMENT_AI_MAX_ITERATIONS = 2;
+export const MAX_DOCUMENT_AI_MAX_ITERATIONS = 20;
 
 export interface DocumentAiQuickActionSetting {
     id: string;
@@ -17,6 +25,15 @@ export interface DocumentAiSettingsV1 {
     modelId: string | null;
     systemInstruction: string;
     quickActions: DocumentAiQuickActionSetting[];
+    /** Max agent tool-loop turns before forcing a stop. */
+    maxIterations: number;
+    /** Target size for each read_blocks chunk, in words. */
+    chunkWordLimit: number;
+    /**
+     * Per-tool allowlist for Document AI.
+     * Missing keys use defaults: native document tools ON, chat-registry tools OFF.
+     */
+    enabledTools: Record<string, boolean>;
 }
 
 export const DEFAULT_DOCUMENT_AI_SETTINGS: DocumentAiSettingsV1 = {
@@ -29,7 +46,24 @@ export const DEFAULT_DOCUMENT_AI_SETTINGS: DocumentAiSettingsV1 = {
         { id: 'summarize', label: 'Summarize', prompt: 'Create a crisp summary of this content.', defaultScope: 'section' },
         { id: 'actions', label: 'Extract actions', prompt: 'Turn concrete next steps into a task list.', defaultScope: 'section' },
     ],
+    maxIterations: DEFAULT_DOCUMENT_AI_MAX_ITERATIONS,
+    chunkWordLimit: DEFAULT_DOCUMENT_AI_CHUNK_WORDS,
+    enabledTools: {},
 };
+
+function sanitizeEnabledTools(value: unknown): Record<string, boolean> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const entries = Object.entries(value as Record<string, unknown>)
+        .filter(([name, enabled]) => (
+            typeof name === 'string'
+            && name.trim().length > 0
+            && name.length <= 80
+            && typeof enabled === 'boolean'
+        ))
+        .slice(0, 200)
+        .map(([name, enabled]) => [name.trim(), enabled] as const);
+    return Object.fromEntries(entries);
+}
 
 const settings = ref<DocumentAiSettingsV1>({ ...DEFAULT_DOCUMENT_AI_SETTINGS });
 let loadedDb = '';
@@ -37,6 +71,15 @@ let loadPromise: Promise<void> | null = null;
 
 function scope(value: unknown): DocumentAiScope {
     return value === 'selection' || value === 'document' ? value : 'section';
+}
+
+export function clampDocumentAiMaxIterations(value: unknown): number {
+    const numeric = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(numeric)) return DEFAULT_DOCUMENT_AI_MAX_ITERATIONS;
+    return Math.min(
+        MAX_DOCUMENT_AI_MAX_ITERATIONS,
+        Math.max(MIN_DOCUMENT_AI_MAX_ITERATIONS, Math.round(numeric)),
+    );
 }
 
 export function sanitizeDocumentAiSettings(value: unknown): DocumentAiSettingsV1 {
@@ -67,6 +110,13 @@ export function sanitizeDocumentAiSettings(value: unknown): DocumentAiSettingsV1
             ? input.systemInstruction.slice(0, 8000)
             : DEFAULT_DOCUMENT_AI_SETTINGS.systemInstruction,
         quickActions: actions,
+        maxIterations: clampDocumentAiMaxIterations(
+            input.maxIterations ?? DEFAULT_DOCUMENT_AI_MAX_ITERATIONS,
+        ),
+        chunkWordLimit: clampDocumentAiChunkWords(
+            input.chunkWordLimit ?? DEFAULT_DOCUMENT_AI_CHUNK_WORDS,
+        ),
+        enabledTools: sanitizeEnabledTools(input.enabledTools),
     };
 }
 

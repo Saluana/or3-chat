@@ -1,7 +1,7 @@
 import type { Editor, JSONContent } from '@tiptap/core';
 import { EditorState } from '@tiptap/pm/state';
 
-export const MAX_DOCUMENT_AI_OPERATIONS = 32;
+export const MAX_DOCUMENT_AI_OPERATIONS = 64;
 export const MAX_DOCUMENT_AI_OUTPUT_BYTES = 256 * 1024;
 
 export type DocumentAiOperation =

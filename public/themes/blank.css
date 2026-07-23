@@ -393,6 +393,188 @@
   border-top: 1px solid var(--md-border-color) !important;
 }
 
+[data-theme="blank"] .document-editor-root .document-ai-change-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  margin: 0.15rem 0.35rem 0.15rem 0;
+  border: 1px solid color-mix(in srgb, var(--md-on-surface) 14%, transparent);
+  border-radius: 999px;
+  background: var(--md-surface);
+  color: var(--md-on-surface-variant);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-change-marker.is-active {
+  border-color: var(--md-primary);
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.55rem 0;
+  padding: 0.75rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--md-on-surface) 12%, transparent);
+  border-radius: 14px;
+  background: var(--md-surface);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  max-width: 100%;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-header {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-body {
+  display: grid;
+  gap: 0.4rem;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-body.is-expanded {
+  max-height: min(42vh, 18rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-pane {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.45rem;
+  align-items: start;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-pane.is-before {
+  color: color-mix(in srgb, #9b3b3b 55%, var(--md-on-surface));
+  background: color-mix(in srgb, #e85d5d 12%, var(--md-surface));
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-pane.is-after {
+  color: color-mix(in srgb, #1f7a4d 40%, var(--md-on-surface));
+  background: color-mix(in srgb, #2f9d6a 12%, var(--md-surface));
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-pane-mark {
+  margin-top: 0.05rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-pane-stack {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-pane-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-pane.is-before .document-ai-hunk-pane-label,
+[data-theme="blank"] .document-editor-root .document-ai-hunk-pane.is-before .document-ai-hunk-pane-mark {
+  color: color-mix(in srgb, #9b3b3b 70%, var(--md-on-surface));
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-pane.is-after .document-ai-hunk-pane-label,
+[data-theme="blank"] .document-editor-root .document-ai-hunk-pane.is-after .document-ai-hunk-pane-mark {
+  color: color-mix(in srgb, #1f7a4d 55%, var(--md-on-surface));
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-pane-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-toggle,
+[data-theme="blank"] .document-editor-root .document-ai-hunk-discard {
+  border: 1px solid color-mix(in srgb, var(--md-on-surface) 14%, transparent);
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-accept {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.28rem 0.8rem;
+  background: #2f9d6a;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-target.is-replace {
+  background: color-mix(in srgb, var(--md-primary) 8%, transparent);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-primary) 22%, transparent);
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-target.is-replace.is-active {
+  background: color-mix(in srgb, var(--md-primary) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-primary) 35%, transparent);
+}
+
+[data-theme="blank"] .document-editor-root .document-ai-hunk-target.is-delete {
+  background: color-mix(in srgb, #e85d5d 10%, transparent);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #e85d5d 28%, transparent);
+}
+
 [data-theme="blank"] #top-nav .theme-btn {
   border: none !important;
 }

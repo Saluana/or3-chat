@@ -368,6 +368,185 @@
   border-top: var(--md-border-width) solid var(--md-border-color) !important;
 }
 
+[data-theme="retro"] .document-editor-root .document-ai-change-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0.15rem 0.35rem 0.15rem 0;
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--md-border-color) 55%, transparent);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-change-marker.is-active {
+  border-color: var(--md-primary);
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+  padding: 0.65rem 0.7rem;
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  background: var(--md-surface);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--md-border-color) 55%, transparent);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  max-width: 100%;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 auto;
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-body {
+  display: grid;
+  gap: 0.35rem;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-body.is-expanded {
+  max-height: min(42vh, 18rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.4rem;
+  align-items: start;
+  padding: 0.45rem 0.55rem;
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane.is-before {
+  background: color-mix(in srgb, var(--md-error) 14%, var(--md-surface));
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane.is-after {
+  background: color-mix(in srgb, #2f9d6a 14%, var(--md-surface));
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane-mark {
+  margin-top: 0.05rem;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane-stack {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane-label {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane.is-before .document-ai-hunk-pane-label,
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane.is-before .document-ai-hunk-pane-mark {
+  color: var(--md-error);
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane.is-after .document-ai-hunk-pane-label,
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane.is-after .document-ai-hunk-pane-mark {
+  color: #1f7a4d;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-toggle,
+[data-theme="retro"] .document-editor-root .document-ai-hunk-discard {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  padding: 0.2rem 0.55rem;
+  background: var(--md-surface);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-accept {
+  border: var(--md-border-width) solid #1f7a4d;
+  border-radius: var(--md-border-radius);
+  padding: 0.2rem 0.65rem;
+  background: #2f9d6a;
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-target.is-replace {
+  background: color-mix(in srgb, var(--md-primary) 12%, transparent);
+  outline: var(--md-border-width) solid var(--md-primary);
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-target.is-replace.is-active {
+  background: color-mix(in srgb, var(--md-primary) 18%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-target.is-delete {
+  background: color-mix(in srgb, var(--md-error) 14%, transparent);
+  outline: var(--md-border-width) solid var(--md-error);
+}
+
 [data-theme="retro"] .theme-btn {
   border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius);
