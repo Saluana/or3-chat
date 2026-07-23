@@ -261,7 +261,7 @@ function fetchPinnedToAddress(
                     }
                 }
                 resolve(
-                    new Response(Readable.toWeb(incoming) as ReadableStream, {
+                    new Response(Readable.toWeb(incoming) as unknown as ReadableStream, {
                         status: incoming.statusCode ?? 500,
                         statusText: incoming.statusMessage,
                         headers,

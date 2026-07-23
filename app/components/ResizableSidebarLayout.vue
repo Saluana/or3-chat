@@ -173,12 +173,15 @@ provide('topHeaderHeight', topHeaderHeight);
 const sidebarHeaderElement = computed(
     () => sidebarHeaderRef.value?.$el as HTMLElement | undefined
 );
-useResizeObserver(sidebarHeaderElement, (entries) => {
-    for (const entry of entries) {
-        const target = entry.target as HTMLElement;
-        topHeaderHeight.value = target.offsetHeight || entry.contentRect.height;
-    }
-});
+if (import.meta.client) {
+    useResizeObserver(sidebarHeaderElement, (entries) => {
+        for (const entry of entries) {
+            const target = entry.target as HTMLElement;
+            topHeaderHeight.value =
+                target.offsetHeight || entry.contentRect.height;
+        }
+    });
+}
 
 const props = defineProps({
     modelValue: { type: Boolean, default: undefined },

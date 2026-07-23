@@ -351,11 +351,13 @@ const debouncedRecalculate = useDebounceFn((width: number) => {
     }
 }, 100);
 
-useResizeObserver(paneContainerRef, (entries) => {
-    const entry = entries[0];
-    if (!entry) return;
-    debouncedRecalculate(entry.contentRect.width);
-});
+if (import.meta.client) {
+    useResizeObserver(paneContainerRef, (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        debouncedRecalculate(entry.contentRect.width);
+    });
+}
 
 const themePlugin = useNuxtApp().$theme as ThemePlugin | undefined;
 const sidebarExpandedComponent = computed(

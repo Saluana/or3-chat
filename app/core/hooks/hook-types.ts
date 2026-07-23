@@ -155,6 +155,8 @@ export interface DocumentAiEditRequestPayload {
     }>;
     referenceContext: string;
     tokenEstimate: number;
+    maxIterations?: number;
+    chunkWordLimit?: number;
 }
 
 export interface DocumentAiEditResultPayload {
@@ -469,7 +471,8 @@ export type WorkspaceRole = 'owner' | 'editor' | 'viewer';
 export interface AccessDecision {
     allowed: boolean;
     permission: Permission;
-    reason?: 'unauthenticated' | 'forbidden' | 'unknown-permission';
+    /** Built-in deny reasons plus constraint-supplied strings. */
+    reason?: 'unauthenticated' | 'forbidden' | 'unknown-permission' | (string & {});
     userId?: string;
     workspaceId?: string;
     role?: WorkspaceRole;

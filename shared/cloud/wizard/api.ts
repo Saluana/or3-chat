@@ -581,7 +581,7 @@ export class Or3CloudWizardApi implements WizardApi {
         const envPrefill = options.existingEnvMap
             ? pickSecretAnswers(
                   createDefaultAnswers({
-                      instanceDir: session.answers.instanceDir,
+                      instanceDir: session.answers.instanceDir ?? process.cwd(),
                       envFile: session.answers.envFile,
                       existingEnv: options.existingEnvMap,
                   })

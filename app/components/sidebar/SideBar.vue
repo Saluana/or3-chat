@@ -473,9 +473,11 @@ const sideNavHeaderElementRef = computed(
 );
 
 // Setup resize observer on sidebar header element (VueUse handles cleanup)
-useResizeObserver(sideNavHeaderElementRef, () => {
-    recomputeListHeight();
-});
+if (import.meta.client) {
+    useResizeObserver(sideNavHeaderElementRef, () => {
+        recomputeListHeight();
+    });
+}
 
 // Listen to window resize (VueUse handles cleanup)
 useEventListener(window, 'resize', recomputeListHeight);

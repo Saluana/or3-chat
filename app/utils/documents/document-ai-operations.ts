@@ -1,5 +1,7 @@
 import type { Editor, JSONContent } from '@tiptap/core';
+import { Fragment, Slice, type Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { EditorState } from '@tiptap/pm/state';
+import { isAllowedDocumentHref } from './document-href';
 
 export const MAX_DOCUMENT_AI_OPERATIONS = 64;
 export const MAX_DOCUMENT_AI_OUTPUT_BYTES = 256 * 1024;
@@ -20,10 +22,20 @@ export interface DocumentAiBlockReference {
     node: JSONContent;
 }
 
+export interface DocumentAiFrozenSelection {
+    from: number;
+    to: number;
+    text: string;
+    /** TipTap JSON for the selected slice (preserves marks and block structure). */
+    content: JSONContent[];
+    openStart: number;
+    openEnd: number;
+}
+
 export interface DocumentAiFrozenSnapshot {
     content: JSONContent;
     blocks: DocumentAiBlockReference[];
-    selection: { from: number; to: number; text: string } | null;
+    selection: DocumentAiFrozenSelection | null;
 }
 
 export interface DocumentAiDiffSummary {
@@ -75,12 +87,23 @@ export function freezeDocumentForAi(editor: Editor): DocumentAiFrozenSnapshot {
         node,
     }));
     const { from, to } = editor.state.selection;
+    if (from === to) {
+        return { content, blocks, selection: null };
+    }
+    const slice = editor.state.doc.slice(from, to);
+    const sliceJson = slice.content.toJSON();
+    const selectionContent = (Array.isArray(sliceJson) ? sliceJson : sliceJson ? [sliceJson] : []) as JSONContent[];
     return {
         content,
         blocks,
-        selection: from !== to
-            ? { from, to, text: editor.state.doc.textBetween(from, to, '\n') }
-            : null,
+        selection: {
+            from,
+            to,
+            text: editor.state.doc.textBetween(from, to, '\n'),
+            content: selectionContent,
+            openStart: slice.openStart,
+            openEnd: slice.openEnd,
+        },
     };
 }
 
@@ -88,9 +111,44 @@ function hasInvalidLink(node: JSONContent): boolean {
     for (const mark of node.marks ?? []) {
         if (mark.type !== 'link') continue;
         const href = String(mark.attrs?.href ?? '').trim();
-        if (!href || /^(?:javascript|data|vbscript):/iu.test(href)) return true;
+        if (!isAllowedDocumentHref(href)) return true;
     }
     return (node.content ?? []).some(hasInvalidLink);
+}
+
+function maxFragmentOpenDepth(fragment: Fragment, side: 'start' | 'end'): number {
+    let depth = 0;
+    let current = fragment;
+    while (current.childCount > 0) {
+        const child: ProseMirrorNode = side === 'start'
+            ? current.firstChild!
+            : current.lastChild!;
+        if (child.isLeaf || child.isAtom) break;
+        depth += 1;
+        current = child.content;
+    }
+    return depth;
+}
+
+/** Clamp frozen open depths to what the replacement fragment can support. */
+export function clampDocumentAiSliceOpen(
+    fragment: Fragment,
+    openStart: number,
+    openEnd: number,
+): { openStart: number; openEnd: number } {
+    return {
+        openStart: Math.max(0, Math.min(openStart, maxFragmentOpenDepth(fragment, 'start'))),
+        openEnd: Math.max(0, Math.min(openEnd, maxFragmentOpenDepth(fragment, 'end'))),
+    };
+}
+
+export function buildDocumentAiSelectionSlice(
+    fragment: Fragment,
+    openStart: number,
+    openEnd: number,
+): Slice {
+    const clamped = clampDocumentAiSliceOpen(fragment, openStart, openEnd);
+    return new Slice(fragment, clamped.openStart, clamped.openEnd);
 }
 
 function validateInsertedNodes(editor: Editor, nodes: JSONContent[]): void {
@@ -122,10 +180,18 @@ export function buildDocumentAiCandidate(
         const operation = selectionOperations[0]!;
         validateInsertedNodes(editor, operation.content);
         const doc = editor.schema.nodeFromJSON(snapshot.content);
-        const tr = EditorState.create({ doc }).tr.replaceWith(
-            snapshot.selection!.from,
-            snapshot.selection!.to,
-            operation.content.map((node) => editor.schema.nodeFromJSON(node))
+        const fragment = Fragment.fromArray(
+            operation.content.map((node) => editor.schema.nodeFromJSON(node)),
+        );
+        const slice = buildDocumentAiSelectionSlice(
+            fragment,
+            snapshot.selection.openStart,
+            snapshot.selection.openEnd,
+        );
+        const tr = EditorState.create({ doc }).tr.replace(
+            snapshot.selection.from,
+            snapshot.selection.to,
+            slice,
         );
         return tr.doc.toJSON();
     }

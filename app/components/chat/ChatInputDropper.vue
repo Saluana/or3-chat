@@ -310,19 +310,21 @@
                 </p>
             </div>
         </div>
-        <component
-            :is="$theme.activeComponents.value['model-catalog-modal']"
-            v-model:showModal="showModelCatalog"
-        />
-        <component
-            :is="$theme.activeComponents.value['system-prompts-modal']"
-            v-model:showModal="showSystemPrompts"
-            :thread-id="props.threadId"
-            :pane-id="props.paneId"
-            @selected="handlePromptSelected"
-            @closed="handlePromptModalClosed"
-        />
-        <OpenRouterKeyModal v-model:open="showKeyModal" />
+        <ClientOnly>
+            <component
+                :is="$theme.activeComponents.value['model-catalog-modal']"
+                v-model:showModal="showModelCatalog"
+            />
+            <component
+                :is="$theme.activeComponents.value['system-prompts-modal']"
+                v-model:showModal="showSystemPrompts"
+                :thread-id="props.threadId"
+                :pane-id="props.paneId"
+                @selected="handlePromptSelected"
+                @closed="handlePromptModalClosed"
+            />
+            <OpenRouterKeyModal v-model:open="showKeyModal" />
+        </ClientOnly>
     </div>
 </template>
 
@@ -1167,17 +1169,19 @@ onMounted(() => {
     componentRootRef.value = (inst?.proxy?.$el as HTMLElement) || null;
 });
 
-useResizeObserver(componentRootRef, (entries) => {
-    const entry = entries[0];
-    if (!entry) return;
-    const nextHeight = readEntryHeight(entry);
-    if (nextHeight == null) return;
-    // Round to whole px so we don't emit micro-deltas that cause extra renders
-    const normalized = Math.round(nextHeight);
-    if (lastHeight === normalized) return;
-    lastHeight = normalized;
-    emit('resize', { height: normalized });
-});
+if (import.meta.client) {
+    useResizeObserver(componentRootRef, (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const nextHeight = readEntryHeight(entry);
+        if (nextHeight == null) return;
+        // Round to whole px so we don't emit micro-deltas that cause extra renders
+        const normalized = Math.round(nextHeight);
+        if (lastHeight === normalized) return;
+        lastHeight = normalized;
+        emit('resize', { height: normalized });
+    });
+}
 </script>
 
 <style scoped>

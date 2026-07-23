@@ -1,7 +1,12 @@
 import type { Editor, JSONContent } from '@tiptap/core';
+import { Fragment } from '@tiptap/pm/model';
 import type {
     DocumentAiFrozenSnapshot,
     DocumentAiOperation,
+} from './document-ai-operations';
+import {
+    buildDocumentAiCandidate,
+    buildDocumentAiSelectionSlice,
 } from './document-ai-operations';
 
 export type DocumentAiHunkStatus = 'pending' | 'accepted' | 'discarded';
@@ -36,7 +41,7 @@ export interface DocumentAiHunkAnchor {
 }
 
 /** Soft cap so a single hunk cannot explode UI memory. */
-const MAX_PREVIEW_CHARS = 100_000;
+const MAX_PREVIEW_CHARS = 4_000;
 
 function textOf(node: JSONContent): string {
     if (typeof node.text === 'string') return node.text;
@@ -239,9 +244,10 @@ export function resolveHunkAnchor(
     }
 
     if (operation.kind === 'insert_end') {
+        // Anchor at the document end (not inside the last textblock).
         return {
-            widgetPos: Math.max(1, docSize - 1),
-            side: 1,
+            widgetPos: Math.max(0, docSize),
+            side: -1,
             nodeRange: null,
         };
     }
@@ -281,4 +287,74 @@ export function acceptedDocumentAiOperations(
     hunks: readonly DocumentAiHunk[],
 ): DocumentAiOperation[] {
     return hunks.filter((hunk) => hunk.status === 'accepted').map((hunk) => hunk.op);
+}
+
+/**
+ * Apply a single freeze-scoped op to the live editor.
+ * Live doc must already reflect `acceptedBefore`. Avoids full-document setContent.
+ */
+export function applyDocumentAiOperationLive(
+    editor: Editor,
+    snapshot: DocumentAiFrozenSnapshot,
+    acceptedBefore: readonly DocumentAiOperation[],
+    operation: DocumentAiOperation,
+): void {
+    // Validate the combined plan against the freeze before mutating the live doc.
+    buildDocumentAiCandidate(editor, snapshot, [...acceptedBefore, operation]);
+
+    if (operation.kind === 'replace_selection') {
+        if (acceptedBefore.length) {
+            throw new Error('Selection replacement cannot follow other accepted edits.');
+        }
+        if (!snapshot.selection) {
+            throw new Error('Selection replacement requires a frozen selection.');
+        }
+        const fragment = Fragment.fromArray(
+            operation.content.map((node) => editor.schema.nodeFromJSON(node)),
+        );
+        const { from, to, openStart, openEnd } = snapshot.selection;
+        const tr = editor.state.tr.replace(
+            from,
+            to,
+            buildDocumentAiSelectionSlice(fragment, openStart, openEnd),
+        );
+        editor.view.dispatch(tr);
+        return;
+    }
+
+    const anchor = resolveHunkAnchor(editor, snapshot, acceptedBefore, operation);
+    if (!anchor) {
+        throw new Error('Could not locate the edit target in the live document.');
+    }
+
+    switch (operation.kind) {
+        case 'delete_block': {
+            if (!anchor.nodeRange) throw new Error('Delete target is missing.');
+            editor.view.dispatch(
+                editor.state.tr.delete(anchor.nodeRange.from, anchor.nodeRange.to),
+            );
+            return;
+        }
+        case 'replace_block': {
+            if (!anchor.nodeRange) throw new Error('Replace target is missing.');
+            const nodes = operation.content.map((node) => editor.schema.nodeFromJSON(node));
+            editor.view.dispatch(
+                editor.state.tr.replaceWith(anchor.nodeRange.from, anchor.nodeRange.to, nodes),
+            );
+            return;
+        }
+        case 'insert_before':
+        case 'insert_after':
+        case 'insert_end': {
+            const nodes = Fragment.fromArray(
+                operation.content.map((node) => editor.schema.nodeFromJSON(node)),
+            );
+            editor.view.dispatch(editor.state.tr.insert(anchor.widgetPos, nodes));
+            return;
+        }
+        default: {
+            const _exhaustive: never = operation;
+            return _exhaustive;
+        }
+    }
 }

@@ -499,6 +499,9 @@ export async function resolveMention(
                 MAX_CONTEXT_BYTES
             )}`;
         } else {
+            const thread = (await db.threads.get(mention.id)) as ThreadRow | undefined;
+            if (!thread || thread.deleted) return null;
+
             const messages = (await db.messages
                 .where('thread_id')
                 .equals(mention.id)

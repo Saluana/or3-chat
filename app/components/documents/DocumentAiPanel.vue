@@ -2,23 +2,40 @@
     <section v-theme="'document.ai'" class="document-ai-composer" :class="{ expanded: customizeOpen, reviewing: Boolean(proposal) }" data-context="document" aria-label="Document AI">
         <div v-if="selectionAvailable && !proposal" class="selection-context" aria-live="polite">
             <span><strong>Selection</strong> “{{ clip(selectedText, 180) }}”</span>
-            <UButton :icon="icons.close" color="neutral" variant="ghost" size="xs" square aria-label="Use current section instead" @click="scope = 'section'" />
+            <UButton
+                v-if="scope !== 'selection'"
+                color="neutral"
+                variant="soft"
+                size="xs"
+                label="Use selection"
+                @click="scope = 'selection'"
+            />
+            <UButton
+                v-else
+                :icon="icons.close"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                square
+                aria-label="Use current section instead"
+                @click="scope = 'section'"
+            />
         </div>
 
         <div v-if="proposal" class="review-bar" aria-live="polite">
             <div class="review-bar-top">
                 <div class="review-bar-heading">
                     <strong>Review changes</strong>
-                    <span class="review-bar-progress">Change {{ activeHunkOrdinal }} of {{ pendingHunkCount }}</span>
+                    <span class="review-bar-progress">Change {{ activeHunkNumber }} of {{ totalHunkCount }}</span>
                 </div>
                 <div class="review-bar-legend" aria-hidden="true">
                     <span class="legend-removed">Removed</span>
                     <span class="legend-added">Added</span>
                 </div>
-                <UButton :icon="icons.close" color="neutral" variant="ghost" size="xs" square aria-label="Discard all changes" @click="$emit('reject')" />
+                <UButton :icon="icons.close" color="neutral" variant="ghost" size="xs" square aria-label="Discard all changes" :disabled="accepting" @click="$emit('reject')" />
             </div>
             <p class="review-bar-title">
-                <span class="review-bar-title-num">{{ activeHunkOrdinal }}</span>
+                <span class="review-bar-title-num">{{ activeHunkNumber }}</span>
                 {{ activeHunk?.label || 'Suggested edit' }}
             </p>
             <div class="review-bar-progress-track" aria-hidden="true">
@@ -26,16 +43,17 @@
             </div>
             <div class="review-bar-actions">
                 <div class="review-bar-nav">
-                    <UButton color="neutral" variant="outline" size="sm" label="Previous" :disabled="pendingHunkCount < 2" @click="goPrevHunk" />
-                    <UButton color="neutral" variant="outline" size="sm" label="Next" :disabled="pendingHunkCount < 2" @click="goNextHunk" />
+                    <UButton color="neutral" variant="outline" size="sm" label="Previous" :disabled="pendingHunkCount < 2 || accepting" @click="goPrevHunk" />
+                    <UButton color="neutral" variant="outline" size="sm" label="Next" :disabled="pendingHunkCount < 2 || accepting" @click="goNextHunk" />
                 </div>
                 <div class="review-bar-decisions">
-                    <UButton color="neutral" variant="outline" size="sm" label="Reject" :disabled="!activeHunk" @click="discardActiveHunk" />
-                    <UButton class="review-accept" color="primary" size="sm" label="Accept" :disabled="stale || !activeHunk" @click="acceptActiveHunk" />
-                    <UButton class="review-accept-all" color="neutral" size="sm" label="Accept all" :disabled="stale || pendingHunkCount === 0" @click="$emit('accept')" />
+                    <UButton color="neutral" variant="outline" size="sm" label="Reject" :disabled="!activeHunk || accepting" @click="discardActiveHunk" />
+                    <UButton class="review-accept" color="primary" size="sm" label="Accept" :disabled="stale || !activeHunk || accepting" @click="acceptActiveHunk" />
+                    <UButton class="review-accept-all" color="neutral" size="sm" label="Accept all" :disabled="stale || pendingHunkCount === 0 || accepting" @click="$emit('accept')" />
                 </div>
             </div>
             <p v-if="stale" class="error-message review-bar-error">The document changed. Regenerate from the latest version.</p>
+            <p v-else-if="accepting" class="review-bar-error" aria-live="polite">Applying change…</p>
         </div>
 
         <template v-else>
@@ -186,8 +204,9 @@
                             :key="group.key"
                             class="tool-group"
                         >
-                            <button
-                                type="button"
+                            <UButton
+                                color="neutral"
+                                variant="ghost"
                                 class="tool-group-header"
                                 :aria-expanded="!isToolGroupCollapsed(group.key)"
                                 @click="toggleToolGroup(group.key)"
@@ -197,7 +216,7 @@
                                     <span>{{ group.hint }}</span>
                                 </div>
                                 <span class="tool-group-count">{{ group.tools.length }}</span>
-                            </button>
+                            </UButton>
                             <div v-show="!isToolGroupCollapsed(group.key)" class="tool-group-list">
                                 <div
                                     v-for="tool in group.tools"
@@ -335,6 +354,7 @@ import type {
 } from '~/composables/documents/useDocumentAiAgent';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { validateFile } from '~/components/chat/file-upload-utils';
+import { MAX_DOCUMENT_AI_ATTACHMENTS } from '~/utils/documents/document-ai-attachments';
 import DocumentAiPromptEditor from './DocumentAiPromptEditor.vue';
 import type { DocumentAiPromptAction } from '~/plugins/DocumentAiCommands/slashCommandExtension';
 import type { DocumentAiContextReference } from '~/utils/documents/document-ai-context';
@@ -352,7 +372,7 @@ interface PendingDocumentAiAttachment extends DocumentAiAttachment {
     loading: boolean;
 }
 
-const MAX_ATTACHMENTS = 4;
+const MAX_ATTACHMENTS = MAX_DOCUMENT_AI_ATTACHMENTS;
 const props = defineProps<{
     status: string;
     error: string;
@@ -371,9 +391,15 @@ const props = defineProps<{
                 readonly after?: string;
             }[];
         };
-        readonly hunks?: readonly DocumentAiHunk[];
+        readonly hunks?: ReadonlyArray<{
+            readonly id: string;
+            readonly number: number;
+            readonly label: string;
+            readonly status: DocumentAiHunk['status'];
+        }>;
     } | null;
     stale: boolean;
+    accepting?: boolean;
     selectionAvailable: boolean;
     selectedText: string;
     documentId: string;
@@ -405,6 +431,7 @@ const emit = defineEmits<{
     reject: [];
     abort: [];
     'toggle-autocomplete': [];
+    'clear-scope-highlight': [];
 }>();
 
 const promptInput = ref<{ focus: () => void }>();
@@ -505,25 +532,28 @@ const pendingHunks = computed(() =>
     (props.proposal?.hunks ?? []).filter((hunk) => hunk.status === 'pending'),
 );
 const pendingHunkCount = computed(() => props.pendingHunkCount ?? pendingHunks.value.length);
+const totalHunkCount = computed(() => props.proposal?.hunks?.length ?? pendingHunkCount.value);
+const acceptedHunkCount = computed(() =>
+    (props.proposal?.hunks ?? []).filter((hunk) => hunk.status === 'accepted').length,
+);
 const agentStatus = computed(() => props.agentStatus ?? '');
+const accepting = computed(() => Boolean(props.accepting));
 const activeHunk = computed(() =>
     pendingHunks.value.find((hunk) => hunk.id === props.focusedHunkId) ?? pendingHunks.value[0] ?? null,
 );
-const activeHunkOrdinal = computed(() => {
-    const index = pendingHunks.value.findIndex((hunk) => hunk.id === activeHunk.value?.id);
-    return index >= 0 ? index + 1 : 0;
-});
+const activeHunkNumber = computed(() => activeHunk.value?.number ?? 0);
 const reviewProgressPercent = computed(() => {
-    if (!pendingHunkCount.value) return '0%';
-    return `${Math.round((activeHunkOrdinal.value / pendingHunkCount.value) * 100)}%`;
+    if (!totalHunkCount.value) return '0%';
+    return `${Math.round((acceptedHunkCount.value / totalHunkCount.value) * 100)}%`;
 });
 let estimateTimer: ReturnType<typeof setTimeout> | undefined;
 
 watch(
     () => props.selectionAvailable,
     (available) => {
-        if (available) scope.value = 'selection';
-        else if (scope.value === 'selection') scope.value = 'section';
+        // Sticky scope: never auto-hijack to selection. Only fall back when
+        // selection becomes unavailable while selection scope is active.
+        if (!available && scope.value === 'selection') scope.value = 'section';
     },
 );
 watch(
@@ -572,7 +602,10 @@ function discardActiveHunk() {
 }
 function scheduleEstimate() {
     if (estimateTimer) clearTimeout(estimateTimer);
-    if (!prompt.value.trim()) return;
+    if (!prompt.value.trim()) {
+        emit('clear-scope-highlight');
+        return;
+    }
     estimateTimer = setTimeout(() => emit('estimate', {
         prompt: prompt.value,
         scope: scope.value,
@@ -588,10 +621,19 @@ function send() {
         attachments: attachments.value.map(({ id: _id, loading: _loading, ...attachment }) => attachment),
     };
     emit('submit', payload);
-    prompt.value = '';
-    references.value = [];
-    attachments.value = [];
 }
+
+watch(
+    () => props.status,
+    (next, previous) => {
+        // Clear composer only after a successful preview is staged (not on stream start).
+        if (next === 'preview' && previous !== 'preview') {
+            prompt.value = '';
+            references.value = [];
+            attachments.value = [];
+        }
+    },
+);
 function selectSuggestedAction(action: DocumentAiPromptAction) {
     if (!action.defaultScope) return;
     scope.value = action.defaultScope === 'selection' && !props.selectionAvailable
@@ -1073,17 +1115,15 @@ function removeAttachment(id: string) {
     background: color-mix(in srgb, var(--md-surface) 88%, transparent);
 }
 .tool-group-header {
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
     width: 100%;
-    padding: 0.7rem 0.8rem;
-    border: 0;
-    background: transparent;
-    color: inherit;
+    height: auto !important;
+    padding: 0.7rem 0.8rem !important;
+    border-radius: 0 !important;
     text-align: left;
-    cursor: pointer;
 }
 .tool-group-copy {
     display: grid;

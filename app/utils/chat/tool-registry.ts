@@ -404,7 +404,7 @@ export function useToolRegistry() {
         }
 
         if (admission) {
-            if (!tool.enabled.value) {
+            if (!admission.ignoreGlobalEnabled && !tool.enabled.value) {
                 return { result: null, toolName, error: `Tool "${toolName}" is disabled.`, timedOut: false };
             }
             if (tool.runtime === 'server') {

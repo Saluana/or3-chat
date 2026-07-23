@@ -177,17 +177,18 @@ export const documentsStyles = {
     },
     '.document-editor-root .document-ai-hunk': {
         style: {
-            display: 'grid',
-            gap: '0.55rem',
-            margin: '0.55rem 0',
-            padding: '0.75rem 0.8rem',
-            border: '1px solid color-mix(in srgb, var(--md-on-surface) 12%, transparent)',
-            borderRadius: '14px',
-            background: 'var(--md-surface)',
-            boxShadow: '0 10px 28px color-mix(in srgb, var(--md-on-surface) 8%, transparent)',
-            fontFamily: 'var(--font-sans)',
-            fontSize: '0.8rem',
+            boxSizing: 'border-box',
+            display: 'block',
+            width: '100%',
             maxWidth: '100%',
+            margin: '0.75rem 0',
+            padding: '0',
+            border: '0',
+            borderRadius: '0',
+            background: 'transparent',
+            boxShadow: 'none',
+            fontFamily: 'var(--font-sans)',
+            fontSize: '0.875rem',
         },
     },
     '.document-editor-root .document-ai-hunk-header': {
@@ -196,6 +197,7 @@ export const documentsStyles = {
             alignItems: 'center',
             gap: '0.55rem',
             minWidth: '0',
+            marginBottom: '0.45rem',
         },
     },
     '.document-editor-root .document-ai-hunk-badge': {
@@ -225,37 +227,57 @@ export const documentsStyles = {
     },
     '.document-editor-root .document-ai-hunk-body': {
         style: {
+            position: 'relative',
             display: 'grid',
-            gap: '0.4rem',
+            gap: '0.35rem',
+        },
+    },
+    '.document-editor-root .document-ai-hunk-body.is-collapsed::after': {
+        style: {
+            content: '""',
+            position: 'absolute',
+            left: '0',
+            right: '0',
+            bottom: '0',
+            height: '1.75rem',
+            pointerEvents: 'none',
+            background: 'linear-gradient(to bottom, transparent, var(--md-surface))',
         },
     },
     '.document-editor-root .document-ai-hunk-body.is-expanded': {
         style: {
-            maxHeight: 'min(42vh, 18rem)',
-            overflow: 'auto',
-            overscrollBehavior: 'contain',
+            maxHeight: 'none',
+            overflow: 'visible',
         },
     },
     '.document-editor-root .document-ai-hunk-pane': {
         style: {
+            boxSizing: 'border-box',
             display: 'grid',
             gridTemplateColumns: 'auto minmax(0, 1fr)',
             gap: '0.45rem',
             alignItems: 'start',
-            padding: '0.55rem 0.65rem',
-            borderRadius: '10px',
+            width: '100%',
+            maxWidth: '100%',
+            padding: '0.5rem 0.65rem',
+            borderRadius: '0',
+            border: '0',
+            borderLeft: '3px solid transparent',
+            background: 'transparent',
         },
     },
     '.document-editor-root .document-ai-hunk-pane.is-before': {
         style: {
-            color: 'color-mix(in srgb, #9b3b3b 55%, var(--md-on-surface))',
-            background: 'color-mix(in srgb, #e85d5d 12%, var(--md-surface))',
+            color: 'var(--md-on-surface)',
+            background: 'color-mix(in srgb, #f8e8e8 70%, var(--md-surface))',
+            borderLeftColor: '#c45c5c',
         },
     },
     '.document-editor-root .document-ai-hunk-pane.is-after': {
         style: {
-            color: 'color-mix(in srgb, #1f7a4d 40%, var(--md-on-surface))',
-            background: 'color-mix(in srgb, #2f9d6a 12%, var(--md-surface))',
+            color: 'var(--md-on-surface)',
+            background: 'color-mix(in srgb, #e4f3e8 70%, var(--md-surface))',
+            borderLeftColor: '#2f9d6a',
         },
     },
     '.document-editor-root .document-ai-hunk-pane-mark': {
@@ -264,7 +286,6 @@ export const documentsStyles = {
             fontSize: '0.9rem',
             fontWeight: '700',
             lineHeight: '1',
-            opacity: '0.85',
         },
     },
     '.document-editor-root .document-ai-hunk-pane-stack': {
@@ -280,35 +301,67 @@ export const documentsStyles = {
             fontWeight: '700',
             letterSpacing: '0.04em',
             textTransform: 'uppercase',
-            opacity: '0.78',
         },
     },
     '.document-editor-root .document-ai-hunk-pane.is-before .document-ai-hunk-pane-label, .document-editor-root .document-ai-hunk-pane.is-before .document-ai-hunk-pane-mark': {
         style: {
-            color: 'color-mix(in srgb, #9b3b3b 70%, var(--md-on-surface))',
+            color: '#a54848',
         },
     },
     '.document-editor-root .document-ai-hunk-pane.is-after .document-ai-hunk-pane-label, .document-editor-root .document-ai-hunk-pane.is-after .document-ai-hunk-pane-mark': {
         style: {
-            color: 'color-mix(in srgb, #1f7a4d 55%, var(--md-on-surface))',
+            color: '#1f7a4d',
         },
     },
     '.document-editor-root .document-ai-hunk-pane-text': {
         style: {
+            color: 'var(--md-on-surface)',
             whiteSpace: 'pre-wrap',
             overflowWrap: 'anywhere',
-            lineHeight: '1.45',
+            lineHeight: '1.55',
+        },
+    },
+    '.document-editor-root .document-ai-hunk-pane.is-before .document-ai-hunk-pane-text': {
+        style: {
+            textDecoration: 'line-through',
+            textDecorationColor: 'color-mix(in srgb, #a54848 40%, transparent)',
+            opacity: '0.9',
         },
     },
     '.document-editor-root .document-ai-hunk-actions': {
         style: {
             display: 'flex',
             flexWrap: 'wrap',
-            justifyContent: 'flex-end',
-            gap: '0.35rem',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.45rem',
+            marginTop: '0.45rem',
         },
     },
-    '.document-editor-root .document-ai-hunk-toggle, .document-editor-root .document-ai-hunk-discard': {
+    '.document-editor-root .document-ai-hunk-decisions': {
+        style: {
+            display: 'flex',
+            flexWrap: 'wrap',
+            justifyContent: 'flex-end',
+            gap: '0.35rem',
+            marginLeft: 'auto',
+        },
+    },
+    '.document-editor-root .document-ai-hunk-toggle': {
+        style: {
+            border: '0',
+            borderRadius: '0',
+            padding: '0.2rem 0',
+            background: 'transparent',
+            color: 'var(--md-primary)',
+            fontSize: '0.75rem',
+            fontWeight: '600',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            textUnderlineOffset: '0.15em',
+        },
+    },
+    '.document-editor-root .document-ai-hunk-discard': {
         style: {
             border: '1px solid color-mix(in srgb, var(--md-on-surface) 14%, transparent)',
             borderRadius: '999px',
@@ -333,22 +386,41 @@ export const documentsStyles = {
     },
     '.document-editor-root .document-ai-hunk-target.is-replace': {
         style: {
-            background: 'color-mix(in srgb, var(--md-primary) 8%, transparent)',
-            borderRadius: '8px',
-            boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--md-primary) 22%, transparent)',
+            background: 'transparent',
+            borderRadius: '0',
+            boxShadow: 'none',
+            borderLeft: '2px solid color-mix(in srgb, var(--md-primary) 55%, transparent)',
+            paddingLeft: '0.55rem',
+            marginLeft: '0',
         },
     },
     '.document-editor-root .document-ai-hunk-target.is-replace.is-active': {
         style: {
-            background: 'color-mix(in srgb, var(--md-primary) 12%, transparent)',
-            boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--md-primary) 35%, transparent)',
+            background: 'color-mix(in srgb, var(--md-primary) 5%, transparent)',
+            borderLeftColor: 'var(--md-primary)',
         },
     },
     '.document-editor-root .document-ai-hunk-target.is-delete': {
         style: {
-            background: 'color-mix(in srgb, #e85d5d 10%, transparent)',
-            borderRadius: '8px',
-            boxShadow: 'inset 0 0 0 1px color-mix(in srgb, #e85d5d 28%, transparent)',
+            background: 'color-mix(in srgb, #e85d5d 6%, transparent)',
+            borderRadius: '0',
+            boxShadow: 'none',
+            borderLeft: '2px solid color-mix(in srgb, #e85d5d 70%, transparent)',
+            paddingLeft: '0.55rem',
+            marginLeft: '0',
+        },
+    },
+    '.document-editor-root .document-ai-scope-target.is-block': {
+        style: {
+            background: 'transparent',
+            borderRadius: '0',
+            boxShadow: 'none',
+        },
+    },
+    '.document-editor-root .document-ai-scope-target.is-selection': {
+        style: {
+            background: 'color-mix(in srgb, var(--md-tertiary, var(--md-primary)) 12%, transparent)',
+            borderRadius: '2px',
         },
     },
 };

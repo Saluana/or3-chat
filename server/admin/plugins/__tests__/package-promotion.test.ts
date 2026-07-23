@@ -24,10 +24,14 @@ function source(version: string): string {
     return root;
 }
 
-async function setup(stateCompatibility = {
+async function setup(stateCompatibility: {
+    version: number;
+    reads: { minimum: number; maximum: number };
+    rollback: 'safe' | 'migration-required' | 'unsupported';
+} = {
     version: 1,
     reads: { minimum: 1, maximum: 1 },
-    rollback: 'safe' as const,
+    rollback: 'safe',
 }) {
     const root = mkdtempSync(resolve(tmpdir(), 'or3-promote-store-'));
     const packages = new ImmutablePluginPackageStore(root);

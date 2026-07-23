@@ -70,13 +70,14 @@ function createFakeSpawn(options?: {
                     });
                 }
                 if (parsed.envelope.kind === 'request') {
+                    const request = parsed.envelope;
                     queueMicrotask(() => {
                         for (const listener of listeners.get('message') ?? []) {
                             listener(
                                 serializeRpcEnvelope(
                                     createRpcResponse({
-                                        id: parsed.envelope.id,
-                                        result: { pong: true, method: parsed.envelope.method },
+                                        id: request.id,
+                                        result: { pong: true, method: request.method },
                                     })
                                 )
                             );

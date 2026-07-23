@@ -190,9 +190,12 @@ test('holds track height during a browsing gesture and commits without moving th
         (window as typeof window & { __or3ScrollCanary: CanaryApi })
             .__or3ScrollCanary.scrollToIndex(50)
     );
+    // Let the keyed jump's visible-row measurements settle before testing
+    // whether a later browsing gesture freezes new structural commits.
+    await page.waitForTimeout(300);
     await page.evaluate(() => {
         const element = document.querySelector<HTMLElement>('.canary-scroll')!;
-        element.dispatchEvent(new WheelEvent('wheel', { deltaY: -200 }));
+        element.dispatchEvent(new TouchEvent('touchstart', { bubbles: true }));
         element.scrollTop -= 200;
         element.dispatchEvent(new Event('scroll'));
     });
@@ -207,6 +210,10 @@ test('holds track height during a browsing gesture and commits without moving th
     const during = await canary(page);
     expect(during.trackHeight).toBe(before.trackHeight);
 
+    await page.evaluate(() => {
+        const element = document.querySelector<HTMLElement>('.canary-scroll')!;
+        element.dispatchEvent(new TouchEvent('touchend', { bubbles: true }));
+    });
     await page.waitForTimeout(180);
     const after = await canary(page);
     expect(after.trackHeight).toBeGreaterThan(before.trackHeight);

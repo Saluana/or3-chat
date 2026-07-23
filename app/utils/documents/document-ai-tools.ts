@@ -130,7 +130,7 @@ export const DOCUMENT_AI_AGENT_TOOLS: ToolDefinition[] = [
         type: 'function',
         function: {
             name: 'propose_edits',
-            description: `Stage 1–${MAX_DOCUMENT_AI_OPERATIONS} TipTap edit operations against the frozen editable scope. May be called multiple times; later calls append. Do not invent refs.`,
+            description: `Stage 1–${MAX_DOCUMENT_AI_OPERATIONS} TipTap edit operations against the frozen editable scope. May be called multiple times; later calls append. Do not invent refs. For replace_selection, content must be TipTap JSON matching the frozen selection shape (preserve marks and multi-block structure).`,
             parameters: {
                 type: 'object',
                 additionalProperties: false,

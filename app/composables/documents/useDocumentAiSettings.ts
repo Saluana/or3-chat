@@ -53,16 +53,15 @@ export const DEFAULT_DOCUMENT_AI_SETTINGS: DocumentAiSettingsV1 = {
 
 function sanitizeEnabledTools(value: unknown): Record<string, boolean> {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-    const entries = Object.entries(value as Record<string, unknown>)
-        .filter(([name, enabled]) => (
-            typeof name === 'string'
-            && name.trim().length > 0
-            && name.length <= 80
-            && typeof enabled === 'boolean'
-        ))
-        .slice(0, 200)
-        .map(([name, enabled]) => [name.trim(), enabled] as const);
-    return Object.fromEntries(entries);
+    const out: Record<string, boolean> = {};
+    for (const [rawName, enabled] of Object.entries(value as Record<string, unknown>)) {
+        if (typeof rawName !== 'string' || typeof enabled !== 'boolean') continue;
+        const name = rawName.trim();
+        if (!name || name.length > 80) continue;
+        out[name] = enabled;
+        if (Object.keys(out).length >= 200) break;
+    }
+    return out;
 }
 
 const settings = ref<DocumentAiSettingsV1>({ ...DEFAULT_DOCUMENT_AI_SETTINGS });

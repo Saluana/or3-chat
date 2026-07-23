@@ -313,7 +313,8 @@ describe('sqlite webhook store', () => {
         expect(resetCount).toBe(1);
 
         const [resetLog] = await store.getDeliveryLogs(stale.webhook_id, 0);
-        const staleRow = resetLog.id === stale.id
+        expect(resetLog).toBeDefined();
+        const staleRow = resetLog!.id === stale.id
             ? resetLog
             : (await store.getDeliveryLogs(stale.webhook_id, 0)).find(
                   (log) => log.id === stale.id

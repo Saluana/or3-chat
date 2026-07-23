@@ -41,6 +41,8 @@ export interface DocumentAiAgentLoopParams {
     orMessages: ORMessage[];
     signal?: AbortSignal;
     maxIterations?: number;
+    /** Model context window; loop prunes older tool payloads to stay under this. */
+    maxContextTokens?: number;
     toolContext: Omit<DocumentAiToolContext, 'stagedOperations' | 'onStageOperations'>;
     tools?: ToolDefinition[];
     /** Document AI allowlist; missing keys use native-on / registry-off defaults. */
@@ -48,6 +50,66 @@ export interface DocumentAiAgentLoopParams {
     toolChoice?: ToolChoice;
     reasoning?: OpenRouterReasoningConfig;
     onStatus?: (event: DocumentAiAgentStatusEvent) => void;
+}
+
+/** Reserve tokens for the next model turn + tool schemas. */
+const DOCUMENT_AI_CONTEXT_RESERVE_TOKENS = 4_096;
+const DOCUMENT_AI_TOOL_RESULT_SOFT_CAP_CHARS = 24_000;
+
+function estimateMessageTokens(message: ORMessage): number {
+    const chunks: string[] = [];
+    if (typeof message.content === 'string') chunks.push(message.content);
+    else if (Array.isArray(message.content)) {
+        for (const part of message.content) {
+            if (part && typeof part === 'object' && part.type === 'text' && typeof part.text === 'string') {
+                chunks.push(part.text);
+            }
+        }
+    }
+    if (Array.isArray(message.tool_calls)) {
+        for (const call of message.tool_calls) {
+            chunks.push(call.function?.name ?? '', call.function?.arguments ?? '');
+        }
+    }
+    // Cheap char≈token heuristic; exact tokenizer is too heavy for the hot loop.
+    return Math.ceil(chunks.join('\n').length / 4);
+}
+
+function estimateConversationTokens(messages: readonly ORMessage[]): number {
+    return messages.reduce((total, message) => total + estimateMessageTokens(message), 0);
+}
+
+function truncateToolResultText(text: string, maxChars: number): string {
+    if (text.length <= maxChars) return text;
+    return `${text.slice(0, Math.max(0, maxChars - 48))}\n…[truncated for context budget]`;
+}
+
+/**
+ * Drop/trim older tool payloads so the running transcript fits the model window.
+ * Keeps system+user seeds and the newest tool turns intact when possible.
+ */
+export function enforceDocumentAiContextBudget(
+    messages: ORMessage[],
+    maxContextTokens: number,
+): void {
+    const budget = Math.max(2_048, maxContextTokens - DOCUMENT_AI_CONTEXT_RESERVE_TOKENS);
+    if (estimateConversationTokens(messages) <= budget) return;
+
+    for (let index = 0; index < messages.length; index += 1) {
+        const message = messages[index];
+        if (!message || message.role !== 'tool') continue;
+        const content = Array.isArray(message.content)
+            ? message.content.find((part) => part?.type === 'text' && typeof part.text === 'string')
+            : null;
+        if (!content || typeof content.text !== 'string') continue;
+        if (content.text.length <= 240) continue;
+        content.text = JSON.stringify({
+            truncated: true,
+            note: 'Earlier tool output was pruned to stay within the model context window. Re-read only what you still need.',
+            tool: message.name ?? 'tool',
+        });
+        if (estimateConversationTokens(messages) <= budget) return;
+    }
 }
 
 function statusLabelForTool(name: string, tools: readonly ToolDefinition[]): string {
@@ -76,10 +138,16 @@ async function executeAgentToolCall(params: {
     argumentsJson: string;
     toolContext: DocumentAiToolContext;
     enabledTools: Readonly<Record<string, boolean>>;
+    /** Tools advertised to the model for this run — execution is pinned to this set. */
+    advertisedTools: readonly ToolDefinition[];
     signal?: AbortSignal;
 }): Promise<string> {
     if (!isDocumentAiToolEnabled(params.name, params.enabledTools)) {
         throw new Error(`Tool "${params.name}" is disabled for Document AI.`);
+    }
+    const admitted = params.advertisedTools.find((tool) => tool.function.name === params.name);
+    if (!admitted) {
+        throw new Error(`Tool "${params.name}" was not advertised for this Document AI run.`);
     }
     if (isDocumentAiNativeTool(params.name)) {
         return executeDocumentAiTool(params.name, params.argumentsJson, params.toolContext);
@@ -98,6 +166,7 @@ async function executeAgentToolCall(params: {
         name: params.name,
         argumentsJson: params.argumentsJson,
         context,
+        admittedDefinition: admitted,
     });
 }
 
@@ -160,6 +229,7 @@ export async function runDocumentAiAgentLoop(
     );
     const enabledTools = params.enabledTools ?? {};
     const tools = params.tools ?? DOCUMENT_AI_AGENT_TOOLS;
+    const maxContextTokens = params.maxContextTokens ?? 32_000;
     const messages: ORMessage[] = [...params.orMessages];
     const stagedOperations: DocumentAiOperation[] = [];
     const toolContext: DocumentAiToolContext = {
@@ -180,6 +250,7 @@ export async function runDocumentAiAgentLoop(
     while (iterations < maxIterations) {
         iterations += 1;
         params.onStatus?.({ type: 'iteration', iteration: iterations, maxIterations });
+        enforceDocumentAiContextBudget(messages, maxContextTokens);
 
         const pendingToolCalls: Array<{
             id: string;
@@ -227,8 +298,13 @@ export async function runDocumentAiAgentLoop(
                     argumentsJson: toolCall.function.arguments,
                     toolContext,
                     enabledTools,
+                    advertisedTools: tools,
                     signal: params.signal,
                 });
+                resultText = truncateToolResultText(
+                    resultText,
+                    DOCUMENT_AI_TOOL_RESULT_SOFT_CAP_CHARS,
+                );
                 params.onStatus?.({
                     type: 'tool_end',
                     name,
@@ -255,6 +331,7 @@ export async function runDocumentAiAgentLoop(
                 name,
                 resultText,
             }));
+            enforceDocumentAiContextBudget(messages, maxContextTokens);
         }
     }
 

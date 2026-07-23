@@ -125,6 +125,11 @@ export interface ToolExecutionContext {
 /** Immutable admission decision associated with a provider-visible tool call. */
 export interface ToolExecutionAdmission {
     definition: ToolDefinition;
+    /**
+     * When true, skip the chat-global enablement check.
+     * Used by Document AI, which gates tools via its own `enabledTools` map.
+     */
+    ignoreGlobalEnabled?: boolean;
 }
 
 /**

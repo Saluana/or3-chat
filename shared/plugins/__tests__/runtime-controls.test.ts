@@ -124,6 +124,7 @@ describe('runtime controls', () => {
             descriptorKey: KEY,
         });
         expect(result.status).toBe('ok');
+        if (result.status !== 'ok') throw new Error('expected ok');
         expect(result.detail).toMatchObject({
             scope: 'this-client',
             fleetWide: false,
@@ -137,6 +138,7 @@ describe('runtime controls', () => {
             safeModeEnabled: false,
         });
         expect(result.status).toBe('ok');
+        if (result.status !== 'ok') throw new Error('expected ok');
         expect(result.detail).toMatchObject({
             limitations: expect.arrayContaining([
                 'trusted-host grants are not a sandbox',

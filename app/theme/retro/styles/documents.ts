@@ -216,17 +216,18 @@ export const documentsStyles = {
     },
     '.document-editor-root .document-ai-hunk': {
         style: {
-            display: 'grid',
-            gap: '0.5rem',
-            margin: '0.5rem 0',
-            padding: '0.65rem 0.7rem',
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            borderRadius: 'var(--md-border-radius)',
-            background: 'var(--md-surface)',
-            boxShadow: '3px 3px 0 color-mix(in srgb, var(--md-border-color) 55%, transparent)',
+            boxSizing: 'border-box',
+            display: 'block',
+            width: '100%',
+            maxWidth: '100%',
+            margin: '0.75rem 0',
+            padding: '0',
+            border: '0',
+            borderRadius: '0',
+            background: 'transparent',
+            boxShadow: 'none',
             fontFamily: 'var(--font-sans)',
             fontSize: '0.85rem',
-            maxWidth: '100%',
         },
     },
     '.document-editor-root .document-ai-hunk-header': {
@@ -235,6 +236,7 @@ export const documentsStyles = {
             alignItems: 'center',
             gap: '0.5rem',
             minWidth: '0',
+            marginBottom: '0.4rem',
         },
     },
     '.document-editor-root .document-ai-hunk-badge': {
@@ -266,36 +268,57 @@ export const documentsStyles = {
     },
     '.document-editor-root .document-ai-hunk-body': {
         style: {
+            position: 'relative',
             display: 'grid',
             gap: '0.35rem',
         },
     },
+    '.document-editor-root .document-ai-hunk-body.is-collapsed::after': {
+        style: {
+            content: '""',
+            position: 'absolute',
+            left: '0',
+            right: '0',
+            bottom: '0',
+            height: '1.75rem',
+            pointerEvents: 'none',
+            background: 'linear-gradient(to bottom, transparent, var(--md-surface))',
+        },
+    },
     '.document-editor-root .document-ai-hunk-body.is-expanded': {
         style: {
-            maxHeight: 'min(42vh, 18rem)',
-            overflow: 'auto',
-            overscrollBehavior: 'contain',
+            maxHeight: 'none',
+            overflow: 'visible',
         },
     },
     '.document-editor-root .document-ai-hunk-pane': {
         style: {
+            boxSizing: 'border-box',
             display: 'grid',
             gridTemplateColumns: 'auto minmax(0, 1fr)',
             gap: '0.4rem',
             alignItems: 'start',
+            width: '100%',
+            maxWidth: '100%',
             padding: '0.45rem 0.55rem',
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            borderRadius: 'var(--md-border-radius)',
+            border: '0',
+            borderLeft: 'var(--md-border-width) solid transparent',
+            borderRadius: '0',
+            background: 'transparent',
         },
     },
     '.document-editor-root .document-ai-hunk-pane.is-before': {
         style: {
-            background: 'color-mix(in srgb, var(--md-error) 14%, var(--md-surface))',
+            color: 'var(--md-on-surface)',
+            background: 'color-mix(in srgb, var(--md-surface) 88%, var(--md-error))',
+            borderLeftColor: 'var(--md-error)',
         },
     },
     '.document-editor-root .document-ai-hunk-pane.is-after': {
         style: {
-            background: 'color-mix(in srgb, #2f9d6a 14%, var(--md-surface))',
+            color: 'var(--md-on-surface)',
+            background: 'color-mix(in srgb, var(--md-surface) 88%, #2f9d6a)',
+            borderLeftColor: '#1f7a4d',
         },
     },
     '.document-editor-root .document-ai-hunk-pane-mark': {
@@ -334,20 +357,54 @@ export const documentsStyles = {
     },
     '.document-editor-root .document-ai-hunk-pane-text': {
         style: {
+            color: 'var(--md-on-surface)',
             whiteSpace: 'pre-wrap',
             overflowWrap: 'anywhere',
             lineHeight: '1.45',
+        },
+    },
+    '.document-editor-root .document-ai-hunk-pane.is-before .document-ai-hunk-pane-text': {
+        style: {
+            textDecoration: 'line-through',
+            textDecorationColor: 'color-mix(in srgb, var(--md-error) 45%, transparent)',
+            opacity: '0.9',
         },
     },
     '.document-editor-root .document-ai-hunk-actions': {
         style: {
             display: 'flex',
             flexWrap: 'wrap',
-            justifyContent: 'flex-end',
-            gap: '0.35rem',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.45rem',
+            marginTop: '0.4rem',
         },
     },
-    '.document-editor-root .document-ai-hunk-toggle, .document-editor-root .document-ai-hunk-discard': {
+    '.document-editor-root .document-ai-hunk-decisions': {
+        style: {
+            display: 'flex',
+            flexWrap: 'wrap',
+            justifyContent: 'flex-end',
+            gap: '0.35rem',
+            marginLeft: 'auto',
+        },
+    },
+    '.document-editor-root .document-ai-hunk-toggle': {
+        style: {
+            border: '0',
+            borderRadius: '0',
+            padding: '0.15rem 0',
+            background: 'transparent',
+            color: 'var(--md-primary)',
+            fontFamily: 'var(--font-display)',
+            fontSize: '0.8rem',
+            fontWeight: '700',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            textUnderlineOffset: '0.15em',
+        },
+    },
+    '.document-editor-root .document-ai-hunk-discard': {
         style: {
             border: 'var(--md-border-width) solid var(--md-border-color)',
             borderRadius: 'var(--md-border-radius)',
@@ -372,19 +429,36 @@ export const documentsStyles = {
     },
     '.document-editor-root .document-ai-hunk-target.is-replace': {
         style: {
-            background: 'color-mix(in srgb, var(--md-primary) 12%, transparent)',
-            outline: 'var(--md-border-width) solid var(--md-primary)',
+            background: 'transparent',
+            outline: 'none',
+            borderLeft: 'var(--md-border-width) solid var(--md-primary)',
+            paddingLeft: '0.55rem',
+            marginLeft: '0',
         },
     },
     '.document-editor-root .document-ai-hunk-target.is-replace.is-active': {
         style: {
-            background: 'color-mix(in srgb, var(--md-primary) 18%, transparent)',
+            background: 'color-mix(in srgb, var(--md-primary) 10%, transparent)',
         },
     },
     '.document-editor-root .document-ai-hunk-target.is-delete': {
         style: {
-            background: 'color-mix(in srgb, var(--md-error) 14%, transparent)',
-            outline: 'var(--md-border-width) solid var(--md-error)',
+            background: 'color-mix(in srgb, var(--md-error) 8%, transparent)',
+            outline: 'none',
+            borderLeft: 'var(--md-border-width) solid var(--md-error)',
+            paddingLeft: '0.55rem',
+            marginLeft: '0',
+        },
+    },
+    '.document-editor-root .document-ai-scope-target.is-block': {
+        style: {
+            background: 'transparent',
+            outline: 'none',
+        },
+    },
+    '.document-editor-root .document-ai-scope-target.is-selection': {
+        style: {
+            background: 'color-mix(in srgb, var(--md-primary) 16%, transparent)',
         },
     },
 };

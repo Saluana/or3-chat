@@ -122,6 +122,7 @@
                             @reject="ai.reject"
                             @abort="ai.abort"
                             @toggle-autocomplete="toggleAutocomplete"
+                            @clear-scope-highlight="ai.clearScopeHighlight"
                         />
                         <template #fallback><div class="ai-composer-loading">Loading document AI…</div></template>
                     </Suspense>
@@ -209,6 +210,7 @@ import { createDocumentRevision, type CompleteDocumentRevision } from '~/db/docu
 import type { DocumentAiScope } from '~/composables/editor/useDocumentAiActions';
 import type { EditorToolbarButton } from '~/composables/editor/useEditorToolbar';
 import type { TipTapDocument } from '~/types/database';
+import { isAllowedDocumentHref } from '~/utils/documents/document-href';
 
 const props = defineProps<{ documentId: string }>();
 const DocumentAiPanel = defineAsyncComponent(() => import('./DocumentAiPanel.vue'));
@@ -313,6 +315,7 @@ const aiPanelState = computed(() => ({
     tokenEstimate: ai.tokenEstimate.value,
     proposal: ai.proposal.value,
     stale: ai.stale.value,
+    accepting: ai.accepting.value,
     agentStatus: ai.agentStatus.value,
     pendingHunkCount: ai.pendingHunkCount.value,
     focusedHunkId: ai.focusedHunkId.value,
@@ -378,9 +381,13 @@ function updateSelectionContext() {
     const { from, to, empty } = current.state.selection;
     selectionAvailable.value = !empty;
     selectedText.value = empty ? '' : current.state.doc.textBetween(from, to, ' ', ' ').trim();
+    // Refresh caret-relative scope chrome only while the composer has it active.
+    ai.syncScopeHighlight(undefined, 'refresh');
 }
 
-function onEditorUpdate() {
+function onEditorUpdate(payload?: { transaction?: { docChanged?: boolean } }) {
+    // Ignore soft updates (e.g. TipTap setEditable) that do not change the doc.
+    if (payload?.transaction && payload.transaction.docChanged === false) return;
     contentVersion.value += 1;
     editorStateVersion.value += 1;
     updateSelectionContext();
@@ -492,7 +499,7 @@ async function loadActiveDocument(id: string) {
 
 watch(documentId, async (id, previous) => {
     if (previous && editor.value) await captureCurrent(true);
-    ai.abort();
+    ai.reset();
     await loadActiveDocument(id);
 });
 
@@ -723,7 +730,7 @@ function applyLink() {
         removeLink();
         return;
     }
-    if (/^(?:javascript|data|vbscript):/iu.test(href)) {
+    if (!isAllowedDocumentHref(href)) {
         linkError.value = 'Use an http, https, mailto, or relative link.';
         return;
     }
@@ -1049,6 +1056,7 @@ async function createManualCheckpoint() {
 .document-content { font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif); font-size: 1rem; line-height: 1.72; }
 .document-content :deep(.ProseMirror) { min-height: 55vh; outline: none; caret-color: var(--md-primary); }
 .document-content :deep(.ProseMirror > *) { margin-block: 0 1rem; }
+.document-content :deep(.document-ai-hunk) { box-sizing: border-box; width: 100%; max-width: 100%; }
 .document-content :deep(h1) { margin-top: 2.4rem; font-family: var(--font-heading, inherit); font-size: 1.9rem; letter-spacing: -0.025em; line-height: 1.2; }
 .document-content :deep(h2) { margin-top: 2.15rem; font-family: var(--font-heading, inherit); font-size: 1.5rem; letter-spacing: -0.018em; line-height: 1.25; }
 .document-content :deep(h3) { margin-top: 1.8rem; font-family: var(--font-heading, inherit); font-size: 1.2rem; line-height: 1.3; }

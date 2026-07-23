@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs';
+import { promises as fs, type Dirent } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Sha256 } from '../../../shared/plugins/runtime-descriptor';
 import type { WorkspaceSettingsStore } from '../stores/types';
@@ -197,7 +197,7 @@ function collectPointerDigests(pointer: PluginPackagePointer | null): Sha256[] {
 
 async function makeTreeWritable(root: string): Promise<void> {
     await fs.chmod(root, 0o755).catch(() => undefined);
-    let children: Awaited<ReturnType<typeof fs.readdir>> = [];
+    let children: Dirent[] = [];
     try {
         children = await fs.readdir(root, { withFileTypes: true });
     } catch {

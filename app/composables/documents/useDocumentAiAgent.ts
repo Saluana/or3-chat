@@ -1,4 +1,4 @@
-import { computed, readonly, ref, type Ref } from 'vue';
+import { computed, readonly, ref, watch, type Ref } from 'vue';
 import type { Editor, JSONContent } from '@tiptap/core';
 import { useUserApiKey } from '~/core/auth/useUserApiKey';
 import { useModelStore } from '~/composables/chat/useModelStore';
@@ -37,7 +37,20 @@ import {
 import { DOCUMENT_AI_AGENT_TOOLS } from '~/utils/documents/document-ai-tools';
 import { resolveDocumentAiToolsForRun } from '~/utils/documents/document-ai-registry-tools';
 import {
+    validateDocumentAiAttachments,
+    type DocumentAiAttachment,
+} from '~/utils/documents/document-ai-attachments';
+import { resolveDocumentAiScopeRange } from '~/utils/documents/document-ai-scope';
+import {
+    canClearStatusAfterAbort,
+    createAcceptQueue,
+    createDocumentAiRunGeneration,
+    proposalStillOwned as proposalIdentityOwned,
+    shouldLockDocumentAiEditor,
+} from './documentAiLifecycle';
+import {
     acceptedDocumentAiOperations,
+    applyDocumentAiOperationLive,
     createDocumentAiHunks,
     pendingDocumentAiOperations,
     type DocumentAiHunk,
@@ -60,7 +73,7 @@ Mandatory workflow:
 3. Empty or near-empty docs: skip long exploration. Create content with insert_end and/or replace_block on the empty paragraph ref (usually b1). Images/attachments are evidence for what to write.
 4. Obey scope: selection uses exactly one replace_selection; section/document edits use only exact provided block refs. Never invent refs, target a ref twice across all propose_edits calls, or use insert_end outside document scope.
 5. Make the smallest complete change. Preserve unrelated meaning, structure, attributes, marks, and node types.
-6. content is an array of valid TipTap JSON nodes—never a doc wrapper, Markdown, HTML, or plain strings. Use inline text nodes for replace_selection and top-level block nodes for block operations.
+6. content is an array of valid TipTap JSON nodes—never a doc wrapper, Markdown, HTML, or plain strings. For replace_selection, return TipTap JSON matching the frozen selection shape (keep marks/links; keep multi-block boundaries when the selection spans blocks). For block operations, use top-level block nodes.
 7. Stage edits with propose_edits (you may call it more than once). Prefer tools over narration. When finished, stop calling tools.
 8. Optional chat tools may also be available (web search, etc.). Use them only when they help fulfill the edit request; they cannot write the document—only propose_edits can stage changes.`;
 
@@ -77,6 +90,7 @@ export const DOCUMENT_EDIT_TOOL = DOCUMENT_AI_AGENT_TOOLS.find(
 )!;
 
 export interface DocumentAiProposal {
+    documentId: string;
     candidate: JSONContent;
     diff: DocumentAiDiffSummary;
     operations: DocumentAiOperation[];
@@ -87,12 +101,7 @@ export interface DocumentAiProposal {
     scope: DocumentAiScope;
 }
 
-export interface DocumentAiAttachment {
-    name: string;
-    mime: string;
-    kind: 'image' | 'pdf';
-    dataUrl: string;
-}
+export type { DocumentAiAttachment };
 
 export interface DocumentAiEstimateRequest {
     prompt: string;
@@ -181,8 +190,13 @@ function seedEditableContext(
             blocks: [] as typeof snapshot.blocks,
             allowedRefs: new Set<string>(),
             seedText: JSON.stringify({
-                selection: snapshot.selection.text,
-                note: 'Call propose_edits with a single replace_selection operation.',
+                selection: {
+                    text: snapshot.selection.text,
+                    content: snapshot.selection.content,
+                    openStart: snapshot.selection.openStart,
+                    openEnd: snapshot.selection.openEnd,
+                },
+                note: 'Call propose_edits with a single replace_selection. Return TipTap JSON that preserves marks and the same block/inline shape as selection.content.',
             }),
         };
     }
@@ -248,6 +262,25 @@ function syncHunkDecorations(
     });
 }
 
+type EstimateSeedCache = {
+    documentId: string;
+    contentVersion: number;
+    scope: DocumentAiScope;
+    scopeKey: string;
+    chunkWordLimit: number;
+    seedText: string;
+};
+
+function estimateScopeKey(editor: Editor, scope: DocumentAiScope): string {
+    if (scope === 'document') return 'document';
+    if (scope === 'selection') {
+        const { from, to, empty } = editor.state.selection;
+        return empty ? 'selection:empty' : `selection:${from}:${to}`;
+    }
+    const range = resolveDocumentAiScopeRange(editor, 'section');
+    return range ? `section:${range.from}:${range.to}` : 'section:none';
+}
+
 export function useDocumentAiAgent(options: {
     editor: Ref<Editor | null>;
     documentId: Ref<string>;
@@ -262,6 +295,14 @@ export function useDocumentAiAgent(options: {
     const agentStatus = ref('');
     const controller = ref<AbortController | null>(null);
     const checkpointCreated = ref(false);
+    const accepting = ref(false);
+    const lastScope = ref<DocumentAiScope>('section');
+    /** Composer-driven scope chrome; off until estimate/submit explicitly shows it. */
+    let scopeHighlightActive = false;
+    let estimateSeedCache: EstimateSeedCache | null = null;
+    /** Bumped on abort/reset/new submit so older runs cannot stomp status. */
+    const runControl = createDocumentAiRunGeneration();
+    const acceptControl = createAcceptQueue();
     const { apiKey } = useUserApiKey();
     const { settings, ensureLoaded } = useDocumentAiSettings();
     const { catalog, fetchModels } = useModelStore();
@@ -270,23 +311,137 @@ export function useDocumentAiAgent(options: {
     const referenceContextCache = new Map<string, string>();
 
     const stale = computed(() => Boolean(
-        proposal.value && proposal.value.requestVersion !== options.contentVersion.value
+        proposal.value && (
+            proposal.value.documentId !== options.documentId.value
+            || proposal.value.requestVersion !== options.contentVersion.value
+        )
     ));
+
+    // Drop inline review widgets when the freeze is invalidated; keep the bar
+    // so the user can regenerate. Skip while accepting — live apply bumps
+    // contentVersion before we retarget requestVersion.
+    watch(stale, (isStale) => {
+        if (!isStale || accepting.value) return;
+        syncHunkDecorations(options.editor.value, null);
+    });
 
     const pendingHunkCount = computed(
         () => proposal.value?.hunks.filter((hunk) => hunk.status === 'pending').length ?? 0,
     );
     const focusedHunkId = ref<string | null>(null);
 
+    function setEditorEditable(editable: boolean) {
+        const editor = options.editor.value;
+        if (!editor || editor.isDestroyed) return;
+        if (editor.isEditable === editable) return;
+        // TipTap's setEditable emits "update" by default even though the doc
+        // did not change — that falsely bumps contentVersion and marks proposals stale.
+        editor.setEditable(editable, false);
+    }
+
+    function syncEditorLock() {
+        setEditorEditable(!shouldLockDocumentAiEditor({
+            status: status.value,
+            accepting: accepting.value,
+        }));
+    }
+
+    /**
+     * Scope highlight is opt-in composer chrome — not permanent document styling.
+     * - `show`: paint after estimate/submit while composing
+     * - `refresh`: update caret-relative range only if already showing
+     * - `clear`: hide (open doc / reject / accept-done / reset)
+     */
+    function syncScopeHighlight(
+        scope?: DocumentAiScope,
+        mode: 'show' | 'refresh' | 'clear' = 'refresh',
+    ) {
+        const editor = options.editor.value;
+        if (!editor || editor.isDestroyed) return;
+        if (scope) lastScope.value = scope;
+
+        if (mode === 'clear') {
+            scopeHighlightActive = false;
+            editor.commands.setDocumentAiScopeRange?.(null);
+            return;
+        }
+        if (mode === 'show') scopeHighlightActive = true;
+
+        if (
+            !scopeHighlightActive
+            || status.value === 'streaming'
+            || status.value === 'preview'
+            || Boolean(proposal.value)
+        ) {
+            editor.commands.setDocumentAiScopeRange?.(null);
+            return;
+        }
+        const range = resolveDocumentAiScopeRange(editor, lastScope.value);
+        editor.commands.setDocumentAiScopeRange?.(range);
+    }
+
+    function clearScopeHighlight() {
+        syncScopeHighlight(undefined, 'clear');
+    }
+
+    function invalidateEstimateCache() {
+        estimateSeedCache = null;
+    }
+
+    function enqueueAccept(work: () => Promise<void>): Promise<void> {
+        return acceptControl.enqueue(async () => {
+            accepting.value = true;
+            syncEditorLock();
+            try {
+                await work();
+            } catch (caught) {
+                error.value = caught instanceof Error ? caught.message : String(caught);
+                throw caught;
+            } finally {
+                accepting.value = false;
+                syncEditorLock();
+                // Never re-paint scope chrome after accept; review is done or still locked.
+                clearScopeHighlight();
+            }
+        });
+    }
+
+    function assertAcceptableProposal(current: DocumentAiProposal) {
+        if (current.documentId !== options.documentId.value) {
+            reject();
+            throw new Error('This proposal belongs to a different document.');
+        }
+        if (stale.value) {
+            throw new Error('The document changed. Regenerate this edit from the latest version.');
+        }
+    }
+
+    function proposalStillOwned(current: DocumentAiProposal): boolean {
+        return proposalIdentityOwned({
+            proposal: proposal.value,
+            current,
+            documentId: options.documentId.value,
+        });
+    }
+
     function bindHunkHandlers(editor: Editor) {
         editor.commands.setDocumentAiHunkHandlers?.({
             onAcceptHunk: (hunkId) => {
-                void acceptHunk(hunkId);
+                if (accepting.value) return;
+                if (stale.value) {
+                    error.value = 'The document changed. Regenerate this edit from the latest version.';
+                    return;
+                }
+                void acceptHunk(hunkId).catch((caught) => {
+                    error.value = caught instanceof Error ? caught.message : String(caught);
+                });
             },
             onDiscardHunk: (hunkId) => {
+                if (accepting.value) return;
                 discardHunk(hunkId);
             },
             onFocusHunk: (hunkId) => {
+                if (accepting.value) return;
                 focusHunk(hunkId);
             },
         });
@@ -381,15 +536,43 @@ export function useDocumentAiAgent(options: {
         status.value = 'estimating';
         try {
             await ensureLoaded();
-            const snapshot = freezeDocumentForAi(editor);
-            const context = seedEditableContext(
-                editor,
-                snapshot,
-                request.scope,
-                settings.value.chunkWordLimit,
-            );
+            lastScope.value = request.scope;
+            // Do not paint scope chrome while typing — the composer already labels
+            // the active scope; block highlights made the whole section look selected.
+            clearScopeHighlight();
+            const chunkWordLimit = settings.value.chunkWordLimit;
+            const version = options.contentVersion.value;
+            const documentId = options.documentId.value;
+            const scopeKey = estimateScopeKey(editor, request.scope);
+            let seedText = '';
+            const cacheHit = estimateSeedCache
+                && estimateSeedCache.documentId === documentId
+                && estimateSeedCache.contentVersion === version
+                && estimateSeedCache.scope === request.scope
+                && estimateSeedCache.scopeKey === scopeKey
+                && estimateSeedCache.chunkWordLimit === chunkWordLimit;
+            if (cacheHit && estimateSeedCache) {
+                seedText = estimateSeedCache.seedText;
+            } else {
+                const snapshot = freezeDocumentForAi(editor);
+                const context = seedEditableContext(
+                    editor,
+                    snapshot,
+                    request.scope,
+                    chunkWordLimit,
+                );
+                seedText = context.seedText;
+                estimateSeedCache = {
+                    documentId,
+                    contentVersion: version,
+                    scope: request.scope,
+                    scopeKey,
+                    chunkWordLimit,
+                    seedText,
+                };
+            }
             const references = await referenceContext(request.references);
-            tokenEstimate.value = await countTokens(`${request.prompt}\n${context.seedText}\n${references}`);
+            tokenEstimate.value = await countTokens(`${request.prompt}\n${seedText}\n${references}`);
             if (status.value === 'estimating') error.value = '';
             return tokenEstimate.value;
         } catch (caught) {
@@ -416,19 +599,37 @@ export function useDocumentAiAgent(options: {
     async function submit(submission: DocumentAiSubmission) {
         const editor = options.editor.value;
         if (!editor || !submission.prompt.trim() || status.value === 'streaming') return;
+        const submitDocumentId = options.documentId.value;
         abort();
+        // New generation after abort so this submit owns status transitions.
+        const myGeneration = runControl.bump();
         proposal.value = null;
+        focusedHunkId.value = null;
         syncHunkDecorations(editor, null);
         error.value = '';
         agentStatus.value = '';
         checkpointCreated.value = false;
+        invalidateEstimateCache();
         bindHunkHandlers(editor);
+
+        let attachments: DocumentAiAttachment[];
+        try {
+            attachments = validateDocumentAiAttachments(submission.attachments);
+        } catch (caught) {
+            error.value = caught instanceof Error ? caught.message : String(caught);
+            status.value = 'error';
+            syncEditorLock();
+            return;
+        }
 
         const snapshot = freezeDocumentForAi(editor);
         const scope = submission.scope === 'selection' && !snapshot.selection
             ? 'section'
             : submission.scope;
+        lastScope.value = scope;
+        clearScopeHighlight();
         await ensureLoaded();
+        if (!runControl.isCurrent(myGeneration)) return;
         const context = seedEditableContext(
             editor,
             snapshot,
@@ -439,13 +640,30 @@ export function useDocumentAiAgent(options: {
         let model: OpenRouterModel;
         try {
             references = await referenceContext(submission.references, true);
-            model = await resolveModel(submission.attachments);
+            model = await resolveModel(attachments);
         } catch (caught) {
+            if (!runControl.isCurrent(myGeneration)) return;
             error.value = caught instanceof Error ? caught.message : String(caught);
+            status.value = 'error';
+            syncEditorLock();
+            return;
+        }
+        if (!runControl.isCurrent(myGeneration) || options.documentId.value !== submitDocumentId) return;
+
+        const tools = resolveDocumentAiToolsForRun(settings.value.enabledTools);
+        if (!tools.length) {
+            error.value = 'Enable at least one tool in Document AI settings.';
             status.value = 'error';
             return;
         }
+        if (!tools.some((tool) => tool.function.name === 'propose_edits')) {
+            error.value = 'Enable “Propose edits” in Document AI settings to stage document changes.';
+            status.value = 'error';
+            return;
+        }
+
         tokenEstimate.value = await countTokens(`${submission.prompt}\n${context.seedText}\n${references}`);
+        if (!runControl.isCurrent(myGeneration)) return;
         const contextLimit = model.top_provider?.context_length ?? model.context_length ?? 32_000;
         if (tokenEstimate.value + 4096 > contextLimit) {
             error.value = `This ${scope} is too large for ${model.name ?? model.id}. Choose a larger-context model or a smaller scope.`;
@@ -454,7 +672,7 @@ export function useDocumentAiAgent(options: {
         }
 
         let request = await hooks.applyFilters('ai.document.edit:filter:request', {
-            documentId: options.documentId.value,
+            documentId: submitDocumentId,
             modelId: model.id,
             prompt: submission.prompt.trim(),
             scope,
@@ -465,11 +683,13 @@ export function useDocumentAiAgent(options: {
             maxIterations: settings.value.maxIterations ?? DEFAULT_DOCUMENT_AI_MAX_ITERATIONS,
             chunkWordLimit: settings.value.chunkWordLimit,
         });
-        const requestVersion = options.contentVersion.value;
+        if (!runControl.isCurrent(myGeneration) || options.documentId.value !== submitDocumentId) return;
         const abortController = new AbortController();
         controller.value = abortController;
         status.value = 'streaming';
         agentStatus.value = 'Starting…';
+        clearScopeHighlight();
+        syncEditorLock();
         await hooks.doAction('ai.document.edit:action:before', request);
         try {
             const streamOptions = resolveDocumentAiToolStreamOptions(model);
@@ -485,7 +705,7 @@ export function useDocumentAiAgent(options: {
                             type: 'text' as const,
                             text: `Request:\n${request.prompt}\n\nScope:\n${request.scope}\n\nEditable frozen context (outline/chunks; use tools to read more):\n${request.context}\n\nRead-only reference context:\n${request.referenceContext || '(none)'}`,
                         },
-                        ...submission.attachments.map((attachment) =>
+                        ...attachments.map((attachment) =>
                             attachment.kind === 'image'
                                 ? {
                                       type: 'image_url' as const,
@@ -503,20 +723,13 @@ export function useDocumentAiAgent(options: {
                 },
             ];
 
-            const tools = resolveDocumentAiToolsForRun(settings.value.enabledTools);
-            if (!tools.length) {
-                throw new Error('Enable at least one tool in Document AI settings.');
-            }
-            if (!tools.some((tool) => tool.function.name === 'propose_edits')) {
-                throw new Error('Enable “Propose edits” in Document AI settings to stage document changes.');
-            }
-
             const { operations } = await runDocumentAiAgentLoop({
                 apiKey: apiKey.value,
                 modelId: request.modelId,
                 orMessages,
                 signal: abortController.signal,
                 maxIterations: settings.value.maxIterations,
+                maxContextTokens: contextLimit,
                 tools,
                 enabledTools: settings.value.enabledTools,
                 toolChoice: streamOptions.toolChoice,
@@ -531,6 +744,14 @@ export function useDocumentAiAgent(options: {
                 },
             });
 
+            if (
+                !runControl.isCurrent(myGeneration)
+                || options.documentId.value !== submitDocumentId
+                || abortController.signal.aborted
+            ) {
+                return;
+            }
+
             if (!operations.length) {
                 throw new Error('The model did not stage any document edits.');
             }
@@ -538,7 +759,10 @@ export function useDocumentAiAgent(options: {
             const candidate = buildDocumentAiCandidate(editor, snapshot, operations);
             editor.schema.nodeFromJSON(candidate);
             const hunks = createDocumentAiHunks(operations, snapshot);
+            // Capture after lock/stream side-effects so soft-lock cannot mark us stale.
+            const requestVersion = options.contentVersion.value;
             const nextProposal: DocumentAiProposal = {
+                documentId: submitDocumentId,
                 candidate,
                 diff: summarizeDocumentAiDiff(snapshot.content, candidate),
                 operations,
@@ -552,6 +776,8 @@ export function useDocumentAiAgent(options: {
             focusedHunkId.value = hunks[0]?.id ?? null;
             syncHunkDecorations(editor, nextProposal, focusedHunkId.value);
             status.value = 'preview';
+            syncEditorLock();
+            clearScopeHighlight();
             if (focusedHunkId.value) focusHunk(focusedHunkId.value);
             await hooks.doAction('ai.document.edit:action:after', {
                 request,
@@ -559,108 +785,131 @@ export function useDocumentAiAgent(options: {
                 accepted: false,
             });
         } catch (caught) {
+            if (!runControl.isCurrent(myGeneration)) return;
             if (abortController.signal.aborted) {
-                status.value = 'idle';
-                agentStatus.value = '';
+                if (canClearStatusAfterAbort({
+                    myGeneration,
+                    runGeneration: runControl.current(),
+                    status: status.value,
+                })) {
+                    status.value = 'idle';
+                    agentStatus.value = '';
+                    syncEditorLock();
+                }
                 return;
             }
             error.value = caught instanceof Error ? caught.message : String(caught);
             status.value = 'error';
+            syncEditorLock();
             await hooks.doAction('ai.document.edit:action:error', { request, error: caught });
         } finally {
             if (controller.value === abortController) controller.value = null;
+            if (runControl.isCurrent(myGeneration) && status.value === 'streaming') {
+                // Loop ended without preview/error transition (shouldn't happen often).
+                status.value = 'idle';
+                syncEditorLock();
+            }
         }
     }
 
     async function accept() {
-        const editor = options.editor.value;
-        const current = proposal.value;
-        if (!editor || !current) return;
-        if (stale.value) throw new Error('The document changed. Regenerate this edit from the latest version.');
-        const pending = pendingDocumentAiOperations(current.hunks);
-        const accepted = acceptedDocumentAiOperations(current.hunks);
-        const operations = [...accepted, ...pending];
-        if (!operations.length) {
-            reject();
-            return;
-        }
-        await ensureAiCheckpoint(editor);
-        const candidate = buildDocumentAiCandidate(editor, current.snapshot, operations);
-        editor.schema.nodeFromJSON(candidate);
-        editor.commands.setContent(candidate, {
-            emitUpdate: true,
-            errorOnInvalidContent: true,
-        });
-        await options.persistCurrent();
-        proposal.value = null;
-        syncHunkDecorations(editor, null);
-        status.value = 'idle';
-        agentStatus.value = '';
-        checkpointCreated.value = false;
-    }
-
-    async function acceptHunk(hunkId: string) {
-        const editor = options.editor.value;
-        const current = proposal.value;
-        if (!editor || !current) return;
-        if (stale.value) throw new Error('The document changed. Regenerate this edit from the latest version.');
-        const hunk = current.hunks.find((entry) => entry.id === hunkId);
-        if (!hunk || hunk.status !== 'pending') return;
-
-        await ensureAiCheckpoint(editor);
-        const nextHunks = current.hunks.map((entry) => (
-            entry.id === hunkId ? { ...entry, status: 'accepted' as const } : entry
-        ));
-        const accepted = acceptedDocumentAiOperations(nextHunks);
-        const pending = pendingDocumentAiOperations(nextHunks);
-        const nextActiveId = nextHunks.find((entry) => entry.status === 'pending')?.id ?? null;
-        focusedHunkId.value = nextActiveId;
-
-        // Push updated hunk statuses into the editor before setContent so
-        // decoration rebuilds remap remaining anchors against accepted ops.
-        const interim: DocumentAiProposal = {
-            ...current,
-            hunks: nextHunks,
-            operations: [...accepted, ...pending],
-            candidate: current.candidate,
-            diff: current.diff,
-        };
-        syncHunkDecorations(editor, pending.length ? interim : null, nextActiveId);
-
-        const liveCandidate = buildDocumentAiCandidate(editor, current.snapshot, accepted);
-        editor.schema.nodeFromJSON(liveCandidate);
-        editor.commands.setContent(liveCandidate, {
-            emitUpdate: true,
-            errorOnInvalidContent: true,
-        });
-        await options.persistCurrent();
-        // setContent bumps contentVersion synchronously via onUpdate.
-        const versionAfterAccept = options.contentVersion.value;
-
-        if (!pending.length) {
+        return enqueueAccept(async () => {
+            const editor = options.editor.value;
+            const current = proposal.value;
+            if (!editor || !current) return;
+            assertAcceptableProposal(current);
+            const operations = current.hunks
+                .filter((hunk) => hunk.status === 'accepted' || hunk.status === 'pending')
+                .map((hunk) => hunk.op);
+            if (!operations.length) {
+                reject();
+                return;
+            }
+            await ensureAiCheckpoint(editor);
+            if (!proposalStillOwned(current) || stale.value) return;
+            const candidate = buildDocumentAiCandidate(editor, current.snapshot, operations);
+            editor.schema.nodeFromJSON(candidate);
+            editor.commands.setContent(candidate, {
+                emitUpdate: true,
+                errorOnInvalidContent: true,
+            });
+            await options.persistCurrent();
+            if (!proposalStillOwned(current)) return;
             proposal.value = null;
             focusedHunkId.value = null;
             syncHunkDecorations(editor, null);
             status.value = 'idle';
             agentStatus.value = '';
             checkpointCreated.value = false;
-            return;
-        }
+        });
+    }
 
-        const previewOps = [...accepted, ...pending];
-        const preview = buildDocumentAiCandidate(editor, current.snapshot, previewOps);
-        const next: DocumentAiProposal = {
-            ...current,
-            hunks: nextHunks,
-            operations: previewOps,
-            candidate: preview,
-            diff: summarizeDocumentAiDiff(current.snapshot.content, preview),
-            requestVersion: versionAfterAccept,
-        };
-        proposal.value = next;
-        syncHunkDecorations(editor, next, nextActiveId);
-        status.value = 'preview';
-        if (nextActiveId) focusHunk(nextActiveId);
+    async function acceptHunk(hunkId: string) {
+        return enqueueAccept(async () => {
+            const editor = options.editor.value;
+            const current = proposal.value;
+            if (!editor || !current) return;
+            assertAcceptableProposal(current);
+            const hunk = current.hunks.find((entry) => entry.id === hunkId);
+            if (!hunk || hunk.status !== 'pending') return;
+
+            await ensureAiCheckpoint(editor);
+            if (proposal.value !== current || stale.value) return;
+
+            const nextHunks = current.hunks.map((entry) => (
+                entry.id === hunkId ? { ...entry, status: 'accepted' as const } : entry
+            ));
+            const accepted = acceptedDocumentAiOperations(nextHunks);
+            const pending = pendingDocumentAiOperations(nextHunks);
+            const nextActiveId = nextHunks.find((entry) => entry.status === 'pending')?.id ?? null;
+            focusedHunkId.value = nextActiveId;
+
+            // Close this card / activate the next one BEFORE mutating the doc.
+            // Otherwise mapped decorations keep the accepted review widget on screen.
+            const interim: DocumentAiProposal = {
+                ...current,
+                hunks: nextHunks,
+                operations: [...accepted, ...pending],
+                candidate: current.candidate,
+                diff: current.diff,
+            };
+            proposal.value = interim;
+            syncHunkDecorations(editor, pending.length ? interim : null, nextActiveId);
+
+            const acceptedBefore = acceptedDocumentAiOperations(current.hunks);
+            applyDocumentAiOperationLive(editor, current.snapshot, acceptedBefore, hunk.op);
+            const versionAfterAccept = options.contentVersion.value;
+            if (proposal.value === interim) {
+                proposal.value = { ...interim, requestVersion: versionAfterAccept };
+            }
+            await options.persistCurrent();
+            if (proposal.value?.documentId !== current.documentId) return;
+
+            if (!pending.length) {
+                proposal.value = null;
+                focusedHunkId.value = null;
+                syncHunkDecorations(editor, null);
+                status.value = 'idle';
+                agentStatus.value = '';
+                checkpointCreated.value = false;
+                return;
+            }
+
+            const previewOps = [...accepted, ...pending];
+            const preview = buildDocumentAiCandidate(editor, current.snapshot, previewOps);
+            const next: DocumentAiProposal = {
+                ...current,
+                hunks: nextHunks,
+                operations: previewOps,
+                candidate: preview,
+                diff: summarizeDocumentAiDiff(current.snapshot.content, preview),
+                requestVersion: options.contentVersion.value,
+            };
+            proposal.value = next;
+            syncHunkDecorations(editor, next, nextActiveId);
+            status.value = 'preview';
+            if (nextActiveId) focusHunk(nextActiveId);
+        });
     }
 
     function discardHunk(hunkId: string) {
@@ -688,6 +937,7 @@ export function useDocumentAiAgent(options: {
             status.value = 'idle';
             agentStatus.value = '';
             checkpointCreated.value = false;
+            syncEditorLock();
             return;
         }
         const applied = [...acceptedOps, ...pendingOps];
@@ -711,15 +961,32 @@ export function useDocumentAiAgent(options: {
         status.value = 'idle';
         agentStatus.value = '';
         checkpointCreated.value = false;
+        referenceContextCache.clear();
+        syncEditorLock();
+        clearScopeHighlight();
     }
 
     function abort() {
+        runControl.bump();
         controller.value?.abort();
         controller.value = null;
+        // Only clear streaming — never stomp an unrelated preview/error state.
         if (status.value === 'streaming') {
             status.value = 'idle';
             agentStatus.value = '';
+            syncEditorLock();
+            clearScopeHighlight();
         }
+    }
+
+    /** Abort in-flight work and clear any preview when switching documents. */
+    function reset() {
+        abort();
+        reject();
+        referenceContextCache.clear();
+        invalidateEstimateCache();
+        lastScope.value = 'section';
+        clearScopeHighlight();
     }
 
     function focusHunk(hunkId: string) {
@@ -727,12 +994,14 @@ export function useDocumentAiAgent(options: {
         if (!editor || !proposal.value) return;
         focusedHunkId.value = hunkId;
         editor.commands.setActiveDocumentAiHunk?.(hunkId);
-        // Keep the document readable: jump the canvas to the active change.
+        // Wait for the decoration refresh to mount the next card/marker before scrolling.
         requestAnimationFrame(() => {
-            const node = editor.view.dom.querySelector(
-                `[data-hunk-id="${CSS.escape(hunkId)}"]`,
-            );
-            node?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            requestAnimationFrame(() => {
+                const node = editor.view.dom.querySelector(
+                    `[data-hunk-id="${CSS.escape(hunkId)}"]`,
+                );
+                node?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            });
         });
     }
 
@@ -758,6 +1027,7 @@ export function useDocumentAiAgent(options: {
         pendingHunkCount,
         focusedHunkId: readonly(focusedHunkId),
         stale,
+        accepting: readonly(accepting),
         estimate,
         submit,
         accept,
@@ -765,7 +1035,10 @@ export function useDocumentAiAgent(options: {
         discardHunk,
         reject,
         abort,
+        reset,
         focusHunk,
         focusNextHunk,
+        syncScopeHighlight,
+        clearScopeHighlight,
     };
 }

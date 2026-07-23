@@ -70,14 +70,19 @@ export async function executeDocumentAiRegistryTool(params: {
     name: string;
     argumentsJson: string;
     context: ToolExecutionContext;
+    /** Definition advertised to the model for this run — pins admission. */
+    admittedDefinition: ToolDefinition;
 }): Promise<string> {
     const registry = useToolRegistry();
-    // No chat admission: Document AI uses its own allowlist (enabledTools).
-    // Skipping admission also avoids coupling to chat's global enabled toggles.
     const execution = await registry.executeTool(
         params.name,
         params.argumentsJson,
         params.context,
+        {
+            definition: params.admittedDefinition,
+            // Document AI uses enabledTools, not chat-global toggles.
+            ignoreGlobalEnabled: true,
+        },
     );
     if (execution.error) {
         throw new Error(execution.error);

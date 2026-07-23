@@ -1013,12 +1013,41 @@ export default defineNuxtConfig({
     },
     vite: {
         customLogger: viteLogger,
-        optimizeDeps: isScrollTestHarnessEnabled
-            ? { exclude: ['or3-scroll'] }
-            : undefined,
+        resolve: {
+            alias: [
+                {
+                    find: /^or3-scroll$/,
+                    replacement: resolve(
+                        __dirname,
+                        '../or3-vsc/src/lib/index.ts',
+                    ),
+                },
+                {
+                    find: /^or3-workflow-vue$/,
+                    replacement: resolve(
+                        __dirname,
+                        '../or3-workflows/packages/workflow-vue/src/index.ts',
+                    ),
+                },
+                {
+                    find: /^or3-workflow-core$/,
+                    replacement: resolve(
+                        __dirname,
+                        '../or3-workflows/packages/workflow-core/src/index.ts',
+                    ),
+                },
+            ],
+        },
+        optimizeDeps: {
+            exclude: [
+                'or3-scroll',
+                'or3-workflow-core',
+                'or3-workflow-vue',
+            ],
+        },
         server: {
             fs: {
-                allow: ['..'],
+                allow: [resolve(__dirname, '..')],
             },
             watch: {
                 ignored: isWizardUiProcess

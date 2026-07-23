@@ -3,6 +3,7 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { freezeDocumentForAi, buildDocumentAiCandidate } from '../document-ai-operations';
 import {
+    applyDocumentAiOperationLive,
     createDocumentAiHunks,
     describeDocumentAiOperation,
     projectFreezeRootsAfterOps,
@@ -86,6 +87,18 @@ describe('document AI hunk anchors', () => {
         expect(textAtAnchor).toContain('Three');
     });
 
+    it('anchors insert_end at the document end, not inside the last block', () => {
+        const current = makeEditor();
+        const snapshot = freezeDocumentForAi(current);
+        const docSize = current.state.doc.content.size;
+        const anchor = resolveHunkAnchor(current, snapshot, [], {
+            kind: 'insert_end',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Tail' }] }],
+        });
+        expect(anchor?.widgetPos).toBe(docSize);
+        expect(anchor?.side).toBe(-1);
+    });
+
     it('anchors the first pending replace before any accepts', () => {
         const current = makeEditor();
         const snapshot = freezeDocumentForAi(current);
@@ -100,5 +113,44 @@ describe('document AI hunk anchors', () => {
             anchor!.nodeRange!.to,
             '\n',
         )).toContain('Two');
+    });
+});
+
+describe('document AI live apply', () => {
+    it('applies a replace_block without rewriting the whole document via setContent', () => {
+        const current = makeEditor();
+        const snapshot = freezeDocumentForAi(current);
+        const beforeSize = current.state.doc.content.size;
+        applyDocumentAiOperationLive(current, snapshot, [], {
+            kind: 'replace_block',
+            ref: 'b2',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Updated two' }] }],
+        });
+        expect(current.state.doc.textContent).toContain('Updated two');
+        expect(current.state.doc.textContent).toContain('One');
+        expect(current.state.doc.textContent).toContain('Three');
+        // Live replace should keep surrounding structure intact (not a full rewrite).
+        expect(Math.abs(current.state.doc.content.size - beforeSize)).toBeLessThan(40);
+    });
+
+    it('applies sequential accepts against projected anchors', () => {
+        const current = makeEditor();
+        const snapshot = freezeDocumentForAi(current);
+        const first = {
+            kind: 'replace_block' as const,
+            ref: 'b1',
+            content: [
+                { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'New title' }] },
+            ],
+        };
+        applyDocumentAiOperationLive(current, snapshot, [], first);
+        applyDocumentAiOperationLive(current, snapshot, [first], {
+            kind: 'replace_block',
+            ref: 'b3',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Updated three' }] }],
+        });
+        expect(current.state.doc.textContent).toContain('New title');
+        expect(current.state.doc.textContent).toContain('Updated three');
+        expect(current.state.doc.textContent).toContain('Two');
     });
 });

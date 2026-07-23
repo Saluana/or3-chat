@@ -60,7 +60,7 @@ describe('openrouterStream', () => {
         const fetchMock = vi
             .fn()
             .mockResolvedValue(createStreamResponse());
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         const events: Array<{ type: string; text?: string }> = [];
 
@@ -100,7 +100,7 @@ describe('openrouterStream', () => {
 
     it('hands the explicit streamed-field mode to the shared parser', async () => {
         const fetchMock = vi.fn().mockResolvedValue(createStreamResponse());
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         for await (const _event of openRouterStream({
             apiKey: 'key-1',
@@ -119,7 +119,7 @@ describe('openrouterStream', () => {
 
     it('sends reasoning effort and Anthropic cache control through the server route', async () => {
         const fetchMock = vi.fn().mockResolvedValue(createStreamResponse());
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         for await (const _event of openRouterStream({
             apiKey: 'key-1',
@@ -142,7 +142,7 @@ describe('openrouterStream', () => {
 
     it('does not send cache control for non-Anthropic models', async () => {
         const fetchMock = vi.fn().mockResolvedValue(createStreamResponse());
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         for await (const _event of openRouterStream({
             apiKey: 'key-1',
@@ -168,7 +168,7 @@ describe('openrouterStream', () => {
             }
             return Promise.resolve(createStreamResponse());
         });
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         const events: Array<{ type: string; text?: string }> = [];
         for await (const event of openRouterStream({
@@ -199,7 +199,7 @@ describe('openrouterStream', () => {
             }
             return Promise.resolve(createStreamResponse());
         });
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         await expect(
             (async () => {
@@ -233,7 +233,7 @@ describe('openrouterStream', () => {
             }
             return Promise.resolve(createStreamResponse());
         });
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         await expect(
             (async () => {
@@ -260,7 +260,7 @@ describe('openrouterStream', () => {
             controller.abort();
             return Promise.reject(new DOMException('Aborted', 'AbortError'));
         });
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         const failure = await (async () => {
             try {
@@ -311,7 +311,7 @@ describe('openrouterStream', () => {
             }
             return Promise.resolve(createStreamResponse());
         });
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         const events: Array<{ type: string; text?: string }> = [];
         for await (const event of openRouterStreamWithRetry({
@@ -339,7 +339,7 @@ describe('openrouterStream', () => {
                 })
             );
         });
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         await expect(
             (async () => {
@@ -368,7 +368,7 @@ describe('background streaming helpers', () => {
         const fetchMock = vi.fn().mockResolvedValue(
             createJsonResponse({ jobId: 'job-1', status: 'streaming' })
         );
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         const result = await startBackgroundStream({
             apiKey: 'key-1',
@@ -424,7 +424,7 @@ describe('background streaming helpers', () => {
         const fetchMock = vi.fn().mockResolvedValue(
             createJsonResponse({ jobId: 'job-1', status: 'streaming' })
         );
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         await startBackgroundStream({
             apiKey: 'key-1',
@@ -447,7 +447,7 @@ describe('background streaming helpers', () => {
         const fetchMock = vi
             .fn()
             .mockResolvedValue(createJsonResponse({ error: 'nope' }, 404));
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         await expect(
             startBackgroundStream({
@@ -481,7 +481,7 @@ describe('background streaming helpers', () => {
                 headers: { 'Content-Type': 'application/json', 'Retry-After': '2' },
             })
         );
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         const failure = await pollJobStatus('job-1').catch((error) => error);
 
@@ -491,7 +491,7 @@ describe('background streaming helpers', () => {
     });
 
     it('classifies a rejected poll fetch as retryable transport failure', async () => {
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch =
+        (globalThis as unknown as { fetch: unknown }).fetch =
             vi.fn().mockRejectedValue(new TypeError('offline'));
 
         const failure = await pollJobStatus('job-1').catch((error) => error);
@@ -525,7 +525,7 @@ describe('background streaming helpers', () => {
         const fetchMock = vi.fn(() =>
             Promise.resolve(createJsonResponse(statuses.shift()))
         );
-        (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = fetchMock;
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
         vi.useFakeTimers();
         const promise = waitForJobCompletion('job-1', undefined, 10, 100);

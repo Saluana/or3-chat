@@ -8,17 +8,24 @@ import {
     clipDocumentAiPreview,
     resolveHunkAnchor,
 } from '~/utils/documents/document-ai-hunks';
+import type { DocumentAiScopeRange } from '~/utils/documents/document-ai-scope';
 
 export interface DocumentAiHunksStorage {
     hunks: DocumentAiHunk[];
     snapshot: DocumentAiFrozenSnapshot | null;
     activeHunkId: string | null;
+    /** Live composer scope highlight (hidden while hunks are pending). */
+    scopeRange: DocumentAiScopeRange | null;
     onAcceptHunk: ((hunkId: string) => void) | null;
     onDiscardHunk: ((hunkId: string) => void) | null;
     onFocusHunk: ((hunkId: string) => void) | null;
 }
 
 declare module '@tiptap/core' {
+    interface Storage {
+        documentAiHunks: DocumentAiHunksStorage;
+    }
+
     interface Commands<ReturnType> {
         documentAiHunks: {
             setDocumentAiHunks: (payload: {
@@ -27,6 +34,7 @@ declare module '@tiptap/core' {
                 activeHunkId?: string | null;
             }) => ReturnType;
             clearDocumentAiHunks: () => ReturnType;
+            setDocumentAiScopeRange: (range: DocumentAiScopeRange | null) => ReturnType;
             setDocumentAiHunkHandlers: (payload: {
                 onAcceptHunk?: ((hunkId: string) => void) | null;
                 onDiscardHunk?: ((hunkId: string) => void) | null;
@@ -38,13 +46,15 @@ declare module '@tiptap/core' {
 }
 
 const pluginKey = new PluginKey('documentAiHunks');
-const PREVIEW_CLIP = 280;
+/** Collapsed preview length; expand reveals the full change in-flow (no nested scroll). */
+const PREVIEW_CLIP = 320;
 
 function emptyStorage(): DocumentAiHunksStorage {
     return {
         hunks: [],
         snapshot: null,
         activeHunkId: null,
+        scopeRange: null,
         onAcceptHunk: null,
         onDiscardHunk: null,
         onFocusHunk: null,
@@ -109,6 +119,26 @@ function buildMarkerChip(
     return root;
 }
 
+function syncPaneTexts(
+    body: HTMLElement,
+    beforeFull: string,
+    afterFull: string,
+    expanded: boolean,
+) {
+    const beforeText = body.querySelector('.is-before .document-ai-hunk-pane-text');
+    const afterText = body.querySelector('.is-after .document-ai-hunk-pane-text');
+    if (beforeText) {
+        beforeText.textContent = expanded
+            ? beforeFull
+            : clipDocumentAiPreview(beforeFull, PREVIEW_CLIP);
+    }
+    if (afterText) {
+        afterText.textContent = expanded
+            ? afterFull
+            : clipDocumentAiPreview(afterFull, PREVIEW_CLIP);
+    }
+}
+
 function buildReviewCard(
     hunk: DocumentAiHunk,
     displayNumber: number,
@@ -130,13 +160,15 @@ function buildReviewCard(
     title.textContent = hunk.label;
     header.append(badge, title);
 
-    const body = document.createElement('div');
-    body.className = 'document-ai-hunk-body is-collapsed';
-
     const beforeFull = hunk.beforePreview;
     const afterFull = hunk.afterPreview;
     const needsExpand = beforeFull.length > PREVIEW_CLIP || afterFull.length > PREVIEW_CLIP;
     let expanded = false;
+
+    const body = document.createElement('div');
+    body.className = needsExpand
+        ? 'document-ai-hunk-body is-collapsed'
+        : 'document-ai-hunk-body';
 
     if (beforeFull) body.appendChild(makePane('before', beforeFull, false));
     if (afterFull) body.appendChild(makePane('after', afterFull, false));
@@ -144,51 +176,96 @@ function buildReviewCard(
     const actions = document.createElement('div');
     actions.className = 'document-ai-hunk-actions';
 
-    if (needsExpand) {
-        actions.appendChild(makeButton('document-ai-hunk-toggle', 'Show more', () => {
-            expanded = !expanded;
-            body.classList.toggle('is-collapsed', !expanded);
-            body.classList.toggle('is-expanded', expanded);
-            const toggle = actions.querySelector('.document-ai-hunk-toggle');
-            if (toggle) toggle.textContent = expanded ? 'Show less' : 'Show more';
-            const beforeText = body.querySelector('.is-before .document-ai-hunk-pane-text');
-            const afterText = body.querySelector('.is-after .document-ai-hunk-pane-text');
-            if (beforeText) {
-                beforeText.textContent = expanded
-                    ? beforeFull
-                    : clipDocumentAiPreview(beforeFull, PREVIEW_CLIP);
-            }
-            if (afterText) {
-                afterText.textContent = expanded
-                    ? afterFull
-                    : clipDocumentAiPreview(afterFull, PREVIEW_CLIP);
-            }
-        }));
-    }
-
-    actions.append(
+    const decisions = document.createElement('div');
+    decisions.className = 'document-ai-hunk-decisions';
+    decisions.append(
         makeButton('document-ai-hunk-discard', 'Reject', () => onDiscard?.(hunk.id)),
         makeButton('document-ai-hunk-accept', 'Accept', () => onAccept?.(hunk.id)),
     );
 
+    if (needsExpand) {
+        const toggle = makeButton('document-ai-hunk-toggle', 'Show full change', () => {
+            expanded = !expanded;
+            body.classList.toggle('is-collapsed', !expanded);
+            body.classList.toggle('is-expanded', expanded);
+            toggle.textContent = expanded ? 'Show less' : 'Show full change';
+            toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            syncPaneTexts(body, beforeFull, afterFull, expanded);
+            if (expanded) {
+                // Keep Accept/Reject in view after the card grows.
+                root.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        });
+        toggle.setAttribute('aria-expanded', 'false');
+        actions.append(toggle, decisions);
+    } else {
+        actions.append(decisions);
+    }
+
     root.append(header, body, actions);
     return root;
+}
+
+function buildScopeDecorations(
+    storage: DocumentAiHunksStorage,
+    editor: import('@tiptap/core').Editor,
+) {
+    const range = storage.scopeRange;
+    if (!range) return [];
+    const docSize = editor.state.doc.content.size;
+    const from = Math.max(0, Math.min(range.from, docSize));
+    const to = Math.max(from, Math.min(range.to, docSize));
+    if (to <= from) return [];
+
+    if (range.mode === 'inline') {
+        return [
+            Decoration.inline(from, to, {
+                class: 'document-ai-scope-target is-selection',
+            }),
+        ];
+    }
+
+    const decorations: ReturnType<typeof Decoration.node>[] = [];
+    editor.state.doc.forEach((node, position) => {
+        const end = position + node.nodeSize;
+        if (end <= from || position >= to) return;
+        decorations.push(
+            Decoration.node(position, end, {
+                class: 'document-ai-scope-target is-block',
+            }),
+        );
+    });
+    return decorations;
 }
 
 function buildDecorations(
     storage: DocumentAiHunksStorage,
     editor: import('@tiptap/core').Editor,
 ): DecorationSet {
-    if (!storage.snapshot || !storage.hunks.length) return DecorationSet.empty;
+    const hunkDecorations = buildHunkDecorations(storage, editor);
+    const pending = storage.hunks.some((hunk) => hunk.status === 'pending');
+    // Review widgets own the canvas; hide scope highlight while hunks are open.
+    if (pending) {
+        return DecorationSet.create(editor.state.doc, hunkDecorations);
+    }
+    const scopeDecorations = buildScopeDecorations(storage, editor);
+    return DecorationSet.create(editor.state.doc, [...scopeDecorations, ...hunkDecorations]);
+}
+
+function buildHunkDecorations(
+    storage: DocumentAiHunksStorage,
+    editor: import('@tiptap/core').Editor,
+) {
+    if (!storage.snapshot || !storage.hunks.length) return [];
     const pending = storage.hunks.filter((hunk) => hunk.status === 'pending');
-    if (!pending.length) return DecorationSet.empty;
+    if (!pending.length) return [];
 
     const acceptedOps = acceptedDocumentAiOperations(storage.hunks);
     const activeId = storage.activeHunkId ?? pending[0]?.id ?? null;
-    const decorations: ReturnType<typeof Decoration.widget>[] = [];
+    const decorations: Array<ReturnType<typeof Decoration.widget> | ReturnType<typeof Decoration.node>> = [];
 
-    pending.forEach((hunk, index) => {
-        const displayNumber = index + 1;
+    pending.forEach((hunk) => {
+        const displayNumber = hunk.number;
         const anchor = resolveHunkAnchor(
             editor,
             storage.snapshot!,
@@ -207,14 +284,14 @@ function buildDecorations(
                     ? buildReviewCard(
                         hunk,
                         displayNumber,
-                        storage.onAcceptHunk,
-                        storage.onDiscardHunk,
+                        (id) => storage.onAcceptHunk?.(id),
+                        (id) => storage.onDiscardHunk?.(id),
                     )
                     : buildMarkerChip(
                         hunk,
                         displayNumber,
                         false,
-                        storage.onFocusHunk,
+                        (id) => storage.onFocusHunk?.(id),
                     )),
                 {
                     side,
@@ -223,20 +300,21 @@ function buildDecorations(
             ),
         );
 
-        if (nodeRange) {
+        // Only the active review target gets block chrome; others stay as markers.
+        if (isActive && nodeRange) {
             decorations.push(
                 Decoration.node(nodeRange.from, nodeRange.to, {
                     class: [
                         'document-ai-hunk-target',
                         hunk.kind === 'remove' ? 'is-delete' : 'is-replace',
-                        isActive ? 'is-active' : '',
-                    ].filter(Boolean).join(' '),
+                        'is-active',
+                    ].join(' '),
                 }),
             );
         }
     });
 
-    return DecorationSet.create(editor.state.doc, decorations);
+    return decorations;
 }
 
 export const DocumentAiHunks = Extension.create({
@@ -261,12 +339,18 @@ export const DocumentAiHunks = Extension.create({
                 return true;
             },
             clearDocumentAiHunks: () => ({ editor, tr }) => {
+                const previous = editor.storage.documentAiHunks;
                 editor.storage.documentAiHunks = {
                     ...emptyStorage(),
-                    onAcceptHunk: editor.storage.documentAiHunks.onAcceptHunk,
-                    onDiscardHunk: editor.storage.documentAiHunks.onDiscardHunk,
-                    onFocusHunk: editor.storage.documentAiHunks.onFocusHunk,
+                    onAcceptHunk: previous.onAcceptHunk,
+                    onDiscardHunk: previous.onDiscardHunk,
+                    onFocusHunk: previous.onFocusHunk,
                 };
+                tr.setMeta(pluginKey, { refresh: true });
+                return true;
+            },
+            setDocumentAiScopeRange: (range) => ({ editor, tr }) => {
+                editor.storage.documentAiHunks.scopeRange = range;
                 tr.setMeta(pluginKey, { refresh: true });
                 return true;
             },
@@ -299,11 +383,20 @@ export const DocumentAiHunks = Extension.create({
                     init: () => DecorationSet.empty,
                     apply(tr, set, _old, state) {
                         const storage = extension.editor.storage.documentAiHunks as DocumentAiHunksStorage;
-                        if (tr.getMeta(pluginKey)?.refresh || tr.docChanged) {
+                        if (tr.getMeta(pluginKey)?.refresh) {
                             return buildDecorations(storage, extension.editor);
                         }
                         void state;
-                        return set.map(tr.mapping, tr.doc);
+                        // Live accept mutates the doc while hunks are pending. Rebuild so
+                        // accepted cards disappear and remaining anchors remount immediately.
+                        // (Mapping alone leaves the old review widget on screen.)
+                        if (tr.docChanged) {
+                            if (storage.hunks.some((hunk) => hunk.status === 'pending')) {
+                                return buildDecorations(storage, extension.editor);
+                            }
+                            return set.map(tr.mapping, tr.doc);
+                        }
+                        return set;
                     },
                 },
                 props: {

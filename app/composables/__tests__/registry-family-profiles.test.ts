@@ -179,7 +179,9 @@ describe('V1 registry family profiles', () => {
         const editorItems = useEditorToolbarButtons(ref({} as never));
         const counts = Array.from({ length: 8 }, () => 0);
         const stops = [messageItems, headerItems, composerItems, footerItems, documentItems, threadItems, projectItems, editorItems]
-            .map((items, index) => watch(items, () => counts[index]++, { flush: 'sync' }));
+            .map((items, index) => watch(items, () => {
+                counts[index] = (counts[index] ?? 0) + 1;
+            }, { flush: 'sync' }));
 
         registerMessageAction({ id: 'same:message', icon: 'i', tooltip: 'first', showOn: 'both', handler: () => {} });
         registerMessageAction({ id: 'same:message', icon: 'i', tooltip: 'second', showOn: 'both', handler: () => {} });

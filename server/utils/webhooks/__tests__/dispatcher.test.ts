@@ -151,9 +151,10 @@ describe('webhook dispatcher', () => {
         await dispatcher.claimAndProcess();
 
         const [log] = await store.getDeliveryLogs(webhook.id, 0);
-        expect(log.status).toBe('pending');
-        expect(log.attempt).toBe(2);
-        expect(log.next_retry_at).toBe(Date.now() + 30_000);
+        expect(log).toBeDefined();
+        expect(log!.status).toBe('pending');
+        expect(log!.attempt).toBe(2);
+        expect(log!.next_retry_at).toBe(Date.now() + 30_000);
     });
 
     it('marks final failures and emits a notification', async () => {
@@ -200,7 +201,8 @@ describe('webhook dispatcher', () => {
         await dispatcher.claimAndProcess();
 
         const [log] = await store.getDeliveryLogs(webhook.id, 0);
-        expect(log.status).toBe('failed');
+        expect(log).toBeDefined();
+        expect(log!.status).toBe('failed');
         expect(notificationSpy).toHaveBeenCalledTimes(1);
     });
 
@@ -242,7 +244,8 @@ describe('webhook dispatcher', () => {
         await dispatcher.claimAndProcess();
 
         const [log] = await store.getDeliveryLogs(webhook.id, 0);
-        expect(log.status).toBe('cancelled');
+        expect(log).toBeDefined();
+        expect(log!.status).toBe('cancelled');
     });
 
     it('sends a test ping and returns the result shape', async () => {
@@ -337,8 +340,9 @@ describe('webhook dispatcher', () => {
         await dispatcher.claimAndProcess();
 
         const [log] = await store.getDeliveryLogs(webhook.id, 0);
-        expect(log.status).toBe('pending');
-        expect(log.error_message?.toLowerCase()).toContain('private ip');
+        expect(log).toBeDefined();
+        expect(log!.status).toBe('pending');
+        expect(log!.error_message?.toLowerCase()).toContain('private ip');
     });
 
     it('does not process the same delivery twice across concurrent dispatchers', async () => {
@@ -395,7 +399,8 @@ describe('webhook dispatcher', () => {
 
         expect(fetchImpl).toHaveBeenCalledTimes(1);
         const [log] = await store.getDeliveryLogs(webhook.id, 0);
-        expect(log.status).toBe('success');
+        expect(log).toBeDefined();
+        expect(log!.status).toBe('success');
     });
 
     it('processes claimed deliveries with bounded concurrency', async () => {

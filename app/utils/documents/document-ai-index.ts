@@ -179,10 +179,11 @@ export function searchFrozenDocument(
 }
 
 export function serializeBlocksForModel(blocks: readonly DocumentAiBlockReference[]) {
+    // Keep TipTap node JSON for structure/marks; omit redundant plain `text`
+    // (derived from the same node) to cut read_blocks payload size ~half.
     return blocks.map((block) => ({
         ref: block.ref,
         type: block.type,
-        text: block.text,
         node: block.node,
     }));
 }

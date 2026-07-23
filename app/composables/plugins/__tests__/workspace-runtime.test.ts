@@ -116,7 +116,7 @@ describe('workspace plugin runtime registry', () => {
                     parameters: { type: 'object', properties: {} },
                 },
             } as never,
-            async () => ({ ok: true })
+            async () => JSON.stringify({ ok: true })
         );
 
         expect(registerTool).toHaveBeenCalled();

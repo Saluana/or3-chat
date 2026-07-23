@@ -7,7 +7,7 @@ import {
 import type { PackageV2PluginDescriptor } from '../runtime-descriptor';
 
 function descriptor(
-    overrides: Partial<PackageV2PluginDescriptor> & {
+    overrides: Omit<Partial<PackageV2PluginDescriptor>, 'artifact'> & {
         artifact?: Partial<PackageV2PluginDescriptor['artifact']>;
     } = {}
 ): PackageV2PluginDescriptor {

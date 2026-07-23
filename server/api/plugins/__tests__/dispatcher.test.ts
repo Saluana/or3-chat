@@ -22,7 +22,10 @@ vi.mock('h3', () => ({
 }));
 
 const useRuntimeConfigMock = vi.fn(() => ({
-    admin: { pluginRouteDispatcherEnabled: true },
+    admin: {
+        pluginRouteDispatcherEnabled: true,
+        disableNonCorePlugins: false,
+    },
 }));
 vi.mock('#imports', () => ({
     useRuntimeConfig: useRuntimeConfigMock as any,
@@ -213,7 +216,10 @@ describe('plugin route dispatcher', () => {
 
     it('returns 404 when dispatcher disabled', async () => {
         useRuntimeConfigMock.mockReturnValue({
-            admin: { pluginRouteDispatcherEnabled: false },
+            admin: {
+                pluginRouteDispatcherEnabled: false,
+                disableNonCorePlugins: false,
+            },
         });
         const handler = (await import('../[pluginId]/[...path]')).default as (
             event: H3Event
