@@ -293,6 +293,62 @@ describe('useMultiPane - newPaneForApp', () => {
         const uniqueIds = new Set(ids);
         expect(uniqueIds.size).toBe(ids.length);
     });
+
+    it('reserves pane capacity across concurrent app initialization', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        const { usePaneApps } = await import('../usePaneApps');
+        let resolveRecord!: (value: { id: string }) => void;
+        const pendingRecord = new Promise<{ id: string }>((resolve) => {
+            resolveRecord = resolve;
+        });
+        const createInitialRecord = vi.fn(() => pendingRecord);
+        usePaneApps().registerPaneApp({
+            id: 'slow-app',
+            label: 'Slow App',
+            component: { name: 'SlowPane', template: '<div>slow</div>' },
+            createInitialRecord,
+        });
+        const multiPane = useMultiPane({ maxPanes: 2 });
+
+        const first = multiPane.newPaneForApp('slow-app');
+        const second = multiPane.newPaneForApp('slow-app');
+        expect(multiPane.canAddPane.value).toBe(false);
+        resolveRecord({ id: 'record-1' });
+        await Promise.all([first, second]);
+
+        expect(multiPane.panes.value).toHaveLength(2);
+        expect(createInitialRecord).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('useMultiPane - async ownership', () => {
+    it('ignores a stale thread history load after a newer selection', async () => {
+        let resolveFirst!: (value: any[]) => void;
+        let resolveSecond!: (value: any[]) => void;
+        const first = new Promise<any[]>((resolve) => {
+            resolveFirst = resolve;
+        });
+        const second = new Promise<any[]>((resolve) => {
+            resolveSecond = resolve;
+        });
+        const loadMessagesFor = vi.fn((threadId: string) =>
+            threadId === 'thread-a' ? first : second
+        );
+        const { useMultiPane } = await import('../useMultiPane');
+        const multiPane = useMultiPane({ loadMessagesFor });
+
+        const selectA = multiPane.setPaneThread(0, 'thread-a');
+        const selectB = multiPane.setPaneThread(0, 'thread-b');
+        resolveSecond([{ id: 'b', role: 'user', content: 'B' }]);
+        await selectB;
+        resolveFirst([{ id: 'a', role: 'user', content: 'A' }]);
+        await selectA;
+
+        expect(multiPane.panes.value[0]?.threadId).toBe('thread-b');
+        expect(multiPane.panes.value[0]?.messages).toEqual([
+            expect.objectContaining({ id: 'b', content: 'B' }),
+        ]);
+    });
 });
 
 describe('useMultiPane - paneWidths normalization', () => {

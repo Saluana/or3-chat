@@ -25,15 +25,16 @@
 import { ref, computed, watch, onScopeDispose, getCurrentScope } from 'vue';
 import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
 import { nowSec, newId, getWriteTxTableNames } from '~/db/util';
-import { create, tx, type Message } from '~/db';
-import { getDb } from '~/db/client';
+import { type Message } from '~/db';
+import { getDb, type Or3DB } from '~/db/client';
 import { serializeFileHashes } from '~/db/files-util';
 import { normalizeFileUrl } from '~/utils/chat/useAi-internal/files';
 import {
     parseHashes,
     mergeAssistantFileHashes,
 } from '~/utils/files/attachments';
-import { messagesByThread } from '~/db/messages';
+import { appendMessageToDb, messagesByThread } from '~/db/messages';
+import { createThreadInDb } from '~/db/threads';
 import type {
     ContentPart,
     ChatMessage,
@@ -79,7 +80,7 @@ import { useUserApiKey } from '#imports';
 import { useActivePrompt } from '#imports';
 import { getDefaultPromptId } from '#imports';
 import { useHooks } from '#imports';
-import { consumeWorkflowHandlingFlag } from '~/plugins/workflow-slash-commands.client';
+import { consumeChatSendHandled } from '~/utils/chat/send-interception';
 import { resolveNotificationUserId } from '~/core/notifications/notification-user';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
@@ -268,6 +269,7 @@ export function useChat(
     const streamId = ref<string | undefined>(undefined);
     type ChatRequestScope = {
         requestId: string;
+        originDb: Or3DB;
         accumulator: typeof streamAcc;
         streamId?: string;
         abortController: AbortController | null;
@@ -982,10 +984,14 @@ export function useChat(
                         messages.value = [...messages.value];
                     }
                     streamAcc.finalize({ aborted: true });
-                    void updateMessageRecord(params.messageId, {
-                        pending: false,
-                        error: 'stopped',
-                    });
+                    void updateMessageRecord(
+                        tracker.originDb ?? getDb(),
+                        params.messageId,
+                        {
+                            pending: false,
+                            error: 'stopped',
+                        }
+                    );
                     if (backgroundJobId.value === params.jobId) {
                         loading.value = false;
                         backgroundJobId.value = null;
@@ -1050,11 +1056,13 @@ export function useChat(
             ) continue;
 
             const interrupt = async () => {
-                const latest = (await getDb().messages.get(row.id)) as
+                const db = getDb();
+                const latest = (await db.messages.get(row.id)) as
                     | StoredMessage
                     | undefined;
                 if (!latest || !isStaleForegroundGeneration(latest)) return;
                 await updateMessageRecord(
+                    db,
                     row.id,
                     {
                         pending: false,
@@ -1182,6 +1190,7 @@ export function useChat(
         const requestId = newId();
         const requestScope: ChatRequestScope = {
             requestId,
+            originDb: getDb(),
             accumulator: streamAcc,
             abortController: null,
             toolLedger: new Map(),
@@ -1384,7 +1393,7 @@ export function useChat(
             } catch {
                 /* intentionally empty */
             }
-            const newThread = await create.thread({
+            const newThread = await createThreadInDb(requestScope.originDb, {
                 title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
                 last_message_at: nowSec(),
                 parent_thread_id: null,
@@ -1516,7 +1525,7 @@ export function useChat(
             )
             .join('\n\n');
         const nextUserMessageId = newId();
-        const userDbMsg = await tx.appendMessage({
+        const userDbMsg = await appendMessageToDb(requestScope.originDb, {
             id: nextUserMessageId,
             thread_id: threadIdRef.value,
             role: 'user',
@@ -1646,7 +1655,7 @@ export function useChat(
             requestScope.streamId = newStreamId;
             streamId.value = newStreamId;
             const nextAssistantId = newId();
-            const assistantDbMsg = (await tx.appendMessage({
+            const assistantDbMsg = (await appendMessageToDb(requestScope.originDb, {
                 id: nextAssistantId,
                 thread_id: threadIdRef.value,
                 role: 'assistant',
@@ -1673,6 +1682,7 @@ export function useChat(
             // Track file hashes across loop iterations
             const assistantFileHashes: string[] = [];
             const persistAssistant = makeAssistantPersister(
+                requestScope.originDb,
                 assistantDbMsg,
                 assistantFileHashes,
                 requestId
@@ -1722,7 +1732,7 @@ export function useChat(
             }
 
             // Check if a workflow is handling this request - skip AI call
-            if (consumeWorkflowHandlingFlag()) {
+            if (consumeChatSendHandled()) {
                 // Seed UI with assistant placeholder so workflow state can render immediately
                 const workflowAssistant: ChatMessage = {
                     role: 'assistant',
@@ -1853,7 +1863,7 @@ export function useChat(
                             background_job_status: 'streaming',
                         } as Record<string, unknown>;
                     }
-                    await updateMessageRecord(assistantDbMsg.id, {
+                    await updateMessageRecord(requestScope.originDb, assistantDbMsg.id, {
                         data: {
                             background_job_id: result.jobId,
                             background_job_status: 'streaming',
@@ -1898,6 +1908,17 @@ export function useChat(
                         };
                     }
                 } catch (error) {
+                    if (
+                        aborted.value ||
+                        requestScope.abortController?.signal.aborted ||
+                        (error instanceof Error &&
+                            error.name === 'AbortError')
+                    ) {
+                        // Let the request-level abort path own cleanup and the
+                        // terminal result. Treating admission cancellation as a
+                        // provider failure leaves a false error row behind.
+                        throw error;
+                    }
                     const errMessage =
                         error instanceof Error
                             ? error.message
@@ -1920,7 +1941,7 @@ export function useChat(
                             toolCalls: target?.toolCalls ?? null,
                             finalize: true,
                         });
-                        await updateMessageRecord(assistantDbMsg.id, {
+                        await updateMessageRecord(requestScope.originDb, assistantDbMsg.id, {
                             pending: false,
                             error: errMessage,
                             data: {
@@ -2155,7 +2176,7 @@ export function useChat(
                         }
                     }
                     try {
-                        const existing = (await getDb().messages.get(
+                        const existing = (await requestScope.originDb.messages.get(
                             tailAssistant.value.id
                         )) as StoredMessage | undefined;
                         const baseData =
@@ -2163,6 +2184,7 @@ export function useChat(
                                 ? (existing.data as Record<string, unknown>)
                                 : {};
                         await updateMessageRecord(
+                            requestScope.originDb,
                             tailAssistant.value.id,
                             {
                                 pending: false, // Clear pending so sync captures this
@@ -2225,14 +2247,15 @@ export function useChat(
                 });
                 if (!tailAssistant.value?.text && tailAssistant.value?.id) {
                     try {
-                        const db = getDb();
-                        await db.transaction(
+                        await requestScope.originDb.transaction(
                             'rw',
-                            getWriteTxTableNames(db, 'messages', {
+                            getWriteTxTableNames(requestScope.originDb, 'messages', {
                                 includeTombstones: true,
                             }),
                             async () => {
-                            await db.messages.delete(tailAssistant.value!.id);
+                            await requestScope.originDb.messages.delete(
+                                tailAssistant.value!.id
+                            );
                         });
                         const idx = rawMessages.value.findIndex(
                             (m) => m.id === tailAssistant.value!.id
@@ -2261,7 +2284,7 @@ export function useChat(
                         }
                     }
                     try {
-                        const existing = (await getDb().messages.get(
+                        const existing = (await requestScope.originDb.messages.get(
                             tailAssistant.value.id
                         )) as StoredMessage | undefined;
                         const baseData =
@@ -2269,6 +2292,7 @@ export function useChat(
                                 ? (existing.data as Record<string, unknown>)
                                 : {};
                         await updateMessageRecord(
+                            requestScope.originDb,
                             tailAssistant.value.id,
                             {
                                 pending: false, // Clear pending so sync captures this
@@ -2589,7 +2613,9 @@ export function useChat(
                     target.error = 'stopped';
                     messages.value = [...messages.value];
                 }
-                void updateMessageRecord(info.messageId, {
+                const trackerDb =
+                    backgroundJobTrackers.get(jobId)?.originDb ?? getDb();
+                void updateMessageRecord(trackerDb, info.messageId, {
                     pending: false,
                     error: 'stopped',
                 });

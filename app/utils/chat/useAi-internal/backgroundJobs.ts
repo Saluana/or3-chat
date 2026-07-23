@@ -32,12 +32,8 @@
  * - Content is never truncated, only extended or synchronized
  */
 
-import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
-import type { HookEngine } from '~/core/hooks/hooks';
-import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
-import { nowSec, newId } from '~/db/util';
+import { nowSec } from '~/db/util';
 import { getDb } from '~/db/client';
-import { resolveNotificationUserId } from '~/core/notifications/notification-user';
 import {
     pollJobStatus,
     subscribeBackgroundJobStream,
@@ -45,20 +41,29 @@ import {
     BackgroundJobPollError,
     type BackgroundJobStatus,
 } from '~/utils/chat/openrouterStream';
-import { NotificationService } from '~/core/notifications/notification-service';
 import {
-    getCachedSessionContext,
     refreshCachedSessionContext,
 } from '~/composables/auth/useSessionContext';
-import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
 import type {
     BackgroundJobTracker,
     BackgroundJobSubscriber,
     BackgroundJobUpdate,
-    StoredMessage,
     EnsureBackgroundJobTrackerParams,
 } from './types';
 import { abortableDelay } from '~~/shared/openrouter/deadlines';
+import {
+    emitBackgroundComplete,
+} from './backgroundJobNotifications';
+import {
+    persistBackgroundJobUpdate,
+} from './backgroundJobPersistence';
+import {
+    dispatchWorkflowComplete,
+    dispatchWorkflowStateUpdate,
+} from './backgroundJobWorkflowEvents';
+
+export { BACKGROUND_JOB_MUTED_KEY } from './backgroundJobNotifications';
+export { BACKGROUND_JOB_PERSIST_INTERVAL_MS } from './backgroundJobPersistence';
 
 /**
  * Polling interval when no active subscribers (user navigated away).
@@ -76,7 +81,6 @@ export const BACKGROUND_JOB_POLL_INTERVAL_ACTIVE_MS = 80;
  * Minimum time between IndexedDB persistence writes.
  * Prevents excessive database writes during high-frequency streaming.
  */
-export const BACKGROUND_JOB_PERSIST_INTERVAL_MS = 500;
 export const BACKGROUND_JOB_MAX_RETRYABLE_POLLS = 5;
 export const BACKGROUND_JOB_MAX_NOT_FOUND_POLLS = 3;
 export const BACKGROUND_JOB_MAX_AUTH_POLLS = 2;
@@ -86,16 +90,12 @@ export const BACKGROUND_JOB_MAX_RETRY_DELAY_MS = 10_000;
  * KV store key for muted thread list.
  * Array of thread IDs that should not trigger notifications.
  */
-export const BACKGROUND_JOB_MUTED_KEY = 'notification_muted_threads';
-
 /**
  * Global tracker map for all active background jobs.
  * Singleton shared across all useChat instances to prevent duplicate tracking.
  */
 export const backgroundJobTrackers = new Map<string, BackgroundJobTracker>();
 
-let cachedNotificationHooks: TypedHookEngine | null = null;
-let cachedWorkflowHooks: TypedHookEngine | null = null;
 function bgStreamLog(
     _stage: string,
     _details?: Record<string, unknown>
@@ -154,356 +154,6 @@ function retryDelayMs(error: BackgroundJobPollError, attempt: number): number {
         250 * 2 ** Math.max(0, attempt - 1)
     );
     return Math.floor(exponential * (0.75 + Math.random() * 0.5));
-}
-
-/**
- * Internal helper. Resolves the global hook engine without relying on composable context.
- * Background trackers can outlive setup/plugin contexts, so `useHooks()` is unsafe here.
- */
-function resolveNotificationHooks(): TypedHookEngine | null {
-    if (cachedNotificationHooks) return cachedNotificationHooks;
-    const g = globalThis as typeof globalThis & {
-        __NUXT_HOOKS__?: HookEngine;
-    };
-    if (!g.__NUXT_HOOKS__) return null;
-    cachedNotificationHooks = createTypedHookEngine(g.__NUXT_HOOKS__);
-    return cachedNotificationHooks;
-}
-
-function resolveWorkflowHooks(): TypedHookEngine | null {
-    if (cachedWorkflowHooks) return cachedWorkflowHooks;
-    const g = globalThis as typeof globalThis & {
-        __NUXT_HOOKS__?: HookEngine;
-    };
-    if (!g.__NUXT_HOOKS__) return null;
-    cachedWorkflowHooks = createTypedHookEngine(g.__NUXT_HOOKS__);
-    return cachedWorkflowHooks;
-}
-
-function dispatchWorkflowStateUpdate(
-    messageId: string,
-    state: WorkflowMessageData
-): void {
-    const workflowHooks = resolveWorkflowHooks();
-    if (!workflowHooks?.hasAction('workflow.execution:action:state_update')) return;
-    void Promise.resolve()
-        .then(() =>
-            workflowHooks.doAction('workflow.execution:action:state_update', {
-                messageId,
-                state,
-            })
-        )
-        .catch(() => {
-            /* intentionally empty */
-        });
-}
-
-function dispatchWorkflowComplete(
-    messageId: string,
-    workflowId: string,
-    finalOutput?: string
-): void {
-    const workflowHooks = resolveWorkflowHooks();
-    if (!workflowHooks?.hasAction('workflow.execution:action:complete')) return;
-    void Promise.resolve()
-        .then(() =>
-            workflowHooks.doAction('workflow.execution:action:complete', {
-                messageId,
-                workflowId,
-                finalOutput,
-            })
-        )
-        .catch(() => {
-            /* intentionally empty */
-        });
-}
-
-/**
- * Internal helper. Checks if a thread is muted via KV store.
- */
-async function isThreadMuted(
-    threadId: string,
-    userId?: string
-): Promise<boolean> {
-    if (!isClientRuntime()) return false;
-    try {
-        const scopedKey =
-            userId && userId.length > 0
-                ? `${BACKGROUND_JOB_MUTED_KEY}:${userId}`
-                : null;
-        const kv =
-            (scopedKey ? await getDb().kv.get(scopedKey) : null) ||
-            (await getDb().kv.get(BACKGROUND_JOB_MUTED_KEY));
-        if (!kv?.value) return false;
-        const parsed: unknown = JSON.parse(kv.value);
-        const muted = Array.isArray(parsed) && parsed.includes(threadId);
-        bgStreamLog('mute-check', {
-            threadId,
-            userId: userId || null,
-            muted,
-            scopedKey,
-        });
-        return muted;
-    } catch {
-        bgStreamWarn('mute-check-failed', {
-            threadId,
-            userId: userId || null,
-        });
-        return false;
-    }
-}
-
-/**
- * Internal helper. Emits system notification when background job completes without active subscribers.
- */
-async function emitBackgroundComplete(
-    tracker: BackgroundJobTracker,
-    status: BackgroundJobStatus
-): Promise<void> {
-    if (!isClientRuntime()) return;
-    if (!tracker.threadId) return;
-    // Notify when detached OR when app tab is backgrounded.
-    // Hidden-tab sessions can keep SSE subscribers active, which otherwise
-    // suppresses completion notifications indefinitely.
-    const hasSubscribers = tracker.subscribers.size > 0;
-    if (tracker.preferServerNotifications && !hasSubscribers) {
-        bgStreamLog('notify-suppressed-prefer-server-notifications', {
-            jobId: tracker.jobId,
-            threadId: tracker.threadId,
-            status: status.status,
-            hasSubscribers,
-        });
-        return;
-    }
-    const isTabHidden =
-        typeof document !== 'undefined' &&
-        document.visibilityState === 'hidden';
-    if (hasSubscribers && !isTabHidden) {
-        bgStreamLog('notify-suppressed-active-subscribers', {
-            jobId: tracker.jobId,
-            threadId: tracker.threadId,
-            subscriberCount: tracker.subscribers.size,
-            status: status.status,
-            isTabHidden,
-        });
-        return;
-    }
-    if (await isThreadMuted(tracker.threadId, tracker.userId)) {
-        bgStreamLog('notify-suppressed-muted-thread', {
-            jobId: tracker.jobId,
-            threadId: tracker.threadId,
-            status: status.status,
-        });
-        return;
-    }
-
-    const hooks = resolveNotificationHooks();
-    if (!hooks) {
-        bgStreamWarn('notify-suppressed-hooks-unavailable', {
-            jobId: tracker.jobId,
-            threadId: tracker.threadId,
-            status: status.status,
-        });
-        return;
-    }
-    const isError = status.status === 'error';
-    const isAbort = status.status === 'aborted';
-    const type = isError || isAbort ? 'system.warning' : 'ai.message.received';
-    const title = isError
-        ? 'AI response failed'
-        : isAbort
-            ? 'AI response stopped'
-            : 'AI response ready';
-    const body = isError
-        ? status.error || 'Background response failed.'
-        : isAbort
-            ? 'Background response was aborted.'
-            : 'Your background response is ready.';
-    const payload = {
-        type,
-        title,
-        body,
-        threadId: tracker.threadId,
-        actions: [
-            {
-                id: newId(),
-                label: 'Open chat',
-                kind: 'navigate' as const,
-                target: { threadId: tracker.threadId },
-                data: { messageId: tracker.messageId },
-            },
-        ],
-    };
-
-    try {
-        bgStreamLog('notify-attempt', {
-            jobId: tracker.jobId,
-            threadId: tracker.threadId,
-            status: status.status,
-            hasSubscribers,
-            isTabHidden,
-            hasPushAction: hooks.hasAction('notify:action:push'),
-        });
-        // Prefer hook-based creation so the currently active NotificationService
-        // instance owns user scoping (prevents stale tracker user IDs).
-        if (hooks.hasAction('notify:action:push')) {
-            await hooks.doAction('notify:action:push', payload);
-            bgStreamLog('notify-emitted-via-hooks', {
-                jobId: tracker.jobId,
-                threadId: tracker.threadId,
-                status: status.status,
-                type: payload.type,
-            });
-            return;
-        }
-
-        const session = getCachedSessionContext();
-        const sessionUserId =
-            session?.authenticated && session.user?.id ? session.user.id : null;
-        const userId =
-            sessionUserId || tracker.userId || resolveNotificationUserId(session);
-        const service = new NotificationService(getDb(), hooks, userId);
-        const created = await service.create(payload);
-        bgStreamLog('notify-emitted-via-service', {
-            jobId: tracker.jobId,
-            threadId: tracker.threadId,
-            status: status.status,
-            type: payload.type,
-            created: Boolean(created),
-            userId,
-        });
-    } catch (error) {
-        bgStreamWarn('notify-failed', {
-            jobId: tracker.jobId,
-            threadId: tracker.threadId,
-            status: status.status,
-            error: error instanceof Error ? error.message : String(error),
-        });
-    }
-}
-
-/**
- * Internal helper. Throttled persistence of background job updates to IndexedDB.
- */
-async function persistBackgroundJobUpdate(
-    tracker: BackgroundJobTracker,
-    status: BackgroundJobStatus,
-    content: string
-): Promise<boolean> {
-    if (!isClientRuntime()) return true;
-
-    const now = Date.now();
-    const statusChanged = status.status !== tracker.status;
-    const contentChanged = content.length > tracker.lastPersistedLength;
-    const toolStateFingerprint = JSON.stringify(status.tool_calls ?? []);
-    const workflowFingerprint = JSON.stringify(status.workflow_state ?? null);
-    const toolStateChanged =
-        toolStateFingerprint !== (tracker.lastToolStateFingerprint ?? '[]');
-    const workflowChanged =
-        workflowFingerprint !== (tracker.lastWorkflowFingerprint ?? 'null');
-    const shouldPersistContent =
-        contentChanged &&
-        (now - tracker.lastPersistAt > BACKGROUND_JOB_PERSIST_INTERVAL_MS ||
-            status.status !== 'streaming');
-
-    if (
-        !statusChanged &&
-        !shouldPersistContent &&
-        !toolStateChanged &&
-        !workflowChanged
-    ) return true;
-
-    const currentDb = tracker.originDb ?? getDb();
-    const currentDbName = currentDb.name;
-    const existing =
-        tracker.messageRecord && tracker.messageRecordDbName === currentDbName
-            ? tracker.messageRecord
-            : ((await currentDb.messages.get(tracker.messageId)) as
-                  | StoredMessage
-                  | undefined);
-    if (!existing) {
-        tracker.messageRecord = null;
-        tracker.messageRecordDbName = null;
-        bgStreamWarn('persist-message-missing', {
-            jobId: tracker.jobId,
-            messageId: tracker.messageId,
-            status: status.status,
-        });
-        return false;
-    }
-    tracker.messageRecord = existing;
-    tracker.messageRecordDbName = currentDbName;
-
-    const baseData =
-        existing.data && typeof existing.data === 'object'
-            ? (existing.data as Record<string, unknown>)
-            : {};
-    const nextError =
-        status.status === 'error'
-            ? status.error || 'Background response failed'
-            : status.status === 'aborted'
-                ? 'Background response aborted'
-                : null;
-    const workflowState =
-        status.workflow_state && typeof status.workflow_state === 'object'
-            ? status.workflow_state
-            : null;
-    const persistedToolCalls = Array.isArray(status.tool_calls)
-        ? status.tool_calls.map((toolCall) => ({
-              ...toolCall,
-              status: toolCall.status === 'skipped' ? 'error' : toolCall.status,
-          }))
-        : undefined;
-    const workflowVersion = workflowVersionOf(workflowState);
-    const includeWorkflowState =
-        workflowState !== null && workflowVersion >= tracker.lastWorkflowVersion;
-    if (includeWorkflowState) {
-        tracker.lastWorkflowVersion = workflowVersion;
-    }
-    const mergedData = {
-        ...baseData,
-        ...(includeWorkflowState ? workflowState : {}),
-        content:
-            content.length > 0
-                ? content
-                : (baseData.content as string | undefined) ?? '',
-        background_job_id: tracker.jobId,
-        background_job_status: status.status,
-        ...(status.error ? { background_job_error: status.error } : {}),
-        ...(nextError ? { error: nextError } : {}),
-        ...(persistedToolCalls ? { tool_calls: persistedToolCalls } : {}),
-    };
-
-    const nextRecord: StoredMessage = {
-        ...existing,
-        pending: status.status === 'streaming',
-        error: nextError,
-        data: mergedData,
-        updated_at: nowSec(),
-    };
-
-    await currentDb.messages.put(nextRecord);
-    tracker.messageRecord = nextRecord;
-    tracker.messageRecordDbName = currentDbName;
-
-    tracker.status = status.status;
-    tracker.lastPersistAt = now;
-    tracker.lastPersistedLength = content.length;
-    tracker.lastToolStateFingerprint = toolStateFingerprint;
-    tracker.lastWorkflowFingerprint = workflowFingerprint;
-    bgStreamLog('persist-complete', {
-        jobId: tracker.jobId,
-        messageId: tracker.messageId,
-        status: status.status,
-        contentLength: content.length,
-        statusChanged,
-        shouldPersistContent,
-        includeWorkflowState,
-        toolCallCount: Array.isArray(status.tool_calls)
-            ? status.tool_calls.length
-            : 0,
-    });
-    return true;
 }
 
 /**
@@ -1225,8 +875,6 @@ export function ensureBackgroundJobTracker(
         active: false,
         preferSse: Boolean(params.useSse),
         pollRunId: 0,
-        messageRecord: null,
-        messageRecordDbName: null,
         originDb,
         originDbName: originDb.name,
         subscribers: new Set<BackgroundJobSubscriber>(),

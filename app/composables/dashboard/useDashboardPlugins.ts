@@ -20,6 +20,26 @@ import {
 import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
 import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
+import type {
+    DashboardNavigationError,
+    DashboardNavigationResult,
+    DashboardNavigationState,
+    UseDashboardNavigationOptions,
+} from '~/core/dashboard/dashboard-navigation-types';
+
+export type {
+    DashboardNavigationError,
+    DashboardNavigationErrorCode,
+    DashboardNavigationResult,
+    DashboardNavigationState,
+    UseDashboardNavigationOptions,
+} from '~/core/dashboard/dashboard-navigation-types';
+export {
+    getPluginCapabilities,
+    hasAllCapabilities,
+    hasAnyCapability,
+    hasCapability,
+} from '~/core/dashboard/plugin-capabilities';
 
 export interface DashboardPlugin {
     /** Unique id across all dashboard plugins */
@@ -191,40 +211,11 @@ function getPageComponentCache(): Map<string, Component> {
         : legacyPageComponentCache;
 }
 
-export type DashboardNavigationErrorCode =
-    | 'missing-plugin'
-    | 'missing-page'
-    | 'handler-error'
-    | 'resolve-error';
-
-export interface DashboardNavigationError {
-    code: DashboardNavigationErrorCode;
-    message: string;
-    pluginId?: string;
-    pageId?: string;
-    cause?: unknown;
-}
-
-export interface DashboardNavigationState {
-    view: 'dashboard' | 'page';
-    activePluginId: string | null;
-    activePageId: string | null;
-    loadingPage: boolean;
-    error: DashboardNavigationError | null;
-}
-
-export type DashboardNavigationResult =
-    | { ok: true }
-    | { ok: false; error: DashboardNavigationError };
-
-export interface UseDashboardNavigationOptions {
-    baseItems?: DashboardPlugin[];
-}
-
 interface DashboardNavigationRuntime {
     state: DashboardNavigationState;
     resolvedComponent: ShallowRef<Component | null>;
     baseItems: ShallowRef<DashboardPlugin[]>;
+    generation: number;
 }
 
 function deletePageCache(pluginId: string, pageId: string) {
@@ -249,6 +240,7 @@ function createDashboardNavigationRuntime(): DashboardNavigationRuntime {
         }),
         resolvedComponent: shallowRef<Component | null>(null),
         baseItems: shallowRef<DashboardPlugin[]>([]),
+        generation: 0,
     };
 }
 
@@ -276,7 +268,8 @@ function sync() {
     reactiveList.items = Array.from(registry.values());
 }
 
-function getRegisteredDashboardPlugin(
+/** @internal Shared with focused dashboard policy helpers. */
+export function getRegisteredDashboardPlugin(
     pluginId: string
 ): DashboardPlugin | undefined {
     return useV2Surface()
@@ -759,33 +752,7 @@ export async function resolveDashboardPluginPageComponent(
     return comp;
 }
 
-// Minimal built‑in examples can be registered in a plugin file separately; keeping
-// this composable focused only on registry mechanics (mirrors other ui-extension patterns).
-
-/**
- * Purpose:
- * Manage dashboard navigation state across landing and page views.
- *
- * Behavior:
- * Merges base items with registered plugins, tracks current view, and
- * resolves page components on demand.
- *
- * Constraints:
- * - Base items overwrite registered items by ID
- * - Errors are stored in reactive navigation state
- *
- * Non-Goals:
- * - Rendering navigation UI
- *
- * @example
- * ```ts
- * const {
- *   dashboardItems,
- *   openPlugin,
- *   openPage,
- * } = useDashboardNavigation();
- * ```
- */
+/** Manage dashboard landing/page navigation and async component ownership. */
 export function useDashboardNavigation(
     options: UseDashboardNavigationOptions = {}
 ) {
@@ -852,6 +819,7 @@ export function useDashboardNavigation(
     const openPlugin = async (
         pluginId: string
     ): Promise<DashboardNavigationResult> => {
+        const generation = ++navigationRuntime.generation;
         clearError();
         const plugin = ensurePlugin(pluginId);
         if (!plugin) {
@@ -876,9 +844,15 @@ export function useDashboardNavigation(
         if (!pages.length) {
             try {
                 await plugin.handler?.({ id: pluginId });
+                if (generation !== navigationRuntime.generation) {
+                    return { ok: true };
+                }
                 state.view = 'dashboard';
                 return { ok: true };
             } catch (cause) {
+                if (generation !== navigationRuntime.generation) {
+                    return { ok: true };
+                }
                 state.view = 'dashboard';
                 state.activePluginId = null;
                 return setError({
@@ -902,6 +876,7 @@ export function useDashboardNavigation(
         pluginId: string,
         pageId: string
     ): Promise<DashboardNavigationResult> => {
+        const generation = ++navigationRuntime.generation;
         clearError();
         const plugin = ensurePlugin(pluginId);
         if (!plugin) {
@@ -941,6 +916,9 @@ export function useDashboardNavigation(
                 pluginId,
                 pageId
             );
+            if (generation !== navigationRuntime.generation) {
+                return { ok: true };
+            }
             state.loadingPage = false;
             if (!component) {
                 state.activePageId = null;
@@ -954,6 +932,9 @@ export function useDashboardNavigation(
             resolved.value = component;
             return { ok: true };
         } catch (cause) {
+            if (generation !== navigationRuntime.generation) {
+                return { ok: true };
+            }
             state.loadingPage = false;
             state.activePageId = null;
             return setError({
@@ -967,6 +948,7 @@ export function useDashboardNavigation(
     };
 
     const goBack = () => {
+        navigationRuntime.generation++;
         clearError();
         if (state.view === 'dashboard') return;
         const pluginId = state.activePluginId;
@@ -990,6 +972,7 @@ export function useDashboardNavigation(
     };
 
     function reset() {
+        navigationRuntime.generation++;
         state.view = 'dashboard';
         state.activePluginId = null;
         state.activePageId = null;
@@ -1010,112 +993,4 @@ export function useDashboardNavigation(
         goBack,
         reset,
     };
-}
-
-/**
- * Purpose:
- * Check whether a plugin declares a capability string.
- *
- * Behavior:
- * Returns true only when the plugin exists and lists the capability.
- *
- * Constraints:
- * - Returns false when the plugin is missing
- *
- * Non-Goals:
- * - Permission enforcement
- *
- * @example
- * ```ts
- * const canRead = hasCapability('my-plugin', 'canReadMessages');
- * ```
- */
-export function hasCapability(pluginId: string, capability: string): boolean {
-    const plugin = getRegisteredDashboardPlugin(pluginId);
-    if (!plugin) return false;
-    if (!plugin.capabilities || !Array.isArray(plugin.capabilities)) {
-        return false;
-    }
-    return plugin.capabilities.includes(capability);
-}
-
-/**
- * Purpose:
- * Read all declared capabilities for a plugin.
- *
- * Behavior:
- * Returns a copy of the capability list or an empty array.
- *
- * Constraints:
- * - Returns empty list when the plugin is missing
- *
- * Non-Goals:
- * - Validation of capability names
- *
- * @example
- * ```ts
- * const caps = getPluginCapabilities('my-plugin');
- * ```
- */
-export function getPluginCapabilities(pluginId: string): string[] {
-    const plugin = getRegisteredDashboardPlugin(pluginId);
-    if (!plugin || !plugin.capabilities) return [];
-    return [...plugin.capabilities];
-}
-
-/**
- * Purpose:
- * Validate that a plugin declares every required capability.
- *
- * Behavior:
- * Returns true when all provided capabilities are present.
- *
- * Constraints:
- * - Returns false when the plugin is missing
- *
- * Non-Goals:
- * - Authorization enforcement
- *
- * @example
- * ```ts
- * const ok = hasAllCapabilities('my-plugin', [
- *   'canReadMessages',
- *   'canSend',
- * ]);
- * ```
- */
-export function hasAllCapabilities(
-    pluginId: string,
-    capabilities: string[]
-): boolean {
-    const plugin = getRegisteredDashboardPlugin(pluginId);
-    if (!plugin || !plugin.capabilities) return false;
-    return capabilities.every((cap) => plugin.capabilities!.includes(cap));
-}
-
-/**
- * Purpose:
- * Validate that a plugin declares at least one of the listed capabilities.
- *
- * Behavior:
- * Returns true when any capability is present.
- *
- * Constraints:
- * - Returns false when the plugin is missing
- *
- * Non-Goals:
- * - Authorization enforcement
- *
- * @example
- * ```ts
- * const ok = hasAnyCapability('my-plugin', ['canWriteDocs', 'canSend']);
- * ```
- */
-export function hasAnyCapability(
-    pluginId: string,
-    capabilities: string[]
-): boolean {
-    const plugin = getRegisteredDashboardPlugin(pluginId);
-    if (!plugin || !plugin.capabilities) return false;
-    return capabilities.some((cap) => plugin.capabilities!.includes(cap));
 }

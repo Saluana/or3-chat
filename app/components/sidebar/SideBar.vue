@@ -158,9 +158,7 @@ import {
     watch,
     computed,
     nextTick,
-    defineAsyncComponent,
 } from 'vue';
-import type { Component } from 'vue';
 import { useHooks } from '~/core/hooks/useHooks';
 import { liveQuery } from 'dexie';
 import {
@@ -175,7 +173,6 @@ import { nowSec } from '~/db/util';
 import { updateDocument } from '~/db/documents';
 import { loadDocument } from '~/composables/documents/useDocumentsStore';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useOr3Config } from '~/composables/useOr3Config';
 import {
@@ -189,31 +186,19 @@ import { getOpenDocumentIds, getOpenThreadIds } from '~/utils/multiPaneHelpers';
 import SidebarAddToProjectModal from './SidebarAddToProjectModal.vue';
 import SidebarCreateDocumentModal from './SidebarCreateDocumentModal.vue';
 import SidebarCreateProjectModal from './SidebarCreateProjectModal.vue';
-
-/**
- * Helper to check if a post is a document
- */
-function isDocumentPost(
-    post: Post | undefined
-): post is Post & { postType: 'doc' } {
-    return post !== undefined && post.postType === 'doc';
-}
-
-/**
- * Rename target types - can be from project tree or direct selection
- */
-type RenamePayload =
-    | { projectId: string; entryId: string; kind: 'chat' | 'doc' }
-    | { docId: string }
-    | ThreadItem
-    | DocumentItem;
+import {
+    isDocumentPost,
+    type SidebarProject,
+    type SidebarRenamePayload,
+} from '~/core/sidebar/sidebar-types';
+import { useResolvedSidebarSections } from '~/core/sidebar/sidebar-section-components';
+import { useSidebarThemeProps } from '~/composables/sidebar/useSidebarThemeProps';
 
 const iconEdit = useIcon('ui.edit');
 const iconFolder = useIcon('sidebar.folder');
 const iconNote = useIcon('sidebar.note');
 const iconLoading = useIcon('ui.loading');
 
-type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 // (Temporarily removed virtualization for chats — use simple list for now)
 
 const {
@@ -282,89 +267,9 @@ const activeThreadIds = computed<string[]>(() => {
     return props.activeThread ? [props.activeThread] : [];
 });
 
-const sectionComponentCache = new Map<string, Component>();
-
-/**
- * Type guard to check if source is a Vue component (not an async loader)
- */
-function isVueComponent(source: unknown): source is Component {
-    return (
-        typeof source === 'object' &&
-        source !== null &&
-        ('render' in source || 'setup' in source)
-    );
-}
-
-/**
- * Module type for async component loading
- */
-interface ComponentModule {
-    default?: Component;
-    component?: Component;
-}
-
-function resolveSidebarSectionComponent(
-    id: string,
-    source: SidebarSection['component']
-): Component {
-    // If it's already a component, return it directly
-    if (isVueComponent(source)) {
-        return source;
-    }
-
-    // Otherwise it's an async loader function
-    if (typeof source === 'function') {
-        const cached = sectionComponentCache.get(id);
-        if (cached) return cached;
-
-        const asyncComp = defineAsyncComponent(async () => {
-            const mod = await (
-                source as () => Promise<ComponentModule | Component>
-            )();
-
-            // Handle module with default export
-            if (mod && typeof mod === 'object' && 'default' in mod) {
-                const moduleWithDefault = mod as ComponentModule;
-                const comp =
-                    moduleWithDefault.default ?? moduleWithDefault.component;
-                if (process.dev && !comp) {
-                    console.warn(
-                        `[useSidebarSections] Async section loader for ${id} returned invalid component`,
-                        mod
-                    );
-                }
-                return comp!;
-            }
-
-            // Module is the component itself
-            return mod as Component;
-        });
-        sectionComponentCache.set(id, asyncComp);
-        return asyncComp;
-    }
-
-    // Fallback - should not happen with proper types
-    return source as Component;
-}
-
 const sidebarSections = useSidebarSections();
-
-const resolvedSidebarSections = computed(() => {
-    const groups = sidebarSections.value;
-    const mapSections = (entries: SidebarSection[]) =>
-        entries.map((entry) => ({
-            id: entry.id,
-            component: resolveSidebarSectionComponent(
-                entry.id,
-                entry.component
-            ),
-        }));
-    return {
-        top: mapSections(groups.top),
-        main: mapSections(groups.main),
-        bottom: mapSections(groups.bottom),
-    };
-});
+const resolvedSidebarSections =
+    useResolvedSidebarSections(sidebarSections);
 
 const getSidebarFooterContext = () => ({
     activeThreadId: activeThreadIds.value[0] ?? null,
@@ -374,31 +279,10 @@ const getSidebarFooterContext = () => ({
 
 const sidebarFooterActions = useSidebarFooterActions(getSidebarFooterContext);
 
-const sidebarProjectSelectOverrides = useThemeOverrides({
-    component: 'selectmenu',
-    context: 'sidebar',
-    identifier: 'sidebar.project-select',
-    isNuxtUI: true,
-});
-
-const sidebarProjectSelectProps = computed(() => {
-    const overrideValue =
-        (sidebarProjectSelectOverrides.value as Record<string, any>) || {};
-    const mergedClass = ['w-full', overrideValue.class || '']
-        .filter(Boolean)
-        .join(' ');
-
-    return {
-        ...overrideValue,
-        class: mergedClass,
-    };
-});
-
-const sidebarFormFieldProps = useThemeOverrides({
-    component: 'formField',
-    context: 'sidebar',
-    isNuxtUI: true,
-});
+const {
+    projectSelect: sidebarProjectSelectProps,
+    formField: sidebarFormFieldProps,
+} = useSidebarThemeProps();
 
 async function handleSidebarFooterAction(entry: SidebarFooterActionEntry) {
     if (entry.disabled) return;
@@ -610,7 +494,7 @@ const deleteProjectModalProps = createSidebarModalProps(
     }
 );
 
-async function openRename(target: RenamePayload) {
+async function openRename(target: SidebarRenamePayload) {
     // Case 1: payload from project tree: { projectId, entryId, kind }
     if ('entryId' in target) {
         const { entryId, kind } = target;

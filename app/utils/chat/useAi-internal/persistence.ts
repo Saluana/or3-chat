@@ -13,8 +13,8 @@
  */
 
 import { nowSec } from '~/db/util';
-import { upsert } from '~/db';
-import { getDb } from '~/db/client';
+import type { Or3DB } from '~/db/client';
+import { upsertMessageInDb } from '~/db/messages';
 import { serializeFileHashes } from '~/db/files-util';
 import type { StoredMessage, AssistantPersister } from './types';
 import type { ToolCallInfo } from '~/utils/chat/uiMessages';
@@ -27,6 +27,7 @@ import { createForegroundGenerationLease } from '~/utils/chat/generation-lease';
  * Creates a persister that incrementally writes assistant output to Dexie.
  */
 export function makeAssistantPersister(
+    db: Or3DB,
     assistantDbMsg: StoredMessage,
     assistantFileHashes: string[],
     generationLeaseId?: string
@@ -48,7 +49,7 @@ export function makeAssistantPersister(
         // Always merge against the latest row. Streaming writes must not erase
         // concurrent plugin metadata, synced edits, or file references.
         const latest =
-            ((await getDb().messages.get(assistantDbMsg.id)) as
+            ((await db.messages.get(assistantDbMsg.id)) as
                 | StoredMessage
                 | undefined) ?? assistantDbMsg;
         const baseData = latest.data && typeof latest.data === 'object'
@@ -86,7 +87,7 @@ export function makeAssistantPersister(
                 file_hashes: serialized,
                 updated_at: nowSec(),
             };
-            await upsert.message(payload);
+            await upsertMessageInDb(db, payload);
             lastSerialized = serialized ?? null;
         }
         return lastSerialized;
@@ -100,12 +101,13 @@ export function makeAssistantPersister(
  * Updates an existing message record and keeps `data.error` in sync.
  */
 export async function updateMessageRecord(
+    db: Or3DB,
     id: string,
     patch: Partial<StoredMessage>,
     existing?: StoredMessage | null
 ): Promise<void> {
     const base =
-        ((await getDb().messages.get(id)) as StoredMessage | undefined) ??
+        ((await db.messages.get(id)) as StoredMessage | undefined) ??
         existing;
     if (!base) return;
 
@@ -127,7 +129,7 @@ export async function updateMessageRecord(
         },
     };
 
-    await upsert.message({
+    await upsertMessageInDb(db, {
         ...base,
         ...finalPatch,
         updated_at: finalPatch.updated_at ?? nowSec(),

@@ -578,5 +578,79 @@ describe('dashboard plugin registry', () => {
             expect(nav.state.activePageId).toBeNull();
             expect(nav.state.view).toBe('page');
         });
+
+        it('ignores a slow page resolution after a newer page wins', async () => {
+            let resolveFirst!: (value: unknown) => void;
+            let resolveSecond!: (value: unknown) => void;
+            const first = new Promise((resolve) => {
+                resolveFirst = resolve;
+            });
+            const second = new Promise((resolve) => {
+                resolveSecond = resolve;
+            });
+            registerDashboardPlugin({
+                id: 'test:nav-race',
+                icon: 'pixelarticons:clock',
+                label: 'Nav Race',
+                pages: [
+                    {
+                        id: 'first',
+                        title: 'First',
+                        component: () => first as Promise<any>,
+                    },
+                    {
+                        id: 'second',
+                        title: 'Second',
+                        component: () => second as Promise<any>,
+                    },
+                ],
+            });
+            await flush();
+            const nav = useDashboardNavigation();
+
+            const firstOpen = nav.openPage('test:nav-race', 'first');
+            const secondOpen = nav.openPage('test:nav-race', 'second');
+            resolveSecond({ default: { name: 'SecondPage', render: () => null } });
+            await secondOpen;
+            resolveFirst({ default: { name: 'FirstPage', render: () => null } });
+            await firstOpen;
+
+            expect(nav.state.activePageId).toBe('second');
+            expect((nav.resolvedPageComponent.value as any)?.name).toBe(
+                'SecondPage'
+            );
+            expect(nav.state.loadingPage).toBe(false);
+        });
+
+        it('ignores a page resolution after navigation resets', async () => {
+            let resolvePage!: (value: unknown) => void;
+            const pending = new Promise((resolve) => {
+                resolvePage = resolve;
+            });
+            registerDashboardPlugin({
+                id: 'test:nav-reset-race',
+                icon: 'pixelarticons:clock',
+                label: 'Nav Reset Race',
+                pages: [
+                    {
+                        id: 'slow',
+                        title: 'Slow',
+                        component: () => pending as Promise<any>,
+                    },
+                ],
+            });
+            await flush();
+            const nav = useDashboardNavigation();
+
+            const opening = nav.openPage('test:nav-reset-race', 'slow');
+            nav.reset();
+            resolvePage({ default: { name: 'LatePage', render: () => null } });
+            await opening;
+
+            expect(nav.state.view).toBe('dashboard');
+            expect(nav.state.activePageId).toBeNull();
+            expect(nav.resolvedPageComponent.value).toBeNull();
+            expect(nav.state.loadingPage).toBe(false);
+        });
     });
 });

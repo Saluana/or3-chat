@@ -14,7 +14,7 @@
  * - Server-side sync logic
  */
 import { useRuntimeConfig } from '#imports';
-import { getDb } from './client';
+import { getDb, type Or3DB } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import {
@@ -47,6 +47,19 @@ import {
  * - Does not create initial messages.
  */
 export async function createThread(input: ThreadCreate): Promise<Thread> {
+    return createThreadInDb(getDb(), input);
+}
+
+/**
+ * Create a thread in an explicitly captured workspace database.
+ *
+ * Long-running request flows must use this variant so a workspace switch
+ * cannot redirect an admitted request into the newly active database.
+ */
+export async function createThreadInDb(
+    db: Or3DB,
+    input: ThreadCreate
+): Promise<Thread> {
     const hooks = useHooks();
 
     // Check maxConversations limit (client-side enforcement)
@@ -54,8 +67,7 @@ export async function createThread(input: ThreadCreate): Promise<Thread> {
         const config = useRuntimeConfig();
         const limits = config.public.limits;
         if (limits.enabled !== false && limits.maxConversations > 0) {
-            const count = await getDb()
-                .threads
+            const count = await db.threads
                 .filter((thread) => thread.deleted !== true)
                 .count();
             if (count >= limits.maxConversations) {
@@ -82,7 +94,6 @@ export async function createThread(input: ThreadCreate): Promise<Thread> {
         entity: value,
         tableName: 'threads',
     });
-    const db = getDb();
     await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
         await dbTry(
             () => db.threads.put(value),

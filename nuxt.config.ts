@@ -1093,6 +1093,7 @@ export default defineNuxtConfig({
             ? [
                   'app/plugins/examples/**',
                   'app/pages/_tests/**',
+                  'app/pages/tests/**',
                   'app/pages/_test.vue',
               ]
             : []),

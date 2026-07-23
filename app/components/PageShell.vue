@@ -247,7 +247,7 @@ import type {
     ThreadEntity,
     DocumentEntity,
 } from '~/core/hooks/hook-types';
-import { useMagicKeys, whenever, useEventListener, useResizeObserver, useDebounceFn } from '@vueuse/core';
+import { useMagicKeys, whenever, useEventListener } from '@vueuse/core';
 import {
     type Component,
     computed,
@@ -258,8 +258,8 @@ import {
 } from 'vue';
 import PaneUnknown from '~/components/PaneUnknown.vue';
 import PaneResizeHandle from '~/components/panes/PaneResizeHandle.vue';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
+import { usePageShellTheme } from '~/composables/core/usePageShellTheme';
 import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
 import {
     validateDbRecordWithRetry,
@@ -268,6 +268,8 @@ import {
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { useIcon } from '~/composables/useIcon';
 import { useOr3Config } from '~/composables/useOr3Config';
+import { useResponsiveState } from '~/composables/core/useResponsiveState';
+import { usePaneResizeController } from '~/composables/core/usePaneResizeController';
 import {
     setGlobalSidebarLayoutApi,
     type SidebarLayoutApi,
@@ -337,219 +339,35 @@ const {
     maxPaneWidth: 2000,
 });
 
-// Store min/max for use in keyboard handlers
 const minPaneWidth = 280;
-const maxPaneWidth = 2000;
-
-// Pane container ref for resize observation
-const paneContainerRef = ref<HTMLElement | null>(null);
-
-// Observe container size changes (sidebar toggle, window resize)
-const debouncedRecalculate = useDebounceFn((width: number) => {
-    if (width > 0 && panes.value.length > 1) {
-        recalculateWidthsForContainer(width);
-    }
-}, 100);
-
-if (import.meta.client) {
-    useResizeObserver(paneContainerRef, (entries) => {
-        const entry = entries[0];
-        if (!entry) return;
-        debouncedRecalculate(entry.contentRect.width);
-    });
-}
+const { isMobile } = useResponsiveState();
 
 const themePlugin = useNuxtApp().$theme as ThemePlugin | undefined;
-const sidebarExpandedComponent = computed(
-    () =>
-        themePlugin?.activeComponents.value.sidebar ??
-        CORE_APP_COMPONENT_DEFAULTS.sidebar
-);
-const sidebarCollapsedComponent = computed(
-    () =>
-        themePlugin?.activeComponents.value['sidebar-collapsed'] ??
-        CORE_APP_COMPONENT_DEFAULTS['sidebar-collapsed']
-);
-const dashboardModalComponent = computed(
-    () =>
-        themePlugin?.activeComponents.value['dashboard-modal'] ??
-        CORE_APP_COMPONENT_DEFAULTS['dashboard-modal']
-);
+const {
+    sidebarExpandedComponent,
+    sidebarCollapsedComponent,
+    dashboardModalComponent,
+    sidebarToggleButtonProps,
+    newPaneButtonProps,
+    themeToggleButtonProps,
+    notificationButtonProps,
+    headerActionButtonProps,
+    paneCloseButtonProps,
+} = usePageShellTheme(themePlugin);
 
-function useButtonThemeProps(
-    identifier: string,
-    fallback: Record<string, unknown> = {}
-) {
-    const overrides = themePlugin
-        ? useThemeOverrides({
-              component: 'button',
-              identifier,
-              isNuxtUI: true,
-          })
-        : computed(() => ({} as Record<string, unknown>));
-
-    return computed(() => ({
-        ...fallback,
-        ...overrides.value,
-    }));
-}
-
-const sidebarToggleButtonProps = useButtonThemeProps('shell.sidebar-toggle', {
-    class: 'theme-btn',
-    variant: 'ghost',
-    size: 'sm',
-    color: 'neutral',
-    ui: { base: 'theme-btn' },
+const {
+    paneContainerRef,
+    onPaneResizeStart,
+    onPaneResizeKeydown,
+} = usePaneResizeController({
+    paneCount: () => panes.value.length,
+    paneWidths,
+    isMobile,
+    minPaneWidth,
+    recalculateWidths: recalculateWidthsForContainer,
+    resize: handleResize,
+    persist: persistPaneWidths,
 });
-const newPaneButtonProps = useButtonThemeProps('shell.new-pane', {
-    class: 'theme-btn',
-    variant: 'ghost',
-    size: 'sm',
-    color: 'neutral',
-    ui: { base: 'theme-btn' },
-});
-const themeToggleButtonProps = useButtonThemeProps('shell.theme-toggle', {
-    class: 'theme-btn',
-    variant: 'ghost',
-    size: 'sm',
-    color: 'neutral',
-    ui: { base: 'theme-btn' },
-});
-const notificationButtonProps = computed(() => ({
-    ...themeToggleButtonProps.value,
-    square: true,
-}));
-const headerActionButtonProps = useButtonThemeProps('shell.header-action', {
-    class: 'theme-btn',
-    variant: 'ghost',
-    size: 'sm',
-    ui: { base: 'theme-btn' },
-});
-const paneCloseButtonProps = useButtonThemeProps('shell.pane-close', {
-    class: 'theme-btn',
-    variant: 'ghost',
-    size: 'xs',
-    color: 'neutral',
-    ui: {
-        base: 'theme-btn bg-[var(--md-surface-variant)]/60',
-    },
-});
-
-// -------- Pane Resize Handlers --------
-const isResizing = ref(false);
-let resizingPaneIndex: number | null = null;
-let resizeStartX = 0;
-let resizeStartWidths: number[] = [];
-let pendingResizeFrame: number | null = null;
-let accumulatedDeltaX = 0;
-
-function onPaneResizeStart(event: PointerEvent, paneIndex: number) {
-    if (isMobile.value) return;
-
-    // Capture pointer to this element
-    (event.target as Element)?.setPointerCapture?.(event.pointerId);
-
-    // Store initial state
-    resizingPaneIndex = paneIndex;
-    resizeStartX = event.clientX;
-    resizeStartWidths = [...paneWidths.value];
-    accumulatedDeltaX = 0;
-    isResizing.value = true;
-}
-
-function onPaneResizeMove(event: PointerEvent) {
-    if (resizingPaneIndex === null) return;
-
-    // Calculate incremental delta from last position
-    const deltaX = event.clientX - resizeStartX;
-    accumulatedDeltaX = deltaX;
-    resizeStartX = event.clientX;
-
-    // Throttle updates using requestAnimationFrame - only update once per frame
-    if (pendingResizeFrame === null) {
-        pendingResizeFrame = requestAnimationFrame(() => {
-            if (resizingPaneIndex !== null && accumulatedDeltaX !== 0) {
-                // Don't persist on every move - only on drag end for performance
-                handleResize(resizingPaneIndex, accumulatedDeltaX, false);
-                accumulatedDeltaX = 0;
-            }
-            pendingResizeFrame = null;
-        });
-    }
-}
-
-function onPaneResizeEnd() {
-    const paneIndexAtEnd = resizingPaneIndex;
-    resizingPaneIndex = null;
-    isResizing.value = false;
-
-    // Cancel any pending frame
-    if (pendingResizeFrame !== null) {
-        cancelAnimationFrame(pendingResizeFrame);
-        pendingResizeFrame = null;
-    }
-
-    // Apply any remaining accumulated delta to the CORRECT pane
-    if (paneIndexAtEnd !== null && accumulatedDeltaX !== 0) {
-        handleResize(paneIndexAtEnd, accumulatedDeltaX, false);
-    }
-
-    // Persist the final widths when drag completes
-    persistPaneWidths();
-    accumulatedDeltaX = 0;
-    resizeStartWidths = [];
-}
-
-// Use VueUse's useEventListener for pointermove/pointerup during resize
-// These only activate when isResizing is true
-useEventListener(
-    () => isResizing.value ? window : null,
-    'pointermove',
-    onPaneResizeMove
-);
-useEventListener(
-    () => isResizing.value ? window : null,
-    'pointerup',
-    onPaneResizeEnd
-);
-
-function onPaneResizeKeydown(event: KeyboardEvent, paneIndex: number) {
-    if (isMobile.value) return;
-
-    const step = event.shiftKey ? 32 : 16;
-    let deltaX = 0;
-
-    if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        deltaX = -step;
-    } else if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        deltaX = step;
-    } else if (event.key === 'Home') {
-        event.preventDefault();
-        // Set to minimum width - calculate delta from current
-        const currentWidth = paneWidths.value[paneIndex];
-        if (currentWidth !== undefined) {
-            deltaX = minPaneWidth - currentWidth;
-        }
-    } else if (event.key === 'End') {
-        event.preventDefault();
-        // Set to maximum possible width
-        const currentWidth = paneWidths.value[paneIndex];
-        const nextWidth = paneWidths.value[paneIndex + 1];
-        if (currentWidth !== undefined && nextWidth !== undefined) {
-            const available = currentWidth + nextWidth - minPaneWidth; // keep next at minPaneWidth
-            deltaX = available - currentWidth;
-        }
-    }
-
-    if (deltaX !== 0) {
-        // Persist immediately for keyboard actions (discrete events)
-        handleResize(paneIndex, deltaX, true);
-    }
-}
-
-// -------- End Pane Resize Handlers --------
 
 // Pane navigation with Shift+Arrow keys (using VueUse)
 const keys = useMagicKeys();
@@ -976,13 +794,6 @@ const themeAriaLabel = computed(() =>
     themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
 );
 
-// --------------- Mobile + layout ---------------
-import { useResponsiveState } from '~/composables/core/useResponsiveState';
-
-// Call the shared composable to get the synced mobile state.
-// All components use this same instance, and it auto-syncs to global isMobile for backward compatibility.
-const { isMobile } = useResponsiveState();
-
 const headerActions = useHeaderActions(() => ({
     route,
     isMobile: isMobile.value,
@@ -1169,29 +980,4 @@ function handleDocumentShortcut(e: KeyboardEvent) {
 // Use VueUse's useEventListener for automatic cleanup and HMR safety
 useEventListener(window, 'keydown', handleDocumentShortcut);
 </script>
-<style scoped>
-:global(html) {
-    height: 100%;
-}
-
-:global(body) {
-    height: 100%;
-    overflow-y: hidden;
-    overscroll-behavior: none;
-}
-.pane-active {
-    position: relative;
-}
-.pane-active::before {
-    content: '';
-    pointer-events: none;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    box-shadow: inset 0 0 0 2px var(--md-primary);
-    z-index: 100;
-    transition: opacity 0.2s ease;
-}
-</style>
+<style scoped src="./PageShell.css"></style>

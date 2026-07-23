@@ -5,7 +5,15 @@ import { describe, expect, it } from 'vitest';
 const componentFiles = ['../DocumentAiPanel.vue', '../DocumentEditorRoot.vue', '../DocumentHistoryPanel.vue', '../DocumentImageNode.vue', '../DocumentInspector.vue'];
 
 function readComponent(relativePath: string) {
-    return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8');
+    const componentUrl = new URL(relativePath, import.meta.url);
+    const source = readFileSync(fileURLToPath(componentUrl), 'utf8');
+    const styleSources = [...source.matchAll(/<style\b[^>]*\bsrc="([^"]+)"[^>]*>/gu)]
+        .map((match) => match[1])
+        .filter((path): path is string => Boolean(path))
+        .map((path) =>
+            readFileSync(fileURLToPath(new URL(path, componentUrl)), 'utf8')
+        );
+    return [source, ...styleSources].join('\n');
 }
 
 describe('premium document editor Nuxt UI contract', () => {

@@ -11,6 +11,14 @@ let sessionValue: any = null;
 
 const dbMock = {
     name: 'or3-db-workspace-a',
+    tables: [{ name: 'messages' }],
+    transaction: vi.fn(
+        async (
+            _mode: string,
+            _tables: unknown,
+            operation: () => Promise<unknown>
+        ) => await operation()
+    ),
     messages: {
         get: vi.fn(),
         put: vi.fn(),
@@ -281,7 +289,7 @@ describe('backgroundJobs reattach + notifications', () => {
         expect(backgroundJobTrackers.has('job-1')).toBe(false);
     });
 
-    it('reuses the cached message row across multiple SSE status updates', async () => {
+    it('re-reads the message row for each persisted SSE status update', async () => {
         subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
 
         const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
@@ -332,9 +340,75 @@ describe('backgroundJobs reattach + notifications', () => {
             content: 'abc',
         });
 
-        expect(dbMock.messages.get).toHaveBeenCalledTimes(1);
+        expect(dbMock.messages.get).toHaveBeenCalledTimes(2);
         expect(dbMock.messages.put).toHaveBeenCalledTimes(2);
         expect(backgroundJobTrackers.has('job-1')).toBe(false);
+    });
+
+    it('preserves metadata written between background status updates', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        dbMock.messages.get
+            .mockResolvedValueOnce({
+                id: 'msg-1',
+                role: 'assistant',
+                thread_id: 'thread-1',
+                data: { content: '' },
+                pending: true,
+                created_at: 1,
+                updated_at: 1,
+                clock: 1,
+            })
+            .mockResolvedValueOnce({
+                id: 'msg-1',
+                role: 'assistant',
+                thread_id: 'thread-1',
+                data: {
+                    content: 'a',
+                    plugin_metadata: { retained: true },
+                },
+                pending: true,
+                created_at: 1,
+                updated_at: 2,
+                clock: 1,
+            });
+
+        const {
+            ensureBackgroundJobTracker,
+            subscribeBackgroundJob,
+        } = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = ensureBackgroundJobTracker({
+            jobId: 'job-1',
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'msg-1',
+            useSse: true,
+        });
+        subscribeBackgroundJob(tracker, {});
+        const handlers = subscribeBackgroundJobStreamMock.mock.calls[0]?.[0] as
+            | { onStatus?: (status: ReturnType<typeof makeStatus>) => void }
+            | undefined;
+
+        handlers?.onStatus?.(
+            makeStatus('streaming', {
+                content: 'a',
+                content_delta: 'a',
+                content_length: 1,
+            })
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        handlers?.onStatus?.(
+            makeStatus('complete', {
+                content: 'ab',
+                content_delta: 'b',
+                content_length: 2,
+            })
+        );
+        await tracker.completion;
+
+        expect(dbMock.messages.put.mock.calls.at(-1)?.[0]?.data).toMatchObject({
+            content: 'ab',
+            plugin_metadata: { retained: true },
+        });
     });
 
     it('persists tool-only state transitions once per distinct fingerprint', async () => {
@@ -417,6 +491,14 @@ describe('backgroundJobs reattach + notifications', () => {
 
         const workspaceBDb = {
             name: 'or3-db-workspace-b',
+            tables: [{ name: 'messages' }],
+            transaction: vi.fn(
+                async (
+                    _mode: string,
+                    _tables: unknown,
+                    operation: () => Promise<unknown>
+                ) => await operation()
+            ),
             messages: { get: vi.fn(), put: vi.fn() },
             kv: { get: vi.fn() },
         };
@@ -430,7 +512,7 @@ describe('backgroundJobs reattach + notifications', () => {
         );
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        expect(dbMock.messages.get).toHaveBeenCalledTimes(1);
+        expect(dbMock.messages.get).toHaveBeenCalledTimes(2);
         expect(dbMock.messages.put).toHaveBeenCalledTimes(2);
         expect(workspaceBDb.messages.get).not.toHaveBeenCalled();
         expect(workspaceBDb.messages.put).not.toHaveBeenCalled();

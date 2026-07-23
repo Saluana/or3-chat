@@ -33,6 +33,39 @@ import type { ChatMessage } from '~/utils/chat/types';
 import type { ORMessage } from '~/core/auth/openrouter-build';
 import type { WorkflowStreamingState } from '~/composables/chat/useWorkflowStreamAccumulator';
 import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
+import type {
+    AccessDecision,
+    AttachmentEntity,
+    DbCreatePayload,
+    DbDeletePayload,
+    DbUpdatePayload,
+    DocumentEntity,
+    FileEntity,
+    KvEntry,
+    MessageCreateEntity,
+    MessageEntity,
+    NotificationAction,
+    NotificationCreatePayload,
+    NotificationEntity,
+    PostCreateEntity,
+    PostEntity,
+    ProjectEntity,
+    PromptEntity,
+    SessionContext,
+    StorageFileDownloadAfterPayload,
+    StorageFileDownloadBeforePayload,
+    StorageFileGcPayload,
+    StorageFileUploadAfterPayload,
+    StorageFileUploadBeforePayload,
+    StorageFileUploadPolicyPayload,
+    StorageFileUrlOptionsPayload,
+    SyncPendingOpPayload,
+    SyncScopePayload,
+    ThreadCreateEntity,
+    ThreadEntity,
+} from './hook-domain-types';
+
+export * from './hook-domain-types';
 
 export interface EditorInstance {
     commands: Record<string, unknown>;
@@ -299,347 +332,6 @@ export interface BranchContextAfterPayload {
 export interface KvUpsertByNameInput {
     name: string;
     value: unknown;
-}
-
-// ============================================================================
-// DB ENTITY TYPES (lightweight — expand incrementally as needed)
-// ============================================================================
-
-/** DB entity: message */
-export interface MessageEntity {
-    id: string;
-    thread_id: string;
-    role: string;
-    pending?: boolean;
-    data?: unknown;
-    index: number;
-    created_at: number;
-    updated_at?: number;
-}
-
-/** DB entity: message create input */
-export interface MessageCreateEntity {
-    id?: string;
-    thread_id: string;
-    role: string;
-    pending?: boolean;
-    data?: unknown;
-    index?: number;
-    created_at?: number;
-    updated_at?: number;
-    file_hashes?: string | string[] | null;
-    error?: string | null;
-    deleted?: boolean;
-    stream_id?: string | null;
-    clock?: number;
-}
-
-/** DB entity: thread */
-export interface ThreadEntity {
-    id: string;
-    title?: string | null;
-    created_at: number;
-    updated_at: number;
-    last_message_at?: number | null;
-    parent_thread_id?: string | null;
-    anchor_message_id?: string | null;
-    anchor_index?: number | null;
-    branch_mode?: 'reference' | 'copy' | null;
-    status: string;
-    deleted: boolean;
-    pinned: boolean;
-    clock: number;
-    forked: boolean;
-    project_id?: string | null;
-    system_prompt_id?: string | null;
-}
-
-/** DB entity: thread create input */
-export interface ThreadCreateEntity {
-    id?: string;
-    title?: string | null;
-    created_at?: number;
-    updated_at?: number;
-    last_message_at?: number | null;
-    parent_thread_id?: string | null;
-    anchor_message_id?: string | null;
-    anchor_index?: number | null;
-    branch_mode?: 'reference' | 'copy' | null;
-    status?: string;
-    deleted?: boolean;
-    pinned?: boolean;
-    clock?: number;
-    forked?: boolean;
-    project_id?: string | null;
-    system_prompt_id?: string | null;
-}
-
-/** DB entity: document */
-export interface DocumentEntity {
-    id: string;
-    title?: string;
-    content?: string;
-    file_hashes?: string | null;
-    created_at?: number;
-    updated_at?: number;
-}
-
-/** DB entity: file */
-export interface FileEntity {
-    hash: string;
-    name: string;
-    mime: string;
-    size: number;
-    ref_count?: number;
-}
-
-/** DB entity: project */
-export interface ProjectEntity {
-    id: string;
-    name: string;
-    description?: string | null;
-    data: unknown;
-    created_at: number;
-    updated_at: number;
-    deleted: boolean;
-    clock: number;
-}
-
-/** DB entity: post */
-export interface PostEntity {
-    id: string;
-    title?: string;
-    body?: string;
-    created_at?: number;
-    updated_at?: number;
-}
-
-/** DB entity: post create input */
-export interface PostCreateEntity {
-    id?: string;
-    title: string;
-    content?: string;
-    postType?: string;
-    created_at?: number;
-    updated_at?: number;
-    deleted?: boolean;
-    meta?: unknown;
-    file_hashes?: string | null;
-}
-
-/** DB entity: prompt */
-export interface PromptEntity {
-    id: string;
-    name: string;
-    text: string;
-}
-
-/** DB entity: attachment */
-export interface AttachmentEntity {
-    id: string;
-    message_id?: string;
-    file_hash?: string;
-}
-
-/** DB entity: key-value entry */
-export interface KvEntry {
-    id: string;
-    name: string;
-    value?: string | null;
-    created_at: number;
-    updated_at: number;
-    clock: number;
-}
-
-// ============================================================================
-// AUTH TYPES
-// ============================================================================
-
-/** Auth permission model. */
-export type Permission =
-    | 'workspace.read'
-    | 'workspace.write'
-    | 'workspace.settings.manage'
-    | 'users.manage'
-    | 'plugins.manage'
-    | 'admin.access';
-
-/** Workspace membership role. */
-export type WorkspaceRole = 'owner' | 'editor' | 'viewer';
-
-/** Authorization decision returned by can(). */
-export interface AccessDecision {
-    allowed: boolean;
-    permission: Permission;
-    /** Built-in deny reasons plus constraint-supplied strings. */
-    reason?: 'unauthenticated' | 'forbidden' | 'unknown-permission' | (string & {});
-    userId?: string;
-    workspaceId?: string;
-    role?: WorkspaceRole;
-    resource?: { kind: string; id?: string };
-}
-
-/** Server-side session context resolved from auth provider. */
-export interface SessionContext {
-    authenticated: boolean;
-    provider?: string;
-    providerUserId?: string;
-    user?: { id: string; email?: string; displayName?: string };
-    workspace?: { id: string; name: string };
-    role?: WorkspaceRole;
-    expiresAt?: string;
-    /** Monotonic revision for membership/role/workspace authorization state. */
-    authorizationRevision?: number;
-    /**
-     * Indicates if this user has deployment-wide admin access.
-     * Set by the canonical store based on admin_users table.
-     */
-    deploymentAdmin?: boolean;
-}
-
-// ============================================================================
-// SYNC TYPES
-// ============================================================================
-
-/** Sync scope for workspace-scoped operations. */
-export interface SyncScopePayload {
-    workspaceId: string;
-    projectId?: string;
-}
-
-/** Sync pending operation payload for hooks. */
-export interface SyncPendingOpPayload {
-    id: string;
-    tableName: string;
-    operation: 'put' | 'delete';
-    pk: string;
-    payload?: unknown;
-    stamp: {
-        deviceId: string;
-        opId: string;
-        hlc: string;
-        clock: number;
-    };
-    createdAt: number;
-    attempts: number;
-    nextAttemptAt?: number;
-    status:
-        | 'pending'
-        | 'in_flight'
-        | 'retry_wait'
-        | 'failed_retryable'
-        | 'failed_permanent'
-        | 'applied'
-        | 'discarded'
-        | 'syncing'
-        | 'failed';
-}
-
-// ============================================================================
-// NOTIFICATION TYPES
-// ============================================================================
-
-/** Notification action button/link configuration */
-export interface NotificationAction {
-    id: string;
-    label: string;
-    kind: 'navigate' | 'callback';
-    target?: {
-        threadId?: string;
-        documentId?: string;
-        route?: string;
-    };
-    data?: Record<string, unknown>;
-}
-
-/** Payload for creating a notification via hooks */
-export interface NotificationCreatePayload {
-    type: string;
-    title: string;
-    body?: string;
-    threadId?: string;
-    documentId?: string;
-    actions?: NotificationAction[];
-}
-
-/** Full notification entity from database */
-export interface NotificationEntity {
-    id: string;
-    workspace_id?: string;
-    user_id: string;
-    thread_id?: string;
-    document_id?: string;
-    type: string;
-    title: string;
-    body?: string;
-    actions?: NotificationAction[];
-    read_at?: number;
-    deleted: boolean;
-    deleted_at?: number;
-    created_at: number;
-    updated_at: number;
-    clock: number;
-}
-
-// ============================================================================
-// STORAGE TYPES
-// ============================================================================
-
-export interface StorageFileUploadBeforePayload {
-    hash: string;
-    workspace_id: string;
-    size_bytes: number;
-}
-
-export interface StorageFileUploadAfterPayload {
-    hash: string;
-    workspace_id: string;
-    storage_id: string;
-}
-
-export interface StorageFileDownloadBeforePayload {
-    hash: string;
-    workspace_id: string;
-}
-
-export interface StorageFileDownloadAfterPayload {
-    hash: string;
-    workspace_id: string;
-    size_bytes: number;
-}
-
-export interface StorageFileUrlOptionsPayload {
-    hash: string;
-    expiry_ms: number;
-    disposition?: string;
-}
-
-export interface StorageFileUploadPolicyPayload {
-    hash: string;
-    mime_type: string;
-    size_bytes: number;
-}
-
-export interface StorageFileGcPayload {
-    deleted_count: number;
-    workspace_id: string;
-}
-
-// Generic DB op payloads
-export interface DbCreatePayload<T = unknown> {
-    entity: T;
-    tableName: string;
-}
-export interface DbUpdatePayload<T = unknown> {
-    existing: T;
-    updated: T;
-    patch: Partial<T>;
-    tableName: string;
-}
-export interface DbDeletePayload<T = unknown> {
-    entity: T;
-    id: string;
-    tableName: string;
 }
 
 // ============================================================================

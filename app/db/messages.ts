@@ -14,7 +14,7 @@
  * - Server-side synchronization
  */
 import Dexie from 'dexie';
-import { getDb } from './client';
+import { getDb, type Or3DB } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import {
@@ -140,13 +140,22 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
  * - Does not merge partial updates.
  */
 export async function upsertMessage(value: Message): Promise<void> {
+    return upsertMessageInDb(getDb(), value);
+}
+
+/**
+ * Upsert a message in an explicitly captured workspace database.
+ */
+export async function upsertMessageInDb(
+    db: Or3DB,
+    value: Message
+): Promise<void> {
     const hooks = useHooks();
     const filtered: unknown = await hooks.applyFilters(
         'db.messages.upsert:filter:input',
         value
     );
     const validated = parseOrThrow(MessageSchema, filtered);
-    const db = getDb();
     await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
         const existing = await dbTry(() => db.messages.get(validated.id), {
             op: 'read',
@@ -367,8 +376,17 @@ export async function hardDeleteMessage(id: string): Promise<void> {
  * - Does not normalize indexes unless necessary.
  */
 export async function appendMessage(input: MessageCreate): Promise<Message> {
+    return appendMessageToDb(getDb(), input);
+}
+
+/**
+ * Append a message in an explicitly captured workspace database.
+ */
+export async function appendMessageToDb(
+    db: Or3DB,
+    input: MessageCreate
+): Promise<Message> {
     const hooks = useHooks();
-    const db = getDb();
     return db.transaction(
         'rw',
         getWriteTxTableNames(db, 'messages', { include: ['threads'] }),

@@ -2,12 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getMessage = vi.hoisted(() => vi.fn());
 const upsertMessage = vi.hoisted(() => vi.fn());
+const dbMock = vi.hoisted(() => ({ messages: { get: getMessage } }));
 
-vi.mock('~/db/client', () => ({
-    getDb: () => ({ messages: { get: getMessage } }),
-}));
-vi.mock('~/db', () => ({
-    upsert: { message: upsertMessage },
+vi.mock('~/db/messages', () => ({
+    upsertMessageInDb: upsertMessage,
 }));
 vi.mock('~/db/util', () => ({ nowSec: () => 999 }));
 vi.mock('~/db/files-util', () => ({
@@ -38,17 +36,20 @@ describe('latest-row assistant persistence', () => {
             },
         });
 
-        const persist = makeAssistantPersister(initial, []);
+        const persist = makeAssistantPersister(dbMock as any, initial, []);
         await persist({ reasoning: 'new reasoning', toolCalls: [] });
 
-        expect(upsertMessage).toHaveBeenCalledWith(expect.objectContaining({
-            file_hashes: '["concurrent-file"]',
-            data: expect.objectContaining({
-                content: 'concurrent edit', plugin_initial: true,
-                plugin_concurrent: { keep: true }, custom_terminal: 'value',
-                reasoning_text: 'new reasoning', tool_calls: [],
+        expect(upsertMessage).toHaveBeenCalledWith(
+            dbMock,
+            expect.objectContaining({
+                file_hashes: '["concurrent-file"]',
+                data: expect.objectContaining({
+                    content: 'concurrent edit', plugin_initial: true,
+                    plugin_concurrent: { keep: true }, custom_terminal: 'value',
+                    reasoning_text: 'new reasoning', tool_calls: [],
+                }),
             }),
-        }));
+        );
     });
 
     it('deep-merges message data against the latest row for ordinary patches', async () => {
@@ -58,15 +59,18 @@ describe('latest-row assistant persistence', () => {
             data: { content: 'latest', plugin: 'preserve' },
         });
 
-        await updateMessageRecord('a1', {
+        await updateMessageRecord(dbMock as any, 'a1', {
             error: 'stopped', data: { generation_state: 'aborted' },
         } as any);
 
-        expect(upsertMessage).toHaveBeenCalledWith(expect.objectContaining({
-            data: {
-                content: 'latest', plugin: 'preserve',
-                generation_state: 'aborted', error: 'stopped',
-            },
-        }));
+        expect(upsertMessage).toHaveBeenCalledWith(
+            dbMock,
+            expect.objectContaining({
+                data: {
+                    content: 'latest', plugin: 'preserve',
+                    generation_state: 'aborted', error: 'stopped',
+                },
+            })
+        );
     });
 });

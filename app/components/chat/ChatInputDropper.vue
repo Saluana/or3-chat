@@ -351,8 +351,6 @@ import {
     useToast,
     useUserApiKey,
     useOpenRouterAuth,
-    useModelStore,
-    useAiSettings,
     useRuntimeConfig,
 } from '#imports';
 import {
@@ -361,10 +359,7 @@ import {
     type ComposerActionContext,
 } from '#imports';
 import { useHooks } from '~/core/hooks/useHooks';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
-import { useButtonOverrides } from '~/composables/useTypedThemeOverrides';
 import { useIcon } from '~/composables/useIcon';
-import { useLocalStorage } from '@vueuse/core';
 import {
     registerPaneInput,
     unregisterPaneInput,
@@ -375,13 +370,9 @@ import type {
     UploadedImage,
 } from '~/components/chat/chat-input/types';
 import { useChatInputAttachments } from '~/components/chat/chat-input/useChatInputAttachments';
-import {
-    getDefaultReasoningEffort,
-    getSupportedReasoningEfforts,
-    modelSupportsReasoning,
-} from '~~/shared/openrouter/reasoning';
-import type { OpenRouterReasoningEffort } from '~~/shared/openrouter/reasoning';
-import type { OpenRouterModel } from '~~/shared/openrouter/types';
+import { useChatModelSelection } from '~/composables/chat/useChatModelSelection';
+import { useChatAttachmentDisplay } from '~/composables/chat/useChatAttachmentDisplay';
+import { useChatInputTheme } from '~/composables/chat/useChatInputTheme';
 import {
     hasDurableSendAcceptance,
     type RegisterSendResult,
@@ -408,12 +399,6 @@ const iconStop = useIcon('chat.stop');
 const iconUpload = useIcon('chat.upload');
 const iconClose = useIcon('ui.close');
 
-const { favoriteModels, getFavoriteModels, catalog } = useModelStore();
-const { settings: aiSettings } = useAiSettings();
-const webSearchEnabled = ref<boolean>(false);
-const thinkingEnabled = ref<boolean>(false);
-const reasoningEffort = ref<string | undefined>(undefined);
-const LAST_MODEL_KEY = 'last_selected_model';
 const runtimeConfig = useRuntimeConfig();
 const openRouterAvailability = computed(() =>
     resolveOpenRouterKeyAvailability(runtimeConfig.public?.openRouter)
@@ -427,35 +412,6 @@ const allowUserOverride = computed(
 const hasInstanceKey = computed(
     () => openRouterAvailability.value.hasInstanceKey
 );
-
-// Use VueUse's useLocalStorage for persisted model selection
-const persistedModel = useLocalStorage<string>(
-    LAST_MODEL_KEY,
-    'openai/gpt-oss-120b'
-);
-
-const suppressPersist = ref(false);
-
-onMounted(async () => {
-    const fave = await getFavoriteModels();
-    // Favorite models loaded (log removed)
-    if (process.client) {
-        // Initialize selectedModel from persistedModel
-        if (persistedModel.value) {
-            selectedModel.value = persistedModel.value;
-        }
-        // If this is a brand-new chat (no threadId), honor fixed default from AI settings for initial display
-        if (!props.threadId) {
-            const set = aiSettings.value;
-            const fixed =
-                set?.defaultModelMode === 'fixed' ? set?.fixedModelId : null;
-            if (fixed) {
-                suppressPersist.value = true; // don't clobber last_selected_model on initial display
-                selectedModel.value = fixed;
-            }
-        }
-    }
-});
 
 onMounted(async () => {
     if (!process.client) return;
@@ -554,21 +510,6 @@ onBeforeUnmount(() => {
     releaseAll();
 });
 
-// When starting a brand-new chat (threadId becomes falsy), honor fixed default from settings
-watch(
-    () => props.threadId,
-    (tid) => {
-        if (tid) return; // only when there is no thread yet (new chat)
-        try {
-            const set = aiSettings.value;
-            if (set?.defaultModelMode === 'fixed' && set?.fixedModelId) {
-                suppressPersist.value = true;
-                selectedModel.value = set.fixedModelId;
-            }
-        } catch {}
-    }
-);
-
 const showModelCatalog = ref(false);
 const showSystemPrompts = ref(false);
 const showKeyModal = ref(false);
@@ -600,6 +541,18 @@ const emit = defineEmits<{
     (e: 'resize', payload: { height: number }): void;
 }>();
 
+const {
+    selectedModel,
+    webSearchEnabled,
+    thinkingEnabled,
+    reasoningEffort,
+    modelReasoningEfforts,
+    modelSupportsThinking,
+} = useChatModelSelection({
+    threadId: () => props.threadId,
+    onChange: (modelId) => emit('model-change', modelId),
+});
+
 const promptText = ref('');
 // Fallback textarea ref (used while TipTap not yet integrated / or fallback active)
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
@@ -625,133 +578,20 @@ async function handleComposerAction(entry: ComposerActionEntry) {
     }
 }
 
-// Theme overrides for buttons
-const sendButtonProps = useButtonOverrides(
-    { component: 'button', context: 'chat', identifier: 'chat.send' },
-    {
-        square: true,
-        size: 'sm',
-        color: 'primary',
-        variant: 'solid',
-        class: 'theme-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center',
-    }
-);
-
-const stopButtonProps = useButtonOverrides(
-    { component: 'button', context: 'chat', identifier: 'chat.stop' },
-    {
-        square: true,
-        size: 'sm',
-        color: 'error',
-        variant: 'solid',
-        class: 'theme-btn flex items-center justify-center text-[var(--md-on-error)] bg-[var(--md-error)]! hover:bg-[var(--md-error-hover)]! active:bg-[var(--md-error-active)]!',
-    }
-);
-
-const attachButtonProps = useButtonOverrides(
-    { component: 'button', context: 'chat', identifier: 'chat.attach' },
-    {
-        square: true,
-        size: 'sm',
-        color: 'info',
-        class: 'theme-btn text-black dark:text-white flex items-center justify-center',
-    }
-);
-
-const settingsButtonProps = useButtonOverrides(
-    { component: 'button', context: 'chat', identifier: 'chat.settings' },
-    {
-        square: true,
-        size: 'sm',
-        color: 'info',
-    }
-);
-
-const composerActionButtonProps = useButtonOverrides(
-    {
-        component: 'button',
-        context: 'chat',
-        identifier: 'chat.composer-action',
-    },
-    {
-        size: 'sm',
-        variant: 'ghost',
-        class: 'theme-btn pointer-events-auto flex items-center gap-1',
-        ui: { base: 'theme-btn' },
-    }
-);
-
-const mainContainerProps = useThemeOverrides({
-    component: 'div',
-    context: 'chat',
-    identifier: 'chat.input-main-container',
-    isNuxtUI: false,
-});
-
-const containerProps = useThemeOverrides({
-    component: 'div',
-    context: 'chat',
-    identifier: 'chat.input-container',
-    isNuxtUI: false,
-});
-
-const editorProps = useThemeOverrides({
-    component: 'div',
-    context: 'chat',
-    identifier: 'chat.editor',
-    isNuxtUI: false,
-});
-
-const attachmentPdfContainerProps = useThemeOverrides({
-    component: 'div',
-    context: 'chat',
-    identifier: 'chat.attachment-pdf-container',
-    isNuxtUI: false,
-});
-
-const attachmentTextContainerProps = useThemeOverrides({
-    component: 'div',
-    context: 'chat',
-    identifier: 'chat.attachment-text-container',
-    isNuxtUI: false,
-});
-
-const attachmentRemoveButtonOverrides = useThemeOverrides({
-    component: 'button',
-    context: 'chat',
-    identifier: 'chat.attachment-remove-btn',
-    isNuxtUI: true,
-});
-const attachmentRemoveBtnProps = computed(() => {
-    const fallback = {
-        type: 'button' as const,
-        color: 'error' as const,
-        variant: 'solid' as const,
-        size: 'xs' as const,
-        square: true as const,
-        icon: iconClose.value,
-        class: 'chat-input-attachment-remove-btn flex items-center justify-center absolute top-1 right-1 h-[22px] w-[22px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white bg-[var(--md-error)]/85 hover:bg-[var(--md-error)]',
-    };
-    const overrideValue =
-        (attachmentRemoveButtonOverrides.value as Record<string, unknown>) || {};
-    const overrideClass =
-        typeof overrideValue.class === 'string' ? overrideValue.class : '';
-    const mergedClass = [fallback.class, overrideClass]
-        .filter(Boolean)
-        .join(' ');
-    return {
-        ...fallback,
-        ...overrideValue,
-        class: mergedClass,
-    };
-});
-
-const dragOverlayProps = useThemeOverrides({
-    component: 'div',
-    context: 'chat',
-    identifier: 'chat.drag-overlay',
-    isNuxtUI: false,
-});
+const {
+    sendButtonProps,
+    stopButtonProps,
+    attachButtonProps,
+    settingsButtonProps,
+    composerActionButtonProps,
+    mainContainerProps,
+    containerProps,
+    editorProps,
+    attachmentPdfContainerProps,
+    attachmentTextContainerProps,
+    attachmentRemoveBtnProps,
+    dragOverlayProps,
+} = useChatInputTheme(iconClose);
 
 const or3Config = useOr3Config();
 const MAX_IMAGES = or3Config.limits.maxFilesPerMessage;
@@ -774,86 +614,9 @@ const {
     onImageRemove: (index) => emit('image-remove', index),
 });
 
-const imageAttachments = computed(() =>
-    uploadedImages.value
-        .map((attachment, index) => ({
-            ...attachment,
-            index,
-            key:
-                attachment.hash ||
-                attachment.url ||
-                `${index}:${attachment.name}`,
-        }))
-        .filter((attachment) => attachment.kind === 'image')
-        .map((attachment, displayIndex) => ({
-            ...attachment,
-            displayIndex,
-        }))
-);
+const { imageAttachments, pdfAttachments } =
+    useChatAttachmentDisplay(uploadedImages);
 
-const pdfAttachments = computed(() =>
-    uploadedImages.value
-        .map((attachment, index) => ({
-            ...attachment,
-            index,
-            key:
-                attachment.hash ||
-                attachment.url ||
-                `${index}:${attachment.name}`,
-        }))
-        .filter((attachment) => attachment.kind === 'pdf')
-);
-
-const selectedModel = ref<string>('openai/gpt-oss-120b');
-
-function stripThinkingSuffix(modelId: string): string {
-    return modelId.endsWith(':thinking')
-        ? modelId.slice(0, -':thinking'.length)
-        : modelId;
-}
-
-const selectedModelMeta = computed<OpenRouterModel | undefined>(() => {
-    const selected = selectedModel.value;
-    if (!selected) return undefined;
-    const baseModel = stripThinkingSuffix(selected);
-
-    return (
-        catalog.value.find((item) => item.id === baseModel) ||
-        favoriteModels.value.find((item) => item.id === baseModel)
-    );
-});
-
-const modelReasoningEfforts = computed(() => {
-    return getSupportedReasoningEfforts(selectedModelMeta.value);
-});
-
-const modelSupportsThinking = computed(() => {
-    return modelReasoningEfforts.value.length > 0;
-});
-
-watch(modelSupportsThinking, (supported) => {
-    if (!supported && thinkingEnabled.value) {
-        thinkingEnabled.value = false;
-    }
-});
-
-watch(
-    [selectedModelMeta, modelReasoningEfforts],
-    ([model, efforts]) => {
-        if (!modelSupportsReasoning(model)) {
-            reasoningEffort.value = undefined;
-            return;
-        }
-        if (
-            reasoningEffort.value &&
-            efforts.includes(reasoningEffort.value as OpenRouterReasoningEffort)
-        ) {
-            return;
-        }
-        reasoningEffort.value = getDefaultReasoningEffort(model);
-    },
-    { immediate: true }
-);
 // hiddenFileInput removed
 // hiddenFileInputListener removed
 const imageSettings = ref<ImageSettings>({
@@ -862,43 +625,6 @@ const imageSettings = ref<ImageSettings>({
     size: '1024x1024',
 });
 const showSettingsDropdown = ref(false);
-
-watch(selectedModel, (newModel) => {
-    emit('model-change', newModel);
-    if (process.client) {
-        if (suppressPersist.value) {
-            // Skip one-time persist when we programmatically set from settings
-            suppressPersist.value = false;
-            return;
-        }
-        // Persist via useLocalStorage
-        persistedModel.value = newModel;
-    }
-});
-
-// React to "Use model" selections made in the model catalog modal.
-function onCatalogModelSelected(e: Event) {
-    const modelId = (e as CustomEvent<{ modelId?: string }>).detail?.modelId;
-    if (!modelId || modelId === selectedModel.value) return;
-    // The selectedModel watcher persists to LAST_MODEL_KEY automatically.
-    selectedModel.value = modelId;
-}
-
-onMounted(() => {
-    if (!process.client) return;
-    window.addEventListener(
-        'or3:model-selected',
-        onCatalogModelSelected as EventListener
-    );
-});
-
-onBeforeUnmount(() => {
-    if (!process.client) return;
-    window.removeEventListener(
-        'or3:model-selected',
-        onCatalogModelSelected as EventListener
-    );
-});
 
 const autoResize = async () => {
     await nextTick();
@@ -1184,112 +910,4 @@ if (import.meta.client) {
 }
 </script>
 
-<style scoped>
-/* Custom scrollbar for textarea */
-/* Firefox */
-textarea {
-    scrollbar-width: thin;
-    scrollbar-color: var(--md-primary) transparent;
-}
-
-/* WebKit */
-textarea::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-
-textarea::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-textarea::-webkit-scrollbar-thumb {
-    background: var(--md-primary);
-    border-radius: 9999px;
-}
-
-textarea::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklab, var(--md-primary) 85%, black);
-}
-
-/* Focus states */
-.group:hover .opacity-0 {
-    opacity: 1;
-}
-
-/* Smooth transitions */
-* {
-    transition-property: color, background-color, border-color, opacity,
-        transform;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 150ms;
-}
-
-/* ProseMirror (TipTap) base styles */
-/* TipTap base */
-.prosemirror-host :deep(.ProseMirror) {
-    outline: none;
-    white-space: pre-wrap;
-    min-height: 100%;
-    width: 100%;
-}
-.prosemirror-host :deep(.ProseMirror p) {
-    margin: 0;
-}
-.prosemirror-host {
-    display: block;
-    min-height: 3.5rem;
-    width: 100%;
-}
-
-/* Placeholder (needs :deep due to scoped styles) */
-.prosemirror-host :deep(p.is-editor-empty:first-child) {
-    position: relative;
-}
-.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
-    /* Use design tokens; ensure sufficient contrast in dark mode */
-    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
-    content: attr(data-placeholder);
-    pointer-events: none;
-    opacity: 0.85; /* increase for dark background readability */
-    font-weight: normal;
-    position: absolute;
-    inset-inline-start: 0;
-    inset-block-start: 0;
-}
-
-/* Mention token styling inside the TipTap editor */
-.prosemirror-host :deep(.mention) {
-    background: var(--ui-bg-muted, #f3f4f6);
-    color: var(--ui-text-highlighted, #1e40af);
-    border-radius: 4px;
-    padding: 0.125rem 0.375rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.2s ease;
-}
-.prosemirror-host :deep(.mention:hover) {
-    background: var(--ui-bg-muted-hover, #e5e7eb);
-}
-.prosemirror-host :deep(.mention::before) {
-    content: '📎';
-    margin-right: 0.25rem;
-    font-size: 0.875em;
-}
-
-/* Workflow tag styling inside the TipTap editor */
-.prosemirror-host :deep(.workflow-tag) {
-    background: var(--md-info, #e0e0ff);
-    color: var(--md-on-tertiary-container, #1a1a66);
-    border-radius: 4px;
-    padding: 0.125rem 0.375rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.15s ease;
-}
-
-.prosemirror-host :deep(.workflow-tag::before) {
-    content: '⚡';
-    margin-right: 0.25rem;
-    font-size: 0.875em;
-}
-</style>
+<style scoped src="./ChatInputDropper.css"></style>

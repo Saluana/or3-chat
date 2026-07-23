@@ -55,8 +55,6 @@ export type BackgroundJobTracker = {
     notFoundPollFailures?: number;
     authPollFailures?: number;
     streamUnsubscribe?: () => void;
-    messageRecord?: StoredMessage | null;
-    messageRecordDbName?: string | null;
     originDb?: Or3DB;
     originDbName?: string;
     subscribers: Set<BackgroundJobSubscriber>;

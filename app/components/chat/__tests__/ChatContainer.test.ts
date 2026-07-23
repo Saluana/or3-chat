@@ -32,6 +32,7 @@ vi.mock('~/composables/core/usePanePrompt', () => ({
 }));
 
 vi.mock('~/state/global', () => ({
+    state: { value: { openrouterKey: '' } },
     isMobile: { value: false },
 }));
 

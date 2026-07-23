@@ -1,36 +1,4 @@
-/**
- * @module app/core/storage/transfer-queue
- *
- * Purpose:
- * Local-first file transfer queue that manages uploads and downloads
- * through the active storage provider. Transfers are persisted in the
- * `file_transfers` Dexie table so they survive page reloads.
- *
- * Responsibilities:
- * - Enqueue upload and download transfers
- * - Process transfers with configurable concurrency (adaptive to network type)
- * - Retry failed transfers with exponential backoff
- * - Verify download integrity via hash comparison
- * - Emit storage hooks before/after upload and download operations
- * - Apply upload policy filters via `storage.files.upload:filter:policy`
- * - Clean up completed/failed transfers after a retention window (7 days)
- *
- * Constraints:
- * - Client-only (accesses IndexedDB, navigator.connection)
- * - Workspace-scoped: switching workspaces cancels in-flight transfers
- * - Presigned URLs are short-lived (default 1 hour expiry)
- * - Maximum 5 retry attempts per transfer by default
- * - Non-retryable errors (413, validation) are marked as permanent failures
- *
- * Non-goals:
- * - Does not manage file metadata (see db/files)
- * - Does not handle multipart uploads
- * - Does not provide streaming progress to UI (transfers are observable via Dexie liveQuery)
- *
- * @see core/storage/types for ObjectStorageProvider interface
- * @see core/storage/provider-registry for provider resolution
- * @see shared/storage/types for FileTransfer schema
- */
+/** Persistent, workspace-scoped upload and download execution queue. */
 import Dexie from 'dexie';
 import { getDb } from '~/db/client';
 import type { Or3DB } from '~/db/client';
@@ -49,110 +17,28 @@ import {
 import { err, reportError } from '~/utils/errors';
 import { getActiveStorageProvider } from './provider-registry';
 import type { ObjectStorageProvider } from './types';
+import {
+    DEFAULT_BACKOFF_BASE_MS,
+    DEFAULT_BACKOFF_MAX_MS,
+    DEFAULT_LEASE_DURATION_MS,
+    DEFAULT_MAX_ATTEMPTS,
+    DEFAULT_MAX_DOWNLOAD_BYTES,
+    DEFAULT_PRESIGN_EXPIRY_MS,
+    TRANSFER_CLEANUP_INTERVAL_MS,
+    TRANSFER_RETENTION_SEC,
+    getDefaultConcurrency,
+    normalizeTransferMime,
+    recoverableTransferError,
+    resolveUploadMethod,
+    toCommitMeta,
+    type FileTransferQueueConfig,
+    type TransferExecutionContext,
+    type TransferWaiter,
+} from './transfer-queue-support';
 
-const DEFAULT_MAX_ATTEMPTS = 5;
-const DEFAULT_BACKOFF_BASE_MS = 1000;
-const DEFAULT_BACKOFF_MAX_MS = 60000;
-const DEFAULT_PRESIGN_EXPIRY_MS = 60 * 60 * 1000;
-const TRANSFER_RETENTION_SEC = 7 * 24 * 60 * 60;
-const TRANSFER_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
-const DEFAULT_LEASE_DURATION_MS = 30_000;
-const DEFAULT_MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024;
+export type { FileTransferQueueConfig } from './transfer-queue-support';
 
-function resolveUploadMethod(presign: {
-    url: string;
-    method?: string;
-}): string {
-    const explicit =
-        typeof presign.method === 'string' ? presign.method.trim() : '';
-    if (explicit.length > 0) return explicit.toUpperCase();
-
-    // FS token upload endpoint is PUT-only; keep compatibility with older
-    // presign responses that omitted `method`.
-    if (presign.url.startsWith('/api/storage/fs/upload')) return 'PUT';
-
-    return 'POST';
-}
-
-function getDefaultConcurrency(): number {
-    if (typeof navigator === 'undefined' || !('connection' in navigator)) {
-        return 2; // Default fallback
-    }
-
-    const connection = navigator.connection as { effectiveType?: string } | undefined;
-    const effectiveType = connection?.effectiveType;
-
-    if (effectiveType === '4g') {
-        return 4;
-    } else if (effectiveType === '3g') {
-        return 2;
-    } else {
-        return 1; // 2g or slow-2g
-    }
-}
-
-/**
- * Purpose:
- * Configuration for the file transfer queue.
- *
- * Constraints:
- * - Concurrency defaults are adaptive; override only for testing or tuning
- */
-export interface FileTransferQueueConfig {
-    concurrency?: number;
-    maxAttempts?: number;
-    backoffBaseMs?: number;
-    backoffMaxMs?: number;
-    leaseDurationMs?: number;
-    maxDownloadBytes?: number;
-    /**
-     * Optional DB resolver for workspace-aware singleton usage.
-     * Internal-facing; tests can omit this and provide a static DB instance.
-     */
-    dbResolver?: () => Or3DB;
-}
-
-type TransferWaiter = {
-    resolve: () => void;
-    reject: (error: Error) => void;
-    timeout: ReturnType<typeof setTimeout>;
-};
-
-type TransferExecutionContext = {
-    workspaceId: string;
-    dbName: string;
-    db: Or3DB;
-};
-
-type RecoverableTransferError = Error & {
-    transferState: RecoverableFileTransferState;
-};
-
-function recoverableTransferError(
-    state: RecoverableFileTransferState,
-    message: string
-): RecoverableTransferError {
-    const error = err('ERR_STORAGE_FILE_NOT_FOUND', message, {
-        tags: { domain: 'storage', stage: 'download' },
-        retryable: false,
-    }) as unknown as RecoverableTransferError;
-    error.transferState = state;
-    return error;
-}
-
-/**
- * Purpose:
- * Workspace-scoped queue for upload and download transfers.
- *
- * Behavior:
- * - Persists transfers in Dexie (`file_transfers`) so they survive reload
- * - Processes work with limited concurrency and retries with backoff
- * - Provides `waitForTransfer()` to await completion for UX flows
- *
- * Constraints:
- * - `setWorkspaceId()` must be called to enable processing
- * - Switching workspaces cancels in-flight transfers
- */
+/** Persistent transfer executor. Call `setWorkspaceId` before processing. */
 export class FileTransferQueue {
     private concurrency: number;
     private maxAttempts: number;
@@ -1070,22 +956,6 @@ export class FileTransferQueue {
         if (remaining.length) this.waiters.set(id, remaining);
         else this.waiters.delete(id);
     }
-}
-
-function normalizeTransferMime(value: string): string {
-    return value.split(';', 1)[0]?.trim().toLowerCase() ?? '';
-}
-
-function toCommitMeta(meta: FileMeta) {
-    return {
-        name: meta.name,
-        mimeType: meta.mime_type,
-        sizeBytes: meta.size_bytes,
-        kind: meta.kind,
-        width: meta.width,
-        height: meta.height,
-        pageCount: meta.page_count,
-    };
 }
 
 let queueInstance: FileTransferQueue | null = null;

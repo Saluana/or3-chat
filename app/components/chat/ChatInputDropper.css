@@ -1,0 +1,107 @@
+/* Custom scrollbar for textarea */
+/* Firefox */
+textarea {
+    scrollbar-width: thin;
+    scrollbar-color: var(--md-primary) transparent;
+}
+
+/* WebKit */
+textarea::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+textarea::-webkit-scrollbar-thumb {
+    background: var(--md-primary);
+    border-radius: 9999px;
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--md-primary) 85%, black);
+}
+
+/* Focus states */
+.group:hover .opacity-0 {
+    opacity: 1;
+}
+
+/* Smooth transitions */
+* {
+    transition-property: color, background-color, border-color, opacity,
+        transform;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+}
+
+/* ProseMirror (TipTap) base styles */
+/* TipTap base */
+.prosemirror-host :deep(.ProseMirror) {
+    outline: none;
+    white-space: pre-wrap;
+    min-height: 100%;
+    width: 100%;
+}
+.prosemirror-host :deep(.ProseMirror p) {
+    margin: 0;
+}
+.prosemirror-host {
+    display: block;
+    min-height: 3.5rem;
+    width: 100%;
+}
+
+/* Placeholder (needs :deep due to scoped styles) */
+.prosemirror-host :deep(p.is-editor-empty:first-child) {
+    position: relative;
+}
+.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
+    /* Use design tokens; ensure sufficient contrast in dark mode */
+    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
+    content: attr(data-placeholder);
+    pointer-events: none;
+    opacity: 0.85; /* increase for dark background readability */
+    font-weight: normal;
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-start: 0;
+}
+
+/* Mention token styling inside the TipTap editor */
+.prosemirror-host :deep(.mention) {
+    background: var(--ui-bg-muted, #f3f4f6);
+    color: var(--ui-text-highlighted, #1e40af);
+    border-radius: 4px;
+    padding: 0.125rem 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+.prosemirror-host :deep(.mention:hover) {
+    background: var(--ui-bg-muted-hover, #e5e7eb);
+}
+.prosemirror-host :deep(.mention::before) {
+    content: '📎';
+    margin-right: 0.25rem;
+    font-size: 0.875em;
+}
+
+/* Workflow tag styling inside the TipTap editor */
+.prosemirror-host :deep(.workflow-tag) {
+    background: var(--md-info, #e0e0ff);
+    color: var(--md-on-tertiary-container, #1a1a66);
+    border-radius: 4px;
+    padding: 0.125rem 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.prosemirror-host :deep(.workflow-tag::before) {
+    content: '⚡';
+    margin-right: 0.25rem;
+    font-size: 0.875em;
+}

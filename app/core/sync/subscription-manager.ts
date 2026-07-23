@@ -230,8 +230,9 @@ export class SubscriptionManager {
         // Check circuit breaker to prevent retry storm during outages
         const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
         if (!circuitBreaker.canRetry()) {
-            console.warn('[SubscriptionManager] Circuit breaker open, skipping bootstrap');
-            return;
+            throw new Error(
+                'Circuit breaker is open; bootstrap cannot complete'
+            );
         }
 
         this.isBootstrapping = true;
@@ -267,8 +268,9 @@ export class SubscriptionManager {
 
                 // Check circuit breaker each iteration
                 if (!circuitBreaker.canRetry()) {
-                    console.warn('[SubscriptionManager] Circuit breaker opened during bootstrap');
-                    break;
+                    throw new Error(
+                        'Circuit breaker opened during bootstrap'
+                    );
                 }
 
                 const response = await pendingFetch!;
@@ -280,11 +282,13 @@ export class SubscriptionManager {
                         cursor,
                         nextCursor: response.nextCursor,
                     });
-                     await useHooks().doAction('sync.bootstrap:action:error', {
+                    await useHooks().doAction('sync.bootstrap:action:error', {
                         scope: this.scope,
                         error: 'Infinite loop detected: cursor not advancing',
                     });
-                    break;
+                    throw new Error(
+                        'Bootstrap pagination cursor did not advance'
+                    );
                 }
 
                 // Start prefetching the next page while we apply the current one
@@ -459,8 +463,7 @@ export class SubscriptionManager {
         // Check circuit breaker to prevent retry storm during outages
         const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
         if (!circuitBreaker.canRetry()) {
-            console.warn('[SubscriptionManager] Circuit breaker open, skipping rescan');
-            return;
+            throw new Error('Circuit breaker is open; rescan cannot complete');
         }
 
         this.isBootstrapping = true;
@@ -482,8 +485,7 @@ export class SubscriptionManager {
 
                 // Check circuit breaker each iteration
                 if (!circuitBreaker.canRetry()) {
-                    console.warn('[SubscriptionManager] Circuit breaker opened during rescan');
-                    break;
+                    throw new Error('Circuit breaker opened during rescan');
                 }
 
                 const response = await this.provider.pull({
@@ -508,7 +510,9 @@ export class SubscriptionManager {
                         cursor,
                         nextCursor: response.nextCursor,
                     });
-                    break;
+                    throw new Error(
+                        'Rescan pagination cursor did not advance'
+                    );
                 }
 
                 cursor = response.nextCursor;
@@ -674,15 +678,11 @@ export class SubscriptionManager {
                 });
             }
 
-            if (maxVersion > currentCursor) {
-                await this.cursorManager.setCursor(maxVersion);
-            }
-
             const drainStartCursor = this.getBacklogDrainStartCursor(currentCursor, newChanges);
             const drainResult = await this.drainBacklog(drainStartCursor, generation);
             if (!this.isCurrentGeneration(generation)) return;
-            if (drainResult.cursor > maxVersion) {
-                maxVersion = drainResult.cursor;
+            maxVersion = Math.max(maxVersion, drainResult.cursor);
+            if (maxVersion > currentCursor) {
                 await this.cursorManager.setCursor(maxVersion);
             }
 
@@ -770,7 +770,11 @@ export class SubscriptionManager {
 
         while (hasMore) {
             if (!this.isCurrentGeneration(generation)) break;
-            if (!circuitBreaker.canRetry()) break;
+            if (!circuitBreaker.canRetry()) {
+                throw new Error(
+                    'Circuit breaker opened during backlog drain'
+                );
+            }
 
             const response = await this.provider.pull({
                 scope: this.scope,
@@ -806,7 +810,7 @@ export class SubscriptionManager {
                     cursor: previousCursor,
                     nextCursor: response.nextCursor,
                 });
-                break;
+                throw new Error('Backlog pagination cursor did not advance');
             }
         }
 
@@ -919,13 +923,7 @@ function getScopeKey(scope: SyncScope): string {
     return `${scope.workspaceId}:${scope.projectId ?? 'default'}`;
 }
 
-/**
- * Purpose:
- * Create (or replace) the SubscriptionManager singleton for a scope.
- *
- * Behavior:
- * - Stops any existing instance for the scope (best-effort)
- */
+/** Create or replace the manager owned by a sync scope. */
 export function createSubscriptionManager(
     db: Or3DB,
     provider: SyncProvider,
@@ -947,20 +945,12 @@ export function createSubscriptionManager(
     return manager;
 }
 
-/**
- * Purpose:
- * Return the existing SubscriptionManager for a scope, if created.
- */
+/** Return the manager currently owned by a sync scope. */
 export function getSubscriptionManager(scope: SyncScope): SubscriptionManager | null {
     return subscriptionManagerInstances.get(getScopeKey(scope)) ?? null;
 }
 
-/**
- * Internal API.
- *
- * Purpose:
- * Stop and clear all SubscriptionManager instances. Intended for tests.
- */
+/** Stop and clear all managers. Test-only lifecycle support. */
 export async function _resetSubscriptionManagers(): Promise<void> {
     for (const manager of subscriptionManagerInstances.values()) {
         await manager.stop();

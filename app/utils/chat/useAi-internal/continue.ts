@@ -254,9 +254,10 @@ export async function continueMessageImpl(
     if (ctx.loading.value || !ctx.threadIdRef.value) return;
     const hasKey = Boolean(ctx.effectiveApiKey.value) || ctx.hasInstanceKey.value;
     if (!hasKey) return;
+    const originDb = getDb();
 
     try {
-        const target = (await getDb().messages.get(messageId)) as StoredMessage | undefined;
+        const target = (await originDb.messages.get(messageId)) as StoredMessage | undefined;
         if (
             !target ||
             target.thread_id !== ctx.threadIdRef.value ||
@@ -276,8 +277,8 @@ export async function continueMessageImpl(
         if (!existingText) return;
 
         const DexieMod = (await import('dexie')).default;
-        const all = await getDb()
-            .messages.where('[thread_id+index]')
+        const all = await originDb.messages
+            .where('[thread_id+index]')
             .between([ctx.threadIdRef.value, DexieMod.minKey], [ctx.threadIdRef.value, target.index])
             .filter((m: Message) => !m.deleted)
             .toArray();
@@ -457,14 +458,18 @@ export async function continueMessageImpl(
         }
 
         const assistantFileHashes = existingHashes.slice();
-        const persistAssistant = makeAssistantPersister(target, assistantFileHashes);
+        const persistAssistant = makeAssistantPersister(
+            originDb,
+            target,
+            assistantFileHashes
+        );
 
         // Durable generation identity must precede the first continuation byte,
         // so reload can distinguish an active continuation from a stale row.
         target.pending = true;
         target.stream_id = newStreamId;
         target.error = null;
-        await updateMessageRecord(messageId, {
+        await updateMessageRecord(originDb, messageId, {
             pending: true,
             stream_id: newStreamId,
             error: null,
@@ -580,7 +585,7 @@ export async function continueMessageImpl(
                 toolCalls: current.toolCalls ?? null,
                 finalize: true, // Clear pending so sync captures this
             });
-            await updateMessageRecord(messageId, { error: null });
+            await updateMessageRecord(originDb, messageId, { error: null });
             current.error = null;
             const rawIdx = ctx.rawMessages.value.findIndex((m) => m.id === messageId);
             if (rawIdx >= 0) {
@@ -627,7 +632,7 @@ export async function continueMessageImpl(
                     };
                 }
             }
-            await updateMessageRecord(messageId, { error: errorType });
+            await updateMessageRecord(originDb, messageId, { error: errorType });
 
             // Show error toast for stream interruptions
             reportError(e, {

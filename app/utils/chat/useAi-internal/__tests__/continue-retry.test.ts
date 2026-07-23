@@ -340,9 +340,13 @@ describe('continue/retry regressions', () => {
             'a1'
         );
 
-        expect(updateMessageRecordSpy).toHaveBeenCalledWith('a1', {
+        expect(updateMessageRecordSpy).toHaveBeenCalledWith(
+            expect.anything(),
+            'a1',
+            {
             error: 'stream_interrupted',
-        });
+            }
+        );
         expect(reportErrorSpy).toHaveBeenCalled();
         expect(tailAssistant.value?.pending).toBe(false);
     });

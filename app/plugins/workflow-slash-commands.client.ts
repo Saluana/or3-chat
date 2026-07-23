@@ -18,7 +18,6 @@ import type {
     HITLRequest,
     HITLResponse,
 } from 'or3-workflow-core';
-import { modelRegistry } from 'or3-workflow-core';
 import type { OpenRouterMessage } from '~/core/hooks/hook-types';
 import type { WorkflowExecutionController } from './WorkflowSlashCommands/executeWorkflow';
 import type { Attachment } from 'or3-workflow-core';
@@ -35,6 +34,22 @@ import {
     type HitlRequestState,
     type HitlAction,
 } from '~/utils/chat/workflow-types';
+import {
+    extractImageAttachments,
+    inheritAttachmentsFromMessages,
+    normalizeAttachmentUrl,
+    normalizeMessagesPayload,
+    toChatHistoryMessage,
+    type MessagesPayload,
+} from './WorkflowSlashCommands/workflowAttachments';
+import {
+    generateImageCaption,
+    shouldGenerateCaption,
+} from './WorkflowSlashCommands/workflowImageCaption';
+import {
+    consumeChatSendHandled,
+    markChatSendHandled,
+} from '~/utils/chat/send-interception';
 
 // Types for lazy-loaded modules
 interface SlashCommandsModule {
@@ -71,11 +86,6 @@ interface WorkflowSlashConfig {
     debounceMs?: number;
 }
 
-// Message payload type
-type MessagesPayload =
-    | { messages: OpenRouterMessage[] }
-    | { messages: OpenRouterMessage[] }[];
-
 type SDKAttachmentPayload = {
     contentType?: string;
     mediaType?: string;
@@ -85,490 +95,6 @@ type SDKAttachmentPayload = {
     data?: unknown;
     name?: string;
 };
-
-function normalizeMessagesPayload(
-    payload: MessagesPayload
-): OpenRouterMessage[] {
-    if (Array.isArray(payload)) {
-        return payload.flatMap((p) => p.messages);
-    }
-    if ('messages' in payload && Array.isArray(payload.messages)) {
-        return payload.messages;
-    }
-    return [];
-}
-
-function parseDataUrlMimeType(url: string): string | null {
-    const match = /^data:([^;]+);base64,/i.exec(url);
-    if (!match || !match[1]) return null;
-    return match[1].toLowerCase();
-}
-
-const imageExtensionByMime: Record<string, string> = {
-    'image/png': 'png',
-    'image/jpeg': 'jpg',
-    'image/webp': 'webp',
-    'image/gif': 'gif',
-    'image/avif': 'avif',
-};
-
-function extensionFromMime(mimeType: string): string {
-    return imageExtensionByMime[mimeType.toLowerCase()] || 'png';
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
-}
-
-function extractImageUrl(part: unknown): string | null {
-    if (!isRecord(part)) return null;
-    const type = typeof part.type === 'string' ? part.type : '';
-    if (type === 'image_url') {
-        const imageUrl = part.image_url;
-        if (typeof imageUrl === 'string') return imageUrl;
-        if (isRecord(imageUrl) && typeof imageUrl.url === 'string')
-            return imageUrl.url;
-        const camel = part.imageUrl;
-        if (isRecord(camel) && typeof camel.url === 'string') return camel.url;
-        return null;
-    }
-    if (type === 'image' && typeof part.image === 'string') {
-        return part.image;
-    }
-    return null;
-}
-
-/**
- * Safely convert engine-level ChatMessage (multimodal) to UI-level ChatHistoryMessage (string content)
- * by flattening multimodal content parts into a single string.
- */
-function toChatHistoryMessage(
-    msg: import('or3-workflow-core').ChatMessage
-): ChatHistoryMessage {
-    let content = '';
-    if (typeof msg.content === 'string') {
-        content = msg.content;
-    } else if (Array.isArray(msg.content)) {
-        content = msg.content
-            .map((part) => {
-                if (part.type === 'text') return part.text;
-                if (part.type === 'image_url')
-                    return `[Image: ${part.imageUrl.url}]`;
-                if (part.type === 'file')
-                    return `[File: ${part.file.filename}]`;
-                return '';
-            })
-            .join(' ');
-    }
-
-    return {
-        role: msg.role as 'user' | 'assistant' | 'system',
-        content,
-    };
-}
-
-type FilePartCandidate = {
-    data?: unknown;
-    fileData?: unknown;
-    file_data?: unknown;
-    mediaType?: unknown;
-    mimeType?: unknown;
-    mime?: unknown;
-    name?: unknown;
-    filename?: unknown;
-    file?: {
-        fileData?: unknown;
-        file_data?: unknown;
-        data?: unknown;
-        filename?: unknown;
-        name?: unknown;
-        mediaType?: unknown;
-        mimeType?: unknown;
-        mime?: unknown;
-    };
-};
-
-function extractFilePart(part: unknown): {
-    fileData: string;
-    filename?: string;
-    mimeType?: string;
-} | null {
-    if (!isRecord(part) || part.type !== 'file') return null;
-    const filePart = part as FilePartCandidate;
-    const nested = isRecord(filePart.file) ? filePart.file : undefined;
-    const fileData =
-        filePart.data ||
-        filePart.fileData ||
-        filePart.file_data ||
-        nested?.fileData ||
-        nested?.file_data ||
-        nested?.data;
-    if (typeof fileData !== 'string') return null;
-
-    const filename =
-        (typeof filePart.name === 'string' && filePart.name) ||
-        (typeof filePart.filename === 'string' && filePart.filename) ||
-        (typeof nested?.filename === 'string' && nested?.filename) ||
-        (typeof nested?.name === 'string' && nested?.name) ||
-        undefined;
-
-    const explicitMime =
-        (typeof filePart.mediaType === 'string' && filePart.mediaType) ||
-        (typeof filePart.mimeType === 'string' && filePart.mimeType) ||
-        (typeof filePart.mime === 'string' && filePart.mime) ||
-        (typeof nested?.mediaType === 'string' && nested?.mediaType) ||
-        (typeof nested?.mimeType === 'string' && nested?.mimeType) ||
-        (typeof nested?.mime === 'string' && nested?.mime) ||
-        undefined;
-
-    return { fileData, filename, mimeType: explicitMime };
-}
-
-function extractImageAttachments(
-    content: OpenRouterMessage['content'],
-    timestamp: number
-): Attachment[] {
-    if (!Array.isArray(content)) return [];
-
-    const attachments: Attachment[] = [];
-    let imageIndex = 0;
-    let fileIndex = 0;
-
-    for (const part of content) {
-        const url = extractImageUrl(part);
-        if (url) {
-            const mimeType = parseDataUrlMimeType(url) || 'image/png';
-            const extension = extensionFromMime(mimeType);
-
-            attachments.push({
-                id: `att-${timestamp}-${imageIndex}`,
-                type: 'image',
-                url,
-                mimeType,
-                name: `image-${imageIndex}.${extension}`,
-            });
-            imageIndex += 1;
-            continue;
-        }
-
-        const file = extractFilePart(part);
-        if (file) {
-            const dataUrlMime = file.fileData.startsWith('data:')
-                ? parseDataUrlMimeType(file.fileData)
-                : null;
-            let mimeType =
-                (file.mimeType && file.mimeType.toLowerCase()) ||
-                dataUrlMime ||
-                'application/octet-stream';
-            if (
-                mimeType === 'application/octet-stream' &&
-                file.filename?.toLowerCase().endsWith('.pdf')
-            ) {
-                mimeType = 'application/pdf';
-            }
-
-            attachments.push({
-                id: `att-file-${timestamp}-${fileIndex}`,
-                type: 'file',
-                url: file.fileData,
-                mimeType,
-                name: file.filename || `file-${fileIndex}`,
-            });
-            fileIndex += 1;
-        }
-    }
-
-    if (import.meta.dev && attachments.length > 0) {
-        console.log(
-            '[workflow-slash] Extracted attachments:',
-            attachments.map((a) => ({
-                id: a.id,
-                type: a.type,
-                mimeType: a.mimeType,
-                name: a.name,
-                urlLength: a.url?.length || 0,
-            }))
-        );
-    }
-
-    return attachments;
-}
-
-async function blobToDataUrl(blob: Blob, mimeType?: string): Promise<string> {
-    const normalized = mimeType ? new Blob([blob], { type: mimeType }) : blob;
-    return new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = () =>
-            reject(reader.error ?? new Error('FileReader error'));
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(normalized);
-    });
-}
-
-async function normalizeAttachmentUrl(
-    value: unknown,
-    mimeType: string
-): Promise<string | null> {
-    if (typeof value === 'string') return value;
-    if (typeof Blob !== 'undefined' && value instanceof Blob) {
-        return blobToDataUrl(value, mimeType || value.type);
-    }
-    const toArrayBuffer = (
-        input: ArrayBuffer | SharedArrayBuffer
-    ): ArrayBuffer => {
-        if (input instanceof ArrayBuffer) return input;
-        if (
-            typeof SharedArrayBuffer !== 'undefined' &&
-            input instanceof SharedArrayBuffer
-        ) {
-            const copy = new Uint8Array(input.byteLength);
-            copy.set(new Uint8Array(input));
-            return copy.buffer;
-        }
-        return input as unknown as ArrayBuffer;
-    };
-    if (value instanceof ArrayBuffer) {
-        const buffer = toArrayBuffer(value);
-        return blobToDataUrl(new Blob([buffer], { type: mimeType }), mimeType);
-    }
-    if (
-        typeof SharedArrayBuffer !== 'undefined' &&
-        value instanceof SharedArrayBuffer
-    ) {
-        const buffer = toArrayBuffer(value);
-        return blobToDataUrl(new Blob([buffer], { type: mimeType }), mimeType);
-    }
-    if (ArrayBuffer.isView(value)) {
-        const view = value as ArrayBufferView;
-        const source = view.buffer;
-        const buffer = toArrayBuffer(source);
-        const slice = buffer.slice(
-            view.byteOffset,
-            view.byteOffset + view.byteLength
-        );
-        return blobToDataUrl(new Blob([slice], { type: mimeType }), mimeType);
-    }
-    return null;
-}
-
-function inheritAttachmentsFromMessages(
-    messages: OpenRouterMessage[],
-    limit = 8
-): Attachment[] {
-    const collected: Attachment[] = [];
-    const seen = new Set<string>();
-    for (let i = messages.length - 1; i >= 0 && collected.length < limit; i--) {
-        const msg = messages[i];
-        if (!msg) continue;
-        const next = extractImageAttachments(msg.content, nowSec());
-        for (const att of next) {
-            const key = att.url || att.id;
-            if (!key || seen.has(key)) continue;
-            seen.add(key);
-            collected.push(att);
-            if (collected.length >= limit) break;
-        }
-    }
-    return collected;
-}
-
-function buildAttachmentUrl(attachment: Attachment): string | null {
-    if (attachment.url) return attachment.url;
-    if (attachment.content) {
-        return `data:${attachment.mimeType};base64,${attachment.content}`;
-    }
-    return null;
-}
-
-function pickCaptionModelId(): string | null {
-    const visionModels = modelRegistry.getVisionModels();
-    return visionModels[0]?.id ?? null;
-}
-
-function collectWorkflowModelIds(workflow: unknown): {
-    modelIds: string[];
-    hasMissingModel: boolean;
-} {
-    if (!workflow || typeof workflow !== 'object') {
-        return { modelIds: [], hasMissingModel: true };
-    }
-
-    const nodes = (workflow as { nodes?: unknown }).nodes;
-    if (!Array.isArray(nodes)) {
-        return { modelIds: [], hasMissingModel: true };
-    }
-
-    const modelIds: string[] = [];
-    let hasMissingModel = false;
-
-    for (const node of nodes) {
-        if (!node || typeof node !== 'object') continue;
-        const typed = node as { type?: string; data?: any };
-        const type = typed.type;
-        const data = typed.data || {};
-
-        if (type === 'agent' || type === 'router') {
-            if (typeof data.model === 'string' && data.model.trim()) {
-                modelIds.push(data.model.trim());
-            } else {
-                hasMissingModel = true;
-            }
-        }
-
-        if (type === 'parallel') {
-            const parentModel =
-                typeof data.model === 'string' && data.model.trim()
-                    ? data.model.trim()
-                    : null;
-            if (parentModel) {
-                modelIds.push(parentModel);
-            }
-            if (Array.isArray(data.branches)) {
-                for (const branch of data.branches) {
-                    if (
-                        branch &&
-                        typeof branch === 'object' &&
-                        typeof branch.model === 'string' &&
-                        branch.model.trim()
-                    ) {
-                        modelIds.push(branch.model.trim());
-                    } else if (
-                        !parentModel &&
-                        branch &&
-                        typeof branch === 'object'
-                    ) {
-                        hasMissingModel = true;
-                    }
-                }
-            }
-        }
-
-        if (type === 'subflow') {
-            hasMissingModel = true;
-        }
-    }
-
-    return { modelIds, hasMissingModel };
-}
-
-async function shouldGenerateCaption(
-    workflow: unknown,
-    attachments: Attachment[] | undefined
-): Promise<boolean> {
-    if (!attachments || attachments.length === 0) return false;
-    const images = attachments.filter(
-        (attachment) => attachment.type === 'image'
-    );
-    if (!images.length) return false;
-
-    const { modelIds, hasMissingModel } = collectWorkflowModelIds(workflow);
-    if (hasMissingModel) return true;
-    if (modelIds.length === 0) return true;
-
-    const { catalog, fetchModels } = useModelStore();
-    let modelList = catalog.value;
-    if (!modelList.length) {
-        try {
-            modelList = await fetchModels({ ttlMs: 60 * 60 * 1000 });
-        } catch (error) {
-            console.warn(
-                '[workflow-slash] Failed to load model catalog',
-                error
-            );
-            return true;
-        }
-    }
-    if (!modelList || modelList.length === 0) return true;
-
-    const modelMap = new Map(
-        modelList.map((model) => [
-            model.id,
-            Array.isArray(model.architecture?.input_modalities)
-                ? model.architecture.input_modalities.map((m) =>
-                      String(m).toLowerCase()
-                  )
-                : [],
-        ])
-    );
-
-    return modelIds.some((modelId) => {
-        const modalities = modelMap.get(modelId);
-        if (!modalities) {
-            return !modelRegistry.supportsInputModality(modelId, 'image');
-        }
-        return !modalities.includes('image');
-    });
-}
-
-function extractTextFromMessageContent(content: unknown): string {
-    if (typeof content === 'string') return content;
-    if (!Array.isArray(content)) return '';
-    return content
-        .map((part) => {
-            if (!part || typeof part !== 'object') return '';
-            const text = (part as { text?: string }).text;
-            return typeof text === 'string' ? text : '';
-        })
-        .join('')
-        .trim();
-}
-
-async function generateImageCaption(
-    attachments: Attachment[],
-    apiKey: string
-): Promise<string | null> {
-    const images = attachments.filter(
-        (attachment) => attachment.type === 'image'
-    );
-    if (!images.length) return null;
-
-    const modelId = pickCaptionModelId();
-    if (!modelId) return null;
-
-    const parts = images
-        .map((attachment) => {
-            const url = buildAttachmentUrl(attachment);
-            if (!url) return null;
-            return {
-                type: 'image_url',
-                imageUrl: { url },
-            };
-        })
-        .filter(Boolean) as Array<{
-        type: 'image_url';
-        imageUrl: { url: string };
-    }>;
-
-    if (!parts.length) return null;
-
-    const { createOpenRouterClient, wrapLegacyChatSendArgs } = await import(
-        '~~/shared/openrouter'
-    );
-    const client = createOpenRouterClient({ apiKey });
-
-    const result = await client.chat.send(
-        wrapLegacyChatSendArgs({
-            model: modelId,
-            messages: [
-                {
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'text',
-                            text: 'Provide a concise, plain-text description of the image(s) for downstream text-only models.',
-                        },
-                        ...parts,
-                    ],
-                },
-            ],
-            stream: false as const,
-        })
-    );
-
-    const messageContent = (result as any)?.choices?.[0]?.message?.content;
-    const caption = extractTextFromMessageContent(messageContent);
-    return caption ? caption.slice(0, 1000) : null;
-}
 
 // ─────────────────────────────────────────────────────────────
 // Active Execution Tracking (for stop functionality)
@@ -605,16 +131,12 @@ let pendingEditorJson: unknown | null = null;
  * Flag to signal that a workflow is handling the current request.
  * This is checked by the chat system to skip the AI call.
  */
-let workflowHandlingRequest = false;
-
 /**
  * Get and reset the workflow handling flag.
  * Called by the chat system to check if it should skip the AI call.
  */
 export function consumeWorkflowHandlingFlag(): boolean {
-    const was = workflowHandlingRequest;
-    workflowHandlingRequest = false;
-    return was;
+    return consumeChatSendHandled();
 }
 
 /**
@@ -1416,8 +938,11 @@ export default defineNuxtPlugin((nuxtApp) => {
             Boolean(session?.authenticated && session.user?.id);
 
         if (backgroundAllowed) {
+            let backgroundJob:
+                | Awaited<ReturnType<typeof startBackgroundWorkflow>>
+                | null = null;
             try {
-                const result = await startBackgroundWorkflow({
+                backgroundJob = await startBackgroundWorkflow({
                     workflowId: workflowPost.id,
                     workflowName: workflowPost.title || 'Workflow',
                     workflowUpdatedAt: workflowPost.updated_at,
@@ -1436,24 +961,43 @@ export default defineNuxtPlugin((nuxtApp) => {
                     apiKey,
                     attachments,
                 });
+            } catch (error) {
+                console.warn(
+                    '[workflow-slash] Background workflow admission failed, falling back',
+                    error
+                );
+            }
 
-                const msg = await db.messages.get(assistantContext.id);
-                if (msg) {
-                    await db.messages.put({
-                        ...msg,
-                        data: {
-                            ...(msg.data as Record<string, unknown>),
-                            background_job_id: result.jobId,
-                            background_job_status: 'streaming',
-                        },
-                        pending: true,
-                        updated_at: nowSec(),
-                        clock: nextClock(msg.clock),
+            if (backgroundJob) {
+                try {
+                    await withMessageSyncTransaction(db, async () => {
+                        const msg = await db.messages.get(assistantContext.id);
+                        if (!msg) return;
+                        await db.messages.put({
+                            ...msg,
+                            data: {
+                                ...(msg.data as Record<string, unknown>),
+                                background_job_id: backgroundJob.jobId,
+                                background_job_status: 'streaming',
+                            },
+                            pending: true,
+                            updated_at: nowSec(),
+                            clock: nextClock(msg.clock),
+                        });
                     });
+                } catch (error) {
+                    // Admission already succeeded. Falling through to foreground
+                    // here would execute workflow tools twice, so keep tracking
+                    // the accepted server job and let its first update repair the
+                    // message metadata atomically.
+                    console.warn(
+                        '[workflow-slash] Failed to persist background workflow metadata',
+                        error
+                    );
                 }
 
                 ensureBackgroundJobTracker({
-                    jobId: result.jobId,
+                    jobId: backgroundJob.jobId,
                     userId: session?.user?.id || '',
                     threadId: assistantContext.threadId || '',
                     messageId: assistantContext.id,
@@ -1462,8 +1006,6 @@ export default defineNuxtPlugin((nuxtApp) => {
                 });
 
                 return;
-            } catch (error) {
-                console.warn('[workflow-slash] Background workflow failed, falling back', error);
             }
         }
 
@@ -2037,7 +1579,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             pendingAssistantContext = null;
 
             // Signal to the chat system that workflow is handling this request
-            workflowHandlingRequest = true;
+            markChatSendHandled();
 
             return { messages: [] };
         }

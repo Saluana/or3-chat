@@ -108,6 +108,12 @@ vi.mock('~/utils/files/attachments', () => ({
 
 vi.mock('~/db/messages', () => ({
     messagesByThread: messagesByThreadMock,
+    appendMessageToDb: (_db: unknown, payload: unknown) =>
+        appendMessageMock(payload),
+}));
+
+vi.mock('~/db/threads', () => ({
+    createThreadInDb: vi.fn(async () => ({ id: 'thread-1' })),
 }));
 
 vi.mock('~/utils/chat/uiMessages', () => ({
@@ -219,8 +225,8 @@ vi.mock('~/state/global', () => ({
     state: { value: { openrouterKey: null } },
 }));
 
-vi.mock('~/plugins/workflow-slash-commands.client', () => ({
-    consumeWorkflowHandlingFlag: () => false,
+vi.mock('~/utils/chat/send-interception', () => ({
+    consumeChatSendHandled: () => false,
 }));
 
 vi.mock('~/core/notifications/notification-user', () => ({
@@ -256,7 +262,7 @@ vi.mock('~/utils/chat/useAi-internal', () => ({
     ]),
     retryMessageImpl: vi.fn(),
     continueMessageImpl: vi.fn(),
-    makeAssistantPersister: (message: any) => async (patch: any) => {
+    makeAssistantPersister: (_db: unknown, message: any) => async (patch: any) => {
         const existing = messageStore.get(message.id) ?? message;
         const next = {
             ...existing,
@@ -272,7 +278,7 @@ vi.mock('~/utils/chat/useAi-internal', () => ({
         messageStore.set(message.id, next);
         return next.file_hashes ?? null;
     },
-    updateMessageRecord: async (id: string, patch: any) => {
+    updateMessageRecord: async (_db: unknown, id: string, patch: any) => {
         const existing = messageStore.get(id);
         if (!existing) return;
         messageStore.set(id, {
@@ -282,6 +288,8 @@ vi.mock('~/utils/chat/useAi-internal', () => ({
         });
     },
 }));
+
+vi.unmock('~/composables/chat/useAi');
 
 async function waitForCall(mock: { mock: { calls: unknown[][] } }): Promise<void> {
     for (let i = 0; i < 200; i++) {
@@ -409,7 +417,6 @@ describe('useChat background detach race', () => {
 
     it('does not register a late UI subscriber after clear() detaches the chat', async () => {
         vi.resetModules();
-        vi.unmock('~/composables/chat/useAi');
         const { useChat } = await import('~/composables/chat/useAi');
 
         const chat = useChat([], 'thread-1');
@@ -438,7 +445,6 @@ describe('useChat background detach race', () => {
 
     it('admits only one send synchronously before the first await', async () => {
         vi.resetModules();
-        vi.unmock('~/composables/chat/useAi');
         const { useChat } = await import('~/composables/chat/useAi');
         const chat = useChat([], 'thread-1');
         const params = {
@@ -458,7 +464,6 @@ describe('useChat background detach race', () => {
 
     it('registers a UI subscriber when chat remains attached', async () => {
         vi.resetModules();
-        vi.unmock('~/composables/chat/useAi');
         const { useChat } = await import('~/composables/chat/useAi');
 
         const chat = useChat([], 'thread-1');
@@ -506,7 +511,6 @@ describe('useChat background detach race', () => {
         ];
 
         vi.resetModules();
-        vi.unmock('~/composables/chat/useAi');
         const { useChat } = await import('~/composables/chat/useAi');
 
         const chat = useChat([], 'thread-1');
@@ -545,7 +549,6 @@ describe('useChat background detach race', () => {
         };
 
         vi.resetModules();
-        vi.unmock('~/composables/chat/useAi');
         const { useChat } = await import('~/composables/chat/useAi');
 
         const chat = useChat([], 'thread-1');
@@ -563,7 +566,6 @@ describe('useChat background detach race', () => {
 
     it('appends background deltas to the tail accumulator without full resets', async () => {
         vi.resetModules();
-        vi.unmock('~/composables/chat/useAi');
         const { useChat } = await import('~/composables/chat/useAi');
 
         const chat = useChat([], 'thread-1');
@@ -617,7 +619,6 @@ describe('useChat background detach race', () => {
 
     it('persists extraTextParts in the user message data.content', async () => {
         vi.resetModules();
-        vi.unmock('~/composables/chat/useAi');
         const { useChat } = await import('~/composables/chat/useAi');
 
         const chat = useChat([], 'thread-1');
@@ -652,7 +653,6 @@ describe('useChat background detach race', () => {
             new Error('background unavailable')
         );
         vi.resetModules();
-        vi.unmock('~/composables/chat/useAi');
         const { useChat } = await import('~/composables/chat/useAi');
         const chat = useChat([], 'thread-1');
 
@@ -672,6 +672,51 @@ describe('useChat background detach race', () => {
         });
     });
 
+    it('reports an abort when stopped during background admission', async () => {
+        startBackgroundStreamMock.mockImplementationOnce(
+            ({ signal }: { signal?: AbortSignal }) =>
+                new Promise((_resolve, reject) => {
+                    signal?.addEventListener(
+                        'abort',
+                        () => {
+                            reject(
+                                new DOMException(
+                                    'The operation was aborted',
+                                    'AbortError'
+                                )
+                            );
+                        },
+                        { once: true }
+                    );
+                })
+        );
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1');
+
+        const sendPromise = chat.sendMessage('hello', {
+            files: [],
+            model: 'test-model',
+            file_hashes: [],
+            online: false,
+            context_hashes: [],
+        });
+
+        await waitForCall(startBackgroundStreamMock);
+        chat.abort();
+        const result = await sendPromise;
+
+        expect(result).toMatchObject({
+            status: 'aborted',
+            reason: 'aborted',
+        });
+        expect(messageStore.get('assistant-msg-1')).not.toMatchObject({
+            data: expect.objectContaining({
+                background_job_status: 'error',
+            }),
+        });
+    });
+
     it('reconciles a stale foreground pending row as interrupted on reload', async () => {
         const stale = {
             id: 'assistant-stale', role: 'assistant', thread_id: 'thread-1',
@@ -685,7 +730,6 @@ describe('useChat background detach race', () => {
         messageStore.set(stale.id, stale);
         messagesByThreadMock.mockResolvedValue([stale]);
         vi.resetModules();
-        vi.unmock('~/composables/chat/useAi');
         const { useChat } = await import('~/composables/chat/useAi');
         const chat = useChat([
             {

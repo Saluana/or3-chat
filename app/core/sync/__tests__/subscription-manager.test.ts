@@ -284,6 +284,50 @@ describe('SubscriptionManager', () => {
         expect(provider.subscribe).toHaveBeenCalledTimes(2);
     });
 
+    it('keeps the durable cursor behind a live gap when backlog pull fails', async () => {
+        const cursorState = (
+            cursorManagerModule as unknown as {
+                __cursorState: { cursor: number };
+            }
+        ).__cursorState;
+        cursorState.cursor = 100;
+
+        const provider: SyncProvider = {
+            id: 'sub-provider-gap-failure',
+            mode: 'direct',
+            auth: undefined,
+            subscribe: vi.fn(async () => () => undefined),
+            pull: vi.fn(async () => {
+                throw new Error('backlog unavailable');
+            }),
+            push: vi.fn(async () => {
+                throw new Error('push not used');
+            }),
+            updateCursor: vi.fn(async () => undefined),
+            dispose: vi.fn(async () => undefined),
+        };
+        const messages = createMemoryTable('id');
+        const tombstones = createMemoryTable('id');
+        const pending_ops = createMemoryTable('id');
+        const db = createMockDb({ messages, tombstones, pending_ops });
+        const manager = new SubscriptionManager(db as any, provider, {
+            workspaceId: 'ws-1',
+        });
+        (manager as unknown as { status: string }).status = 'connected';
+
+        await (
+            manager as unknown as {
+                handleChanges: (
+                    changes: SyncChange[],
+                    generation: number
+                ) => Promise<void>;
+            }
+        ).handleChanges([buildChange(110)], 0);
+
+        expect(cursorState.cursor).toBe(100);
+        expect(provider.updateCursor).not.toHaveBeenCalled();
+    });
+
     it('suppresses echoed changes by opId', async () => {
         (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = 1;
 
@@ -546,7 +590,58 @@ describe('SubscriptionManager', () => {
         ).toBe(false);
     });
 
-    it('breaks backlog drain when cursor does not advance and hasMore is true', async () => {
+    it('does not mark an incomplete bootstrap as synchronized', async () => {
+        const cursorApi = (
+            cursorManagerModule as unknown as {
+                getCursorManager: () => {
+                    markSyncComplete: ReturnType<typeof vi.fn>;
+                    setCursor: ReturnType<typeof vi.fn>;
+                };
+            }
+        ).getCursorManager();
+        cursorApi.markSyncComplete.mockClear();
+        cursorApi.setCursor.mockClear();
+
+        const provider: SyncProvider = {
+            id: 'sub-provider-incomplete-bootstrap',
+            mode: 'direct',
+            auth: undefined,
+            subscribe: vi.fn(async () => () => undefined),
+            pull: vi.fn(async () => ({
+                changes: [buildChange(1)],
+                nextCursor: 0,
+                hasMore: true,
+            })),
+            push: vi.fn(async () => {
+                throw new Error('push not used');
+            }),
+            updateCursor: vi.fn(async () => undefined),
+            dispose: vi.fn(async () => undefined),
+        };
+        const db = createMockDb({
+            messages: createMemoryTable('id'),
+            tombstones: createMemoryTable('id'),
+            pending_ops: createMemoryTable('id'),
+        });
+        const manager = new SubscriptionManager(db as any, provider, {
+            workspaceId: 'ws-1',
+        });
+        (manager as unknown as { status: string }).status = 'connecting';
+
+        await expect(
+            (
+                manager as unknown as {
+                    bootstrap: (generation: number) => Promise<void>;
+                }
+            ).bootstrap(0)
+        ).rejects.toThrow('Bootstrap pagination cursor did not advance');
+
+        expect(cursorApi.setCursor).not.toHaveBeenCalled();
+        expect(cursorApi.markSyncComplete).not.toHaveBeenCalled();
+        expect(provider.updateCursor).not.toHaveBeenCalled();
+    });
+
+    it('fails backlog drain when cursor does not advance and hasMore is true', async () => {
         const pull = vi.fn(async (request: PullRequest): Promise<PullResponse> => ({
             changes: [],
             nextCursor: request.cursor,
@@ -574,17 +669,23 @@ describe('SubscriptionManager', () => {
         const manager = new SubscriptionManager(db as any, provider, { workspaceId: 'ws-1' });
         (manager as unknown as { status: string }).status = 'connected';
 
-        const result = await (
-            manager as unknown as {
-                drainBacklog: (
-                    startCursor: number,
-                    generation: number
-                ) => Promise<{ applied: number; skipped: number; conflicts: number; cursor: number }>;
-            }
-        ).drainBacklog(10, 0);
+        await expect(
+            (
+                manager as unknown as {
+                    drainBacklog: (
+                        startCursor: number,
+                        generation: number
+                    ) => Promise<{
+                        applied: number;
+                        skipped: number;
+                        conflicts: number;
+                        cursor: number;
+                    }>;
+                }
+            ).drainBacklog(10, 0)
+        ).rejects.toThrow('Backlog pagination cursor did not advance');
 
         expect(pull).toHaveBeenCalledTimes(1);
-        expect(result.cursor).toBe(10);
     });
 
     it('prefetches next page during bootstrap while applying current page', async () => {
