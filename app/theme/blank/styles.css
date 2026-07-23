@@ -7,15 +7,75 @@
     }
 
     .sb-group-header {
-        @apply px-2.5 text-xs font-medium text-(--md-on-surface-variant) uppercase tracking-wider;
+        @apply px-0 text-xs font-medium text-(--md-on-surface-variant) uppercase tracking-wider;
     }
 
     .sidebar-scroll {
-        @apply pr-2 pt-2;
+        @apply pr-1.5 pt-1;
     }
 
     #nav-header {
-        @apply mb-0 ml-2 mr-2 pb-2 pl-0 border-none;
+        @apply mb-0 ml-1 mr-1 pb-2 pl-0 border-none;
+    }
+
+    .page-link-btn {
+        @apply shadow-none;
+    }
+
+    .unified-sb-item {
+        @apply mx-1;
+    }
+
+    .unified-sb-item-active {
+        background: color-mix(
+            in srgb,
+            var(--md-primary) 8%,
+            var(--md-surface)
+        ) !important;
+        border-color: color-mix(
+            in srgb,
+            var(--md-primary) 14%,
+            transparent
+        ) !important;
+    }
+
+    .sb-item-time {
+        @apply text-[10px] tracking-wide;
+        opacity: 0.55 !important;
+    }
+
+    .project-empty-state {
+        background: color-mix(
+            in srgb,
+            var(--md-surface-variant) 70%,
+            var(--md-surface)
+        ) !important;
+    }
+
+    /* Chats card: soft brand blue (pairs with docs green, echoes logo #2a8fd6) */
+    .page-link-accent-chats .page-link-icon-container {
+        background: color-mix(in srgb, #2a8fd6 14%, var(--md-surface)) !important;
+        color: #2a8fd6 !important;
+    }
+
+    /* Expanded: soft outer edge against main content */
+    #sidebar-container-outer:has(#top-header[data-sidebar-state='expanded']) {
+        border-right: 1px solid
+            color-mix(in srgb, var(--md-border-color) 70%, transparent) !important;
+        box-sizing: border-box;
+    }
+
+    /* Collapsed: header is the rail top — same edge as the icon column */
+    #top-header[data-sidebar-state='collapsed'] {
+        background-color: var(--md-surface-variant) !important;
+        border-right: 1px solid
+            color-mix(in srgb, var(--md-border-color) 70%, transparent) !important;
+        box-sizing: border-box;
+    }
+
+    #nav-collapsed-container {
+        border-right: 1px solid
+            color-mix(in srgb, var(--md-border-color) 70%, transparent) !important;
     }
 
     .chat-input-wrapper {

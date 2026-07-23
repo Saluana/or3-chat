@@ -22,7 +22,7 @@ export const sidebarOverrides = {
 
     'input#sidebar.search': {
         ui: {
-            base: 'border-0 rounded-xl bg-[var(--md-surface-hover)] hover:bg-[var(--md-surface-active)] ring-0! focus:ring-0 text-[14px]! h-[36px]!',
+            base: 'border border-[color:var(--md-border-color)] rounded-xl bg-[var(--md-surface)] hover:bg-[var(--md-surface)] ring-0! focus:ring-2 focus:ring-[color:var(--md-primary)]/10 text-[14px]! h-[40px]! shadow-[0_1px_2px_rgba(15,23,42,0.04)]',
         },
     },
     'selectmenu#sidebar.project-select': {
@@ -128,18 +128,26 @@ export const sidebarOverrides = {
     },
     'button#sidebar.collapsed-page:active': {
         ui: {
-            base: 'h-[40px] w-[40px] flex items-center justify-center bg-[var(--md-surface-active)] hover:bg-[var(--md-surface-active)] border-0 text-[var(--md-on-surface)] rounded-xl p-0!',
+            base: 'h-[40px] w-[40px] flex items-center justify-center bg-[color:var(--md-primary)]/10 hover:bg-[color:var(--md-primary)]/14 border-0 text-[var(--md-primary)] rounded-xl p-0!',
             leadingIcon: 'w-5 h-5',
         },
     },
 };
 
 export const sidebarCssSelectors = {
-    // No border on sidebar - ChatGPT style
+    // Soft rail + white content panel
     '#sidebar-container-outer': {
         style: {
             borderRight: 'none',
-            backgroundColor: 'var(--md-surface-variant)',
+            backgroundColor: 'var(--md-surface)',
+        },
+    },
+    /* Expanded: hairline against main content (collapsed keeps rail-only edge) */
+    '#sidebar-container-outer:has(#top-header[data-sidebar-state="expanded"])': {
+        style: {
+            borderRight:
+                '1px solid color-mix(in srgb, var(--md-border-color) 70%, transparent)',
+            boxSizing: 'border-box',
         },
     },
     '.sidenav-header-separator': {
@@ -151,22 +159,90 @@ export const sidebarCssSelectors = {
         style: {
             background: 'transparent',
             border: 'none',
-            borderRadius: '10px',
+            borderRadius: '12px',
             boxShadow: 'none',
         },
     },
     '#top-header': {
         style: {
+            backgroundColor: 'var(--md-surface)',
+            borderBottom: 'none',
+        },
+    },
+    '#top-header[data-sidebar-state="collapsed"]': {
+        style: {
             backgroundColor: 'var(--md-surface-variant)',
+            borderBottom: 'none',
+            width: '64px',
+            boxSizing: 'border-box',
+        },
+    },
+    '#nav-content-container': {
+        style: {
+            backgroundColor: 'var(--md-surface)',
+        },
+    },
+    '#nav-header': {
+        style: {
+            paddingLeft: '0.5rem',
+            paddingRight: '0.5rem',
+            paddingBottom: '0.35rem',
         },
     },
     '.sidebar-section-heading': {
         style: {
-            fontSize: '12px',
+            fontSize: '11px',
             fontWeight: '600',
             textTransform: 'uppercase',
-            letterSpacing: '0.06em',
+            letterSpacing: '0.08em',
             color: 'var(--md-on-surface-variant)',
+        },
+    },
+    '.page-link-btn': {
+        style: {
+            borderRadius: '14px',
+            minHeight: '54px',
+            marginBottom: '0.4rem',
+        },
+    },
+    '.unified-sb-item': {
+        style: {
+            borderRadius: '12px',
+            marginInline: '4px',
+            border: '1px solid transparent',
+        },
+    },
+    '.unified-sb-item-active': {
+        style: {
+            background:
+                'color-mix(in srgb, var(--md-primary) 8%, var(--md-surface))',
+            borderColor:
+                'color-mix(in srgb, var(--md-primary) 12%, transparent)',
+        },
+    },
+    '.sb-group-header-label': {
+        style: {
+            fontSize: '11px',
+            letterSpacing: '0.08em',
+        },
+    },
+    '.time-group-header .sb-group-header-label': {
+        style: {
+            color: 'color-mix(in srgb, var(--md-on-surface-variant) 85%, transparent)',
+            fontWeight: '600',
+        },
+    },
+    '.project-empty-state': {
+        style: {
+            borderRadius: '14px',
+        },
+    },
+    /* Soft brand blue — pairs with docs green, echoes logo #2a8fd6 */
+    '.page-link-accent-chats .page-link-icon-container': {
+        style: {
+            background:
+                'color-mix(in srgb, #2a8fd6 14%, var(--md-surface))',
+            color: '#2a8fd6',
         },
     },
     '#nav-top-section .iconify': {
@@ -183,19 +259,20 @@ export const sidebarCssSelectors = {
             height: '20px',
         },
     },
+    // Always-visible 64px icon rail (expanded SideBar AND collapsed layout).
+    // Do NOT set width:100% — that collapses the expanded panel.
     '#nav-collapsed-container': {
         style: {
             minWidth: '64px !important',
             maxWidth: '64px !important',
             width: '64px !important',
-            borderRight: 'none',
             backgroundColor: 'var(--md-surface-variant)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
+            boxSizing: 'border-box',
         },
     },
-    // Fix the wrapper width set by PageShell on the collapsed slot
     '#sidebar-content-collapsed': {
         style: {
             width: '64px !important',
@@ -203,7 +280,6 @@ export const sidebarCssSelectors = {
             maxWidth: '64px !important',
         },
     },
-    // Bottom nav: match rail width and center contents
     '.bottomnav-root': {
         style: {
             width: '64px !important',
@@ -212,14 +288,12 @@ export const sidebarCssSelectors = {
             paddingTop: '4px',
         },
     },
-    // Page buttons section: center within the 64px rail
     '#nav-pages-section': {
         style: {
             borderTop: 'none',
             alignItems: 'center',
         },
     },
-    // Top section buttons: center within the 64px rail
     '#nav-top-section': {
         style: {
             alignItems: 'center',
@@ -233,7 +307,6 @@ export const sidebarCssSelectors = {
             justifyContent: 'center',
         },
     },
-    // Empty state buttons: shrink text to fit on one line at narrow widths
     '.sb-empty-state button': {
         style: {
             fontSize: '12px',
@@ -242,13 +315,11 @@ export const sidebarCssSelectors = {
             textOverflow: 'ellipsis',
         },
     },
-    // Connect button label: tighten letter-spacing so DISCONNECT fits in square
     '.bottomnav-root [data-connection-state] .uppercase': {
         style: {
             letterSpacing: 'normal',
         },
     },
-    // Footer section: center
     '#nav-footer-section': {
         style: {
             alignItems: 'center',

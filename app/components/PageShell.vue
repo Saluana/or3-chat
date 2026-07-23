@@ -16,7 +16,7 @@
             <component
                 :is="sidebarCollapsedComponent"
                 :active-thread="activeChatThreadId"
-                class="w-[65px]"
+                class="w-[64px]"
                 @new-chat="onNewChat"
                 @new-document="openCollapsedCreateDocumentModal"
                 @new-project="openCollapsedCreateProjectModal"

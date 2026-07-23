@@ -37,6 +37,7 @@
                         :label="item.label"
                         :description="item.description"
                         :icon="item.icon"
+                        :accent="item.accent"
                         :class="item.class"
                         @select="setActivePage(item.pageId)"
                     />
@@ -52,6 +53,7 @@
                         @toggle-collapse="
                             projectsCollapsed = !projectsCollapsed
                         "
+                        @new-project="emit('new-project')"
                         @update:expanded-projects="
                             (val) => emit('update:expandedProjects', val)
                         "
@@ -73,10 +75,23 @@
                         @select-document="(id) => emit('select-document', id)"
                     />
 
+                    <!-- Recent section label -->
+                    <div
+                        v-else-if="item.type === 'recent-header'"
+                        class="mx-1 mt-4 mb-1 px-2.5 flex items-center justify-between sb-recent-header"
+                        style="width: calc(100% - 8px)"
+                    >
+                        <span
+                            class="text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--md-on-surface-variant)]"
+                        >
+                            Recent
+                        </span>
+                    </div>
+
                     <!-- Time Group Header -->
                     <SidebarGroupHeader
                         v-else-if="item.type === 'time-group-header'"
-                        class="mt-3 time-group-header"
+                        class="mt-1 time-group-header"
                         :label="item.label"
                         :collapsed="collapsedGroups.has(item.groupKey)"
                         @toggle="toggleGroup(item.groupKey)"
@@ -246,10 +261,12 @@ type SidebarCombinedItem =
           description: string;
           icon: string;
           pageId: string;
+          accent?: 'chats' | 'docs' | 'projects';
           class?: string;
       }
     | { key: string; type: 'projects' }
     | { key: string; type: 'empty-state' }
+    | { key: string; type: 'recent-header' }
     | {
           key: string;
           type: 'time-group-header';
@@ -425,10 +442,11 @@ const combinedItems = computed(() => {
         key: 'page-link-chats',
         type: 'page-link',
         label: 'Chats',
-        class: 'mb-3',
-        description: 'View your chat history.',
+        class: 'mb-1.5',
+        description: 'View your chat history',
         icon: iconChats.value,
         pageId: 'sidebar-chats',
+        accent: 'chats',
     });
 
     if (documentsEnabled.value) {
@@ -436,10 +454,11 @@ const combinedItems = computed(() => {
             key: 'page-link-docs',
             type: 'page-link',
             label: 'Documents',
-            description: 'View your documents.',
+            description: 'View your documents',
             icon: iconDocs.value,
             pageId: 'sidebar-docs',
-            class: 'mb-3',
+            class: 'mb-1.5',
+            accent: 'docs',
         });
     }
 
@@ -459,7 +478,16 @@ const combinedItems = computed(() => {
     }
 
     // Time-grouped items (flattened for true per-item virtualization)
+    let recentHeaderAdded = false;
     for (const [groupKey, groupItems] of groupedItems.value) {
+        if (!recentHeaderAdded) {
+            result.push({
+                key: 'recent-header',
+                type: 'recent-header',
+            });
+            recentHeaderAdded = true;
+        }
+
         result.push({
             key: `time-group-header-${groupKey}`,
             type: 'time-group-header',

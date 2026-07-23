@@ -1,9 +1,11 @@
 <template>
-    <div class="mt-3 space-y-2">
+    <div class="mt-4 space-y-2">
         <SidebarGroupHeader
             label="Projects"
             :collapsed="collapsed"
+            action-label="+ New project"
             @toggle="emit('toggle-collapse')"
+            @action="emit('new-project')"
         />
 
         <!-- Grid-based height animation for smooth collapse/expand -->
@@ -78,19 +80,28 @@
                 </div>
                 <div
                     v-else
-                    class="mx-1 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)]/25 px-3 py-3 project-empty-state"
+                    class="mx-1 rounded-xl border border-dashed border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)]/35 px-3 py-3.5 project-empty-state"
                 >
-                    <div
-                        class="flex items-center gap-2 text-[16px] font-semibold text-[color:var(--md-on-surface-variant)]"
-                    >
-                        <UIcon :name="iconFolder" class="w-5 h-5" />
-                        No projects yet
+                    <div class="flex items-start gap-3">
+                        <div
+                            class="shrink-0 w-9 h-9 rounded-lg border border-dashed border-[color:var(--md-border-color)] bg-[color:var(--md-surface)] flex items-center justify-center text-[color:var(--md-on-surface-variant)]"
+                        >
+                            <UIcon :name="iconPlus" class="w-4 h-4" />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div
+                                class="text-[13px] font-semibold text-[color:var(--md-on-surface)]"
+                            >
+                                No projects yet
+                            </div>
+                            <p
+                                class="mt-0.5 text-[11px] leading-snug text-[color:var(--md-on-surface-variant)]"
+                            >
+                                Create your first project to organize chats and
+                                documents.
+                            </p>
+                        </div>
                     </div>
-                    <p
-                        class="mt-1 text-[14px] text-[color:var(--md-on-surface)]/80"
-                    >
-                        Create a project to organize chats and documents.
-                    </p>
                 </div>
             </div>
         </div>
@@ -124,10 +135,11 @@ const props = defineProps<{
     activeDocumentIds: string[];
 }>();
 
-const iconFolder = useIcon('sidebar.new_folder');
+const iconPlus = useIcon('ui.plus');
 
 const emit = defineEmits<{
     (e: 'toggle-collapse'): void;
+    (e: 'new-project'): void;
     (e: 'add-chat-to-project', id: string): void;
     (e: 'add-document-to-project-root', id: string): void;
     (e: 'rename-project', id: string): void;

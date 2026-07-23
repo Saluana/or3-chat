@@ -6,7 +6,7 @@
                     ref="searchInputWrapper"
                     v-model="sidebarQuery"
                     v-bind="searchInputProps"
-                    aria-label="Search"
+                    aria-label="Search chats, documents, and projects"
                     class="w-full"
                     @keydown.escape.prevent.stop="onEscapeClear"
                 >
@@ -18,6 +18,13 @@
                             aria-label="Clear input"
                             @click="sidebarQuery = ''"
                         />
+                        <span
+                            v-else
+                            class="inline-flex items-center justify-center h-5 px-1.5 rounded-md border border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)] text-[10px] leading-none font-medium text-[color:var(--md-on-surface-variant)] select-none pointer-events-none font-[system-ui,ui-sans-serif,sans-serif]"
+                            aria-hidden="true"
+                        >
+                            {{ searchShortcutLabel }}
+                        </span>
                     </template>
                 </UInput>
             </div>
@@ -192,20 +199,29 @@ const searchInputProps = computed(() => {
     // Merge theme UI with component-specific UI
     const themeUi = (searchInputOverrides.value as any)?.ui || {};
     const componentUi = {
-        base: 'rounded-[18px] border border-[color:var(--md-border-color)]/80 bg-[color:var(--md-surface)]/85 shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] placeholder:text-[color:var(--md-on-surface-variant)]/70 focus:border-[color:var(--md-primary)]/40 focus:ring-2 focus:ring-[color:var(--md-primary)]/10',
-        trailing: 'pr-1',
+        base: 'rounded-xl border border-[color:var(--md-border-color)] bg-[color:var(--md-surface)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] placeholder:text-[color:var(--md-on-surface-variant)]/70 focus:border-[color:var(--md-primary)]/35 focus:ring-2 focus:ring-[color:var(--md-primary)]/10',
+        trailing: 'pr-1.5 gap-0',
     };
     const mergedUi = { ...componentUi, ...themeUi };
 
     return {
         leadingIcon: iconSearch.value,
-        trailing: false,
         size: 'md' as const,
         variant: 'outline' as const,
-        placeholder: 'Search...',
         ...(searchInputOverrides.value as any),
+        // Slot provides trailing content; don't also enable empty trailing-icon chrome.
+        trailingIcon: undefined,
+        placeholder: 'Search chats, documents, projects...',
         ui: mergedUi,
     };
+});
+
+const searchShortcutLabel = computed(() => {
+    if (!import.meta.client) return '⌘K';
+    const ua = navigator.userAgent || '';
+    const platform = navigator.platform || '';
+    const isApple = /Mac|iPhone|iPad|iPod/i.test(`${platform} ${ua}`);
+    return isApple ? '⌘K' : 'Ctrl+K';
 });
 
 const searchClearButtonProps = computed(() => {

@@ -2,12 +2,13 @@
     <div
         :class="[
             collapsed
-                ? 'px-0 justify-center w-[63.5px]'
+                ? 'px-0 justify-center w-[64px]'
                 : 'px-3 justify-between w-full',
             'flex items-center min-h-12 max-h-12 header-pattern py-2 border-b-(--md-border-width) border-(--md-border-color)',
             sidebarHeaderProps.class || '',
         ]"
         id="top-header"
+        :data-sidebar-state="collapsed ? 'collapsed' : 'expanded'"
         :style="sidebarHeaderStyle"
         :data-theme-target="sidebarHeaderProps['data-theme-target']"
         :data-theme-matches="sidebarHeaderProps['data-theme-matches']"
@@ -158,7 +159,7 @@ const sidebarHeaderProps = computed<HeaderOverrideProps>(() => {
 
 const sidebarHeaderStyle = computed<StyleValue>(() => {
     const baseStyle: StyleValue = props.collapsed
-        ? { width: '63.5px' }
+        ? { width: '64px', boxSizing: 'border-box' }
         : undefined;
     const overrides = sidebarHeaderProps.value.style;
 
