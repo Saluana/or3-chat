@@ -13,6 +13,7 @@ import {
     OpenRouterProviderError,
     OpenRouterStreamError,
 } from './errors';
+import { createRuntimeUuid } from '../runtime-id';
 
 export type ORStreamEvent =
     | { type: 'text'; text: string }
@@ -277,7 +278,7 @@ export async function* parseOpenRouterSSE(
                         tool_call: {
                             id:
                                 toolCall.id ||
-                                `or3_tool_call_${index}_${crypto.randomUUID().slice(0, 8)}`,
+                                `or3_tool_call_${index}_${createRuntimeUuid().slice(0, 8)}`,
                             type: 'function',
                             function: { ...toolCall.function },
                         },

@@ -107,7 +107,7 @@ export default {
         // Global input overrides
         input: {
             slots: {
-                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)]',
+                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)] max-lg:text-[16px]!',
             },
             variants: {
                 variant: {
@@ -126,7 +126,7 @@ export default {
         },
         select: {
             slots: {
-                base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! retro-shadow focus:ring-1 focus:ring-[color:var(--md-primary)]',
+                base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! retro-shadow focus:ring-1 focus:ring-[color:var(--md-primary)] max-lg:text-[16px]!',
                 content: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! theme-shadow',
                 item: 'rounded-[var(--md-border-radius)] data-highlighted:before:bg-[var(--md-surface-hover)]',
             },
@@ -263,15 +263,15 @@ export default {
         },
         textarea: {
             slots: {
-                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)]',
+                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)] max-lg:text-[16px]!',
             },
         },
         selectMenu: {
             slots: {
-                base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
+                base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] max-lg:text-[16px]!',
                 content:
                     'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)]',
-                input: 'border-0 rounded-none! retro-shadow-none',
+                input: 'border-0 rounded-none! retro-shadow-none max-lg:text-[16px]!',
                 arrow: 'h-[18px] w-[18px]',
                 itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
             },

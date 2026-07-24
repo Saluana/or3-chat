@@ -1,7 +1,7 @@
 import type { Or3DB } from '~/db/client';
 import type { SnapshotItem, SnapshotResponse, SyncScope } from '~~/shared/sync/types';
-import { getPkField } from '~~/shared/sync/table-metadata';
 import { getHookBridge } from './hook-bridge';
+import { normalizeSyncPayload } from './sync-payload-normalizer';
 
 function snapshotItemKey(item: SnapshotItem): string {
     return `${item.tableName}\0${item.pk}\0${item.kind}`;
@@ -88,13 +88,26 @@ export async function applySnapshotChain(
                         `Snapshot row payload is invalid for ${item.tableName}:${item.pk}`
                     );
                 }
-                await tx.table(item.tableName).put({
-                    ...(item.payload as Record<string, unknown>),
-                    [getPkField(item.tableName)]: item.pk,
-                    clock: item.revision.clock,
-                    hlc: item.revision.hlc,
-                    op_id: item.revision.opId,
-                });
+                const normalized = normalizeSyncPayload(
+                    item.tableName,
+                    item.pk,
+                    item.payload,
+                    item.revision
+                );
+                if (!normalized.isValid) {
+                    throw new Error(
+                        `Snapshot row payload failed validation for ${item.tableName}:${item.pk}: ${normalized.errors?.join('; ') ?? 'unknown validation error'}`
+                    );
+                }
+
+                // Keep snapshot installation consistent with incremental apply:
+                // wire-only fields (for example posts.post_type) must be mapped
+                // to the Dexie record shape before indexed fields are populated.
+                const localPayload =
+                    item.tableName === 'file_meta'
+                        ? { ...normalized.payload, ref_count: 0 }
+                        : normalized.payload;
+                await tx.table(item.tableName).put(localPayload);
                 continue;
             }
             await tx.table('tombstones').put({

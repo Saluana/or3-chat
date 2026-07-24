@@ -22,8 +22,11 @@ describe('Document AI model contract', () => {
         const prompt = buildDocumentAiSystemPrompt('Keep the author voice.');
 
         expect(prompt).toContain('Editable frozen content is the only writable source');
-        expect(prompt).toContain('selection uses exactly one replace_selection');
-        expect(prompt).toContain('Never invent refs');
+        expect(prompt).toContain('only writable target');
+        expect(prompt).toContain('exactly one replace_selection');
+        expect(prompt).toContain('never invent refs');
+        expect(prompt).toContain('cursor block');
+        expect(prompt).toContain('bounded cursor-local window');
         expect(prompt).toContain('valid TipTap JSON nodes');
         expect(prompt).toContain('Stage edits with propose_edits');
         expect(prompt).toContain('get_document_outline');

@@ -95,6 +95,8 @@ describe('premium document editor Nuxt UI contract', () => {
         expect(editor).toContain('<Transition name="inspector-backdrop">');
         expect(editor).toContain('<Transition name="table-toolbar">');
         expect(aiPanel).toContain('<Transition name="ai-settings">');
+        expect(aiPanel).toContain('<Teleport to="body">');
+        expect(aiPanel).toContain('class="settings-overlay"');
         expect(editor).toContain('@media (prefers-reduced-motion: reduce)');
         expect(aiPanel).toContain('@media (prefers-reduced-motion: reduce)');
     });
@@ -110,6 +112,13 @@ describe('premium document editor Nuxt UI contract', () => {
         expect(source).toContain('class="quick-action-row"');
         expect(source).toContain('Duplicate ${action.label}');
         expect(source).toContain('<USwitch');
+        expect(source).toContain('useScrollLock({ controlledState: customizeOpen })');
+        expect(source).toContain('class="composer-actions composer-actions-leading"');
+        expect(source).toContain('class="composer-actions composer-actions-trailing"');
+        expect(source).toContain('border-radius: 1.75rem');
+        expect(source).not.toContain('class="scope-control"');
+        expect(source).not.toContain('AI edit scope');
+        expect(source).not.toContain('Document AI default scope');
         expect(agent).toContain("type: 'image_url'");
         expect(agent).toContain("type: 'file'");
     });
@@ -120,6 +129,7 @@ describe('premium document editor Nuxt UI contract', () => {
         expect(source).toContain("INHERIT_MODEL_VALUE = 'inherit'");
         expect(source).toContain('favoriteToolModels');
         expect(source).toContain('getFavoriteModels');
+        expect(source).toContain("content: 'z-[1100]!");
         expect(source).toContain("itemLabel: 'whitespace-nowrap overflow-visible! text-clip!'");
         expect(source).not.toContain("value: ''");
         expect(source).not.toContain('catalog.value.filter((model) => model.supported_parameters?.includes(\'tools\'))');
@@ -132,11 +142,27 @@ describe('premium document editor Nuxt UI contract', () => {
         expect(source).toContain('class="quick-action-edit-header"');
         expect(source).toContain('class="quick-action-fields"');
         expect(source).toContain('label="Button label"');
-        expect(source).toContain('label="Default scope"');
         expect(source).toContain('label="Prompt"');
+        expect(source).not.toContain('label="Default scope"');
         expect(source).toContain('Changes save automatically.');
         expect(source).toContain('label="Use"');
         expect(source).toContain('class="quick-action-empty"');
+    });
+
+    it('keeps the mobile inspector closed by default and makes settings independently scrollable', () => {
+        const editor = readComponent('../DocumentEditorRoot.vue');
+        const panel = readComponent('../DocumentAiPanel.vue');
+
+        expect(editor).toContain('const inspectorOpen = ref(false)');
+        expect(editor).toContain('inspectorOpen.value = !isMobile.value');
+        expect(editor).toContain('if (isMobile.value) inspectorOpen.value = false');
+        expect(panel).toContain('height: 100dvh');
+        expect(panel).toContain('overflow-y: auto');
+        expect(panel).toContain('overscroll-behavior: contain');
+        expect(panel).toContain('touch-action: pan-y');
+        expect(panel).toContain(':search-input="!isMobile"');
+        expect(panel).toContain('margin: 0 -0.75rem');
+        expect(panel).not.toMatch(/\n\s+searchable\n/u);
     });
 
     it('uses a structured TipTap composer for Document AI commands and references', () => {

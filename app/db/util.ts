@@ -12,6 +12,7 @@
  * - Business logic or persistence operations
  */
 import type { ZodTypeAny, infer as ZodInfer } from 'zod';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 import type { Or3DB } from './client';
 
 /**
@@ -71,23 +72,16 @@ export const nextClock = (clock?: number): number => (clock ?? 0) + 1;
  * Generate a unique identifier string.
  *
  * Behavior:
- * Uses Web Crypto UUID v4 when available and falls back to a timestamp-based id.
+ * Uses the shared runtime-compatible UUID v4 generator.
  *
  * Constraints:
- * - Fallback ids are not cryptographically secure.
+ * - The last-resort fallback is not cryptographically secure.
  *
  * Non-Goals:
  * - Does not guarantee global uniqueness across devices.
  */
 export function newId(): string {
-    // Prefer Web Crypto if available
-    if (
-        typeof crypto !== 'undefined' &&
-        typeof crypto.randomUUID === 'function'
-    ) {
-        return crypto.randomUUID();
-    }
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+    return createRuntimeUuid();
 }
 
 type WriteTxTableNamesOptions = {

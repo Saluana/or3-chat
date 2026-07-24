@@ -30,6 +30,7 @@ import {
 } from '~~/shared/chat/tool-limits';
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
 import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 /**
  * `ToolHandler`
@@ -437,8 +438,8 @@ export function useToolRegistry() {
             workspaceId: null,
             threadId: null,
             messageId: null,
-            callId: crypto.randomUUID(),
-            requestId: crypto.randomUUID(),
+            callId: createRuntimeUuid(),
+            requestId: createRuntimeUuid(),
             abortSignal: new AbortController().signal,
         };
         const execution = await withTimeout(

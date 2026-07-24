@@ -62,6 +62,20 @@ utilities.
 - Reuse resolver instances via `useThemeResolver`.
 - Use `useThemeOverrides` for reactive resolution instead of recomputing.
 
+## Mobile editable controls
+
+Mobile Safari and other touch browsers may zoom focused editable controls when
+their computed font size is below `16px`.
+
+- Keep text-like `input`, `textarea`, `select`, and contenteditable surfaces at
+  least `16px` on touch devices.
+- Theme app-config variants are not sufficient by themselves because raw DOM
+  controls, portal content, and third-party editors can bypass them.
+- Use a theme-scoped touch media query as the final enforcement layer while
+  preserving compact desktop typography.
+- Do not disable browser zoom with `maximum-scale` or `user-scalable`; users
+  must retain page-zoom accessibility.
+
 ## Contexts
 
 Auto-detection only covers `chat`, `sidebar`, `dashboard`, and `header`. For

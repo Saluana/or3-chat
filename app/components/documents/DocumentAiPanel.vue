@@ -1,27 +1,5 @@
 <template>
     <section v-theme="'document.ai'" class="document-ai-composer" :class="{ expanded: customizeOpen, reviewing: Boolean(proposal) }" data-context="document" aria-label="Document AI">
-        <div v-if="selectionAvailable && !proposal" class="selection-context" aria-live="polite">
-            <span><strong>Selection</strong> “{{ clip(selectedText, 180) }}”</span>
-            <UButton
-                v-if="scope !== 'selection'"
-                color="neutral"
-                variant="soft"
-                size="xs"
-                label="Use selection"
-                @click="scope = 'selection'"
-            />
-            <UButton
-                v-else
-                :icon="icons.close"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                square
-                aria-label="Use current section instead"
-                @click="scope = 'section'"
-            />
-        </div>
-
         <div v-if="proposal" class="review-bar" aria-live="polite">
             <div class="review-bar-top">
                 <div class="review-bar-heading">
@@ -58,6 +36,11 @@
 
         <template v-else>
             <div class="composer-row">
+                <input ref="attachmentInput" class="sr-only" type="file" accept="image/*,application/pdf" multiple @change="onAttachmentInput" />
+                <div class="composer-actions composer-actions-leading">
+                    <UButton :icon="icons.plus" color="neutral" variant="ghost" size="sm" square class="attachment-button" aria-label="Add image or PDF" title="Add image or PDF" :disabled="status === 'streaming' || attachments.length >= MAX_ATTACHMENTS" @click="attachmentInput?.click()" />
+                    <UButton :icon="icons.settings" color="neutral" :variant="customizeOpen ? 'soft' : 'ghost'" size="sm" square class="settings-button" :aria-expanded="customizeOpen" aria-label="Document AI settings" @click="customizeOpen = !customizeOpen" />
+                </div>
                 <DocumentAiPromptEditor
                     ref="promptInput"
                     v-model="prompt"
@@ -68,11 +51,12 @@
                     :plugin-actions="pluginActions"
                     :disabled="status === 'streaming'"
                     @update:references="references = $event"
-                    @select-action="selectSuggestedAction"
                     @submit="send"
                 />
-                <UButton v-if="status === 'streaming'" :icon="icons.stop" color="error" size="sm" square class="send-button" aria-label="Stop AI" @click="$emit('abort')" />
-                <UButton v-else :icon="icons.send" color="primary" size="sm" square class="send-button" aria-label="Send to document AI" :disabled="!prompt.trim() || attachments.some((attachment) => attachment.loading)" @click="send" />
+                <div class="composer-actions composer-actions-trailing">
+                    <UButton v-if="status === 'streaming'" :icon="icons.stop" color="error" size="sm" square class="send-button" aria-label="Stop AI" @click="$emit('abort')" />
+                    <UButton v-else :icon="icons.send" color="primary" size="sm" square class="send-button" aria-label="Send to document AI" :disabled="!prompt.trim() || attachments.some((attachment) => attachment.loading)" @click="send" />
+                </div>
             </div>
 
             <div v-if="attachments.length" class="attachment-list" aria-label="Document AI attachments">
@@ -84,24 +68,26 @@
                     <UButton :icon="icons.close" color="neutral" variant="ghost" size="xs" square :aria-label="`Remove ${attachment.name}`" @click="removeAttachment(attachment.id)" />
                 </div>
             </div>
-
-            <div class="composer-controls">
-                <input ref="attachmentInput" class="sr-only" type="file" accept="image/*,application/pdf" multiple @change="onAttachmentInput" />
-                <UButton :icon="icons.plus" color="neutral" variant="ghost" size="sm" square class="attachment-button" aria-label="Add image or PDF" title="Add image or PDF" :disabled="status === 'streaming' || attachments.length >= MAX_ATTACHMENTS" @click="attachmentInput?.click()" />
-                <span class="scope-label">Scope</span>
-                <UTabs :model-value="scope" :items="scopeItems" :content="false" size="xs" color="neutral" variant="pill" class="scope-control" aria-label="AI edit scope" @update:model-value="setScope" />
-                <span class="token-estimate">{{ tokenLabel }}</span>
-                <UButton :icon="icons.settings" color="neutral" :variant="customizeOpen ? 'soft' : 'ghost'" size="sm" square class="settings-button" :aria-expanded="customizeOpen" aria-label="Document AI settings" @click="customizeOpen = !customizeOpen" />
-            </div>
         </template>
 
-        <Transition name="ai-settings">
-            <div v-if="customizeOpen && !proposal" class="settings-panel-shell">
-                <div class="settings-panel">
+        <Teleport to="body">
+            <Transition name="ai-settings">
+                <div
+                    v-if="customizeOpen && !proposal"
+                    v-theme="'document.ai'"
+                    class="settings-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="document-ai-settings-title"
+                    @click.self="customizeOpen = false"
+                >
+                    <div class="settings-panel-shell">
+                        <div class="settings-panel">
                     <div class="settings-intro">
                         <div>
-                            <strong>Document AI settings</strong>
-                            <span>Choose how edits are generated for this document.</span>
+                            <strong id="document-ai-settings-title">Document AI settings</strong>
+                            <span>Context is automatic: selection when present, otherwise the cursor block plus the surrounding document.</span>
+                            <span class="settings-context-summary">{{ contextSummary }}</span>
                         </div>
                         <UButton :icon="icons.close" color="neutral" variant="ghost" size="xs" square aria-label="Close Document AI settings" @click="customizeOpen = false" />
                     </div>
@@ -117,11 +103,11 @@
                                 :items="modelItems"
                                 value-key="value"
                                 label-key="label"
-                                searchable
+                                :search-input="!isMobile"
                                 class="w-full model-select"
-                                :content="{ align: 'start', sideOffset: 6 }"
+                                :content="{ align: 'start', side: 'bottom', sideOffset: 6 }"
                                 :ui="{
-                                    content: 'w-max! min-w-[var(--reka-combobox-trigger-width)] max-w-[min(28rem,calc(100vw-2rem))]!',
+                                    content: 'z-[1100]! w-max! min-w-[var(--reka-combobox-trigger-width)] max-w-[min(28rem,calc(100vw-2rem))]!',
                                     item: 'min-h-9 px-3',
                                     itemLabel: 'whitespace-nowrap overflow-visible! text-clip!',
                                 }"
@@ -131,14 +117,6 @@
                             <p v-if="!favoriteToolModels.length" class="model-select-hint">
                                 Favorite a tool-capable model in chat to choose one here.
                             </p>
-                        </section>
-
-                        <section class="setting-card">
-                            <div class="setting-card-copy">
-                                <strong>Scope</strong>
-                                <span>Choose what the AI should consider.</span>
-                            </div>
-                            <USelect :model-value="scope" :items="scopeItems" value-key="value" label-key="label" class="w-full" aria-label="Document AI default scope" @update:model-value="setScope" />
                         </section>
 
                         <section class="setting-card instruction-card">
@@ -277,9 +255,6 @@
                                             <UFormField label="Button label" class="quick-action-label-field">
                                                 <UInput class="w-full" :model-value="action.label" aria-label="Quick action label" @change="updateQuickActionFromEvent(index, 'label', $event)" />
                                             </UFormField>
-                                            <UFormField label="Default scope" class="quick-action-scope-field">
-                                                <USelect class="w-full" :model-value="action.defaultScope" :items="scopes" value-key="value" label-key="label" aria-label="Quick action scope" @update:model-value="updateQuickAction(index, 'defaultScope', $event)" />
-                                            </UFormField>
                                             <UFormField label="Prompt" description="The instruction sent when this action is used." class="quick-action-prompt-field">
                                                 <UTextarea class="w-full" :model-value="action.prompt" :rows="2" :maxrows="6" autoresize aria-label="Quick action prompt" @change="updateQuickActionFromEvent(index, 'prompt', $event)" />
                                             </UFormField>
@@ -298,7 +273,6 @@
                                             <strong>{{ action.label }}</strong>
                                             <span>{{ action.prompt }}</span>
                                         </div>
-                                        <UBadge color="neutral" variant="soft" size="sm" class="action-scope">{{ formatActionScope(action.defaultScope) }}</UBadge>
                                         <div class="action-buttons">
                                             <UButton label="Use" color="primary" variant="soft" size="xs" @click="runAction(action)" />
                                             <UButton :icon="icons.edit" color="neutral" variant="ghost" size="xs" square :aria-label="`Edit ${action.label}`" @click="editingActionId = action.id" />
@@ -325,9 +299,11 @@
                     </section>
 
                     <p class="settings-note">Document AI preferences sync with this workspace.</p>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </Transition>
+            </Transition>
+        </Teleport>
 
         <p v-if="error" class="error-message" role="alert">{{ error }}</p>
         <div v-if="status === 'streaming'" class="stream-status" aria-live="polite">
@@ -342,6 +318,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useToast } from '#imports';
 import type { DocumentAiAction, DocumentAiScope } from '~/composables/editor/useDocumentAiActions';
 import { useIcon } from '~/composables/useIcon';
+import { useScrollLock } from '~/composables/core/useScrollLock';
+import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import {
     MAX_DOCUMENT_AI_MAX_ITERATIONS,
     MIN_DOCUMENT_AI_MAX_ITERATIONS,
@@ -356,16 +334,15 @@ import { useModelStore } from '~/composables/chat/useModelStore';
 import { validateFile } from '~/components/chat/file-upload-utils';
 import { MAX_DOCUMENT_AI_ATTACHMENTS } from '~/utils/documents/document-ai-attachments';
 import DocumentAiPromptEditor from './DocumentAiPromptEditor.vue';
-import type { DocumentAiPromptAction } from '~/plugins/DocumentAiCommands/slashCommandExtension';
 import type { DocumentAiContextReference } from '~/utils/documents/document-ai-context';
 import {
     MAX_DOCUMENT_AI_CHUNK_WORDS,
     MIN_DOCUMENT_AI_CHUNK_WORDS,
 } from '~/utils/documents/document-ai-index';
 import type { DocumentAiHunk } from '~/utils/documents/document-ai-hunks';
-import { clipDocumentAiPreview } from '~/utils/documents/document-ai-hunks';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { buildDocumentAiToolToggleRows } from '~/utils/documents/document-ai-registry-tools';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 interface PendingDocumentAiAttachment extends DocumentAiAttachment {
     id: string;
@@ -439,14 +416,13 @@ const attachmentInput = ref<HTMLInputElement>();
 const prompt = ref('');
 const references = ref<DocumentAiContextReference[]>([]);
 const attachments = ref<PendingDocumentAiAttachment[]>([]);
-const scope = ref<DocumentAiScope>(props.selectionAvailable ? 'selection' : 'section');
 const customizeOpen = ref(false);
 const editingActionId = ref<string | null>(null);
-const scopes: Array<{ label: string; value: DocumentAiScope }> = [
-    { label: 'Selection', value: 'selection' },
-    { label: 'Section', value: 'section' },
-    { label: 'Document', value: 'document' },
-];
+const { isMobile } = useResponsiveState();
+const automaticScope = computed<DocumentAiScope>(() =>
+    props.selectionAvailable ? 'selection' : 'document'
+);
+useScrollLock({ controlledState: customizeOpen });
 const INHERIT_MODEL_VALUE = 'inherit';
 const { settings, update } = useDocumentAiSettings();
 const toolRegistry = useToolRegistry();
@@ -514,19 +490,18 @@ const modelItems = computed(() => {
     ];
 });
 const selectedModelValue = computed(() => settings.value.modelId ?? INHERIT_MODEL_VALUE);
-const scopeItems = computed(() =>
-    scopes.map((option) => ({
-        ...option,
-        disabled: option.value === 'selection' && !props.selectionAvailable,
-    })),
-);
-const scopeLabel = computed(() => (scope.value === 'selection' ? 'Highlighted text' : scope.value === 'section' ? 'Current section' : 'Entire document'));
 const autocompleteLabel = computed(() => (props.autocomplete.loading ? 'Updating…' : props.autocomplete.enabled ? 'On' : 'Off'));
 const tokenLabel = computed(() => {
-    const estimate = props.tokenEstimate ? `~${props.tokenEstimate.toLocaleString()} tokens` : scopeLabel.value;
+    const estimate = props.tokenEstimate ? `~${props.tokenEstimate.toLocaleString()} tokens` : 'Estimate pending';
     const files = attachments.value.length ? ` · ${attachments.value.length} ${attachments.value.length === 1 ? 'file' : 'files'}` : '';
     const context = references.value.length ? ` · ${references.value.length} ${references.value.length === 1 ? 'reference' : 'references'}` : '';
     return `${estimate}${files}${context}`;
+});
+const contextSummary = computed(() => {
+    const target = props.selectionAvailable
+        ? `Selected text${props.selectedText.trim() ? `: “${props.selectedText.trim().replace(/\s+/gu, ' ').slice(0, 90)}${props.selectedText.trim().length > 90 ? '…' : ''}”` : ''}`
+        : 'Cursor block';
+    return `${target} · surrounding document available · ${tokenLabel.value}`;
 });
 const pendingHunks = computed(() =>
     (props.proposal?.hunks ?? []).filter((hunk) => hunk.status === 'pending'),
@@ -549,14 +524,6 @@ const reviewProgressPercent = computed(() => {
 let estimateTimer: ReturnType<typeof setTimeout> | undefined;
 
 watch(
-    () => props.selectionAvailable,
-    (available) => {
-        // Sticky scope: never auto-hijack to selection. Only fall back when
-        // selection becomes unavailable while selection scope is active.
-        if (!available && scope.value === 'selection') scope.value = 'section';
-    },
-);
-watch(
     () => props.focusNonce,
     async () => {
         await nextTick();
@@ -566,25 +533,32 @@ watch(
 watch(
     () => props.proposal,
     (proposal) => {
-        if (proposal) attachments.value = [];
+        if (proposal) {
+            attachments.value = [];
+            customizeOpen.value = false;
+        }
     },
 );
-watch(scope, scheduleEstimate);
+watch(automaticScope, scheduleEstimate);
 watch(prompt, scheduleEstimate);
 watch(references, scheduleEstimate, { deep: true });
 onMounted(() => {
+    window.addEventListener('keydown', onWindowKeydown);
     void Promise.all([
         fetchModels().catch(() => []),
         getFavoriteModels().catch(() => []),
     ]);
 });
 onBeforeUnmount(() => {
+    window.removeEventListener('keydown', onWindowKeydown);
     if (estimateTimer) clearTimeout(estimateTimer);
 });
 
-function clip(value: string, length = 160) {
-    const text = value.trim().replace(/\s+/gu, ' ');
-    return clipDocumentAiPreview(text || '(empty block)', length);
+function onWindowKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && customizeOpen.value) {
+        event.preventDefault();
+        customizeOpen.value = false;
+    }
 }
 function goPrevHunk() {
     emit('focus-prev-hunk');
@@ -608,7 +582,7 @@ function scheduleEstimate() {
     }
     estimateTimer = setTimeout(() => emit('estimate', {
         prompt: prompt.value,
-        scope: scope.value,
+        scope: automaticScope.value,
         references: references.value,
     }), 250);
 }
@@ -616,7 +590,7 @@ function send() {
     if (!prompt.value.trim() || attachments.value.some((attachment) => attachment.loading)) return;
     const payload = {
         prompt: prompt.value,
-        scope: scope.value,
+        scope: automaticScope.value,
         references: references.value,
         attachments: attachments.value.map(({ id: _id, loading: _loading, ...attachment }) => attachment),
     };
@@ -634,20 +608,10 @@ watch(
         }
     },
 );
-function selectSuggestedAction(action: DocumentAiPromptAction) {
-    if (!action.defaultScope) return;
-    scope.value = action.defaultScope === 'selection' && !props.selectionAvailable
-        ? 'section'
-        : action.defaultScope;
-}
 function runAction(action: DocumentAiAction) {
     prompt.value = action.prompt;
-    scope.value = action.defaultScope === 'selection' && !props.selectionAvailable ? 'section' : (action.defaultScope ?? (props.selectionAvailable ? 'selection' : 'section'));
     customizeOpen.value = false;
     send();
-}
-function setScope(value: string | number) {
-    if (value === 'selection' || value === 'document' || value === 'section') scope.value = value;
 }
 function setModel(value: string) {
     void update({ modelId: !value || value === INHERIT_MODEL_VALUE ? null : value });
@@ -670,13 +634,9 @@ function setChunkWordLimit(event: Event) {
 function setAutocomplete(value: boolean) {
     if (value !== props.autocomplete.enabled) emit('toggle-autocomplete');
 }
-function updateQuickAction(index: number, field: 'label' | 'prompt' | 'defaultScope', value: string | number | null | undefined) {
+function updateQuickAction(index: number, field: 'label' | 'prompt', value: string | number | null | undefined) {
     const quickActions = settings.value.quickActions.map((action, actionIndex) => {
         if (actionIndex !== index) return action;
-        if (field === 'defaultScope') {
-            const defaultScope: DocumentAiScope = value === 'selection' || value === 'document' ? value : 'section';
-            return { ...action, defaultScope };
-        }
         return { ...action, [field]: String(value ?? '') };
     });
     void update({ quickActions });
@@ -684,12 +644,9 @@ function updateQuickAction(index: number, field: 'label' | 'prompt' | 'defaultSc
 function updateQuickActionFromEvent(index: number, field: 'label' | 'prompt', event: Event) {
     updateQuickAction(index, field, (event.target as HTMLInputElement | HTMLTextAreaElement).value);
 }
-function formatActionScope(value: DocumentAiScope) {
-    return scopes.find((option) => option.value === value)?.label ?? 'Section';
-}
 function addQuickAction() {
     if (settings.value.quickActions.length >= 12) return;
-    const id = crypto.randomUUID();
+    const id = createRuntimeUuid();
     void update({
         quickActions: [
             ...settings.value.quickActions,
@@ -697,7 +654,7 @@ function addQuickAction() {
                 id,
                 label: 'Custom action',
                 prompt: 'Describe the edit to make.',
-                defaultScope: 'section',
+                defaultScope: 'document',
             },
         ],
     });
@@ -707,7 +664,7 @@ function duplicateQuickAction(index: number) {
     if (settings.value.quickActions.length >= 12) return;
     const source = settings.value.quickActions[index];
     if (!source) return;
-    const id = crypto.randomUUID();
+    const id = createRuntimeUuid();
     const copy = { ...source, id, label: `${source.label} copy`.slice(0, 60) };
     const quickActions = [...settings.value.quickActions];
     quickActions.splice(index + 1, 0, copy);
@@ -748,7 +705,7 @@ async function addAttachment(file: File) {
         });
         return;
     }
-    const id = crypto.randomUUID();
+    const id = createRuntimeUuid();
     attachments.value.push({
         id,
         name: file.name || (validation.kind === 'pdf' ? 'document.pdf' : 'image'),

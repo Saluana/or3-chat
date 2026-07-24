@@ -237,4 +237,14 @@ defineExpose({ focus, removeReference });
 .context-chip { min-width: 0; max-width: 16rem; display: flex; align-items: center; gap: 0.3rem; padding: 0.18rem 0.22rem 0.18rem 0.4rem; border: var(--md-border-width) solid var(--md-border-color); border-radius: var(--md-border-radius); color: var(--md-on-surface); background: var(--md-surface-container-low); font-size: 0.66rem; }
 .context-chip > svg { width: 0.8rem; height: 0.8rem; flex: 0 0 auto; color: var(--md-on-surface-variant); }
 .context-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 600px) {
+    .prompt-editor-shell { gap: 0.25rem; }
+    .prompt-editor {
+        min-height: 2.25rem;
+        max-height: 7rem;
+        padding: 0.4rem 0.2rem;
+        font-size: 1rem;
+    }
+    .prompt-editor :deep(.ProseMirror) { min-height: 1.35rem; }
+}
 </style>

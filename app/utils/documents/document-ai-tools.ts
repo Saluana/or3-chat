@@ -47,7 +47,7 @@ export const DOCUMENT_AI_AGENT_TOOLS: ToolDefinition[] = [
         type: 'function',
         function: {
             name: 'get_document_outline',
-            description: 'Get the editable document outline with section word counts and block ranges. Call this before reading large documents.',
+            description: 'Get the readable document outline with section word counts and block ranges. Some readable blocks may be context-only when a text selection is the edit target.',
             parameters: {
                 type: 'object',
                 additionalProperties: false,
@@ -66,7 +66,7 @@ export const DOCUMENT_AI_AGENT_TOOLS: ToolDefinition[] = [
         type: 'function',
         function: {
             name: 'list_document_chunks',
-            description: 'List large contiguous chunks of the editable document (configured word budget). Prefer reading whole chunks instead of many tiny ranges.',
+            description: 'List large contiguous chunks of readable document context (configured word budget). Prefer whole chunks over many tiny ranges.',
             parameters: {
                 type: 'object',
                 additionalProperties: false,
@@ -85,7 +85,7 @@ export const DOCUMENT_AI_AGENT_TOOLS: ToolDefinition[] = [
         type: 'function',
         function: {
             name: 'read_blocks',
-            description: 'Read TipTap JSON for an inclusive block ref range (for example b1…b40). Keep ranges within one listed chunk when possible.',
+            description: 'Read TipTap JSON for an inclusive readable block range (for example b1…b40). Reading a block does not necessarily make it writable.',
             parameters: {
                 type: 'object',
                 additionalProperties: false,
@@ -239,15 +239,18 @@ export interface DocumentAiToolContext {
     editor: Editor;
     snapshot: DocumentAiFrozenSnapshot;
     scope: DocumentAiScope;
+    /** Refs the model may change. Selection scope intentionally has none. */
     allowedRefs: ReadonlySet<string>;
+    /** Refs the model may inspect for context, even when they are not writable. */
+    readableRefs?: ReadonlySet<string>;
     chunkWordLimit: number;
     stagedOperations: DocumentAiOperation[];
     onStageOperations: (operations: DocumentAiOperation[]) => void;
 }
 
-function editableBlocks(ctx: DocumentAiToolContext) {
-    if (ctx.scope === 'selection') return [];
-    return ctx.snapshot.blocks.filter((block) => ctx.allowedRefs.has(block.ref));
+function readableBlocks(ctx: DocumentAiToolContext) {
+    const refs = ctx.readableRefs ?? ctx.allowedRefs;
+    return ctx.snapshot.blocks.filter((block) => refs.has(block.ref));
 }
 
 function validateScopedOperations(
@@ -289,17 +292,21 @@ export function executeDocumentAiTool(
 
     switch (name) {
         case 'get_document_outline': {
-            const outline = buildDocumentOutline(ctx.snapshot, ctx.allowedRefs);
+            const outline = buildDocumentOutline(
+                ctx.snapshot,
+                ctx.readableRefs ?? ctx.allowedRefs,
+            );
             return JSON.stringify({
                 scope: ctx.scope,
-                totalBlocks: editableBlocks(ctx).length,
+                writableBlockCount: ctx.allowedRefs.size,
+                readableBlockCount: readableBlocks(ctx).length,
                 outline,
                 summary: summarizeOutlineForPrompt(outline),
             });
         }
         case 'list_document_chunks': {
             const limit = clampDocumentAiChunkWords(ctx.chunkWordLimit);
-            const chunks = chunkDocumentBlocks(editableBlocks(ctx), limit).map((chunk) => ({
+            const chunks = chunkDocumentBlocks(readableBlocks(ctx), limit).map((chunk) => ({
                 index: chunk.index,
                 fromRef: chunk.fromRef,
                 toRef: chunk.toRef,
@@ -315,7 +322,12 @@ export function executeDocumentAiTool(
         case 'read_blocks': {
             const fromRef = String(args.fromRef ?? '');
             const toRef = String(args.toRef ?? '');
-            const blocks = sliceBlocksByRefRange(ctx.snapshot, fromRef, toRef, ctx.allowedRefs);
+            const blocks = sliceBlocksByRefRange(
+                ctx.snapshot,
+                fromRef,
+                toRef,
+                ctx.readableRefs ?? ctx.allowedRefs,
+            );
             const wordCount = blocks.reduce((total, block) => {
                 const words = block.text.trim() ? block.text.trim().split(/\s+/u).length : 0;
                 return total + words;
@@ -337,7 +349,11 @@ export function executeDocumentAiTool(
             const query = String(args.query ?? '');
             return JSON.stringify({
                 query,
-                matches: searchFrozenDocument(ctx.snapshot, query, ctx.allowedRefs),
+                matches: searchFrozenDocument(
+                    ctx.snapshot,
+                    query,
+                    ctx.readableRefs ?? ctx.allowedRefs,
+                ),
             });
         }
         case 'propose_edits': {

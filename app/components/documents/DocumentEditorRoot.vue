@@ -190,6 +190,7 @@ import { TaskItem, TaskList } from '@tiptap/extension-list';
 import ToolbarButton from './ToolbarButton.vue';
 import DocumentInspector from './DocumentInspector.vue';
 import { useIcon } from '~/composables/useIcon';
+import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import AutocompleteState from '~/plugins/EditorAutocomplete/state';
 import { Or3DocumentImage } from '~/extensions/or3-document-image';
 import { DocumentAiHunks } from '~/plugins/DocumentAiHunks/TiptapExtension';
@@ -261,7 +262,8 @@ const contentVersion = ref(0);
 const editorStateVersion = ref(0);
 const selectionAvailable = ref(false);
 const selectedText = ref('');
-const inspectorOpen = ref(true);
+const { isMobile, hydrated: responsiveHydrated } = useResponsiveState();
+const inspectorOpen = ref(false);
 const inspectorTab = ref('outline');
 const aiFocusNonce = ref(0);
 const overflowOpen = ref(false);
@@ -287,6 +289,7 @@ let captureTimer: ReturnType<typeof setTimeout> | undefined;
 let revisionTimer: ReturnType<typeof setTimeout> | undefined;
 let unregisterSession: (() => void) | undefined;
 let lastAutomaticRevisionAt = 0;
+let inspectorDefaultApplied = false;
 
 const pluginButtons = useEditorToolbarButtons(editor);
 const inspectorPanels = useEditorInspectorPanels();
@@ -503,8 +506,23 @@ async function loadActiveDocument(id: string) {
 
 watch(documentId, async (id, previous) => {
     if (previous && editor.value) await captureCurrent(true);
+    if (isMobile.value) inspectorOpen.value = false;
     ai.reset();
     await loadActiveDocument(id);
+});
+
+watch(
+    responsiveHydrated,
+    (ready) => {
+        if (!ready || inspectorDefaultApplied) return;
+        inspectorDefaultApplied = true;
+        inspectorOpen.value = !isMobile.value;
+    },
+    { immediate: true },
+);
+
+watch(isMobile, (mobile) => {
+    if (mobile) inspectorOpen.value = false;
 });
 
 watch(

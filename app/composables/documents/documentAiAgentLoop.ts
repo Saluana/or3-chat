@@ -1,6 +1,7 @@
 import { openRouterStreamWithRetry } from '~/utils/chat/openrouterStream';
 import type { ToolChoice, ToolDefinition, ToolExecutionContext } from '~/utils/chat/types';
 import type { OpenRouterReasoningConfig } from '~~/shared/openrouter/reasoning';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 import {
     DOCUMENT_AI_AGENT_TOOLS,
     executeDocumentAiTool,
@@ -158,8 +159,8 @@ async function executeAgentToolCall(params: {
         workspaceId: null,
         threadId: null,
         messageId: null,
-        callId: crypto.randomUUID(),
-        requestId: crypto.randomUUID(),
+        callId: createRuntimeUuid(),
+        requestId: createRuntimeUuid(),
         abortSignal,
     };
     return executeDocumentAiRegistryTool({

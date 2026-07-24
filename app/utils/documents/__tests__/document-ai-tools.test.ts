@@ -72,4 +72,49 @@ describe('document AI tools', () => {
         expect(stagedResult.totalStaged).toBe(1);
         expect(staged).toHaveLength(1);
     });
+
+    it('lets selection edits read the surrounding document without writing outside it', () => {
+        const current = makeEditor();
+        current.commands.setTextSelection({ from: 1, to: 3 });
+        const snapshot = freezeDocumentForAi(current);
+        const ctx = {
+            editor: current,
+            snapshot,
+            scope: 'selection' as const,
+            allowedRefs: new Set<string>(),
+            readableRefs: new Set(snapshot.blocks.map((block) => block.ref)),
+            chunkWordLimit: 5000,
+            stagedOperations: [] as DocumentAiOperation[],
+            onStageOperations: () => undefined,
+        };
+
+        const outline = JSON.parse(executeDocumentAiTool(
+            'get_document_outline',
+            '{}',
+            ctx,
+        ));
+        expect(outline).toMatchObject({
+            writableBlockCount: 0,
+            readableBlockCount: 2,
+        });
+
+        const read = JSON.parse(executeDocumentAiTool(
+            'read_blocks',
+            JSON.stringify({ fromRef: 'b1', toRef: 'b2' }),
+            ctx,
+        ));
+        expect(read.blocks).toHaveLength(2);
+
+        expect(() => executeDocumentAiTool(
+            'propose_edits',
+            JSON.stringify({
+                operations: [{
+                    kind: 'replace_block',
+                    ref: 'b2',
+                    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Nope' }] }],
+                }],
+            }),
+            ctx,
+        )).toThrow('outside the selected text');
+    });
 });

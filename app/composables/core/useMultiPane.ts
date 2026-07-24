@@ -12,6 +12,7 @@ import {
 } from '~/utils/multiPaneApi';
 import { deriveMessageContent } from '~/utils/chat/messages';
 import { usePaneApps } from './usePaneApps';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 type PaneAppGetter = ReturnType<typeof usePaneApps>['getPaneApp'];
 
@@ -85,13 +86,7 @@ export interface UseMultiPaneApi {
 }
 
 function genId(): string {
-    if (
-        typeof crypto !== 'undefined' &&
-        typeof crypto.randomUUID === 'function'
-    ) {
-        return crypto.randomUUID();
-    }
-    return 'pane-' + Math.random().toString(36).slice(2);
+    return createRuntimeUuid();
 }
 
 function createEmptyPane(initialThreadId = ''): PaneState {

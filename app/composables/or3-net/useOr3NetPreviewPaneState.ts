@@ -1,4 +1,5 @@
 import { readonly, ref } from 'vue';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 import type { Or3NetLaunchMetadata, Or3NetPreviewDescriptor } from './types';
 
@@ -27,11 +28,7 @@ function syncRecords(): void {
 }
 
 function createPreviewPaneRecordId(): string {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return crypto.randomUUID();
-    }
-
-    return `or3-net-preview-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    return createRuntimeUuid();
 }
 
 export function useOr3NetPreviewPaneState() {

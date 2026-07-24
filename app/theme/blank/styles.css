@@ -232,3 +232,30 @@
         background: var(--md-surface-hover) !important;
     }
 }
+
+/*
+ * iOS and other mobile browsers zoom focused text controls below 16px.
+ * Keep desktop typography compact while enforcing a mobile editing floor.
+ */
+@media (hover: none) and (pointer: coarse), (max-width: 47.999rem) {
+    html[data-theme="blank"] :is(
+        input:not([type]),
+        input[type="text"],
+        input[type="search"],
+        input[type="email"],
+        input[type="password"],
+        input[type="url"],
+        input[type="tel"],
+        input[type="number"],
+        input[type="date"],
+        input[type="datetime-local"],
+        input[type="month"],
+        input[type="week"],
+        input[type="time"],
+        textarea,
+        select,
+        [contenteditable]:not([contenteditable="false"])
+    ) {
+        font-size: 16px !important;
+    }
+}

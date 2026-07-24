@@ -21,13 +21,14 @@
  * - Fixed-width padding ensures correct string comparison
  *
  * Constraints:
- * - Node ID uses `crypto.randomUUID()` truncated to 8 chars;
+ * - Node ID uses a runtime-compatible UUID truncated to 8 chars;
  *   collisions are possible but unlikely at small device counts
  * - Not NTP-synchronized; ordering is best-effort across devices
  *
  * @see core/sync/conflict-resolver for HLC-based tie-breaking
  * @see core/sync/hook-bridge for HLC generation on local writes
  */
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 /**
  * Purpose:
@@ -58,7 +59,7 @@ export class HLCGenerator {
                 return this.nodeId;
             }
         }
-        this.nodeId = crypto.randomUUID().slice(0, 8);
+        this.nodeId = createRuntimeUuid().slice(0, 8);
         if (typeof localStorage !== 'undefined') {
             localStorage.setItem('or3-device-id', this.nodeId);
         }

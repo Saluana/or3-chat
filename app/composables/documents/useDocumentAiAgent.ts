@@ -27,6 +27,7 @@ import {
     buildDocumentOutline,
     chunkDocumentBlocks,
     clampDocumentAiChunkWords,
+    countWords,
     serializeBlocksForModel,
     summarizeOutlineForPrompt,
 } from '~/utils/documents/document-ai-index';
@@ -97,6 +98,31 @@ export interface DocumentAiSubmission extends DocumentAiEstimateRequest {
     attachments: DocumentAiAttachment[];
 }
 
+const AUTO_FOCUS_CONTEXT_WORDS = 1_800;
+
+/**
+ * The composer no longer asks people to choose a scope. A real selection is a
+ * strict edit target; otherwise the agent may edit the document, using the
+ * caret block as its default anchor.
+ */
+export function resolveAutomaticDocumentAiScope(editor: Editor): DocumentAiScope {
+    return editor.state.selection.empty ? 'document' : 'selection';
+}
+
+export function resolveDocumentAiCursorBlockIndex(
+    editor: Editor,
+    snapshot: DocumentAiFrozenSnapshot,
+): number {
+    if (!snapshot.blocks.length) return -1;
+    const cursor = editor.state.selection.head;
+    let selectedIndex = 0;
+    editor.state.doc.forEach((node, position, index) => {
+        const end = position + node.nodeSize;
+        if (cursor >= position && cursor <= end) selectedIndex = index;
+    });
+    return Math.min(selectedIndex, snapshot.blocks.length - 1);
+}
+
 function currentSectionBlocks(editor: Editor, snapshot: DocumentAiFrozenSnapshot) {
     let selectedIndex = 0;
     const selection = editor.state.selection.from;
@@ -124,36 +150,28 @@ function toolCapable(model: { supported_parameters?: string[] }) {
     return model.supported_parameters?.includes('tools') === true;
 }
 
-function seedEditableContext(
+export function seedEditableContext(
     editor: Editor,
     snapshot: DocumentAiFrozenSnapshot,
     scope: DocumentAiScope,
     chunkWordLimit: number,
 ) {
-    if (scope === 'selection') {
-        if (!snapshot.selection) throw new Error('Select text before using selection scope.');
-        return {
-            blocks: [] as typeof snapshot.blocks,
-            allowedRefs: new Set<string>(),
-            seedText: JSON.stringify({
-                selection: {
-                    text: snapshot.selection.text,
-                    content: snapshot.selection.content,
-                    openStart: snapshot.selection.openStart,
-                    openEnd: snapshot.selection.openEnd,
-                },
-                note: 'Call propose_edits with a single replace_selection. Return TipTap JSON that preserves marks and the same block/inline shape as selection.content.',
-            }),
-        };
+    if (scope === 'selection' && !snapshot.selection) {
+        throw new Error('Select text before using selection scope.');
     }
 
-    const blocks = scope === 'document'
-        ? snapshot.blocks
-        : currentSectionBlocks(editor, snapshot);
-    const allowedRefs = new Set(blocks.map((block) => block.ref));
-    const outline = buildDocumentOutline(snapshot, allowedRefs);
+    const writableBlocks = scope === 'selection'
+        ? []
+        : scope === 'document'
+            ? snapshot.blocks
+            : currentSectionBlocks(editor, snapshot);
+    const allowedRefs = new Set(
+        scope === 'selection' ? [] : writableBlocks.map((block) => block.ref),
+    );
+    const readableRefs = new Set(snapshot.blocks.map((block) => block.ref));
+    const outline = buildDocumentOutline(snapshot, readableRefs);
     const limit = clampDocumentAiChunkWords(chunkWordLimit);
-    const chunks = chunkDocumentBlocks(blocks, limit).map((chunk) => ({
+    const chunks = chunkDocumentBlocks(snapshot.blocks, limit).map((chunk) => ({
         index: chunk.index,
         fromRef: chunk.fromRef,
         toRef: chunk.toRef,
@@ -161,29 +179,66 @@ function seedEditableContext(
         blockCount: chunk.blocks.length,
     }));
 
-    // Small sections still fit in the seed; large scopes get outline + chunk map only.
-    const totalWords = blocks.reduce((total, block) => {
-        const words = block.text.trim() ? block.text.trim().split(/\s+/u).length : 0;
-        return total + words;
-    }, 0);
+    // Small docs fit in the seed. Large docs send one bounded cursor-local
+    // window plus the outline/chunk map; tools can pull any other range.
+    const totalWords = snapshot.blocks.reduce(
+        (total, block) => total + countWords(block.text),
+        0,
+    );
     const isEmptyDocument = totalWords === 0;
-    const includeInlineBlocks = totalWords <= limit && blocks.length <= 80;
+    const includeWholeDocument = totalWords <= limit && snapshot.blocks.length <= 80;
+    const cursorIndex = resolveDocumentAiCursorBlockIndex(editor, snapshot);
+    const cursorBlock = cursorIndex >= 0 ? snapshot.blocks[cursorIndex] ?? null : null;
+    const focusChunks = chunkDocumentBlocks(
+        snapshot.blocks,
+        Math.min(limit, AUTO_FOCUS_CONTEXT_WORDS),
+    );
+    const focusChunk = focusChunks.find((chunk) =>
+        cursorBlock
+        && cursorBlock.index >= chunk.blockStart
+        && cursorBlock.index < chunk.blockEnd
+    ) ?? focusChunks[0];
 
     return {
-        blocks,
+        blocks: writableBlocks,
         allowedRefs,
+        readableRefs,
         seedText: JSON.stringify({
+            contextMode: 'automatic',
             scope,
             chunkWordLimit: limit,
+            cursor: cursorBlock
+                ? {
+                      blockRef: cursorBlock.ref,
+                      blockIndex: cursorBlock.index,
+                      blockType: cursorBlock.type,
+                      position: editor.state.selection.head,
+                  }
+                : null,
+            selection: snapshot.selection
+                ? {
+                      text: snapshot.selection.text,
+                      content: snapshot.selection.content,
+                      openStart: snapshot.selection.openStart,
+                      openEnd: snapshot.selection.openEnd,
+                  }
+                : null,
             outlineSummary: summarizeOutlineForPrompt(outline),
             chunks,
-            editableBlocks: includeInlineBlocks ? serializeBlocksForModel(blocks) : undefined,
+            documentBlocks: includeWholeDocument
+                ? serializeBlocksForModel(snapshot.blocks)
+                : undefined,
+            cursorContextBlocks: !includeWholeDocument && focusChunk
+                ? serializeBlocksForModel(focusChunk.blocks)
+                : undefined,
             emptyDocument: isEmptyDocument,
-            note: isEmptyDocument
+            note: scope === 'selection'
+                ? 'The selection is the only writable target. The cursor-local/full document content and read tools are context only. Call propose_edits with exactly one replace_selection that preserves the selection shape.'
+                : isEmptyDocument
                 ? 'Document is empty. Create the article with propose_edits using insert_end and/or replace_block on b1. Do not stall on outline/search.'
-                : includeInlineBlocks
-                    ? 'Editable blocks are included below. You may still use tools, then propose_edits.'
-                    : 'Document is large. Use list_document_chunks / read_blocks before propose_edits.',
+                : includeWholeDocument
+                    ? 'The full document is included. Treat the cursor block as the likely target unless the request clearly asks for a broader change.'
+                    : 'A bounded cursor-local window is included with the full outline/chunk map. Read other chunks only when needed, and prefer the cursor block unless the request clearly targets broader content.',
         }),
     };
 }
@@ -482,19 +537,20 @@ export function useDocumentAiAgent(options: {
         status.value = 'estimating';
         try {
             await ensureLoaded();
-            lastScope.value = request.scope;
+            const scope = resolveAutomaticDocumentAiScope(editor);
+            lastScope.value = scope;
             // Do not paint scope chrome while typing — the composer already labels
             // the active scope; block highlights made the whole section look selected.
             clearScopeHighlight();
             const chunkWordLimit = settings.value.chunkWordLimit;
             const version = options.contentVersion.value;
             const documentId = options.documentId.value;
-            const scopeKey = estimateScopeKey(editor, request.scope);
+            const scopeKey = estimateScopeKey(editor, scope);
             let seedText = '';
             const cacheHit = estimateSeedCache
                 && estimateSeedCache.documentId === documentId
                 && estimateSeedCache.contentVersion === version
-                && estimateSeedCache.scope === request.scope
+                && estimateSeedCache.scope === scope
                 && estimateSeedCache.scopeKey === scopeKey
                 && estimateSeedCache.chunkWordLimit === chunkWordLimit;
             if (cacheHit && estimateSeedCache) {
@@ -504,14 +560,14 @@ export function useDocumentAiAgent(options: {
                 const context = seedEditableContext(
                     editor,
                     snapshot,
-                    request.scope,
+                    scope,
                     chunkWordLimit,
                 );
                 seedText = context.seedText;
                 estimateSeedCache = {
                     documentId,
                     contentVersion: version,
-                    scope: request.scope,
+                    scope,
                     scopeKey,
                     chunkWordLimit,
                     seedText,
@@ -569,9 +625,7 @@ export function useDocumentAiAgent(options: {
         }
 
         const snapshot = freezeDocumentForAi(editor);
-        const scope = submission.scope === 'selection' && !snapshot.selection
-            ? 'section'
-            : submission.scope;
+        const scope = resolveAutomaticDocumentAiScope(editor);
         lastScope.value = scope;
         clearScopeHighlight();
         await ensureLoaded();
@@ -649,7 +703,7 @@ export function useDocumentAiAgent(options: {
                     content: [
                         {
                             type: 'text' as const,
-                            text: `Request:\n${request.prompt}\n\nScope:\n${request.scope}\n\nEditable frozen context (outline/chunks; use tools to read more):\n${request.context}\n\nRead-only reference context:\n${request.referenceContext || '(none)'}`,
+                            text: `Request:\n${request.prompt}\n\nAutomatically resolved edit target:\n${request.scope}\n\nFrozen document context (selection/cursor/outline/chunks; writable limits are enforced by tools):\n${request.context}\n\nRead-only reference context:\n${request.referenceContext || '(none)'}`,
                         },
                         ...attachments.map((attachment) =>
                             attachment.kind === 'image'
@@ -686,6 +740,7 @@ export function useDocumentAiAgent(options: {
                     snapshot,
                     scope,
                     allowedRefs: context.allowedRefs,
+                    readableRefs: context.readableRefs,
                     chunkWordLimit: settings.value.chunkWordLimit,
                 },
             });

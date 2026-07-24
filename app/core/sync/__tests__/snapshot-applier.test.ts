@@ -167,4 +167,54 @@ describe('applySnapshotChain', () => {
 
         expect(await db.pending_ops.count()).toBe(0);
     });
+
+    it('normalizes wire fields before writing rows used by Dexie indexes', async () => {
+        const db = createDb();
+        await db.open();
+        const postPages: SnapshotResponse[] = [{
+            workspaceId: 'workspace-1',
+            snapshotId: 'snapshot-posts',
+            highWatermark: 13,
+            items: [{
+                kind: 'row',
+                tableName: 'posts',
+                pk: 'document-1',
+                payload: {
+                    id: 'document-1',
+                    title: 'Synced document',
+                    content: '',
+                    post_type: 'doc',
+                    deleted: false,
+                    created_at: 1,
+                    updated_at: 1,
+                    clock: 2,
+                    hlc: '2:0:remote',
+                },
+                revision: {
+                    clock: 2,
+                    hlc: '2:0:remote',
+                    opId: 'op-document-1',
+                },
+            }],
+            nextPageToken: null,
+        }];
+
+        await applySnapshotChain(
+            db,
+            postPages,
+            { workspaceId: 'workspace-1' },
+            'device-1'
+        );
+
+        expect(await db.posts.get('document-1')).toMatchObject({
+            postType: 'doc',
+            clock: 2,
+            hlc: '2:0:remote',
+            op_id: 'op-document-1',
+        });
+        expect(await db.posts.get('document-1')).not.toHaveProperty('post_type');
+        expect(
+            await db.posts.where('postType').equals('doc').count()
+        ).toBe(1);
+    });
 });

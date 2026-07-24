@@ -10,6 +10,7 @@ import type {
     FileTransferDirection,
     RecoverableFileTransferState,
 } from '~~/shared/storage/types';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 import {
     computeHashHex,
     parseHash,
@@ -54,7 +55,7 @@ export class FileTransferQueue {
     private dbResolver?: () => Or3DB;
     private leaseDurationMs: number;
     private maxDownloadBytes: number;
-    private readonly workerId = crypto.randomUUID();
+    private readonly workerId = createRuntimeUuid();
     private leaseRenewals = new Map<string, ReturnType<typeof setInterval>>();
 
     constructor(
@@ -142,7 +143,7 @@ export class FileTransferQueue {
 
         const now = nowSec();
         const transfer: FileTransfer = {
-            id: crypto.randomUUID(),
+            id: createRuntimeUuid(),
             hash,
             workspace_id: this.workspaceId,
             direction,

@@ -33,6 +33,7 @@ import type { TypedHookEngine } from '../hooks/typed-hooks';
 import type { NotificationCreatePayload } from '../hooks/hook-types';
 import { nowSec, getWriteTxTableNames } from '~/db/util';
 import { z } from 'zod';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 // Callback type for the push action handler
 type PushActionCallback = (payload: unknown) => Promise<void>;
@@ -169,7 +170,7 @@ export class NotificationService {
 
         const now = nowSec();
         const notification: Notification = {
-            id: crypto.randomUUID(),
+            id: createRuntimeUuid(),
             user_id: this.userId,
             type: filteredPayload.data.type,
             title: filteredPayload.data.title,

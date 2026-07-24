@@ -285,9 +285,13 @@ function forwardResize(payload: ResizePayload) {
 /* ── Send / Stop button ── */
 :deep(.blank2-chat-dropper .chat-input-send-btn),
 :deep(.blank2-chat-dropper .chat-input-stop-btn) {
+    flex: 0 0 2rem;
+    min-width: 2rem;
     min-height: 2rem;
     width: 2rem;
-    padding: 0;
+    height: 2rem;
+    aspect-ratio: 1 / 1;
+    padding: 0 !important;
     border: 0;
     border-radius: 50%;
     background: var(--md-primary) !important;
@@ -354,7 +358,7 @@ function forwardResize(payload: ResizePayload) {
 
     :deep(.blank2-chat-dropper .chat-input-editor),
     :deep(.blank2-chat-dropper .ProseMirror) {
-        font-size: 0.925rem;
+        font-size: 1rem;
     }
 
     :deep(.blank2-chat-dropper .chat-input-editor-container) {
@@ -390,8 +394,11 @@ function forwardResize(payload: ResizePayload) {
 
     :deep(.blank2-chat-dropper .chat-input-send-btn),
     :deep(.blank2-chat-dropper .chat-input-stop-btn) {
-        min-height: 1.75rem;
-        width: 1.75rem;
+        flex-basis: 2.25rem;
+        min-width: 2.25rem;
+        min-height: 2.25rem;
+        width: 2.25rem;
+        height: 2.25rem;
     }
 
     :deep(.blank2-chat-dropper .chat-input-attachments) {

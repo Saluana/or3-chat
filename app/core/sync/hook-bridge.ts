@@ -18,6 +18,7 @@ import { nowSec } from '~/db/util';
 import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
 import { getPkField } from '~~/shared/sync/table-metadata';
 import { markRecentOpId } from './recent-op-cache';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 /** Tables that should be captured for sync */
 const SYNCED_TABLES = [
@@ -297,7 +298,7 @@ export class HookBridge {
         const baseClock = (typeof safePayload.clock === 'number') ? safePayload.clock : 0;
         const stamp: ChangeStamp = {
             deviceId: this.deviceId,
-            opId: crypto.randomUUID(),
+            opId: createRuntimeUuid(),
             hlc,
             // Soft-delete helpers already increment the materialized row clock.
             // A physical delete has no new row revision, so advance it here.
@@ -336,7 +337,7 @@ export class HookBridge {
 
 
         const pendingOp: PendingOp = {
-            id: crypto.randomUUID(),
+            id: createRuntimeUuid(),
             tableName,
             operation,
             pk,

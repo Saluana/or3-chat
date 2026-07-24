@@ -50,6 +50,7 @@ import {
     consumeChatSendHandled,
     markChatSendHandled,
 } from '~/utils/chat/send-interception';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 // Types for lazy-loaded modules
 interface SlashCommandsModule {
@@ -1178,7 +1179,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             // Reuse the original message ID so UI updates in place
             const assistantContext = {
                 id: messageId,
-                streamId: crypto.randomUUID(),
+                streamId: createRuntimeUuid(),
                 threadId: message.thread_id || '',
             };
 

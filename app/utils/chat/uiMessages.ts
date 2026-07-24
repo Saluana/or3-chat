@@ -12,6 +12,7 @@ import {
     type UiWorkflowState,
 } from '~/utils/chat/workflow-types';
 import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 interface ContentPartLike {
     type?: string;
@@ -121,7 +122,7 @@ export function partsToText(
  * Converts a raw message record into a UI-ready message object.
  */
 export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
-    const id = raw.id || raw.stream_id || crypto.randomUUID();
+    const id = raw.id || raw.stream_id || createRuntimeUuid();
     const role = raw.role || 'user';
     let file_hashes: string[] | undefined;
     if (Array.isArray(raw.file_hashes)) file_hashes = raw.file_hashes.slice();

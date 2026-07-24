@@ -1,106 +1,79 @@
 .document-ai-composer {
     display: grid;
-    gap: 0.65rem;
+    gap: 0.45rem;
     width: 100%;
-    padding: 0.7rem;
-    border: var(--md-border-width) solid var(--md-border-color);
-    border-radius: var(--md-border-radius);
-    background: color-mix(in oklab, var(--md-surface), transparent 2%);
-    box-shadow: 0 10px 32px rgb(0 0 0 / 9%);
+    padding: 0.45rem 0.5rem;
+    border: var(--md-border-width) solid color-mix(in oklab, var(--md-border-color), transparent 18%);
+    border-radius: 1.75rem;
+    background: color-mix(in oklab, var(--md-surface), white 4%);
+    box-shadow:
+        0 0 0 1px color-mix(in oklab, var(--md-border-color), transparent 74%),
+        0 1px 3px rgb(0 0 0 / 4%),
+        0 4px 12px -4px rgb(0 0 0 / 7%);
     backdrop-filter: blur(18px);
     transition:
-        box-shadow 220ms ease,
-        border-color 220ms ease;
+        border-color 250ms ease,
+        box-shadow 350ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 .document-ai-composer:focus-within {
-    border-color: color-mix(in oklab, var(--md-primary), var(--md-border-color) 55%);
-    box-shadow: 0 14px 38px rgb(0 0 0 / 12%);
-}
-.selection-context {
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    padding: 0.35rem 0.5rem;
-    border-radius: var(--md-border-radius);
-    color: var(--md-on-surface-variant);
-    background: var(--md-surface-container-low);
-    font-size: 0.72rem;
-}
-.selection-context > span {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.selection-context strong {
-    color: var(--md-on-surface);
-    margin-inline-end: 0.3rem;
+    border-color: color-mix(in oklab, var(--md-primary), transparent 55%);
+    box-shadow:
+        0 0 0 1px color-mix(in oklab, var(--md-primary), transparent 88%),
+        0 0 0 4px color-mix(in oklab, var(--md-primary), transparent 94%),
+        0 2px 8px rgb(0 0 0 / 6%),
+        0 8px 24px -8px rgb(0 0 0 / 9%);
 }
 .composer-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
-    gap: 0.6rem;
-    min-height: 2.7rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.6rem;
 }
 .composer-prompt {
     min-width: 0;
 }
+.composer-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+.composer-actions-leading {
+    gap: 0.05rem;
+}
 .send-button {
-    align-self: end;
+    display: inline-grid !important;
+    place-items: center;
+    flex: 0 0 2.5rem;
+    min-width: 2.5rem !important;
+    min-height: 2.5rem !important;
     justify-content: center;
-    width: 2.6rem;
-    height: 2.6rem;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    aspect-ratio: 1 / 1;
     padding: 0 !important;
-    border-radius: var(--md-border-radius);
+    border-radius: 50%;
     text-align: center;
 }
 .send-button :deep(svg) {
     margin: 0;
 }
-.composer-controls {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    min-width: 0;
-}
-.attachment-button {
-    flex: 0 0 auto;
-    border: var(--md-border-width) solid var(--md-border-color);
-    border-radius: var(--md-border-radius);
-}
-.scope-label {
-    color: var(--md-on-surface-variant);
-    font-size: 0.7rem;
-}
-.scope-control {
-    flex: 0 0 auto;
-}
-.scope-control :deep([role='tablist']) {
-    min-height: 2rem;
-    padding: 0.15rem;
-    border-radius: var(--md-border-radius);
-    background: var(--md-surface-container-low);
-}
-.scope-control :deep([role='tab']) {
-    min-height: 1.7rem;
-    padding: 0.2rem 0.55rem;
-    font-size: 0.68rem;
-}
-.token-estimate {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--md-on-surface-variant);
-    font-size: 0.68rem;
-    text-align: right;
-}
+.attachment-button,
 .settings-button {
+    display: inline-grid !important;
+    place-items: center;
     flex: 0 0 auto;
+    width: 2.35rem !important;
+    height: 2.35rem !important;
+    min-width: 2.35rem !important;
+    min-height: 2.35rem !important;
+    aspect-ratio: 1 / 1;
+    padding: 0 !important;
+    border: 0;
+    border-radius: 50%;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: color-mix(in oklab, var(--md-on-surface), transparent 42%) !important;
 }
 .attachment-list {
     display: flex;
@@ -294,21 +267,42 @@
         flex: 1 1 auto;
     }
 }
-.settings-panel-shell {
-    min-height: 0;
+.settings-overlay {
+    position: fixed;
+    z-index: 1000;
+    inset: 0;
     display: grid;
-    grid-template-rows: 1fr;
-    transform-origin: top;
+    place-items: center;
+    padding: 1rem;
+    overflow: hidden;
+    overscroll-behavior: contain;
+    background: color-mix(in srgb, var(--md-on-surface) 22%, transparent);
+    backdrop-filter: blur(3px);
+}
+.settings-panel-shell {
+    width: min(64rem, 100%);
+    max-height: min(52rem, calc(100dvh - 2rem));
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
+    background: var(--md-surface);
+    box-shadow: 0 24px 80px rgb(0 0 0 / 24%);
+    transform-origin: center;
 }
 .settings-panel {
+    width: 100%;
     min-height: 0;
     display: grid;
     gap: 1rem;
-    max-height: min(28rem, calc(100dvh - 13rem));
+    max-height: none;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 1rem 0.2rem 0.15rem;
-    border-top: var(--md-border-width) solid var(--md-border-color);
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+    padding: 1rem;
     scrollbar-width: thin;
 }
 .settings-intro,
@@ -317,6 +311,20 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
+}
+.settings-intro {
+    position: sticky;
+    z-index: 2;
+    top: -1rem;
+    margin: -1rem -1rem 0;
+    padding: 1rem;
+    border-bottom: var(--md-border-width) solid var(--md-border-color);
+    background: color-mix(in oklab, var(--md-surface), transparent 2%);
+    backdrop-filter: blur(14px);
+}
+.settings-context-summary {
+    color: var(--md-primary) !important;
+    font-weight: 600;
 }
 .tool-settings {
     display: grid;
@@ -406,7 +414,7 @@
 }
 .settings-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.65rem;
 }
 .setting-card {
@@ -510,10 +518,6 @@
     font-size: 0.67rem;
     line-height: 1.4;
 }
-.action-scope {
-    justify-self: end;
-    white-space: nowrap;
-}
 .action-buttons {
     display: flex;
     align-items: center;
@@ -553,7 +557,7 @@
 }
 .quick-action-fields {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(9rem, 0.3fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.7rem;
     padding: 0.75rem;
     border: var(--md-border-width) solid color-mix(in oklab, var(--md-border-color), transparent 22%);
@@ -624,22 +628,19 @@
 }
 .ai-settings-enter-active,
 .ai-settings-leave-active {
-    transition:
-        grid-template-rows 280ms cubic-bezier(0.4, 0, 0.2, 1),
-        opacity 180ms ease,
-        transform 280ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity 180ms ease;
+}
+.ai-settings-enter-active .settings-panel-shell,
+.ai-settings-leave-active .settings-panel-shell {
+    transition: transform 240ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 .ai-settings-enter-from,
 .ai-settings-leave-to {
-    grid-template-rows: 0fr;
     opacity: 0;
-    transform: translateY(-0.45rem) scaleY(0.985);
 }
-.ai-settings-enter-to,
-.ai-settings-leave-from {
-    grid-template-rows: 1fr;
-    opacity: 1;
-    transform: translateY(0) scaleY(1);
+.ai-settings-enter-from .settings-panel-shell,
+.ai-settings-leave-to .settings-panel-shell {
+    transform: translateY(0.75rem) scale(0.985);
 }
 .error-message {
     margin: 0;
@@ -680,24 +681,57 @@
 }
 @media (max-width: 600px) {
     .document-ai-composer {
-        padding: 0.55rem;
+        gap: 0.35rem;
+        padding: 0.35rem 0.45rem;
+        border-radius: 1.75rem;
     }
-    .composer-controls {
-        flex-wrap: wrap;
+    .composer-row {
+        gap: 0.2rem;
     }
-    .scope-label,
-    .token-estimate {
-        display: none;
+    .attachment-button,
+    .settings-button {
+        width: 2rem !important;
+        height: 2rem !important;
+        min-width: 2rem !important;
+        min-height: 2rem !important;
     }
-    .scope-control {
-        flex: 1;
+    .send-button {
+        width: 2.45rem !important;
+        height: 2.45rem !important;
+        min-width: 2.45rem !important;
+        min-height: 2.45rem !important;
+        flex-basis: 2.45rem;
+        border-radius: 50%;
     }
-    .scope-control :deep([role='tablist']) {
+    .settings-overlay {
+        place-items: stretch;
+        padding: 0;
+        background: var(--md-surface);
+        backdrop-filter: none;
+    }
+    .settings-panel-shell {
         width: 100%;
+        height: 100dvh;
+        max-height: 100dvh;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
     }
-    .scope-control :deep([role='tab']) {
-        flex: 1;
-        min-height: 2.2rem;
+    .settings-panel {
+        padding:
+            0
+            0.75rem
+            max(1rem, env(safe-area-inset-bottom));
+    }
+    .settings-intro {
+        top: 0;
+        margin: 0 -0.75rem;
+        padding:
+            max(0.75rem, env(safe-area-inset-top))
+            0.75rem
+            0.75rem;
+        background: var(--md-surface);
+        backdrop-filter: none;
     }
     .settings-grid {
         grid-template-columns: 1fr;
@@ -706,12 +740,8 @@
         align-items: flex-start;
     }
     .quick-action-summary {
-        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-columns: auto minmax(0, 1fr);
         gap: 0.55rem;
-    }
-    .action-scope {
-        grid-column: 3;
-        grid-row: 1;
     }
     .action-buttons {
         grid-column: 1 / -1;
@@ -739,9 +769,6 @@
     .quick-action-edit-footer :deep(button),
     .quick-action-empty :deep(button) {
         justify-content: center;
-    }
-    .selection-context {
-        font-size: 0.68rem;
     }
 }
 @media (prefers-reduced-motion: reduce) {

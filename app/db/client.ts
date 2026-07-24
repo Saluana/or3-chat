@@ -219,6 +219,28 @@ export class Or3DB extends Dexie {
         this.version(14).stores({
             posts: 'id, title, postType, [postType+title], deleted, created_at, updated_at',
         });
+
+        // Version 15: Repair rows installed by snapshot-v1 before snapshot
+        // payloads were normalized. Those rows stored the wire field
+        // `post_type`, so Dexie's `postType` indexes could not see documents,
+        // prompts, or internal document revisions on fresh devices.
+        this.version(15)
+            .stores({
+                posts: 'id, title, postType, [postType+title], deleted, created_at, updated_at',
+            })
+            .upgrade((tx) =>
+                tx.table('posts')
+                    .toCollection()
+                    .modify((post: Record<string, unknown>) => {
+                        if (
+                            typeof post.postType !== 'string' &&
+                            typeof post.post_type === 'string'
+                        ) {
+                            post.postType = post.post_type;
+                        }
+                        delete post.post_type;
+                    })
+            );
     }
 }
 

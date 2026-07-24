@@ -10,7 +10,7 @@ export function useChatInputTheme(closeIcon: Ref<string>) {
             size: 'sm',
             color: 'primary',
             variant: 'solid',
-            class: 'theme-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center',
+            class: 'theme-btn aspect-square shrink-0 h-8 min-h-8 w-8 min-w-8 p-0 disabled:opacity-40 text-white dark:text-black flex items-center justify-center',
         }
     );
     const stopButtonProps = useButtonOverrides(
@@ -20,7 +20,7 @@ export function useChatInputTheme(closeIcon: Ref<string>) {
             size: 'sm',
             color: 'error',
             variant: 'solid',
-            class: 'theme-btn flex items-center justify-center text-[var(--md-on-error)] bg-[var(--md-error)]! hover:bg-[var(--md-error-hover)]! active:bg-[var(--md-error-active)]!',
+            class: 'theme-btn aspect-square shrink-0 h-8 min-h-8 w-8 min-w-8 p-0 flex items-center justify-center text-[var(--md-on-error)] bg-[var(--md-error)]! hover:bg-[var(--md-error-hover)]! active:bg-[var(--md-error-active)]!',
         }
     );
     const attachButtonProps = useButtonOverrides(

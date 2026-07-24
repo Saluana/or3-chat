@@ -1,11 +1,86 @@
 import { computed, ref } from 'vue';
 import { getWorkspaceDb, type Or3DB } from '~/db/client';
+import { getHookBridge } from '~/core/sync/hook-bridge';
 
-type LegacyStats = {
+export type LegacyStats = {
     threads: number;
     messages: number;
     projects: number;
 };
+
+/**
+ * Copy the legacy unscoped database into a workspace database.
+ *
+ * Source reads must finish before the target transaction begins: IndexedDB
+ * transactions cannot safely await work from a different database. The target
+ * transaction includes the sync bookkeeping tables so HookBridge can enqueue
+ * every imported synced row atomically.
+ */
+export async function copyLegacyWorkspaceData(
+    baseDb: Or3DB,
+    targetDb: Or3DB
+): Promise<LegacyStats> {
+    const [
+        projects,
+        threads,
+        messages,
+        kv,
+        attachments,
+        fileMeta,
+        fileBlobs,
+        posts,
+    ] = await Promise.all([
+        baseDb.projects.toArray(),
+        baseDb.threads.toArray(),
+        baseDb.messages.toArray(),
+        baseDb.kv.toArray(),
+        baseDb.attachments.toArray(),
+        baseDb.file_meta.toArray(),
+        baseDb.file_blobs.toArray(),
+        baseDb.posts.toArray(),
+    ]);
+
+    const targetTables = [
+        targetDb.projects,
+        targetDb.threads,
+        targetDb.messages,
+        targetDb.kv,
+        targetDb.attachments,
+        targetDb.file_meta,
+        targetDb.file_blobs,
+        targetDb.posts,
+    ];
+
+    // The workspace manager is normally mounted while the sync engine is
+    // running, but make capture explicit so imports cannot silently remain
+    // local-only if plugin startup order changes.
+    getHookBridge(targetDb).start();
+
+    await targetDb.transaction(
+        'rw',
+        [...targetTables, targetDb.pending_ops, targetDb.tombstones],
+        async () => {
+            if (projects.length) await targetDb.projects.bulkPut(projects);
+            if (threads.length) await targetDb.threads.bulkPut(threads);
+            if (messages.length) await targetDb.messages.bulkPut(messages);
+            if (kv.length) await targetDb.kv.bulkPut(kv);
+            if (attachments.length) {
+                await targetDb.attachments.bulkPut(attachments);
+            }
+            if (fileMeta.length) await targetDb.file_meta.bulkPut(fileMeta);
+            if (fileBlobs.length) {
+                await targetDb.file_blobs.bulkPut(fileBlobs);
+            }
+            if (posts.length) await targetDb.posts.bulkPut(posts);
+        }
+    );
+
+    return {
+        threads: threads.length,
+        messages: messages.length,
+        projects: projects.length,
+    };
+}
 
 export function useWorkspaceLegacyImport(baseDb: Or3DB) {
     const legacyStats = ref<LegacyStats>({
@@ -40,37 +115,7 @@ export function useWorkspaceLegacyImport(baseDb: Or3DB) {
         } = {}
     ) {
         const targetDb = getWorkspaceDb(activeWorkspaceId);
-
-        const tableDefinitions = {
-            projects: targetDb.projects,
-            threads: targetDb.threads,
-            messages: targetDb.messages,
-            kv: targetDb.kv,
-            attachments: targetDb.attachments,
-            file_meta: targetDb.file_meta,
-            file_blobs: targetDb.file_blobs,
-            posts: targetDb.posts,
-        } as const;
-
-        await targetDb.transaction('rw', Object.values(tableDefinitions), async () => {
-            async function copyTable<T>(
-                sourceTable: { toArray: () => Promise<T[]> },
-                targetTable: { bulkPut: (items: readonly T[]) => Promise<unknown> }
-            ) {
-                const sourceRows = await sourceTable.toArray();
-                if (sourceRows.length === 0) return;
-                await targetTable.bulkPut(sourceRows);
-            }
-
-            await copyTable(baseDb.projects, targetDb.projects);
-            await copyTable(baseDb.threads, targetDb.threads);
-            await copyTable(baseDb.messages, targetDb.messages);
-            await copyTable(baseDb.kv, targetDb.kv);
-            await copyTable(baseDb.attachments, targetDb.attachments);
-            await copyTable(baseDb.file_meta, targetDb.file_meta);
-            await copyTable(baseDb.file_blobs, targetDb.file_blobs);
-            await copyTable(baseDb.posts, targetDb.posts);
-        });
+        await copyLegacyWorkspaceData(baseDb, targetDb);
 
         await loadLegacyStats();
         await options.onImported?.();
