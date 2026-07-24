@@ -37,7 +37,7 @@
                         </g>
                     </svg>
                     <span
-                        class="text-[7px] uppercase tracking-wider whitespace-nowrap"
+                        class="sidebar-rail-caption text-[7px] uppercase tracking-wider whitespace-nowrap"
                     >
                         <template v-if="hydrated">{{ connectionLabel }}</template>
                         <template v-else>Connect</template>
@@ -93,7 +93,7 @@
                         </g>
                     </svg>
                     <span
-                        class="text-[7px] uppercase tracking-wider whitespace-nowrap"
+                        class="sidebar-rail-caption text-[7px] uppercase tracking-wider whitespace-nowrap"
                     >
                         <template v-if="hydrated">{{ connectionLabel }}</template>
                         <template v-else>Connect</template>

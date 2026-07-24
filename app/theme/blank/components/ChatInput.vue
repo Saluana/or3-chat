@@ -237,6 +237,18 @@ function forwardResize(payload: ResizePayload) {
     color: color-mix(in srgb, var(--md-on-surface) 38%, transparent);
     opacity: 1;
     font-weight: 400;
+    font: inherit;
+    letter-spacing: inherit;
+    /*
+     * Keep the placeholder in the same inline formatting context as the
+     * contenteditable caret. An absolutely positioned pseudo-element gets a
+     * different baseline in iOS WebKit, which makes the caret look too high.
+     */
+    position: static;
+    float: left;
+    height: 0;
+    inset: auto;
+    margin-inline-start: -2px;
 }
 
 /* ── Loading spinner ── */
@@ -361,13 +373,57 @@ function forwardResize(payload: ResizePayload) {
         font-size: 1rem;
     }
 
+    /*
+     * iOS WebKit paints the contenteditable caret at the full inherited line
+     * height. The site-wide 1.45 input line-height produces a 23.2px caret
+     * beside a 16px placeholder, so constrain this compact composer to 20px.
+     */
+    :deep(.blank2-chat-dropper .ProseMirror),
+    :deep(.blank2-chat-dropper .ProseMirror p) {
+        line-height: 1.25 !important;
+    }
+
+    /*
+     * iOS WebKit initially paints an empty contenteditable caret against the
+     * editor root, then moves it onto the paragraph after the first edit
+     * (including Backspace). That is why the caret fixes itself only after a
+     * key press. Avoid that unstable native empty state: hide its caret and
+     * draw one against the same paragraph line box as the placeholder.
+     * ProseMirror removes `is-editor-empty` as soon as content exists, so the
+     * native caret resumes automatically while typing.
+     */
+    :deep(
+        .blank2-chat-dropper
+            .ProseMirror:focus:has(p.is-editor-empty:first-child)
+    ) {
+        caret-color: transparent;
+    }
+
+    :deep(
+        .blank2-chat-dropper
+            .ProseMirror:focus
+            p.is-editor-empty:first-child::after
+    ) {
+        content: '';
+        position: absolute;
+        inset-inline-start: -2px;
+        inset-block-start: 50%;
+        width: 2px;
+        height: 1rem;
+        border-radius: 999px;
+        background: #007aff;
+        transform: translateY(-50%);
+        pointer-events: none;
+        animation: blank-mobile-caret-blink 1.05s steps(1, end) infinite;
+    }
+
     :deep(.blank2-chat-dropper .chat-input-editor-container) {
-        min-height: 2.75rem !important;
-        padding: 0 3.6rem 0 6.25rem !important;
+        min-height: 2.5rem !important;
+        padding: 0 3rem 0 5rem !important;
     }
 
     :deep(.blank2-chat-dropper .chat-input-bottom-controls) {
-        height: 3.75rem;
+        height: 3.5rem;
     }
 
     :deep(.blank2-chat-dropper .chat-input-inner-container) {
@@ -376,6 +432,7 @@ function forwardResize(payload: ResizePayload) {
 
     :deep(.blank2-chat-dropper .chat-input-bottom-controls-left) {
         left: 0.5rem;
+        gap: 0.25rem;
     }
 
     :deep(.blank2-chat-dropper .chat-input-bottom-controls-right) {
@@ -386,25 +443,65 @@ function forwardResize(payload: ResizePayload) {
         margin: 0.5rem 0.5rem 0;
     }
 
-    :deep(.blank2-chat-dropper .chat-input-attachment-btn button),
-    :deep(.blank2-chat-dropper .chat-input-settings-btn button) {
-        min-width: 2.75rem;
-        min-height: 2.75rem;
-        width: 2.75rem;
-        height: 2.75rem;
+    :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-left .chat-input-attachment-btn > button),
+    :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-left .chat-input-settings-btn button) {
+        position: relative;
+        min-width: 2rem !important;
+        min-height: 2rem !important;
+        width: 2rem !important;
+        height: 2rem !important;
+        padding: 0 !important;
     }
 
-    :deep(.blank2-chat-dropper .chat-input-send-btn),
-    :deep(.blank2-chat-dropper .chat-input-stop-btn) {
-        flex-basis: 2.75rem;
-        min-width: 2.75rem;
-        min-height: 2.75rem;
-        width: 2.75rem;
-        height: 2.75rem;
+    :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-left .chat-input-attachment-btn > button::before),
+    :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-left .chat-input-settings-btn button::before) {
+        content: '';
+        position: absolute;
+        inset: -0.375rem;
+    }
+
+    :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-right .chat-input-send-btn),
+    :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-right .chat-input-stop-btn) {
+        position: relative;
+        flex-basis: 2.25rem;
+        min-width: 2.25rem !important;
+        min-height: 2.25rem !important;
+        width: 2.25rem !important;
+        height: 2.25rem !important;
+        padding: 0 !important;
+    }
+
+    :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-right .chat-input-send-btn::before),
+    :deep(.blank2-chat-dropper.chat-input-main .chat-input-bottom-controls-right .chat-input-stop-btn::before) {
+        content: '';
+        position: absolute;
+        inset: -0.25rem;
+    }
+
+    :deep(.blank2-chat-dropper .chat-input-attachment-btn .iconify),
+    :deep(.blank2-chat-dropper .chat-input-settings-btn .iconify),
+    :deep(.blank2-chat-dropper .chat-input-send-btn .iconify),
+    :deep(.blank2-chat-dropper .chat-input-stop-btn .iconify) {
+        width: 1.125rem !important;
+        height: 1.125rem !important;
+        min-width: 1.125rem;
+        min-height: 1.125rem;
     }
 
     :deep(.blank2-chat-dropper .chat-input-attachments) {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@keyframes blank-mobile-caret-blink {
+    0%,
+    45% {
+        opacity: 1;
+    }
+
+    50%,
+    100% {
+        opacity: 0;
     }
 }
 

@@ -13,6 +13,7 @@ State manager that powers OR3’s multi-pane chat/document workspace. It keeps t
 -   Tracks the active pane index, preventing focus bugs
 -   Emits hook events for pane open/close/switch so extensions stay in sync
 -   Supports a configurable pane cap, custom message loaders, and document flush callbacks
+-   Supports a reactive `allowMultiplePanes` policy so compact displays can enforce a single-pane workspace
 -   Launches registered custom pane apps while enforcing pane limits
 
 ---
@@ -39,6 +40,7 @@ multiPane.setActive(1);
 const multiPane = useMultiPane({
     initialThreadId: '',
     maxPanes: 3,
+    allowMultiplePanes: computed(() => !isMobile.value),
     onFlushDocument: async (docId) => {
         await saveDraft(docId);
     },
@@ -96,6 +98,7 @@ const multiPane = useMultiPane(options?: UseMultiPaneOptions);
 | ----------------- | --------------------------------------------------- | ---------------------------------------------------------------- |
 | `initialThreadId` | `string`                                            | Starting thread for the first pane (empty string for new chat).  |
 | `maxPanes`        | `number`                                            | Maximum simultaneous panes (default `3`).                        |
+| `allowMultiplePanes` | `MaybeRefOrGetter<boolean>`                      | Reactive policy guard for adding panes (default `true`).         |
 | `onFlushDocument` | `(id: string) => void \| Promise<void>`             | Called before closing a document pane so you can persist drafts. |
 | `loadMessagesFor` | `(threadId: string) => Promise<MultiPaneMessage[]>` | Override message loader (defaults to Dexie query).               |
 
@@ -150,7 +153,7 @@ interface PaneState {
 
 -   **Thread veto**: Filters registered on `ui.pane.thread:filter:select` can return `false` to block a thread switch.
 -   **Document panes**: When `mode === 'doc'` and `documentId` is set, `closePane` calls `onFlushDocument` before removing the pane—use it to save unsaved edits.
--   **Pane limit**: `addPane()` silently no-ops once `maxPanes` is reached; pair with `canAddPane` to disable UI affordances.
+-   **Pane limit and display policy**: `addPane()` silently no-ops once `maxPanes` is reached or `allowMultiplePanes` resolves to `false`; pair with `canAddPane` to disable UI affordances.
 -   **Custom modes**: `newPaneForApp` sets `mode` to the app id, so use `updatePane` if your app needs to adjust metadata after loading.
 -   **Hot reload**: On HMR the latest instance overwrites `__or3MultiPaneApi`, so developer tooling always hits the freshest store.
 -   **Testing**: Pass `loadMessagesFor` to inject fixtures without touching Dexie.

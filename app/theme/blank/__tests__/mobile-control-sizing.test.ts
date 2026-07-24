@@ -25,13 +25,46 @@ describe('blank theme mobile control sizing', () => {
     it('defines an Apple-sized mobile interaction and type scale', () => {
         expect(blankStyles).toContain('--blank-mobile-control-min: 44px');
         expect(blankStyles).toContain('--blank-mobile-control-text: 16px');
+        expect(blankStyles).toContain('--blank-mobile-label-text: 14px');
+        expect(blankStyles).toContain('--blank-mobile-icon-size: 20px');
         expect(blankStyles).toContain('--blank-mobile-supporting-text: 12px');
-        expect(blankStyles).toContain('[role="button"]');
+        expect(blankStyles).toContain(
+            'button:not([role="switch"]):not([role="checkbox"]):not([role="radio"])',
+        );
         expect(blankStyles).toContain('[role="menuitem"]');
         expect(blankStyles).toContain('[role="option"]');
         expect(blankStyles).toContain('[role="tab"]');
         expect(blankStyles).toContain('min-height: var(--blank-mobile-control-min) !important');
         expect(blankStyles).toContain('min-width: var(--blank-mobile-control-min) !important');
+    });
+
+    it('keeps switch tracks compact while their surrounding rows remain touch sized', () => {
+        const primaryTouchSelector = blankStyles.match(
+            /html\[data-theme="blank"\] :where\(([\s\S]*?)\)\s*\{\s*min-height: var\(--blank-mobile-control-min\)/,
+        );
+        expect(primaryTouchSelector?.[1]).toBeDefined();
+        expect(primaryTouchSelector?.[1]).not.toContain(
+            '\n        [role="switch"],',
+        );
+        expect(blankStyles).toContain('.chat-settings-switch');
+        expect(blankStyles).toContain(
+            '[data-slot="root"]:has([role="switch"])',
+        );
+    });
+
+    it('uses a readable but compact mobile hierarchy for sidebar content', () => {
+        expect(blankStyles).toContain('.sb-group-header-action');
+        expect(blankStyles).toContain('.page-link-label');
+        expect(blankStyles).toContain('.page-link-description');
+        expect(blankStyles).toContain('.sb-btn-title');
+        expect(blankStyles).toContain('.sb-btn-icon');
+        expect(blankStyles).toContain('padding-right: 3.25rem !important');
+        expect(blankStyles).toContain('font-size: 8px !important');
+        expect(blankStyles).toContain('min-height: 56px !important');
+        expect(blankStyles).toContain('padding-block: 6px !important');
+        expect(blankStyles).toContain('[aria-label="Account menu"]');
+        expect(blankStyles).toContain('.sidebar-rail-caption');
+        expect(blankStyles).toContain('.sidebar-mode-badge');
     });
 
     it('keeps Nuxt UI mobile variants at least 44px without changing desktop sizes', () => {
@@ -47,10 +80,23 @@ describe('blank theme mobile control sizing', () => {
         expect(blankAppConfig.ui.tabs.slots.trigger).toContain('max-md:min-h-[44px]!');
     });
 
-    it('uses 44px controls in the fixed-position mobile composers', () => {
-        expect(chatInput).toContain('width: 2.75rem');
-        expect(chatInput).toContain('height: 2.75rem');
-        expect(chatInput).toContain('flex-basis: 2.75rem');
+    it('uses compact visible controls with expanded hit areas in the mobile composer', () => {
+        expect(chatInput).toContain('width: 2.25rem !important');
+        expect(chatInput).toContain('height: 2.25rem !important');
+        expect(chatInput).toContain('width: 2rem !important');
+        expect(chatInput).toContain('inset: -0.375rem');
+        expect(chatInput).toContain('position: static');
+        expect(chatInput).toContain('float: left');
+        expect(chatInput).toContain('height: 0');
+        expect(chatInput).toContain('margin-inline-start: -2px');
+        expect(chatInput).toContain('line-height: 1.25 !important');
+        expect(chatInput).toContain('caret-color: transparent');
+        expect(chatInput).toContain('height: 1rem');
+        expect(chatInput).toContain('blank-mobile-caret-blink');
+        expect(blankStyles).toContain('(display-mode: standalone)');
+        expect(blankStyles).toContain(
+            'padding-bottom: max(34px, env(safe-area-inset-bottom)) !important',
+        );
         expect(blankStyles).toContain('.document-ai-composer');
         expect(blankStyles).toContain('.attachment-button');
         expect(blankStyles).toContain('.settings-button');

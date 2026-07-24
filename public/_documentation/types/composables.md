@@ -187,7 +187,7 @@ export interface PreviewCacheMetrics {
 | ------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `MultiPaneMessage`        | interface | Normalised pane message payload (`role`, `content`, optional `file_hashes`, `id`, `stream_id`).                          |
 | `PaneState`               | interface | Persistent pane descriptor (`id`, `mode`, `threadId`, optional `documentId`, `messages`, `validating`).                  |
-| `UseMultiPaneOptions`     | interface | Optional configuration for `useMultiPane()` (`initialThreadId`, `maxPanes`, `onFlushDocument`, `loadMessagesFor`).       |
+| `UseMultiPaneOptions`     | interface | Optional configuration for `useMultiPane()` (`initialThreadId`, `maxPanes`, `allowMultiplePanes`, `onFlushDocument`, `loadMessagesFor`). |
 | `UseMultiPaneApi`         | interface | Methods returned by `useMultiPane()` (`panes`, `activePaneIndex`, `addPane`, `setPaneThread`, navigation helpers, etc.). |
 | `MultiPaneState`          | alias     | Re-export of `PaneState` for consumers that prefer `MultiPaneState[]` semantics.                                         |
 | `UsePaneDocumentsOptions` | interface | `usePaneDocuments()` inputs (pane refs, `activePaneIndex`, `createNewDoc`, `flushDocument`).                             |

@@ -1,7 +1,16 @@
 // Multi-pane state management composable for chat & documents
 // Keeps pane logic outside of UI components for easier testing & extension.
 
-import { ref, computed, onScopeDispose, getCurrentScope, type Ref, type ComputedRef } from 'vue';
+import {
+    ref,
+    computed,
+    onScopeDispose,
+    getCurrentScope,
+    toValue,
+    type Ref,
+    type ComputedRef,
+    type MaybeRefOrGetter,
+} from 'vue';
 import { useLocalStorage } from '@vueuse/core';
 import Dexie from 'dexie';
 import { getDb } from '~/db/client';
@@ -49,6 +58,7 @@ export interface UseMultiPaneOptions {
     minPaneWidth?: number; // minimum width per pane in pixels (default 280)
     maxPaneWidth?: number; // maximum width per pane in pixels (default 2000)
     storageKey?: string; // localStorage key for persisting widths (default 'pane-widths')
+    allowMultiplePanes?: MaybeRefOrGetter<boolean>; // responsive or policy-level pane creation guard
 }
 
 export interface UseMultiPaneApi {
@@ -276,12 +286,20 @@ export function useMultiPane(
         },
     });
 
+    const multiplePanesAllowed = computed(
+        () =>
+            options.allowMultiplePanes === undefined ||
+            toValue(options.allowMultiplePanes)
+    );
     const canAddPane = computed(
-        () => panes.value.length + pendingPaneCreations.value < maxPanes
+        () =>
+            multiplePanesAllowed.value &&
+            panes.value.length + pendingPaneCreations.value < maxPanes
     );
-    const newWindowTooltip = computed(() =>
-        canAddPane.value ? 'New window' : `Max ${maxPanes} windows`
-    );
+    const newWindowTooltip = computed(() => {
+        if (!multiplePanesAllowed.value) return 'Single pane on this display';
+        return canAddPane.value ? 'New window' : `Max ${maxPanes} windows`;
+    });
 
     const loadMessagesFor = options.loadMessagesFor || defaultLoadMessagesFor;
 

@@ -101,7 +101,7 @@
                 :is="modeLinkComponent"
                 v-bind="modeLinkProps"
                 :aria-label="modeLabel"
-                class="mt-auto mb-1 block rounded-[var(--md-border-radius)] border px-1.5 py-0.5 text-[9px] uppercase tracking-wider whitespace-nowrap"
+                class="sidebar-mode-badge mt-auto mb-1 block rounded-[var(--md-border-radius)] border px-1.5 py-0.5 text-[9px] uppercase tracking-wider whitespace-nowrap"
                 :class="
                     isSsrAuthEnabled
                         ? 'border-[var(--md-primary)]/40 text-[var(--md-primary)]'

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { ref } from 'vue';
 
 // Store original require/import
 let originalDb: any;
@@ -151,6 +152,24 @@ describe('useMultiPane - newPaneForApp', () => {
 
         // Should still be 2
         expect(multiPane.panes.value.length).toBe(2);
+    });
+
+    it('does not create panes while the display disallows multi-pane', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        const allowMultiplePanes = ref(false);
+        const multiPane = useMultiPane({
+            maxPanes: 3,
+            allowMultiplePanes,
+        });
+
+        expect(multiPane.canAddPane.value).toBe(false);
+        multiPane.addPane();
+        expect(multiPane.panes.value).toHaveLength(1);
+
+        allowMultiplePanes.value = true;
+        expect(multiPane.canAddPane.value).toBe(true);
+        multiPane.addPane();
+        expect(multiPane.panes.value).toHaveLength(2);
     });
 
     it('does not create pane for unregistered app', async () => {

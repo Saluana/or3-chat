@@ -87,8 +87,12 @@ in a correctly configured viewport.
   desktop layouts remain unchanged.
 - A control's visible icon may be smaller than 44px, but its interactive region
   must not be.
-- Use 16px for editable and control text on mobile. Supporting labels may be
-  smaller, but keep them at or above 12px and use adequate contrast.
+- Use 16–17px for primary control and navigation labels, and at least 16px for
+  editable text on mobile. Supporting labels may be smaller, but keep ordinary
+  supporting copy at or above 12px and use adequate contrast.
+- Use 20–24px visible icons inside the larger hit region. Primary navigation
+  rows can be 48–56px tall while secondary inline actions stay visually
+  compact.
 - Preserve at least a small visual gap between adjacent hit regions to reduce
   accidental taps.
 - Theme-level rules must cover portal content and raw DOM controls; component

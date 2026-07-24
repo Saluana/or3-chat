@@ -161,8 +161,9 @@
                 <div
                     v-for="(pane, i) in panes"
                     :key="pane.id"
+                    v-show="!isMobile || i === activePaneIndex"
                     class="relative flex flex-col border-l-[var(--md-border-width)] first:border-l-0 outline-none focus-visible:ring-0 overflow-visible"
-                    :style="{ width: getPaneWidth(i) }"
+                    :style="{ width: isMobile ? '100%' : getPaneWidth(i) }"
                     :class="[
                         ...(i === activePaneIndex && panes.length > 1
                             ? [
@@ -182,7 +183,7 @@
                     @click="setActive(i)"
                 >
                     <div
-                        v-if="panes.length > 1"
+                        v-if="panes.length > 1 && !isMobile"
                         class="absolute top-1 right-1 z-30"
                     >
                         <UTooltip :delay-duration="0" text="Close window">
@@ -210,7 +211,7 @@
 
                     <!-- Resize handle (only between panes, not after the last one) -->
                     <PaneResizeHandle
-                        v-if="i < panes.length - 1"
+                        v-if="!isMobile && i < panes.length - 1"
                         :pane-index="i"
                         :pane-count="panes.length"
                         :is-desktop="!isMobile"
@@ -308,6 +309,8 @@ const showNotificationBell = computed(
 );
 const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
+const minPaneWidth = 280;
+const { isMobile } = useResponsiveState();
 
 // ---------------- Multi-pane ----------------
 const {
@@ -337,10 +340,8 @@ const {
     },
     minPaneWidth: 280,
     maxPaneWidth: 2000,
+    allowMultiplePanes: computed(() => !isMobile.value),
 });
-
-const minPaneWidth = 280;
-const { isMobile } = useResponsiveState();
 
 const themePlugin = useNuxtApp().$theme as ThemePlugin | undefined;
 const {

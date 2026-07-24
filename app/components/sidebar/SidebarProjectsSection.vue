@@ -84,18 +84,18 @@
                 >
                     <div class="flex items-start gap-3">
                         <div
-                            class="shrink-0 w-9 h-9 rounded-lg border border-dashed border-[color:var(--md-border-color)] bg-[color:var(--md-surface)] flex items-center justify-center text-[color:var(--md-on-surface-variant)]"
+                            class="project-empty-icon shrink-0 w-9 h-9 rounded-lg border border-dashed border-[color:var(--md-border-color)] bg-[color:var(--md-surface)] flex items-center justify-center text-[color:var(--md-on-surface-variant)]"
                         >
                             <UIcon :name="iconPlus" class="w-4 h-4" />
                         </div>
                         <div class="min-w-0 flex-1">
                             <div
-                                class="text-[13px] font-semibold text-[color:var(--md-on-surface)]"
+                                class="project-empty-title text-[13px] font-semibold text-[color:var(--md-on-surface)]"
                             >
                                 No projects yet
                             </div>
                             <p
-                                class="mt-0.5 text-[11px] leading-snug text-[color:var(--md-on-surface-variant)]"
+                                class="project-empty-description mt-0.5 text-[11px] leading-snug text-[color:var(--md-on-surface-variant)]"
                             >
                                 Create your first project to organize chats and
                                 documents.

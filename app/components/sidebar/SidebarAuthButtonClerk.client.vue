@@ -21,7 +21,7 @@
                     <span class="flex flex-col items-center gap-1 w-full">
                         <UIcon :name="iconUser" class="h-[18px] w-[18px]" />
                         <span
-                            class="text-[7px] uppercase tracking-wider whitespace-nowrap"
+                            class="sidebar-rail-caption text-[7px] uppercase tracking-wider whitespace-nowrap"
                         >
                             Login
                         </span>

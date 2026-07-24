@@ -246,19 +246,18 @@
         --blank-mobile-control-min: 44px;
         --blank-mobile-control-text: 16px;
         --blank-mobile-input-text: 16px;
+        --blank-mobile-label-text: 14px;
+        --blank-mobile-icon-size: 20px;
         --blank-mobile-supporting-text: 12px;
     }
 
     html[data-theme="blank"] :where(
-        button,
+        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
         [role="button"],
         [role="menuitem"],
         [role="option"],
         [role="tab"],
         [role="treeitem"],
-        [role="switch"],
-        [role="checkbox"],
-        [role="radio"],
         summary
     ) {
         min-height: var(--blank-mobile-control-min) !important;
@@ -268,13 +267,34 @@
     }
 
     html[data-theme="blank"] :where(
-        button,
-        [role="button"],
+        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
+        [role="button"]
+    ) {
+        min-width: var(--blank-mobile-control-min) !important;
+    }
+
+    /*
+     * A switch's painted track is intentionally smaller than its hit region.
+     * Nuxt UI renders that track as a button[role="switch"], so sizing the
+     * button itself to 44px distorts the track and thumb geometry.
+     */
+    html[data-theme="blank"] :where(
+        .chat-settings-switch,
+        [data-slot="root"]:has([role="switch"]),
+        [data-slot="root"]:has([role="checkbox"]),
+        [data-slot="root"]:has([role="radio"])
+    ) {
+        min-height: var(--blank-mobile-control-min) !important;
+        height: auto !important;
+        touch-action: manipulation;
+    }
+
+    html[data-theme="blank"] :where(
         [role="switch"],
         [role="checkbox"],
         [role="radio"]
     ) {
-        min-width: var(--blank-mobile-control-min) !important;
+        touch-action: manipulation;
     }
 
     html[data-theme="blank"] :where(
@@ -287,7 +307,7 @@
     }
 
     html[data-theme="blank"] :where(
-        button,
+        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
         [role="button"],
         [role="menuitem"],
         [role="option"],
@@ -299,6 +319,33 @@
         [data-slot="placeholder"]
     ) {
         font-size: inherit !important;
+    }
+
+    /* Keep tiny utility text legible without flattening the whole hierarchy. */
+    html[data-theme="blank"] :where(
+        .text-xs,
+        [class~="text-[7px]"],
+        [class~="text-[8px]"],
+        [class~="text-[9px]"],
+        [class~="text-[10px]"],
+        [class~="text-[11px]"]
+    ) {
+        font-size: var(--blank-mobile-supporting-text) !important;
+        line-height: 1.35;
+    }
+
+    /* Icons may stay visually smaller than their 44px hit target. */
+    html[data-theme="blank"] :where(
+        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
+        [role="button"],
+        [role="menuitem"],
+        [role="option"],
+        [role="tab"],
+        [role="treeitem"]
+    ) > .iconify {
+        min-width: var(--blank-mobile-icon-size);
+        min-height: var(--blank-mobile-icon-size);
+        font-size: var(--blank-mobile-icon-size) !important;
     }
 
     html[data-theme="blank"] :is(
@@ -356,6 +403,230 @@
         line-height: 1.35;
     }
 
+    /* Sidebar mobile hierarchy: readable rows, compact section actions. */
+    html[data-theme="blank"] .sb-group-header {
+        min-height: var(--blank-mobile-control-min);
+        height: var(--blank-mobile-control-min);
+    }
+
+    html[data-theme="blank"] :where(
+        .sb-group-header-label,
+        .sb-recent-header > span
+    ) {
+        font-size: 13px !important;
+        line-height: 1.25;
+    }
+
+    html[data-theme="blank"] .sb-group-header-action {
+        font-size: var(--blank-mobile-label-text) !important;
+        line-height: 1.2;
+        padding-inline: 0.625rem;
+    }
+
+    html[data-theme="blank"] .sb-group-header-icon {
+        width: 18px !important;
+        height: 18px !important;
+    }
+
+    html[data-theme="blank"] :where(
+        .sb-btn-title
+    ) {
+        font-size: var(--blank-mobile-control-text) !important;
+        line-height: 1.3;
+    }
+
+    html[data-theme="blank"] .unified-sb-item {
+        min-height: 48px !important;
+        padding-right: 3.25rem !important;
+        overflow: hidden;
+    }
+
+    html[data-theme="blank"] .unified-sb-item .sb-btn-title {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-theme="blank"] .page-link-label {
+        font-size: 15px !important;
+        line-height: 1.25;
+    }
+
+    html[data-theme="blank"] .page-link-description {
+        font-size: 13px !important;
+        line-height: 1.35;
+    }
+
+    @layer utilities {
+        html[data-theme="blank"] .page-link-btn {
+            min-height: 56px !important;
+            padding-block: 6px !important;
+        }
+
+        html[data-theme="blank"] .bottomnav-root
+            [aria-label="Account menu"] {
+            width: var(--blank-mobile-control-min) !important;
+            height: var(--blank-mobile-control-min) !important;
+            min-width: var(--blank-mobile-control-min) !important;
+            min-height: var(--blank-mobile-control-min) !important;
+            padding: 0 !important;
+        }
+
+        html[data-theme="blank"] .bottomnav-root
+            [aria-label="Account menu"] span span {
+            font-size: 8px !important;
+            line-height: 1.15 !important;
+            letter-spacing: 0.04em !important;
+        }
+    }
+
+    html[data-theme="blank"] :where(
+        .page-link-icon-container > .iconify,
+        .page-link-icon,
+        .sb-btn-icon
+    ) {
+        width: 20px !important;
+        height: 20px !important;
+        min-width: 20px;
+        min-height: 20px;
+        font-size: 20px !important;
+    }
+
+    html[data-theme="blank"] .page-link-icon-container {
+        width: 38px;
+        height: 38px;
+    }
+
+    html[data-theme="blank"] .project-empty-icon {
+        width: 40px;
+        height: 40px;
+    }
+
+    html[data-theme="blank"] .project-empty-icon > .iconify {
+        width: 20px !important;
+        height: 20px !important;
+        font-size: 20px !important;
+    }
+
+    html[data-theme="blank"] .project-empty-title {
+        font-size: 16px !important;
+        line-height: 1.3;
+    }
+
+    html[data-theme="blank"] .project-empty-description {
+        font-size: var(--blank-mobile-label-text) !important;
+        line-height: 1.4;
+    }
+
+    html[data-theme="blank"] :where(
+        #nav-top-section,
+        #nav-collapsed-container,
+        .bottomnav-root
+    ) .iconify {
+        width: 24px !important;
+        height: 24px !important;
+        font-size: 24px !important;
+    }
+
+    html[data-theme="blank"] :where(
+        .sidebar-rail-caption
+    ) {
+        font-size: 8px !important;
+        line-height: 1.15;
+        letter-spacing: 0.04em;
+    }
+
+    html[data-theme="blank"] .sidebar-mode-badge {
+        font-size: 9px !important;
+        line-height: 1.1;
+        letter-spacing: 0.04em;
+    }
+
+    /* Header icon buttons share one visual and interactive size. */
+    html[data-theme="blank"] #top-nav :where(
+        .theme-btn,
+        .notification-bell-btn
+    ) {
+        width: var(--blank-mobile-control-min) !important;
+        height: var(--blank-mobile-control-min) !important;
+        min-width: var(--blank-mobile-control-min) !important;
+        min-height: var(--blank-mobile-control-min) !important;
+        padding: 0 !important;
+    }
+
+    html[data-theme="blank"] #top-nav :where(
+        .theme-btn,
+        .notification-bell-btn
+    ) .iconify {
+        width: 22px !important;
+        height: 22px !important;
+        min-width: 22px;
+        min-height: 22px;
+        font-size: 22px !important;
+    }
+
+    html[data-theme="blank"] #top-nav
+        .notification-bell-btn .iconify {
+        width: 24px !important;
+        height: 24px !important;
+        min-width: 24px;
+        min-height: 24px;
+        font-size: 24px !important;
+    }
+
+    /*
+     * Keep the chat composer visually compact. The generic mobile UButton
+     * floor is 44px, so these buttons paint smaller controls and recover the
+     * touch area with their component-level pseudo-elements.
+     */
+    @layer utilities {
+        html[data-theme="blank"] .blank2-chat-dropper.chat-input-main
+            .chat-input-bottom-controls-left
+            :is(.chat-input-attachment-btn, .chat-input-settings-btn)
+            button {
+            width: 2rem !important;
+            height: 2rem !important;
+            min-width: 2rem !important;
+            min-height: 2rem !important;
+            padding: 0 !important;
+        }
+
+        html[data-theme="blank"] .blank2-chat-dropper.chat-input-main
+            .chat-input-bottom-controls-right
+            :is(.chat-input-send-btn, .chat-input-stop-btn) {
+            width: 2.25rem !important;
+            height: 2.25rem !important;
+            min-width: 2.25rem !important;
+            min-height: 2.25rem !important;
+            padding: 0 !important;
+        }
+    }
+
+    /* Chat settings use a full-width row as the hit region, not the switch. */
+    html[data-theme="blank"] .chat-settings-popover .chat-settings-switch {
+        min-height: var(--blank-mobile-control-min) !important;
+        padding-block: 0.25rem;
+    }
+
+    html[data-theme="blank"] .chat-settings-popover .chat-settings-switch
+        [data-slot="label"] {
+        font-size: var(--blank-mobile-control-text) !important;
+        line-height: 1.3;
+    }
+
+    html[data-theme="blank"] .chat-settings-popover
+        .chat-settings-switch > .iconify {
+        width: 22px !important;
+        height: 22px !important;
+        font-size: 22px !important;
+    }
+
+    html[data-theme="blank"] .chat-settings-popover-tool-description {
+        font-size: 13px !important;
+        line-height: 1.4;
+    }
+
     html[data-theme="blank"] .document-ai-composer :is(
         .attachment-button,
         .settings-button,
@@ -365,5 +636,11 @@
         height: var(--blank-mobile-control-min) !important;
         min-width: var(--blank-mobile-control-min) !important;
         min-height: var(--blank-mobile-control-min) !important;
+    }
+}
+
+@media (max-width: 47.999rem) and (display-mode: standalone) {
+    html[data-theme="blank"] .chat-input-wrapper {
+        padding-bottom: max(34px, env(safe-area-inset-bottom)) !important;
     }
 }
