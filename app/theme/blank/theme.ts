@@ -134,8 +134,8 @@ export default defineTheme({
         formField: {
             ui: {
                 base: 'flex flex-col',
-                label: 'text-xs font-medium px-1 text-[var(--md-on-surface)]/70 -mb-0.5!',
-                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
+                label: 'text-xs font-medium px-1 text-[var(--md-on-surface)]/70 -mb-0.5! max-md:text-[16px]!',
+                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1! max-md:text-[13px]!',
             },
         },
         input: {
@@ -147,8 +147,8 @@ export default defineTheme({
                             'text-highlighted bg-default ring-0 border-[color:var(--md-border-color)] focus-visible:ring-1 focus-visible:ring-[color:var(--md-on-surface)]/20',
                     },
                     size: {
-                        sm: { base: 'h-[32px] text-[13px]!' },
-                        md: { base: 'h-[36px] text-[14px]!' },
+                        sm: { base: 'h-[32px] text-[13px]! max-md:min-h-[44px]! max-md:text-[16px]!' },
+                        md: { base: 'h-[36px] text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!' },
                         lg: { base: 'h-[44px] text-[16px]!' },
                     },
                 },
@@ -156,13 +156,13 @@ export default defineTheme({
         },
         selectmenu: {
             ui: {
-                base: 'text-[14px] leading-[20px]',
-                value: 'text-[14px]',
-                placeholder: 'text-[14px]',
-                label: 'text-[14px]',
-                item: 'text-[14px]',
-                itemLabel: 'text-[14px]',
-                content: 'text-[14px]',
+                base: 'text-[14px] leading-[20px] max-md:min-h-[44px]! max-md:text-[16px]!',
+                value: 'text-[14px] max-md:text-[16px]!',
+                placeholder: 'text-[14px] max-md:text-[16px]!',
+                label: 'text-[14px] max-md:text-[16px]!',
+                item: 'text-[14px] max-md:min-h-[44px]! max-md:text-[16px]!',
+                itemLabel: 'text-[14px] max-md:text-[16px]!',
+                content: 'text-[14px] max-md:text-[16px]!',
             },
         },
 

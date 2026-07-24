@@ -10,7 +10,7 @@ export default {
             slots: {
                 root: '',
                 item: 'border-0 rounded-xl mb-2 bg-[var(--md-surface-hover)] text-[var(--md-on-surface)]',
-                link: 'h-[36px] text-[14px]! hover:bg-[var(--md-surface-active)]',
+                link: 'h-[36px] text-[14px]! hover:bg-[var(--md-surface-active)] max-md:min-h-[44px]! max-md:text-[16px]!',
             },
         },
         modal: {
@@ -23,7 +23,7 @@ export default {
                 header: 'border-b border-[rgba(0,0,0,0.08)] dark:border-[rgba(255,255,255,0.1)] bg-transparent px-5! py-0 min-h-[52px] w-full justify-between flex items-center',
                 title: 'text-[var(--md-on-surface)] font-normal text-lg!',
                 description: 'hidden',
-                close: 'relative! top-auto! end-auto! flex items-center justify-center leading-none h-[36px] w-[36px] p-0 rounded-lg bg-transparent! hover:bg-[var(--md-surface-hover)]! text-[var(--md-on-surface-variant)]!',
+                close: 'relative! top-auto! end-auto! flex items-center justify-center leading-none h-[36px] w-[36px] p-0 rounded-lg bg-transparent! hover:bg-[var(--md-surface-hover)]! text-[var(--md-on-surface-variant)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
             },
         },
         button: {
@@ -58,21 +58,21 @@ export default {
                     error: 'text-[var(--md-on-error)] hover:bg-[var(--md-error-hover)] active:bg-[var(--md-error-active)]',
                 },
                 size: {
-                    xs: { base: 'h-[24px] px-[8px]! text-[13px]' },
+                    xs: { base: 'h-[24px] px-[8px]! text-[13px] max-md:min-h-[44px]! max-md:px-[14px]! max-md:text-[16px]!' },
                     sm: {
-                        base: 'h-[32px] px-[12px]! text-[14px]',
+                        base: 'h-[32px] px-[12px]! text-[14px] max-md:min-h-[44px]! max-md:px-[14px]! max-md:text-[16px]!',
                         leadingIcon: 'shrink-0 h-4 w-4',
                         trailingIcon: 'shrink-0 h-4 w-4',
                     },
-                    md: { base: 'h-[36px] px-[14px]! text-[14px]' },
+                    md: { base: 'h-[36px] px-[14px]! text-[14px] max-md:min-h-[44px]! max-md:px-[16px]! max-md:text-[16px]!' },
                     lg: { base: 'h-[44px] px-[20px]! text-[16px]' },
                     'sb-square': {
-                        base: 'h-[36px] w-[36px] text-[18px]',
+                        base: 'h-[36px] w-[36px] text-[18px] max-md:min-h-[44px]! max-md:min-w-[44px]!',
                         trailingIcon: 'shrink-0 h-5 w-5',
                         leadingIcon: 'shrink-0 h-5 w-5',
                     },
                     'sb-base': {
-                        base: 'bg-transparent hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0! shadow-none! text-[var(--md-on-surface)] h-[36px]',
+                        base: 'bg-transparent hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0! shadow-none! text-[var(--md-on-surface)] h-[36px] max-md:min-h-[44px]! max-md:text-[16px]!',
                         trailingIcon: 'shrink-0 h-5 w-5',
                         leadingIcon: 'shrink-0 h-5 w-5',
                     },
@@ -97,21 +97,21 @@ export default {
                 leading: { true: 'ps-10!' },
                 trailing: { true: 'pe-10!' },
                 size: {
-                    sm: { base: 'h-[32px] px-[12px]! text-[14px]' },
-                    md: { base: 'h-[36px] px-[14px]! text-[14px]' },
+                    sm: { base: 'h-[32px] px-[12px]! text-[14px] max-md:min-h-[44px]! max-md:text-[16px]!' },
+                    md: { base: 'h-[36px] px-[14px]! text-[14px] max-md:min-h-[44px]! max-md:text-[16px]!' },
                 },
             },
         },
         select: {
             slots: {
-                base: 'rounded-xl border border-[rgba(0,0,0,0.15)] bg-transparent text-[var(--md-on-surface)] ring-0! hover:border-[rgba(0,0,0,0.25)] focus:ring-1 focus:ring-[var(--md-primary)] dark:border-[rgba(255,255,255,0.15)] dark:hover:border-[rgba(255,255,255,0.25)] max-lg:text-[16px]!',
+                base: 'rounded-xl border border-[rgba(0,0,0,0.15)] bg-transparent text-[var(--md-on-surface)] ring-0! hover:border-[rgba(0,0,0,0.25)] focus:ring-1 focus:ring-[var(--md-primary)] dark:border-[rgba(255,255,255,0.15)] dark:hover:border-[rgba(255,255,255,0.25)] max-lg:text-[16px]! max-md:min-h-[44px]!',
                 content: 'rounded-xl border border-[rgba(0,0,0,0.08)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! shadow-lg dark:border-[rgba(255,255,255,0.08)]',
-                item: 'rounded-lg data-highlighted:before:bg-[var(--md-surface-hover)]',
+                item: 'rounded-lg data-highlighted:before:bg-[var(--md-surface-hover)] max-md:min-h-[44px]! max-md:text-[16px]!',
             },
         },
         tabs: {
             slots: {
-                trigger: 'text-[var(--md-on-surface-variant)] data-[state=active]:text-[var(--md-on-surface)]',
+                trigger: 'text-[var(--md-on-surface-variant)] data-[state=active]:text-[var(--md-on-surface)] max-md:min-h-[44px]! max-md:text-[16px]!',
             },
             variants: {
                 variant: {
@@ -136,8 +136,8 @@ export default {
         formField: {
             slots: {
                 base: 'flex flex-col',
-                label: 'text-sm font-medium -mb-1 px-1',
-                help: 'mt-[4px] text-xs text-[var(--md-on-surface-variant)] px-1!',
+                label: 'text-sm font-medium -mb-1 px-1 max-md:text-[16px]!',
+                help: 'mt-[4px] text-xs text-[var(--md-on-surface-variant)] px-1! max-md:text-[13px]!',
             },
         },
         fieldGroup: {
@@ -152,7 +152,7 @@ export default {
         toast: {
             slots: {
                 root: 'border-0 rounded-xl shadow-lg',
-                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0 rounded-full',
+                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0 rounded-full max-md:min-h-[44px]! max-md:min-w-[44px]!',
             },
         },
         popover: {
@@ -163,7 +163,7 @@ export default {
         },
         switch: {
             slots: {
-                root: 'relative flex items-start',
+                root: 'relative flex items-start max-md:min-h-[44px] max-md:items-center',
                 base: [
                     'inline-flex items-center shrink-0 rounded-full border-2 border-transparent focus-visible:outline-2 focus-visible:outline-offset-2 data-[state=unchecked]:bg-accented',
                     'transition-[background] duration-200',
@@ -208,11 +208,12 @@ export default {
         },
         selectMenu: {
             slots: {
-                base: 'rounded-xl border-0 max-lg:text-[16px]!',
+                base: 'rounded-xl border-0 max-lg:text-[16px]! max-md:min-h-[44px]!',
                 content:
                     'ring-0! border-0! rounded-xl bg-[var(--md-surface)] shadow-lg',
                 input: 'border-0 rounded-none! max-lg:text-[16px]!',
                 arrow: 'h-[18px] w-[18px]',
+                item: 'max-md:min-h-[44px]! max-md:text-[16px]!',
                 itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
             },
         },

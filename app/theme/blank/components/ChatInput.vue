@@ -362,12 +362,12 @@ function forwardResize(payload: ResizePayload) {
     }
 
     :deep(.blank2-chat-dropper .chat-input-editor-container) {
-        min-height: 2.5rem !important;
-        padding: 0 3.25rem 0 5rem !important;
+        min-height: 2.75rem !important;
+        padding: 0 3.6rem 0 6.25rem !important;
     }
 
     :deep(.blank2-chat-dropper .chat-input-bottom-controls) {
-        height: 3.5rem;
+        height: 3.75rem;
     }
 
     :deep(.blank2-chat-dropper .chat-input-inner-container) {
@@ -388,17 +388,19 @@ function forwardResize(payload: ResizePayload) {
 
     :deep(.blank2-chat-dropper .chat-input-attachment-btn button),
     :deep(.blank2-chat-dropper .chat-input-settings-btn button) {
-        min-height: 1.75rem;
-        width: 1.75rem;
+        min-width: 2.75rem;
+        min-height: 2.75rem;
+        width: 2.75rem;
+        height: 2.75rem;
     }
 
     :deep(.blank2-chat-dropper .chat-input-send-btn),
     :deep(.blank2-chat-dropper .chat-input-stop-btn) {
-        flex-basis: 2.25rem;
-        min-width: 2.25rem;
-        min-height: 2.25rem;
-        width: 2.25rem;
-        height: 2.25rem;
+        flex-basis: 2.75rem;
+        min-width: 2.75rem;
+        min-height: 2.75rem;
+        width: 2.75rem;
+        height: 2.75rem;
     }
 
     :deep(.blank2-chat-dropper .chat-input-attachments) {

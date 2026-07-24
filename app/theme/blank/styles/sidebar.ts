@@ -1,14 +1,14 @@
 const SidebarPopoverButtonConfig = {
-    class: 'justify-start font-normal !normal-case border-0',
+    class: 'justify-start font-normal !normal-case border-0 max-md:min-h-[44px]! max-md:text-[16px]!',
     variant: 'ghost',
     size: 'sm',
     ui: {
-        base: 'text-[14px]!',
+        base: 'text-[14px]! max-md:text-[16px]!',
     },
 };
 
 const SidebarCollapsedTopButtonConfig = {
-    class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
+    class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] max-md:min-h-[44px]! max-md:min-w-[44px]!',
 };
 
 export const sidebarOverrides = {
@@ -22,21 +22,21 @@ export const sidebarOverrides = {
 
     'input#sidebar.search': {
         ui: {
-            base: 'border border-[color:var(--md-border-color)] rounded-xl bg-[var(--md-surface)] hover:bg-[var(--md-surface)] ring-0! focus:ring-2 focus:ring-[color:var(--md-primary)]/10 text-[14px]! h-[40px]! shadow-[0_1px_2px_rgba(15,23,42,0.04)]',
+            base: 'border border-[color:var(--md-border-color)] rounded-xl bg-[var(--md-surface)] hover:bg-[var(--md-surface)] ring-0! focus:ring-2 focus:ring-[color:var(--md-primary)]/10 text-[14px]! h-[40px]! shadow-[0_1px_2px_rgba(15,23,42,0.04)] max-md:min-h-[44px]! max-md:text-[16px]!',
         },
     },
     'selectmenu#sidebar.project-select': {
-        class: 'h-[36px] rounded-xl border-0 ring-0 data-[state=open]:bg-[var(--md-surface-hover)]! w-full cursor-pointer',
+        class: 'h-[36px] rounded-xl border-0 ring-0 data-[state=open]:bg-[var(--md-surface-hover)]! w-full cursor-pointer max-md:min-h-[44px]!',
         ui: {
-            base: 'text-[14px]!',
-            value: 'text-[14px]!',
-            placeholder: 'text-[14px]!',
+            base: 'text-[14px]! max-md:text-[16px]!',
+            value: 'text-[14px]! max-md:text-[16px]!',
+            placeholder: 'text-[14px]! max-md:text-[16px]!',
             content:
-                'ring-0! border-0! rounded-xl bg-[var(--md-surface)] shadow-lg text-[14px]!',
+                'ring-0! border-0! rounded-xl bg-[var(--md-surface)] shadow-lg text-[14px]! max-md:text-[16px]!',
         },
         searchInput: {
             ui: {
-                base: 'text-[14px]! rounded-none rounded-t-xl!',
+                base: 'text-[14px]! rounded-none rounded-t-xl! max-md:min-h-[44px]! max-md:text-[16px]!',
             },
         },
     },
@@ -51,7 +51,7 @@ export const sidebarOverrides = {
     },
     'button#sidebar.new-chat': {
         variant: 'ghost',
-        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! border-0! rounded-xl',
+        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! border-0! rounded-xl max-md:min-h-[44px]! max-md:min-w-[44px]!',
     },
     'button#sidebar.collapsed-search': SidebarCollapsedTopButtonConfig,
     'button#sidebar.new-document': SidebarCollapsedTopButtonConfig,
@@ -71,7 +71,7 @@ export const sidebarOverrides = {
 
     /* --- Bottom nav buttons: clean, borderless --- */
     'button#sidebar.bottom-nav.info': {
-        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
+        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
     },
     'button#sidebar.bottom-nav.connect': {
         variant: 'ghost',
@@ -85,11 +85,11 @@ export const sidebarOverrides = {
     },
 
     'button#sidebar.bottom-nav.auth': {
-        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
+        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
     },
 
     'button#sidebar.bottom-nav.dashboard': {
-        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
+        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
     },
 
     'button#sidebar.bottom-nav.activity': SidebarPopoverButtonConfig,
@@ -122,13 +122,13 @@ export const sidebarOverrides = {
     /* --- Collapsed sidebar --- */
     'button#sidebar.collapsed-page': {
         ui: {
-            base: 'h-[40px] w-[40px] flex items-center justify-center bg-transparent hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 text-[var(--md-on-surface)] rounded-xl p-0!',
+            base: 'h-[40px] w-[40px] flex items-center justify-center bg-transparent hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 text-[var(--md-on-surface)] rounded-xl p-0! max-md:min-h-[44px]! max-md:min-w-[44px]!',
             leadingIcon: 'w-5 h-5',
         },
     },
     'button#sidebar.collapsed-page:active': {
         ui: {
-            base: 'h-[40px] w-[40px] flex items-center justify-center bg-[color:var(--md-primary)]/10 hover:bg-[color:var(--md-primary)]/14 border-0 text-[var(--md-primary)] rounded-xl p-0!',
+            base: 'h-[40px] w-[40px] flex items-center justify-center bg-[color:var(--md-primary)]/10 hover:bg-[color:var(--md-primary)]/14 border-0 text-[var(--md-primary)] rounded-xl p-0! max-md:min-h-[44px]! max-md:min-w-[44px]!',
             leadingIcon: 'w-5 h-5',
         },
     },

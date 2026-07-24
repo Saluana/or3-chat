@@ -10,8 +10,8 @@ describe('blank mobile chat send button', () => {
         );
 
         expect(source).toContain('aspect-ratio: 1 / 1');
-        expect(source).toContain('width: 2.25rem');
-        expect(source).toContain('height: 2.25rem');
-        expect(source).toContain('flex-basis: 2.25rem');
+        expect(source).toContain('width: 2.75rem');
+        expect(source).toContain('height: 2.75rem');
+        expect(source).toContain('flex-basis: 2.75rem');
     });
 });

@@ -2,7 +2,7 @@
 const chatInputButtonConfig = {
     variant: 'ghost' as const,
     size: 'sm' as const,
-    class: 'min-h-[36px] w-[36px] text-[var(--md-on-surface-variant)] flex items-center justify-center p-0 rounded-full hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0',
+    class: 'min-h-[36px] w-[36px] text-[var(--md-on-surface-variant)] flex items-center justify-center p-0 rounded-full hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 max-md:min-h-[44px]! max-md:min-w-[44px]!',
 };
 
 export const chatOverrides = {
@@ -41,26 +41,26 @@ export const chatOverrides = {
     'button#chat.attach': chatInputButtonConfig,
     'button#chat.settings': chatInputButtonConfig,
     'selectmenu#chat.model-select': {
-        class: 'h-[36px] rounded-full border-0 px-3 bg-transparent w-full min-w-[100px] max-w-[320px] ring-0! hover:bg-[var(--md-surface-hover)]! cursor-pointer text-[14px]!',
+        class: 'h-[36px] rounded-full border-0 px-3 bg-transparent w-full min-w-[100px] max-w-[320px] ring-0! hover:bg-[var(--md-surface-hover)]! cursor-pointer text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!',
         ui: {
-            base: 'text-[14px]!',
-            value: 'text-[14px]!',
-            placeholder: 'text-[14px]!',
-            item: 'text-[14px]!',
-            itemLabel: 'text-[14px]!',
+            base: 'text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!',
+            value: 'text-[14px]! max-md:text-[16px]!',
+            placeholder: 'text-[14px]! max-md:text-[16px]!',
+            item: 'text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!',
+            itemLabel: 'text-[14px]! max-md:text-[16px]!',
             content:
-                'ring-0! border-0! rounded-xl bg-[var(--md-surface)] shadow-lg text-[14px]!',
+                'ring-0! border-0! rounded-xl bg-[var(--md-surface)] shadow-lg text-[14px]! max-md:text-[16px]!',
         },
         searchInput: {
             ui: {
-                base: 'text-[14px]! rounded-none shadow-none! rounded-t-xl!',
+                base: 'text-[14px]! rounded-none shadow-none! rounded-t-xl! max-md:min-h-[44px]! max-md:text-[16px]!',
             },
         },
     },
     'button.settings': {
         class: 'rounded-none text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0',
         ui: {
-            label: 'text-[14px]!',
+            label: 'text-[14px]! max-md:text-[16px]!',
         },
     },
     'modal#dashboard.shell': {

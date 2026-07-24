@@ -43,7 +43,14 @@ describe('mobile form-control font-size contract', () => {
             expect(css).toContain(
                 '[contenteditable]:not([contenteditable="false"])'
             );
-            expect(css).toContain('font-size: 16px !important');
+            if (themeName === 'blank') {
+                expect(css).toContain('--blank-mobile-input-text: 16px');
+                expect(css).toContain(
+                    'font-size: var(--blank-mobile-input-text) !important'
+                );
+            } else {
+                expect(css).toContain('font-size: 16px !important');
+            }
             expect(css).not.toContain('input[type="file"]');
         }
     );

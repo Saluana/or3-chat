@@ -76,6 +76,24 @@ their computed font size is below `16px`.
 - Do not disable browser zoom with `maximum-scale` or `user-scalable`; users
   must retain page-zoom accessibility.
 
+## Mobile control sizing
+
+For the built-in touch presentation, use a 44px minimum hit region for buttons,
+menu items, tabs, switches, and text-like form controls. This follows Apple's
+44×44pt guidance and works because CSS pixels map closely to iOS layout points
+in a correctly configured viewport.
+
+- Keep the 44px requirement inside touch/mobile media queries so compact
+  desktop layouts remain unchanged.
+- A control's visible icon may be smaller than 44px, but its interactive region
+  must not be.
+- Use 16px for editable and control text on mobile. Supporting labels may be
+  smaller, but keep them at or above 12px and use adequate contrast.
+- Preserve at least a small visual gap between adjacent hit regions to reduce
+  accidental taps.
+- Theme-level rules must cover portal content and raw DOM controls; component
+  overrides with fixed `!important` dimensions need their own mobile rule.
+
 ## Contexts
 
 Auto-detection only covers `chat`, `sidebar`, `dashboard`, and `header`. For

@@ -234,10 +234,73 @@
 }
 
 /*
- * iOS and other mobile browsers zoom focused text controls below 16px.
- * Keep desktop typography compact while enforcing a mobile editing floor.
+ * Mobile interaction scale
+ *
+ * Apple recommends a 44×44pt hit region for touch controls, 17pt default text,
+ * and 11pt as the absolute minimum for supporting text. CSS px maps closely to
+ * the iOS layout-point coordinate system in a correctly configured viewport.
+ * Keep desktop compact and enforce the larger scale only on touch/small screens.
  */
 @media (hover: none) and (pointer: coarse), (max-width: 47.999rem) {
+    html[data-theme="blank"] {
+        --blank-mobile-control-min: 44px;
+        --blank-mobile-control-text: 16px;
+        --blank-mobile-input-text: 16px;
+        --blank-mobile-supporting-text: 12px;
+    }
+
+    html[data-theme="blank"] :where(
+        button,
+        [role="button"],
+        [role="menuitem"],
+        [role="option"],
+        [role="tab"],
+        [role="treeitem"],
+        [role="switch"],
+        [role="checkbox"],
+        [role="radio"],
+        summary
+    ) {
+        min-height: var(--blank-mobile-control-min) !important;
+        font-size: var(--blank-mobile-control-text) !important;
+        line-height: 1.35;
+        touch-action: manipulation;
+    }
+
+    html[data-theme="blank"] :where(
+        button,
+        [role="button"],
+        [role="switch"],
+        [role="checkbox"],
+        [role="radio"]
+    ) {
+        min-width: var(--blank-mobile-control-min) !important;
+    }
+
+    html[data-theme="blank"] :where(
+        [role="menuitem"],
+        [role="option"],
+        [role="tab"],
+        [role="treeitem"]
+    ) {
+        padding-block: 0.625rem !important;
+    }
+
+    html[data-theme="blank"] :where(
+        button,
+        [role="button"],
+        [role="menuitem"],
+        [role="option"],
+        [role="tab"],
+        [role="treeitem"]
+    ) :where(
+        [data-slot="label"],
+        [data-slot="value"],
+        [data-slot="placeholder"]
+    ) {
+        font-size: inherit !important;
+    }
+
     html[data-theme="blank"] :is(
         input:not([type]),
         input[type="text"],
@@ -256,6 +319,51 @@
         select,
         [contenteditable]:not([contenteditable="false"])
     ) {
-        font-size: 16px !important;
+        font-size: var(--blank-mobile-input-text) !important;
+        line-height: 1.45;
+    }
+
+    html[data-theme="blank"] :is(
+        input:not([type]),
+        input[type="text"],
+        input[type="search"],
+        input[type="email"],
+        input[type="password"],
+        input[type="url"],
+        input[type="tel"],
+        input[type="number"],
+        input[type="date"],
+        input[type="datetime-local"],
+        input[type="month"],
+        input[type="week"],
+        input[type="time"],
+        select
+    ) {
+        min-height: var(--blank-mobile-control-min) !important;
+    }
+
+    html[data-theme="blank"] :where(
+        .sb-item-time,
+        .sidebar-section-heading,
+        .sb-group-header-label,
+        .dashboard-plugin-icon-label,
+        .tool-row-desc,
+        .tool-group-copy span,
+        .settings-heading span,
+        .setting-card-copy span
+    ) {
+        font-size: var(--blank-mobile-supporting-text) !important;
+        line-height: 1.35;
+    }
+
+    html[data-theme="blank"] .document-ai-composer :is(
+        .attachment-button,
+        .settings-button,
+        .send-button
+    ) {
+        width: var(--blank-mobile-control-min) !important;
+        height: var(--blank-mobile-control-min) !important;
+        min-width: var(--blank-mobile-control-min) !important;
+        min-height: var(--blank-mobile-control-min) !important;
     }
 }
