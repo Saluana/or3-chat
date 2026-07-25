@@ -123,7 +123,10 @@ export async function uninstallExtension(
     const label = kind === 'plugin' ? 'Plugin' : 'Theme';
     const confirmed = await confirm({
         title: `Uninstall ${label}`,
-        message: `Are you sure you want to uninstall "${id}"?`,
+        message:
+            kind === 'plugin'
+                ? `Uninstall "${id}" from the site? It will no longer be available in any workspace.`
+                : `Uninstall "${id}" from the site? It will no longer be available to users.`,
         danger: true,
         confirmText: 'Uninstall',
     });

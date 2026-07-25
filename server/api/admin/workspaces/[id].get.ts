@@ -6,7 +6,10 @@
  */
 import { defineEventHandler, getRouterParam, createError } from 'h3';
 import { requireAdminApiContext } from '../../../admin/api';
-import { getWorkspaceAccessStore } from '../../../admin/stores/registry';
+import {
+    getWorkspaceAccessStore,
+    getWorkspaceSettingsStore,
+} from '../../../admin/stores/registry';
 import { isAdminEnabled } from '../../../utils/admin/is-admin-enabled';
 import { checkGenericRateLimit, getClientIp } from '../../../admin/auth/rate-limit';
 
@@ -66,11 +69,15 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    // Get members
-    const members = await store.listMembers({ workspaceId });
+    const settingsStore = getWorkspaceSettingsStore(event);
+    const [members, guestAccessValue] = await Promise.all([
+        store.listMembers({ workspaceId }),
+        settingsStore.get(workspaceId, 'admin.guest_access.enabled'),
+    ]);
 
     return {
         ...workspace,
         members,
+        guestAccessEnabled: guestAccessValue === 'true',
     };
 });

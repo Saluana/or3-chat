@@ -1,14 +1,9 @@
 <template>
     <div class="space-y-6">
-        <!-- Workspace Selector Modal - shown if no workspace selected -->
-        <WorkspaceSelector
-            v-model="showWorkspaceSelector"
-            @select="onWorkspaceSelected"
-        />
         <div>
             <h2 class="text-2xl font-semibold mb-1">Themes</h2>
             <p class="text-sm opacity-70">
-                Manage and switch active themes.
+                Preview themes in this browser or choose the site-wide default.
             </p>
             <p class="mt-2 text-xs text-[var(--md-warning)]">
                 Trusted-code themes can contain TypeScript and Vue components and
@@ -100,8 +95,8 @@
                     <div class="flex items-start justify-between gap-2 mb-1">
                         <h4 class="font-semibold text-base leading-tight">{{ theme.name }}</h4>
                         <div class="flex items-center gap-1 shrink-0">
-                            <UBadge v-if="activeTheme === theme.id" color="success" variant="subtle" size="xs">Active</UBadge>
-                            <UBadge v-if="defaultTheme === theme.id" color="primary" variant="subtle" size="xs">Default</UBadge>
+                            <UBadge v-if="activeTheme === theme.id" color="success" variant="subtle" size="xs">Previewing here</UBadge>
+                            <UBadge v-if="defaultTheme === theme.id" color="primary" variant="subtle" size="xs">Site default</UBadge>
                             <UBadge v-if="disabledThemes.has(theme.id)" color="error" variant="subtle" size="xs">Disabled</UBadge>
                             <UBadge v-if="theme.isBuiltIn && !theme.isInstalledExtension" color="neutral" variant="subtle" size="xs">Built-in</UBadge>
                         </div>
@@ -119,7 +114,7 @@
                     <div v-else class="flex-1" />
 
                     <!-- Actions -->
-                    <div class="pt-3 mt-3 border-t border-[var(--md-outline-variant)]/30 flex items-center gap-2">
+                    <div class="pt-3 mt-3 border-t border-[var(--md-outline-variant)]/30 flex flex-wrap items-center gap-2">
                         <UButton
                             size="xs"
                             class="w-fit px-1.5!"
@@ -128,7 +123,7 @@
                             :disabled="activeTheme === theme.id || disabledThemes.has(theme.id)"
                             @click="activateTheme(theme.id)"
                         >
-                            Activate
+                            Preview here
                         </UButton>
                         <UButton
                             size="xs"
@@ -137,7 +132,7 @@
                             :disabled="!isOwner || defaultTheme === theme.id"
                             @click="setDefaultTheme(theme.id)"
                         >
-                            Set Default
+                            Make site default
                         </UButton>
                         <UButton
                             size="xs"
@@ -147,7 +142,7 @@
                             :disabled="!isOwner || defaultTheme === theme.id"
                             @click="toggleThemeDisabled(theme.id)"
                         >
-                            {{ disabledThemes.has(theme.id) ? 'Enable' : 'Disable' }}
+                            {{ disabledThemes.has(theme.id) ? 'Show to users' : 'Hide from users' }}
                         </UButton>
                         <div class="flex-1" />
                         <UButton
@@ -171,37 +166,39 @@
 
 <script setup lang="ts">
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
-import { useAdminExtensions, useAdminSystemConfig, useAdminWorkspace, useAdminSystemStatus } from '~/composables/admin/useAdminData';
-import { useAdminAuth } from '~/composables/admin/useAdminAuth';
+import { useAdminSystemStatus } from '~/composables/admin/useAdminData';
+import type { ExtensionItem } from '~/composables/admin/useAdminExtensions';
 import { useExtensionManagement } from '~/composables/admin/useExtensionManagement';
 import { useServerRestart } from '~/composables/admin/useServerRestart';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
-import { useAdminWorkspaceGate } from '~/composables/admin/useAdminWorkspaceGate';
 import { useNuxtApp } from '#imports';
-import WorkspaceSelector from '~/components/admin/WorkspaceSelector.vue';
 
 definePageMeta({
     layout: 'admin',
     middleware: ['admin-auth'],
 });
 
-const { selectedWorkspaceId, showWorkspaceSelector, onWorkspaceSelected } =
-    useAdminWorkspaceGate(async (workspaceId) => {
-        if (workspaceId.value) {
-            await refreshWorkspace();
-        }
-    });
-
-const { data, status: extStatus, refresh: refreshExtensions } = useAdminExtensions();
-const { data: workspaceData, status: workspaceStatus, refresh: refreshWorkspace } = useAdminWorkspace(selectedWorkspaceId);
-const { data: configData, status: configStatus, refresh: refreshConfig } = useAdminSystemConfig();
+const {
+    data: pageData,
+    status: pageStatus,
+    refresh: refreshPage,
+} = useFetch<{
+    themes: ExtensionItem[];
+    role?: string;
+    defaultTheme: string;
+    disabledThemes: string;
+}>('/api/admin/themes-page', {
+    credentials: 'include',
+    server: false,
+    dedupe: 'defer',
+});
 const { data: statusData } = useAdminSystemStatus();
 
-const pending = computed(() => extStatus.value === 'pending' || workspaceStatus.value === 'pending' || configStatus.value === 'pending');
+const pending = computed(() => pageStatus.value === 'pending');
 
 const themes = computed(
-    () => (data.value?.items ?? []).filter((i) => i.kind === 'theme')
+    () => pageData.value?.themes ?? []
 );
 const builtInThemes = ref<Array<{ id: string; name: string; description?: string }>>([]);
 
@@ -240,7 +237,7 @@ const adminThemes = computed(() => {
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 });
 
-const { isOwner } = useAdminAuth(workspaceData);
+const isOwner = computed(() => pageData.value?.role === 'owner');
 const { fileInput, triggerFileInput, install, installFromUrl } = useExtensionManagement(isOwner);
 const { restart, restartRequired } = useServerRestart(
     isOwner,
@@ -328,13 +325,11 @@ onMounted(() => {
 });
 
 const defaultTheme = computed(() => {
-    const entry = configData.value?.entries?.find((e) => e.key === 'OR3_DEFAULT_THEME');
-    return entry?.value ?? '';
+    return pageData.value?.defaultTheme ?? '';
 });
 
 const disabledThemes = computed(() => {
-    const entry = configData.value?.entries?.find((e) => e.key === 'OR3_DISABLED_THEMES');
-    const raw = entry?.value ?? '';
+    const raw = pageData.value?.disabledThemes ?? '';
     return new Set(raw.split(',').map(s => s.trim()).filter(Boolean));
 });
 
@@ -492,6 +487,6 @@ async function activateTheme(themeId: string) {
 
 
 async function refresh() {
-    await Promise.all([refreshExtensions(), refreshWorkspace(), refreshConfig()]);
+    await refreshPage();
 }
 </script>

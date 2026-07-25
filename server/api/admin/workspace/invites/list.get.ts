@@ -3,10 +3,12 @@ import { z } from 'zod';
 import { requireAdminApiContext } from '../../../../admin/api';
 import { getAuthWorkspaceStore } from '../../../../auth/store/registry';
 import { isAdminEnabled } from '../../../../utils/admin/is-admin-enabled';
+import { resolveAdminWorkspaceTarget } from '../../../../admin/workspace-target';
 
 const QuerySchema = z.object({
     status: z.enum(['pending', 'accepted', 'revoked', 'expired']).optional(),
     limit: z.coerce.number().int().min(1).max(500).optional(),
+    workspaceId: z.string().min(1).optional(),
 });
 
 function isMissingConvexFunctionError(error: unknown, functionName: string): boolean {
@@ -28,20 +30,14 @@ export default defineEventHandler(async (event) => {
     });
     setResponseHeader(event, 'Cache-Control', 'no-store');
 
-    const session = adminCtx.session;
-    if (!session?.workspace) {
-        throw createError({
-            statusCode: 403,
-            statusMessage: 'Workspace admin session required',
-        });
-    }
-
-    const workspaceId = session.workspace.id;
-
     const query = QuerySchema.safeParse(getQuery(event));
     if (!query.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid query' });
     }
+    const workspaceId = resolveAdminWorkspaceTarget(
+        adminCtx,
+        query.data.workspaceId
+    );
 
     const config = useRuntimeConfig();
     const storeId = config.public.sync.provider;

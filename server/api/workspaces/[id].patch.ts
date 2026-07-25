@@ -5,7 +5,11 @@
  * Updates workspace metadata.
  */
 import { defineEventHandler, readBody, createError, getRouterParam } from 'h3';
-import { requireWorkspaceSession, resolveWorkspaceStore } from './_helpers';
+import {
+    requireWorkspaceSession,
+    resolveTargetWorkspaceSession,
+    resolveWorkspaceStore,
+} from './_helpers';
 import { requireCan } from '../../auth/can';
 
 type UpdateWorkspaceBody = {
@@ -46,7 +50,12 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
     }
 
-    requireCan(session, 'workspace.write', {
+    const targetSession = await resolveTargetWorkspaceSession(
+        session,
+        store,
+        workspaceId
+    );
+    requireCan(targetSession, 'workspace.write', {
         kind: 'workspace',
         id: workspaceId,
     });

@@ -20,10 +20,13 @@ import type {
     HITLRequest,
     HITLResponse,
     Attachment,
+    ToolExecutionContext as WorkflowToolExecutionContext,
+    WorkflowTool,
 } from 'or3-workflow-core';
 import { deriveMessageContent } from '~/utils/chat/messages';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { listWorkflowsWithMeta } from './useWorkflowSlashCommands';
+import { DEFAULT_WORKFLOW_TOOL_POLICY } from '~~/shared/chat/workflow-tool-policy';
 
 // WorkflowTokenMetadata shape (not exported from core, define inline)
 interface WorkflowTokenMetadata {
@@ -203,6 +206,58 @@ function getWorkflowTools(): ExecutableToolDefinition[] {
             // ToolHandler<Record<string, unknown>> is compatible with (args: unknown) => string
             handler: tool.handler as (args: unknown) => Promise<string> | string,
         }));
+}
+
+function getTypedWorkflowTools(): WorkflowTool[] {
+    const registry = useToolRegistry();
+    return registry.listTools.value
+        .filter((tool) => tool.enabled.value)
+        .map((tool) => {
+            const idempotencyKey = tool.workflowPolicy?.idempotencyKey;
+            const policy = {
+                ...DEFAULT_WORKFLOW_TOOL_POLICY,
+                ...tool.workflowPolicy,
+            };
+            return {
+                descriptor: {
+                    name: tool.definition.function.name,
+                    description: tool.definition.function.description,
+                    inputSchema: tool.definition.function.parameters,
+                    authority: 'host-client' as const,
+                    sideEffect: policy.sideEffect,
+                    approval: policy.approval,
+                    parallelSafe: policy.parallelSafe,
+                    permissions: tool.workflowPolicy?.permissions,
+                },
+                execute: async (
+                    input: unknown,
+                    context: WorkflowToolExecutionContext
+                ) => {
+                    const serialized =
+                        typeof input === 'string'
+                            ? input
+                            : JSON.stringify(input ?? {});
+                    const execution = await registry.executeTool(
+                        tool.definition.function.name,
+                        serialized,
+                        {
+                            subject: null,
+                            workspaceId: null,
+                            threadId: null,
+                            messageId: null,
+                            callId: context.callId,
+                            requestId: context.runId,
+                            abortSignal: context.signal,
+                        }
+                    );
+                    if (execution.error) throw new Error(execution.error);
+                    return execution.result ?? '';
+                },
+                idempotencyKey: idempotencyKey
+                    ? (input: unknown) => idempotencyKey(input)
+                    : undefined,
+            };
+        });
 }
 
 function getToolSupport(modelId?: string): 'supported' | 'unsupported' | 'unknown' {
@@ -730,6 +785,7 @@ export function executeWorkflow(
                 : resumeFrom;
 
         const workflowTools = getWorkflowTools();
+        const typedWorkflowTools = getTypedWorkflowTools();
 
         // Create execution adapter from the provider-neutral gateway.
         adapter = new OpenRouterExecutionAdapter(gateway, {
@@ -737,6 +793,11 @@ export function executeWorkflow(
             preflight: true,
             resumeFrom: resumeFromWithHistory,
             tools: workflowTools,
+            workflowTools: typedWorkflowTools,
+            toolExecutionPolicy: {
+                mode: 'parallel',
+                defaultApproval: 'auto',
+            },
             subflowRegistry,
             onToolCall: executeToolCallViaRegistry,
             onToolCallEvent: options.onToolCallEvent,

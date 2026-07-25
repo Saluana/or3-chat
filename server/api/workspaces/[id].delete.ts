@@ -5,7 +5,11 @@
  * Removes a workspace.
  */
 import { defineEventHandler, createError, getRouterParam } from 'h3';
-import { requireWorkspaceSession, resolveWorkspaceStore } from './_helpers';
+import {
+    requireWorkspaceSession,
+    resolveTargetWorkspaceSession,
+    resolveWorkspaceStore,
+} from './_helpers';
 import { requireCan } from '../../auth/can';
 import { invalidateSharedSessionCacheForIdentity } from '../../auth/session';
 import { useRuntimeConfig } from '#imports';
@@ -23,7 +27,12 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
     }
 
-    requireCan(session, 'workspace.settings.manage', {
+    const targetSession = await resolveTargetWorkspaceSession(
+        session,
+        store,
+        workspaceId
+    );
+    requireCan(targetSession, 'workspace.settings.manage', {
         kind: 'workspace',
         id: workspaceId,
     });

@@ -182,7 +182,8 @@ type ChatHistoryModule = typeof import('~/utils/chat/history');
 export function useChat(
     msgs: ChatMessage[] = [],
     initialThreadId?: string,
-    pendingPromptId?: string
+    pendingPromptId?: string,
+    options: { historyAlreadyLoaded?: boolean } = {}
 ) {
     // Messages and basic state
     const messages = ref<UiChatMessage[]>(msgs.map((m) => ensureUiMessage(m)));
@@ -231,7 +232,11 @@ export function useChat(
     const hooks = useHooks();
     const { activePromptContent } = useActivePrompt();
     const threadIdRef = ref<string | undefined>(initialThreadId);
-    const historyLoadedFor = ref<string | null>(null);
+    const historyLoadedFor = ref<string | null>(
+        options.historyAlreadyLoaded && initialThreadId
+            ? initialThreadId
+            : null
+    );
     const cleanupFns: Array<() => void> = [];
     const logBgStream = (
         _stage: string,

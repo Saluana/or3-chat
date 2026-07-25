@@ -250,6 +250,7 @@ export interface WorkflowMessageData {
         nextSequence: number;
         snapshot?: unknown;
         events: unknown[];
+        intents: unknown[];
         receipts: unknown[];
     };
 

@@ -7,9 +7,15 @@
         />
 
         <div>
-            <h2 class="text-2xl font-semibold mb-1">Plugins</h2>
+            <div class="mb-1 flex flex-wrap items-center gap-2">
+                <h2 class="text-2xl font-semibold">Plugins</h2>
+                <UBadge v-if="workspaceContextName" color="neutral" variant="soft">
+                    {{ workspaceContextName }}
+                </UBadge>
+            </div>
             <p class="text-sm opacity-70">
-                Manage installed extensions and plugins.
+                Activate plugins for the selected workspace. Installation and
+                diagnostics are available under advanced controls.
             </p>
         </div>
 
@@ -26,9 +32,14 @@
         </div>
 
         <div class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
-            <div class="mb-4 flex items-center justify-between">
-                <h3 class="text-lg font-medium">Installed</h3>
-                <div class="flex items-center gap-3">
+            <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h3 class="text-lg font-medium">Available on this site</h3>
+                    <p class="text-xs opacity-70">
+                        Add or uninstall site-wide; activate per workspace.
+                    </p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
                      <!-- Input hidden mostly, custom button triggers it -->
                     <input
                         ref="fileInput"
@@ -38,10 +49,10 @@
                         @change="installPlugin"
                     />
                     <UButton size="sm" :disabled="!isOwner" @click="showUrlModal = true" icon="i-heroicons-link">
-                        Import from URL
+                        Add from URL
                     </UButton>
                     <UButton size="sm"  :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
-                        Install .zip
+                        Add from .zip
                     </UButton>
                 </div>
             </div>
@@ -73,37 +84,20 @@
                     :key="plugin.id"
                     class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] hover:bg-[var(--md-surface-container-low)] transition-colors"
                 >
-                    <div class="flex items-start justify-between">
-                        <div>
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div class="min-w-0">
                             <div class="font-semibold text-base">{{ plugin.name }}</div>
                             <div class="text-xs opacity-70 font-mono mt-0.5">{{ plugin.id }} • v{{ plugin.version }}</div>
                             <div v-if="plugin.description" class="mt-2 text-sm opacity-80 max-w-2xl">
                                 {{ plugin.description }}
                             </div>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <UBadge color="primary" variant="subtle">Installed</UBadge>
+                        <div class="flex flex-wrap items-center gap-2">
                             <UBadge :color="enabledSet.has(plugin.id) ? 'success' : 'neutral'" variant="subtle">
-                                {{ enabledSet.has(plugin.id) ? 'Enabled' : 'Disabled' }}
-                            </UBadge>
-                            <UBadge
-                                :color="loadedSet.has(plugin.id) ? 'success' : 'neutral'"
-                                variant="subtle"
-                            >
-                                {{ loadedSet.has(plugin.id) ? 'Runtime Enabled' : 'Not Runtime Enabled' }}
+                                {{ enabledSet.has(plugin.id) ? 'Active' : 'Inactive' }}
                             </UBadge>
                         </div>
                     </div>
-
-                    <p
-                        v-if="enabledSet.has(plugin.id) && !loadedSet.has(plugin.id)"
-                        class="mt-2 text-xs opacity-75"
-                    >
-                        Enabled in workspace settings, but the runtime manifest does not currently
-                        expose this plugin. If it was installed after the current build and includes
-                        client code, run Rebuild + Restart from Admin &gt; System before expecting
-                        it to load in production.
-                    </p>
 
                     <div class="mt-4 pt-4 border-t border-[var(--md-outline-variant)]/50 flex flex-wrap items-center gap-2">
                         <UButton
@@ -114,7 +108,7 @@
                             :loading="toggleLoading[plugin.id]"
                             @click="togglePlugin(plugin.id)"
                         >
-                            {{ enabledSet.has(plugin.id) ? 'Disable' : 'Enable' }}
+                            {{ enabledSet.has(plugin.id) ? 'Deactivate' : 'Activate' }}
                         </UButton>
                         <UButton
                             size="sm"
@@ -136,7 +130,7 @@
                                 collisionPadding: 16,
                             }"
                         >
-                            <UButton color="neutral" variant="ghost" size="sm" label="Settings" trailing-icon="i-heroicons-chevron-down-20-solid" />
+                            <UButton color="neutral" variant="ghost" size="sm" label="Advanced" trailing-icon="i-heroicons-chevron-down-20-solid" />
                             <template #content>
                                 <div class="p-4 w-80 max-h-[min(28rem,calc(100vh-4rem))] overflow-y-auto space-y-3">
                                     <div class="text-xs font-semibold uppercase opacity-60">Access policy</div>
@@ -208,14 +202,20 @@
             </div>
         </div>
 
-        <PluginRuntimeInspector />
+        <details class="rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
+            <summary class="cursor-pointer px-4 py-3 text-sm font-medium">
+                Advanced runtime diagnostics
+            </summary>
+            <div class="border-t border-[var(--md-outline-variant)] p-4">
+                <PluginRuntimeInspector />
+            </div>
+        </details>
     </div>
 </template>
 
 <script setup lang="ts">
-import { installExtension, uninstallExtension, ADMIN_HEADERS, type ExtensionItem } from '~/composables/admin/useAdminExtensions';
-import { useAdminExtensions, useAdminWorkspace } from '~/composables/admin/useAdminData';
-import { useAdminAuth } from '~/composables/admin/useAdminAuth';
+import { ADMIN_HEADERS, type ExtensionItem } from '~/composables/admin/useAdminExtensions';
+import { useAdminSession } from '~/composables/admin/useAdminData';
 import { useExtensionManagement } from '~/composables/admin/useExtensionManagement';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
 import { requestWorkspacePluginReconcile } from '~/composables/plugins/bundled-v1-manager-runtime';
@@ -235,20 +235,35 @@ definePageMeta({
 });
 
 const { selectedWorkspaceId, showWorkspaceSelector, onWorkspaceSelected } =
-    useAdminWorkspaceGate(async (workspaceId) => {
-        if (workspaceId.value) {
-            await refreshWorkspace();
-        }
+    useAdminWorkspaceGate(async () => {
+        await refreshPage();
     });
 
-// 1. Fetch Extensions
-const { data, status, refresh: refreshNuxtData } = useAdminExtensions();
-
-// 2. Fetch Workspace (for role and enabled plugins)
-const { data: workspaceData, refresh: refreshWorkspace } = useAdminWorkspace(selectedWorkspaceId);
-
-// 3. Auth & Permissions
-const { isOwner } = useAdminAuth(workspaceData);
+const { data: session } = useAdminSession();
+const {
+    data: pageData,
+    status,
+    refresh: refreshPage,
+} = useFetch<{
+    plugins: ExtensionItem[];
+    role?: string;
+    workspaceId: string;
+    workspaceName?: string;
+    enabledPlugins: string[];
+}>('/api/admin/plugins-page', {
+    query: computed(() => ({
+        workspaceId: selectedWorkspaceId.value || undefined,
+    })),
+    credentials: 'include',
+    server: false,
+    immediate: false,
+    dedupe: 'defer',
+});
+const isOwner = computed(() => pageData.value?.role === 'owner');
+const { selectedWorkspace } = useAdminWorkspaceContext();
+const workspaceContextName = computed(
+    () => selectedWorkspace.value?.name || pageData.value?.workspaceName
+);
 
 // 4. Extension Management
 const { fileInput, triggerFileInput, install, installFromUrl, uninstall } = useExtensionManagement(isOwner);
@@ -288,7 +303,7 @@ const configuredPluginModules =
 // Computed & State
 const pending = computed(() => status.value === 'pending');
 const plugins = computed(
-    () => (data.value?.items ?? []).filter((i) => i.kind === 'plugin')
+    () => pageData.value?.plugins ?? []
 );
 
 const enabledSet = ref<Set<string>>(new Set());
@@ -300,28 +315,6 @@ const accessByPlugin = reactive<
     >
 >({});
 const toggleLoading = reactive<Record<string, boolean>>({});
-const loadedSet = ref<Set<string>>(new Set());
-
-async function refreshLoadedState() {
-    try {
-        const runtimeLoaderEnabled =
-            (runtimeConfig.public as { admin?: { pluginRuntimeLoaderEnabled?: boolean } })
-                .admin?.pluginRuntimeLoaderEnabled !== false;
-        if (!runtimeLoaderEnabled) {
-            loadedSet.value = new Set();
-            return;
-        }
-
-        const manifest = await $fetch<{
-            enabledPluginIds: string[];
-        }>('/api/plugins/runtime-manifest', {
-            cache: 'no-store',
-        });
-        loadedSet.value = new Set(manifest.enabledPluginIds ?? []);
-    } catch {
-        loadedSet.value = new Set();
-    }
-}
 
 function getAccessEditor(pluginId: string) {
     if (!accessByPlugin[pluginId]) {
@@ -331,11 +324,24 @@ function getAccessEditor(pluginId: string) {
 }
 
 // Watcher
-watch(() => workspaceData.value, (val) => {
+watch(() => pageData.value, (val) => {
     if (val?.enabledPlugins) {
         enabledSet.value = new Set(val.enabledPlugins);
     }
 }, { immediate: true });
+
+watch(
+    [() => session.value?.kind, selectedWorkspaceId],
+    ([kind, workspaceId]) => {
+        if (
+            kind === 'workspace_admin' ||
+            (kind === 'super_admin' && workspaceId)
+        ) {
+            void refreshPage();
+        }
+    },
+    { immediate: true }
+);
 
 // Actions
 async function setEnabled(pluginId: string, enabled: boolean) {
@@ -343,7 +349,11 @@ async function setEnabled(pluginId: string, enabled: boolean) {
         '/api/admin/plugins/workspace-enable',
         {
             method: 'POST',
-            body: { pluginId, enabled },
+            body: {
+                pluginId,
+                enabled,
+                workspaceId: selectedWorkspaceId.value,
+            },
             headers: ADMIN_HEADERS,
         }
     );
@@ -388,7 +398,12 @@ async function loadSettings(pluginId: string) {
         };
     }>(
         '/api/admin/plugins/workspace-settings',
-        { query: { pluginId } }
+        {
+            query: {
+                pluginId,
+                workspaceId: selectedWorkspaceId.value,
+            },
+        }
     );
     settingsByPlugin[pluginId] = JSON.stringify(res.settings ?? {}, null, 2);
     accessByPlugin[pluginId] = deserializeAccessEditor(
@@ -418,6 +433,7 @@ async function saveSettings(pluginId: string) {
             body: {
                 pluginId,
                 settings: withSerializedAccessPolicy(parsed, accessEditor),
+                workspaceId: selectedWorkspaceId.value,
             },
             headers: ADMIN_HEADERS,
         });
@@ -434,11 +450,6 @@ async function saveSettings(pluginId: string) {
 }
 
 async function refresh() {
-    await Promise.all([refreshNuxtData(), refreshWorkspace()]);
-    await refreshLoadedState();
+    await refreshPage();
 }
-
-onMounted(() => {
-    void refreshLoadedState();
-});
 </script>

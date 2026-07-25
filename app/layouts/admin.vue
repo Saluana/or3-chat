@@ -36,9 +36,8 @@
                 </div>
             </div>
             <div class="flex items-center gap-2">
-                <div class="w-2 h-2 rounded-full bg-[var(--md-sys-color-success,#10b981)]"></div>
                 <span class="text-xs text-[var(--md-on-surface-variant)] font-medium">v{{ appVersion }}</span>
-                <WorkspaceIndicator v-if="hasWorkspace" @click="openWorkspaceSelector" class="hidden sm:flex" />
+                <WorkspaceIndicator v-if="showWorkspaceContext" @click="openWorkspaceSelector" class="hidden sm:flex" />
             </div>
         </header>
 
@@ -116,13 +115,7 @@
 
                 <!-- Mobile Drawer Footer -->
                 <div class="p-4 border-t border-[var(--md-outline-variant)] text-xs text-[var(--md-on-surface-variant)]" role="contentinfo">
-                    <div class="flex items-center justify-between">
-                        <span>OR3 v{{ appVersion }}</span>
-                        <div class="flex items-center gap-2">
-                            <div class="w-2 h-2 rounded-full bg-[var(--md-sys-color-success,#10b981)]"></div>
-                            <span class="opacity-70">Online</span>
-                        </div>
-                    </div>
+                    <span>OR3 v{{ appVersion }}</span>
                 </div>
             </aside>
         </Transition>
@@ -198,7 +191,7 @@
         >
             <!-- Workspace Indicator Banner -->
             <div
-                v-if="hasWorkspace && selectedWorkspace"
+                v-if="showWorkspaceContext && selectedWorkspace"
                 class="sticky top-0 z-10 px-4 sm:px-6 lg:px-8 py-3 bg-[var(--md-surface-container-low)] border-b border-[var(--md-outline-variant)]"
             >
                 <div class="max-w-5xl mx-auto flex items-center justify-between">
@@ -390,6 +383,7 @@ interface NavLink {
     label: string;
     to: string;
     icon: string;
+    section: string;
 }
 
 const isSuperAdmin = computed(
@@ -398,33 +392,26 @@ const isSuperAdmin = computed(
 const isWorkspaceAdmin = computed(
     () => adminSession.value?.kind === 'workspace_admin'
 );
+const showWorkspaceContext = computed(
+    () => hasWorkspace.value && route.path.startsWith('/admin/plugins')
+);
 
 const navLinks = computed<NavLink[]>(() => {
-    const base: NavLink[] = [{ label: 'Overview', to: '/admin', icon: homeIcon.value }];
+    const base: NavLink[] = [];
 
     if (isSuperAdmin.value) {
         base.push(
-            { label: 'Plugins', to: '/admin/plugins', icon: pluginsIcon.value },
-            { label: 'Themes', to: '/admin/themes', icon: settingsIcon.value },
-            { label: 'System', to: '/admin/system', icon: systemIcon.value }
+            { label: 'Overview', to: '/admin', icon: homeIcon.value, section: 'Site' },
+            { label: 'Workspaces', to: '/admin/workspaces', icon: workspacesIcon.value, section: 'Site' },
+            { label: 'Plugins', to: '/admin/plugins', icon: pluginsIcon.value, section: 'Extensions' },
+            { label: 'Webhooks', to: '/admin/webhooks', icon: pluginsIcon.value, section: 'Extensions' },
+            { label: 'Themes', to: '/admin/themes', icon: settingsIcon.value, section: 'Appearance' },
+            { label: 'System', to: '/admin/system', icon: systemIcon.value, section: 'Operations' }
         );
     }
 
     if (isWorkspaceAdmin.value) {
-        base.push({ label: 'Plugins', to: '/admin/plugins', icon: pluginsIcon.value });
-    }
-
-    if (isSuperAdmin.value) {
-        base.splice(1, 0, {
-            label: 'Workspaces',
-            to: '/admin/workspaces',
-            icon: workspacesIcon.value,
-        });
-        base.splice(2, 0, {
-            label: 'Webhooks',
-            to: '/admin/webhooks',
-            icon: pluginsIcon.value,
-        });
+        base.push({ label: 'Plugins', to: '/admin/plugins', icon: pluginsIcon.value, section: 'Extensions' });
     }
     
     // Sort logic or visual separators could be added here
@@ -432,6 +419,7 @@ const navLinks = computed<NavLink[]>(() => {
         label: page.label,
         to: `/admin/extensions/${page.path ?? page.id}`,
         icon: pluginsIcon.value,
+        section: 'Extensions',
     }));
     
     return [...base, ...pluginLinks];

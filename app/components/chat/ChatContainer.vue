@@ -126,6 +126,7 @@ import {
     ref,
     reactive,
     isRef,
+    triggerRef,
     type Ref,
     type CSSProperties,
     onBeforeUnmount,
@@ -294,7 +295,8 @@ const chat = shallowRef<ChatInstance>(
     useChat(
         props.messageHistory,
         props.threadId,
-        pendingPromptId.value || undefined
+        pendingPromptId.value || undefined,
+        { historyAlreadyLoaded: true }
     ) as ChatInstance
 );
 // Ensure history + background job reattachment on initial load
@@ -524,21 +526,53 @@ function mergeWorkflowState(msg: UiChatMessage) {
     };
 }
 
-const allMessages = computed(() => {
-    if (!chat.value) return [];
-    const list = stableMessages.value.map(mergeWorkflowState);
-    const tail = streamingMessage.value;
-    
-    if (tail) {
-        // Deduplicate: Don't add tail if it's already in the stable list
-        // (This happens during race conditions where sync adds it before tail is cleared)
-        const exists = list.some(m => m.id === tail.id || (m.stream_id && m.stream_id === tail.stream_id));
-        if (!exists) {
-            list.push(mergeWorkflowState(tail));
-        }
+// Stable history and workflow projection only recompute when history or workflow
+// state changes. Streaming token updates patch the single tail slot in place.
+const stableMessagesWithWorkflow = computed(() =>
+    stableMessages.value.map(mergeWorkflowState)
+);
+const stableMessageIdentities = computed(() => {
+    const identities = new Set<string>();
+    for (const message of stableMessages.value) {
+        if (message.id) identities.add(`id:${message.id}`);
+        if (message.stream_id) identities.add(`stream:${message.stream_id}`);
     }
-    return list;
+    return identities;
 });
+const allMessages = shallowRef<UiChatMessage[]>([]);
+let renderedStableSnapshot: UiChatMessage[] | null = null;
+
+watch(
+    [stableMessagesWithWorkflow, stableMessageIdentities, streamingMessage],
+    ([stable, identities, tail]) => {
+        const tailAlreadyStable =
+            Boolean(tail?.id && identities.has(`id:${tail.id}`)) ||
+            Boolean(
+                tail?.stream_id &&
+                    identities.has(`stream:${tail.stream_id}`)
+            );
+
+        if (!tail || tailAlreadyStable) {
+            allMessages.value = stable;
+            renderedStableSnapshot = stable;
+            return;
+        }
+
+        const mergedTail = mergeWorkflowState(tail);
+        if (
+            renderedStableSnapshot === stable &&
+            allMessages.value.length === stable.length + 1
+        ) {
+            allMessages.value[stable.length] = mergedTail;
+            triggerRef(allMessages);
+            return;
+        }
+
+        allMessages.value = [...stable, mergedTail];
+        renderedStableSnapshot = stable;
+    },
+    { immediate: true }
+);
 
 // Media prefetch is intentionally separate from row mounting. Keep the proven
 // 5500px render overscan until the browser canary passes at 1200/5500.
@@ -867,7 +901,8 @@ function onPendingPromptSelected(promptId: string | null) {
     chat.value = useChat(
         props.messageHistory,
         props.threadId,
-        pendingPromptId.value || undefined
+        pendingPromptId.value || undefined,
+        { historyAlreadyLoaded: true }
     );
     void chat.value?.ensureHistorySynced?.();
 }

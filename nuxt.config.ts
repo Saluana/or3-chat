@@ -869,6 +869,14 @@ export default defineNuxtConfig({
                         if (/^_nuxt\/KaTeX_/i.test(entry.url)) return false;
                         if (/^_nuxt\/katex\..*\.css$/i.test(entry.url))
                             return false;
+                        // The exact tokenizer is a worker-only, on-demand asset.
+                        // Do not force its ~1 MB gzip payload into every PWA
+                        // installation; the browser will cache it after use.
+                        if (
+                            entry.url.endsWith('.js') &&
+                            entry.size > 1.5 * 1024 * 1024
+                        )
+                            return false;
                         return true;
                     }),
                     warnings: [],

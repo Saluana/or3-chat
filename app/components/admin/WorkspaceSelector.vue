@@ -7,7 +7,7 @@
             class: 'theme-btn'
         }"
         title="Select a Workspace"
-        description="Choose a workspace to manage plugins and themes"
+        description="Choose the workspace whose plugins you want to manage"
     >
         <template #body>
             <div class="space-y-3">
@@ -19,19 +19,30 @@
                     />
                 </div>
 
-                <UAlert
-                    v-else-if="error"
-                    color="error"
-                    :icon="warningIcon"
-                    title="Failed to load workspaces"
-                    :description="error.message"
-                />
+                <div v-else-if="error" class="space-y-3">
+                    <UAlert
+                        color="error"
+                        :icon="warningIcon"
+                        title="Failed to load workspaces"
+                        :description="error.message"
+                    />
+                    <UButton
+                        block
+                        color="neutral"
+                        variant="soft"
+                        :loading="pending"
+                        @click="refreshWorkspaces"
+                    >
+                        Retry
+                    </UButton>
+                </div>
 
                 <template v-else>
-                    <div
+                    <button
                         v-for="workspace in workspaces"
                         :key="workspace.id"
-                        class="group flex items-center gap-3 p-4 rounded-lg border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] hover:bg-[var(--md-surface-container)] transition-all cursor-pointer"
+                        type="button"
+                        class="group flex w-full items-center gap-3 p-4 text-left rounded-lg border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] hover:bg-[var(--md-surface-container)] transition-all focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]"
                         @click="selectAndClose(workspace)"
                     >
                         <div
@@ -54,15 +65,10 @@
                             </div>
                         </div>
 
-                        <UButton
-                            color="primary"
-                            size="sm"
-                            variant="solid"
-                            @click.stop="selectAndClose(workspace)"
-                        >
+                        <span class="rounded bg-[var(--md-primary)] px-3 py-2 text-sm font-medium text-[var(--md-on-primary)]">
                             Select
-                        </UButton>
-                    </div>
+                        </span>
+                    </button>
 
                     <div
                         v-if="workspaces.length === 0"
@@ -129,7 +135,13 @@ async function refreshWorkspaces() {
 watch(
     isOpen,
     (open) => {
-        if (!open || pending.value || hasLoaded.value) return;
+        if (
+            !open ||
+            pending.value ||
+            (hasLoaded.value && !error.value)
+        ) {
+            return;
+        }
         void refreshWorkspaces();
     },
     { immediate: true }

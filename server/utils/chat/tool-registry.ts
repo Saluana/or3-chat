@@ -20,6 +20,7 @@ import {
     MAX_TOOL_ARGUMENT_BYTES,
     MAX_TOOL_DURABLE_RESULT_BYTES,
 } from '~~/shared/chat/tool-limits';
+import type { WorkflowToolRegistrationPolicy } from '~~/shared/chat/workflow-tool-policy';
 import { getServerContributionSurfaceSelection } from '../plugins/contribution-surface-selection';
 import {
     recordServerToolOwnership,
@@ -43,6 +44,7 @@ export interface RegisteredServerTool {
     handler: ContextualToolHandler<Record<string, unknown>>;
     runtime: ToolRuntime;
     timeoutMs: number;
+    workflowPolicy?: WorkflowToolRegistrationPolicy;
     owner: symbol;
 }
 
@@ -50,6 +52,7 @@ export interface RegisterServerToolOptions {
     runtime?: ToolRuntime;
     timeoutMs?: number;
     override?: boolean;
+    workflowPolicy?: WorkflowToolRegistrationPolicy;
 }
 
 const DEFAULT_TIMEOUT_MS = 10000;
@@ -109,6 +112,7 @@ export function registerServerTool<
         handler: normalizedHandler,
         runtime,
         timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        workflowPolicy: opts.workflowPolicy,
         owner,
     };
     registry.set(name, tool);

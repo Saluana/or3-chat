@@ -19,8 +19,11 @@ import {
     type Attachment,
     type ExecutionCallbacks,
     type ExecutionInput,
+    type ExecutionResult,
     type HITLRequest,
     type HITLResponse,
+    type ToolExecutionContext as WorkflowToolExecutionContext,
+    type WorkflowTool,
     type WorkflowData,
 } from 'or3-workflow-core';
 import { registerHitlRequest, clearHitlRequestsForJob } from './hitl-store';
@@ -30,6 +33,7 @@ import {
     BackgroundJobRunStore,
     type WorkflowStateWithJournal,
 } from './background-run-store';
+import { DEFAULT_WORKFLOW_TOOL_POLICY } from '~~/shared/chat/workflow-tool-policy';
 
 function logBgStream(
     _stage: string,
@@ -67,6 +71,21 @@ export interface BackgroundWorkflowParams {
 export interface BackgroundWorkflowResult {
     jobId: string;
     status: 'streaming';
+}
+
+/**
+ * Background jobs must reflect the adapter's terminal result. Node failures are
+ * returned as `success: false` rather than thrown, so ignoring this flag marks
+ * failed workflows completed and discards the useful provider error.
+ */
+export function assertBackgroundWorkflowSucceeded(
+    result: ExecutionResult
+): asserts result is ExecutionResult & { success: true } {
+    if (result.success) return;
+    throw (
+        result.error ??
+        new Error('Workflow execution failed without an error')
+    );
 }
 
 function createWorkflowState(params: {
@@ -114,7 +133,11 @@ async function updateWorkflowJob(
 async function executeWorkflowToolCall(
     name: string,
     args: unknown,
-    context?: { jobId: string; workflowId: string }
+    context?: {
+        jobId: string;
+        workflowId: string;
+        tool?: WorkflowToolExecutionContext;
+    }
 ): Promise<string> {
     const serialized = typeof args === 'string' ? args : JSON.stringify(args ?? {});
     logBackgroundEvent('info', 'background.workflow.tool.started', {
@@ -129,9 +152,16 @@ async function executeWorkflowToolCall(
             workspaceId: null,
             threadId: null,
             messageId: null,
-            callId: `${context?.workflowId ?? 'workflow'}:${name}`,
-            requestId: context?.jobId ?? crypto.randomUUID(),
-            abortSignal: new AbortController().signal,
+            callId:
+                context?.tool?.callId ??
+                `${context?.workflowId ?? 'workflow'}:${name}`,
+            requestId:
+                context?.tool?.runId ??
+                context?.jobId ??
+                crypto.randomUUID(),
+            abortSignal:
+                context?.tool?.signal ??
+                new AbortController().signal,
         });
         if (execution.error) {
             logBackgroundEvent('warn', 'background.workflow.tool.failed', {
@@ -228,15 +258,6 @@ async function runWorkflowInBackground(
     if (priorState?.runJournal) {
         workflowState.runJournal = priorState.runJournal;
     }
-    const runStore = new BackgroundJobRunStore(
-        jobId,
-        provider,
-        workflowState,
-        (journal) => {
-            workflowState.runJournal = journal;
-        }
-    );
-
     initJobLiveState(jobId);
     logBgStream('workflow-background-start', {
         jobId,
@@ -281,20 +302,62 @@ async function runWorkflowInBackground(
             // Intentionally ignored here; queued write failures are surfaced by awaited writes.
         });
     };
-    const workflowTools = listServerTools().map((tool) => ({
+    const runStore = new BackgroundJobRunStore(
+        jobId,
+        provider,
+        workflowState,
+        async (journal) => {
+            workflowState.runJournal = journal;
+            await queueWorkflowWrite();
+        }
+    );
+    const registeredTools = listServerTools();
+    const workflowTools: WorkflowTool[] = registeredTools.map((tool) => {
+        const idempotencyKey = tool.workflowPolicy?.idempotencyKey;
+        const policy = {
+            ...DEFAULT_WORKFLOW_TOOL_POLICY,
+            ...tool.workflowPolicy,
+        };
+        return {
+            descriptor: {
+                name: tool.definition.function.name,
+                description: tool.definition.function.description,
+                inputSchema: tool.definition.function.parameters,
+                authority: 'host-server',
+                sideEffect: policy.sideEffect,
+                approval: policy.approval,
+                parallelSafe: policy.parallelSafe,
+                permissions: tool.workflowPolicy?.permissions,
+            },
+            execute: (args, toolContext) =>
+                executeWorkflowToolCall(
+                    tool.definition.function.name,
+                    args,
+                    {
+                        jobId,
+                        workflowId: params.workflowId,
+                        tool: toolContext,
+                    }
+                ),
+            idempotencyKey: idempotencyKey
+                ? (input) => idempotencyKey(input)
+                : undefined,
+        };
+    });
+    const legacyWorkflowTools = registeredTools.map((tool) => ({
         type: 'function' as const,
         function: tool.definition.function,
-        handler: (args: unknown) =>
-            executeWorkflowToolCall(tool.definition.function.name, args, {
-                jobId,
-                workflowId: params.workflowId,
-            }),
     }));
 
     const adapter = new OpenRouterExecutionAdapter(gateway, {
         defaultModel: 'openai/gpt-4o-mini',
         preflight: true,
-        tools: workflowTools,
+        tools: legacyWorkflowTools,
+        workflowTools,
+        toolExecutionPolicy: {
+            mode: 'parallel',
+            defaultApproval: 'auto',
+        },
         runStore,
         runId: jobId,
         persistWaveSnapshots: true,
@@ -477,6 +540,7 @@ async function runWorkflowInBackground(
             executionInput,
             executionCallbacks
         );
+        assertBackgroundWorkflowSucceeded(executionResult);
 
         const resultFinalOutput =
             executionResult.finalOutput.length > 0

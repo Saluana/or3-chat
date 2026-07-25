@@ -86,17 +86,11 @@ export default defineEventHandler(async (event) => {
     const accessStore = getWorkspaceAccessStore(event);
     const settingsStore = getWorkspaceSettingsStore(event);
 
-    const members = await accessStore.listMembers({
-        workspaceId,
-    });
-    const enabledPlugins = await getEnabledPlugins(
-        settingsStore,
-        workspaceId
-    );
-    const guestAccessValue = await settingsStore.get(
-        workspaceId,
-        'admin.guest_access.enabled'
-    );
+    const [members, enabledPlugins, guestAccessValue] = await Promise.all([
+        accessStore.listMembers({ workspaceId }),
+        getEnabledPlugins(settingsStore, workspaceId),
+        settingsStore.get(workspaceId, 'admin.guest_access.enabled'),
+    ]);
 
     return {
         workspace: { id: workspaceId, name: workspaceName },

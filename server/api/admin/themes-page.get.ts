@@ -37,10 +37,14 @@ export default defineEventHandler(async (event) => {
     ]);
     
     const defaultThemeEntry = configEntries.find(e => e.key === 'OR3_DEFAULT_THEME');
+    const disabledThemesEntry = configEntries.find(
+        (e) => e.key === 'OR3_DISABLED_THEMES'
+    );
     
     return {
         themes: extensions.filter(i => i.kind === 'theme'),
         role: session.role,
-        defaultTheme: defaultThemeEntry?.value ?? ''
+        defaultTheme: defaultThemeEntry?.value ?? '',
+        disabledThemes: disabledThemesEntry?.value ?? '',
     };
 });

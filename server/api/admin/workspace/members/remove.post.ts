@@ -6,13 +6,15 @@
  */
 import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
-import { requireAdminApi } from '../../../../admin/api';
+import { requireAdminApiContext } from '../../../../admin/api';
 import { getWorkspaceAccessStore } from '../../../../admin/stores/registry';
 import { invalidateSharedSessionCacheForIdentity } from '../../../../auth/session';
 import { useRuntimeConfig } from '#imports';
+import { resolveAdminWorkspaceTarget } from '../../../../admin/workspace-target';
 
 const BodySchema = z.object({
     userId: z.string().min(1),
+    workspaceId: z.string().min(1).optional(),
 });
 
 /**
@@ -26,7 +28,7 @@ const BodySchema = z.object({
  * - Does not delete the user, only the association.
  */
 export default defineEventHandler(async (event) => {
-    const session = await requireAdminApi(event, {
+    const context = await requireAdminApiContext(event, {
         ownerOnly: true,
         mutation: true,
         allowWorkspaceAdmin: true,
@@ -37,16 +39,29 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
     }
 
-    const workspaceId = session.workspace?.id;
-    if (!workspaceId) {
-        throw createError({ statusCode: 400, statusMessage: 'Workspace not resolved' });
-    }
+    const workspaceId = resolveAdminWorkspaceTarget(
+        context,
+        body.data.workspaceId
+    );
 
     const store = getWorkspaceAccessStore(event);
-    await store.removeMember({
-        workspaceId,
-        userId: body.data.userId,
-    });
+    try {
+        await store.removeMember({
+            workspaceId,
+            userId: body.data.userId,
+        });
+    } catch (error) {
+        if (
+            error instanceof Error &&
+            error.message.includes('last workspace owner')
+        ) {
+            throw createError({
+                statusCode: 409,
+                statusMessage: error.message,
+            });
+        }
+        throw error;
+    }
 
     invalidateSharedSessionCacheForIdentity({
         storeId:

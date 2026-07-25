@@ -16,11 +16,14 @@ vi.mock('h3', () => ({
 }));
 
 const requireWorkspaceSessionMock = vi.fn();
+const resolveTargetWorkspaceSessionMock = vi.fn();
 const setActiveWorkspaceMock = vi.fn();
 const listUserWorkspacesMock = vi.fn();
 const invalidateSharedSessionCacheForIdentityMock = vi.fn();
 vi.mock('../_helpers', () => ({
     requireWorkspaceSession: (...args: unknown[]) => requireWorkspaceSessionMock(...args),
+    resolveTargetWorkspaceSession: (...args: unknown[]) =>
+        resolveTargetWorkspaceSessionMock(...args),
     resolveWorkspaceStore: () => ({
         setActiveWorkspace: (...args: unknown[]) => setActiveWorkspaceMock(...args),
         listUserWorkspaces: (...args: unknown[]) => listUserWorkspacesMock(...args),
@@ -54,6 +57,26 @@ describe('POST /api/workspaces/active', () => {
             { id: 'ws-1', name: 'Workspace 1', role: 'owner' },
             { id: 'ws-2', name: 'Workspace 2', role: 'viewer' },
         ]);
+        resolveTargetWorkspaceSessionMock.mockReset().mockImplementation(
+            async (
+                session: Record<string, unknown>,
+                store: { listUserWorkspaces: (userId: string) => Promise<Array<{ id: string; name: string; role: string }>> },
+                workspaceId: string
+            ) => {
+                const memberships = await store.listUserWorkspaces('user-1');
+                const target = memberships.find((item) => item.id === workspaceId);
+                if (!target) {
+                    const error = new Error('Forbidden') as Error & { statusCode: number };
+                    error.statusCode = 403;
+                    throw error;
+                }
+                return {
+                    ...session,
+                    workspace: { id: target.id, name: target.name },
+                    role: target.role,
+                };
+            }
+        );
         invalidateSharedSessionCacheForIdentityMock.mockReset();
     });
 

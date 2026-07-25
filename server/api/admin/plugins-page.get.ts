@@ -8,11 +8,13 @@
  * - Aggregates installed plugins and their enabled status for the current workspace
  * - Reduces round-trips for initial page load
  */
-import { defineEventHandler, createError } from 'h3';
-import { requireAdminApi } from '../../admin/api';
+import { defineEventHandler, getQuery } from 'h3';
+import { requireAdminApiContext } from '../../admin/api';
 import { listInstalledExtensions } from '../../admin/extensions/extension-manager';
 import { getEnabledPlugins } from '../../admin/plugins/workspace-plugin-store';
 import { getWorkspaceSettingsStore } from '../../admin/stores/registry';
+import { resolveAdminWorkspaceTarget } from '../../admin/workspace-target';
+import { isSuperAdmin } from '../../admin/context';
 
 /**
  * GET /api/admin/plugins-page
@@ -28,29 +30,31 @@ import { getWorkspaceSettingsStore } from '../../admin/stores/registry';
  * - Replaces 2 separate calls => ~50% latency reduction.
  */
 export default defineEventHandler(async (event) => {
-    const session = await requireAdminApi(event, {
+    const context = await requireAdminApiContext(event, {
         ownerOnly: true,
         allowWorkspaceAdmin: true,
     });
-    
-    if (!session.workspace?.id) {
-        throw createError({
-            statusCode: 400,
-            statusMessage: 'Workspace not resolved',
-        });
-    }
+    const workspaceId = resolveAdminWorkspaceTarget(
+        context,
+        getQuery(event).workspaceId
+    );
     
     const settingsStore = getWorkspaceSettingsStore(event);
     
     // Parallel fetch instead of sequential
     const [extensions, enabledPlugins] = await Promise.all([
         listInstalledExtensions(),
-        getEnabledPlugins(settingsStore, session.workspace.id)
+        getEnabledPlugins(settingsStore, workspaceId)
     ]);
     
     return {
         plugins: extensions.filter(i => i.kind === 'plugin'),
-        role: session.role,
-        enabledPlugins
+        role: isSuperAdmin(context) ? 'owner' : context.session?.role,
+        workspaceId,
+        workspaceName:
+            context.session?.workspace?.id === workspaceId
+                ? context.session.workspace.name
+                : undefined,
+        enabledPlugins,
     };
 });

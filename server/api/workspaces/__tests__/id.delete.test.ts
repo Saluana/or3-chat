@@ -16,11 +16,14 @@ vi.mock('h3', () => ({
 }));
 
 const requireWorkspaceSessionMock = vi.fn();
+const resolveTargetWorkspaceSessionMock = vi.fn();
 const removeWorkspaceMock = vi.fn();
 const invalidateSharedSessionCacheForIdentityMock = vi.fn();
 const requireCanMock = vi.fn();
 vi.mock('../_helpers', () => ({
     requireWorkspaceSession: (...args: unknown[]) => requireWorkspaceSessionMock(...args),
+    resolveTargetWorkspaceSession: (...args: unknown[]) =>
+        resolveTargetWorkspaceSessionMock(...args),
     resolveWorkspaceStore: () => ({
         removeWorkspace: (...args: unknown[]) => removeWorkspaceMock(...args),
     }),
@@ -51,6 +54,13 @@ describe('DELETE /api/workspaces/:id', () => {
             provider: 'test-provider',
             providerUserId: 'provider-user-1',
         });
+        resolveTargetWorkspaceSessionMock.mockReset().mockImplementation(
+            async (session: Record<string, unknown>, _store: unknown, workspaceId: string) => ({
+                ...session,
+                workspace: { id: workspaceId, name: 'Workspace 2' },
+                role: 'owner',
+            })
+        );
         removeWorkspaceMock.mockReset().mockResolvedValue(undefined);
         invalidateSharedSessionCacheForIdentityMock.mockReset();
         requireCanMock.mockReset();
@@ -83,7 +93,9 @@ describe('DELETE /api/workspaces/:id', () => {
 
         await expect(handler(makeEvent())).resolves.toEqual({ ok: true });
         expect(requireCanMock).toHaveBeenCalledWith(
-            expect.objectContaining({ workspace: { id: 'ws-1' } }),
+            expect.objectContaining({
+                workspace: expect.objectContaining({ id: 'ws-2' }),
+            }),
             'workspace.settings.manage',
             { kind: 'workspace', id: 'ws-2' }
         );

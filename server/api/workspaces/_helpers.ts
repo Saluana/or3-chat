@@ -55,3 +55,34 @@ export function resolveWorkspaceStore(event: H3Event): AuthWorkspaceStore {
     }
     return store;
 }
+
+/**
+ * Build an authorization context for a workspace the caller belongs to, even
+ * when it is not their currently active workspace.
+ */
+export async function resolveTargetWorkspaceSession(
+    session: SessionContext & { authenticated: true },
+    store: AuthWorkspaceStore,
+    workspaceId: string
+): Promise<SessionContext> {
+    const userId = session.user?.id;
+    if (!userId) {
+        throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
+    }
+
+    const targetMembership = (await store.listUserWorkspaces(userId)).find(
+        (workspace) => workspace.id === workspaceId
+    );
+    if (!targetMembership) {
+        throw createError({ statusCode: 403, statusMessage: 'Forbidden' });
+    }
+
+    return {
+        ...session,
+        workspace: {
+            id: targetMembership.id,
+            name: targetMembership.name,
+        },
+        role: targetMembership.role,
+    };
+}

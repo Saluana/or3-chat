@@ -17,6 +17,9 @@
         "postinstall": "nuxt prepare",
         "test": "vitest run",
         "test:watch": "vitest",
+        "test:workflows:live": "bun run scripts/verify-workflows-openrouter-live.ts",
+        "test:workflows:live:complex": "bun run scripts/verify-workflows-complex-openrouter-live.ts",
+        "test:workflows:live:router": "bun run scripts/verify-workflows-router-openrouter-live.ts",
         "test:e2e:scroll": "OR3_SCROLL_TEST_HARNESS=true PW_PORT=3107 bunx playwright test tests/e2e/or3-scroll-canary.spec.ts",
         "test:e2e:command-palette": "bunx playwright test tests/e2e/command-palette.spec.ts",
         "command-palette:benchmarks:check": "bunx vite-node --config vitest.config.ts --mode production app/core/search/command-palette/__benchmarks__/search-benchmark.ts",
@@ -85,7 +88,7 @@
     "dependencies": {
         "@noble/hashes": "^2.2.0",
         "@nuxt/ui": "4.10.0",
-        "@openrouter/sdk": "^1.0.0",
+        "@openrouter/sdk": "^1.1.6",
         "@or3/plugin-sdk": "file:./packages/plugin-sdk",
         "@orama/orama": "^3.1.16",
         "@tiptap/core": "^3.28.0",

@@ -13,10 +13,10 @@
 
         <div v-else-if="workspace" class="space-y-6">
             <!-- Header -->
-            <div class="flex items-start justify-between">
-                <div>
-                    <div class="flex items-center gap-3">
-                        <h1 class="text-2xl font-semibold">{{ workspace.name }}</h1>
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <h1 class="min-w-0 break-words text-2xl font-semibold">{{ workspace.name }}</h1>
                         <UBadge v-if="workspace.deleted" color="error" variant="soft">Deleted</UBadge>
                     </div>
                     <p v-if="workspace.description" class="text-sm opacity-70 mt-1">
@@ -24,7 +24,7 @@
                     </p>
                 </div>
                 
-                <div class="flex gap-2">
+                <div class="flex flex-wrap gap-2">
                     <UButton
                         v-if="!workspace.deleted"
                         @click="handleSoftDelete"
@@ -51,10 +51,10 @@
             <!-- Info Card -->
             <div class="p-6 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
                 <h2 class="text-lg font-medium mb-4">Workspace Information</h2>
-                <div class="grid grid-cols-2 gap-4 text-sm">
-                    <div>
+                <div class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                    <div class="min-w-0">
                         <div class="opacity-50">ID</div>
-                        <div class="font-mono">{{ workspace.id }}</div>
+                        <div class="break-all font-mono">{{ workspace.id }}</div>
                     </div>
                     <div>
                         <div class="opacity-50">Owner</div>
@@ -75,29 +75,86 @@
                 </div>
             </div>
 
+            <div class="flex flex-col gap-4 p-6 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h2 class="text-lg font-medium">Guest access</h2>
+                    <p class="text-sm opacity-70">
+                        Allow people without a workspace account to open explicitly shared resources.
+                    </p>
+                </div>
+                <USwitch
+                    :model-value="workspace.guestAccessEnabled"
+                    :disabled="isUpdatingGuestAccess || workspace.deleted"
+                    :loading="isUpdatingGuestAccess"
+                    :aria-label="workspace.guestAccessEnabled ? 'Disable guest access' : 'Enable guest access'"
+                    @update:model-value="setGuestAccess"
+                />
+            </div>
+
             <!-- Members Card -->
             <div class="p-6 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-lg font-medium">Members</h2>
-                    <div class="text-sm opacity-70">{{ workspace.members?.length || 0 }} total</div>
+                <div class="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="text-lg font-medium">Members</h2>
+                        <p class="text-sm opacity-70">{{ workspace.members?.length || 0 }} total</p>
+                    </div>
+                    <div class="flex flex-col gap-2 sm:flex-row">
+                        <UInput
+                            v-model="newMemberIdentifier"
+                            aria-label="Member email or user ID"
+                            placeholder="Email or user ID"
+                            class="min-w-0 sm:w-64"
+                        />
+                        <USelect
+                            v-model="newMemberRole"
+                            aria-label="New member role"
+                            :items="memberRoleItems"
+                            class="sm:w-32"
+                        />
+                        <UButton
+                            :loading="isAddingMember"
+                            :disabled="!newMemberIdentifier.trim()"
+                            @click="addMember"
+                        >
+                            Add member
+                        </UButton>
+                    </div>
                 </div>
 
                 <div v-if="(workspace.members?.length ?? 0) > 0" class="space-y-2">
                     <div
                         v-for="member in workspace.members"
                         :key="member.userId"
-                        class="flex items-center justify-between p-3 rounded-lg bg-[var(--md-surface-container-low)]"
+                        class="flex flex-col gap-3 p-3 rounded-lg bg-[var(--md-surface-container-low)] sm:flex-row sm:items-center sm:justify-between"
                     >
-                        <div class="flex items-center gap-3">
+                        <div class="min-w-0 flex items-center gap-3">
                             <div class="w-8 h-8 rounded-full bg-[var(--md-primary-container)] flex items-center justify-center">
                                 <span class="text-xs font-medium text-[var(--md-on-primary-container)]">
                                     {{ (member.email || member.userId).substring(0, 2).toUpperCase() }}
                                 </span>
                             </div>
-                            <div>
-                                <div class="font-medium">{{ member.email || member.userId }}</div>
+                            <div class="min-w-0">
+                                <div class="break-all font-medium">{{ member.email || member.userId }}</div>
                                 <div class="text-xs opacity-50">{{ member.role }}</div>
                             </div>
+                        </div>
+                        <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+                            <USelect
+                                :model-value="member.role"
+                                :items="memberRoleItems"
+                                :aria-label="`Role for ${member.email || member.userId}`"
+                                class="min-w-32 flex-1 sm:flex-none"
+                                :disabled="memberActionUserId === member.userId"
+                                @update:model-value="updateMemberRole(member, $event)"
+                            />
+                            <UButton
+                                color="error"
+                                variant="soft"
+                                :loading="memberActionUserId === member.userId"
+                                @click="removeMember(member)"
+                            >
+                                Remove
+                            </UButton>
                         </div>
                     </div>
                 </div>
@@ -110,7 +167,10 @@
             <!-- Actions -->
             <div class="p-6 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-lg font-medium">Invites</h2>
+                    <div>
+                        <h2 class="text-lg font-medium">Invites</h2>
+                        <p class="text-sm opacity-70">Invite people to {{ workspace.name }}.</p>
+                    </div>
                     <UButton size="sm" variant="soft" color="neutral" :loading="isLoadingInvites" @click="loadInvites">
                         Refresh
                     </UButton>
@@ -177,6 +237,7 @@ import type { WorkspaceSummary, WorkspaceMemberInfo } from '~/types/global';
 
 interface Workspace extends WorkspaceSummary {
     members?: WorkspaceMemberInfo[];
+    guestAccessEnabled: boolean;
 }
 
 definePageMeta({
@@ -194,6 +255,11 @@ const isDeleting = ref(false);
 const isRestoring = ref(false);
 const isLoadingInvites = ref(false);
 const isCreatingInvite = ref(false);
+const isAddingMember = ref(false);
+const isUpdatingGuestAccess = ref(false);
+const memberActionUserId = ref<string | null>(null);
+const newMemberIdentifier = ref('');
+const newMemberRole = ref<'owner' | 'editor' | 'viewer'>('viewer');
 const inviteEmail = ref('');
 const inviteRole = ref<'owner' | 'editor' | 'viewer'>('viewer');
 const inviteTtlHours = ref(72);
@@ -201,6 +267,11 @@ const inviteRoleItems = [
     { label: 'Viewer', value: 'viewer' },
     { label: 'Editor', value: 'editor' },
     { label: 'Owner', value: 'owner' },
+];
+const memberRoleItems = [
+    { label: 'Owner', value: 'owner' },
+    { label: 'Editor', value: 'editor' },
+    { label: 'Viewer', value: 'viewer' },
 ];
 const invites = ref<Array<{ id: string; email: string; role: 'owner' | 'editor' | 'viewer'; status: 'pending' | 'accepted' | 'revoked' | 'expired'; expiresAt: number; inviteUrl?: string }>>([]);
 
@@ -216,6 +287,7 @@ async function refreshWorkspace() {
             `/api/admin/workspaces/${workspaceId.value}`,
             {
                 credentials: 'include',
+                query: { workspaceId: workspaceId.value },
             }
         );
     } catch (err: unknown) {
@@ -291,6 +363,147 @@ async function handleRestore() {
     }
 }
 
+async function addMember() {
+    const identifier = newMemberIdentifier.value.trim();
+    if (!identifier) return;
+    isAddingMember.value = true;
+    try {
+        await $fetch('/api/admin/workspace/members/upsert', {
+            method: 'POST',
+            credentials: 'include',
+            headers: ADMIN_HEADERS,
+            body: {
+                workspaceId: workspaceId.value,
+                emailOrProviderId: identifier,
+                role: newMemberRole.value,
+            },
+        });
+        newMemberIdentifier.value = '';
+        toast.add({ title: 'Member added', color: 'success' });
+        await refreshWorkspace();
+    } catch (err: unknown) {
+        toast.add({
+            title: 'Failed to add member',
+            description: getMessage(err, 'Unable to add member'),
+            color: 'error',
+        });
+    } finally {
+        isAddingMember.value = false;
+    }
+}
+
+async function setGuestAccess(enabled: boolean) {
+    isUpdatingGuestAccess.value = true;
+    try {
+        await $fetch('/api/admin/workspace/guest-access/set', {
+            method: 'POST',
+            credentials: 'include',
+            headers: ADMIN_HEADERS,
+            body: {
+                workspaceId: workspaceId.value,
+                enabled,
+            },
+        });
+        if (workspace.value) {
+            workspace.value.guestAccessEnabled = enabled;
+        }
+        toast.add({
+            title: enabled ? 'Guest access enabled' : 'Guest access disabled',
+            description: `${workspace.value?.name || 'Workspace'} was updated.`,
+            color: 'success',
+        });
+    } catch (err: unknown) {
+        toast.add({
+            title: 'Failed to update guest access',
+            description: getMessage(err, 'Unable to update guest access'),
+            color: 'error',
+        });
+    } finally {
+        isUpdatingGuestAccess.value = false;
+    }
+}
+
+async function updateMemberRole(member: WorkspaceMemberInfo, role: unknown) {
+    if (
+        role !== 'owner' &&
+        role !== 'editor' &&
+        role !== 'viewer'
+    ) {
+        return;
+    }
+    if (role === member.role || memberActionUserId.value) return;
+
+    if (member.role === 'owner' && role !== 'owner') {
+        const confirmed = await confirm({
+            title: 'Change owner role?',
+            message: `Change ${member.email || member.userId} from owner to ${role}? At least one owner must remain.`,
+            confirmText: 'Change role',
+            danger: true,
+        });
+        if (!confirmed) return;
+    }
+
+    memberActionUserId.value = member.userId;
+    try {
+        await $fetch('/api/admin/workspace/members/set-role', {
+            method: 'POST',
+            credentials: 'include',
+            headers: ADMIN_HEADERS,
+            body: {
+                workspaceId: workspaceId.value,
+                userId: member.userId,
+                role,
+            },
+        });
+        toast.add({ title: 'Member role updated', color: 'success' });
+        await refreshWorkspace();
+    } catch (err: unknown) {
+        toast.add({
+            title: 'Failed to update role',
+            description: getMessage(err, 'Unable to update member role'),
+            color: 'error',
+        });
+        await refreshWorkspace();
+    } finally {
+        memberActionUserId.value = null;
+    }
+}
+
+async function removeMember(member: WorkspaceMemberInfo) {
+    if (memberActionUserId.value) return;
+    const label = member.email || member.userId;
+    const confirmed = await confirm({
+        title: 'Remove member?',
+        message: `Remove ${label} from ${workspace.value?.name || 'this workspace'}? They will lose access immediately.`,
+        confirmText: 'Remove member',
+        danger: true,
+    });
+    if (!confirmed) return;
+
+    memberActionUserId.value = member.userId;
+    try {
+        await $fetch('/api/admin/workspace/members/remove', {
+            method: 'POST',
+            credentials: 'include',
+            headers: ADMIN_HEADERS,
+            body: {
+                workspaceId: workspaceId.value,
+                userId: member.userId,
+            },
+        });
+        toast.add({ title: 'Member removed', color: 'success' });
+        await refreshWorkspace();
+    } catch (err: unknown) {
+        toast.add({
+            title: 'Failed to remove member',
+            description: getMessage(err, 'Unable to remove member'),
+            color: 'error',
+        });
+    } finally {
+        memberActionUserId.value = null;
+    }
+}
+
 async function loadInvites() {
     isLoadingInvites.value = true;
     try {
@@ -302,6 +515,7 @@ async function loadInvites() {
             '/api/admin/workspace/invites/list',
             {
                 credentials: 'include',
+                query: { workspaceId: workspaceId.value },
             }
         );
         invites.value = response.invites ?? [];
@@ -328,6 +542,13 @@ async function loadInvites() {
 
 async function createInvite() {
     if (!inviteEmail.value.trim()) return;
+    const confirmed = await confirm({
+        title: `Invite to ${workspace.value?.name || 'workspace'}?`,
+        message: `Send ${inviteEmail.value.trim()} an invite as ${inviteRole.value}?`,
+        confirmText: 'Create invite',
+    });
+    if (!confirmed) return;
+
     isCreatingInvite.value = true;
     try {
         const response = await $fetch<{ invite: { id: string; email: string; role: 'owner' | 'editor' | 'viewer'; expiresAt: number; inviteUrl: string; }; }>(
@@ -340,6 +561,7 @@ async function createInvite() {
                     email: inviteEmail.value,
                     role: inviteRole.value,
                     expiresInSeconds: Math.max(1, inviteTtlHours.value) * 60 * 60,
+                    workspaceId: workspaceId.value,
                 },
             }
         );
@@ -356,7 +578,7 @@ async function createInvite() {
 
         toast.add({
             title: 'Invite created',
-            description: 'Invite link copied to clipboard.',
+            description: `Invite for ${workspace.value?.name || 'workspace'} copied to clipboard.`,
             color: 'success',
         });
         await copyInviteUrl(response.invite.inviteUrl);
@@ -372,12 +594,21 @@ async function createInvite() {
 }
 
 async function revokeInvite(inviteId: string) {
+    const invite = invites.value.find((item) => item.id === inviteId);
+    const confirmed = await confirm({
+        title: 'Revoke invite?',
+        message: `Revoke the invite for ${invite?.email || 'this person'} to ${workspace.value?.name || 'this workspace'}?`,
+        confirmText: 'Revoke invite',
+        danger: true,
+    });
+    if (!confirmed) return;
+
     try {
         await $fetch('/api/admin/workspace/invites/revoke', {
             method: 'POST',
             credentials: 'include',
             headers: ADMIN_HEADERS,
-            body: { inviteId },
+            body: { inviteId, workspaceId: workspaceId.value },
         });
         invites.value = invites.value.map((invite) =>
             invite.id === inviteId

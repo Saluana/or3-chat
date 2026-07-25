@@ -38,7 +38,14 @@ describe('V1 client tool registry profile', () => {
 
     it('rejects duplicates, overrides by identity, exposes refs, and normalizes runtime hints', () => {
         const def = definition('profile_client_tool', 'client');
-        const first = registry.registerTool(def, () => 'first');
+        const first = registry.registerTool(def, () => 'first', {
+            workflowPolicy: {
+                sideEffect: 'reversible',
+                approval: 'always',
+                parallelSafe: false,
+                permissions: ['workspace.write'],
+            },
+        });
         expect(registry.getTool(def.function.name)).toBe(first);
         expect(registry.listTools.value[0]).toBe(first);
         expect(isRef(first.enabled)).toBe(true);
@@ -46,6 +53,12 @@ describe('V1 client tool registry profile', () => {
         expect(first.runtime).toBe('client');
         expect(first.definition).not.toBe(def);
         expect(first.definition.runtime).toBe('client');
+        expect(first.workflowPolicy).toEqual({
+            sideEffect: 'reversible',
+            approval: 'always',
+            parallelSafe: false,
+            permissions: ['workspace.write'],
+        });
         expect(() => registry.registerTool(def, () => 'duplicate')).toThrow(
             'Tool "profile_client_tool" is already registered. Use override: true to replace it.'
         );
@@ -117,8 +130,21 @@ describe('V1 server tool registry profile', () => {
             override: true,
             runtime: 'hybrid',
             timeoutMs: 1234,
+            workflowPolicy: {
+                sideEffect: 'destructive',
+                approval: 'always',
+                parallelSafe: false,
+            },
         });
-        expect(getServerTool(def.function.name)).toMatchObject({ runtime: 'hybrid', timeoutMs: 1234 });
+        expect(getServerTool(def.function.name)).toMatchObject({
+            runtime: 'hybrid',
+            timeoutMs: 1234,
+            workflowPolicy: {
+                sideEffect: 'destructive',
+                approval: 'always',
+                parallelSafe: false,
+            },
+        });
         expect(stale()).toBe(false);
         expect(current()).toBe(true);
         expect(current()).toBe(false);
