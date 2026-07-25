@@ -59,7 +59,13 @@ export interface PromptRow {
     created_at: number; // seconds
     updated_at: number; // seconds
     deleted: boolean;
+    meta: Post['meta'];
     clock?: number;
+}
+
+export interface PromptMeta {
+    tags: string[];
+    favorite: boolean;
 }
 
 /** Public facing record with content already parsed. */
@@ -80,6 +86,8 @@ export interface PromptRecord {
     id: string;
     title: string;
     content: TipTapDocument | null; // TipTap JSON object
+    tags: string[];
+    favorite: boolean;
     created_at: number;
     updated_at: number;
     deleted: boolean;
@@ -118,10 +126,13 @@ async function deletePromptPostRow(id: string): Promise<void> {
 }
 
 function toPromptEntity(row: PromptRow): PromptEntity {
+    const meta = parsePromptMeta(row.meta);
     return {
         id: row.id,
         name: row.title,
         text: row.content,
+        tags: meta.tags,
+        favorite: meta.favorite,
     };
 }
 
@@ -138,9 +149,11 @@ function promptEntityToRow(entity: PromptEntity, base?: PromptRow): PromptRow {
             created_at: nowSec(),
             updated_at: nowSec(),
             deleted: false,
+            meta: serializePromptMeta(),
             clock: 0,
         } as PromptRow);
 
+    const fallbackMeta = parsePromptMeta(fallback.meta);
     return {
         ...fallback,
         id: entity.id,
@@ -150,6 +163,10 @@ function promptEntityToRow(entity: PromptEntity, base?: PromptRow): PromptRow {
         updated_at: fallback.updated_at,
         postType: 'prompt',
         deleted: fallback.deleted,
+        meta: serializePromptMeta({
+            tags: entity.tags ?? fallbackMeta.tags,
+            favorite: entity.favorite ?? fallbackMeta.favorite,
+        }),
         clock: fallback.clock,
     };
 }
@@ -173,6 +190,12 @@ function buildPromptUpdatePayload(
     };
     if (patch.title !== undefined) patchEntity.name = updatedRow.title;
     if (patch.content !== undefined) patchEntity.text = updatedRow.content;
+    if (patch.tags !== undefined) {
+        patchEntity.tags = parsePromptMeta(updatedRow.meta).tags;
+    }
+    if (patch.favorite !== undefined) {
+        patchEntity.favorite = parsePromptMeta(updatedRow.meta).favorite;
+    }
 
     return {
         existing: toPromptEntity(existingRow),
@@ -184,6 +207,51 @@ function buildPromptUpdatePayload(
 
 function emptyPromptJSON(): TipTapDocument {
     return { type: 'doc', content: [] };
+}
+
+export function normalizePromptTags(tags: unknown): string[] {
+    if (!Array.isArray(tags)) return [];
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+    for (const value of tags) {
+        if (typeof value !== 'string') continue;
+        const tag = value.trim();
+        if (!tag) continue;
+        const key = tag.toLocaleLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        normalized.push(tag);
+    }
+    return normalized;
+}
+
+export function parsePromptMeta(raw: unknown): PromptMeta {
+    let value = raw;
+    if (typeof value === 'string') {
+        if (!value.trim()) return { tags: [], favorite: false };
+        try {
+            value = JSON.parse(value);
+        } catch {
+            return { tags: [], favorite: false };
+        }
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return { tags: [], favorite: false };
+    }
+    const record = value as Record<string, unknown>;
+    return {
+        tags: normalizePromptTags(record.tags),
+        favorite: record.favorite === true,
+    };
+}
+
+function serializePromptMeta(
+    meta: Partial<PromptMeta> = {}
+): string {
+    return JSON.stringify({
+        tags: normalizePromptTags(meta.tags),
+        favorite: meta.favorite === true,
+    } satisfies PromptMeta);
 }
 
 function normalizeTitle(
@@ -219,10 +287,13 @@ function parseContent(raw: string | null | undefined): TipTapDocument {
 }
 
 function rowToRecord(row: PromptRow): PromptRecord {
+    const meta = parsePromptMeta(row.meta);
     return {
         id: row.id,
         title: row.title,
         content: parseContent(row.content),
+        tags: meta.tags,
+        favorite: meta.favorite,
         created_at: row.created_at,
         updated_at: row.updated_at,
         deleted: row.deleted,
@@ -245,6 +316,8 @@ function rowToRecord(row: PromptRow): PromptRecord {
 export interface CreatePromptInput {
     title?: string | null;
     content?: TipTapDocument | null; // TipTap JSON object
+    tags?: string[];
+    favorite?: boolean;
 }
 
 /**
@@ -273,6 +346,10 @@ export async function createPrompt(
         created_at: nowSec(),
         updated_at: nowSec(),
         deleted: false,
+        meta: serializePromptMeta({
+            tags: input.tags,
+            favorite: input.favorite,
+        }),
         clock: nextClock(),
     };
     const filteredEntity = await hooks.applyFilters(
@@ -295,7 +372,7 @@ export async function createPrompt(
         created_at: persistedRow.created_at,
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
-        meta: '',
+        meta: persistedRow.meta,
         clock: persistedRow.clock ?? 0,
     };
     await putPromptPostRow(postRow); // reuse posts table
@@ -332,6 +409,7 @@ export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
         created_at: row.created_at,
         updated_at: row.updated_at,
         deleted: row.deleted,
+        meta: row.meta,
         clock: row.clock,
     };
     const filteredEntity = await hooks.applyFilters(
@@ -345,7 +423,7 @@ export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
 
 /**
  * Purpose:
- * List recent prompts with optional limiting.
+ * List prompts ordered by most recently updated, with optional limiting.
  *
  * Behavior:
  * Filters by `postType = prompt`, excludes deleted rows, and sorts by `updated_at`.
@@ -356,7 +434,7 @@ export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
  * Non-Goals:
  * - Does not paginate via cursor semantics.
  */
-export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
+export async function listPrompts(limit?: number): Promise<PromptRecord[]> {
     const hooks = useHooks();
     // Filter by postType (indexed) and non-deleted
     const rows = await getDb().posts
@@ -367,7 +445,9 @@ export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
         .toArray();
     // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
     rows.sort((a, b) => b.updated_at - a.updated_at);
-    const sliced = rows.slice(0, limit) as PromptRow[];
+    const sliced = (
+        typeof limit === 'number' ? rows.slice(0, limit) : rows
+    ) as PromptRow[];
     const baseMap = new Map(sliced.map((row) => [row.id, row]));
     const filteredEntities = await hooks.applyFilters(
         'db.prompts.list:filter:output',
@@ -392,6 +472,8 @@ export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
 export interface UpdatePromptPatch {
     title?: string;
     content?: TipTapDocument | null; // TipTap JSON object
+    tags?: string[];
+    favorite?: boolean;
 }
 
 /**
@@ -422,21 +504,34 @@ export async function updatePrompt(
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
+        meta: existing.meta,
         clock: existing.clock,
     };
+    const existingMeta = parsePromptMeta(existingRow.meta);
     const updatedRow: PromptRow = {
         id: existingRow.id,
         title:
             patch.title !== undefined
                 ? normalizeTitle(patch.title, { allowEmpty: true })
                 : existingRow.title,
-        content: patch.content
-            ? JSON.stringify(patch.content)
-            : existingRow.content,
+        content:
+            patch.content !== undefined
+                ? JSON.stringify(patch.content ?? emptyPromptJSON())
+                : existingRow.content,
         postType: 'prompt',
         created_at: existingRow.created_at,
         updated_at: nowSec(),
         deleted: existingRow.deleted,
+        meta: serializePromptMeta({
+            tags:
+                patch.tags !== undefined
+                    ? patch.tags
+                    : existingMeta.tags,
+            favorite:
+                patch.favorite !== undefined
+                    ? patch.favorite
+                    : existingMeta.favorite,
+        }),
         clock: nextClock(existingRow.clock),
     };
 
@@ -467,7 +562,7 @@ export async function updatePrompt(
         created_at: persistedRow.created_at,
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
-        meta: '',
+        meta: persistedRow.meta,
         clock: persistedRow.clock ?? 0,
     };
     await putPromptPostRow(postRow);
@@ -505,6 +600,7 @@ export async function softDeletePrompt(id: string): Promise<void> {
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
+        meta: existing.meta,
         clock: existing.clock,
     };
     const payload: DbDeletePayload<PromptEntity> = {
@@ -528,7 +624,7 @@ export async function softDeletePrompt(id: string): Promise<void> {
         created_at: updatedRow.created_at,
         updated_at: updatedRow.updated_at,
         deleted: updatedRow.deleted,
-        meta: '',
+        meta: updatedRow.meta,
         clock: updatedRow.clock,
     };
     await putPromptPostRow(postRow, true);
@@ -560,6 +656,7 @@ export async function hardDeletePrompt(id: string): Promise<void> {
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
+        meta: existing.meta,
         clock: existing.clock,
     };
     const payload: DbDeletePayload<PromptEntity> = {

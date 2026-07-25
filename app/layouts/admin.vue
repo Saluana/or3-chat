@@ -315,6 +315,9 @@ const workspaceIcon = useIcon('admin.workspace');
 const pluginsIcon = useIcon('dashboard.plugins');
 const settingsIcon = useIcon('dashboard.settings');
 const systemIcon = useIcon('ui.settings');
+const brandingIcon = 'i-heroicons-paint-brush';
+const featuresIcon = 'i-heroicons-sparkles';
+const advancedIcon = 'i-heroicons-adjustments-horizontal';
 const refreshIcon = useIcon('ui.refresh');
 const warningIcon = useIcon('ui.warning');
 
@@ -403,10 +406,13 @@ const navLinks = computed<NavLink[]>(() => {
         base.push(
             { label: 'Overview', to: '/admin', icon: homeIcon.value, section: 'Site' },
             { label: 'Workspaces', to: '/admin/workspaces', icon: workspacesIcon.value, section: 'Site' },
+            { label: 'UI & Branding', to: '/admin/branding', icon: brandingIcon, section: 'Experience' },
+            { label: 'Features', to: '/admin/features', icon: featuresIcon, section: 'Experience' },
+            { label: 'Themes', to: '/admin/themes', icon: settingsIcon.value, section: 'Experience' },
             { label: 'Plugins', to: '/admin/plugins', icon: pluginsIcon.value, section: 'Extensions' },
             { label: 'Webhooks', to: '/admin/webhooks', icon: pluginsIcon.value, section: 'Extensions' },
-            { label: 'Themes', to: '/admin/themes', icon: settingsIcon.value, section: 'Appearance' },
-            { label: 'System', to: '/admin/system', icon: systemIcon.value, section: 'Operations' }
+            { label: 'Operations', to: '/admin/system', icon: systemIcon.value, section: 'Operations' },
+            { label: 'Advanced Settings', to: '/admin/advanced', icon: advancedIcon, section: 'Operations' }
         );
     }
 

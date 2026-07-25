@@ -226,6 +226,17 @@
             v-if="dashboardEnabled"
             v-model:showModal="showDashboardModal"
         />
+        <ClientOnly>
+            <component
+                :is="systemPromptsModalComponent"
+                v-model:showModal="systemPromptsModalOpen"
+                :mode="systemPromptsModalRequest?.mode"
+                :prompt-id="systemPromptsModalRequest?.promptId"
+                :thread-id="systemPromptsModalRequest?.threadId"
+                :pane-id="systemPromptsModalRequest?.paneId"
+                @selected="notifySystemPromptSelected"
+            />
+        </ClientOnly>
         <SearchCommandPalette />
     </resizable-sidebar-layout>
 </template>
@@ -283,6 +294,10 @@ import {
 } from '~/composables/search/useCommandPalette';
 import { createPaletteHostContext } from '~/core/search/command-palette/host-context';
 import { registerCorePaletteSources } from '~/core/search/command-palette/sources/register-core';
+import {
+    useSystemPromptsModal,
+    type SystemPromptsModalMode,
+} from '~/composables/chat/useSystemPromptsModal';
 
 const legacyCompatClasses = {
     height: `h-[${'100dvh'}]`,
@@ -356,6 +371,7 @@ const {
     sidebarExpandedComponent,
     sidebarCollapsedComponent,
     dashboardModalComponent,
+    systemPromptsModalComponent,
     sidebarToggleButtonProps,
     newPaneButtonProps,
     themeToggleButtonProps,
@@ -811,7 +827,30 @@ const {
     open: openCommandPalette,
     close: closeCommandPalette,
 } = useCommandPalette();
+const {
+    isOpen: systemPromptsModalOpen,
+    request: systemPromptsModalRequest,
+    open: openSystemPromptsModal,
+    notifySelected: notifySystemPromptSelected,
+} = useSystemPromptsModal();
 let disposePaletteHostContext: (() => void) | null = null;
+
+async function openSystemPromptsFromPalette(options: {
+    mode: SystemPromptsModalMode;
+    promptId?: string;
+}) {
+    const activePane = panes.value[activePaneIndex.value];
+    closeCommandPalette();
+    await nextTick();
+    openSystemPromptsModal({
+        ...options,
+        threadId:
+            activePane?.mode === 'chat'
+                ? activePane.threadId || undefined
+                : undefined,
+        paneId: activePane?.mode === 'chat' ? activePane.id : undefined,
+    });
+}
 
 function setDashboardOpen(open: boolean) {
     if (!dashboardEnabled.value) return;
@@ -845,6 +884,7 @@ onMounted(() => {
             setDashboardOpen,
             canOpenNewPane: () => canAddPane.value,
             getDashboardNavigation: () => dashboardNavigation,
+            openSystemPrompts: openSystemPromptsFromPalette,
         })
     );
 
@@ -865,6 +905,10 @@ onMounted(() => {
             newChat: onNewChat,
             newDocument: () => onNewDocument(),
             newProject: openNewProjectModal,
+            openSystemPrompts: () =>
+                openSystemPromptsFromPalette({ mode: 'home' }),
+            newSystemPrompt: () =>
+                openSystemPromptsFromPalette({ mode: 'new' }),
         },
     });
 });

@@ -195,6 +195,11 @@ export function useChat(
     const aborted = ref<boolean>(false);
     const { apiKey, setKey } = useUserApiKey();
     const runtimeConfig = useRuntimeConfig();
+    // Nuxt UI resolves its toast service through Vue injection. Capture it
+    // while useChat is still running inside setup; calling useToast() later
+    // from an async send handler triggers Vue's "inject() can only be used
+    // inside setup()" warning.
+    const toast = useToast();
     const syncConfig = runtimeConfig.public.sync;
     const serverNotificationsEnabled = computed(
         () =>
@@ -327,7 +332,12 @@ export function useChat(
         () => {
             if (runtimeConfig.public.ssrAuthEnabled !== true) return false;
             if (backgroundStreamingConfig.value?.enabled !== true) return false;
-            if (!isBackgroundStreamingEnabled()) return false;
+            if (
+                !isBackgroundStreamingEnabled(
+                    backgroundStreamingConfig.value?.enabled
+                )
+            )
+                return false;
             const session = sessionContext
                 ? sessionContext.data.value?.session ?? null
                 : null;
@@ -351,8 +361,6 @@ export function useChat(
     async function enforceClientLimits(isNewThread: boolean): Promise<boolean> {
         const limits = limitsConfig.value;
         if (limits.enabled === false) return true;
-
-        const toast = useToast();
 
         const maxConversations =
             typeof limits.maxConversations === 'number'
@@ -1275,7 +1283,7 @@ export function useChat(
                 const openrouter = useOpenRouterAuth();
                 openrouter.startLogin();
             } else if (!allowUserOverride.value) {
-                useToast().add({
+                toast.add({
                     title: 'Instance key required',
                     description:
                         'This deployment requires a managed OpenRouter key. Contact your administrator.',
@@ -1284,7 +1292,7 @@ export function useChat(
                 });
             } else if (runtimeConfig.public.ssrAuthEnabled === true) {
                 // SSR mode: user must authenticate via the auth provider first
-                useToast().add({
+                toast.add({
                     title: 'Sign in required',
                     description:
                         'Please sign in to continue chatting.',
@@ -1295,7 +1303,7 @@ export function useChat(
                 // Static/local mode: there is no "sign in" — the user just
                 // needs an OpenRouter key. The chat input already shows
                 // connect/paste actions; this is only a backstop.
-                useToast().add({
+                toast.add({
                     title: 'Connect to OpenRouter',
                     description:
                         'Add an OpenRouter API key to start chatting.',
@@ -1326,7 +1334,7 @@ export function useChat(
             (!outgoing || typeof outgoing !== 'string' || outgoing.trim() === '') &&
             earlyExtraTextParts.length === 0
         ) {
-            useToast().add({
+            toast.add({
                 title: 'Message blocked',
                 description: 'Your message was filtered out.',
                 duration: 3000,
@@ -1385,7 +1393,7 @@ export function useChat(
                     chosen.reason !== 'fixed'
                 ) {
                     try {
-                        useToast().add({
+                        toast.add({
                             title: 'Model fallback in effect',
                             description:
                                 'Your fixed model was not used. Falling back to last selected or default.',
@@ -1398,12 +1406,21 @@ export function useChat(
             } catch {
                 /* intentionally empty */
             }
-            const newThread = await createThreadInDb(requestScope.originDb, {
-                title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
-                last_message_at: nowSec(),
-                parent_thread_id: null,
-                system_prompt_id: effectivePromptId || null,
-            });
+            const newThread = await createThreadInDb(
+                requestScope.originDb,
+                {
+                    title:
+                        content.split(' ').slice(0, 6).join(' ') ||
+                        'New Thread',
+                    last_message_at: nowSec(),
+                    parent_thread_id: null,
+                    system_prompt_id: effectivePromptId || null,
+                },
+                {
+                    hooks,
+                    limits: runtimeConfig.public.limits,
+                }
+            );
             threadIdRef.value = newThread.id;
             // Bind thread to active pane immediately (before first user message hook) if multi-pane present.
             try {

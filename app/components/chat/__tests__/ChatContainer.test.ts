@@ -29,6 +29,10 @@ vi.mock('~/composables/core/usePanePrompt', () => ({
     clearPanePendingPrompt: vi.fn(),
     setPanePendingPrompt: vi.fn(),
     setupPanePromptCleanup: vi.fn(),
+    usePanePendingPrompt: vi.fn(() => ({
+        __v_isRef: true,
+        value: undefined,
+    })),
 }));
 
 vi.mock('~/state/global', () => ({

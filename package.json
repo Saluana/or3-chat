@@ -19,6 +19,7 @@
         "test:watch": "vitest",
         "test:workflows:live": "bun run scripts/verify-workflows-openrouter-live.ts",
         "test:workflows:live:complex": "bun run scripts/verify-workflows-complex-openrouter-live.ts",
+        "test:workflows:live:matrix": "bun run scripts/verify-workflows-provider-matrix-live.ts",
         "test:workflows:live:router": "bun run scripts/verify-workflows-router-openrouter-live.ts",
         "test:e2e:scroll": "OR3_SCROLL_TEST_HARNESS=true PW_PORT=3107 bunx playwright test tests/e2e/or3-scroll-canary.spec.ts",
         "test:e2e:command-palette": "bunx playwright test tests/e2e/command-palette.spec.ts",

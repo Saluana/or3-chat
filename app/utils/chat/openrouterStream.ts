@@ -567,13 +567,18 @@ async function readErrorMessage(
  * Purpose:
  * Returns true when background streaming is available for this client.
  */
-export function isBackgroundStreamingEnabled(): boolean {
+export function isBackgroundStreamingEnabled(
+    configuredEnabled?: boolean
+): boolean {
     if (!isServerRouteAvailable()) return false;
 
-    const runtimeConfig = useRuntimeConfig() as {
-        public?: { backgroundStreaming?: { enabled?: boolean } };
-    };
-    const configEnabled = runtimeConfig.public?.backgroundStreaming?.enabled;
+    const configEnabled =
+        configuredEnabled ??
+        (
+            useRuntimeConfig() as {
+                public?: { backgroundStreaming?: { enabled?: boolean } };
+            }
+        ).public?.backgroundStreaming?.enabled;
     if (configEnabled === false) return false;
     // Explicit config should win over stale local cache.
     if (configEnabled === true) return true;

@@ -10,6 +10,7 @@ export type PaletteCategoryId =
     | 'chat'
     | 'document'
     | 'project'
+    | 'prompt'
     | 'workflow'
     | 'image'
     | 'setting'
@@ -52,6 +53,11 @@ export type PaletteActionTarget =
           destination: 'active' | 'new-pane';
       }
     | { kind: 'project'; projectId: string }
+    | {
+          kind: 'system-prompt';
+          mode: 'home' | 'edit' | 'new';
+          promptId?: string;
+      }
     | { kind: 'dashboard'; pluginId: string; pageId?: string }
     | { kind: 'image'; hash: string }
     | {
@@ -241,6 +247,10 @@ export interface PaletteHostContext {
         destination: 'active' | 'new-pane'
     ): Promise<PaletteActionResult>;
     revealProject(projectId: string): Promise<PaletteActionResult>;
+    openSystemPrompts(options: {
+        mode: 'home' | 'edit' | 'new';
+        promptId?: string;
+    }): Promise<PaletteActionResult>;
     openDashboard(
         pluginId: string,
         pageId?: string
@@ -311,6 +321,13 @@ export const CORE_PALETTE_CATEGORIES: readonly PaletteCategory[] = [
         aliases: ['project'],
         icon: 'i-lucide-folder',
         order: 40,
+    },
+    {
+        id: 'prompt',
+        label: 'Prompts',
+        aliases: ['prompt'],
+        icon: 'i-lucide-scroll-text',
+        order: 45,
     },
     {
         id: 'workflow',

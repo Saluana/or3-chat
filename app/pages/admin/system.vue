@@ -1,135 +1,91 @@
 <template>
     <div class="space-y-8">
-        <div>
-            <h2 class="text-2xl font-semibold mb-1">System</h2>
-            <p class="text-sm opacity-70">
-                Core system configuration and status.
-            </p>
-        </div>
+        <header>
+            <div class="flex items-center gap-3">
+                <div
+                    class="flex h-10 w-10 items-center justify-center rounded-[var(--md-sys-shape-corner-medium,12px)] bg-[var(--md-primary)]/10 text-[var(--md-primary)]"
+                >
+                    <UIcon name="i-heroicons-wrench-screwdriver" class="h-5 w-5" />
+                </div>
+                <div>
+                    <h2 class="text-2xl font-semibold">Operations</h2>
+                    <p class="mt-1 text-sm opacity-70">
+                        Monitor OR3 and perform routine server maintenance.
+                    </p>
+                </div>
+            </div>
+        </header>
 
         <ClientOnly>
-            <!-- Skeleton: show when pending OR when no data yet -->
-            <div v-if="pending || !status" class="grid grid-cols-1 md:grid-cols-2 gap-6 animate-pulse">
-                <div class="h-64 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
-                <div class="h-64 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
+            <div
+                v-if="pending || !status"
+                class="grid grid-cols-1 gap-6 animate-pulse md:grid-cols-2"
+            >
+                <div class="h-64 rounded-[var(--md-sys-shape-corner-medium,12px)] bg-[var(--md-surface-container-highest)]" />
+                <div class="h-64 rounded-[var(--md-sys-shape-corner-medium,12px)] bg-[var(--md-surface-container-highest)]" />
             </div>
 
             <template v-else>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
                     <AdminSystemStatusCard :status="status" :warnings="warnings" />
-
                     <AdminSystemOperationsCard
                         :is-owner="isOwner"
-                        :allow-restart="Boolean(status?.admin?.allowRestart)"
-                        :allow-rebuild="Boolean(status?.admin?.allowRebuild)"
+                        :allow-restart="Boolean(status.admin?.allowRestart)"
+                        :allow-rebuild="Boolean(status.admin?.allowRebuild)"
                         @restart="restart"
                         @rebuild-restart="rebuildRestart"
                     />
-        </div>
+                </div>
 
-                <AdminSystemProviderActions
-                    :actions="providerActions"
-                    :is-owner="isOwner"
-                    @run="runProviderAction"
-                />
-
-                <!-- Restart Required Banner -->
-                <div v-if="restartRequired" class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)] flex items-center justify-between gap-4">
-                    <div class="flex items-center gap-3">
-                        <UIcon name="i-heroicons-exclamation-triangle" class="w-5 h-5 flex-shrink-0" />
-                        <div>
-                            <div class="font-semibold text-sm">Restart Required</div>
-                            <div class="text-xs opacity-80">Some changes will only take effect after a server restart.</div>
-                        </div>
+                <section v-if="providerActions.length" class="space-y-3">
+                    <div>
+                        <h3 class="text-lg font-semibold">Maintenance</h3>
+                        <p class="mt-1 text-sm opacity-60">
+                            Provider-specific cleanup and recovery tools.
+                        </p>
                     </div>
-                    <UButton
-                        size="xs"
-                        color="warning"
-                        variant="solid"
-                        :disabled="!isOwner || !status?.admin?.allowRestart"
-                        @click="restart"
-                    >
-                        Restart Now
-                    </UButton>
-                </div>
+                    <AdminSystemProviderActions
+                        :actions="providerActions"
+                        :is-owner="isOwner"
+                        @run="runProviderAction"
+                    />
+                </section>
 
-                <!-- Grouped Configuration -->
-                <div v-if="enrichedEntries.length > 0">
-            <h3 class="text-lg font-semibold mb-3">Configuration</h3>
-            <div class="space-y-6">
-                <div
-                    v-for="group in configGroups"
-                    :key="group"
-                    class="p-5 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]"
+                <section
+                    class="rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-5"
                 >
-                    <h4 class="text-base font-semibold mb-4 flex items-center gap-2">
-                        <span class="w-1 h-4 rounded-full" :class="getGroupColor(group)"></span>
-                        {{ group }}
-                    </h4>
-                    <div class="space-y-6 sm:space-y-5">
-	                        <div
-	                            v-for="entry in getEntriesForGroup(group)"
-	                            :key="entry.key"
-	                            class="space-y-2"
-	                        >
-                            <label class="block">
-                                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-1 gap-1">
-                                    <div class="flex-1 min-w-0">
-                                        <div class="font-medium text-sm">{{ entry.label }}</div>
-                                        <div class="text-xs opacity-60 mt-0.5 leading-relaxed">{{ entry.description }}</div>
-                                    </div>
-                                    <code class="text-xs opacity-40 font-mono mt-0.5 sm:ml-2 sm:mt-0.5 shrink-0">{{ entry.key }}</code>
-                                </div>
-	                                <USelectMenu
-	                                    v-if="entry.valueType === 'boolean' && !entry.masked"
-	                                    :model-value="entry.value ?? undefined"
-	                                    @update:model-value="entry.value = $event ?? null"
-	                                    size="sm"
-	                                    :disabled="!isOwner"
-	                                    :items="booleanItems"
-	                                    :value-key="'value'"
-	                                    class="w-full"
-	                                />
-	                                <UInput
-	                                    v-else
-	                                    :model-value="entry.value ?? undefined"
-	                                    @update:model-value="entry.value = $event ?? null"
-	                                    size="sm"
-	                                    :disabled="!isOwner"
-	                                    :type="entry.valueType === 'number' ? 'number' : 'text'"
-	                                    :placeholder="entry.masked ? '******' : ''"
-	                                    class="w-full"
-	                                >
-	                                    <template #trailing v-if="entry.masked">
-	                                        <UBadge size="xs" color="neutral" variant="subtle">MASKED</UBadge>
-	                                    </template>
-	                                </UInput>
-	                            </label>
-	                        </div>
-	                    </div>
-	                </div>
-
-                <div class="flex justify-end">
-                    <UButton
-                        :disabled="!isOwner || isSaving"
-                        :loading="isSaving"
-                        @click="saveConfig"
-                        color="neutral"
-                        variant="solid"
-                        icon="i-heroicons-check"
-                    >
-                        Save Configuration
-                    </UButton>
-                </div>
-            </div>
-        </div>
+                    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="flex items-start gap-3">
+                            <div
+                                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-corner-small,8px)] bg-[var(--md-surface-container-highest)]"
+                            >
+                                <UIcon name="i-heroicons-adjustments-horizontal" class="h-5 w-5 opacity-70" />
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-semibold">Looking for infrastructure settings?</h3>
+                                <p class="mt-1 text-xs leading-relaxed opacity-60">
+                                    Authentication, databases, storage, security, background jobs,
+                                    and service credentials now live in Advanced Settings.
+                                </p>
+                            </div>
+                        </div>
+                        <UButton
+                            to="/admin/advanced"
+                            color="neutral"
+                            variant="soft"
+                            trailing-icon="i-heroicons-arrow-right"
+                            class="shrink-0"
+                        >
+                            Advanced Settings
+                        </UButton>
+                    </div>
+                </section>
             </template>
 
-            <!-- SSR fallback skeleton -->
             <template #fallback>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 animate-pulse">
-                    <div class="h-64 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
-                    <div class="h-64 bg-[var(--md-surface-container-highest)] rounded-[var(--md-sys-shape-corner-medium,12px)]"></div>
+                <div class="grid grid-cols-1 gap-6 animate-pulse md:grid-cols-2">
+                    <div class="h-64 rounded-[var(--md-sys-shape-corner-medium,12px)] bg-[var(--md-surface-container-highest)]" />
+                    <div class="h-64 rounded-[var(--md-sys-shape-corner-medium,12px)] bg-[var(--md-surface-container-highest)]" />
                 </div>
             </template>
         </ClientOnly>
@@ -137,13 +93,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
-import { useAdminSystemConfigEnriched, useAdminSystemStatus } from '~/composables/admin/useAdminData';
+import { useAdminSystemStatus } from '~/composables/admin/useAdminData';
 import { useServerRestart } from '~/composables/admin/useServerRestart';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
-import type { ConfigGroup, EnrichedConfigEntry, ProviderAction } from '~/composables/admin/useAdminTypes';
+import type { ProviderAction } from '~/composables/admin/useAdminTypes';
 import AdminSystemStatusCard from '~/components/admin/system/AdminSystemStatusCard.vue';
 import AdminSystemOperationsCard from '~/components/admin/system/AdminSystemOperationsCard.vue';
 import AdminSystemProviderActions from '~/components/admin/system/AdminSystemProviderActions.vue';
@@ -154,175 +109,34 @@ definePageMeta({
 });
 
 const { data: statusData, status: statusFetchStatus } = useAdminSystemStatus();
-const { data: enrichedConfigData, status: configFetchStatus } = useAdminSystemConfigEnriched();
+const { confirm } = useConfirmDialog();
+const toast = useToast();
 
-// Use fetch status for pending state to avoid hydration mismatch.
-// With lazy: true, data may differ between SSR and client.
-const pending = computed(
-    () => statusFetchStatus.value === 'pending' || configFetchStatus.value === 'pending'
-);
+const pending = computed(() => statusFetchStatus.value === 'pending');
 const status = computed(() => statusData.value?.status);
-	const warnings = computed(() => statusData.value?.warnings ?? []);
-	type EnrichedConfigEntryUi = Omit<EnrichedConfigEntry, 'value'> & {
-	    value: string | null;
-	};
-	const enrichedEntries = ref<EnrichedConfigEntryUi[]>([]);
-	const restartRequired = ref(false);
-    const isSaving = ref(false);
-		const role = computed(() => statusData.value?.session?.role);
-		const isOwner = computed(() => role.value === 'owner');
-		const booleanItems: Array<{ label: string; value: string }> = [
-		    { label: 'Enabled', value: 'true' },
-		    { label: 'Disabled', value: 'false' },
-	];
+const warnings = computed(() => statusData.value?.warnings ?? []);
+const isOwner = computed(() => statusData.value?.session?.role === 'owner');
 
-const configGroups: ConfigGroup[] = [
-    'Auth',
-    'Sync',
-    'Storage',
-    'UI & Branding',
-    'Features',
-    'Limits & Security',
-    'Background Processing',
-    'Admin',
-    'External Services',
-];
-
-	const providerActions = computed(() => {
-	    if (!status.value) return [];
+const providerActions = computed(() => {
+    if (!status.value) return [];
     const actions: Array<
         ProviderAction & { kind: 'auth' | 'sync' | 'storage'; provider: string }
     > = [];
     for (const kind of ['auth', 'sync', 'storage'] as const) {
         const provider = status.value[kind].provider;
         if (!status.value[kind].enabled) continue;
-        const list = status.value[kind].actions ?? [];
-        for (const action of list) {
+        for (const action of status.value[kind].actions ?? []) {
             actions.push({ ...action, kind, provider });
         }
     }
     return actions;
-	});
+});
 
-		function normalizeUiValue(entry: EnrichedConfigEntry): string | null {
-		    if (entry.masked) return entry.value ?? null;
-		    if (entry.valueType === 'boolean') return entry.value ?? null;
-		    return entry.value ?? '';
-		}
-
-	function normalizeForSave(value: string | null | undefined, masked: boolean): string | null {
-	    if (masked && value === '******') return '******';
-	    if (value === null || value === undefined || value === '') return null;
-	    return value;
-	}
-
-	const originalValues = ref<Record<string, string | null | undefined>>({});
-
-		watch(
-		    () => enrichedConfigData.value?.entries,
-		    (next) => {
-		        if (next) {
-		            const uiEntries: EnrichedConfigEntryUi[] = next.map((e) => ({
-		                ...e,
-		                value: normalizeUiValue(e),
-		            }));
-		            originalValues.value = Object.fromEntries(
-		                uiEntries.map((e) => [e.key, e.value])
-		            );
-
-	            enrichedEntries.value = uiEntries.sort((a, b) => {
-	                const groupCompare = configGroups.indexOf(a.group as ConfigGroup) - configGroups.indexOf(b.group as ConfigGroup);
-	                if (groupCompare !== 0) return groupCompare;
-	                return a.order - b.order;
-	            });
-	        }
-	    },
-		    { immediate: true }
-		);
-
-	function getEntriesForGroup(group: ConfigGroup): EnrichedConfigEntryUi[] {
-	    return enrichedEntries.value.filter((e) => e.group === group);
-	}
-
-const GROUP_COLORS: Record<ConfigGroup, string> = {
-    'Auth': 'bg-[var(--md-sys-color-primary)]',
-    'Sync': 'bg-[var(--md-sys-color-secondary)]',
-    'Storage': 'bg-[var(--md-sys-color-tertiary)]',
-    'UI & Branding': 'bg-[var(--md-sys-color-primary-container)]',
-    'Features': 'bg-[var(--md-sys-color-secondary-container)]',
-    'Limits & Security': 'bg-[var(--md-sys-color-error)]',
-    'Background Processing': 'bg-[var(--md-sys-color-tertiary-container)]',
-    'Admin': 'bg-[var(--md-outline)]',
-    'External Services': 'bg-[var(--md-sys-color-surface-tint)]',
-};
-
-function getGroupColor(group: ConfigGroup): string {
-    return GROUP_COLORS[group] || 'bg-[var(--md-outline)]';
-}
-
-	async function saveConfig() {
-        if (isSaving.value) return;
-	    const updates = enrichedEntries.value
-	        .map((entry) => {
-	            const prev = originalValues.value[entry.key];
-	            const prevNormalized = normalizeForSave(prev, entry.masked);
-	            const nextNormalized = normalizeForSave(entry.value, entry.masked);
-	            return prevNormalized === nextNormalized
-	                ? null
-	                : { key: entry.key, value: nextNormalized };
-	        })
-	        .filter(Boolean) as Array<{ key: string; value: string | null }>;
-
-        if (updates.length === 0) {
-            toast.add({
-                title: 'No changes detected',
-                description: 'Update a setting before saving.',
-                color: 'neutral',
-            });
-            return;
-        }
-
-        isSaving.value = true;
-        try {
-	        const res = await $fetch<{ ok: boolean; restartRequired?: boolean }>('/api/admin/system/config/write', {
-	            method: 'POST',
-	            body: {
-	                entries: updates,
-	            },
-	            headers: { 'x-or3-admin-intent': 'admin' },
-	        });
-
-	        if (res.restartRequired) {
-	            restartRequired.value = true;
-	        }
-
-	        originalValues.value = Object.fromEntries(
-	            enrichedEntries.value.map((e) => [e.key, e.value])
-	        );
-
-            toast.add({
-                title: 'Configuration saved',
-                description: 'Settings have been updated successfully.',
-                color: 'success',
-            });
-        } catch (error: unknown) {
-            const message = parseErrorMessage(error, 'Failed to save configuration');
-            toast.add({ title: 'Error', description: message, color: 'error' });
-        } finally {
-            isSaving.value = false;
-        }
-	}
-
-const { confirm } = useConfirmDialog();
-const toast = useToast();
-
-// Use composable for basic restart, but system page has extra rebuild functionality
 const serverRestart = useServerRestart(
     isOwner,
     computed(() => status.value?.admin?.allowRestart)
 );
 
-// Override restart to use composable's implementation
 async function restart() {
     await serverRestart.restart();
 }
@@ -330,12 +144,13 @@ async function restart() {
 async function rebuildRestart() {
     const confirmed = await confirm({
         title: 'Rebuild & Restart Server',
-        message: 'Are you sure you want to rebuild and restart the server now? This process may take several minutes.',
+        message:
+            'Are you sure you want to rebuild and restart the server now? This process may take several minutes.',
         danger: true,
         confirmText: 'Rebuild & Restart',
     });
     if (!confirmed) return;
-    
+
     try {
         await $fetch('/api/admin/system/rebuild-restart', {
             method: 'POST',
@@ -343,12 +158,15 @@ async function rebuildRestart() {
         });
         toast.add({
             title: 'Rebuild initiated',
-            description: 'The server is rebuilding and will restart...',
+            description: 'The server is rebuilding and will restart.',
             color: 'success',
         });
     } catch (error: unknown) {
-        const message = parseErrorMessage(error, 'Rebuild failed');
-        toast.add({ title: 'Error', description: message, color: 'error' });
+        toast.add({
+            title: 'Rebuild failed',
+            description: parseErrorMessage(error, 'Rebuild failed'),
+            color: 'error',
+        });
     }
 }
 
@@ -365,7 +183,7 @@ async function runProviderAction(action: {
             title: 'Run Provider Action',
             message: [
                 `Are you sure you want to run "${action.label}"?`,
-                action.description ? action.description : null,
+                action.description || null,
                 'This action cannot be undone.',
             ]
                 .filter(Boolean)
@@ -375,7 +193,7 @@ async function runProviderAction(action: {
         });
         if (!confirmed) return;
     }
-    
+
     try {
         await $fetch('/api/admin/system/provider-action', {
             method: 'POST',
@@ -384,12 +202,15 @@ async function runProviderAction(action: {
         });
         toast.add({
             title: 'Action completed',
-            description: `${action.label} executed successfully`,
+            description: `${action.label} executed successfully.`,
             color: 'success',
         });
     } catch (error: unknown) {
-        const message = parseErrorMessage(error, 'Action failed');
-        toast.add({ title: 'Error', description: message, color: 'error' });
+        toast.add({
+            title: 'Action failed',
+            description: parseErrorMessage(error, 'Action failed'),
+            color: 'error',
+        });
     }
 }
 </script>

@@ -96,6 +96,15 @@ export function bindPaletteLifecycle(
         },
         {
             names: [
+                'db.prompts.create:action:after',
+                'db.prompts.update:action:after',
+                'db.prompts.delete:action:soft:after',
+                'db.prompts.delete:action:hard:after',
+            ],
+            sourceIds: () => ['prompt'],
+        },
+        {
+            names: [
                 'db.files.create:action:after',
                 'db.files.refchange:action:after',
                 'db.files.restore:action:after',

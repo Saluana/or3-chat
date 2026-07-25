@@ -184,6 +184,11 @@ async function dispatch(
             );
         case 'project':
             return host.revealProject(target.projectId);
+        case 'system-prompt':
+            return host.openSystemPrompts({
+                mode: target.mode,
+                promptId: target.promptId,
+            });
         case 'dashboard':
             return host.openDashboard(target.pluginId, target.pageId);
         case 'image':

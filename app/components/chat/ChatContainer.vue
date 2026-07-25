@@ -139,6 +139,7 @@ import {
     clearPanePendingPrompt,
     setPanePendingPrompt,
     setupPanePromptCleanup,
+    usePanePendingPrompt,
 } from '~/composables/core/usePanePrompt';
 import type {
     ChatMessage as ChatMessageType,
@@ -291,6 +292,9 @@ if (props.paneId) {
     const pre = getPanePendingPrompt(props.paneId);
     if (pre) pendingPromptId.value = pre;
 }
+const panePendingPrompt = props.paneId
+    ? usePanePendingPrompt(props.paneId)
+    : null;
 const chat = shallowRef<ChatInstance>(
     useChat(
         props.messageHistory,
@@ -891,6 +895,7 @@ function onEdited(payload: { id: string; content: string }) {
 }
 
 function onPendingPromptSelected(promptId: string | null) {
+    if (pendingPromptId.value === promptId) return;
     pendingPromptId.value = promptId;
     // Store pane-level until thread creation
     if (props.paneId) {
@@ -905,6 +910,12 @@ function onPendingPromptSelected(promptId: string | null) {
         { historyAlreadyLoaded: true }
     );
     void chat.value?.ensureHistorySynced?.();
+}
+
+if (panePendingPrompt) {
+    watch(panePendingPrompt, (promptId) => {
+        onPendingPromptSelected(promptId ?? null);
+    });
 }
 
 function onStopStream() {

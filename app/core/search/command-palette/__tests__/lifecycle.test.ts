@@ -51,6 +51,10 @@ describe('bindPaletteLifecycle', () => {
             'todo-source',
         ]);
 
+        actions.get('db.prompts.update:action:after')?.();
+        await vi.advanceTimersByTimeAsync(250);
+        expect(refreshSources).toHaveBeenLastCalledWith(['prompt']);
+
         actions.get('sync.pull:action:applied')?.();
         await vi.advanceTimersByTimeAsync(250);
         expect(refreshSources).toHaveBeenLastCalledWith(undefined);

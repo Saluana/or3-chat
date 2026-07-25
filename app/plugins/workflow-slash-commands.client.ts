@@ -11,6 +11,7 @@
 import { defineNuxtPlugin } from '#app';
 import { useAppConfig, useHooks, useToast, useModelStore, useRuntimeConfig, useSessionContext } from '#imports';
 import { useOr3Config } from '~/composables/useOr3Config';
+import { useUserApiKey } from '~/core/auth/useUserApiKey';
 import type { Or3DB } from '~/db/client';
 import type { Extension, Node } from '@tiptap/core';
 import type {
@@ -237,6 +238,15 @@ export default defineNuxtPlugin((nuxtApp) => {
     }
 
     const hooks = useHooks();
+    // Resolve context-backed composables while the Nuxt plugin is initializing.
+    // Workflow execution and retry handlers run asynchronously, after Vue's
+    // active setup context has been cleared.
+    const runtimeConfig = useRuntimeConfig();
+    const sessionContext =
+        runtimeConfig.public.ssrAuthEnabled === true
+            ? useSessionContext()
+            : null;
+    const { apiKey } = useUserApiKey();
 
     const withMessageSyncTransaction = async <T>(
         db: Or3DB,
@@ -927,15 +937,12 @@ export default defineNuxtPlugin((nuxtApp) => {
             workflowId: workflowPost.id,
         });
 
-        const runtimeConfig = useRuntimeConfig();
-        const sessionContext =
-            runtimeConfig.public.ssrAuthEnabled === true
-                ? useSessionContext()
-                : null;
         const session = sessionContext?.data.value?.session ?? null;
         const backgroundAllowed =
             runtimeConfig.public.backgroundStreaming?.enabled === true &&
-            isBackgroundStreamingEnabled() &&
+            isBackgroundStreamingEnabled(
+                runtimeConfig.public.backgroundStreaming?.enabled
+            ) &&
             Boolean(session?.authenticated && session.user?.id);
 
         if (backgroundAllowed) {
@@ -1157,9 +1164,6 @@ export default defineNuxtPlugin((nuxtApp) => {
                 });
                 return false;
             }
-
-            const { useUserApiKey } = await import('~/core/auth/useUserApiKey');
-            const { apiKey } = useUserApiKey();
 
             if (!apiKey.value) {
                 reportError('Please connect your OpenRouter account', {
@@ -1517,9 +1521,6 @@ export default defineNuxtPlugin((nuxtApp) => {
             }
 
             // Get API key
-            const { useUserApiKey } = await import('~/core/auth/useUserApiKey');
-            const { apiKey } = useUserApiKey();
-
             if (!apiKey.value) {
                 reportError('Please connect your OpenRouter account', {
                     code: 'ERR_AUTH',

@@ -16,7 +16,7 @@
 
                 <!-- Form Section -->
                 <div class="min-w-0 p-4! sm:p-8!">
-                    <form @submit.prevent="handleLogin" class="flex flex-col gap-5!">
+                    <form ref="loginForm" @submit.prevent="handleLogin" class="flex flex-col gap-5!">
                         <!-- Username Field -->
                         <div class="flex flex-col gap-2!">
                             <label for="admin-username" class="block text-sm font-medium text-[var(--md-on-surface)]">
@@ -32,6 +32,7 @@
                                 :icon="userIcon"
                                 size="lg"
                                 class="w-full"
+                                required
                                 :disabled="isLoading"
                             />
                         </div>
@@ -51,6 +52,7 @@
                                 :icon="lockIcon"
                                 size="lg"
                                 class="w-full"
+                                required
                                 :disabled="isLoading"
                             />
                         </div>
@@ -62,7 +64,7 @@
                             size="lg"
                             color="primary"
                             :loading="isLoading"
-                            :disabled="!username || !password || isLoading"
+                            :disabled="isLoading"
                             class="mt-2!"
                         >
                             <UIcon :name="loginIcon" class="w-5 h-5 mr-2" />
@@ -130,6 +132,7 @@ const arrowLeftIcon = useIcon('ui.arrow.left');
 
 const username = ref('');
 const password = ref('');
+const loginForm = ref<HTMLFormElement | null>(null);
 const isLoading = ref(false);
 const error = ref<string | null>(null);
 
@@ -152,6 +155,14 @@ onMounted(async () => {
 });
 
 async function handleLogin() {
+    // Browser/password-manager autofill can update the native inputs without
+    // emitting an input event, leaving Vue's v-model refs stale. Read the
+    // submitted values from the form so autofilled credentials still work.
+    const formUsername = loginForm.value?.elements.namedItem('username');
+    const formPassword = loginForm.value?.elements.namedItem('password');
+    if (formUsername instanceof HTMLInputElement) username.value = formUsername.value;
+    if (formPassword instanceof HTMLInputElement) password.value = formPassword.value;
+
     if (!username.value || !password.value) return;
 
     isLoading.value = true;

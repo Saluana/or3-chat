@@ -25,6 +25,7 @@ describe('executePaletteAction', () => {
             openDocument: vi.fn(),
             openPaneApp: vi.fn(),
             revealProject: vi.fn(),
+            openSystemPrompts: vi.fn(),
             openDashboard: vi.fn(),
             openImage: vi.fn(),
             executeCommand: async (commandId) => {
@@ -59,6 +60,7 @@ describe('executePaletteAction', () => {
             openDocument: vi.fn(),
             openPaneApp: vi.fn(),
             revealProject: vi.fn(),
+            openSystemPrompts: vi.fn(),
             openDashboard: vi.fn(),
             openImage: vi.fn(),
             executeCommand: vi.fn(),
@@ -86,6 +88,7 @@ describe('executePaletteAction', () => {
             openDocument: vi.fn(),
             openPaneApp: vi.fn(),
             revealProject: vi.fn(),
+            openSystemPrompts: vi.fn(),
             openDashboard: vi.fn(),
             openImage: vi.fn(),
             executeCommand: vi.fn(),
@@ -121,6 +124,7 @@ describe('executePaletteAction', () => {
             openDocument: vi.fn(),
             openPaneApp: vi.fn(),
             revealProject: vi.fn(),
+            openSystemPrompts: vi.fn(),
             openDashboard: vi.fn(),
             openImage: vi.fn(),
             executeCommand: vi.fn(),
@@ -145,5 +149,39 @@ describe('executePaletteAction', () => {
             error: { code: 'stale-plugin' },
         });
         expect(host.executeCommand).not.toHaveBeenCalled();
+    });
+
+    it('dispatches system prompt edit targets', async () => {
+        const openSystemPrompts = vi.fn().mockResolvedValue({ ok: true });
+        const host = {
+            openChat: vi.fn(),
+            openDocument: vi.fn(),
+            openPaneApp: vi.fn(),
+            revealProject: vi.fn(),
+            openSystemPrompts,
+            openDashboard: vi.fn(),
+            openImage: vi.fn(),
+            executeCommand: vi.fn(),
+            canOpenNewPane: () => true,
+        } satisfies PaletteHostContext;
+
+        await expect(
+            executePaletteAction({
+                host,
+                action: {
+                    id: 'edit-prompt',
+                    label: 'Edit prompt',
+                    target: {
+                        kind: 'system-prompt',
+                        mode: 'edit',
+                        promptId: 'prompt-1',
+                    },
+                },
+            })
+        ).resolves.toEqual({ ok: true });
+        expect(openSystemPrompts).toHaveBeenCalledWith({
+            mode: 'edit',
+            promptId: 'prompt-1',
+        });
     });
 });

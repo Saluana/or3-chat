@@ -130,6 +130,7 @@ export const DEFAULT_ICONS = {
     'palette.chat': 'pixelarticons:chat',
     'palette.document': 'pixelarticons:note',
     'palette.project': 'pixelarticons:folder',
+    'palette.prompt': 'pixelarticons:script-text',
     'palette.workflow': 'pixelarticons:git-branch',
     'palette.image': 'pixelarticons:image',
     'palette.setting': 'pixelarticons:sliders',

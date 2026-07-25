@@ -93,7 +93,13 @@ vi.mock('../util', () => ({
     ),
 }));
 
-import { createPrompt, updatePrompt } from '../prompts';
+import {
+    createPrompt,
+    getPrompt,
+    normalizePromptTags,
+    parsePromptMeta,
+    updatePrompt,
+} from '../prompts';
 import { db } from '../client';
 
 const postsTable = db.posts as any;
@@ -133,7 +139,10 @@ describe('prompt hooks integration', () => {
             created_at: 1000,
             updated_at: 1000,
             deleted: false,
-            meta: '',
+            meta: JSON.stringify({
+                tags: ['Writing'],
+                favorite: true,
+            }),
             clock: 1,
         });
 
@@ -149,5 +158,79 @@ describe('prompt hooks integration', () => {
         expect(updated!.title).toBe('new title');
         const stored = (await postsTable.get('prompt-1')) as PromptRow;
         expect(stored.title).toBe('new title');
+        expect(parsePromptMeta(stored.meta)).toEqual({
+            tags: ['Writing'],
+            favorite: true,
+        });
+    });
+
+    it('normalizes prompt tags and persists favorite metadata', async () => {
+        const created = await createPrompt({
+            title: 'Tagged',
+            tags: [' Writing ', 'writing', '', 'Research'],
+            favorite: true,
+        });
+
+        expect(created.tags).toEqual(['Writing', 'Research']);
+        expect(created.favorite).toBe(true);
+        expect(normalizePromptTags(['One', ' one ', 2, null])).toEqual([
+            'One',
+        ]);
+    });
+
+    it('defaults invalid legacy metadata without losing prompt content', async () => {
+        postsTable.__rows.set('legacy-prompt', {
+            id: 'legacy-prompt',
+            title: 'Legacy',
+            content: JSON.stringify({
+                type: 'doc',
+                content: [{ type: 'paragraph', content: [] }],
+            }),
+            postType: 'prompt',
+            created_at: 1000,
+            updated_at: 1000,
+            deleted: false,
+            meta: 'not-json',
+            clock: 1,
+        });
+
+        const prompt = await getPrompt('legacy-prompt');
+
+        expect(prompt).toMatchObject({
+            title: 'Legacy',
+            tags: [],
+            favorite: false,
+        });
+        expect(prompt?.content?.type).toBe('doc');
+    });
+
+    it('normalizes metadata patches and preserves them during later autosaves', async () => {
+        postsTable.__rows.set('prompt-1', {
+            id: 'prompt-1',
+            title: 'Prompt',
+            content: JSON.stringify({ type: 'doc', content: [] }),
+            postType: 'prompt',
+            created_at: 1000,
+            updated_at: 1000,
+            deleted: false,
+            meta: '',
+            clock: 1,
+        });
+
+        await updatePrompt('prompt-1', {
+            tags: [' Coding ', 'coding', 'Review'],
+            favorite: true,
+        });
+        const autosaved = await updatePrompt('prompt-1', {
+            content: {
+                type: 'doc',
+                content: [{ type: 'paragraph', content: [] }],
+            },
+        });
+
+        expect(autosaved).toMatchObject({
+            tags: ['Coding', 'Review'],
+            favorite: true,
+        });
     });
 });

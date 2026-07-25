@@ -103,6 +103,8 @@ export function createDefaultCoreCommandSpecs(deps: {
     newChat?: () => Promise<void> | void;
     newDocument?: () => Promise<void> | void;
     newProject?: () => Promise<void> | void;
+    openSystemPrompts?: () => Promise<void> | void;
+    newSystemPrompt?: () => Promise<void> | void;
 }): CoreCommandSpec[] {
     const enabled = deps.isFeatureEnabled ?? (() => true);
     const wrap =
@@ -160,6 +162,24 @@ export function createDefaultCoreCommandSpecs(deps: {
             icon: 'i-lucide-folder-plus',
             order: 30,
             handler: wrap(deps.newProject),
+        },
+        {
+            id: 'new-system-prompt',
+            label: 'New system prompt',
+            description: 'Create and edit a new system prompt',
+            keywords: ['prompt', 'instructions', 'system'],
+            icon: 'i-lucide-file-plus-2',
+            order: 35,
+            handler: wrap(deps.newSystemPrompt),
+        },
+        {
+            id: 'open-system-prompts',
+            label: 'Open system prompts',
+            description: 'Browse and manage the system prompt library',
+            keywords: ['prompt', 'instructions', 'library', 'favorite', 'tags'],
+            icon: 'i-lucide-scroll-text',
+            order: 36,
+            handler: wrap(deps.openSystemPrompts),
         },
         {
             id: 'open-dashboard',

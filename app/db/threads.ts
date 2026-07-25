@@ -32,6 +32,15 @@ import {
     type ThreadCreate,
     type Message,
 } from './schema';
+import type { TypedHookEngine } from '../core/hooks/typed-hooks';
+
+export interface CreateThreadContext {
+    hooks?: TypedHookEngine;
+    limits?: {
+        enabled?: boolean;
+        maxConversations?: number;
+    };
+}
 
 /**
  * Purpose:
@@ -58,14 +67,15 @@ export async function createThread(input: ThreadCreate): Promise<Thread> {
  */
 export async function createThreadInDb(
     db: Or3DB,
-    input: ThreadCreate
+    input: ThreadCreate,
+    context: CreateThreadContext = {}
 ): Promise<Thread> {
-    const hooks = useHooks();
+    const hooks = context.hooks ?? useHooks();
 
     // Check maxConversations limit (client-side enforcement)
     if (import.meta.client) {
-        const config = useRuntimeConfig();
-        const limits = config.public.limits;
+        const limits =
+            context.limits ?? useRuntimeConfig().public.limits;
         if (limits.enabled !== false && limits.maxConversations > 0) {
             const count = await db.threads
                 .filter((thread) => thread.deleted !== true)

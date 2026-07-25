@@ -89,7 +89,7 @@ export default <IconMap>{
     'ui.minus': 'tabler:minus',
     'ui.plus': 'tabler:plus',
     'ui.help': 'tabler:message-question',
-    'ui.star': 'tabler:sun',
+    'ui.star': 'tabler:star',
     'ui.moon': 'tabler:moon',
     'ui.dino': 'tabler:bug',
     'ui.refresh': 'tabler:reload',

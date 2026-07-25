@@ -56,6 +56,12 @@
                     "summary": "Reactive composable that manages the currently selected system prompt for chat conversations.\\n\\nThis composable provides a module-singleton selection state (id + content) so multiple components\\nand composables can read the active system prompt consistently without creating duplicate refs.\\n\\nIt integrates with the local prompt database (`~/db/prompts`) to load prompt content and emits a\\nhook event after a prompt is selected so other subsystems can react."
                 },
                 {
+                    "name": "useSystemPromptsModal.md",
+                    "path": "/composables/useSystemPromptsModal",
+                    "category": "Chat",
+                    "summary": "Shared controller for opening the globally hosted system prompt library in home, edit, or new mode with optional active chat context."
+                },
+                {
                     "name": "useAiSettings.md",
                     "path": "/composables/useAiSettings",
                     "category": "Chat",
