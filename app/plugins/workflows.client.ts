@@ -1,8 +1,7 @@
 // app/plugins/workflows.client.ts
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { useHooks, useRuntimeConfig } from '#imports';
-import { registerSidebarPage } from '~/composables/sidebar/registerSidebarPage';
-import { usePaneApps } from '~/composables/core/usePaneApps';
+import { createManagedWorkspacePluginRuntime } from '~/composables/plugins/workspace-runtime';
 import WorkflowPane from './workflows/components/WorkflowPane.vue';
 import WorkflowSidebar from './workflows/components/WorkflowSidebar.vue';
 import { destroyEditorForPane } from './workflows/composables/useWorkflows';
@@ -30,6 +29,10 @@ export default defineNuxtPlugin(() => {
     
     // Check if editor is enabled
     const editorEnabled = features.workflows.editor !== false;
+    const pluginRuntime = createManagedWorkspacePluginRuntime({
+        pluginId: 'or3-workflows',
+    });
+    const api = pluginRuntime.api;
 
     const hooks = useHooks();
 
@@ -38,9 +41,8 @@ export default defineNuxtPlugin(() => {
     let disposePaneCloseHook: (() => void) | undefined;
     
     if (executionEnabled) {
-        const { registerPaneApp } = usePaneApps();
         try {
-            registerPaneApp({
+            api.registerPaneApp({
                 id: 'or3-workflows',
                 label: 'Workflows',
                 component: WorkflowPane,
@@ -49,6 +51,29 @@ export default defineNuxtPlugin(() => {
             });
         } catch (e) {
             console.error('[workflows] Failed to register pane app:', e);
+        }
+
+        // Public command-palette post-source API (no core Dexie workflow query).
+        try {
+            const definition = {
+                id: 'workflow-source',
+                label: 'Workflows',
+                postType: 'workflow-entry',
+                categoryId: 'workflow',
+                filterAliases: ['workflow'] as const,
+                icon: 'tabler:binary-tree-2',
+                order: 50,
+                openTarget: {
+                    kind: 'pane-app' as const,
+                    appId: 'or3-workflows',
+                },
+            };
+            api.registerCommandPalettePostSource(definition);
+        } catch (e) {
+            console.error(
+                '[workflows] Failed to register command palette source:',
+                e
+            );
         }
 
         disposePaneCloseHook = hooks.on(
@@ -62,10 +87,9 @@ export default defineNuxtPlugin(() => {
     }
 
     // Register the sidebar page (if editor enabled)
-    let cleanup: (() => void) | undefined;
     if (editorEnabled) {
         try {
-            cleanup = registerSidebarPage({
+            api.registerSidebarPage({
                 id: 'or3-workflows-page',
                 label: 'Workflows',
                 component: WorkflowSidebar,
@@ -81,8 +105,8 @@ export default defineNuxtPlugin(() => {
     // HMR cleanup
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
-            cleanup?.();
             disposePaneCloseHook?.();
+            void pluginRuntime.dispose('workflow plugin HMR');
         });
     }
 });

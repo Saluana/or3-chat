@@ -17,6 +17,7 @@ interface GateState {
 
 type GateGlobals = typeof globalThis & {
     __or3PluginGateState?: GateState;
+    __or3PluginGateListeners?: Set<() => void>;
 };
 
 const g = globalThis as GateGlobals;
@@ -27,6 +28,24 @@ const state: GateState =
         pending: {},
         scopeKey: '__init__',
     }));
+const gateListeners =
+    g.__or3PluginGateListeners ??
+    (g.__or3PluginGateListeners = new Set<() => void>());
+
+function notifyGateChange(): void {
+    for (const listener of [...gateListeners]) {
+        try {
+            listener();
+        } catch {
+            // Access observers must not break policy evaluation.
+        }
+    }
+}
+
+export function subscribePluginGateChanges(listener: () => void): () => void {
+    gateListeners.add(listener);
+    return () => gateListeners.delete(listener);
+}
 
 function buildScopeKey(): string {
     const session = getCachedSessionContext();
@@ -41,6 +60,7 @@ function buildScopeKey(): string {
 function resetDecisionCache(): void {
     state.decisions = {};
     state.pending = {};
+    notifyGateChange();
 }
 
 function syncScopeCache(): void {
@@ -90,6 +110,7 @@ async function hydrateServerDecision(pluginId: string): Promise<void> {
             return;
         }
         state.decisions[pluginId] = result;
+        notifyGateChange();
     } catch {
         // Keep local fallback decision when server endpoint is unavailable.
     } finally {
@@ -97,6 +118,7 @@ async function hydrateServerDecision(pluginId: string): Promise<void> {
             return;
         }
         state.pending[pluginId] = false;
+        notifyGateChange();
     }
 }
 
@@ -131,4 +153,10 @@ export function getPluginGateDecision(
     }
 
     return combineGateDecisions(local, state.decisions[pluginId]);
+}
+
+export function isPluginGateDecisionPending(pluginId?: string): boolean {
+    if (!pluginId) return false;
+    syncScopeCache();
+    return state.pending[pluginId] === true;
 }

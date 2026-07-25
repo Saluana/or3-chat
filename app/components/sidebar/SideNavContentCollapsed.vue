@@ -29,16 +29,16 @@
                 :content="{
                     side: 'right',
                 }"
-                text="Search"
+                text="Search everything"
             >
                 <UButton
                     v-bind="searchButtonProps"
                     id="btn-search"
-                    aria-label="Search"
+                    aria-label="Open command palette"
                     class="flex item-center justify-center"
                     @click="emit('focus-search')"
                 >
-                    <span class="sr-only">Search</span>
+                    <span class="sr-only">Open command palette</span>
                 </UButton>
             </UTooltip>
             <UTooltip

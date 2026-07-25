@@ -4,6 +4,7 @@ export type PluginServerRouteMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE
 
 export type PluginGrant =
     | 'ui.dashboard.register'
+    | 'ui.command-palette.register'
     | 'documents.read'
     | 'documents.write'
     | 'tools.register.client'

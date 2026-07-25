@@ -125,6 +125,7 @@ export function createGatewayStorageProvider(
                 workspace_id: input.workspaceId,
                 hash: input.hash,
                 storage_id: input.storageId,
+                mime_type: input.mimeType,
                 expires_in_ms: input.expiresInMs,
                 disposition: input.disposition,
             }, baseUrl);

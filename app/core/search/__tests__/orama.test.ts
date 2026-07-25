@@ -150,6 +150,46 @@ describe('Orama search helpers', () => {
             
             expect(results).toEqual({ hits: [] });
         });
+
+        it('should forward boost, tolerance, properties, and offset', async () => {
+            mockOramaModule.search.mockResolvedValue({ hits: [] });
+            vi.doMock('@orama/orama', () => mockOramaModule);
+
+            const { searchWithIndex } = await import('../orama');
+            const mockDb = { id: 'test-db' };
+            await searchWithIndex(mockDb, 'test', 24, {
+                properties: ['title', 'body'],
+                boost: { title: 5, body: 1 },
+                tolerance: 1,
+                offset: 0,
+            });
+
+            expect(mockOramaModule.search).toHaveBeenCalledWith(mockDb, {
+                term: 'test',
+                limit: 24,
+                properties: ['title', 'body'],
+                boost: { title: 5, body: 1 },
+                tolerance: 1,
+                offset: 0,
+            });
+        });
+    });
+
+    describe('insertDocumentsBatched', () => {
+        it('should insert in batches', async () => {
+            mockOramaModule.insertMultiple.mockResolvedValue(undefined);
+            vi.doMock('@orama/orama', () => mockOramaModule);
+
+            const { insertDocumentsBatched } = await import('../orama');
+            const mockDb = { id: 'test-db' };
+            const docs = Array.from({ length: 3 }, (_, i) => ({ id: String(i) }));
+            await insertDocumentsBatched(mockDb, docs, {
+                batchSize: 2,
+                yieldBetweenBatches: false,
+            });
+
+            expect(mockOramaModule.insertMultiple).toHaveBeenCalledTimes(2);
+        });
     });
 
     describe('createTokenCounter', () => {

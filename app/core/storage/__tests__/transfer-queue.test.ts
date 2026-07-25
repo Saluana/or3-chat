@@ -442,6 +442,96 @@ describe('FileTransferQueue', () => {
         expect((await db.file_transfers.get(transfer.id))?.state).toBe('queued');
     });
 
+    it('re-queues remote_missing downloads on enqueue so later blob availability can succeed', async () => {
+        const meta = makeMeta({ storage_id: 'st_1', mime_type: 'image/webp' });
+        const db = createDbStub([meta], []);
+        const stuck: FileTransfer = {
+            id: 'stuck-remote-missing',
+            hash: meta.hash,
+            workspace_id: 'ws-1',
+            direction: 'download',
+            bytes_total: 0,
+            bytes_done: 0,
+            state: 'remote_missing',
+            attempts: 1,
+            created_at: 1,
+            updated_at: 1,
+            last_error: 'Remote object is temporarily missing and requires reconciliation',
+        };
+        await db.file_transfers.put(stuck);
+        const provider: ObjectStorageProvider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(async () => ({ url: 'https://upload.example', expiresAt: Date.now() })),
+            getPresignedDownloadUrl: vi.fn(async () => ({ url: 'https://download.example', expiresAt: Date.now() })),
+        };
+        const queue = new FileTransferQueue(db as any, provider);
+        queue.setWorkspaceId('ws-1');
+
+        const result = await queue.enqueue(meta.hash, 'download');
+        expect(result?.id).toBe(stuck.id);
+        expect(result?.state).toBe('queued');
+    });
+
+    it('accepts downloads with missing or octet-stream content-type using file_meta mime', async () => {
+        const meta = makeMeta({ storage_id: 'st_1', mime_type: 'image/webp' });
+        const db = createDbStub([meta], []);
+        const provider: ObjectStorageProvider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(async () => ({ url: 'upload', expiresAt: Date.now() })),
+            getPresignedDownloadUrl: vi.fn(async () => ({
+                url: 'download',
+                expiresAt: Date.now(),
+            })),
+        };
+        const queue = new FileTransferQueue(db as any, provider);
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => ({
+                ok: true,
+                status: 200,
+                headers: { get: () => null },
+                body: { cancel: vi.fn() },
+            }))
+        );
+        (queue as any).readBlobWithProgress = vi.fn(async (_response: Response, _id: string, _db: unknown, _max: number, mimeType: string) => ({
+            blob: {
+                size: 5,
+                type: mimeType,
+                arrayBuffer: async () => new TextEncoder().encode('hello').buffer,
+            } as Blob,
+            bytesTotal: 5,
+        }));
+
+        await (queue as any).doDownload(
+            {
+                id: 'missing-mime',
+                hash: meta.hash,
+                workspace_id: 'ws-1',
+                direction: 'download',
+                bytes_total: 0,
+                bytes_done: 0,
+                state: 'running',
+                attempts: 0,
+                created_at: 1,
+                updated_at: 1,
+            },
+            new AbortController().signal
+        );
+
+        expect((queue as any).readBlobWithProgress).toHaveBeenCalledWith(
+            expect.anything(),
+            'missing-mime',
+            expect.anything(),
+            expect.anything(),
+            'image/webp'
+        );
+        expect(await db.file_blobs.get(meta.hash)).toBeDefined();
+    });
+
     it('cancels in-flight transfer on workspace switch and explicit cancellation', async () => {
         const meta = makeMeta({ kind: 'image', mime_type: 'image/png', name: 'a.png', size_bytes: 3 });
         const db = createDbStub([meta], [{ hash: meta.hash, blob: new Blob(['abc']) }]);

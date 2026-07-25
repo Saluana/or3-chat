@@ -9,6 +9,7 @@ import { sidebarOverrides, sidebarCssSelectors } from './styles/sidebar';
 import { chatOverrides, chatCssSelectors } from './styles/chat';
 import { dashboardOverrides, dashboardStyles } from './styles/dashboard';
 import { documentsOverrides, documentsStyles } from './styles/documents';
+import { paletteOverrides, paletteCssSelectors } from './styles/palette';
 
 export default defineTheme({
     name: 'blank',
@@ -170,12 +171,14 @@ export default defineTheme({
         ...sidebarOverrides,
         ...dashboardOverrides,
         ...documentsOverrides,
+        ...paletteOverrides,
     },
     cssSelectors: {
         ...sidebarCssSelectors,
         ...chatCssSelectors,
         ...dashboardStyles,
         ...documentsStyles,
+        ...paletteCssSelectors,
         '#top-nav .theme-btn': {
             style: {
                 border: 'none !important',

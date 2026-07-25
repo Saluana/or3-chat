@@ -366,7 +366,8 @@ defineExpose({ ensureUrl });
                     :aria-label="`View ${m.name}`"
                     @click="view(m)"
                 >
-                    <span>Preview unavailable</span>
+                    <span v-if="state.errorByHash[m.hash]">Preview unavailable</span>
+                    <span v-else>Loading preview…</span>
                 </button>
 
                 <div

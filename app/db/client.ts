@@ -274,6 +274,55 @@ const workspaceDbCache = new LRUCache<string, Or3DB>({
 
 let activeWorkspaceId: string | null = null;
 let activeDb: Or3DB = defaultDb;
+let workspaceGeneration = 0;
+
+export interface ActiveWorkspaceChangeEvent {
+    oldWorkspaceId: string | null;
+    newWorkspaceId: string | null;
+    generation: number;
+}
+
+type ActiveWorkspaceListener = (event: ActiveWorkspaceChangeEvent) => void;
+
+const activeWorkspaceListeners = new Set<ActiveWorkspaceListener>();
+
+/**
+ * Subscribe to active workspace database changes.
+ * Notifications are ordered and include a monotonically increasing generation.
+ * No Vue dependency — safe for core search/sync consumers.
+ */
+export function subscribeActiveWorkspaceDb(
+    listener: ActiveWorkspaceListener
+): () => void {
+    activeWorkspaceListeners.add(listener);
+    return () => {
+        activeWorkspaceListeners.delete(listener);
+    };
+}
+
+export function getWorkspaceGeneration(): number {
+    return workspaceGeneration;
+}
+
+function notifyActiveWorkspaceChange(
+    oldWorkspaceId: string | null,
+    newWorkspaceId: string | null
+): void {
+    const event: ActiveWorkspaceChangeEvent = {
+        oldWorkspaceId,
+        newWorkspaceId,
+        generation: workspaceGeneration,
+    };
+    for (const listener of [...activeWorkspaceListeners]) {
+        try {
+            listener(event);
+        } catch (error) {
+            if (import.meta.dev) {
+                console.warn('[db/client] workspace listener failed', error);
+            }
+        }
+    }
+}
 
 /**
  * @deprecated Use getDb() instead to ensure you always get the current active DB.
@@ -447,9 +496,17 @@ export function setActiveWorkspaceDb(workspaceId: string | null): Or3DB {
     const previousWorkspaceId = activeWorkspaceId;
 
     if (!workspaceId) {
+        if (previousWorkspaceId === null) return activeDb;
+        // Increment generation before notifying so late async work can be ignored.
+        workspaceGeneration += 1;
         activeWorkspaceId = null;
         activeDb = defaultDb;
         db = defaultDb;
+        notifyActiveWorkspaceChange(previousWorkspaceId, null);
+        return activeDb;
+    }
+
+    if (previousWorkspaceId === workspaceId) {
         return activeDb;
     }
 
@@ -457,9 +514,11 @@ export function setActiveWorkspaceDb(workspaceId: string | null): Or3DB {
         evictWorkspaceDb(previousWorkspaceId);
     }
 
+    workspaceGeneration += 1;
     activeWorkspaceId = workspaceId;
     activeDb = getWorkspaceDb(workspaceId);
     db = activeDb;
+    notifyActiveWorkspaceChange(previousWorkspaceId, workspaceId);
     return activeDb;
 }
 

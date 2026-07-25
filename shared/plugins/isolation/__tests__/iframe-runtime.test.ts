@@ -12,6 +12,7 @@ import {
     validateDeclarativeUiNode,
     type IsolatedIframePort,
 } from '../iframe-runtime';
+import type { HostRpcHandler } from '../host-rpc-broker';
 
 function grants(
     approved: readonly string[] = ['ui.dashboard.register']
@@ -313,6 +314,60 @@ describe('iframe-runtime (8.7-8.9)', () => {
         );
         await vi.waitFor(() => {
             expect(events).toEqual([{ action: 'ping', detail: { n: 1 } }]);
+        });
+        runtime.dispose();
+    });
+
+    it('routes palette contributions only through the dedicated granted bridge', async () => {
+        const inbox: Array<{ message: unknown; origin: string }> = [];
+        const fake = createFakeIframe(inbox);
+        const contributeCommandPalette = vi.fn<HostRpcHandler>(() => ({
+            accepted: true,
+        }));
+        const contributeUi = vi.fn(() => ({ accepted: true }));
+        const runtime = new IframeIsolationRuntime({
+            pluginId: 'iso.iframe',
+            workspaceId: 'ws-1',
+            generation: 3,
+            src: 'https://plugins.local/ui.html',
+            origin: 'https://plugins.local',
+            grants: grants([
+                'ui.dashboard.register',
+                'ui.command-palette.register',
+            ]),
+            createIframe: () => fake.port,
+            services: {
+                contributeUi,
+                contributeCommandPalette,
+            },
+        });
+        await runtime.start();
+        runtime.ingestFromIframe(
+            serializeRpcEnvelope(
+                createRpcRequest({
+                    id: 'palette-1',
+                    method: 'ui.command-palette.contribute',
+                    params: {
+                        contribution: {
+                            kind: 'ui.command-palette.command',
+                            id: 'todo-new',
+                            definition: {
+                                id: 'todo-new',
+                                label: 'New todo',
+                            },
+                        },
+                    },
+                })
+            )
+        );
+
+        await vi.waitFor(() => {
+            expect(contributeCommandPalette).toHaveBeenCalledOnce();
+        });
+        expect(contributeUi).not.toHaveBeenCalled();
+        expect(contributeCommandPalette.mock.calls[0]?.[1]).toMatchObject({
+            pluginId: 'iso.iframe',
+            generation: 3,
         });
         runtime.dispose();
     });

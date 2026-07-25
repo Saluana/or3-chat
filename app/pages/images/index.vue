@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import type { FileMeta } from '../../db/schema';
 import {
     listImageMetasPaged,
@@ -8,11 +8,16 @@ import {
 } from '../../db/files-select';
 import {
     getFileBlob,
+    getFileMeta,
     softDeleteMany,
     fileDeleteError,
     restoreMany,
     hardDeleteMany,
 } from '../../db/files';
+import {
+    consumePendingPaletteImageSelection,
+    subscribePaletteImageSelection,
+} from '~/core/search/command-palette/image-selection';
 import GalleryGrid from './GalleryGrid.vue';
 import ImageViewer from './ImageViewer.vue';
 import { reportError } from '../../utils/errors';
@@ -79,8 +84,35 @@ async function loadMore() {
     }
 }
 
+/**
+ * Open the viewer for a hash requested by the command palette. The image may
+ * live outside the first page, so the meta is read directly.
+ */
+async function openPaletteSelection(hash: string) {
+    if (!hash) return;
+    const meta =
+        items.value.find((item) => item.hash === hash) ??
+        (await getFileMeta(hash));
+    if (!meta || meta.deleted) return;
+    selected.value = meta;
+    showViewer.value = true;
+}
+
+let stopPaletteSelection: (() => void) | null = null;
+
 onMounted(() => {
     loadMore();
+    stopPaletteSelection = subscribePaletteImageSelection((hash) => {
+        consumePendingPaletteImageSelection();
+        if (hash) void openPaletteSelection(hash);
+    });
+    // The request is queued before this page mounts on a cold open.
+    const pending = consumePendingPaletteImageSelection();
+    if (pending) void openPaletteSelection(pending);
+});
+
+onUnmounted(() => {
+    stopPaletteSelection?.();
 });
 
 async function handleDownload(meta: FileMeta) {

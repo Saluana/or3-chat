@@ -5,6 +5,7 @@
     "": {
       "name": "or3-chat",
       "dependencies": {
+        "@noble/hashes": "^2.2.0",
         "@nuxt/ui": "4.10.0",
         "@openrouter/sdk": "^1.0.0",
         "@or3/plugin-sdk": "file:./packages/plugin-sdk",
@@ -585,6 +586,8 @@
     "@microsoft/tsdoc-config": ["@microsoft/tsdoc-config@0.18.1", "", { "dependencies": { "@microsoft/tsdoc": "0.16.0", "ajv": "~8.18.0", "jju": "~1.4.0", "resolve": "~1.22.2" } }, "sha512-9brPoVdfN9k9g0dcWkFeA7IH9bbcttzDJlXvkf8b2OBzd5MueR1V2wkKBL0abn0otvmkHJC6aapBOTJDDeMCZg=="],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.1.6", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1", "@emnapi/runtime": "^1.7.1" } }, "sha512-ZLv/JdUfkvOy9eCnnBaGfiO+XimbjebAeO+MRQqD/B+FR1tnRN0tpKSJHRbE8sFfS6aqsXZ67TQjfwfsxULVbg=="],
+
+    "@noble/hashes": ["@noble/hashes@2.2.0", "", {}, "sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg=="],
 
     "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
 

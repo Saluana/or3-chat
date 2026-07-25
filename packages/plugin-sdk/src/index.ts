@@ -12,6 +12,8 @@ export type {
 } from './clients';
 export type {
     Or3PluginDefinition,
+    PluginCommandPaletteCommandDefinition,
+    PluginCommandPalettePostSourceDefinition,
     PluginContext,
     PluginContribution,
     PluginContributionKind,

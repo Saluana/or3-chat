@@ -18,6 +18,8 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:e2e:scroll": "OR3_SCROLL_TEST_HARNESS=true PW_PORT=3107 bunx playwright test tests/e2e/or3-scroll-canary.spec.ts",
+        "test:e2e:command-palette": "bunx playwright test tests/e2e/command-palette.spec.ts",
+        "command-palette:benchmarks:check": "bunx vite-node --config vitest.config.ts --mode production app/core/search/command-palette/__benchmarks__/search-benchmark.ts",
         "analyze": "bun run build && npx vite-bundle-visualizer dist/stats.html",
         "eslint": "eslint",
         "lint": "echo 'Lint script would go here'",
@@ -81,6 +83,7 @@
         "or3-cloud": "./bin/or3-cloud.js"
     },
     "dependencies": {
+        "@noble/hashes": "^2.2.0",
         "@nuxt/ui": "4.10.0",
         "@openrouter/sdk": "^1.0.0",
         "@or3/plugin-sdk": "file:./packages/plugin-sdk",

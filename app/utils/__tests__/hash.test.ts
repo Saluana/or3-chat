@@ -82,11 +82,14 @@ describe('hash utilities', () => {
         expect(sparkState.appendCalls).toBeGreaterThan(0);
     });
 
-    it('throws for SHA-256 when WebCrypto is unavailable', async () => {
+    it('falls back to @noble/hashes for SHA-256 when WebCrypto is unavailable', async () => {
         vi.stubGlobal('crypto', {} as Crypto);
+        const blob = makeBlobLike('hello');
 
-        await expect(computeHashHex(makeBlobLike('x'), 'sha256')).rejects.toThrow(
-            'WebCrypto unavailable for SHA-256 hashing'
+        const hex = await computeHashHex(blob, 'sha256');
+
+        expect(hex).toBe(
+            '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
         );
     });
 

@@ -165,6 +165,7 @@ export function validateDeclarativeUiNode(raw: unknown): DeclarativeUiValidation
 
 export interface IframeUiBridgeServices {
     readonly contributeUi?: HostRpcHandler;
+    readonly contributeCommandPalette?: HostRpcHandler;
     readonly uiEvent?: HostRpcHandler;
 }
 
@@ -216,6 +217,13 @@ function buildUiMethodSpecs(
                     context
                 );
             },
+        });
+    }
+    if (services?.contributeCommandPalette) {
+        specs.push({
+            method: 'ui.command-palette.contribute',
+            grant: 'ui.command-palette.register',
+            handler: services.contributeCommandPalette,
         });
     }
     if (services?.uiEvent) {

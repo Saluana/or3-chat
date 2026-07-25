@@ -20,7 +20,7 @@
                 @new-chat="onNewChat"
                 @new-document="openCollapsedCreateDocumentModal"
                 @new-project="openCollapsedCreateProjectModal"
-                @focus-search="focusSidebarSearch"
+                @focus-search="openCommandPalette"
                 @toggle-dashboard="toggleDashboard"
                 @expand-sidebar="expandSidebar"
             />
@@ -226,6 +226,7 @@
             v-if="dashboardEnabled"
             v-model:showModal="showDashboardModal"
         />
+        <SearchCommandPalette />
     </resizable-sidebar-layout>
 </template>
 <script setup lang="ts">
@@ -275,6 +276,13 @@ import {
     setGlobalSidebarLayoutApi,
     type SidebarLayoutApi,
 } from '~/utils/sidebarLayoutApi';
+import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
+import {
+    setPaletteHostContext,
+    useCommandPalette,
+} from '~/composables/search/useCommandPalette';
+import { createPaletteHostContext } from '~/core/search/command-palette/host-context';
+import { registerCorePaletteSources } from '~/core/search/command-palette/sources/register-core';
 
 const legacyCompatClasses = {
     height: `h-[${'100dvh'}]`,
@@ -795,6 +803,78 @@ const themeAriaLabel = computed(() =>
     themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
 );
 
+// --------------- Command palette ---------------
+// PageShell is the single host: it owns the navigation context the palette
+// actions dispatch through, and registers the core sources once per session.
+const dashboardNavigation = useDashboardNavigation();
+const {
+    open: openCommandPalette,
+    close: closeCommandPalette,
+} = useCommandPalette();
+let disposePaletteHostContext: (() => void) | null = null;
+
+function setDashboardOpen(open: boolean) {
+    if (!dashboardEnabled.value) return;
+    showDashboardModal.value = open;
+}
+
+async function openDashboardPage(pluginId: string, pageId: string) {
+    setDashboardOpen(true);
+    await nextTick();
+    await dashboardNavigation.openPage(pluginId, pageId);
+}
+
+async function openImageLibraryPage() {
+    await openDashboardPage('core:images', 'images-library');
+}
+
+async function openNewProjectModal() {
+    await ensureSidebarExpanded();
+    await nextTick();
+    sideNavExpandedRef.value?.openCreateProject?.();
+}
+
+onMounted(() => {
+    disposePaletteHostContext?.();
+    disposePaletteHostContext = setPaletteHostContext(
+        createPaletteHostContext({
+            expandSidebar,
+            activateDefaultSidebarPage: () =>
+                sideNavExpandedRef.value?.activateDefaultPage?.(),
+            openImageLibraryPage,
+            setDashboardOpen,
+            canOpenNewPane: () => canAddPane.value,
+            getDashboardNavigation: () => dashboardNavigation,
+        })
+    );
+
+    registerCorePaletteSources({
+        commandDeps: {
+            isFeatureEnabled: (feature) => {
+                if (feature === 'documents') return documentsEnabled.value;
+                if (feature === 'dashboard') return dashboardEnabled.value;
+                return true;
+            },
+            toggleTheme,
+            openDashboard: () => setDashboardOpen(true),
+            openImageLibrary: openImageLibraryPage,
+            openThemeSettings: () =>
+                openDashboardPage('core:settings', 'theme-settings'),
+            openAiSettings: () =>
+                openDashboardPage('core:settings', 'ai-settings'),
+            newChat: onNewChat,
+            newDocument: () => onNewDocument(),
+            newProject: openNewProjectModal,
+        },
+    });
+});
+
+onUnmounted(() => {
+    closeCommandPalette();
+    disposePaletteHostContext?.();
+    disposePaletteHostContext = null;
+});
+
 const headerActions = useHeaderActions(() => ({
     route,
     isMobile: isMobile.value,
@@ -858,17 +938,6 @@ function expandSidebar() {
     const layout: any = layoutRef.value;
     if (!layout) return;
     layout?.expand?.();
-}
-
-async function focusSidebarSearch() {
-    await ensureSidebarExpanded();
-    await nextTick();
-    await delay(60);
-    for (let attempt = 0; attempt < 6; attempt++) {
-        const didFocus = !!sideNavExpandedRef.value?.focusSearchInput?.();
-        if (didFocus) return;
-        await delay(30);
-    }
 }
 
 function openCollapsedCreateDocumentModal() {

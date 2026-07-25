@@ -699,6 +699,10 @@
   border-radius: 2px;
 }
 
+[data-theme="blank"] .or3-palette-option {
+  border-radius: 12px;
+}
+
 [data-theme="blank"] #top-nav .theme-btn {
   border: none !important;
 }

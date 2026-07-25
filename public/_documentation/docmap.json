@@ -26,6 +26,12 @@
                     "summary": "Step-by-step guide to setting up a local development environment for OR3. Covers cloning the repo, installing dependencies, running the dev server, and debugging tips."
                 },
                 {
+                    "name": "command-palette.md",
+                    "path": "/start/command-palette",
+                    "category": "Introduction",
+                    "summary": "User guide for the global command palette: Cmd/Ctrl+K and sidebar triggers, full-content search across chats, documents, projects, images, dashboard pages and commands, category prefixes (chat:, doc:, project:, image:, cmd:), keyboard reference including the Tab/Cmd+Enter action tray, preview behavior, unavailable actions, degraded-search fallbacks, and accessibility semantics."
+                },
+                {
                     "name": "snake-game-tutorial.md",
                     "path": "/start/snake-game-tutorial",
                     "category": "Tutorial",
@@ -840,6 +846,12 @@
                     "path": "/plugins/manifest-v2",
                     "category": "Reference",
                     "summary": "Manifest V2 contract: engines, runtime entrypoints, grants, trust, settings/stateCompatibility, and canonical package digests via plugin-runtime CLI inspect/pack."
+                },
+                {
+                    "name": "command-palette.md",
+                    "path": "/plugins/command-palette",
+                    "category": "Reference",
+                    "summary": "Command palette plugin contracts: ui.command-palette.register grant, post-source and command contribution kinds, V1 workspace API registration, alias rules, mediated isolated command execution, and todo/workflow examples."
                 }
             ]
         }

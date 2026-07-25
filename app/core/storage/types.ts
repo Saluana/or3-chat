@@ -69,6 +69,8 @@ export interface ObjectStorageProvider {
         workspaceId: string;
         hash: string;
         storageId?: string;
+        /** Optional; FS gateway uses this to set download Content-Type. */
+        mimeType?: string;
         expiresInMs?: number;
         disposition?: string;
     }): Promise<PresignedUrlResult>;

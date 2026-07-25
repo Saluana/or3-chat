@@ -136,9 +136,20 @@ export class FileTransferQueue {
         this.rebindDb();
 
         const existing = await this.findExistingTransfer(hash, direction);
-        if (existing && existing.state !== 'failed') {
-            this.scheduleProcessQueue(0);
-            return existing;
+        if (existing) {
+            // Prior 404 / pre-commit races park here; re-queue so later success can proceed.
+            if (
+                existing.state === 'remote_missing' ||
+                existing.state === 'pending_upload'
+            ) {
+                await this.retryRecoverable(existing.id);
+                const retried = await this.db.file_transfers.get(existing.id);
+                return retried ?? existing;
+            }
+            if (existing.state !== 'failed') {
+                this.scheduleProcessQueue(0);
+                return existing;
+            }
         }
 
         const now = nowSec();
@@ -696,6 +707,7 @@ export class FileTransferQueue {
             workspaceId: transfer.workspace_id,
             hash: meta.hash,
             storageId: meta.storage_id,
+            mimeType: meta.mime_type,
             expiresInMs: urlOptions.expiry_ms,
             disposition: urlOptions.disposition,
         });
@@ -703,6 +715,7 @@ export class FileTransferQueue {
         const response = await fetch(presign.url, {
             method: presign.method ?? 'GET',
             headers: presign.headers,
+            credentials: 'include',
             signal,
         });
 
@@ -720,8 +733,17 @@ export class FileTransferQueue {
             );
         }
 
+        // FS downloads may omit Content-Type; treat missing/octet-stream as trusting file_meta.
         const responseMime = response.headers.get('content-type');
-        if (!responseMime || normalizeTransferMime(responseMime) !== normalizeTransferMime(meta.mime_type)) {
+        const actualMime = responseMime
+            ? normalizeTransferMime(responseMime)
+            : '';
+        const expectedMime = normalizeTransferMime(meta.mime_type);
+        const mimeTrusted =
+            !actualMime ||
+            actualMime === 'application/octet-stream' ||
+            actualMime === expectedMime;
+        if (!mimeTrusted) {
             await response.body?.cancel();
             throw err(
                 'ERR_STORAGE_DOWNLOAD_FAILED',
@@ -729,13 +751,17 @@ export class FileTransferQueue {
                 { tags: { domain: 'storage', stage: 'download' }, retryable: false }
             );
         }
+        const blobMime =
+            actualMime && actualMime !== 'application/octet-stream'
+                ? responseMime!
+                : meta.mime_type;
 
         const { blob, bytesTotal } = await this.readBlobWithProgress(
             response,
             transfer.id,
             context.db,
             this.maxDownloadBytes,
-            responseMime
+            blobMime
         );
         await this.updateTransfer(transfer.id, {
             bytes_total: bytesTotal,

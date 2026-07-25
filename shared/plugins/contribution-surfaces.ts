@@ -18,6 +18,7 @@ export const PLUGIN_CONTRIBUTION_SURFACES = [
     'admin-extensions',
     'client-tools',
     'server-tools',
+    'command-palette',
 ] as const;
 
 export type PluginContributionSurfaceId = (typeof PLUGIN_CONTRIBUTION_SURFACES)[number];

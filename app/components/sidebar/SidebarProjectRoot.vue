@@ -1,6 +1,7 @@
 <template>
     <div
         class="project-root-container cursor-pointer group/project-root h-10 mx-1 mb-0.5"
+        :data-project-id="project.id"
     >
         <div
             role="button"

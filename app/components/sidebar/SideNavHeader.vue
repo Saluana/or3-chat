@@ -18,13 +18,16 @@
                             aria-label="Clear input"
                             @click="sidebarQuery = ''"
                         />
-                        <span
+                        <button
                             v-else
-                            class="inline-flex items-center justify-center h-5 px-1.5 rounded-md border border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)] text-[10px] leading-none font-medium text-[color:var(--md-on-surface-variant)] select-none pointer-events-none font-[system-ui,ui-sans-serif,sans-serif]"
-                            aria-hidden="true"
+                            type="button"
+                            class="inline-flex items-center justify-center h-5 px-1.5 rounded-md border border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)] text-[10px] leading-none font-medium text-[color:var(--md-on-surface-variant)] select-none font-[system-ui,ui-sans-serif,sans-serif] transition-colors hover:border-[color:var(--md-primary)] hover:text-[color:var(--md-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--md-primary)]/40"
+                            :title="`Search everything (${searchShortcutLabel})`"
+                            aria-label="Open command palette"
+                            @click="openCommandPalette"
                         >
                             {{ searchShortcutLabel }}
-                        </span>
+                        </button>
                     </template>
                 </UInput>
             </div>
@@ -116,6 +119,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
+import { useCommandPalette } from '~/composables/search/useCommandPalette';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import { useIcon } from '~/composables/useIcon';
@@ -215,6 +219,8 @@ const searchInputProps = computed(() => {
         ui: mergedUi,
     };
 });
+
+const { open: openCommandPalette } = useCommandPalette();
 
 const searchShortcutLabel = computed(() => {
     if (!import.meta.client) return '⌘K';

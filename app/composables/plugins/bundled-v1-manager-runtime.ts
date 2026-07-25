@@ -109,7 +109,9 @@ export function createBundledV1WorkspaceManager(
             if (signal.aborted) throw signal.reason;
             const plugin = parseWorkspacePluginModule(mod, descriptor.id);
             if (!plugin) throw new Error('Invalid plugin module export or plugin id mismatch');
-            const runtime = createManagedWorkspacePluginRuntime();
+            const runtime = createManagedWorkspacePluginRuntime({
+                pluginId: descriptor.id,
+            });
             let registered = false;
             return {
                 async register() {

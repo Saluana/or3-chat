@@ -41,6 +41,7 @@ function getRegistry(): LazyBoundariesRegistry {
                 'docs-search-worker': 'idle',
                 'workspace-export': 'idle',
                 'workspace-import': 'idle',
+                'command-palette-search': 'idle',
             }),
         };
     }

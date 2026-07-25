@@ -384,3 +384,546 @@ Structurally, three files are over 1000 lines with one over 2200, the context-bu
 6. Add automatic retry to the chat-call boundary with the same `Retry-After`/429 semantics the sync outbox already implements.
 
 The sync side (outbox / hook-bridge / HLC) is in noticeably better shape than the chat-call side. The 429 handling in `outbox-manager.ts:385-401` is exactly right; that pattern needs to migrate up to the chat HTTP call.
+
+---
+
+# Thermo-Nuclear Code Quality Review — Global Command Palette
+
+Scope: every uncommitted command-palette change in `or3-chat`, including the
+overlay, search/index lifecycle, host navigation, plugin APIs, V2 isolation
+contracts, examples, documentation, themes, benchmarks, and probe scripts.
+
+The two-click pointer behavior requested in the follow-up is implemented
+correctly: the first click arms the row and locks the preview, while a second
+click on the same active row executes it. The problems below are elsewhere in
+the feature.
+
+Findings are ordered by severity.
+
+> **Resolution update — 2026-07-24:** CP-1 through CP-21 are resolved in the
+> current working tree. The original findings remain below as the audit trail;
+> the closing approval and verification evidence are recorded at the end.
+
+---
+
+## P0 — Ship blockers / trust-boundary failures
+
+### `CP-1.` Plugin contribution IDs are global, unprotected, and last-writer-wins (`registry.ts:262-364`, `registry.ts:366-450`)
+
+```ts
+const previous = state.sources.get(source.id);
+// ...
+previous?.value.dispose?.();
+state.sources.set(source.id, { value: source, owner });
+
+// Commands do not even inspect the previous owner.
+state.commands.set(definition.id, { value: command, owner });
+```
+
+Source, command, and post-source-definition IDs are keyed only by the
+contribution's caller-controlled `id`. Ownership records use a fresh symbol but
+registration never rejects a different plugin owner. The existing registry test
+explicitly blesses replacement of `new-chat` by a second registration.
+
+**Impact:** A plugin granted palette registration can register `new-chat`,
+`command`, `chat`, or another plugin's ID. It can replace a core command handler,
+remove a core search source, or steal another plugin's contribution. Exact-owner
+disposal merely keeps the attacker/replacement installed when the original
+owner unloads.
+
+**Fix:** Namespace plugin contribution identity by `pluginId`, reserve all core
+IDs, and reject cross-owner replacement. If user-facing IDs must stay short,
+store a separate internal key such as
+`plugin:${pluginId}:command:${definition.id}`. Add adversarial tests proving a
+plugin cannot replace core or another plugin's source, command, category, or
+post-source definition.
+
+### `CP-2.` Denied plugin content is still loaded, indexed, and displayed (`coordinator.ts:156-227`, `coordinator.ts:308-313`, `command-source.ts:16-24`, `plugin-post-source.ts:32-56`)
+
+```ts
+const sources = listPaletteSources();
+// ...
+const resources = await source.load(context);
+
+// Plugin post source performs the DB scan without checking source.access.
+const posts = (await db.posts.toArray()).filter(/* ... */);
+```
+
+The access gate is checked only immediately before action execution in
+`action-executor.ts:56-68` and `action-executor.ts:99-111`. Source loading,
+command indexing, empty-query command results, recent results, and ordinary
+search never apply that gate.
+
+The failure path makes this worse: when a reload fails, `reconcileSources`
+retains the old index and marks only the status as `error`; searches still
+include that entry.
+
+**Impact:** A revoked/denied plugin contribution can leak record titles,
+content, metadata, and command labels through search and preview. Clicking is
+denied, but the sensitive information has already been displayed. A transient
+reload error after policy revocation can keep the old data searchable
+indefinitely.
+
+**Fix:** Gate contributions before `load`, before command-to-resource mapping,
+and before empty-query assembly. Clear a plugin index synchronously when its
+access decision becomes denied or its generation changes. Subscribe to access
+policy changes and add tests asserting a denied source's `load` is never called
+and its records/commands never appear.
+
+### `CP-3.` Runtime V2 palette support is dead code; the adapter has no production caller (`v2-host-mapping.ts:20-124`)
+
+```ts
+export function mapV2PaletteContribution(options: { /* ... */ }) {
+    // maps declarative SDK definitions into the live palette registry
+}
+```
+
+Repository-wide references to `mapV2PaletteContribution` find only its
+definition. The iframe runtime forwards
+`ui.command-palette.contribute` to the generic `services.contributeUi`, but no
+host activation path calls this mapper.
+
+**Impact:** The SDK, manifest grant, iframe RPC method, and test host claim that
+V2 plugins can contribute palette sources and commands, but those contributions
+never reach the live palette. The feature is implemented as disconnected
+islands that unit tests can pass independently.
+
+**Fix:** Wire the adapter into the real V2 contribution activation transaction,
+after grant validation and with plugin generation/cleanup ownership. Add an
+end-to-end activation test that loads a V2/isolated plugin and observes its
+source and command in the actual palette registry, then verifies unload removes
+both.
+
+### `CP-4.` The “mediated” command channel is decorative; mapped commands execute the raw handler directly (`v2-host-mapping.ts:77-108`, `mediated-commands.ts:41-81`)
+
+```ts
+registerMediatedPaletteCommand({ handler: options.commandHandler, /* ... */ });
+
+const handler: PaletteCommandHandler = options.commandHandler
+    ? options.commandHandler
+    : async () => ({ ok: false, /* ... */ });
+
+registerPaletteCommand(definition, handler, /* ... */);
+```
+
+`executeMediatedPaletteCommand` has no production caller. The mapper registers a
+mediated entry, then gives the exact same raw handler directly to the palette
+command. Clicking bypasses the mediated registry and its expected-generation
+check.
+
+**Impact:** The documentation's core isolation claim—declarative metadata plus a
+host-mediated execution path—is false. The extra registry creates the appearance
+of a boundary without enforcing one, and its stale-generation protection is
+never exercised.
+
+**Fix:** The palette handler must be a host-owned closure that calls
+`executeMediatedPaletteCommand({ pluginId, commandId, expectedGeneration })`.
+Do not register the plugin handler directly in the palette registry. Add a test
+that changes generation between display and execution and proves the plugin
+handler is not invoked.
+
+---
+
+## P1 — User-visible correctness failures
+
+### `CP-5.` The mutation lifecycle subscribes to invented hook names and misses the real mutations (`lifecycle.ts:39-57`)
+
+```ts
+for (const family of ['threads', 'messages', 'documents', 'projects', 'files', 'posts']) {
+    for (const op of ['create', 'upsert', 'update', 'delete']) {
+        const name = `db.${family}.${op}:action:after`;
+        hooks.addAction(name, scheduleReconcile);
+    }
+}
+```
+
+The database does not expose that Cartesian product. Examples:
+
+- Message writes emit `append`, `move`, `copy`, `insertAfter`, and `normalize`.
+- File changes emit `refchange`, `restore`, and
+  `delete:action:hard:after`.
+- Document deletion emits `delete:action:soft:after` or
+  `delete:action:hard:after`.
+- Posts and messages use `delete:action:hard:after`, not
+  `delete:action:after`.
+
+The cast to `(name: string, fn: () => void)` hides this mismatch from the typed
+hook catalog.
+
+**Impact:** Common operations leave the palette index stale. A newly appended
+chat message, moved message, restored/deleted image, or deleted document may
+remain absent/present until some unrelated recognized hook or a full workspace
+refresh happens.
+
+**Fix:** Subscribe to the actual canonical hook keys (prefer a shared exported
+mutation-key list rather than string synthesis). Add integration tests for
+append, soft/hard delete, move, restore, and sync apply, asserting results change
+without closing/reopening the app.
+
+### `CP-6.` Dashboard registry changes never invalidate the dashboard search source (`dashboard-source.ts:34-50`, `coordinator.ts:97-109`)
+
+```ts
+async load() {
+    return collectDashboardResources();
+}
+
+const plugins = useDashboardPlugins().value;
+```
+
+The source reads the live dashboard registry only when `load()` runs. The
+coordinator subscribes to workspace changes and the palette registry, not the
+dashboard plugin/page registry.
+
+**Impact:** Dashboard plugins and pages registered after the palette warms are
+not searchable; unloaded/disabled pages remain searchable. This is especially
+likely during plugin activation/HMR, precisely where a live registry matters.
+
+**Fix:** Expose a dashboard registry version/subscription and invalidate only
+the dashboard source when plugins or pages register, replace, unload, or change
+access policy. Test add/remove while the coordinator is already warm.
+
+### `CP-7.` Chunk-level hit limiting can collapse eight expected results into one (`source-index.ts:168-190`, `types.ts:345-347`)
+
+```ts
+const raw = await searchWithIndex(db, term, limit, /* ... */); // limit = 24
+return {
+    results: groupHitsByResource(hits, this.resources, term),
+};
+```
+
+Content is indexed as multiple chunks per resource, but Orama is limited to 24
+chunk hits before grouping. A long chat with 24 highly ranked matching chunks
+can consume the entire hit window. Grouping then returns a single thread even
+when many other resources match. `PALETTE_MAX_PER_SOURCE = 8` does not help
+because the diversity was already discarded.
+
+**Impact:** Search silently omits valid resources based on how long the
+top-scoring resource is. Results get worse as conversations/documents grow.
+
+**Fix:** Fetch iteratively until eight unique resources are found or the index
+is exhausted, use a much larger bounded oversample tied to maximum chunks, or
+maintain a resource-level index alongside chunk snippets. Add a regression test
+where one resource owns more than 24 matching chunks and at least eight other
+resources match.
+
+### `CP-8.` Source registration is a non-transactional two-step operation (`workspace-runtime.ts:149-170`, `v2-host-mapping.ts:28-71`)
+
+```ts
+const defHandle = registerPalettePostSourceDefinition(definition, { pluginId });
+const sourceHandle = ensurePluginPostSourceRegistered({ definition, pluginId });
+```
+
+If the second call throws, the definition, aliases, and category from the first
+call remain registered. Neither the V1 runtime nor V2 mapper rolls the first
+step back.
+
+**Impact:** A failed plugin activation can leave ghost aliases and categories
+that outlive the plugin, block future registrations, and parse queries into a
+category with no source.
+
+**Fix:** Make post-source registration one atomic registry operation, or wrap
+the second call in `try/catch` and dispose the first handle before rethrowing.
+Add fault-injection tests for source-construction and registry-registration
+failures.
+
+### `CP-9.` PageShell teardown leaves global palette state alive and uses an unowned host singleton (`PageShell.vue:833-869`, `useCommandPalette.ts:106-186`)
+
+```ts
+onMounted(() => setPaletteHostContext(createPaletteHostContext(/* ... */)));
+onUnmounted(() => setPaletteHostContext(null));
+```
+
+The palette, coordinator, query state, previous focus, and hydrated preview are
+module-global. PageShell unmount clears only the host pointer; it does not close
+or dispose the palette. `setPaletteHostContext` also has no owner token, so an
+older PageShell unmount can clear a newer PageShell's host during overlapping
+route/HMR lifetimes.
+
+**Impact:** An image preview object URL can leak after shell teardown, the
+palette can remount already open with stale results/focus, lifecycle hooks remain
+bound, and valid navigation can suddenly become “unavailable” after the old
+shell unmounts.
+
+**Fix:** Return an owner-aware registration handle from
+`setPaletteHostContext`; only the current owner may clear it. Close/dispose the
+palette on the final shell teardown, or move ownership into a top-level Nuxt
+plugin whose lifetime genuinely matches the singleton.
+
+### `CP-10.` Failed image navigation leaves a future, unrelated selection queued (`host-context.ts:205-218`, `image-selection.ts:6-23`)
+
+```ts
+setPendingPaletteImageSelection(hash);
+await deps.openImageLibraryPage?.();
+```
+
+The pending selection is written before navigation and there is no rollback in
+the catch path.
+
+**Impact:** If dashboard navigation fails, the palette reports an error but the
+hash remains queued. Opening the image library later can unexpectedly open the
+old image.
+
+**Fix:** Add conditional clear/consume semantics keyed by the expected hash and
+clear it on navigation failure, or pass the selection through navigation state
+so it commits only with successful navigation. Test rejected navigation followed
+by a normal image-library open.
+
+### `CP-11.` Core commands can report success while doing absolutely nothing (`command-source.ts:95-126`)
+
+```ts
+const wrap = (fn?: () => Promise<void> | void) => async () => {
+    await fn?.();
+    return { ok: true };
+};
+```
+
+Every dependency is optional, while feature enablement defaults to true.
+Missing host wiring therefore registers visible commands whose handlers resolve
+successfully without performing an action.
+
+**Impact:** The palette closes and tells telemetry the command succeeded even
+though nothing happened. Refactors that forget one dependency fail silently.
+
+**Fix:** Do not register commands whose required handlers are absent, or return a
+typed `navigation-failed`/`not-found` result. Make production dependencies
+required at the registration boundary.
+
+---
+
+## P2 — Performance and lifecycle debt
+
+### `CP-12.` Every recognized mutation rebuilds every source from full-table scans (`lifecycle.ts:17-21`, `coordinator.ts:156-227`)
+
+```ts
+timer = setTimeout(() => {
+    void coordinator.ensureWarm();
+}, 250);
+
+await Promise.all(sources.map(async (source) => {
+    const resources = await source.load(context);
+    await nextIndex.replaceAll(resources);
+}));
+```
+
+A single local write rebuilds all Orama indexes. Chat loads every thread and
+message; documents load every post; images load every file; each plugin post
+source independently loads every post again. The index already exposes
+`upsertResource` and `removeResource`, but the lifecycle never uses them.
+
+`ensureWarm()` also sets `warmAgain = true` for every call made during a build,
+forcing another complete rebuild after the first one.
+
+**Impact:** Streaming/chat activity and document saves cause repeated
+O(database size × source count) scans, large temporary allocations, and index
+reconstruction on the UI runtime. N plugin post sources create N concurrent
+`posts.toArray()` scans. The 250 ms debounce hides frequency, not cost.
+
+**Fix:** Route typed mutations to affected sources and use incremental
+upsert/remove. Reconcile full sources only after bulk sync/workspace switch.
+Share or query-index post snapshots by `postType` instead of scanning the whole
+table once per plugin source. Track invalidation versions so concurrent warm
+callers coalesce without forcing an unconditional second rebuild.
+
+### `CP-13.` Workspace abort races the promise but does not cancel any work (`coordinator.ts:111-118`, `coordinator.ts:185-227`, `coordinator.ts:234-250`)
+
+```ts
+await Promise.race([reconcileSources(generation), aborted]);
+```
+
+`PaletteLoadContext` carries no `AbortSignal`; `source.load(context)` cannot
+stop Dexie scans, normalization, or chunk building. `replaceAll(resources)` is
+also called without the signal supported by `PaletteSourceIndex`.
+
+**Impact:** After a workspace switch, old-workspace table scans and Orama builds
+continue in the background while the new workspace starts its own. Generation
+checks prevent publication, but not CPU, memory, or DB work. Rapid switches can
+stack multiple full builds.
+
+**Fix:** Put a signal in `PaletteLoadContext`, check it between expensive phases,
+and pass it to `replaceAll`. Treat abort separately from index failure so an
+abort does not disable Orama fallback state.
+
+### `CP-14.` “Retry source” reloads every source (`coordinator.ts:491-498`)
+
+```ts
+entry.index.dispose();
+bound.delete(sourceId);
+await reconcileSources(workspaceGeneration);
+```
+
+The UI promises a per-source retry, but `reconcileSources` reloads the complete
+registry.
+
+**Impact:** Retrying one failed plugin source re-scans messages, posts, files,
+projects, dashboard pages, and every healthy plugin source, while also flashing
+their statuses back to loading.
+
+**Fix:** Extract `loadSource(sourceId, generation)` and use it for targeted
+retry. Reserve full reconcile for registry/workspace changes.
+
+### `CP-15.` `chunkText` can enter an infinite loop on valid TypeScript inputs (`chunker.ts:17-44`)
+
+```ts
+const size = options?.size ?? PALETTE_CHUNK_SIZE;
+const overlap = options?.overlap ?? PALETTE_CHUNK_OVERLAP;
+// ...
+start = Math.max(0, end - overlap);
+```
+
+There is no validation that `size > 0` and `0 <= overlap < size`. With
+`overlap >= size`, `start` does not advance. The function is exported and its
+options are public, so this is not merely an impossible internal state.
+
+**Impact:** A benchmark, test, future source, or caller-provided tuning value can
+hang the renderer/test process indefinitely.
+
+**Fix:** Throw for invalid options or clamp them, and assert that every loop
+iteration strictly advances `start`. Add zero, negative, equal, and
+greater-than-size tests.
+
+### `CP-16.` Plugin palette handles leak across reloads, and bundled examples discard cleanup entirely (`register-core.ts:19-20`, `register-core.ts:68-76`, `workflows.client.ts:56-83`, `custom-pane-todo-example.client.ts:520-547`)
+
+```ts
+const handle = registerPaletteSource(source);
+handles.push(handle);
+return handle;
+```
+
+`ensurePluginPostSourceRegistered` stores every caller-owned handle in a
+module-global array. Even after a plugin disposes its returned handle, the array
+retains it. The workflow and todo integrations do not retain either returned
+handle, so their palette contributions are not removed by HMR/plugin cleanup at
+all. The workflow HMR cleanup disposes sidebar/hook state but omits palette
+state.
+
+**Impact:** Repeated plugin activation/HMR grows retained handle objects and can
+leave contributions active after the rest of a plugin is gone. The shipped
+examples teach plugin authors to import private core modules and ignore the
+public cleanup-scoped API.
+
+**Fix:** Keep only true core handles in the core array. Caller-owned plugin
+handles belong exclusively to the plugin scope. Update workflows/todo to use
+`api.registerCommandPalettePostSource` or retain/dispose the composite handle in
+their cleanup path.
+
+### `CP-17.` V2 registry reset and module subscription are not lifecycle-safe (`registry.ts:113-142`, `registry.ts:586-591`)
+
+```ts
+const v2Kernel = getContributionSurfaceKernel(/* ... */);
+v2Kernel.registry.subscribe(bump);
+
+export function __resetPaletteRegistryForTests() {
+    delete globalThis.__or3PaletteRegistryState;
+    reactiveState.version = 0;
+}
+```
+
+The subscription handle is discarded, and the test reset clears only legacy
+state. It does not clear V2 kernel contributions or listener state.
+
+**Impact:** V2 tests can leak contributions between cases. HMR/module reload can
+add duplicate kernel subscriptions retaining old module closures and causing
+duplicate registry notifications.
+
+**Fix:** Retain and dispose the kernel subscription on HMR/full teardown. Add a
+kernel reset path used by the test helper, plus V2-mode isolation tests.
+
+---
+
+## P3 — Coverage, documentation, and UX lies
+
+### `CP-18.` The new “E2E tests” are unregistered screenshot scripts with no assertions (`tests/e2e/palette-*.mjs`)
+
+```js
+await page.waitForTimeout(5000);
+// take screenshot / print values
+```
+
+All four files use raw Playwright, fixed sleeps, `/tmp` output, and zero
+`expect`/assert calls. None is referenced by a package script or the Playwright
+test suite. They mutate a running dev profile and depend on manual visual
+inspection.
+
+**Impact:** CI can be completely broken for keyboard behavior, two-click
+activation, focus restoration, mobile layout, and theme rendering while the
+repository appears to contain E2E coverage.
+
+**Fix:** Convert the important flows into `@playwright/test` specs with
+deterministic fixtures and assertions. Keep screenshot explorers under
+`scripts/manual/` if they remain useful, and clean up seeded data/theme changes.
+
+### `CP-19.` The performance budget is an orphaned script, not an enforced budget (`__benchmarks__/search-benchmark.ts:11-17`, `package.json`)
+
+```ts
+// Run:
+//   bun app/core/search/command-palette/__benchmarks__/search-benchmark.ts
+```
+
+The benchmark can fail itself on p95, but there is no package script or CI job
+that runs it. Its “max indexing batch” budget is described but not asserted.
+
+**Impact:** The feature's explicit latency budget is documentation, not a
+regression gate. The full-rebuild design in CP-12 can degrade without any
+automated signal.
+
+**Fix:** Add a stable package command and CI budget check on a controlled
+runtime, assert every published budget, and record enough build/query metadata
+to explain failures.
+
+### `CP-20.` Plugin documentation contradicts the shipped UI and points examples at private internals (`public/_documentation/plugins/command-palette.md:3-6`, `:63-68`)
+
+```md
+The overlay UI (Cmd/Ctrl+K) is wired in a follow-up pass...
+```
+
+The overlay is now wired. The same document says workflows/todo demonstrate the
+public post-source API, but both import the internal registry and
+`sources/register-core` directly.
+
+**Impact:** Documentation is stale on arrival and recommends examples that
+bypass the cleanup behavior it promises on line 46.
+
+**Fix:** Update the current-state wording and convert the examples to the
+documented workspace API before presenting them as canonical.
+
+### `CP-21.` Disabled feature categories remain visible because all core categories are pre-seeded (`registry.ts:65-93`, `registry.ts:502-519`, `register-core.ts:35-44`)
+
+Core source registration correctly skips documents/dashboard sources when
+disabled, but `getState()` always installs every core category and
+`listPaletteCategories()` always returns them.
+
+**Impact:** Feature-disabled builds can show category chips such as Documents,
+Images, Settings, or Dashboard that are guaranteed to return no results.
+
+**Fix:** Derive visible categories from live sources/commands or store an
+availability flag. Keep aliases parseable if desired, but do not render disabled
+categories as actionable filters.
+
+---
+
+## Command-palette approval bar
+
+**Approved after remediation.** CP-1 through CP-21 are closed.
+
+- Contribution ownership, reserved IDs, access filtering, V2 activation,
+  mediated execution, atomic registration, and lifecycle cleanup are enforced.
+- Mutation refresh is source-targeted, dashboard/access changes invalidate live
+  results, workspace work is abortable, retries are scoped, and long-resource
+  searches paginate until they have enough unique results.
+- Failed navigation rolls back image selection, missing host commands fail
+  explicitly, chunk options are validated, and visible categories are derived
+  from live accessible contributions.
+- The bundled examples use the managed public workspace API. Manual probes were
+  replaced by registered Playwright assertions, and the indexing budgets are an
+  executable package gate.
+
+Verification:
+
+- `bun run type-check`
+- `bun run test -- --reporter=dot` — 490 files passed; 3,336 tests passed
+- `bun run test:e2e:command-palette` — 3 browser flows passed
+- `bun run command-palette:benchmarks:check` — three consecutive 50,000-chunk
+  runs passed; worst batches 30.14 ms, 40.23 ms, and 31.66 ms (budget: 50 ms)
+- plugin SDK, contracts, isolation, examples, V2 conformance, and banned-import
+  checks
+- `bun run build`

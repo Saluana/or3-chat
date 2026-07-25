@@ -28,6 +28,7 @@ const BodySchema = z.object({
     workspace_id: z.string(),
     hash: z.string(),
     storage_id: z.string().optional(),
+    mime_type: z.string().min(1).optional(),
     expires_in_ms: z.number().int().min(1).max(86_400_000).optional(),
     disposition: z.enum(['inline', 'attachment']).optional(),
 });
@@ -92,6 +93,7 @@ export default defineEventHandler(async (event) => {
         workspaceId: body.data.workspace_id,
         hash: body.data.hash,
         storageId: body.data.storage_id,
+        mimeType: body.data.mime_type,
         expiresInMs: body.data.expires_in_ms,
         disposition: body.data.disposition,
     });

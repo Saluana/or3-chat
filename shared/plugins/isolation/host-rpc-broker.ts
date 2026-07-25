@@ -22,6 +22,7 @@ export type HostRpcMethodGrant =
     | 'settings.write'
     | 'network.http'
     | 'ui.dashboard.register'
+    | 'ui.command-palette.register'
     | 'documents.read'
     | 'documents.write'
     | 'tools.register.client'

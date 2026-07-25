@@ -7,10 +7,12 @@
  * Behavior:
  * - New files use SHA-256 with `sha256:` prefix
  * - Legacy MD5 hashes remain supported for reads/verification
- * - Uses WebCrypto where available and falls back to streaming MD5
+ * - Uses WebCrypto where available; falls back to `@noble/hashes` for SHA-256
+ *   (needed on non-secure contexts like `http://LAN-IP` on mobile) and
+ *   spark-md5 for MD5
  *
  * Constraints:
- * - WebCrypto SHA-256 is required for modern hashing on large files
+ * - SHA-256 prefers WebCrypto; pure-JS fallback keeps LAN mobile working
  * - Hashing is best-effort and throws on unexpected crypto errors
  *
  * Non-Goals:
@@ -42,14 +44,71 @@ type SparkMd5Module = {
     ArrayBuffer: new () => SparkMd5ArrayBuffer;
 };
 
+type NobleSha256Module = {
+    sha256: {
+        (data: Uint8Array): Uint8Array;
+        create: () => {
+            update: (data: Uint8Array) => unknown;
+            digest: () => Uint8Array;
+        };
+    };
+};
+
+type NobleUtilsModule = {
+    bytesToHex: (bytes: Uint8Array) => string;
+};
+
 // Cached SparkMD5 module to avoid repeated dynamic imports
 let sparkCache: SparkMd5Module | null = null;
+let nobleSha256Cache: NobleSha256Module | null = null;
+let nobleUtilsCache: NobleUtilsModule | null = null;
 
 async function loadSpark(): Promise<SparkMd5Module> {
     if (sparkCache) return sparkCache;
     const mod = (await import('spark-md5')) as { default: SparkMd5Module };
     sparkCache = mod.default;
     return sparkCache;
+}
+
+async function loadNobleSha256(): Promise<{
+    sha256: NobleSha256Module['sha256'];
+    bytesToHex: NobleUtilsModule['bytesToHex'];
+}> {
+    if (!nobleSha256Cache) {
+        nobleSha256Cache = (await import('@noble/hashes/sha2.js')) as NobleSha256Module;
+    }
+    if (!nobleUtilsCache) {
+        nobleUtilsCache = (await import('@noble/hashes/utils.js')) as NobleUtilsModule;
+    }
+    return {
+        sha256: nobleSha256Cache.sha256,
+        bytesToHex: nobleUtilsCache.bytesToHex,
+    };
+}
+
+function canUseSubtleDigest(): boolean {
+    return (
+        typeof crypto !== 'undefined' &&
+        typeof crypto.subtle !== 'undefined' &&
+        typeof crypto.subtle.digest === 'function'
+    );
+}
+
+async function computeSha256HexFallback(blob: Blob): Promise<string> {
+    const { sha256, bytesToHex } = await loadNobleSha256();
+    if (blob.size <= CHUNK_SIZE) {
+        const buf = new Uint8Array(await blob.arrayBuffer());
+        return bytesToHex(sha256(buf));
+    }
+    const hash = sha256.create();
+    let offset = 0;
+    while (offset < blob.size) {
+        const slice = blob.slice(offset, offset + CHUNK_SIZE);
+        hash.update(new Uint8Array(await slice.arrayBuffer()));
+        offset += CHUNK_SIZE;
+        if (offset < blob.size) await yieldToMain();
+    }
+    return bytesToHex(hash.digest());
 }
 
 // Pre-allocated hex lookup table for O(n) conversion (2x faster than string concat)
@@ -158,18 +217,21 @@ export async function computeHashHex(
                 : undefined;
         if (markId && hasPerf) performance.mark(`${markId}:start`);
         try {
-            const canUseSubtle =
-                typeof crypto !== 'undefined' &&
-                typeof crypto.subtle !== 'undefined' &&
-                typeof crypto.subtle.digest === 'function';
-            if (!canUseSubtle) {
-                throw new Error('WebCrypto unavailable for SHA-256 hashing');
+            if (canUseSubtleDigest()) {
+                try {
+                    const buf = await blob.arrayBuffer();
+                    const digest = await crypto.subtle.digest('SHA-256', buf);
+                    const hex = bufferToHex(new Uint8Array(digest));
+                    if (markId && hasPerf)
+                        finishMark(markId, blob.size, 'subtle', dev, 'sha256');
+                    return hex;
+                } catch {
+                    // Fall through to pure-JS (e.g. insecure context quirks).
+                }
             }
-            const buf = await blob.arrayBuffer();
-            const digest = await crypto.subtle.digest('SHA-256', buf);
-            const hex = bufferToHex(new Uint8Array(digest));
+            const hex = await computeSha256HexFallback(blob);
             if (markId && hasPerf)
-                finishMark(markId, blob.size, 'subtle', dev, 'sha256');
+                finishMark(markId, blob.size, 'stream', dev, 'sha256');
             return hex;
         } catch (error) {
             if (markId && hasPerf) {
@@ -209,10 +271,7 @@ async function computeMd5Hex(blob: Blob): Promise<string> {
     try {
         // Try Web Crypto subtle.digest for files up to 8MB (covers ~95% of files)
         try {
-            const canUseSubtle =
-                typeof crypto !== 'undefined' &&
-                typeof crypto.subtle !== 'undefined' &&
-                typeof crypto.subtle.digest === 'function';
+            const canUseSubtle = canUseSubtleDigest();
             if (blob.size <= WEBCRYPTO_THRESHOLD && canUseSubtle) {
                 const buf = await blob.arrayBuffer();
                 // MD5 not in lib types but supported in some browsers

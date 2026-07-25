@@ -124,6 +124,20 @@ export const DEFAULT_ICONS = {
     'dashboard.backup': 'pixelarticons:briefcase-download',
     'dashboard.restore': 'pixelarticons:briefcase-upload',
 
+    // Command palette
+    'palette.search': 'pixelarticons:search',
+    'palette.command': 'pixelarticons:zap',
+    'palette.chat': 'pixelarticons:chat',
+    'palette.document': 'pixelarticons:note',
+    'palette.project': 'pixelarticons:folder',
+    'palette.workflow': 'pixelarticons:git-branch',
+    'palette.image': 'pixelarticons:image',
+    'palette.setting': 'pixelarticons:sliders',
+    'palette.dashboard': 'pixelarticons:dashboard',
+    'palette.recent': 'pixelarticons:clock',
+    'palette.result': 'pixelarticons:chevron-right',
+    'palette.new-pane': 'pixelarticons:card-plus',
+
     // Admin
     'admin.workspace': 'pixelarticons:building',
     'admin.workspaces': 'pixelarticons:buildings',

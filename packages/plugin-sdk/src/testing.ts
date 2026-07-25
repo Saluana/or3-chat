@@ -40,6 +40,8 @@ export interface PluginTestHostSnapshot {
     readonly contributionCount: number;
     readonly hookCount: number;
     readonly cleanupCount: number;
+    readonly palettePostSources: readonly PluginContribution[];
+    readonly paletteCommands: readonly PluginContribution[];
 }
 
 export type PluginTestActivationResult = PluginResult<{
@@ -75,6 +77,12 @@ export class PluginTestHost {
     #cleanups: Array<() => void | Promise<void>> = [];
     #contributionCount = 0;
     #hookCount = 0;
+    #palettePostSources: PluginContribution[] = [];
+    #paletteCommands: PluginContribution[] = [];
+    #commandHandlers = new Map<
+        string,
+        () => Promise<unknown> | unknown
+    >();
 
     constructor(options: PluginTestHostOptions = {}) {
         this.#approvedGrants = new Set(options.approvedGrants ?? []);
@@ -108,7 +116,28 @@ export class PluginTestHost {
             contributionCount: this.#contributionCount,
             hookCount: this.#hookCount,
             cleanupCount: this.#cleanups.length,
+            palettePostSources: Object.freeze([...this.#palettePostSources]),
+            paletteCommands: Object.freeze([...this.#paletteCommands]),
         });
+    }
+
+    /**
+     * Simulate host-mediated execution of an isolated palette command.
+     * Handlers are never serialized; only command ids cross the boundary.
+     */
+    async executePaletteCommand(commandId: string): Promise<unknown> {
+        const handler = this.#commandHandlers.get(commandId);
+        if (!handler) {
+            throw new Error(`No mediated handler for command "${commandId}"`);
+        }
+        return handler();
+    }
+
+    registerMediatedPaletteCommandHandler(
+        commandId: string,
+        handler: () => Promise<unknown> | unknown
+    ): void {
+        this.#commandHandlers.set(commandId, handler);
     }
 
     async activate(definition: Or3PluginDefinition): Promise<PluginTestActivationResult> {
@@ -135,13 +164,43 @@ export class PluginTestHost {
             return registration;
         };
         const contributions: PluginContributions = {
-            register: <TDefinition>(_contribution: PluginContribution<TDefinition>) => {
-                if (!approved.has('ui.dashboard.register')) {
+            register: <TDefinition>(contribution: PluginContribution<TDefinition>) => {
+                const kind = contribution.kind;
+                const needsPalette =
+                    kind === 'ui.command-palette.post-source' ||
+                    kind === 'ui.command-palette.command';
+                if (needsPalette && !approved.has('ui.command-palette.register')) {
+                    throw new Error(
+                        'Grant ui.command-palette.register was not approved'
+                    );
+                }
+                if (
+                    !needsPalette &&
+                    !approved.has('ui.dashboard.register')
+                ) {
                     throw new Error('Grant ui.dashboard.register was not approved');
                 }
                 stagedContributions += 1;
+                const recorded = contribution as PluginContribution;
+                if (kind === 'ui.command-palette.post-source') {
+                    this.#palettePostSources.push(recorded);
+                }
+                if (kind === 'ui.command-palette.command') {
+                    this.#paletteCommands.push(recorded);
+                }
                 return handle(() => {
                     stagedContributions = Math.max(0, stagedContributions - 1);
+                    if (kind === 'ui.command-palette.post-source') {
+                        this.#palettePostSources = this.#palettePostSources.filter(
+                            (entry) => entry !== recorded
+                        );
+                    }
+                    if (kind === 'ui.command-palette.command') {
+                        this.#paletteCommands = this.#paletteCommands.filter(
+                            (entry) => entry !== recorded
+                        );
+                        this.#commandHandlers.delete(contribution.id);
+                    }
                 });
             },
         };
@@ -242,6 +301,9 @@ export class PluginTestHost {
         this.#cleanups = [];
         this.#contributionCount = 0;
         this.#hookCount = 0;
+        this.#palettePostSources = [];
+        this.#paletteCommands = [];
+        this.#commandHandlers.clear();
         if (firstFailure) throw firstFailure;
     }
 

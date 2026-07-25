@@ -6,7 +6,7 @@
             @new-chat="onNewChat"
             @new-document="openCreateDocumentModal"
             @new-project="openCreateProject"
-            @focus-search="focusSearchInput"
+            @focus-search="openCommandPalette"
             @toggle-dashboard="emit('toggleDashboard')"
             @expand-sidebar="() => {}"
         />
@@ -247,6 +247,11 @@ import {
     type SidebarFooterActionEntry,
 } from '~/composables/sidebar/useSidebarSections';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
+import { useCommandPalette } from '~/composables/search/useCommandPalette';
+import {
+    consumePaletteProjectReveal,
+    subscribePaletteProjectReveal,
+} from '~/core/search/command-palette/project-reveal';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import type { ComponentPublicInstance } from 'vue';
 // Documents live query (docs only) to feed search
@@ -429,10 +434,56 @@ watch([projects, expandedProjects, sidebarFooterActions], () => {
 
 // (Removed verbose debug watcher)
 
+// --------------- Command palette project reveal ---------------
+const { open: openCommandPalette } = useCommandPalette();
+
+const REVEAL_CLASS = 'or3-project-revealed';
+let stopRevealSubscription: (() => void) | null = null;
+let revealHighlightTimer: ReturnType<typeof setTimeout> | null = null;
+let revealedElement: HTMLElement | null = null;
+
+function clearRevealHighlight() {
+    if (revealHighlightTimer) clearTimeout(revealHighlightTimer);
+    revealHighlightTimer = null;
+    revealedElement?.classList.remove(REVEAL_CLASS);
+    revealedElement = null;
+}
+
+async function revealProject(projectId: string) {
+    if (!projectId) return;
+    if (!activeSections.value.projects) activeSections.value.projects = true;
+    if (!expandedProjects.value.includes(projectId)) {
+        expandedProjects.value = [...expandedProjects.value, projectId];
+    }
+    await nextTick();
+    clearRevealHighlight();
+    const row = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-project-id]')
+    ).find((element) => element.dataset.projectId === projectId);
+    if (!row) return;
+    row.scrollIntoView({ block: 'nearest' });
+    // Transient highlight: the palette already navigated, this only orients the eye.
+    row.classList.add(REVEAL_CLASS);
+    revealedElement = row;
+    revealHighlightTimer = setTimeout(clearRevealHighlight, 2200);
+}
+
+onMounted(() => {
+    stopRevealSubscription = subscribePaletteProjectReveal((request) => {
+        consumePaletteProjectReveal();
+        void revealProject(request.projectId);
+    });
+    // A request may have landed before this sidebar mounted.
+    const pending = consumePaletteProjectReveal();
+    if (pending) void revealProject(pending.projectId);
+});
+
 onUnmounted(() => {
     sub?.unsubscribe();
     subProjects?.unsubscribe();
     subDocs?.unsubscribe();
+    stopRevealSubscription?.();
+    clearRevealHighlight();
 });
 
 const emit = defineEmits<{
@@ -992,9 +1043,25 @@ async function focusSearchInput() {
     return focused;
 }
 
+async function activateDefaultPage() {
+    if (activePageId.value === DEFAULT_PAGE_ID) return true;
+    return await resetToDefault();
+}
+
 defineExpose({
     focusSearchInput,
     openCreateDocumentModal,
     openCreateProject,
+    activateDefaultPage,
 });
 </script>
+
+<style>
+/* Transient orientation cue after the command palette reveals a project. */
+.or3-project-revealed > .project-root-toggle {
+    outline: var(--md-border-width, 2px) solid var(--md-primary);
+    outline-offset: -1px;
+    background: color-mix(in srgb, var(--md-primary) 12%, transparent);
+    transition: outline-color 200ms ease, background-color 200ms ease;
+}
+</style>

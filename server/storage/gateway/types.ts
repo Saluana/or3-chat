@@ -79,6 +79,8 @@ export interface PresignDownloadRequest {
     workspaceId: string;
     hash: string;
     storageId?: string;
+    /** Optional MIME type so gateway downloads can set Content-Type. */
+    mimeType?: string;
     /** Optional client-requested TTL (ms). Provider must clamp/bound. */
     expiresInMs?: number;
     /** Optional disposition hint (e.g. inline/attachment). Provider may honor. */

@@ -98,6 +98,8 @@ type DashboardGlobals = typeof globalThis & {
     __or3DashboardNavigationRuntime?: DashboardNavigationRuntime;
     __or3DashboardNavigationRuntimeV2?: DashboardNavigationRuntime;
     __or3DashboardV2PageBuckets?: Set<string>;
+    __or3DashboardRegistryListeners?: Set<() => void>;
+    __or3DashboardRegistryKernelUnsubscribes?: Array<() => void>;
 };
 
 type OwnedDashboardPlugin = {
@@ -128,6 +130,24 @@ const pageRegistry: Map<string, Map<string, DashboardPluginPage>> =
 const reactivePages = reactive<{ [pluginId: string]: DashboardPluginPage[] }>(
     {}
 );
+const dashboardRegistryListeners =
+    g.__or3DashboardRegistryListeners ??
+    (g.__or3DashboardRegistryListeners = new Set<() => void>());
+
+function notifyDashboardRegistryChange(): void {
+    for (const listener of [...dashboardRegistryListeners]) {
+        try {
+            listener();
+        } catch {
+            // Dashboard observers are isolated from registry mutations.
+        }
+    }
+}
+
+export function subscribeDashboardRegistry(listener: () => void): () => void {
+    dashboardRegistryListeners.add(listener);
+    return () => dashboardRegistryListeners.delete(listener);
+}
 
 // Order constant (avoid magic number repetition)
 const DEFAULT_ORDER = 200;
@@ -190,6 +210,13 @@ const pageV2Kernel = getContributionSurfaceKernel<DashboardPageContribution>(
 const v2PageBuckets =
     g.__or3DashboardV2PageBuckets ??
     (g.__or3DashboardV2PageBuckets = new Set<string>());
+for (const unsubscribe of g.__or3DashboardRegistryKernelUnsubscribes ?? []) {
+    unsubscribe();
+}
+g.__or3DashboardRegistryKernelUnsubscribes = [
+    pluginV2Kernel.registry.subscribe(notifyDashboardRegistryChange),
+    pageV2Kernel.registry.subscribe(notifyDashboardRegistryChange),
+];
 
 function useV2Surface(): boolean {
     return getContributionSurfaceSelection().isSelected('dashboard');
@@ -261,11 +288,13 @@ function getDashboardNavigationRuntime(): DashboardNavigationRuntime {
 function syncPages(pluginId: string) {
     const m = pageRegistry.get(pluginId);
     reactivePages[pluginId] = m ? Array.from(m.values()) : [];
+    notifyDashboardRegistryChange();
 }
 
 function sync() {
     // Expose a shallow copy array so that consumer sorts don't mutate source
     reactiveList.items = Array.from(registry.values());
+    notifyDashboardRegistryChange();
 }
 
 /** @internal Shared with focused dashboard policy helpers. */

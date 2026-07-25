@@ -614,6 +614,21 @@
   background: color-mix(in srgb, var(--md-primary) 16%, transparent);
 }
 
+[data-theme="retro"] .or3-palette-chip {
+  border-radius: var(--md-border-radius);
+  border-width: var(--md-border-width);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+[data-theme="retro"] .or3-palette-option-icon {
+  border-width: var(--md-border-width);
+}
+
+[data-theme="retro"] .or3-palette-query {
+  border-bottom: var(--md-border-width) solid var(--md-border-color);
+}
+
 [data-theme="retro"] .theme-btn {
   border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius);

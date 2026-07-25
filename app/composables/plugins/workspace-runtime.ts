@@ -13,6 +13,15 @@ import {
     LegacyPluginScope,
     type LegacyCleanupReport,
 } from '~~/shared/plugins/legacy-plugin-scope';
+import {
+    registerPaletteCommand,
+} from '~/core/search/command-palette/registry';
+import { registerPluginPostSource } from '~/core/search/command-palette/sources/register-core';
+import type {
+    PaletteCommandDefinition,
+    PaletteCommandHandler,
+    PalettePostSourceDefinition,
+} from '~/core/search/command-palette/types';
 
 export type WorkspacePluginSource = 'builtin' | 'extension';
 
@@ -27,6 +36,13 @@ export interface Or3WorkspacePluginApi {
     registerPaneApp: (def: PaneAppDef) => RegistrationHandle;
     registerMessageAction: (action: ChatMessageAction) => RegistrationHandle;
     registerTool: (def: ExtendedToolDefinition, handler: ToolHandler) => RegistrationHandle;
+    registerCommandPalettePostSource: (
+        definition: PalettePostSourceDefinition
+    ) => RegistrationHandle;
+    registerCommandPaletteCommand: (
+        definition: PaletteCommandDefinition,
+        handler: PaletteCommandHandler
+    ) => RegistrationHandle;
     onCleanup: (fn: () => void | Promise<void>) => void;
 }
 
@@ -67,7 +83,10 @@ export interface ManagedWorkspacePluginRuntime {
 }
 
 /** Internal manager adapter. The public V1 factory below intentionally hides its report. */
-export function createManagedWorkspacePluginRuntime(): ManagedWorkspacePluginRuntime {
+export function createManagedWorkspacePluginRuntime(options?: {
+    pluginId?: string;
+}): ManagedWorkspacePluginRuntime {
+    const pluginId = options?.pluginId ?? 'workspace-plugin';
     const scope = new LegacyPluginScope({
         onCleanupError({ error }) {
             if (import.meta.dev) {
@@ -121,6 +140,25 @@ export function createManagedWorkspacePluginRuntime(): ManagedWorkspacePluginRun
                     return removed;
                 },
             };
+            scope.onCleanup(() => {
+                handle.dispose();
+            });
+            return handle;
+        },
+        registerCommandPalettePostSource(definition) {
+            const handle = registerPluginPostSource({
+                definition,
+                pluginId,
+            });
+            scope.onCleanup(() => {
+                handle.dispose();
+            });
+            return handle;
+        },
+        registerCommandPaletteCommand(definition, handler) {
+            const handle = registerPaletteCommand(definition, handler, {
+                pluginId,
+            });
             scope.onCleanup(() => {
                 handle.dispose();
             });

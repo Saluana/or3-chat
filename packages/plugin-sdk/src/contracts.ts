@@ -23,6 +23,8 @@ export type PluginContributionKind =
     | 'ui.dashboard.card'
     | 'ui.sidebar.section'
     | 'ui.pane.app'
+    | 'ui.command-palette.post-source'
+    | 'ui.command-palette.command'
     | 'chat.action'
     | 'chat.tool.client'
     | 'chat.tool.server'
@@ -30,6 +32,36 @@ export type PluginContributionKind =
     | 'editor.inspector.panel'
     | 'document.ai.action'
     | 'admin.extension';
+
+/** Declarative command-palette post source (no function closures). */
+export interface PluginCommandPalettePostSourceDefinition {
+    readonly id: string;
+    readonly label: string;
+    readonly postType: string;
+    readonly categoryId: string;
+    readonly filterAliases: readonly string[];
+    readonly icon?: string;
+    readonly order?: number;
+    readonly metaKeys?: readonly string[];
+    readonly openTarget:
+        | { readonly kind: 'pane-app'; readonly appId: string }
+        | {
+              readonly kind: 'dashboard';
+              readonly pluginId: string;
+              readonly pageId?: string;
+          };
+}
+
+/** Declarative command-palette command metadata (handler is host-mediated). */
+export interface PluginCommandPaletteCommandDefinition {
+    readonly id: string;
+    readonly label: string;
+    readonly description?: string;
+    readonly keywords?: readonly string[];
+    readonly icon?: string;
+    readonly order?: number;
+    readonly closeOnSuccess?: boolean;
+}
 
 export interface PluginContribution<TDefinition = unknown> {
     readonly kind: PluginContributionKind;

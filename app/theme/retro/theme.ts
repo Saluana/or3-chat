@@ -13,6 +13,7 @@ import { sidebarOverrides, sidebarCssSelectors } from './styles/sidebar';
 import { chatOverrides, chatCssSelectors } from './styles/chat';
 import { dashboardOverrides, dashboardStyles } from './styles/dashboard';
 import { documentsOverrides, documentsStyles } from './styles/documents';
+import { paletteOverrides, paletteCssSelectors } from './styles/palette';
 
 export default defineTheme({
     name: 'retro',
@@ -207,6 +208,7 @@ export default defineTheme({
         ...sidebarOverrides,
         ...dashboardOverrides,
         ...documentsOverrides,
+        ...paletteOverrides,
     },
     // CSS Selectors for direct DOM targeting
     // These target elements that can't easily be integrated with the component override system
@@ -215,6 +217,7 @@ export default defineTheme({
         ...chatCssSelectors,
         ...dashboardStyles,
         ...documentsStyles,
+        ...paletteCssSelectors,
         '.theme-btn': {
             style: {
                 border: 'var(--md-border-width) solid var(--md-border-color)',
