@@ -5,20 +5,16 @@
  * `{ data }`. v1 nests chat under `chatRequest`, oauth under `requestBody`,
  * and returns a PageIterator of `{ result: { data } }`.
  *
- * or3-workflow-core@0.1.x still calls the flat chat.send API, so we patch
- * clients passed into that adapter.
+ * These helpers remain in use by non-workflow paths (caption, OAuth exchange,
+ * model listing). Workflow execution now flows through the provider-neutral
+ * `OpenRouterModelGateway`, so the former `chat.send` monkey patch is gone.
  */
 
-import type { OpenRouter } from '@openrouter/sdk';
 import type { Model as SDKModel } from '@openrouter/sdk/models';
 import type { ExchangeAuthCodeForAPIKeyRequest } from '@openrouter/sdk/models/operations';
 import type { SendChatCompletionRequestRequest } from '@openrouter/sdk/models/operations';
 
 type UnknownRecord = Record<string, unknown>;
-
-function isRecord(value: unknown): value is UnknownRecord {
-    return typeof value === 'object' && value !== null;
-}
 
 /** Convert flat chat.send args to the v1 `{ chatRequest }` shape when needed. */
 export function wrapLegacyChatSendArgs(
@@ -83,27 +79,4 @@ export async function collectModelsFromListPages(
         if (Array.isArray(batch)) models.push(...batch);
     }
     return models;
-}
-
-/**
- * Patch an OpenRouter client so flat `chat.send({ model, messages, ... })`
- * calls (used by or3-workflow-core) are rewritten to the v1 nested shape.
- */
-export function patchOpenRouterClientForWorkflowCompat(
-    client: OpenRouter
-): OpenRouter {
-    const chat = client.chat as OpenRouter['chat'] & {
-        send: (...args: unknown[]) => unknown;
-    };
-    const originalSend = chat.send.bind(chat);
-
-    chat.send = ((request: unknown, options?: unknown) =>
-        originalSend(
-            wrapLegacyChatSendArgs(
-                isRecord(request) ? request : { value: request }
-            ),
-            options
-        )) as typeof chat.send;
-
-    return client;
 }

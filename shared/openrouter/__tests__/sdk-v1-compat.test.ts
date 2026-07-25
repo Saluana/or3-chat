@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
     collectModelsFromListPages,
     wrapLegacyChatSendArgs,
@@ -125,34 +125,5 @@ describe('openrouter sdk v1 compat helpers', () => {
         const normalized = normalizeSDKError(new Error('boom'));
         expect(normalized.code).toBe('ERR_UNKNOWN');
         expect(normalized.message).toBe('boom');
-    });
-
-    it('createWorkflowCompatibleClient rewrites flat chat.send calls', async () => {
-        const send = vi.fn(async (request: unknown) => request);
-        const client = {
-            chat: { send },
-        };
-
-        const { patchOpenRouterClientForWorkflowCompat } = await import(
-            '../sdk-v1-compat'
-        );
-        patchOpenRouterClientForWorkflowCompat(client as never);
-
-        await client.chat.send({
-            model: 'openai/gpt-4',
-            messages: [{ role: 'user', content: 'hi' }],
-            stream: true,
-        });
-
-        expect(send).toHaveBeenCalledWith(
-            {
-                chatRequest: {
-                    model: 'openai/gpt-4',
-                    messages: [{ role: 'user', content: 'hi' }],
-                    stream: true,
-                },
-            },
-            undefined
-        );
     });
 });

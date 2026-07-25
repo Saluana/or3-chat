@@ -656,12 +656,12 @@ export function executeWorkflow(
         const { OpenRouterExecutionAdapter } = await import(
             'or3-workflow-core'
         );
-        const { createWorkflowOpenRouterClient } = await import(
+        const { createWorkflowModelGateway } = await import(
             '~~/shared/openrouter'
         );
 
-        // Workflow-core still uses the flat chat.send API; wrap for SDK v1.
-        const client = createWorkflowOpenRouterClient({ apiKey });
+        // Provider-neutral gateway over the unpatched public SDK v1 transport.
+        const gateway = createWorkflowModelGateway({ apiKey });
 
         const toolFallbackModel = pickToolFallbackModel(DEFAULT_TOOL_MODEL);
         const toolModelCheck = ensureToolCapableModels(
@@ -731,9 +731,8 @@ export function executeWorkflow(
 
         const workflowTools = getWorkflowTools();
 
-        // Create execution adapter
-        // Cast to any to handle version mismatch between SDK versions
-        adapter = new OpenRouterExecutionAdapter(client as any, {
+        // Create execution adapter from the provider-neutral gateway.
+        adapter = new OpenRouterExecutionAdapter(gateway, {
             defaultModel: DEFAULT_TOOL_MODEL,
             preflight: true,
             resumeFrom: resumeFromWithHistory,
