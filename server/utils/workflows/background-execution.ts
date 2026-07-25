@@ -26,6 +26,10 @@ import {
 import { registerHitlRequest, clearHitlRequestsForJob } from './hitl-store';
 import { createWorkflowModelGateway } from '~~/shared/openrouter';
 import { normalizeOpenRouterBaseUrl } from '~~/shared/openrouter/url';
+import {
+    BackgroundJobRunStore,
+    type WorkflowStateWithJournal,
+} from './background-run-store';
 
 function logBgStream(
     _stage: string,
@@ -211,7 +215,27 @@ async function runWorkflowInBackground(
         workflowName: params.workflowName,
         prompt: params.prompt,
         attachments: params.attachments,
-    });
+    }) as WorkflowStateWithJournal;
+
+    // Durable run journal for wave/tool restart safety (R7.AC1, R7.AC7).
+    // Hydrate from any prior journal on the job so SSR process restarts resume
+    // without duplicating receipt-backed tool calls.
+    const existingJob = await provider
+        .getJob(jobId, params.userId)
+        .catch(() => null);
+    const priorState = (existingJob?.workflow_state ??
+        null) as WorkflowStateWithJournal | null;
+    if (priorState?.runJournal) {
+        workflowState.runJournal = priorState.runJournal;
+    }
+    const runStore = new BackgroundJobRunStore(
+        jobId,
+        provider,
+        workflowState,
+        (journal) => {
+            workflowState.runJournal = journal;
+        }
+    );
 
     initJobLiveState(jobId);
     logBgStream('workflow-background-start', {
@@ -271,6 +295,9 @@ async function runWorkflowInBackground(
         defaultModel: 'openai/gpt-4o-mini',
         preflight: true,
         tools: workflowTools,
+        runStore,
+        runId: jobId,
+        persistWaveSnapshots: true,
         onToolCall: (name, args) =>
             executeWorkflowToolCall(name, args, {
                 jobId,
