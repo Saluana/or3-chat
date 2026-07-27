@@ -116,6 +116,53 @@ describe('POST /api/sync/snapshot', () => {
         expect(recordSyncRequestMock).not.toHaveBeenCalled();
     });
 
+    it.each([
+        [
+            'a different workspace',
+            { ...response, workspaceId: 'ws-other' },
+        ],
+        [
+            'unordered items',
+            {
+                ...response,
+                items: [
+                    {
+                        kind: 'row',
+                        tableName: 'threads',
+                        pk: 'thread-1',
+                        payload: {},
+                        revision: {
+                            clock: 1,
+                            hlc: '1:0:d',
+                            opId: 'op-thread',
+                        },
+                    },
+                    {
+                        kind: 'row',
+                        tableName: 'messages',
+                        pk: 'message-1',
+                        payload: {},
+                        revision: {
+                            clock: 1,
+                            hlc: '1:0:d',
+                            opId: 'op-message',
+                        },
+                    },
+                ],
+            },
+        ],
+    ])('rejects adapter output with %s', async (_label, adapterResponse) => {
+        const handler = (await import('../snapshot.post')).default as (
+            input: H3Event
+        ) => Promise<unknown>;
+        snapshotMock.mockResolvedValue(adapterResponse);
+
+        await expect(handler(event())).rejects.toMatchObject({
+            statusCode: 502,
+        });
+        expect(recordSyncRequestMock).not.toHaveBeenCalled();
+    });
+
     it('returns Retry-After when snapshot paging is rate limited', async () => {
         const handler = (await import('../snapshot.post')).default as
             (input: H3Event) => Promise<unknown>;

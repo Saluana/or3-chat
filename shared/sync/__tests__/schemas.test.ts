@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
     NotificationPayloadSchema,
+    PullResponseSchema,
     PostPayloadSchema,
+    PushBatchSchema,
     PushResultSchema,
+    SnapshotResponseSchema,
     TABLE_PAYLOAD_SCHEMAS,
     TombstoneSchema,
 } from '../schemas';
@@ -144,5 +147,113 @@ describe('sync schemas', () => {
         });
 
         expect(parsed.success).toBe(true);
+    });
+
+    it('rejects unordered pull versions and duplicate pull operation IDs', () => {
+        const opId = 'a1b2c3d4-5678-4abc-8def-123456789001';
+        const baseChange = {
+            tableName: 'messages',
+            pk: 'message-1',
+            op: 'delete' as const,
+            stamp: {
+                deviceId: 'device-1',
+                opId,
+                hlc: '1:0:device-1',
+                clock: 1,
+            },
+        };
+        const parsed = PullResponseSchema.safeParse({
+            changes: [
+                { ...baseChange, serverVersion: 2 },
+                {
+                    ...baseChange,
+                    pk: 'message-2',
+                    serverVersion: 1,
+                },
+            ],
+            nextCursor: 2,
+            hasMore: false,
+        });
+
+        expect(parsed.success).toBe(false);
+    });
+
+    it('rejects duplicate push request and response operation IDs', () => {
+        const opId = 'a1b2c3d4-5678-4abc-8def-123456789001';
+        const op = {
+            id: 'pending-1',
+            tableName: 'messages',
+            operation: 'delete' as const,
+            pk: 'message-1',
+            stamp: {
+                deviceId: 'device-1',
+                opId,
+                hlc: '1:0:device-1',
+                clock: 1,
+            },
+            createdAt: 1,
+            attempts: 0,
+            status: 'pending' as const,
+        };
+
+        expect(
+            PushBatchSchema.safeParse({
+                scope: { workspaceId: 'workspace-1' },
+                ops: [op, { ...op, id: 'pending-2', pk: 'message-2' }],
+            }).success
+        ).toBe(false);
+        expect(
+            PushResultSchema.safeParse({
+                results: [
+                    { opId, success: true, serverVersion: 1 },
+                    { opId, success: true, serverVersion: 1 },
+                ],
+                serverVersion: 1,
+            }).success
+        ).toBe(false);
+    });
+
+    it('rejects unordered and contradictory snapshot items', () => {
+        const response = {
+            workspaceId: 'workspace-1',
+            snapshotId: 'snapshot-1',
+            highWatermark: 2,
+            items: [
+                {
+                    kind: 'row' as const,
+                    tableName: 'messages',
+                    pk: 'message-1',
+                    payload: { id: 'message-1' },
+                    revision: { clock: 1, hlc: '1:0:d', opId: 'op-row' },
+                },
+                {
+                    kind: 'tombstone' as const,
+                    tableName: 'messages',
+                    pk: 'message-1',
+                    revision: {
+                        clock: 2,
+                        hlc: '2:0:d',
+                        opId: 'op-delete',
+                    },
+                    serverDeletedAt: 2,
+                },
+            ],
+            nextPageToken: null,
+        };
+
+        expect(SnapshotResponseSchema.safeParse(response).success).toBe(false);
+        expect(
+            SnapshotResponseSchema.safeParse({
+                ...response,
+                items: [
+                    {
+                        ...response.items[0],
+                        tableName: 'threads',
+                        pk: 'thread-1',
+                    },
+                    response.items[1],
+                ],
+            }).success
+        ).toBe(false);
     });
 });

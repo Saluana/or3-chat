@@ -37,6 +37,14 @@ import type {
     PushResult,
     SyncSubscribeOptions,
 } from '~~/shared/sync/types';
+import {
+    PullResponseSchema,
+    PushResultSchema,
+    SnapshotResponseSchema,
+    getPullResponseContractError,
+    getPushResultContractError,
+    getSnapshotResponseContractError,
+} from '~~/shared/sync/schemas';
 
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 const DEFAULT_PULL_LIMIT = 100;
@@ -129,7 +137,17 @@ async function requestJson<T>(
     path: string,
     body: unknown,
     baseUrl: string,
-    options: { allowEmpty?: boolean; signal?: AbortSignal } = {}
+    options: {
+        allowEmpty?: boolean;
+        signal?: AbortSignal;
+        schema?: {
+            safeParse(
+                input: unknown
+            ):
+                | { success: true; data: T }
+                | { success: false; error: unknown };
+        };
+    } = {}
 ): Promise<T> {
     const res = await fetch(`${baseUrl}${path}`, {
         method: 'POST',
@@ -156,7 +174,31 @@ async function requestJson<T>(
         throw new Error(`[gateway-sync] ${path} returned empty response`);
     }
 
-    return JSON.parse(text) as T;
+    let decoded: unknown;
+    try {
+        decoded = JSON.parse(text);
+    } catch {
+        throw new Error(`[gateway-sync] ${path} returned invalid JSON`);
+    }
+    if (options.schema) {
+        const parsed = options.schema.safeParse(decoded);
+        if (!parsed.success) {
+            throw new Error(`[gateway-sync] ${path} returned invalid response`);
+        }
+        return parsed.data;
+    }
+    return decoded as T;
+}
+
+function assertGatewayResponseContract(
+    path: string,
+    contractError: string | null
+): void {
+    if (contractError) {
+        throw new Error(
+            `[gateway-sync] ${path} returned invalid response: ${contractError}`
+        );
+    }
 }
 
 /**
@@ -207,16 +249,24 @@ export function createGatewaySyncProvider(
                 let hasMore = true;
                 while (active && hasMore) {
                     const previousCursor = cursor;
+                    const request: PullRequest = {
+                        scope,
+                        cursor,
+                        limit,
+                        tables,
+                    };
                     const response = await requestJson<PullResponse>(
                         '/api/sync/pull',
-                        {
-                            scope,
-                            cursor,
-                            limit,
-                            tables,
-                        },
+                        request,
                         baseUrl,
-                        { signal: pollAbortController.signal }
+                        {
+                            signal: pollAbortController.signal,
+                            schema: PullResponseSchema,
+                        }
+                    );
+                    assertGatewayResponseContract(
+                        '/api/sync/pull',
+                        getPullResponseContractError(request, response)
                     );
 
                     if (response.changes.length) {
@@ -313,15 +363,45 @@ export function createGatewaySyncProvider(
         },
 
         async pull(request: PullRequest): Promise<PullResponse> {
-            return requestJson<PullResponse>('/api/sync/pull', request, baseUrl);
+            const response = await requestJson<PullResponse>(
+                '/api/sync/pull',
+                request,
+                baseUrl,
+                { schema: PullResponseSchema }
+            );
+            assertGatewayResponseContract(
+                '/api/sync/pull',
+                getPullResponseContractError(request, response)
+            );
+            return response;
         },
 
         async snapshot(request: SnapshotRequest): Promise<SnapshotResponse> {
-            return requestJson<SnapshotResponse>('/api/sync/snapshot', request, baseUrl);
+            const response = await requestJson<SnapshotResponse>(
+                '/api/sync/snapshot',
+                request,
+                baseUrl,
+                { schema: SnapshotResponseSchema }
+            );
+            assertGatewayResponseContract(
+                '/api/sync/snapshot',
+                getSnapshotResponseContractError(request, response)
+            );
+            return response;
         },
 
         async push(batch: PushBatch): Promise<PushResult> {
-            return requestJson<PushResult>('/api/sync/push', batch, baseUrl);
+            const response = await requestJson<PushResult>(
+                '/api/sync/push',
+                batch,
+                baseUrl,
+                { schema: PushResultSchema }
+            );
+            assertGatewayResponseContract(
+                '/api/sync/push',
+                getPushResultContractError(batch, response)
+            );
+            return response;
         },
 
         async updateCursor(scope: SyncScope, deviceId: string, version: number): Promise<void> {

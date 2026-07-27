@@ -1,6 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PullResponse, SnapshotResponse, SyncChange, SyncScope } from '~~/shared/sync/types';
 import { createGatewaySyncProvider } from '../providers/gateway-sync-provider';
+import { OutboxManager } from '../outbox-manager';
+import { createMockDb, createPendingOpsTable } from './sync-test-utils';
+
+const hookState = vi.hoisted(() => ({
+    doAction: vi.fn(),
+}));
+
+vi.mock('~/core/hooks/useHooks', () => ({
+    useHooks: () => ({
+        doAction: hookState.doAction,
+    }),
+}));
 
 function makeOkResponse(body: unknown) {
     return {
@@ -28,6 +40,11 @@ function makeErrorResponse(
 }
 
 function change(version: number, opId: string): SyncChange {
+    const normalizedOpId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        opId
+    )
+        ? opId
+        : `00000000-0000-4000-8000-${String(version).padStart(12, '0')}`;
     return {
         serverVersion: version,
         tableName: 'messages',
@@ -48,8 +65,31 @@ function change(version: number, opId: string): SyncChange {
             clock: 1,
             hlc: `0000000000${version}:0000:node`,
             deviceId: 'device-1',
-            opId,
+            opId: normalizedOpId,
         },
+    };
+}
+
+function pushBatch() {
+    return {
+        scope: { workspaceId: 'ws-1' },
+        ops: [
+            {
+                id: 'pending-1',
+                tableName: 'messages',
+                operation: 'delete' as const,
+                pk: 'message-1',
+                stamp: {
+                    deviceId: 'device-1',
+                    opId: 'a1b2c3d4-5678-4abc-8def-123456789001',
+                    hlc: '1:0:device-1',
+                    clock: 1,
+                },
+                createdAt: 1,
+                attempts: 0,
+                status: 'pending' as const,
+            },
+        ],
     };
 }
 
@@ -59,6 +99,7 @@ describe('GatewaySyncProvider', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         originalFetch = (globalThis as unknown as { fetch?: unknown }).fetch;
+        hookState.doAction.mockReset().mockResolvedValue(undefined);
     });
 
     afterEach(() => {
@@ -415,5 +456,195 @@ describe('GatewaySyncProvider', () => {
         unsubscribe();
         await vi.advanceTimersByTimeAsync(10_000);
         expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        [
+            'malformed shape',
+            { changes: 'invalid', nextCursor: 1, hasMore: false },
+        ],
+        [
+            'missing operation ID',
+            {
+                changes: [
+                    {
+                        ...change(2, 'op-2'),
+                        stamp: {
+                            clock: 1,
+                            hlc: '2:0:device-1',
+                            deviceId: 'device-1',
+                        },
+                    },
+                ],
+                nextCursor: 2,
+                hasMore: false,
+            },
+        ],
+        [
+            'regressing cursor',
+            { changes: [], nextCursor: 0, hasMore: false },
+        ],
+        [
+            'non-advancing hasMore cursor',
+            { changes: [], nextCursor: 1, hasMore: true },
+        ],
+        [
+            'unordered changes',
+            {
+                changes: [change(3, 'op-3'), change(2, 'op-2')],
+                nextCursor: 3,
+                hasMore: false,
+            },
+        ],
+    ])('rejects successful pull responses with %s', async (_label, body) => {
+        const fetchMock = vi.fn(async () => makeOkResponse(body));
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+        const provider = createGatewaySyncProvider();
+
+        await expect(
+            provider.pull({
+                scope: { workspaceId: 'ws-1' },
+                cursor: 1,
+                limit: 10,
+            })
+        ).rejects.toThrow('invalid response');
+    });
+
+    it('does not deliver malformed subscription pulls to onChanges', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const fetchMock = vi.fn(async () =>
+            makeOkResponse({
+                changes: [change(2, 'op-2'), change(1, 'op-1')],
+                nextCursor: 2,
+                hasMore: false,
+            })
+        );
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+        const onChanges = vi.fn();
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 10 });
+        const unsubscribe = await provider.subscribe(
+            { workspaceId: 'ws-1' },
+            ['messages'],
+            onChanges,
+            { cursor: 0, limit: 10 }
+        );
+
+        await vi.advanceTimersByTimeAsync(10);
+
+        expect(onChanges).not.toHaveBeenCalled();
+        unsubscribe();
+    });
+
+    it.each([
+        ['missing', { results: [], serverVersion: 1 }],
+        [
+            'duplicate',
+            {
+                results: [
+                    {
+                        opId: 'a1b2c3d4-5678-4abc-8def-123456789001',
+                        success: true,
+                        serverVersion: 1,
+                    },
+                    {
+                        opId: 'a1b2c3d4-5678-4abc-8def-123456789001',
+                        success: true,
+                        serverVersion: 1,
+                    },
+                ],
+                serverVersion: 1,
+            },
+        ],
+    ])('rejects successful push responses with %s operation IDs', async (_label, body) => {
+        const fetchMock = vi.fn(async () => makeOkResponse(body));
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+        const provider = createGatewaySyncProvider();
+
+        await expect(provider.push(pushBatch())).rejects.toThrow(
+            'invalid response'
+        );
+    });
+
+    it('keeps an outbox operation pending when a successful gateway push omits its result', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const fetchMock = vi.fn(async () =>
+            makeOkResponse({ results: [], serverVersion: 1 })
+        );
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+        const pending = pushBatch().ops[0]!;
+        const pendingOps = createPendingOpsTable([pending]);
+        const outbox = new OutboxManager(
+            createMockDb({ pending_ops: pendingOps }) as never,
+            createGatewaySyncProvider(),
+            { workspaceId: 'ws-1' },
+            { retryDelays: [100, 200] }
+        );
+
+        await outbox.flush();
+
+        expect(pendingOps.__rows.get(pending.id)).toMatchObject({
+            id: pending.id,
+            status: 'retry_wait',
+            attempts: 1,
+        });
+    });
+
+    it.each([
+        [
+            'wrong workspace',
+            {
+                workspaceId: 'ws-other',
+                snapshotId: 'snapshot-1',
+                highWatermark: 1,
+                items: [],
+                nextPageToken: null,
+            },
+        ],
+        [
+            'unordered items',
+            {
+                workspaceId: 'ws-1',
+                snapshotId: 'snapshot-1',
+                highWatermark: 1,
+                items: [
+                    {
+                        kind: 'row',
+                        tableName: 'threads',
+                        pk: 'thread-1',
+                        payload: {},
+                        revision: {
+                            clock: 1,
+                            hlc: '1:0:d',
+                            opId: 'op-thread',
+                        },
+                    },
+                    {
+                        kind: 'row',
+                        tableName: 'messages',
+                        pk: 'message-1',
+                        payload: {},
+                        revision: {
+                            clock: 1,
+                            hlc: '1:0:d',
+                            opId: 'op-message',
+                        },
+                    },
+                ],
+                nextPageToken: null,
+            },
+        ],
+    ])('rejects successful snapshot responses with %s', async (_label, body) => {
+        const fetchMock = vi.fn(async () => makeOkResponse(body));
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+        const provider = createGatewaySyncProvider();
+
+        await expect(
+            provider.snapshot?.({
+                scope: { workspaceId: 'ws-1' },
+                pageSize: 10,
+            })
+        ).rejects.toThrow('invalid response');
     });
 });

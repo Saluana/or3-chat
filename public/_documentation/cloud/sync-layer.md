@@ -20,6 +20,12 @@ tombstones, intervening writes, duplicate boundaries, and fresh-device recovery
 after the original log entries have been pruned. Retention remains fail-closed
 pending its explicit safety-gate activation and operational rollout.
 
+When an existing device's cursor expires, snapshot-capable providers use the
+same canonical replacement path instead of attempting cursor-zero replay.
+Materialized rows and tombstones for the requested tables are replaced
+atomically, changes after the snapshot watermark are replayed, and pending local
+puts/deletes are re-applied before the live subscription resumes.
+
 ---
 
 ## Architecture Overview
@@ -308,6 +314,21 @@ If you still see many notifications:
 - Bootstrap is paginated (100 records per batch)
 - Monitor progress via `sync.bootstrap:action:progress` hook
 - Consider implementing a loading indicator
+
+For repeatable local measurements, run:
+
+```bash
+bun run sync:outbox:benchmark
+bun run sync:snapshot:benchmark
+bun run sync:benchmarks:check
+```
+
+The outbox harness seeds superseded writes and verifies bounded 50-operation
+batches, deterministic coalescing, and a fully drained queue. The snapshot
+harness installs 50,000 materialized rows in 300-row pages and verifies the row
+count and replay watermark. Override fixture sizes with
+`OR3_BENCH_OUTBOX_RECORDS`, `OR3_BENCH_OUTBOX_REVISIONS`,
+`OR3_BENCH_SNAPSHOT_ROWS`, and `OR3_BENCH_SNAPSHOT_PAGE_SIZE`.
 
 ### Cursor Reset / Rescan Loop
 

@@ -531,6 +531,19 @@ export async function importWorkspaceStream({
         }
         expectedRowsByTable.set(table.name, table.rowCount);
     }
+    if (
+        clearTables &&
+        (
+            expectedRowsByTable.size !== tableByName.size ||
+            [...tableByName.keys()].some(
+                (tableName) => !expectedRowsByTable.has(tableName)
+            )
+        )
+    ) {
+        throw new Error(
+            'Replace backup must include every database table before existing data can be cleared.'
+        );
+    }
 
     const progress: WorkspaceBackupProgress = {
         completedRows: 0,

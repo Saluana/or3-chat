@@ -135,6 +135,69 @@ describe('applySnapshotChain', () => {
         expect(await db.messages.count()).toBe(0);
     });
 
+    it('rejects contradictory row and tombstone entries before replacement mutation', async () => {
+        const db = createDb();
+        await db.open();
+        await db.messages.put({
+            id: 'existing-message',
+            thread_id: 'thread-1',
+            role: 'user',
+            index: 1000,
+            order_key: 'existing',
+            data: { content: 'keep me' },
+            deleted: false,
+            created_at: 1,
+            updated_at: 1,
+            clock: 1,
+        });
+        await db.sync_state.put({
+            id: 'sync_state:workspace-1:default',
+            cursor: 7,
+            lastSyncAt: 1,
+            deviceId: 'device-before',
+        });
+
+        const contradictory = pages();
+        contradictory[1] = {
+            ...contradictory[1]!,
+            items: [
+                {
+                    kind: 'tombstone',
+                    tableName: 'messages',
+                    pk: 'message-1',
+                    revision: {
+                        clock: 2,
+                        hlc: '2:0:device',
+                        opId: 'op-delete-message-1',
+                    },
+                    serverDeletedAt: 2,
+                },
+            ],
+        };
+
+        await expect(
+            applySnapshotChain(
+                db,
+                contradictory,
+                { workspaceId: 'workspace-1' },
+                'device-1',
+                () => true,
+                ['messages']
+            )
+        ).rejects.toThrow('contradictory');
+
+        expect(await db.messages.toArray()).toEqual([
+            expect.objectContaining({
+                id: 'existing-message',
+                data: { content: 'keep me' },
+            }),
+        ]);
+        expect(
+            await db.sync_state.get('sync_state:workspace-1:default')
+        ).toMatchObject({ cursor: 7, deviceId: 'device-before' });
+        expect(await db.tombstones.count()).toBe(0);
+    });
+
     it('rolls back rows and watermark when the lifecycle is invalidated during apply', async () => {
         const db = createDb();
         await db.open();

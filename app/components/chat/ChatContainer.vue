@@ -126,7 +126,6 @@ import {
     ref,
     reactive,
     isRef,
-    triggerRef,
     type Ref,
     type CSSProperties,
     onBeforeUnmount,
@@ -414,9 +413,14 @@ function unwrapRef<T>(refOrValue: T | Ref<T>): T {
 }
 
 const streamId = computed(() => unwrapRef(chat.value?.streamId));
-const streamState = computed<StreamState | null>(
-    () => chat.value?.streamState ?? null
-);
+const streamState = computed<StreamState | null>(() => {
+    const state = chat.value?.streamState as
+        | Ref<StreamState | null>
+        | StreamState
+        | null
+        | undefined;
+    return unwrapRef<StreamState | null>(state ?? null);
+});
 // Stream text + reasoning (from unified stream accumulator)
 // Tail assistant from composable (kept out of history until next user send)
 const tailAssistant = computed<UiChatMessage | null>(() => {
@@ -567,8 +571,10 @@ watch(
             renderedStableSnapshot === stable &&
             allMessages.value.length === stable.length + 1
         ) {
-            allMessages.value[stable.length] = mergedTail;
-            triggerRef(allMessages);
+            // Or3Scroll memoizes rows from the items array identity. Replacing
+            // only the tail slot (even with triggerRef) leaves its rendered row
+            // stale while tokens are streaming.
+            allMessages.value = [...stable, mergedTail];
             return;
         }
 

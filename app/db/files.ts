@@ -121,25 +121,33 @@ function createFileDeletePayload(
 }
 
 /** Internal helper to change ref_count and fire hook */
-async function changeRefCount(hash: string, delta: number) {
+async function changeRefCount(
+    hash: string,
+    delta: number
+): Promise<FileMeta | undefined> {
     const db = getDb();
-    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
-        const meta = await db.file_meta.get(hash);
-        if (!meta) return;
-        const next = {
-            ...meta,
-            ref_count: Math.max(0, meta.ref_count + delta),
-            updated_at: nowSec(),
-            clock: nextClock(meta.clock),
-        };
-        await db.file_meta.put(next);
-        const hooks = useHooks();
-        await hooks.doAction('db.files.refchange:action:after', {
-            before: toFileEntity(meta),
-            after: toFileEntity(next),
-            delta,
-        });
-    });
+    return db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'file_meta'),
+        async () => {
+            const meta = await db.file_meta.get(hash);
+            if (!meta) return undefined;
+            const next = {
+                ...meta,
+                ref_count: Math.max(0, meta.ref_count + delta),
+                updated_at: nowSec(),
+                clock: nextClock(meta.clock),
+            };
+            await db.file_meta.put(next);
+            const hooks = useHooks();
+            await hooks.doAction('db.files.refchange:action:after', {
+                before: toFileEntity(meta),
+                after: toFileEntity(next),
+                delta,
+            });
+            return next;
+        }
+    );
 }
 
 /**
@@ -173,19 +181,21 @@ export async function createOrRefFile(
     const hash = await computeFileHash(file);
     const existing = await getDb().file_meta.get(hash);
     if (existing) {
-        await changeRefCount(hash, 1);
-        if (import.meta.dev) {
-            console.debug('[files] ref existing', {
-                hash: hash.slice(0, 8),
-                size: existing.size_bytes,
-                ref_count: existing.ref_count + 1,
-            });
+        const incremented = await changeRefCount(hash, 1);
+        if (incremented) {
+            if (import.meta.dev) {
+                console.debug('[files] ref existing', {
+                    hash: hash.slice(0, 8),
+                    size: incremented.size_bytes,
+                    ref_count: incremented.ref_count,
+                });
+            }
+            if (markId && hasPerf) finalizePerf(markId, 'ref', file.size);
+            if (!incremented.storage_id) {
+                await enqueueUpload(hash);
+            }
+            return incremented;
         }
-        if (markId && hasPerf) finalizePerf(markId, 'ref', file.size);
-        if (!existing.storage_id) {
-            await enqueueUpload(hash);
-        }
-        return existing;
     }
     const mime = file.type || 'application/octet-stream';
     // Basic image dimension extraction if image
@@ -233,11 +243,33 @@ export async function createOrRefFile(
     };
 
     let storedMeta: FileMeta | null = null;
+    let createdNew = false;
     const db = getDb();
     await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'file_meta', { include: ['file_blobs'] }),
         async () => {
+        // The initial lookup happens before image metadata/filter work. Recheck
+        // under the write transaction so concurrent identical files increment
+        // the single canonical row instead of overwriting each other at one.
+        const concurrentExisting = await db.file_meta.get(hash);
+        if (concurrentExisting) {
+            const next = {
+                ...concurrentExisting,
+                ref_count: concurrentExisting.ref_count + 1,
+                updated_at: nowSec(),
+                clock: nextClock(concurrentExisting.clock),
+            };
+            await db.file_meta.put(next);
+            await hooks.doAction('db.files.refchange:action:after', {
+                before: toFileEntity(concurrentExisting),
+                after: toFileEntity(next),
+                delta: 1,
+            });
+            storedMeta = next;
+            return;
+        }
+
         await hooks.doAction('db.files.create:action:before', actionPayload);
         const mergedMeta = parseOrThrow(
             FileMetaSchema,
@@ -249,6 +281,7 @@ export async function createOrRefFile(
             db.file_blobs.put({ hash: mergedMeta.hash, blob: file }),
         ]);
         storedMeta = mergedMeta;
+        createdNew = true;
         actionPayload = {
             entity: toFileEntity(mergedMeta),
             tableName: FILE_TABLE,
@@ -259,14 +292,18 @@ export async function createOrRefFile(
     // Use non-null assertion since the transaction guarantees the value is set
     const finalMeta = storedMeta!;
     if (import.meta.dev) {
-        console.debug('[files] created', {
+        console.debug(createdNew ? '[files] created' : '[files] ref existing', {
             hash: finalMeta.hash.slice(0, 8),
             size: file.size,
             mime,
         });
     }
-    if (markId && hasPerf) finalizePerf(markId, 'create', file.size);
-    await enqueueUpload(finalMeta.hash);
+    if (markId && hasPerf) {
+        finalizePerf(markId, createdNew ? 'create' : 'ref', file.size);
+    }
+    if (!finalMeta.storage_id) {
+        await enqueueUpload(finalMeta.hash);
+    }
     return finalMeta;
 }
 

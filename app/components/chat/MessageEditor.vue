@@ -21,7 +21,6 @@ import { StarterKit } from '@tiptap/starter-kit';
 import { Editor, EditorContent } from '@tiptap/vue-3';
 // If you still want markdown extension keep it; otherwise remove these two lines:
 import { Markdown } from 'tiptap-markdown';
-import { useDebounceFn } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{
@@ -49,13 +48,23 @@ const editorProps = useThemeOverrides({
 });
 
 const editor = ref<Editor | null>(null);
-// Prevent feedback loop when emitting updates -> watcher -> setContent -> update
-let internalUpdate = false;
 let lastEmitted = '';
+let emitTimer: ReturnType<typeof setTimeout> | undefined;
 
-const emitModelValue = useDebounceFn((val: string): void => {
-    emit('update:modelValue', val);
-}, 200);
+function cancelPendingEmit(): void {
+    if (emitTimer === undefined) return;
+    clearTimeout(emitTimer);
+    emitTimer = undefined;
+}
+
+function emitModelValue(val: string): void {
+    cancelPendingEmit();
+    emitTimer = setTimeout(() => {
+        emitTimer = undefined;
+        lastEmitted = val;
+        emit('update:modelValue', val);
+    }, 200);
+}
 
 async function init() {
     const extensions = [StarterKit.configure({ codeBlock: {} }), Markdown];
@@ -106,6 +115,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    cancelPendingEmit();
     try {
         editor.value?.destroy();
     } catch {}
@@ -114,8 +124,14 @@ onBeforeUnmount(() => {
 watch(
     () => props.modelValue,
     (val) => {
-        if (!editor.value) return;
-        if (internalUpdate) return;
+        const instance = editor.value;
+        if (!instance || val === lastEmitted) return;
+
+        // A parent replacement is authoritative. Drop any queued local update
+        // so it cannot overwrite the newer value after the debounce expires.
+        cancelPendingEmit();
+        instance.commands.setContent(val, { emitUpdate: false });
+        lastEmitted = val;
     }
 );
 </script>
