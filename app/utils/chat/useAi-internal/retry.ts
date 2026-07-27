@@ -35,7 +35,7 @@ import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { getDb } from '~/db/client';
 import { compareMessageOrder, messagesByThread } from '~/db/messages';
 import { parseFileHashes } from '~/db/files-util';
-import { deriveMessageContent } from '~/utils/chat/messages';
+import { normalizeStreamingMessage } from '~/utils/chat/messages';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { reportError, err } from '~/utils/errors';
 import type { StoredMessage } from './types';
@@ -84,30 +84,6 @@ export type RetryMessageContext = {
     defaultModelId: string;
     suppressNextTailFlush: (assistantId: string) => void;
 };
-
-/**
- * Internal helper. Extracts reasoning text from message data or legacy field.
- */
-const toReasoning = (m: StoredMessage) => {
-    if (
-        m.data &&
-        typeof m.data === 'object' &&
-        'reasoning_text' in m.data &&
-        typeof (m.data as { reasoning_text?: unknown }).reasoning_text === 'string'
-    ) {
-        return (m.data as { reasoning_text: string }).reasoning_text;
-    }
-    return typeof m.reasoning_text === 'string' ? m.reasoning_text : null;
-};
-
-/**
- * Internal helper. Derives displayable content from stored message fields.
- */
-const toContent = (m: StoredMessage) =>
-    deriveMessageContent({
-        content: m.content,
-        data: m.data,
-    });
 
 /**
  * Internal helper. Extracts plain text from content that may be string or ContentPart array.
@@ -271,13 +247,18 @@ export async function retryMessageImpl(
             const data = m.data && typeof m.data === 'object'
                 ? (m.data as Record<string, unknown>)
                 : null;
+            const normalized = normalizeStreamingMessage({
+                content: m.content,
+                reasoning_text: m.reasoning_text,
+                data,
+            });
             return {
                 role: m.role as ChatMessage['role'],
-                content: toContent(m),
+                content: normalized.text,
                 id: m.id,
                 stream_id: m.stream_id ?? undefined,
                 file_hashes: m.file_hashes ?? undefined,
-                reasoning_text: toReasoning(m),
+                reasoning_text: normalized.reasoningText,
                 data,
                 name:
                     typeof data?.tool_name === 'string'
@@ -308,14 +289,19 @@ export async function retryMessageImpl(
         ctx.rawMessages.value = ordered.map(toChatMessage);
 
         const uiMessages = dbMessages.filter((m) => m.role !== 'tool');
-        ctx.messages.value = uiMessages.map((m) =>
-            ensureUiMessage({
+        ctx.messages.value = uiMessages.map((m) => {
+            const normalized = normalizeStreamingMessage({
+                content: m.content,
+                reasoning_text: m.reasoning_text,
+                data: m.data,
+            });
+            return ensureUiMessage({
                 role: m.role as 'user' | 'assistant' | 'system' | 'tool',
-                content: toContent(m),
+                content: normalized.text,
                 id: m.id,
                 stream_id: m.stream_id ?? undefined,
                 file_hashes: m.file_hashes ?? undefined,
-                reasoning_text: toReasoning(m),
+                reasoning_text: normalized.reasoningText,
                 error: m.error ?? null,
                 data: m.data
                     ? {
@@ -330,8 +316,8 @@ export async function retryMessageImpl(
                         ? Number(m.index) || null
                         : null,
                 created_at: typeof m.created_at === 'number' ? m.created_at : null,
-            })
-        );
+            });
+        });
 
         const textToSend = extractUserText(originalTextRaw);
 

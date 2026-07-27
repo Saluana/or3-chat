@@ -10,9 +10,10 @@
  * - Normalize proxy trust configuration.
  * - Extract client IP from trusted forwarded headers or socket address.
  * - Extract host value from trusted forwarded headers or Host header.
+ * - Resolve the effective HTTP protocol across a trusted proxy boundary.
  *
  * Non-Goals:
- * - Full IP validation or geo-location.
+ * - Verifying IP ownership, proxy-chain ownership, or geo-location.
  * - Parsing Proxy Protocol or other non-HTTP identity schemes.
  *
  * Constraints:
@@ -22,6 +23,7 @@
 
 import type { H3Event } from 'h3';
 import { getHeader } from 'h3';
+import { isIP } from 'node:net';
 
 /**
  * Purpose:
@@ -94,12 +96,6 @@ export function normalizeProxyTrustConfig(
     };
 }
 
-/**
- * Simple IPv4 and IPv6 validation regex.
- * Matches common IP formats but not all edge cases.
- */
-const IP_REGEX = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:.]+$/;
-
 function normalizeHeaderValue(
     value: unknown
 ): string | string[] | undefined {
@@ -125,10 +121,36 @@ function parseForwardedFor(headerValue: string): string | null {
     const firstIp = headerValue.split(',')[0]?.trim();
     if (!firstIp) return null;
 
-    // Validate basic IP shape
-    if (!IP_REGEX.test(firstIp)) return null;
+    // Require a complete, standards-valid IPv4 or IPv6 address. A shape-only
+    // regex accepts values such as 999.999.999.999, which would let callers
+    // spoof an unbounded set of rate-limit identities.
+    if (isIP(firstIp) === 0) return null;
 
     return firstIp;
+}
+
+function parseHostAuthority(value: string): string | null {
+    const candidate = value.trim().toLowerCase();
+    if (!candidate || /[\u0000-\u0020\u007f]/.test(candidate)) {
+        return null;
+    }
+
+    try {
+        const parsed = new URL(`http://${candidate}`);
+        if (
+            parsed.username ||
+            parsed.password ||
+            parsed.pathname !== '/' ||
+            parsed.search ||
+            parsed.hash ||
+            parsed.host.toLowerCase() !== candidate
+        ) {
+            return null;
+        }
+        return candidate;
+    } catch {
+        return null;
+    }
 }
 
 /**
@@ -141,7 +163,7 @@ function parseForwardedFor(headerValue: string): string | null {
  * - Fails closed to `null` when forwarded headers are missing or invalid.
  *
  * Constraints:
- * - Returned IPs are not verified beyond basic shape checks.
+ * - Returned IPs are syntactically validated, but their ownership is not verified.
  * - Trusting forwarded headers requires a trusted proxy boundary.
  *
  * Non-Goals:
@@ -201,8 +223,8 @@ export function getProxyRequestHost(
                 ? forwardedHost[0]!
                 : forwardedHost;
             const firstHost = hostValue.split(',')[0]?.trim();
-            if (firstHost && firstHost.length > 0) {
-                return firstHost.toLowerCase();
+            if (firstHost) {
+                return parseHostAuthority(firstHost);
             }
         }
 
@@ -217,8 +239,41 @@ export function getProxyRequestHost(
         const host = Array.isArray(normalizedHost)
             ? normalizedHost[0]!
             : normalizedHost;
-        return host.trim().toLowerCase();
+        return parseHostAuthority(host);
     }
 
     return null;
+}
+
+export type ProxyRequestProtocol = 'http' | 'https';
+
+/**
+ * Resolve the effective request protocol without trusting client-supplied
+ * forwarding headers unless the deployment explicitly enables proxy trust.
+ */
+export function getProxyRequestProtocol(
+    event: H3Event,
+    cfg: ProxyTrustConfig
+): ProxyRequestProtocol | null {
+    if (cfg.trustProxy) {
+        const forwardedProto = normalizeHeaderValue(
+            getHeader(event, 'x-forwarded-proto')
+        );
+        if (!forwardedProto) {
+            return null;
+        }
+
+        const value = Array.isArray(forwardedProto)
+            ? forwardedProto[0]!
+            : forwardedProto;
+        const firstProto = value.split(',')[0]?.trim().toLowerCase();
+        return firstProto === 'http' || firstProto === 'https'
+            ? firstProto
+            : null;
+    }
+
+    const socket = event.node.req.socket as
+        | (typeof event.node.req.socket & { encrypted?: boolean })
+        | undefined;
+    return socket?.encrypted === true ? 'https' : 'http';
 }

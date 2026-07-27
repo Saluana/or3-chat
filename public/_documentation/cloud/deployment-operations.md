@@ -113,20 +113,44 @@ OR3_TRUST_PROXY=true
 
 ## Operational Checks Before Release
 
-> **Release blocked:** `planning/or3-cloud-chat-audit-remediation/tasks.md`
-> is the authoritative remediation checklist. A release MUST NOT proceed while
-> any unchecked task linked to a Blocker or High finding remains in that file.
+The authoritative gate is the
+[OR3 Cloud release checklist](./release-checklist). In summary:
 
-1. Confirm every task linked to a Blocker or High finding in the remediation
-   checklist is checked and has its stated verification evidence.
-2. `bun run type-check` passes.
-3. SSR auth session endpoint works and sets `Cache-Control: no-store`.
-4. Sync push/pull and storage presign/upload/download pass smoke tests.
-5. Background job start + status + abort endpoints behave correctly.
-6. Backup and rollback procedures are documented for the active stack.
+1. Run `bun run release:check` from `or3-chat`.
+2. Copy `scripts/release/staging-canary.example.json`, replace its endpoint,
+   artifact, topology, credential, and deployment-control values, then run:
+
+   ```bash
+   bun run release:canary --config ./staging-canary.json \
+     --evidence ./artifacts/staging-canary.json
+   ```
+
+3. Retain the JSON evidence beside the clean commit and immutable artifact.
+   A passing report covers deep provider health, auth, sync, storage,
+   background jobs, isolated backup/restore, rollback, and rolling-restart
+   assertions.
+
+The canary runner is deployment-provider neutral: each scenario is a sequence
+of HTTP operations with an expected status and optional dotted JSON assertions.
+Production canary routes should be protected by short-lived credentials and
+should create namespaced, disposable fixtures. The runner never assumes that
+the public application exposes test-control routes.
+
+For multi-instance candidates, the topology declaration fails closed when:
+
+- background jobs use process-local memory;
+- correctness depends on process-local viewer suppression;
+- SQLite or filesystem storage lacks an explicit single-writer or supported
+  shared-volume topology.
+
+The rolling-restart scenario must begin sync and background work before
+restarting an instance, then verify convergence and job completion through
+another instance. External providers must remain the source of truth across
+the restart.
 
 ## Related
 
 - [config-reference](./config-reference)
 - [provider-compatibility-matrix](./provider-compatibility-matrix)
+- [release-checklist](./release-checklist)
 - [release-notes-production-readiness](./release-notes-production-readiness)

@@ -61,6 +61,42 @@ describe('normalized stream reducer', () => {
         );
     });
 
+    it('keeps duplicate text deltas but deduplicates repeated tool and image events', () => {
+        let state = beginNormalizedIteration(createNormalizedStreamState());
+        state = reduceNormalizedStreamEvent(state, { type: 'text', text: 'same' });
+        state = reduceNormalizedStreamEvent(state, { type: 'text', text: 'same' });
+        state = reduceNormalizedStreamEvent(state, toolEvent);
+        state = reduceNormalizedStreamEvent(state, toolEvent);
+        state = reduceNormalizedStreamEvent(state, {
+            type: 'image',
+            url: 'https://example.test/image.png',
+        });
+        state = reduceNormalizedStreamEvent(state, {
+            type: 'image',
+            url: 'https://example.test/image.png',
+        });
+
+        expect(state.cumulativeText).toBe('samesame');
+        expect(state.chunks).toBe(2);
+        expect(state.iterationToolCallIds).toEqual(['call-1']);
+        expect(Object.keys(state.tools)).toEqual(['call-1']);
+        expect(state.images).toEqual(['https://example.test/image.png']);
+    });
+
+    it('preserves every chunk in a long normalized stream', () => {
+        let state = beginNormalizedIteration(createNormalizedStreamState());
+        for (let index = 0; index < 5_000; index += 1) {
+            state = reduceNormalizedStreamEvent(state, {
+                type: 'text',
+                text: String(index % 10),
+            });
+        }
+
+        expect(state.cumulativeText).toHaveLength(5_000);
+        expect(state.chunks).toBe(5_000);
+        expect(state.outputBytes).toBe(5_000);
+    });
+
     it('normalizes abort and failure terminal states', () => {
         const active = beginNormalizedIteration(createNormalizedStreamState());
         const aborted = new Error('cancelled');

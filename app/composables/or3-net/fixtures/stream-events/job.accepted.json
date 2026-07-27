@@ -1,6 +1,0 @@
-{
-  "event": "job.accepted",
-  "data": {
-    "job_id": "job_123"
-  }
-}

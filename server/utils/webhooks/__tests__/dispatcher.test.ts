@@ -1,5 +1,5 @@
 /* @vitest-environment node */
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { encryptSecret } from '../crypto';
@@ -155,6 +155,85 @@ describe('webhook dispatcher', () => {
         expect(log!.status).toBe('pending');
         expect(log!.attempt).toBe(2);
         expect(log!.next_retry_at).toBe(Date.now() + 30_000);
+    });
+
+    it('preserves replay identity and raw payload while re-signing each retry', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-03-01T12:00:00.000Z'));
+
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store);
+        const eventId = 'evt-retry-stable';
+        const payload = {
+            event: 'thread.created',
+            event_id: eventId,
+            timestamp: '2026-03-01T12:00:00.000Z',
+            workspace_id: 'ws-1',
+            user_id: 'user-1',
+            data: { id: 'thread-1' },
+        };
+        const fetchImpl = vi
+            .fn()
+            .mockResolvedValueOnce(new Response('retry', { status: 503 }))
+            .mockResolvedValueOnce(new Response('ok', { status: 200 }));
+        const dispatcher = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: false,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                fetchImpl,
+            },
+            'worker-1'
+        );
+
+        await dispatcher.enqueue({
+            webhookId: webhook.id,
+            eventType: 'thread.created',
+            eventId,
+            payload,
+        });
+        await dispatcher.claimAndProcess();
+
+        vi.setSystemTime(new Date('2026-03-01T12:00:30.000Z'));
+        await dispatcher.claimAndProcess();
+
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        const attempts = fetchImpl.mock.calls.map(([, init]) => {
+            const headers = new Headers(init.headers);
+            return {
+                body: String(init.body),
+                eventId: headers.get('X-OR3-Event-ID'),
+                timestamp: Number(headers.get('X-OR3-Timestamp')),
+                signature: headers.get('X-OR3-Signature'),
+            };
+        });
+
+        expect(attempts[0]?.body).toBe(JSON.stringify(payload));
+        expect(attempts[1]?.body).toBe(attempts[0]?.body);
+        expect(attempts.map((attempt) => attempt.eventId)).toEqual([
+            eventId,
+            eventId,
+        ]);
+        expect(attempts[1]!.timestamp).toBeGreaterThan(attempts[0]!.timestamp);
+        expect(attempts[1]!.signature).not.toBe(attempts[0]!.signature);
+
+        for (const attempt of attempts) {
+            expect(attempt.signature).toBe(
+                `sha256=${createHmac('sha256', 'whs_test_secret')
+                    .update(`${attempt.timestamp}.${attempt.body}`)
+                    .digest('hex')}`
+            );
+        }
+
+        const [log] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(log).toMatchObject({
+            event_id: eventId,
+            attempt: 2,
+            status: 'success',
+        });
     });
 
     it('marks final failures and emits a notification', async () => {

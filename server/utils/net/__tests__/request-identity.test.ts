@@ -29,7 +29,12 @@ vi.mock('h3', () => ({
 }));
 
 // Import after mock
-import { getClientIp, getProxyRequestHost, type ProxyTrustConfig } from '../request-identity';
+import {
+    getClientIp,
+    getProxyRequestHost,
+    getProxyRequestProtocol,
+    type ProxyTrustConfig,
+} from '../request-identity';
 
 describe('request-identity utilities', () => {
     beforeEach(() => {
@@ -180,6 +185,29 @@ describe('request-identity utilities', () => {
 
             expect(ip).toBe('203.0.113.1');
         });
+
+        it.each([
+            '999.999.999.999',
+            '203.0.113',
+            '203.0.113.1:443',
+            '::::',
+            '2001:db8::1.example',
+        ])('should reject malformed forwarded client IP %s', (forwardedFor) => {
+            const event = {
+                node: {
+                    req: {
+                        socket: { remoteAddress: '192.168.1.100' },
+                        headers: {
+                            'x-forwarded-for': forwardedFor,
+                        },
+                    },
+                },
+            };
+
+            expect(
+                getClientIp(event as any, { trustProxy: true })
+            ).toBeNull();
+        });
     });
 
     describe('getRequestHost', () => {
@@ -292,5 +320,104 @@ describe('request-identity utilities', () => {
 
             expect(host).toBe('example.com');
         });
+
+        it.each([
+            'admin.example.com:443@evil.example',
+            'admin.example.com/path',
+            'admin.example.com?next=evil.example',
+            'admin.example.com#evil.example',
+            'admin.example.com\\@evil.example',
+            'admin.example.com:',
+            '[::1',
+        ])('should reject malformed forwarded host %s', (forwardedHost) => {
+            const event = {
+                node: {
+                    req: {
+                        socket: {},
+                        headers: {
+                            host: 'internal.local',
+                            'x-forwarded-host': forwardedHost,
+                        },
+                    },
+                },
+            };
+
+            expect(
+                getProxyRequestHost(event as any, { trustProxy: true })
+            ).toBeNull();
+        });
+
+        it('should accept the first well-formed forwarded host in a proxy list', () => {
+            const event = {
+                node: {
+                    req: {
+                        socket: {},
+                        headers: {
+                            host: 'internal.local',
+                            'x-forwarded-host':
+                                'Admin.Example.com:443, internal.local',
+                        },
+                    },
+                },
+            };
+
+            expect(
+                getProxyRequestHost(event as any, { trustProxy: true })
+            ).toBe('admin.example.com:443');
+        });
+    });
+
+    describe('getProxyRequestProtocol', () => {
+        it('ignores a spoofed forwarded protocol when proxy trust is disabled', () => {
+            const event = {
+                node: {
+                    req: {
+                        socket: { encrypted: false },
+                        headers: { 'x-forwarded-proto': 'https' },
+                    },
+                },
+            };
+
+            expect(
+                getProxyRequestProtocol(event as any, { trustProxy: false })
+            ).toBe('http');
+        });
+
+        it('uses the first protocol in a trusted proxy chain', () => {
+            const event = {
+                node: {
+                    req: {
+                        socket: { encrypted: false },
+                        headers: { 'x-forwarded-proto': 'HTTPS, http' },
+                    },
+                },
+            };
+
+            expect(
+                getProxyRequestProtocol(event as any, { trustProxy: true })
+            ).toBe('https');
+        });
+
+        it.each([undefined, '', 'ftp', 'https http'])(
+            'fails closed for missing or malformed trusted protocol %s',
+            (forwardedProto) => {
+                const headers: Record<string, string> = {};
+                if (forwardedProto !== undefined) {
+                    headers['x-forwarded-proto'] = forwardedProto;
+                }
+                const event = {
+                    node: {
+                        req: {
+                            socket: { encrypted: false },
+                            headers,
+                        },
+                    },
+                };
+
+                expect(
+                    getProxyRequestProtocol(event as any, { trustProxy: true })
+                ).toBeNull();
+            }
+        );
     });
 });

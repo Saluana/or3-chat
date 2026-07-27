@@ -90,7 +90,7 @@ describe('Workspace DB Cache LRU', () => {
         expect(cache.get('key1')).toBeUndefined();
     });
 
-    it('should evict previous workspace on switch and cleanup sync singletons', () => {
+    it('should retain the previous workspace on switch and cleanup sync singletons', () => {
         const cleanupCursorSpy = vi.spyOn(cursorManager, 'cleanupCursorManager');
         const cleanupHookSpy = vi.spyOn(hookBridge, 'cleanupHookBridge');
         const cleanupSubscriptionWorkspaceSpy = vi.spyOn(
@@ -106,7 +106,7 @@ describe('Workspace DB Cache LRU', () => {
         expect(cleanupSubscriptionWorkspaceSpy).toHaveBeenCalledWith('ws-a');
 
         const { keys } = getWorkspaceDbCacheStats();
-        expect(keys.includes('ws-a')).toBe(false);
+        expect(keys.includes('ws-a')).toBe(true);
         expect(keys.includes('ws-b')).toBe(true);
     });
 

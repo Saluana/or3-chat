@@ -84,14 +84,17 @@ OR3 client flow:
 5. Client calls `POST /api/storage/commit` so the server can verify the upload (size/type) and finalize metadata.
 
 Downloads are similar via `POST /api/storage/presign-download` + direct `GET`.
+`POST /api/storage/delete` derives the object key from the authorized workspace
+and hash, rejects a mismatched `storage_id`, and idempotently removes the blob
+and commit marker.
 
 ## Garbage Collection Safety
 
-Destructive S3 blob GC is temporarily disabled. GC requests return
-`deleted_count: 0`, `status: "disabled"`, and
-`reason: "canonical_reference_state_required"` without listing or deleting
-objects. It must remain disabled until canonical materialized reference state,
-not a partial bucket listing, determines blob liveness.
+Destructive S3 blob GC runs only when the active sync provider supplies
+canonical, workspace-scoped materialized reference state. Without that
+capability it returns `deleted_count: 0`, `status: "disabled"`, and
+`reason: "canonical_reference_state_required"`. Candidate scans, canonical
+queries, and immediate pre-delete reference checks are bounded and fail closed.
 
 ## Related
 

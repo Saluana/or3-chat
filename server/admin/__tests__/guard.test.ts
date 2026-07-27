@@ -98,10 +98,89 @@ describe('admin guard proxy host allowlist', () => {
                 host: 'internal.local',
                 origin: 'https://admin.example.com',
                 'x-forwarded-host': 'admin.example.com',
+                'x-forwarded-proto': 'https',
                 'x-or3-admin-intent': 'admin',
             },
         });
 
         expect(() => requireAdminMutation(event)).not.toThrow();
     });
+
+    it('normalizes the default HTTPS port for same-origin mutations', () => {
+        const event = makeEvent({
+            method: 'POST',
+            headers: {
+                host: 'internal.local',
+                origin: 'https://admin.example.com',
+                'x-forwarded-host': 'admin.example.com:443',
+                'x-forwarded-proto': 'https',
+                'x-or3-admin-intent': 'admin',
+            },
+        });
+
+        expect(() => requireAdminMutation(event)).not.toThrow();
+    });
+
+    it.each([
+        {
+            name: 'non-default origin port',
+            origin: 'https://admin.example.com:444',
+            forwardedHost: 'admin.example.com',
+            forwardedProto: 'https',
+        },
+        {
+            name: 'different trusted request port',
+            origin: 'https://admin.example.com',
+            forwardedHost: 'admin.example.com:444',
+            forwardedProto: 'https',
+        },
+        {
+            name: 'scheme downgrade',
+            origin: 'http://admin.example.com',
+            forwardedHost: 'admin.example.com',
+            forwardedProto: 'https',
+        },
+        {
+            name: 'userinfo authority',
+            origin: 'https://admin.example.com',
+            forwardedHost: 'admin.example.com:443@evil.example',
+            forwardedProto: 'https',
+        },
+        {
+            name: 'malformed origin',
+            origin: 'https://admin.example.com https://evil.example',
+            forwardedHost: 'admin.example.com',
+            forwardedProto: 'https',
+        },
+        {
+            name: 'opaque origin',
+            origin: 'null',
+            forwardedHost: 'admin.example.com',
+            forwardedProto: 'https',
+        },
+        {
+            name: 'malformed forwarded proto',
+            origin: 'https://admin.example.com',
+            forwardedHost: 'admin.example.com',
+            forwardedProto: 'ftp,https',
+        },
+    ])(
+        'rejects $name in the mutation origin/proxy matrix',
+        ({ origin, forwardedHost, forwardedProto }) => {
+            const event = makeEvent({
+                method: 'POST',
+                headers: {
+                    host: 'internal.local',
+                    origin,
+                    'x-forwarded-host': forwardedHost,
+                    'x-forwarded-proto': forwardedProto,
+                    'x-or3-admin-intent': 'admin',
+                },
+            });
+
+            expect(() => requireAdminMutation(event)).toThrow(
+                expect.objectContaining({ statusCode: 403 })
+            );
+        }
+    );
 });

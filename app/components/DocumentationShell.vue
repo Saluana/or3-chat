@@ -343,7 +343,6 @@ import {
     useNuxtApp,
     useRoute,
     useAsyncData,
-    useRequestURL,
     navigateTo,
 } from '#imports';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
@@ -664,8 +663,15 @@ const { data: docmapData } = await useAsyncData(
     'docmap',
     async () => {
         try {
-            const url = import.meta.server ? new URL('/_documentation/docmap.json', useRequestURL().origin).href : '/_documentation/docmap.json';
-            const map = await $fetch<Docmap | null>(url);
+            if (import.meta.server) {
+                const bundled = await import(
+                    '~~/public/_documentation/docmap.json'
+                );
+                return bundled.default as Docmap;
+            }
+            const map = await $fetch<Docmap | null>(
+                '/_documentation/docmap.json'
+            );
             return map ?? null;
         } catch (e) {
             console.error('Failed to fetch docmap.json:', e);

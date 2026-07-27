@@ -145,6 +145,48 @@ describe('createStreamAccumulator', () => {
         expect(acc.state.text).toBe('X');
     });
 
+    it('hydrates persisted state without replaying a queued delta', async () => {
+        const acc = createStreamAccumulator();
+        acc.append('stale', { kind: 'text' });
+        acc.hydrate({ text: 'persisted', reasoningText: 'saved thought' });
+        await nextFrame();
+
+        expect(acc.state.text).toBe('persisted');
+        expect(acc.state.reasoningText).toBe('saved thought');
+    });
+
+    it('resumes an aborted stream from its persisted snapshot without duplication', () => {
+        const first = createStreamAccumulator();
+        first.hydrate({ text: 'partial', reasoningText: 'thinking' });
+        first.append(' response', { kind: 'text' });
+        first.finalize({ aborted: true });
+        expect(first.state.text).toBe('partial response');
+
+        const resumed = createStreamAccumulator();
+        resumed.hydrate({
+            text: first.state.text,
+            reasoningText: first.state.reasoningText,
+        });
+        resumed.append(' completed', { kind: 'text' });
+        resumed.finalize();
+
+        expect(resumed.state.text).toBe('partial response completed');
+        expect(resumed.state.reasoningText).toBe('thinking');
+    });
+
+    it('preserves a long stream exactly while batching its reactive write', () => {
+        const acc = createStreamAccumulator();
+        const chunks = Array.from({ length: 20_000 }, (_, index) =>
+            String(index % 10)
+        );
+        for (const chunk of chunks) acc.append(chunk, { kind: 'text' });
+        acc.finalize();
+
+        expect(acc.state.text).toBe(chunks.join(''));
+        expect(acc.state.text).toHaveLength(20_000);
+        expect(acc.state.version).toBe(1);
+    });
+
     it('append ignores after finalize and does not schedule new frame', async () => {
         const acc = createStreamAccumulator();
         acc.append('A', { kind: 'text' });

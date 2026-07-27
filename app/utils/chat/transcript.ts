@@ -1,6 +1,6 @@
 import type { Message } from '~/db/schema';
 import { parseFileHashes } from '~/db/files-util';
-import { deriveMessageContent } from './messages';
+import { normalizeStreamingMessage } from './messages';
 import type { ChatMessage, ToolCall } from './types';
 import { ensureUiMessage, type ToolCallInfo, type UiChatMessage } from './uiMessages';
 import {
@@ -64,6 +64,7 @@ export interface CanonicalTranscriptRecord {
 
 type StoredTranscriptMessage = Message & {
     content?: ChatMessage['content'];
+    reasoning_text?: string | null;
 };
 
 const asObject = (value: unknown): Record<string, unknown> =>
@@ -136,26 +137,21 @@ export function messageToCanonicalTranscript(
             : typeof data.parent_turn_id === 'string' && kind === 'tool_result'
               ? data.parent_turn_id
               : '';
-    const rawToolCalls = Array.isArray(data.tool_calls) ? data.tool_calls : [];
-    const toolCalls = rawToolCalls.flatMap((value): CanonicalToolCall[] => {
-        const call = asObject(value);
-        const callId = typeof call.id === 'string' ? call.id : '';
-        const name = typeof call.name === 'string' ? call.name : '';
-        if (!callId || !name) return [];
-        return [{
-            callId,
-            parentAssistantId: message.id,
-            name,
-            arguments: typeof call.args === 'string' ? call.args : '',
-            fingerprint:
-                typeof call.fingerprint === 'string' ? call.fingerprint : undefined,
-            status:
-                call.status === 'complete' || call.status === 'error' ||
-                call.status === 'pending' ? call.status : 'loading',
-            result: typeof call.result === 'string' ? call.result : undefined,
-            error: typeof call.error === 'string' ? call.error : undefined,
-        }];
+    const normalized = normalizeStreamingMessage({
+        content: message.content,
+        reasoning_text: message.reasoning_text,
+        data,
     });
+    const toolCalls = normalized.toolCalls.map((call): CanonicalToolCall => ({
+            callId: call.id,
+            parentAssistantId: message.id,
+            name: call.name,
+            arguments: call.args ?? '',
+            fingerprint: call.fingerprint,
+            status: call.status,
+            result: call.result,
+            error: call.error,
+        }));
     const generationId =
         typeof data.generation_id === 'string' ? data.generation_id : null;
 
@@ -164,9 +160,8 @@ export function messageToCanonicalTranscript(
         threadId: message.thread_id,
         role: message.role as ChatMessage['role'],
         kind,
-        content: deriveMessageContent({ content: message.content, data }),
-        reasoning:
-            typeof data.reasoning_text === 'string' ? data.reasoning_text : null,
+        content: normalized.text,
+        reasoning: normalized.reasoningText,
         fileHashes: safeFileHashes(message.file_hashes),
         index: message.index,
         orderKey: message.order_key,

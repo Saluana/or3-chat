@@ -137,6 +137,30 @@ describe('POST /api/storage/presign-upload', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
     });
 
+    it.each([
+        { field: 'workspace_id', value: '' },
+        { field: 'workspace_id', value: '   ' },
+        { field: 'hash', value: '' },
+        { field: 'mime_type', value: '' },
+        { field: 'size_bytes', value: 0 },
+        { field: 'size_bytes', value: -1 },
+        { field: 'size_bytes', value: 1.5 },
+        { field: 'size_bytes', value: Number.POSITIVE_INFINITY },
+    ])('returns 400 for hostile $field input', async ({ field, value }) => {
+        const handler = (await import('../presign-upload.post')).default as (
+            event: H3Event
+        ) => Promise<unknown>;
+        readBodyMock.mockResolvedValue({
+            ...makeValidBody(),
+            [field]: value,
+        });
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 400,
+        });
+        expect(presignUploadMock).not.toHaveBeenCalled();
+    });
+
     it('returns 400 for invalid expires_in_ms bounds/type', async () => {
         const handler = (await import('../presign-upload.post')).default as (event: H3Event) => Promise<unknown>;
 

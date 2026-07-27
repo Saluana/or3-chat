@@ -580,8 +580,10 @@ These are instance-level usage limits (mostly for SSR / hosted deployments).
 - Type: `boolean`
 - Default: `false`
 - Env: `OR3_TRUST_PROXY`
-- Purpose: Trust reverse-proxy headers (`X-Forwarded-*`) for client IP/host.
-- Notes: Enable this when running behind a load balancer / reverse proxy.
+- Purpose: Trust reverse-proxy headers (`X-Forwarded-*`) for client IP, host, and protocol.
+- Notes:
+  - Enable this only when the application is reachable exclusively through a proxy that overwrites forwarded headers.
+  - Admin mutations fail closed when trusted `X-Forwarded-Host` or `X-Forwarded-Proto` values are missing or malformed.
 
 #### `security.proxy.forwardedForHeader`
 

@@ -17,12 +17,14 @@ import { useRuntimeConfig } from '#imports';
  *
  * Behavior:
  * - If the request has no `Origin` header, it does nothing.
+ * - Rejects malformed/non-HTTP serialized origins before emitting CORS access.
  * - If `security.allowedOrigins` is empty, all origins are allowed and
  *   `Access-Control-Allow-Origin: *` is emitted.
  * - If `security.allowedOrigins` is non-empty, only exact matches are allowed.
  *   For allowed origins, the middleware echoes the origin and enables
  *   `Access-Control-Allow-Credentials: true`.
- * - Appends `Origin` to `Vary` instead of overwriting it.
+ * - Appends `Origin` to `Vary` before allowlist evaluation so cached blocked
+ *   responses cannot poison responses for allowed origins.
  * - For `OPTIONS` preflight requests, responds with 204 and emits
  *   allow-methods and allow-headers.
  *
@@ -42,6 +44,9 @@ export default defineEventHandler((event) => {
 
     if (!origin) return;
 
+    appendVaryOrigin(event);
+    if (!isValidCorsOrigin(origin)) return;
+
     const allowAll = allowedOrigins.length === 0;
     if (!allowAll && !allowedOrigins.includes(origin)) return;
 
@@ -53,17 +58,6 @@ export default defineEventHandler((event) => {
     } else {
         setHeader(event, 'Access-Control-Allow-Origin', origin);
         setHeader(event, 'Access-Control-Allow-Credentials', 'true');
-    }
-
-    // Append 'Origin' to existing Vary header instead of overwriting
-    const existingVary = getResponseHeader(event, 'Vary');
-    if (existingVary) {
-        const varyValues = existingVary.toString().split(',').map(v => v.trim());
-        if (!varyValues.includes('Origin')) {
-            setHeader(event, 'Vary', `${existingVary}, Origin`);
-        }
-    } else {
-        setHeader(event, 'Vary', 'Origin');
     }
 
     if (event.method === 'OPTIONS') {
@@ -83,3 +77,33 @@ export default defineEventHandler((event) => {
         return '';
     }
 });
+
+function appendVaryOrigin(event: Parameters<typeof getResponseHeader>[0]): void {
+    const existingVary = getResponseHeader(event, 'Vary');
+    if (existingVary) {
+        const varyValues = existingVary.toString().split(',').map(v => v.trim());
+        if (!varyValues.some((value) => value.toLowerCase() === 'origin')) {
+            setHeader(event, 'Vary', `${existingVary}, Origin`);
+        }
+    } else {
+        setHeader(event, 'Vary', 'Origin');
+    }
+}
+
+function isValidCorsOrigin(origin: string): boolean {
+    if (origin === 'null') {
+        return true;
+    }
+
+    try {
+        const parsed = new URL(origin);
+        return (
+            (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+            !parsed.username &&
+            !parsed.password &&
+            parsed.origin === origin
+        );
+    } catch {
+        return false;
+    }
+}

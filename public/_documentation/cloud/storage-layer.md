@@ -79,8 +79,12 @@ In OR3, S3-compatible backends are implemented as a **server-side** `StorageGate
 - `POST /api/storage/presign-upload`
 - `POST /api/storage/presign-download`
 - `POST /api/storage/commit`
+- `POST /api/storage/delete`
 
 Those endpoints enforce `can()` authorization + rate limits and then delegate to the registered adapter to generate short-lived presigned URLs.
+Deletion requires `workspace.write`; adapters derive the backend key from the
+authorized workspace and content hash, reject mismatched provider storage IDs,
+and treat an already-absent object as a successful retry.
 
 To set up S3 storage:
 
@@ -174,9 +178,9 @@ Quota is the sum of canonical live metadata plus active reservations. If the act
 sync provider does not implement this query, quota enforcement fails closed instead
 of undercounting from incomplete history.
 
-Filesystem GC is available only with the same canonical query capability. It scans
+Filesystem and S3 GC are available only with the same canonical query capability. They scan
 a bounded number of retained objects, keeps an object when either live metadata or a
 live reference edge exists, and rechecks both immediately before deleting the blob
-and its commit sidecar. Providers without canonical queries continue to report GC as
+and its commit sidecar/marker. Providers without canonical queries continue to report GC as
 disabled. SQLite and Convex implement the same bounded canonical query contract;
 there is no fallback to `pull()`.

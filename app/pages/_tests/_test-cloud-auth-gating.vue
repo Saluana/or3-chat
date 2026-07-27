@@ -149,11 +149,21 @@ function appendLog(message: string): void {
     logs.value.push(`[${new Date().toISOString()}] ${message}`);
 }
 
-function evaluateProbeStatus(status: number): boolean {
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function evaluateProbeStatus(probe: Probe, status: number, payload: unknown): boolean {
     if (!publicSsrAuthEnabled.value) {
+        if (probe.id === 'auth-session') {
+            return status === 200
+                && isRecord(payload)
+                && payload.session === null
+                && payload.appAccessAllowed === false;
+        }
         return status === 404 || status === 405;
     }
-    return status !== 404;
+    return status >= 200 && status < 500 && status !== 404 && status !== 405;
 }
 
 async function executeProbe(probe: Probe): Promise<void> {
@@ -163,8 +173,12 @@ async function executeProbe(probe: Probe): Promise<void> {
             headers: probe.method === 'POST' ? { 'content-type': 'application/json' } : undefined,
             body: probe.method === 'POST' ? JSON.stringify(probe.body ?? {}) : undefined,
         });
+        const contentType = response.headers.get('content-type') ?? '';
+        const payload = contentType.includes('application/json')
+            ? await response.json().catch(() => null)
+            : null;
         probe.status = response.status;
-        probe.pass = evaluateProbeStatus(response.status);
+        probe.pass = evaluateProbeStatus(probe, response.status, payload);
         appendLog(`${probe.method} ${probe.path} -> ${response.status} (${probe.pass ? 'pass' : 'fail'})`);
     } catch (error) {
         probe.status = 0;

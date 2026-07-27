@@ -527,7 +527,8 @@ describe('FileTransferQueue', () => {
             'missing-mime',
             expect.anything(),
             expect.anything(),
-            'image/webp'
+            'image/webp',
+            expect.any(AbortSignal)
         );
         expect(await db.file_blobs.get(meta.hash)).toBeDefined();
     });
@@ -557,6 +558,125 @@ describe('FileTransferQueue', () => {
         (queue as any).abortControllers.set('running-b', manualController);
         queue.setWorkspaceId('ws-2');
         expect(manualController.signal.aborted).toBe(true);
+    });
+
+    it('requeues a transfer interrupted by a workspace switch', async () => {
+        const meta = makeMeta({ kind: 'image', mime_type: 'image/png', name: 'a.png', size_bytes: 3 });
+        const db = createDbStub([meta], [{ hash: meta.hash, blob: new Blob(['abc']) }]);
+        const transfer: FileTransfer = {
+            id: 'workspace-switch-upload',
+            hash: meta.hash,
+            workspace_id: 'ws-1',
+            direction: 'upload',
+            bytes_total: 0,
+            bytes_done: 0,
+            state: 'queued',
+            attempts: 0,
+            created_at: 1,
+            updated_at: 1,
+        };
+        await db.file_transfers.put(transfer);
+
+        const provider: ObjectStorageProvider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(async () => ({
+                url: 'https://upload.example',
+                expiresAt: Date.now(),
+                storageId: 'st_1',
+            })),
+            getPresignedDownloadUrl: vi.fn(async () => ({
+                url: 'https://download.example',
+                expiresAt: Date.now(),
+            })),
+        };
+        const fetchMock = vi.fn((_url: string | URL | Request, init?: RequestInit) =>
+            new Promise<Response>((_resolve, reject) => {
+                const signal = init?.signal;
+                const rejectAbort = () => reject(new DOMException('Aborted', 'AbortError'));
+                if (signal?.aborted) {
+                    rejectAbort();
+                    return;
+                }
+                signal?.addEventListener('abort', rejectAbort, { once: true });
+            })
+        );
+        vi.stubGlobal('fetch', fetchMock);
+
+        const queue = new FileTransferQueue(db as any, provider, {
+            concurrency: 1,
+            maxAttempts: 2,
+        });
+        queue.setWorkspaceId('ws-1');
+        (queue as any).running.add(transfer.id);
+
+        const processing = (queue as any).processTransfer(transfer);
+        for (let i = 0; i < 20 && fetchMock.mock.calls.length === 0; i += 1) {
+            await Promise.resolve();
+        }
+        expect(fetchMock).toHaveBeenCalledOnce();
+
+        queue.setWorkspaceId('ws-2');
+        await processing;
+
+        expect(await db.file_transfers.get(transfer.id)).toMatchObject({
+            state: 'queued',
+            retry_at: 0,
+            last_error: undefined,
+            lease_owner: undefined,
+            lease_expires_at: undefined,
+        });
+    });
+
+    it('requeues a running transfer in a freshly opened workspace database after eviction', async () => {
+        const meta = makeMeta();
+        const closedDb = createDbStub([meta], []);
+        const reopenedDb = createDbStub([meta], []);
+        const transfer: FileTransfer = {
+            id: 'evicted-workspace-download',
+            hash: meta.hash,
+            workspace_id: 'ws-evicted',
+            direction: 'download',
+            bytes_total: 0,
+            bytes_done: 0,
+            state: 'running',
+            attempts: 0,
+            retry_at: 0,
+            lease_owner: 'old-worker',
+            lease_expires_at: Date.now() + 30_000,
+            created_at: 1,
+            updated_at: 1,
+        };
+        await reopenedDb.file_transfers.put(transfer);
+
+        const provider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(),
+            getPresignedDownloadUrl: vi.fn(),
+        } as unknown as ObjectStorageProvider;
+        const queue = new FileTransferQueue(closedDb as any, provider, {
+            workspaceDbResolver: (workspaceId) => {
+                expect(workspaceId).toBe('ws-evicted');
+                return reopenedDb as any;
+            },
+        });
+
+        await (queue as any).requeueTransferAfterDatabaseClose(transfer, {
+            workspaceId: 'ws-evicted',
+            dbName: 'or3-db-ws-evicted',
+            db: closedDb,
+        });
+
+        expect(await reopenedDb.file_transfers.get(transfer.id)).toMatchObject({
+            state: 'queued',
+            retry_at: 0,
+            last_error: undefined,
+            lease_owner: undefined,
+            lease_expires_at: undefined,
+        });
     });
 
     it('settles an in-flight transfer only against its captured workspace database', async () => {

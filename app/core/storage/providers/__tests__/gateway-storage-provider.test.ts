@@ -32,6 +32,7 @@ describe('createGatewayStorageProvider', () => {
                 headers: { 'x-download': '1' },
                 storageId: 'sid-2',
             }))
+            .mockResolvedValueOnce(okJson({ ok: true }))
             .mockResolvedValueOnce(okJson({ ok: true }));
         vi.stubGlobal('fetch', fetchMock);
 
@@ -71,6 +72,11 @@ describe('createGatewayStorageProvider', () => {
                 kind: 'image',
             },
         });
+        await provider.deleteObject!({
+            workspaceId: 'ws-1',
+            hash: 'sha256:abc',
+            storageId: 's1',
+        });
 
         expect(fetchMock).toHaveBeenNthCalledWith(
             1,
@@ -96,10 +102,24 @@ describe('createGatewayStorageProvider', () => {
                 credentials: 'include',
             })
         );
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            4,
+            'https://gateway.example/api/storage/delete',
+            expect.objectContaining({
+                method: 'POST',
+                credentials: 'include',
+            })
+        );
 
         const commitBody = JSON.parse((fetchMock.mock.calls[2]?.[1] as RequestInit).body as string);
         expect(commitBody.storage_provider_id).toBe('custom-gateway');
         expect(commitBody.intent_id).toBe('intent-1');
+        const deleteBody = JSON.parse((fetchMock.mock.calls[3]?.[1] as RequestInit).body as string);
+        expect(deleteBody).toEqual({
+            workspace_id: 'ws-1',
+            hash: 'sha256:abc',
+            storage_id: 's1',
+        });
         expect(uploadResult).toEqual({
             url: 'u1',
             expiresAt: 1,

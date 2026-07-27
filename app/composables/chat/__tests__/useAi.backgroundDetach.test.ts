@@ -144,6 +144,7 @@ vi.mock('~/utils/chat/messages', () => ({
         /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId)
             ? ['image', 'text']
             : ['text'],
+    resolveChatInputTokenBudget: () => 8000,
 }));
 
 vi.mock('~/utils/chat/openrouterStream', () => ({
@@ -260,6 +261,7 @@ vi.mock('~/utils/chat/useAi-internal', () => ({
     buildOpenRouterMessagesForSend: vi.fn(async () => [
         { role: 'user', content: 'hello' },
     ]),
+    enforceOpenRouterMessageTokenBudget: vi.fn(async (messages) => messages),
     retryMessageImpl: vi.fn(),
     continueMessageImpl: vi.fn(),
     makeAssistantPersister: (_db: unknown, message: any) => async (patch: any) => {

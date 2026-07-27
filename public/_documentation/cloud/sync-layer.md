@@ -329,6 +329,14 @@ harness installs 50,000 materialized rows in 300-row pages and verifies the row
 count and replay watermark. Override fixture sizes with
 `OR3_BENCH_OUTBOX_RECORDS`, `OR3_BENCH_OUTBOX_REVISIONS`,
 `OR3_BENCH_SNAPSHOT_ROWS`, and `OR3_BENCH_SNAPSHOT_PAGE_SIZE`.
+Both harnesses enforce wall-time and throughput regression budgets and write
+versioned JSON reports under `output/performance/`. Override runner-specific
+budgets with `OR3_BENCH_OUTBOX_MAX_DRAIN_MS`,
+`OR3_BENCH_OUTBOX_MIN_OPS_PER_SECOND`,
+`OR3_BENCH_SNAPSHOT_MAX_APPLY_MS`, and
+`OR3_BENCH_SNAPSHOT_MIN_ROWS_PER_SECOND`. `bun run performance:check` also
+enforces command-palette and browser Core Web Vitals budgets; CI retains the
+reports as trend artifacts.
 
 ### Cursor Reset / Rescan Loop
 

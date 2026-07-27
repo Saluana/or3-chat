@@ -14,7 +14,7 @@
  *
  * Constraints:
  * - Requires SSR endpoints to be deployed
- * - Does not support `deleteObject` (not implemented)
+ * - Supports authenticated, workspace-scoped deletion through the SSR gateway
  * - Auth is handled by the SSR layer (cookies/session); no client-side tokens needed
  *
  * @see core/storage/types for ObjectStorageProvider interface
@@ -64,8 +64,8 @@ async function requestJson<T>(
  * endpoints (a gateway).
  *
  * Behavior:
- * - Calls `/api/storage/presign-upload`, `/api/storage/presign-download`, and
- *   `/api/storage/commit` using POST JSON
+ * - Calls `/api/storage/presign-upload`, `/api/storage/presign-download`,
+ *   `/api/storage/commit`, and `/api/storage/delete` using POST JSON
  * - Does not require client-managed auth tokens (relies on SSR cookies/session)
  *
  * Constraints:
@@ -153,6 +153,14 @@ export function createGatewayStorageProvider(
                 width: input.meta.width,
                 height: input.meta.height,
                 page_count: input.meta.pageCount,
+            }, baseUrl);
+        },
+
+        async deleteObject(input): Promise<void> {
+            await requestJson<{ ok: boolean }>('/api/storage/delete', {
+                workspace_id: input.workspaceId,
+                hash: input.hash,
+                storage_id: input.storageId,
             }, baseUrl);
         },
     };

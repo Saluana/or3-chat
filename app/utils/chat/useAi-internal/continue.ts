@@ -35,9 +35,10 @@ import { newId } from '~/db/util';
 import { parseHashes } from '~/utils/files/attachments';
 import { createOrRefFile } from '~/db/files';
 import {
-    deriveMessageContent,
+    createContinuationDeltaNormalizer,
     shouldKeepAssistantMessage,
     getChatModalities,
+    normalizeStreamingMessage,
 } from '~/utils/chat/messages';
 import { composeSystemPrompt } from '~/utils/chat/prompt-utils';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
@@ -47,9 +48,13 @@ import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
 import { reportError, err } from '~/utils/errors';
 import type { StoredMessage, OpenRouterMessage } from './types';
 import { makeAssistantPersister, updateMessageRecord } from './persistence';
-import { buildOpenRouterMessagesForSend } from './messageBuild';
+import {
+    buildOpenRouterMessagesForSend,
+    enforceOpenRouterMessageTokenBudget,
+} from './messageBuild';
 import { createStreamWriteCoalescer } from './streamWriteCoalescer';
 import { utf8Bytes } from '~~/shared/chat/tool-limits';
+import { DEFAULT_MAX_INPUT_TOKENS } from '~/utils/chat/constants';
 
 /** Chat settings from useAiSettings */
 type ChatSettings = {
@@ -70,6 +75,7 @@ type HooksLike = {
 type StreamAccumulatorLike = {
     reset: () => void;
     append: (text: string, opts: { kind: 'text' | 'reasoning' }) => void;
+    hydrate?: (seed: { text?: unknown; reasoningText?: unknown }) => void;
     finalize: (opts?: { error?: Error }) => void;
     state: { finalized: boolean };
 };
@@ -94,6 +100,7 @@ export type ContinueMessageContext = {
     defaultModelId: string;
     getSystemPromptContent: () => Promise<string | null>;
     useAiSettings: () => { settings: Ref<ChatSettings | undefined> };
+    resolveInputTokenBudget?: (modelId: string) => number;
     resetStream: () => void;
 };
 
@@ -102,22 +109,6 @@ const CONTINUE_TAIL_CHARS = 1200;
 
 /** Continuation prefix that model is instructed to emit */
 const CONTINUATION_PREFIX = '>>';
-
-/** Write interval for persistence during streaming */
-/**
- * Internal helper. Extracts reasoning text from message data or legacy field.
- */
-const toReasoning = (m: StoredMessage): string | null => {
-    if (
-        m.data &&
-        typeof m.data === 'object' &&
-        'reasoning_text' in m.data &&
-        typeof (m.data as { reasoning_text?: unknown }).reasoning_text === 'string'
-    ) {
-        return (m.data as { reasoning_text: string }).reasoning_text;
-    }
-    return typeof m.reasoning_text === 'string' ? m.reasoning_text : null;
-};
 
 /**
  * Build the continuation system prompt prefix.
@@ -167,61 +158,6 @@ const buildContinuationText = (tailSnippet: string): string => {
 };
 
 /**
- * Check if a space is needed between prev and next text at boundary.
- */
-const needsBoundarySpace = (prev: string, next: string): boolean => {
-    if (!prev || !next) return false;
-    if (/\s$/.test(prev) || /^\s/.test(next)) return false;
-    const last = prev.slice(-1);
-    const first = next[0];
-    const noSpaceAfter = new Set([
-        '(',
-        '[',
-        '{',
-        '<',
-        '«',
-        '“',
-        '‘',
-        '"',
-        "'",
-        '`',
-        '/',
-        '\\',
-        '-',
-        '–',
-        '—',
-    ]);
-    const noSpaceBefore = new Set([
-        ',',
-        '.',
-        '…',
-        ';',
-        ':',
-        '!',
-        '?',
-        '%',
-        ')',
-        ']',
-        '}',
-        '>',
-        '»',
-        '”',
-        '’',
-        '"',
-        "'",
-        '`',
-    ]);
-    if (noSpaceAfter.has(last)) return false;
-    if (!first || noSpaceBefore.has(first)) return false;
-    const isWordChar = (c: string) => /[\p{L}\p{N}]/u.test(c);
-    const isClosePunct = /[)\]}>"'»”’]/.test(last);
-    const isSentencePunct = /[.!?;:…]/.test(last);
-    if (isWordChar(last) && isWordChar(first)) return true;
-    if ((isSentencePunct || isClosePunct) && isWordChar(first)) return true;
-    return false;
-};
-
-/**
  * `ai.chat.continue:action:*` (action)
  *
  * Purpose:
@@ -268,12 +204,14 @@ export async function continueMessageImpl(
 
         const inMemoryText =
             ctx.tailAssistant.value?.id === target.id ? ctx.tailAssistant.value.text : '';
-        const existingText =
-            inMemoryText ||
-            deriveMessageContent({
-                content: (target as { content?: string | ContentPart[] | null }).content,
-                data: target.data,
-            });
+        const normalizedTarget = normalizeStreamingMessage({
+            ...target,
+            text: inMemoryText || undefined,
+            content: (target as {
+                content?: string | ContentPart[] | null;
+            }).content,
+        });
+        const existingText = normalizedTarget.text;
         if (!existingText) return;
 
         const DexieMod = (await import('dexie')).default;
@@ -286,10 +224,11 @@ export async function continueMessageImpl(
 
         const toContent = (m: StoredMessage): string => {
             if (m.id === target.id) return existingText;
-            return deriveMessageContent({
+            return normalizeStreamingMessage({
                 content: (m as { content?: string | ContentPart[] | null }).content,
                 data: m.data,
-            });
+                reasoning_text: m.reasoning_text,
+            }).text;
         };
 
         const baseMessages: ChatMessage[] = all.map((m): ChatMessage => {
@@ -318,7 +257,8 @@ export async function continueMessageImpl(
                 id: m.id,
                 stream_id: m.stream_id ?? undefined,
                 file_hashes: m.file_hashes ?? undefined,
-                reasoning_text: toReasoning(storedMsg),
+                reasoning_text: normalizeStreamingMessage(storedMsg)
+                    .reasoningText,
                 data,
                 name,
                 tool_call_id: toolCallId,
@@ -372,8 +312,20 @@ export async function continueMessageImpl(
         );
 
         const sanitizedEffectiveMessages = (
-            Array.isArray(effectiveMessages) ? effectiveMessages : []
-        ).filter(shouldKeepAssistantMessage);
+            Array.isArray(effectiveMessages)
+                ? (effectiveMessages as unknown[])
+                : []
+        ).filter((message): message is ChatMessage => {
+            if (!message || typeof message !== 'object') return false;
+            const candidate = message as Partial<ChatMessage>;
+            return (
+                typeof candidate.role === 'string' &&
+                shouldKeepAssistantMessage({
+                    role: candidate.role,
+                    content: candidate.content,
+                })
+            );
+        });
 
         let orMessages = await buildOpenRouterMessagesForSend({
             effectiveMessages: sanitizedEffectiveMessages,
@@ -384,7 +336,6 @@ export async function continueMessageImpl(
             fileHashes: [],
             maxImageInputs: 5,
             imageInclusionPolicy: 'all',
-            maxInputTokens: 8000,
         });
 
         const filteredMessages = await ctx.hooks.applyFilters(
@@ -412,6 +363,11 @@ export async function continueMessageImpl(
             (typeof modelCandidate === 'string' && modelCandidate) ||
             modelOverride ||
             ctx.defaultModelId;
+        orMessages = await enforceOpenRouterMessageTokenBudget(
+            orMessages,
+            ctx.resolveInputTokenBudget?.(modelId) ??
+                DEFAULT_MAX_INPUT_TOKENS
+        );
         // modalities controls OUTPUT format, not input capability
         const modalities = getChatModalities(modelId);
 
@@ -422,7 +378,7 @@ export async function continueMessageImpl(
         ctx.aborted.value = false;
         ctx.abortController.value = new AbortController();
 
-        const existingReasoning = toReasoning(target);
+        const existingReasoning = normalizedTarget.reasoningText;
         const existingHashes = target.file_hashes ? parseHashes(target.file_hashes) : [];
         let existingUiIndex = ctx.messages.value.findIndex((m) => m.id === target.id);
         let existingUi: UiChatMessage | null = null;
@@ -450,11 +406,18 @@ export async function continueMessageImpl(
         if (existingHashes.length) current.file_hashes = existingHashes;
         ctx.tailAssistant.value = current;
 
-        if (existingText) {
-            ctx.streamAcc.append(existingText, { kind: 'text' });
-        }
-        if (existingReasoning) {
-            ctx.streamAcc.append(existingReasoning, { kind: 'reasoning' });
+        if (ctx.streamAcc.hydrate) {
+            ctx.streamAcc.hydrate({
+                text: existingText,
+                reasoningText: existingReasoning,
+            });
+        } else {
+            if (existingText) {
+                ctx.streamAcc.append(existingText, { kind: 'text' });
+            }
+            if (existingReasoning) {
+                ctx.streamAcc.append(existingReasoning, { kind: 'reasoning' });
+            }
         }
 
         const assistantFileHashes = existingHashes.slice();
@@ -486,28 +449,10 @@ export async function continueMessageImpl(
             signal: ctx.abortController.value.signal,
         });
 
-        let stripPrefixPending = true;
-        let prefixBuffer = '';
-        let boundarySpacingApplied = false;
-
-        const applyBoundarySpacing = (prev: string, next: string): string => {
-            if (boundarySpacingApplied) return next;
-            boundarySpacingApplied = true;
-            return needsBoundarySpace(prev, next) ? ` ${next}` : next;
-        };
-
-        const consumeContinuationDelta = (delta: string): string => {
-            if (!stripPrefixPending) return delta;
-            prefixBuffer += delta;
-            if (prefixBuffer.length < CONTINUATION_PREFIX.length) return '';
-            if (prefixBuffer.startsWith(CONTINUATION_PREFIX)) {
-                prefixBuffer = prefixBuffer.slice(CONTINUATION_PREFIX.length);
-            }
-            stripPrefixPending = false;
-            const out = prefixBuffer;
-            prefixBuffer = '';
-            return out;
-        };
+        const continuationNormalizer = createContinuationDeltaNormalizer(
+            existingText,
+            CONTINUATION_PREFIX
+        );
 
         const writeCoalescer = createStreamWriteCoalescer();
 
@@ -522,6 +467,13 @@ export async function continueMessageImpl(
             writeCoalescer.flushed();
         };
 
+        const appendTextDelta = (delta: string) => {
+            if (!delta) return;
+            ctx.streamAcc.append(delta, { kind: 'text' });
+            current.text += delta;
+            writeCoalescer.markDirty(utf8Bytes(delta));
+        };
+
         try {
             for await (const ev of stream) {
                 if (ev.type === 'reasoning') {
@@ -531,13 +483,7 @@ export async function continueMessageImpl(
                     writeCoalescer.markDirty(utf8Bytes(ev.text));
                 } else if (ev.type === 'text') {
                     if (current.pending) current.pending = false;
-                    const rawDelta = consumeContinuationDelta(ev.text);
-                    if (!rawDelta) continue;
-                    const delta = applyBoundarySpacing(current.text, rawDelta);
-                    if (!delta) continue;
-                    ctx.streamAcc.append(delta, { kind: 'text' });
-                    current.text += delta;
-                    writeCoalescer.markDirty(utf8Bytes(delta));
+                    appendTextDelta(continuationNormalizer.push(ev.text));
                 } else if (ev.type === 'image') {
                     if (current.pending) current.pending = false;
                     // Store image first, then use hash placeholder (not Base64)
@@ -576,6 +522,7 @@ export async function continueMessageImpl(
                 if (writeCoalescer.shouldFlush()) await flushProgress();
             }
 
+            appendTextDelta(continuationNormalizer.finish());
             await flushProgress();
 
             if (current.pending) current.pending = false;

@@ -15,6 +15,12 @@ export function useDocumentationContent(
             const markdownPath = `/_documentation${slug}.md`;
 
             try {
+                if (import.meta.server && slug === '/start/overview') {
+                    const bundled = await import(
+                        '~~/public/_documentation/start/overview.md?raw'
+                    );
+                    return bundled.default;
+                }
                 const content = await $fetch<string>(markdownPath, {
                     responseType: 'text',
                 });

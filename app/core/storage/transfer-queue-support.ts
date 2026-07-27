@@ -20,6 +20,7 @@ export interface FileTransferQueueConfig {
     leaseDurationMs?: number;
     maxDownloadBytes?: number;
     dbResolver?: () => Or3DB;
+    workspaceDbResolver?: (workspaceId: string) => Or3DB;
 }
 
 export type TransferWaiter = {

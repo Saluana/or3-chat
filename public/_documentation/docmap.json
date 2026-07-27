@@ -758,6 +758,12 @@
                     "summary": "Deployment and operations runbook for OR3 Cloud SSR environments. Covers env groups, health checks, logging expectations, scaling guidance, and release readiness checks."
                 },
                 {
+                    "name": "release-checklist.md",
+                    "path": "/cloud/release-checklist",
+                    "category": "Operations",
+                    "summary": "Authoritative OR3 Cloud release gate separating reproducible code checks from staging, backup/restore, rollback, and multi-instance promotion evidence."
+                },
+                {
                     "name": "release-notes-production-readiness.md",
                     "path": "/cloud/release-notes-production-readiness",
                     "category": "Release Notes",

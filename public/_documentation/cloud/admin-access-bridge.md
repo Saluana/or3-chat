@@ -2,6 +2,15 @@
 
 This page explains why a Clerk user can appear as an admin in deployments that use the Convex provider.
 
+## Provider admin stores
+
+Admin routes resolve three provider abstractions from the active sync provider:
+`WorkspaceAccessStore`, `WorkspaceSettingsStore`, and `AdminUserStore`.
+The SQLite and Convex packages implement the complete shared contract, covering
+workspace membership/lifecycle, workspace-scoped settings, deployment-admin
+grants, and user search. A provider without this bridge returns an explicit
+`501` instead of falling back to another provider's data.
+
 ## Quick Summary
 
 - Not every Clerk user is an admin.

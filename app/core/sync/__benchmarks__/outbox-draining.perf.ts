@@ -1,6 +1,13 @@
 import 'fake-indexeddb/auto';
 import { Or3DB } from '~/db/client';
 import { OutboxManager } from '../outbox-manager';
+import {
+    assertBudgets,
+    maxBudget,
+    minBudget,
+    positiveNumber,
+    writePerformanceReport,
+} from '~~/scripts/performance/report';
 import type {
     PendingOp,
     PullRequest,
@@ -138,6 +145,7 @@ async function main(): Promise<void> {
         }
         const drainMs = performance.now() - drainStarted;
         const remaining = await db.pending_ops.count();
+        const pushedOpsPerSecond = provider.pushedOpIds.size / (drainMs / 1000);
 
         if (remaining !== 0) {
             throw new Error(`Outbox benchmark left ${remaining} pending operations`);
@@ -151,7 +159,24 @@ async function main(): Promise<void> {
             throw new Error(`Outbox batch exceeded configured limit: ${provider.maxBatch}`);
         }
 
-        console.log(JSON.stringify({
+        const budgets = {
+            drainMs: maxBudget(
+                Number(drainMs.toFixed(2)),
+                positiveNumber(
+                    process.env.OR3_BENCH_OUTBOX_MAX_DRAIN_MS,
+                    20_000
+                )
+            ),
+            pushedOpsPerSecond: minBudget(
+                Number(pushedOpsPerSecond.toFixed(2)),
+                positiveNumber(
+                    process.env.OR3_BENCH_OUTBOX_MIN_OPS_PER_SECOND,
+                    50
+                )
+            ),
+        };
+        const report = {
+            benchmark: 'sync-outbox-draining',
             records,
             supersededWrites,
             totalOps,
@@ -161,8 +186,13 @@ async function main(): Promise<void> {
             providerPushes: provider.pushes,
             maxBatch: provider.maxBatch,
             pushedOps: provider.pushedOpIds.size,
+            pushedOpsPerSecond: Number(pushedOpsPerSecond.toFixed(2)),
             remaining,
-        }, null, 2));
+            budgets,
+        };
+        const outputPath = writePerformanceReport('sync-outbox-draining', report);
+        console.log(JSON.stringify({ ...report, outputPath }, null, 2));
+        assertBudgets('sync-outbox-draining', budgets);
     } finally {
         db.close();
         await db.delete();

@@ -121,10 +121,10 @@ const scenarioPass = computed(() =>
 
 let queue: FileTransferQueue | null = null;
 let originalConsoleError: ((...args: unknown[]) => void) | null = null;
+let fixtureObjectUrl: string | null = null;
 
 const fixtureBytes = new TextEncoder().encode('or3-workspace-switch-race-fixture');
 const fixtureBlob = new Blob([fixtureBytes], { type: 'application/octet-stream' });
-const fixtureBase64 = btoa(String.fromCharCode(...fixtureBytes));
 
 function appendLog(message: string): void {
     logs.value.push(`[${new Date().toISOString()}] ${message}`);
@@ -162,8 +162,10 @@ function createProvider(): ObjectStorageProvider {
             };
         },
         async getPresignedDownloadUrl() {
+            fixtureObjectUrl ??= URL.createObjectURL(fixtureBlob);
+            appendLog(`Presigned mock download: ${fixtureObjectUrl.slice(0, 24)}...`);
             return {
-                url: `data:application/octet-stream;base64,${fixtureBase64}`,
+                url: fixtureObjectUrl,
                 expiresAt: Date.now() + 60_000,
                 method: 'GET',
                 storageId: 'mock-download',
@@ -339,12 +341,33 @@ async function runScenario(iterations: number): Promise<void> {
 
         phase.value = 'validating';
 
-        setActiveWorkspaceDb(WORKSPACE_B);
-        queue.setWorkspaceId(WORKSPACE_B);
+        // Return to the transfer's workspace and request the file again. A
+        // workspace switch intentionally cancels in-flight work; enqueue is
+        // responsible for recovering that failed transfer on demand.
+        setActiveWorkspaceDb(WORKSPACE_A);
+        queue.setWorkspaceId(WORKSPACE_A);
+        transferCompleted.value = await waitForTransferDone(WORKSPACE_A, 100);
+        if (!transferCompleted.value) {
+            const recoveredTransfer = await queue.enqueue(fixtureHash.value, 'download');
+            if (recoveredTransfer) {
+                try {
+                    await queue.waitForTransfer(recoveredTransfer.id, 3000);
+                } catch (error) {
+                    appendLog(`Recovery wait ended: ${error instanceof Error ? error.message : String(error)}`);
+                }
+            }
+            transferCompleted.value = await waitForTransferDone(WORKSPACE_A);
+        }
+        const transferStates = await getWorkspaceDb(WORKSPACE_A).file_transfers
+            .where('hash')
+            .equals(fixtureHash.value)
+            .toArray();
+        appendLog(`Workspace A transfer states: ${transferStates.map((transfer) =>
+            `${transfer.id}:${transfer.state}:${transfer.last_error ?? 'none'}`
+        ).join(', ') || 'none'}`);
 
         workspaceAThreads.value = await withWorkspace(WORKSPACE_A, async () => getDb().threads.count());
         workspaceBThreads.value = await withWorkspace(WORKSPACE_B, async () => getDb().threads.count());
-        transferCompleted.value = await waitForTransferDone(WORKSPACE_A) || await waitForTransferDone(WORKSPACE_B);
 
         const stable = invariantStableRead.value;
         if (!stable) {
@@ -377,6 +400,10 @@ void resetHarness();
 
 onBeforeUnmount(() => {
     queue?.cancelAllRunning();
+    if (fixtureObjectUrl) {
+        URL.revokeObjectURL(fixtureObjectUrl);
+        fixtureObjectUrl = null;
+    }
     uninstallErrorTracking();
 });
 </script>

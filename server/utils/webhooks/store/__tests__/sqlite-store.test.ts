@@ -405,6 +405,7 @@ describe('sqlite webhook store', () => {
 
     it('cancels and deletes logs by webhook and purges expired rows', async () => {
         const { store } = createTestContext();
+        const now = Date.now();
         const webhookA = await store.createWebhook(createWebhookInput());
         const webhookB = await store.createWebhook(
             createWebhookInput({ label: 'Other' })
@@ -413,28 +414,28 @@ describe('sqlite webhook store', () => {
         await store.createDeliveryLog(
             createDeliveryLogInput(webhookA.id, {
                 status: 'pending',
-                created_at: Date.now() - 10_000,
+                created_at: now - 10_000,
             })
         );
         await store.createDeliveryLog(
             createDeliveryLogInput(webhookA.id, {
                 status: 'in_flight',
                 claimed_by: 'worker-a',
-                claimed_at: Date.now() - 10_000,
-                created_at: Date.now() - 10_000,
+                claimed_at: now - 10_000,
+                created_at: now - 10_000,
             })
         );
         const keepLog = await store.createDeliveryLog(
             createDeliveryLogInput(webhookB.id, {
                 status: 'success',
-                created_at: Date.now(),
+                created_at: now,
             })
         );
 
         expect(await store.cancelDeliveriesByWebhook(webhookA.id)).toBe(2);
         expect(await store.deleteDeliveryLogsByWebhook(webhookA.id)).toBe(2);
-        expect(await store.purgeExpiredLogs(Date.now() - 1)).toBe(0);
-        expect(await store.purgeExpiredLogs(Date.now() + 1)).toBe(1);
+        expect(await store.purgeExpiredLogs(now - 1)).toBe(0);
+        expect(await store.purgeExpiredLogs(now + 1)).toBe(1);
 
         const remaining = await store.getDeliveryLogs(webhookB.id, 0);
         expect(remaining.find((log) => log.id === keepLog.id)).toBeUndefined();

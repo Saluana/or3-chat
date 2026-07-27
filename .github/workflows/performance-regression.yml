@@ -1,0 +1,37 @@
+name: Performance Regression
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'server/**'
+      - 'shared/**'
+      - 'scripts/performance/**'
+      - 'tests/e2e/performance-budgets.e2e.ts'
+      - 'package.json'
+      - '.github/workflows/performance-regression.yml'
+  workflow_dispatch:
+
+jobs:
+  budgets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run performance:check
+      - name: Upload performance trends
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-${{ github.sha }}
+          path: |
+            output/performance/*.json
+            output/playwright/*.json
+            test-results/**
+          if-no-files-found: warn
+          retention-days: 30

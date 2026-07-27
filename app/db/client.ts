@@ -250,6 +250,13 @@ const defaultDb = new Or3DB();
  * LRU cache for workspace DBs to prevent memory leaks and IndexedDB connection exhaustion.
  * Automatically evicts least-recently-used DBs when capacity is reached.
  */
+function cleanupWorkspaceResources(dbName: string, workspaceId: string): void {
+    cleanupCursorManager(dbName);
+    cleanupHookBridge(dbName);
+    cleanupSubscriptionManagersByWorkspace(workspaceId);
+    cleanupSyncCircuitBreakers(workspaceId);
+}
+
 const workspaceDbCache = new LRUCache<string, Or3DB>({
     max: MAX_CACHED_WORKSPACE_DBS,
     ttl: WORKSPACE_DB_TTL_MS,
@@ -257,10 +264,7 @@ const workspaceDbCache = new LRUCache<string, Or3DB>({
     dispose: (db, workspaceId) => {
         const dbName = db.name;
         const workspaceKey = String(workspaceId);
-        cleanupCursorManager(dbName);
-        cleanupHookBridge(dbName);
-        cleanupSubscriptionManagersByWorkspace(workspaceKey);
-        cleanupSyncCircuitBreakers(workspaceKey);
+        cleanupWorkspaceResources(dbName, workspaceKey);
 
         // Close the DB when evicted to free IndexedDB connection
         try {
@@ -479,10 +483,11 @@ export function getWorkspaceDbCacheStats(): {
 
 /**
  * Purpose:
- * Set the active workspace DB and evict the previously active workspace.
+ * Set the active workspace DB while retaining recent workspace connections.
  *
  * Behavior:
- * Switches the active DB reference and cleans up old workspace resources.
+ * Switches the active DB reference. The bounded LRU cache handles delayed
+ * cleanup so in-flight work against the previous workspace can settle safely.
  *
  * Constraints:
  * - Passing null resets to the default DB.
@@ -491,8 +496,6 @@ export function getWorkspaceDbCacheStats(): {
  * - Does not validate workspace permissions.
  */
 export function setActiveWorkspaceDb(workspaceId: string | null): Or3DB {
-    // Evict previous workspace DB on switch to free resources and clean up
-    // sync singletons bound to the old workspace.
     const previousWorkspaceId = activeWorkspaceId;
 
     if (!workspaceId) {
@@ -510,8 +513,11 @@ export function setActiveWorkspaceDb(workspaceId: string | null): Or3DB {
         return activeDb;
     }
 
-    if (previousWorkspaceId && previousWorkspaceId !== workspaceId) {
-        evictWorkspaceDb(previousWorkspaceId);
+    if (previousWorkspaceId) {
+        cleanupWorkspaceResources(
+            `or3-db-${previousWorkspaceId}`,
+            previousWorkspaceId
+        );
     }
 
     workspaceGeneration += 1;

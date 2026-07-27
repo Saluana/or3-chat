@@ -90,4 +90,78 @@ describe('canonical transcript projections', () => {
             toolCalls: [{ id: 'call-1', status: 'complete', result: 'answer' }],
         });
     });
+
+    it('reloads the same canonical assistant state from mixed and malformed fields', () => {
+        const [record] = storedMessagesToCanonicalTranscript([
+            row({
+                id: 'a2',
+                role: 'assistant',
+                index: 4000,
+                data: {
+                    content: 'persisted answer',
+                    reasoning_text: 'persisted reasoning',
+                    tool_calls: [
+                        null,
+                        { id: '', name: 'invalid' },
+                        {
+                            id: 'call-2',
+                            type: 'function',
+                            function: {
+                                name: 'search',
+                                arguments: '{"q":"first"}',
+                            },
+                        },
+                        {
+                            id: 'call-2',
+                            name: 'search',
+                            args: '{"q":"latest"}',
+                            status: 'complete',
+                            result: 'found',
+                        },
+                    ],
+                },
+            }),
+        ]);
+
+        expect(record).toMatchObject({
+            content: 'persisted answer',
+            reasoning: 'persisted reasoning',
+            toolCalls: [
+                {
+                    callId: 'call-2',
+                    name: 'search',
+                    arguments: '{"q":"latest"}',
+                    status: 'complete',
+                    result: 'found',
+                },
+            ],
+        });
+        expect(projectTranscriptForUi([record!])[0]).toMatchObject({
+            text: 'persisted answer',
+            reasoning_text: 'persisted reasoning',
+            toolCalls: [
+                {
+                    id: 'call-2',
+                    name: 'search',
+                    args: '{"q":"latest"}',
+                    status: 'complete',
+                    result: 'found',
+                },
+            ],
+        });
+        expect(projectTranscriptForOpenRouter([record!])[0]).toMatchObject({
+            role: 'assistant',
+            content: 'persisted answer',
+            reasoning_text: 'persisted reasoning',
+            tool_calls: [
+                {
+                    id: 'call-2',
+                    function: {
+                        name: 'search',
+                        arguments: '{"q":"latest"}',
+                    },
+                },
+            ],
+        });
+    });
 });

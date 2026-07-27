@@ -23,7 +23,11 @@ import type { H3Event } from 'h3';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
 import { normalizeHost } from '../utils/normalize-host';
 import { useRuntimeConfig } from '#imports';
-import { getProxyRequestHost, normalizeProxyTrustConfig } from '../utils/net/request-identity';
+import {
+    getProxyRequestHost,
+    getProxyRequestProtocol,
+    normalizeProxyTrustConfig,
+} from '../utils/net/request-identity';
 
 /**
  * Checks if the request method implies a state change.
@@ -33,13 +37,22 @@ function isMutationMethod(method?: string): boolean {
     return !['GET', 'HEAD', 'OPTIONS'].includes(normalized);
 }
 
-/**
- * Safely extracts the host portion from an Origin or Referer header.
- */
-function getOriginHost(origin?: string): string | null {
-    if (!origin) return null;
+function parseHttpRequestSource(
+    value: string | undefined,
+    requireSerializedOrigin: boolean
+): URL | null {
+    if (!value) return null;
     try {
-        return new URL(origin).host;
+        const parsed = new URL(value);
+        if (
+            (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+            parsed.username ||
+            parsed.password ||
+            (requireSerializedOrigin && parsed.origin !== value)
+        ) {
+            return null;
+        }
+        return parsed;
     } catch {
         return null;
     }
@@ -92,7 +105,8 @@ export function requireAdminRequest(event: H3Event): void {
  * Behavior:
  * 1. Skips for safe methods (GET, HEAD, OPTIONS).
  * 2. Requires `x-or3-admin-intent: admin` header.
- * 3. Enforces that the `Origin` (or `Referer`) exactly matches the `Host`.
+ * 3. Enforces that the `Origin` (or `Referer`) exactly matches the effective
+ *    request scheme, host, and port.
  * 
  * @throws 403 if CSRF or intent checks fail.
  */
@@ -106,23 +120,31 @@ export function requireAdminMutation(event: H3Event): void {
     }
 
     // Origin/Referer matching (Same-Origin-ish)
-    const origin =
-        getRequestHeader(event, 'origin') || getRequestHeader(event, 'referer');
-    const originHost = getOriginHost(origin || undefined);
-    if (!originHost) {
+    const originHeader = getRequestHeader(event, 'origin');
+    const requestSource = parseHttpRequestSource(
+        originHeader || getRequestHeader(event, 'referer'),
+        Boolean(originHeader)
+    );
+    if (!requestSource) {
         throw createError({ statusCode: 403, statusMessage: 'Forbidden: Origin validation failed' });
     }
 
     const proxyConfig = normalizeProxyTrustConfig(useRuntimeConfig(event).security.proxy);
     const requestHost = getProxyRequestHost(event, proxyConfig);
+    const requestProtocol = getProxyRequestProtocol(event, proxyConfig);
 
-    if (!requestHost) {
+    if (!requestHost || !requestProtocol) {
         throw createError({ statusCode: 403, statusMessage: 'Forbidden: Host resolution failed' });
     }
 
-    const normalizedHost = normalizeHost(requestHost);
-    const normalizedOrigin = normalizeHost(originHost);
-    if (normalizedHost !== normalizedOrigin) {
+    let requestOrigin: string;
+    try {
+        requestOrigin = new URL(`${requestProtocol}://${requestHost}`).origin;
+    } catch {
+        throw createError({ statusCode: 403, statusMessage: 'Forbidden: Host resolution failed' });
+    }
+
+    if (requestOrigin !== requestSource.origin) {
         throw createError({ statusCode: 403, statusMessage: 'Forbidden: Origin mismatch' });
     }
 }

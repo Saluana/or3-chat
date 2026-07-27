@@ -57,6 +57,7 @@ export {
     resolveSystemPromptText,
     buildSystemPromptMessage,
     buildOpenRouterMessagesForSend,
+    enforceOpenRouterMessageTokenBudget,
 } from './messageBuild';
 export type {
     ResolveSystemPromptParams,

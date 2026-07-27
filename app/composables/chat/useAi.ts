@@ -57,6 +57,7 @@ import {
     deriveMessageContent,
     shouldKeepAssistantMessage,
     getChatModalities,
+    resolveChatInputTokenBudget,
 } from '~/utils/chat/messages';
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
 import {
@@ -106,6 +107,7 @@ import {
     resolveSystemPromptText,
     buildSystemPromptMessage,
     buildOpenRouterMessagesForSend,
+    enforceOpenRouterMessageTokenBudget,
     retryMessageImpl,
     continueMessageImpl,
     makeAssistantPersister,
@@ -1647,10 +1649,20 @@ export function useChat(
                 Array.isArray(effectiveMessages) ? effectiveMessages : []
             ).filter(shouldKeepAssistantMessage);
 
-            // Conservative input-token budget. Image parts are not counted here
-            // because their cost is model-specific; this prevents text-history
-            // explosions from hitting provider context limits.
-            const MAX_INPUT_TOKENS = 8000;
+            const budgetModelId = stripThinkingSuffix(modelId).replace(
+                /:online$/,
+                ''
+            );
+            const budgetModelMeta =
+                catalog.value.find(
+                    (candidate: ModelInfo) => candidate.id === budgetModelId
+                ) ||
+                favoriteModels.value.find(
+                    (candidate: ModelInfo) => candidate.id === budgetModelId
+                ) ||
+                modelMeta;
+            const maxInputTokens =
+                resolveChatInputTokenBudget(budgetModelMeta);
 
             let orMessages = await buildOpenRouterMessagesForSend({
                 effectiveMessages: sanitizedEffectiveMessages,
@@ -1660,7 +1672,7 @@ export function useChat(
                 fileHashes: Array.isArray(file_hashes) ? file_hashes : [],
                 maxImageInputs: 5,
                 imageInclusionPolicy: 'all',
-                maxInputTokens: MAX_INPUT_TOKENS,
+                maxInputTokens,
             });
             if (orMessages.length === 0) {
                 return {
@@ -1752,6 +1764,10 @@ export function useChat(
                     orMessages = candidate;
                 }
             }
+            orMessages = await enforceOpenRouterMessageTokenBudget(
+                orMessages,
+                maxInputTokens
+            );
 
             // Check if a workflow is handling this request - skip AI call
             if (consumeChatSendHandled()) {
@@ -2423,6 +2439,22 @@ export function useChat(
                 defaultModelId: DEFAULT_AI_MODEL,
                 getSystemPromptContent,
                 useAiSettings,
+                resolveInputTokenBudget: (selectedModelId: string) => {
+                    const normalizedId = stripThinkingSuffix(
+                        selectedModelId
+                    ).replace(/:online$/, '');
+                    const { catalog, favoriteModels } = useModelStore();
+                    const metadata =
+                        catalog.value.find(
+                            (candidate: ModelInfo) =>
+                                candidate.id === normalizedId
+                        ) ||
+                        favoriteModels.value.find(
+                            (candidate: ModelInfo) =>
+                                candidate.id === normalizedId
+                        );
+                    return resolveChatInputTokenBudget(metadata);
+                },
                 resetStream,
             },
             messageId,

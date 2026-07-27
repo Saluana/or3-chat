@@ -18,6 +18,15 @@ describe('webhook signing', () => {
         expect(signatureA).not.toBe(signatureB);
     });
 
+    it('signs the exact raw payload bytes', () => {
+        const compact = signPayload('{"ok":true}', 'test-secret', 1_700_000_000);
+        const spaced = signPayload('{ "ok": true }', 'test-secret', 1_700_000_000);
+        const tampered = signPayload('{"ok":false}', 'test-secret', 1_700_000_000);
+
+        expect(spaced).not.toBe(compact);
+        expect(tampered).not.toBe(compact);
+    });
+
     it('uses the timestamp prefix in the signed content', () => {
         const body = '{"ok":true}';
         const timestamp = 1_700_000_000;

@@ -8,6 +8,7 @@ import {
     SnapshotResponseSchema,
     TABLE_PAYLOAD_SCHEMAS,
     TombstoneSchema,
+    MAX_SYNC_PUSH_BATCH_OPS,
 } from '../schemas';
 
 describe('sync schemas', () => {
@@ -211,6 +212,89 @@ describe('sync schemas', () => {
                 serverVersion: 1,
             }).success
         ).toBe(false);
+    });
+
+    it('rejects oversized batches and hostile identifier/filter bounds', () => {
+        const makeOp = (index: number) => ({
+            id: `pending-${index}`,
+            tableName: 'messages',
+            operation: 'delete' as const,
+            pk: `message-${index}`,
+            stamp: {
+                deviceId: 'device-1',
+                opId: `00000000-0000-4000-8000-${index
+                    .toString()
+                    .padStart(12, '0')}`,
+                hlc: `${index}:0:device-1`,
+                clock: index,
+            },
+            createdAt: index,
+            attempts: 0,
+            status: 'pending' as const,
+        });
+
+        expect(
+            PushBatchSchema.safeParse({
+                scope: { workspaceId: 'workspace-1' },
+                ops: Array.from(
+                    { length: MAX_SYNC_PUSH_BATCH_OPS + 1 },
+                    (_, index) => makeOp(index)
+                ),
+            }).success
+        ).toBe(false);
+        expect(
+            PullResponseSchema.safeParse({
+                changes: [],
+                nextCursor: 0,
+                hasMore: false,
+            }).success
+        ).toBe(true);
+        expect(
+            PushBatchSchema.safeParse({
+                scope: { workspaceId: ' '.repeat(5) },
+                ops: [],
+            }).success
+        ).toBe(false);
+    });
+
+    it('never throws while rejecting deterministic malformed JSON fuzz cases', () => {
+        let seed = 0x5eed1234;
+        const random = () => {
+            seed = (seed * 1664525 + 1013904223) >>> 0;
+            return seed / 0x1_0000_0000;
+        };
+        const scalar = (): unknown => {
+            const values: unknown[] = [
+                null,
+                true,
+                false,
+                random() * Number.MAX_SAFE_INTEGER,
+                'x'.repeat(Math.floor(random() * 400)),
+            ];
+            return values[Math.floor(random() * values.length)];
+        };
+        const jsonValue = (depth = 0): unknown => {
+            if (depth >= 4 || random() < 0.45) return scalar();
+            if (random() < 0.5) {
+                return Array.from(
+                    { length: Math.floor(random() * 8) },
+                    () => jsonValue(depth + 1)
+                );
+            }
+            return Object.fromEntries(
+                Array.from(
+                    { length: Math.floor(random() * 8) },
+                    (_, index) => [`key_${depth}_${index}`, jsonValue(depth + 1)]
+                )
+            );
+        };
+
+        for (let index = 0; index < 500; index += 1) {
+            const candidate = jsonValue();
+            expect(() => PushBatchSchema.safeParse(candidate)).not.toThrow();
+            expect(() => PullResponseSchema.safeParse(candidate)).not.toThrow();
+            expect(() => SnapshotResponseSchema.safeParse(candidate)).not.toThrow();
+        }
     });
 
     it('rejects unordered and contradictory snapshot items', () => {

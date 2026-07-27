@@ -1,6 +1,13 @@
 import 'fake-indexeddb/auto';
 import { Or3DB } from '~/db/client';
 import { applySnapshotChain } from '../snapshot-applier';
+import {
+    assertBudgets,
+    maxBudget,
+    minBudget,
+    positiveNumber,
+    writePerformanceReport,
+} from '~~/scripts/performance/report';
 import type {
     SnapshotItem,
     SnapshotResponse,
@@ -103,16 +110,41 @@ async function main(): Promise<void> {
             throw new Error('Snapshot watermark was not installed atomically');
         }
 
-        console.log(JSON.stringify({
+        const rowsPerSecond = rowCount / (applyMs / 1000);
+        const budgets = {
+            applyMs: maxBudget(
+                Number(applyMs.toFixed(2)),
+                positiveNumber(
+                    process.env.OR3_BENCH_SNAPSHOT_MAX_APPLY_MS,
+                    90_000
+                )
+            ),
+            rowsPerSecond: minBudget(
+                Number(rowsPerSecond.toFixed(2)),
+                positiveNumber(
+                    process.env.OR3_BENCH_SNAPSHOT_MIN_ROWS_PER_SECOND,
+                    500
+                )
+            ),
+        };
+        const report = {
+            benchmark: 'sync-snapshot-bootstrap',
             rows: rowCount,
             pageSize,
             pages: pages.length,
             fixtureMs: Number(fixtureMs.toFixed(2)),
             applyMs: Number(applyMs.toFixed(2)),
-            rowsPerSecond: Number((rowCount / (applyMs / 1000)).toFixed(2)),
+            rowsPerSecond: Number(rowsPerSecond.toFixed(2)),
             watermark,
             storedRows,
-        }, null, 2));
+            budgets,
+        };
+        const outputPath = writePerformanceReport(
+            'sync-snapshot-bootstrap',
+            report
+        );
+        console.log(JSON.stringify({ ...report, outputPath }, null, 2));
+        assertBudgets('sync-snapshot-bootstrap', budgets);
     } finally {
         db.close();
         await db.delete();

@@ -8,6 +8,7 @@ dist
 opencode.json
 playwright-report 
 test-results
+output/
 # Node dependencies
 node_modules
 convex

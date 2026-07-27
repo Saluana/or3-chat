@@ -120,6 +120,7 @@ describe('CORS middleware', () => {
             // Should not set any CORS headers for blocked origins
             expect(mockHeaders['Access-Control-Allow-Origin']).toBeUndefined();
             expect(mockHeaders['Access-Control-Allow-Credentials']).toBeUndefined();
+            expect(mockHeaders['Vary']).toBe('Origin');
         });
     });
 
@@ -216,6 +217,48 @@ describe('CORS middleware', () => {
             await corsHandler(event);
 
             expect(mockHeaders['Access-Control-Allow-Headers']).toBe('Content-Type,Authorization');
+        });
+
+        it.each([
+            'https://allowed.example https://evil.example',
+            'https://allowed.example/path',
+            'https://user@allowed.example',
+            'ftp://allowed.example',
+            'not-an-origin',
+        ])('should reject malformed origin %s even in allow-all mode', async (origin) => {
+            const corsHandler = (await import('../cors')).default;
+            const event = makeEvent({
+                headers: { origin },
+                method: 'GET',
+            });
+
+            await corsHandler(event);
+
+            expect(mockHeaders['Access-Control-Allow-Origin']).toBeUndefined();
+            expect(mockHeaders['Access-Control-Allow-Credentials']).toBeUndefined();
+            expect(mockHeaders['Vary']).toBe('Origin');
+        });
+
+        it.each([
+            'https://allowed.example.evil.test',
+            'https://allowed.example@evil.test',
+            'https://allowed.example:444',
+            'null',
+        ])('should not reflect hostile allowlist near-match %s', async (origin) => {
+            runtimeConfig = {
+                security: { allowedOrigins: ['https://allowed.example'] },
+            };
+            const corsHandler = (await import('../cors')).default;
+            const event = makeEvent({
+                headers: { origin },
+                method: 'GET',
+            });
+
+            await corsHandler(event);
+
+            expect(mockHeaders['Access-Control-Allow-Origin']).toBeUndefined();
+            expect(mockHeaders['Access-Control-Allow-Credentials']).toBeUndefined();
+            expect(mockHeaders['Vary']).toBe('Origin');
         });
     });
 });

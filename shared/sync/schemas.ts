@@ -7,6 +7,19 @@
 import { z } from 'zod';
 import { toServerFormat } from './field-mappings';
 
+export const MAX_SYNC_PUSH_BATCH_OPS = 100;
+export const MAX_SYNC_PUSH_BATCH_BYTES = 2 * 1024 * 1024;
+const MAX_SYNC_IDENTIFIER_LENGTH = 256;
+const MAX_SYNC_TABLE_FILTERS = 50;
+
+function jsonByteLength(value: unknown): number {
+    try {
+        return new TextEncoder().encode(JSON.stringify(value)).length;
+    } catch {
+        return Number.MAX_SAFE_INTEGER;
+    }
+}
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -54,22 +67,22 @@ function createTablePayloadSchema<T extends z.ZodRawShape>(
 // ============================================================
 
 export const SyncScopeSchema = z.object({
-    workspaceId: z.string(),
-    projectId: z.string().optional(),
+    workspaceId: z.string().trim().min(1).max(MAX_SYNC_IDENTIFIER_LENGTH),
+    projectId: z.string().trim().min(1).max(MAX_SYNC_IDENTIFIER_LENGTH).optional(),
 });
 
 export const ChangeStampSchema = z.object({
-    deviceId: z.string(),
+    deviceId: z.string().trim().min(1).max(MAX_SYNC_IDENTIFIER_LENGTH),
     opId: z.string().uuid(),
-    hlc: z.string(),
+    hlc: z.string().min(1).max(512),
     clock: z.number().int().nonnegative(),
 });
 
 export const PendingOpSchema = z.object({
-    id: z.string(),
-    tableName: z.string(),
+    id: z.string().min(1).max(MAX_SYNC_IDENTIFIER_LENGTH),
+    tableName: z.string().min(1).max(128),
     operation: z.enum(['put', 'delete']),
-    pk: z.string(),
+    pk: z.string().min(1).max(1024),
     payload: z.unknown().optional(),
     stamp: ChangeStampSchema,
     createdAt: z.number(),
@@ -237,12 +250,15 @@ export const PullRequestSchema = z.object({
     scope: SyncScopeSchema,
     cursor: z.number().int().nonnegative(),
     limit: z.number().int().positive().max(1000),
-    tables: z.array(z.string()).optional(),
+    tables: z
+        .array(z.string().trim().min(1).max(128))
+        .max(MAX_SYNC_TABLE_FILTERS)
+        .optional(),
 });
 
 export const PullResponseSchema = z
     .object({
-        changes: SyncChangesSchema,
+        changes: SyncChangesSchema.max(1000),
         nextCursor: z.number().int().nonnegative(),
         hasMore: z.boolean(),
     })
@@ -280,7 +296,10 @@ export const SnapshotRequestSchema = z.object({
     scope: SyncScopeSchema,
     pageSize: z.number().int().positive().max(1000),
     pageToken: z.string().min(1).max(4096).optional(),
-    tables: z.array(z.string().min(1)).optional(),
+    tables: z
+        .array(z.string().trim().min(1).max(128))
+        .max(MAX_SYNC_TABLE_FILTERS)
+        .optional(),
 });
 
 export const SnapshotRevisionSchema = z.object({
@@ -343,9 +362,16 @@ export const SnapshotResponseSchema = z
 export const PushBatchSchema = z
     .object({
         scope: SyncScopeSchema,
-        ops: z.array(PendingOpSchema),
+        ops: z.array(PendingOpSchema).max(MAX_SYNC_PUSH_BATCH_OPS),
     })
     .superRefine((batch, ctx) => {
+        if (jsonByteLength(batch) > MAX_SYNC_PUSH_BATCH_BYTES) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['ops'],
+                message: `Push batch exceeds ${MAX_SYNC_PUSH_BATCH_BYTES} bytes`,
+            });
+        }
         const opIds = new Set<string>();
         for (const [index, op] of batch.ops.entries()) {
             if (opIds.has(op.stamp.opId)) {
@@ -386,7 +412,7 @@ export const PushResultItemSchema = z.object({
 
 export const PushResultSchema = z
     .object({
-        results: z.array(PushResultItemSchema),
+        results: z.array(PushResultItemSchema).max(MAX_SYNC_PUSH_BATCH_OPS),
         serverVersion: z.number().int().nonnegative(),
     })
     .superRefine((response, ctx) => {

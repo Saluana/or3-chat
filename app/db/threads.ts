@@ -76,13 +76,14 @@ export async function createThreadInDb(
     if (import.meta.client) {
         const limits =
             context.limits ?? useRuntimeConfig().public.limits;
-        if (limits.enabled !== false && limits.maxConversations > 0) {
+        const maxConversations = limits.maxConversations ?? 0;
+        if (limits.enabled !== false && maxConversations > 0) {
             const count = await db.threads
                 .filter((thread) => thread.deleted !== true)
                 .count();
-            if (count >= limits.maxConversations) {
+            if (count >= maxConversations) {
                 throw new Error(
-                    `Conversation limit reached (${limits.maxConversations}). Delete existing conversations to create new ones.`
+                    `Conversation limit reached (${maxConversations}). Delete existing conversations to create new ones.`
                 );
             }
         }

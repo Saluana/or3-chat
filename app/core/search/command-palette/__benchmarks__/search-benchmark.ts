@@ -18,6 +18,7 @@
 
 import { PaletteSourceIndex } from '../source-index';
 import { groupHitsByResource } from '../group-hits';
+import { writePerformanceReport } from '~~/scripts/performance/report';
 import type { PaletteResource } from '../types';
 
 const RESOURCE_COUNT = 10_000;
@@ -151,7 +152,11 @@ async function main(): Promise<void> {
         },
     };
 
-    console.log(JSON.stringify(report, null, 2));
+    const outputPath = writePerformanceReport(
+        'command-palette-search',
+        report
+    );
+    console.log(JSON.stringify({ ...report, outputPath }, null, 2));
     if (!report.budgets.warmQueryP95Passed) {
         console.error(
             `[benchmark] warm query p95 ${report.warmQueryP95Ms}ms exceeded 75ms budget`

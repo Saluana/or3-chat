@@ -32,6 +32,11 @@ export function registerAdminStoreProvider(provider: AdminStoreProvider): void {
         console.warn(`[admin:stores] Replacing provider: ${provider.id}`);
     }
     providers.set(provider.id, provider);
+    // A provider can be replaced during dev/HMR. Do not retain capabilities
+    // from the previous implementation for the cache TTL.
+    if (cachedProviderId === provider.id) {
+        clearAdminStoreCache();
+    }
 }
 
 export function getAdminStoreProvider(id: string): AdminStoreProvider | null {
@@ -41,7 +46,7 @@ export function getAdminStoreProvider(id: string): AdminStoreProvider | null {
 function resolveProviderId(event?: H3Event): string {
     void event;
     const config = useRuntimeConfig();
-    return config.sync.provider || config.public.sync.provider || 'convex';
+    return config.sync?.provider || config.public?.sync?.provider || 'convex';
 }
 
 /**

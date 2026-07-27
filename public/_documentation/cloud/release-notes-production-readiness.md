@@ -2,10 +2,9 @@
 
 Release notes for the production-readiness tranche covering sync casing normalization, background execution hardening, and documentation completion.
 
-> **Current release verdict: BLOCKED.** The combined cloud/chat audit remediation
-> checklist at `planning/or3-cloud-chat-audit-remediation/tasks.md` is the release
-> gate. Do not publish a release while any unchecked task linked to a Blocker or
-> High finding remains.
+> **Current code verdict: RELEASE CANDIDATE.** Production promotion still
+> requires recorded staging, backup/restore, and rollback evidence from the
+> [OR3 Cloud release checklist](./release-checklist).
 
 ## Highlights
 
@@ -30,6 +29,37 @@ Release notes for the production-readiness tranche covering sync casing normaliz
   - workflow node lifecycle and HITL request points
   - notification emission failures
 - Secret redaction on log payload fields and token-like strings.
+
+## Chat Reliability
+
+- Model-aware context budgeting reserves response capacity before requests are
+  sent.
+- Text, tool-call arguments, and tool-result identifiers count toward the
+  request budget.
+- The final budget is enforced after plugin request filters for send and
+  continue flows.
+
+## Storage and Workspace Reliability
+
+- Recent workspace databases remain in the bounded LRU cache so in-flight
+  operations are not interrupted by rapid workspace switching.
+- Storage transfers interrupted by a workspace switch are requeued with their
+  lease state cleared, including recovery after an underlying database is
+  evicted.
+- Download stream cancellation now propagates through the transfer lifecycle.
+- The release gate runs deterministic auth, offline recovery, workspace race,
+  and adapter fault browser harnesses.
+
+## Deployment Reliability
+
+- Added a provider-neutral staging canary runner with versioned JSON evidence
+  for deep health, auth, sync, storage, background jobs, backup/restore,
+  rollback, and rolling restarts.
+- Added deterministic multi-instance tests proving that active sync and
+  background work are asserted after an instance restart.
+- Added fail-closed guards for memory background jobs, process-local viewer
+  suppression assumptions, and undeclared SQLite/filesystem multi-instance
+  topology.
 
 ## Documentation
 
@@ -62,3 +92,4 @@ Release notes for the production-readiness tranche covering sync casing normaliz
 - [migration-default-stack](./migration-default-stack)
 - [deployment-operations](./deployment-operations)
 - [provider-compatibility-matrix](./provider-compatibility-matrix)
+- [release-checklist](./release-checklist)

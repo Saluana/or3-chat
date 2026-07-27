@@ -168,19 +168,8 @@ const defaultTestConfig = {
     legal: { termsUrl: '', privacyUrl: '' },
     security: { allowedOrigins: [], forceHttps: false },
     limits: { enabled: false, requestsPerMinute: 20, maxConversations: 0, maxMessagesPerDay: 0, storageProvider: 'memory', operationRateLimits: {} },
-    or3Net: {
-        hostUrl: '',
-        exchangeSecret: '',
-        exchangeIssuer: 'or3-chat',
-        exchangeAudience: 'or3-net',
-        exchangeTtlMs: 60000,
-    },
     public: { 
         ssrAuthEnabled: true,
-        or3Net: {
-            enabled: false,
-            hostUrl: '',
-        },
         openRouter: {
             allowUserOverride: true,
             hasInstanceKey: false,

@@ -121,6 +121,9 @@ Nuxt gateway and invokes the deployment directly:
   owners and editors, keeping viewers read-only.
 - Sync GC entry points are internal-only, bounded, and require the verified
   `snapshot-v1` retention contract.
+- Gateway object deletion verifies workspace membership, matches any supplied
+  storage ID to canonical file metadata, refuses live references, and is a
+  successful no-op when retried after deletion.
 - Background-job persistence (including status reads and aborts), notification
   persistence, webhook definition/delivery storage, and rate-limit storage are
   internal Convex functions. Their SSR adapters use the admin credential;

@@ -29,10 +29,10 @@ import { setNoCacheHeaders } from '../../utils/headers';
 import { getWorkspaceStorageUsageSnapshot } from '../../utils/storage/quota';
 
 const BodySchema = z.object({
-    workspace_id: z.string(),
-    hash: z.string(),
-    mime_type: z.string(),
-    size_bytes: z.number(),
+    workspace_id: z.string().trim().min(1).max(256),
+    hash: z.string().trim().min(1).max(256),
+    mime_type: z.string().trim().min(1).max(255),
+    size_bytes: z.number().int().positive(),
     expires_in_ms: z.number().int().min(1).max(86_400_000).optional(),
     disposition: z.enum(['inline', 'attachment']).optional(),
 });

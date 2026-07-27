@@ -6,6 +6,8 @@ Setup and operating guide for the default-stack sync backend.
 
 - Gateway-mode sync backend for OR3 sync endpoints.
 - Canonical workspace/user storage through provider `AuthWorkspaceStore`.
+- Complete admin-store support for workspace access/lifecycle, workspace
+  settings, user search, and deployment-admin grants.
 - Global `server_version` cursor progression per workspace.
 - Durable outbox push/pull support with idempotency (`op_id`) and LWW conflict semantics.
 - Consistent materialized snapshot pages pinned to one server high-watermark.

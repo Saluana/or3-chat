@@ -61,6 +61,7 @@
  *  - Expose readonly reactive StreamingState for UI consumption
  */
 import { reactive } from 'vue';
+import { normalizeStreamingMessage } from '~/utils/chat/messages';
 
 export interface StreamingState {
     text: string;
@@ -77,6 +78,10 @@ export type AppendKind = 'text' | 'reasoning';
 export interface StreamAccumulatorApi {
     state: Readonly<StreamingState>;
     append(delta: string, options: { kind: AppendKind }): void;
+    hydrate(seed: {
+        text?: unknown;
+        reasoningText?: unknown;
+    }): void;
     finalize(opts?: { error?: Error; aborted?: boolean }): void; // idempotent
     reset(): void; // prepare for a fresh stream
 }
@@ -109,10 +114,6 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         error: null,
         version: 0,
     });
-    // TODO(normalization): Future message normalization pass will consolidate assistant
-    // message text assembly so accumulator text piping can directly hydrate persisted
-    // message content without duplicate string concatenation in useChat.
-
     let pendingMain: string[] = [];
     let pendingReasoning: string[] = [];
     let frame: number | null = null;
@@ -220,6 +221,27 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         state.finalized = true;
     }
 
+    function hydrate(seed: {
+        text?: unknown;
+        reasoningText?: unknown;
+    }) {
+        if (!ensureNotFinalized('hydrate')) return;
+        if (frame != null) {
+            getCAF()(frame);
+            frame = null;
+        }
+        microtaskToken = null;
+        pendingMain = [];
+        pendingReasoning = [];
+        const normalized = normalizeStreamingMessage({
+            text: seed.text,
+            reasoning_text: seed.reasoningText,
+        });
+        state.text = normalized.text;
+        state.reasoningText = normalized.reasoningText ?? '';
+        state.version++;
+    }
+
     function reset() {
         if (frame != null) {
             const caf = getCAF();
@@ -241,7 +263,7 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         state.version++;
     }
 
-    return { state, append, finalize, reset };
+    return { state, append, hydrate, finalize, reset };
 }
 
 // Convenience factory (future usage) - could be extended to support options

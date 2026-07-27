@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { trimOrMessagesByTokenBudget } from '../messages';
+import {
+    resolveChatInputTokenBudget,
+    trimOrMessagesByTokenBudget,
+} from '../messages';
 
 type Message = {
     id: string;
@@ -54,5 +57,72 @@ describe('trimOrMessagesByTokenBudget', () => {
             'system',
             'last-user',
         ]);
+    });
+
+    it('counts tool-call arguments when deciding which old turn to remove', async () => {
+        const trimmed = await trimOrMessagesByTokenBudget(
+            [
+                { id: 'system', role: 'system', content: 's' },
+                { id: 'old-user', role: 'user', content: 'old' },
+                {
+                    id: 'old-assistant',
+                    role: 'assistant',
+                    content: '',
+                    tool_calls: [
+                        {
+                            id: 'call-1',
+                            function: {
+                                name: 'lookup',
+                                arguments: 'x'.repeat(50),
+                            },
+                        },
+                    ],
+                },
+                {
+                    id: 'old-tool',
+                    role: 'tool',
+                    content: 'result',
+                    tool_call_id: 'call-1',
+                },
+                { id: 'last-user', role: 'user', content: 'new' },
+            ],
+            20,
+            countCharacters
+        );
+
+        expect(trimmed.map((message) => message.id)).toEqual([
+            'system',
+            'last-user',
+        ]);
+    });
+});
+
+describe('resolveChatInputTokenBudget', () => {
+    it('uses a conservative fallback when model metadata is unavailable', () => {
+        expect(resolveChatInputTokenBudget(undefined)).toBe(8000);
+    });
+
+    it('reserves output space and prefers top-provider context metadata', () => {
+        expect(
+            resolveChatInputTokenBudget({
+                context_length: 16_000,
+                top_provider: {
+                    context_length: 32_000,
+                    max_completion_tokens: 4_000,
+                },
+            })
+        ).toBe(28_000);
+    });
+
+    it('caps very large model windows to a browser-safe input budget', () => {
+        expect(
+            resolveChatInputTokenBudget({ context_length: 1_000_000 })
+        ).toBe(128_000);
+    });
+
+    it('never returns a budget larger than a tiny advertised context', () => {
+        expect(
+            resolveChatInputTokenBudget({ context_length: 512 })
+        ).toBe(511);
     });
 });

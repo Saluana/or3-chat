@@ -1,6 +1,0 @@
-{
-  "error": "missing required scope",
-  "code": "auth.insufficient_scope",
-  "status": 403,
-  "request_id": "req_scope"
-}

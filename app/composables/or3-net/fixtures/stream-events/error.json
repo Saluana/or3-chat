@@ -1,9 +1,0 @@
-{
-  "event": "error",
-  "data": {
-    "error": "stream failed",
-    "code": "server.internal",
-    "status": 500,
-    "request_id": "req_stream"
-  }
-}

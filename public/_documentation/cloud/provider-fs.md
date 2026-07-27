@@ -5,7 +5,7 @@ Setup and operating guide for the default-stack object storage backend.
 ## What It Provides
 
 - Gateway-mode blob storage using local filesystem paths.
-- Presign/commit/download integration for OR3 storage APIs.
+- Presign/commit/download/delete integration for OR3 storage APIs.
 - Hash-addressed blob persistence (`sha256:<hex>` compatible).
 - Canonical reference-driven, retention-bounded blob GC with a fail-closed fallback.
 
@@ -44,6 +44,8 @@ OR3_STORAGE_WORKSPACE_QUOTA_BYTES=optional-quota-bytes
 - Token secret must be set at startup; missing secret should fail fast.
 - Upload endpoints must enforce server-side max file size.
 - Uploaded bytes should pass SHA-256 integrity verification before commit.
+- Delete validates the canonical `workspace_id:hash` storage ID, removes both
+  the blob and commit sidecar, and is safe to retry.
 - Presigned tokens are user-bound and configuration rejects lifetimes over one hour.
 - Use `PUT` for FS upload URLs (`/api/storage/fs/upload?token=...`).
 

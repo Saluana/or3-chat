@@ -1,9 +1,0 @@
-{"event":"job.accepted","data":{"job_id":"job_demo"}}
-{"event":"job.started","data":{"job_id":"job_demo","started_at":"2026-04-01T10:00:00.000Z"}}
-{"event":"text.delta","data":{"text":"hello "}}
-{"event":"tool.call","data":{"name":"shell","tool_call_id":"tool_1","arguments":{"command":"echo hi"}}}
-{"event":"tool.result","data":{"name":"shell","tool_call_id":"tool_1","result":{"ok":true},"content":"hi"}}
-{"event":"job.completed","data":{"job_id":"job_demo","output":"done"}}
-{"event":"job.failed","data":{"job_id":"job_demo","reason":"boom"}}
-{"event":"job.aborted","data":{"job_id":"job_demo"}}
-{"event":"error","data":{"error":"stream failed","code":"server.internal","status":500,"request_id":"req_stream"}}

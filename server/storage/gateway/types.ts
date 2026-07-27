@@ -106,6 +106,13 @@ export interface PresignDownloadResponse {
     storageId?: string;
 }
 
+/** Request to delete one workspace-scoped object. */
+export interface DeleteObjectRequest {
+    workspaceId: string;
+    hash: string;
+    storageId?: string;
+}
+
 /**
  * Purpose:
  * Server-side storage gateway adapter interface.
@@ -170,6 +177,15 @@ export interface StorageGatewayAdapter {
      * @param input - Commit request (backend-specific structure)
      */
     commit?(event: H3Event, input: unknown): Promise<void>;
+
+    /**
+     * Optional: Delete one object and any provider-owned commit metadata.
+     *
+     * Implementations must derive and validate the provider key from
+     * `workspaceId` and `hash`; an untrusted `storageId` must never select an
+     * object outside that scope. Deleting an already-absent object succeeds.
+     */
+    deleteObject?(event: H3Event, input: DeleteObjectRequest): Promise<void>;
 
     /**
      * Optional: Garbage collect orphaned files.

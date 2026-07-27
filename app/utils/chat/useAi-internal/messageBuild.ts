@@ -145,6 +145,25 @@ export type BuildOpenRouterMessagesParams = {
 };
 
 /**
+ * Applies the final text/tool token budget to a provider-ready message list.
+ * Call this after request hooks so extensions cannot accidentally push the
+ * payload back over the selected model's context allowance.
+ */
+export async function enforceOpenRouterMessageTokenBudget(
+    messages: OpenRouterMessage[],
+    maxInputTokens: number
+): Promise<OpenRouterMessage[]> {
+    if (!Number.isFinite(maxInputTokens) || maxInputTokens <= 0) {
+        return messages;
+    }
+    return trimOrMessagesByTokenBudget(
+        messages,
+        maxInputTokens,
+        countTokensApprox
+    );
+}
+
+/**
  * `buildOpenRouterMessagesForSend`
  *
  * Purpose:
@@ -244,10 +263,9 @@ export async function buildOpenRouterMessagesForSend(
     );
 
     if (params.maxInputTokens && params.maxInputTokens > 0) {
-        orMessages = await trimOrMessagesByTokenBudget(
+        orMessages = await enforceOpenRouterMessageTokenBudget(
             orMessages,
-            params.maxInputTokens,
-            countTokensApprox
+            params.maxInputTokens
         );
     }
 

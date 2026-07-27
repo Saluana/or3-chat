@@ -61,15 +61,8 @@ vi.mock('~/db/files-util', () => ({
     parseFileHashes: (...args: unknown[]) => parseFileHashesSpy(...args),
 }));
 
-vi.mock('~/utils/chat/messages', () => ({
-    deriveMessageContent: (m: {
-        content?: string | null;
-        data?: { content?: string | null } | null;
-    }) => {
-        if (typeof m.content === 'string') return m.content;
-        if (m.data && typeof m.data.content === 'string') return m.data.content;
-        return '';
-    },
+vi.mock('~/utils/chat/messages', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('~/utils/chat/messages')>()),
     shouldKeepAssistantMessage: () => true,
     getChatModalities: (modelId: string) =>
         /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId)
@@ -126,6 +119,7 @@ vi.mock('../messageBuild', () => ({
     buildOpenRouterMessagesForSend: vi.fn(async () => [
         { role: 'user', content: 'continue' },
     ]),
+    enforceOpenRouterMessageTokenBudget: vi.fn(async (messages) => messages),
 }));
 
 vi.mock('../persistence', () => ({

@@ -1,6 +1,6 @@
 /** Persistent, workspace-scoped upload and download execution queue. */
 import Dexie from 'dexie';
-import { getDb } from '~/db/client';
+import { getDb, getWorkspaceDb } from '~/db/client';
 import type { Or3DB } from '~/db/client';
 import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
 import { useHooks } from '~/core/hooks/useHooks';
@@ -39,6 +39,19 @@ import {
 
 export type { FileTransferQueueConfig } from './transfer-queue-support';
 
+function isAbortError(error: unknown): boolean {
+    return typeof error === 'object'
+        && error !== null
+        && 'name' in error
+        && (error as { name?: unknown }).name === 'AbortError';
+}
+
+function createAbortError(): Error {
+    const error = new Error('Transfer cancelled');
+    error.name = 'AbortError';
+    return error;
+}
+
 /** Persistent transfer executor. Call `setWorkspaceId` before processing. */
 export class FileTransferQueue {
     private concurrency: number;
@@ -48,11 +61,13 @@ export class FileTransferQueue {
     private running = new Set<string>();
     private waiters = new Map<string, TransferWaiter[]>();
     private abortControllers = new Map<string, AbortController>();
+    private requeueOnAbort = new Set<string>();
     private workspaceId: string | null = null;
     private processQueueTimeout: ReturnType<typeof setTimeout> | null = null;
     private processQueueAt: number | null = null;
     private lastCleanupAt = 0;
     private dbResolver?: () => Or3DB;
+    private workspaceDbResolver: (workspaceId: string) => Or3DB;
     private leaseDurationMs: number;
     private maxDownloadBytes: number;
     private readonly workerId = createRuntimeUuid();
@@ -70,6 +85,7 @@ export class FileTransferQueue {
         this.leaseDurationMs = config.leaseDurationMs ?? DEFAULT_LEASE_DURATION_MS;
         this.maxDownloadBytes = config.maxDownloadBytes ?? DEFAULT_MAX_DOWNLOAD_BYTES;
         this.dbResolver = config.dbResolver;
+        this.workspaceDbResolver = config.workspaceDbResolver ?? getWorkspaceDb;
     }
 
     setWorkspaceId(workspaceId: string | null) {
@@ -78,7 +94,7 @@ export class FileTransferQueue {
 
         // Cancel in-flight transfers for the old workspace when switching
         if (previousWorkspaceId && workspaceId !== previousWorkspaceId) {
-            this.cancelAllRunning();
+            this.cancelRunningForWorkspaceSwitch();
             if (this.processQueueTimeout) {
                 clearTimeout(this.processQueueTimeout);
                 this.processQueueTimeout = null;
@@ -98,6 +114,7 @@ export class FileTransferQueue {
 
     /** Cancel a specific transfer by ID */
     cancelTransfer(id: string): void {
+        this.requeueOnAbort.delete(id);
         const controller = this.abortControllers.get(id);
         if (controller) {
             controller.abort();
@@ -108,6 +125,15 @@ export class FileTransferQueue {
     cancelAllRunning(): void {
         for (const id of this.running) {
             this.cancelTransfer(id);
+        }
+    }
+
+    private cancelRunningForWorkspaceSwitch(): void {
+        for (const id of this.running) {
+            const controller = this.abortControllers.get(id);
+            if (!controller || controller.signal.aborted) continue;
+            this.requeueOnAbort.add(id);
+            controller.abort();
         }
     }
 
@@ -340,12 +366,22 @@ export class FileTransferQueue {
             this.resolveWaiters(transfer.id);
         } catch (error) {
             if (this.isDatabaseClosedError(error)) {
-                this.rebindDb();
+                await this.requeueTransferAfterDatabaseClose(transfer, context);
                 return;
             }
 
             // Handle abort specially - don't retry aborted transfers
-            if (error instanceof Error && error.name === 'AbortError') {
+            if (isAbortError(error)) {
+                if (this.requeueOnAbort.delete(transfer.id)) {
+                    await this.safeUpdateTransfer(transfer.id, {
+                        state: 'queued',
+                        retry_at: 0,
+                        last_error: undefined,
+                        lease_owner: undefined,
+                        lease_expires_at: undefined,
+                    }, context.db);
+                    return;
+                }
                 await this.safeUpdateTransfer(transfer.id, {
                     state: 'failed',
                     last_error: 'Transfer cancelled',
@@ -406,6 +442,7 @@ export class FileTransferQueue {
 
             this.scheduleProcessQueue(delay);
         } finally {
+            this.requeueOnAbort.delete(transfer.id);
             this.stopLeaseRenewal(transfer.id);
             this.abortControllers.delete(transfer.id);
         }
@@ -718,6 +755,10 @@ export class FileTransferQueue {
             credentials: 'include',
             signal,
         });
+        if (signal.aborted) {
+            await response.body?.cancel();
+            throw createAbortError();
+        }
 
         if (!response.ok) {
             if (response.status === 404 || response.status === 410) {
@@ -761,7 +802,8 @@ export class FileTransferQueue {
             transfer.id,
             context.db,
             this.maxDownloadBytes,
-            blobMime
+            blobMime,
+            signal
         );
         await this.updateTransfer(transfer.id, {
             bytes_total: bytesTotal,
@@ -800,8 +842,13 @@ export class FileTransferQueue {
         transferId: string,
         db: Or3DB = this.db,
         maxBytes = this.maxDownloadBytes,
-        mimeType = response.headers.get('content-type') ?? ''
+        mimeType = response.headers.get('content-type') ?? '',
+        signal?: AbortSignal
     ): Promise<{ blob: Blob; bytesTotal: number }> {
+        if (signal?.aborted) {
+            await response.body?.cancel();
+            throw createAbortError();
+        }
         const contentLength = Number(response.headers.get('content-length') || 0);
         if (contentLength > maxBytes) {
             await response.body?.cancel();
@@ -822,6 +869,10 @@ export class FileTransferQueue {
         }
 
         const reader = response.body.getReader();
+        const abortReader = () => {
+            void reader.cancel('transfer aborted').catch(() => {});
+        };
+        signal?.addEventListener('abort', abortReader, { once: true });
         let received = 0;
         let lastUpdate = 0;
         const UPDATE_INTERVAL_MS = 200; // Update every 200ms max
@@ -830,7 +881,17 @@ export class FileTransferQueue {
         // Stream chunks directly into a new Response for blob conversion
         const stream = new ReadableStream<Uint8Array>({
             pull: async (controller) => {
+                if (signal?.aborted) {
+                    await reader.cancel('transfer aborted');
+                    controller.error(createAbortError());
+                    return;
+                }
                 const { done, value } = await reader.read();
+                if (signal?.aborted) {
+                    await reader.cancel('transfer aborted');
+                    controller.error(createAbortError());
+                    return;
+                }
                 if (done) {
                     // Final update on completion
                     await this.updateTransfer(transferId, {
@@ -865,10 +926,15 @@ export class FileTransferQueue {
             },
         });
 
-        const blob = await new Response(stream, {
-            headers: mimeType ? { 'content-type': mimeType } : undefined,
-        }).blob();
-        return { blob, bytesTotal: contentLength || blob.size };
+        try {
+            const blob = await new Response(stream, {
+                headers: mimeType ? { 'content-type': mimeType } : undefined,
+            }).blob();
+            if (signal?.aborted) throw createAbortError();
+            return { blob, bytesTotal: contentLength || blob.size };
+        } finally {
+            signal?.removeEventListener('abort', abortReader);
+        }
     }
 
     private async persistUploadMetadata(
@@ -946,6 +1012,25 @@ export class FileTransferQueue {
     private rebindDb(): void {
         if (!this.dbResolver) return;
         this.db = this.dbResolver();
+    }
+
+    private async requeueTransferAfterDatabaseClose(
+        transfer: FileTransfer,
+        context: TransferExecutionContext
+    ): Promise<void> {
+        const recoveryDb = this.workspaceDbResolver(context.workspaceId);
+        await this.updateTransfer(transfer.id, {
+            state: 'queued',
+            retry_at: 0,
+            last_error: undefined,
+            lease_owner: undefined,
+            lease_expires_at: undefined,
+        }, recoveryDb);
+        if (this.workspaceId === context.workspaceId) {
+            this.db = recoveryDb;
+        } else {
+            this.rebindDb();
+        }
     }
 
     private isDatabaseClosedError(error: unknown): boolean {
