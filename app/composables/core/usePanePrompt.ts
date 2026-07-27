@@ -1,4 +1,4 @@
-import { reactive } from 'vue';
+import { computed, reactive, type ComputedRef } from 'vue';
 import { useHooks } from '~/core/hooks/useHooks';
 
 // In-memory map: paneId -> pending prompt id (applied on first thread creation)
@@ -107,6 +107,12 @@ export function getPanePendingPrompt(
     paneId: string
 ): string | null | undefined {
     return pendingByPane[paneId];
+}
+
+export function usePanePendingPrompt(
+    paneId: string
+): ComputedRef<string | null | undefined> {
+    return computed(() => pendingByPane[paneId]);
 }
 
 /**

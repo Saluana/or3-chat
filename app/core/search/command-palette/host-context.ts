@@ -19,6 +19,10 @@ export interface PaletteHostContextDeps {
     expandSidebar?: () => void | Promise<void>;
     activateDefaultSidebarPage?: () => void | Promise<void>;
     openImageLibraryPage?: () => void | Promise<void>;
+    openSystemPrompts?: (options: {
+        mode: 'home' | 'edit' | 'new';
+        promptId?: string;
+    }) => void | Promise<void>;
     setDashboardOpen?: (open: boolean) => void;
     canOpenNewPane?: () => boolean;
     getMultiPaneApi?: typeof getGlobalMultiPaneApi;
@@ -181,6 +185,27 @@ export function createPaletteHostContext(
                     error instanceof Error
                         ? error.message
                         : 'Failed to reveal project',
+                    error
+                );
+            }
+        },
+
+        async openSystemPrompts(options) {
+            if (!deps.openSystemPrompts) {
+                return failure(
+                    'navigation-failed',
+                    'System prompts host unavailable'
+                );
+            }
+            try {
+                await deps.openSystemPrompts(options);
+                return { ok: true };
+            } catch (error) {
+                return failure(
+                    'navigation-failed',
+                    error instanceof Error
+                        ? error.message
+                        : 'Failed to open system prompts',
                     error
                 );
             }

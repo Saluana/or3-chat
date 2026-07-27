@@ -88,7 +88,12 @@ describe('POST /api/sync/pull', () => {
                     op: 'put',
                     payload: { id: 'm1' },
                     serverVersion: 5,
-                    stamp: { clock: 1, hlc: '1:1:dev', deviceId: 'dev', opId: 'op-1' },
+                    stamp: {
+                        clock: 1,
+                        hlc: '1:1:dev',
+                        deviceId: 'dev',
+                        opId: 'a1b2c3d4-5678-4abc-8def-123456789001',
+                    },
                 },
             ],
             nextCursor: 5,
@@ -186,7 +191,12 @@ describe('POST /api/sync/pull', () => {
                     op: 'put',
                     payload: { id: 'm1' },
                     serverVersion: 5,
-                    stamp: { clock: 1, hlc: '1:1:dev', deviceId: 'dev', opId: 'op-1' },
+                    stamp: {
+                        clock: 1,
+                        hlc: '1:1:dev',
+                        deviceId: 'dev',
+                        opId: 'a1b2c3d4-5678-4abc-8def-123456789001',
+                    },
                 },
             ],
             nextCursor: 5,
@@ -195,5 +205,76 @@ describe('POST /api/sync/pull', () => {
 
         expect(pullMock).toHaveBeenCalledWith(expect.anything(), body);
         expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'sync:pull');
+    });
+
+    it.each([
+        [
+            'a regressing cursor',
+            { changes: [], nextCursor: -1, hasMore: false },
+        ],
+        [
+            'unordered changes',
+            {
+                changes: [
+                    {
+                        tableName: 'messages',
+                        pk: 'm2',
+                        op: 'delete',
+                        serverVersion: 6,
+                        stamp: {
+                            clock: 1,
+                            hlc: '2:0:dev',
+                            deviceId: 'dev',
+                            opId: 'a1b2c3d4-5678-4abc-8def-123456789002',
+                        },
+                    },
+                    {
+                        tableName: 'messages',
+                        pk: 'm1',
+                        op: 'delete',
+                        serverVersion: 5,
+                        stamp: {
+                            clock: 1,
+                            hlc: '1:0:dev',
+                            deviceId: 'dev',
+                            opId: 'a1b2c3d4-5678-4abc-8def-123456789001',
+                        },
+                    },
+                ],
+                nextCursor: 6,
+                hasMore: false,
+            },
+        ],
+    ])('returns 502 when the adapter returns %s', async (_label, response) => {
+        const handler = (await import('../pull.post')).default as (
+            event: H3Event
+        ) => Promise<unknown>;
+        readBodyMock.mockResolvedValue(makeValidBody());
+        pullMock.mockResolvedValue(response);
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 502,
+        });
+        expect(recordSyncRequestMock).not.toHaveBeenCalled();
+    });
+
+    it('returns 502 when hasMore does not advance beyond the requested cursor', async () => {
+        const handler = (await import('../pull.post')).default as (
+            event: H3Event
+        ) => Promise<unknown>;
+        readBodyMock.mockResolvedValue({
+            ...makeValidBody(),
+            cursor: 5,
+        });
+        pullMock.mockResolvedValue({
+            changes: [],
+            nextCursor: 5,
+            hasMore: true,
+        });
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 502,
+        });
+        expect(recordSyncRequestMock).not.toHaveBeenCalled();
     });
 });

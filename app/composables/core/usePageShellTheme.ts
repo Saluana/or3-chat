@@ -19,6 +19,11 @@ export function usePageShellTheme(themePlugin: ThemePlugin | undefined) {
             themePlugin?.activeComponents.value['dashboard-modal'] ??
             CORE_APP_COMPONENT_DEFAULTS['dashboard-modal']
     );
+    const systemPromptsModalComponent = computed(
+        () =>
+            themePlugin?.activeComponents.value['system-prompts-modal'] ??
+            CORE_APP_COMPONENT_DEFAULTS['system-prompts-modal']
+    );
 
     function button(identifier: string, fallback: Record<string, unknown>) {
         const overrides = themePlugin
@@ -60,6 +65,7 @@ export function usePageShellTheme(themePlugin: ThemePlugin | undefined) {
         sidebarExpandedComponent,
         sidebarCollapsedComponent,
         dashboardModalComponent,
+        systemPromptsModalComponent,
         sidebarToggleButtonProps,
         newPaneButtonProps,
         themeToggleButtonProps,

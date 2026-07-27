@@ -61,12 +61,13 @@ These make it easy to inject custom validation, analytics, or audit trails aroun
 
 1. **Perf markers** — In dev mode the module records `performance.measure` spans for create/ref operations.
 2. **Image metadata** — Uses an object URL to resolve dimensions without full decode; errors are swallowed gracefully.
-3. **Transactions** — Critical write operations run inside Dexie transactions covering both metadata and blob tables to keep state consistent.
+3. **Transactions** — Critical write operations run inside Dexie transactions covering both metadata and blob tables to keep state consistent. Deduplication is rechecked inside the write transaction so concurrent identical uploads increment one canonical metadata row instead of overwriting its reference count.
 
 ---
 
 ## Usage tips
 
 -   Always call `derefFile` when removing file references from messages to keep ref counts accurate.
+-   `ref_count` represents unique live message edges, not upload attempts. Use the message-file helpers so duplicate or hook-pruned attachments are reconciled automatically.
 -   Hook into `db.files.create:filter:input` to enforce custom size caps or rename files.
 -   When batch deleting, prefer `softDeleteMany` first; run `hardDeleteMany` during periodic cleanups to reclaim storage.

@@ -20,10 +20,13 @@ import type {
     HITLRequest,
     HITLResponse,
     Attachment,
+    ToolExecutionContext as WorkflowToolExecutionContext,
+    WorkflowTool,
 } from 'or3-workflow-core';
 import { deriveMessageContent } from '~/utils/chat/messages';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { listWorkflowsWithMeta } from './useWorkflowSlashCommands';
+import { DEFAULT_WORKFLOW_TOOL_POLICY } from '~~/shared/chat/workflow-tool-policy';
 
 // WorkflowTokenMetadata shape (not exported from core, define inline)
 interface WorkflowTokenMetadata {
@@ -203,6 +206,58 @@ function getWorkflowTools(): ExecutableToolDefinition[] {
             // ToolHandler<Record<string, unknown>> is compatible with (args: unknown) => string
             handler: tool.handler as (args: unknown) => Promise<string> | string,
         }));
+}
+
+function getTypedWorkflowTools(): WorkflowTool[] {
+    const registry = useToolRegistry();
+    return registry.listTools.value
+        .filter((tool) => tool.enabled.value)
+        .map((tool) => {
+            const idempotencyKey = tool.workflowPolicy?.idempotencyKey;
+            const policy = {
+                ...DEFAULT_WORKFLOW_TOOL_POLICY,
+                ...tool.workflowPolicy,
+            };
+            return {
+                descriptor: {
+                    name: tool.definition.function.name,
+                    description: tool.definition.function.description,
+                    inputSchema: tool.definition.function.parameters,
+                    authority: 'host-client' as const,
+                    sideEffect: policy.sideEffect,
+                    approval: policy.approval,
+                    parallelSafe: policy.parallelSafe,
+                    permissions: tool.workflowPolicy?.permissions,
+                },
+                execute: async (
+                    input: unknown,
+                    context: WorkflowToolExecutionContext
+                ) => {
+                    const serialized =
+                        typeof input === 'string'
+                            ? input
+                            : JSON.stringify(input ?? {});
+                    const execution = await registry.executeTool(
+                        tool.definition.function.name,
+                        serialized,
+                        {
+                            subject: null,
+                            workspaceId: null,
+                            threadId: null,
+                            messageId: null,
+                            callId: context.callId,
+                            requestId: context.runId,
+                            abortSignal: context.signal,
+                        }
+                    );
+                    if (execution.error) throw new Error(execution.error);
+                    return execution.result ?? '';
+                },
+                idempotencyKey: idempotencyKey
+                    ? (input: unknown) => idempotencyKey(input)
+                    : undefined,
+            };
+        });
 }
 
 function getToolSupport(modelId?: string): 'supported' | 'unsupported' | 'unknown' {
@@ -656,12 +711,12 @@ export function executeWorkflow(
         const { OpenRouterExecutionAdapter } = await import(
             'or3-workflow-core'
         );
-        const { createWorkflowOpenRouterClient } = await import(
+        const { createWorkflowModelGateway } = await import(
             '~~/shared/openrouter'
         );
 
-        // Workflow-core still uses the flat chat.send API; wrap for SDK v1.
-        const client = createWorkflowOpenRouterClient({ apiKey });
+        // Provider-neutral gateway over the unpatched public SDK v1 transport.
+        const gateway = createWorkflowModelGateway({ apiKey });
 
         const toolFallbackModel = pickToolFallbackModel(DEFAULT_TOOL_MODEL);
         const toolModelCheck = ensureToolCapableModels(
@@ -730,14 +785,19 @@ export function executeWorkflow(
                 : resumeFrom;
 
         const workflowTools = getWorkflowTools();
+        const typedWorkflowTools = getTypedWorkflowTools();
 
-        // Create execution adapter
-        // Cast to any to handle version mismatch between SDK versions
-        adapter = new OpenRouterExecutionAdapter(client as any, {
+        // Create execution adapter from the provider-neutral gateway.
+        adapter = new OpenRouterExecutionAdapter(gateway, {
             defaultModel: DEFAULT_TOOL_MODEL,
             preflight: true,
             resumeFrom: resumeFromWithHistory,
             tools: workflowTools,
+            workflowTools: typedWorkflowTools,
+            toolExecutionPolicy: {
+                mode: 'parallel',
+                defaultApproval: 'auto',
+            },
             subflowRegistry,
             onToolCall: executeToolCallViaRegistry,
             onToolCallEvent: options.onToolCallEvent,

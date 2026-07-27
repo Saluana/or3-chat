@@ -110,7 +110,7 @@ const backup = useWorkspaceBackup();
 1. **Module-level loaders** — Lazily imports `dexie-export-import` and `streamsaver` the first time they’re needed, caching promises for reuse.
 2. **Export path** — Prefers the File System Access API (`showSaveFilePicker`) when available; otherwise falls back to StreamSaver with service worker shim. Progress is tracked by table/row counts from `streamWorkspaceExport` helpers.
 3. **Peek** — Detects backup format by sniffing the file header. Dexie backups use `dexie-export-import`’s `peakImportFile`; stream backups parse the header line for metadata validation.
-4. **Import** — Chooses between streaming import (`importWorkspaceStream`) and Dexie import (`importInto`). Appends respect `overwriteValues`; replace mode wipes tables first.
+4. **Import** — Chooses between streaming import (`importWorkspaceStream`) and Dexie import (`importInto`). Appends respect `overwriteValues`. Streaming replace mode validates that the manifest contains every current database table before opening the destructive transaction, then clears and imports atomically so a truncated stream rolls back.
 5. **Hooks** — Emits `workspace.backup.*` actions (`before`, `after`, `error`, `cancelled`) at each stage, plus `workspace:reloaded` after a successful import so other stores can resync.
 6. **Error handling** — Wraps failures in `asAppError`, logs via `reportError`, and stores them in `state.error` with domain/action tags.
 
@@ -121,6 +121,7 @@ const backup = useWorkspaceBackup();
 -   **Browser-only**: Every major action checks for `window`. In SSR contexts the composable will set an error explaining the limitation.
 -   **Abort handling**: If the user cancels a save picker, the export resets to idle without surfacing an error.
 -   **Version checks**: Both Dexie and stream imports validate database name/version; importing something from a newer schema raises a clear error.
+-   **Replace safety**: A streaming replace backup must declare every table in the current workspace schema. Empty, partial, or truncated backups fail without clearing existing rows; use append mode for an intentional partial-table merge.
 -   **Chunk sizing**: Streaming exports use `STREAM_CHUNK_SIZE = 500` rows; Dexie imports default to ~1 MB chunks (`DEFAULT_KILOBYTES_PER_CHUNK`). Adjust in utilities if you need different throughput.
 -   **Overwrite semantics**: In append mode, `overwriteValues` lets you merge data without wiping tables—set it via UI toggle before calling `importWorkspace`.
 -   **Cleanup**: Call `reset()` after successful operations if you want to start a new flow without refreshing the page.

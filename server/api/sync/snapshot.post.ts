@@ -6,7 +6,11 @@
  * strictly after its high-watermark.
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
-import { SnapshotRequestSchema, SnapshotResponseSchema } from '~~/shared/sync/schemas';
+import {
+    SnapshotRequestSchema,
+    SnapshotResponseSchema,
+    getSnapshotResponseContractError,
+} from '~~/shared/sync/schemas';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
@@ -66,7 +70,10 @@ export default defineEventHandler(async (event) => {
     const response = SnapshotResponseSchema.safeParse(
         await adapter.snapshot(event, request.data)
     );
-    if (!response.success) {
+    if (
+        !response.success ||
+        getSnapshotResponseContractError(request.data, response.data)
+    ) {
         throw createError({ statusCode: 502, statusMessage: 'Invalid snapshot response' });
     }
 

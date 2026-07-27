@@ -100,53 +100,71 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
     const runtime: PluginRuntimeManifestResponse['runtime'] = {};
     const enabledPluginIds: string[] = [];
 
-    for (const plugin of installedPlugins) {
-        const configured = configuredEnabled.includes(plugin.id);
-        let loadAllowed = false;
-        let loadDeniedReason: string | undefined = configured
-            ? undefined
-            : 'plugin-disabled';
-        let effectivePolicy = mergePluginGatePolicy(plugin.access, null);
+    const resolvedPlugins = await Promise.all(
+        installedPlugins.map(async (plugin) => {
+            const configured = configuredEnabled.includes(plugin.id);
+            let loadAllowed = false;
+            let loadDeniedReason: string | undefined = configured
+                ? undefined
+                : 'plugin-disabled';
+            let effectivePolicy = mergePluginGatePolicy(plugin.access, null);
 
-        if (configured) {
-            const access = await checkPluginAccess(event, {
-                pluginId: plugin.id,
-                action: 'runtime.load',
-            });
-            loadAllowed = access.decision.allowed;
-            effectivePolicy = access.decision.effectivePolicy;
-            if (!loadAllowed) loadDeniedReason = access.decision.reasons[0] ?? 'forbidden';
-        } else {
-            // Disabled V1 plugins were not previously passed through entitlement
-            // resolution. Preserve that behavior while still reporting their
-            // effective policy when the settings backend is available.
-            try {
-                const settings = await getPluginSettings(settingsStore, workspaceId, plugin.id);
-                effectivePolicy = mergePluginGatePolicy(
-                    plugin.access,
-                    readPluginAccessPolicy(settings)
-                );
-            } catch {
-                // The plugin stays disabled; manifest-default policy remains an
-                // honest conservative identity without making a new dependency
-                // capable of breaking the legacy response.
+            if (configured) {
+                const access = await checkPluginAccess(event, {
+                    pluginId: plugin.id,
+                    action: 'runtime.load',
+                });
+                loadAllowed = access.decision.allowed;
+                effectivePolicy = access.decision.effectivePolicy;
+                if (!loadAllowed) {
+                    loadDeniedReason =
+                        access.decision.reasons[0] ?? 'forbidden';
+                }
+            } else {
+                try {
+                    const settings = await getPluginSettings(
+                        settingsStore,
+                        workspaceId,
+                        plugin.id
+                    );
+                    effectivePolicy = mergePluginGatePolicy(
+                        plugin.access,
+                        readPluginAccessPolicy(settings)
+                    );
+                } catch {
+                    // Disabled plugins retain their conservative manifest policy.
+                }
             }
-        }
 
-        const base = {
-            clientEntry: plugin.runtime?.client?.entry,
-            hasServerRoutes: Boolean(plugin.runtime?.server?.routes?.length),
-            loadAllowed,
-            loadDeniedReason,
-            mediatedLifecycleCoverage: LEGACY_LIFECYCLE_COVERAGE.mediated,
-            lifecycleCoverage: LEGACY_LIFECYCLE_COVERAGE.overall,
-        };
-        const artifactResolution = resolveBundledPluginArtifact(
-            bundledPluginCatalog,
-            plugin.id,
-            plugin.runtime?.client?.entry
-        );
-        if (artifactResolution.status === 'bundled') {
+            const base = {
+                clientEntry: plugin.runtime?.client?.entry,
+                hasServerRoutes: Boolean(
+                    plugin.runtime?.server?.routes?.length
+                ),
+                loadAllowed,
+                loadDeniedReason,
+                mediatedLifecycleCoverage:
+                    LEGACY_LIFECYCLE_COVERAGE.mediated,
+                lifecycleCoverage: LEGACY_LIFECYCLE_COVERAGE.overall,
+            };
+            const artifactResolution = resolveBundledPluginArtifact(
+                bundledPluginCatalog,
+                plugin.id,
+                plugin.runtime?.client?.entry
+            );
+
+            if (artifactResolution.status !== 'bundled') {
+                return {
+                    id: plugin.id,
+                    loadAllowed,
+                    entry: {
+                        ...base,
+                        descriptorStatus: 'rebuild-required' as const,
+                        rebuildRequiredReason: artifactResolution.reason,
+                    },
+                };
+            }
+
             const identity: PluginDescriptorIdentity = {
                 id: plugin.id,
                 version: plugin.version,
@@ -156,7 +174,9 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                 trust: 'trusted-host',
                 workspaceId,
                 policyRevision: createPluginPolicyRevision(effectivePolicy),
-                grantsRevision: createLegacyV1GrantsRevision(plugin.capabilities),
+                grantsRevision: createLegacyV1GrantsRevision(
+                    plugin.capabilities
+                ),
                 resolvedDependencyKeys: [],
                 artifact: artifactResolution.artifact,
             };
@@ -164,22 +184,23 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                 ...identity,
                 descriptorKey: await createDescriptorKey(identity),
             };
-            runtime[plugin.id] = {
-                ...base,
-                descriptorStatus: 'ready',
-                descriptor,
+            return {
+                id: plugin.id,
+                loadAllowed,
+                entry: {
+                    ...base,
+                    descriptorStatus: 'ready' as const,
+                    descriptor,
+                },
             };
-        } else {
-            runtime[plugin.id] = {
-                ...base,
-                descriptorStatus: 'rebuild-required',
-                rebuildRequiredReason: artifactResolution.reason,
-            };
-        }
+        })
+    );
 
-        if (loadAllowed) {
-            enabledPluginIds.push(plugin.id);
-        }
+    // Promise.all preserves input order, so the response and revision remain
+    // deterministic while provider lookups and descriptor hashing run in parallel.
+    for (const resolved of resolvedPlugins) {
+        runtime[resolved.id] = resolved.entry;
+        if (resolved.loadAllowed) enabledPluginIds.push(resolved.id);
     }
 
     const revision = buildRevision({

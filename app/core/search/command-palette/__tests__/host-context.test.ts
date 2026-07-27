@@ -82,6 +82,29 @@ describe('createPaletteHostContext', () => {
         expect(result).toEqual({ ok: true });
     });
 
+    it('opens system prompt modal modes through the host dependency', async () => {
+        const openSystemPrompts = vi.fn();
+        const host = createPaletteHostContext({
+            openSystemPrompts,
+            getMultiPaneApi: () => undefined,
+            getDashboardNavigation: () => ({
+                openPlugin: vi.fn(),
+                openPage: vi.fn(),
+            }),
+        });
+
+        await expect(
+            host.openSystemPrompts({
+                mode: 'edit',
+                promptId: 'prompt-1',
+            })
+        ).resolves.toEqual({ ok: true });
+        expect(openSystemPrompts).toHaveBeenCalledWith({
+            mode: 'edit',
+            promptId: 'prompt-1',
+        });
+    });
+
     it('clears a queued image selection when navigation fails', async () => {
         __resetPaletteImageSelectionForTests();
         const host = createPaletteHostContext({

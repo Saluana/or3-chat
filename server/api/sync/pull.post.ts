@@ -11,7 +11,11 @@
  * - Returns changes + new global cursor (server version).
  */
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
-import { PullRequestSchema } from '~~/shared/sync/schemas';
+import {
+    PullRequestSchema,
+    PullResponseSchema,
+    getPullResponseContractError,
+} from '~~/shared/sync/schemas';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
@@ -87,10 +91,21 @@ export default defineEventHandler(async (event) => {
     }
 
     // Dispatch to adapter
-    const result = await adapter.pull(event, parsed.data);
+    const result = PullResponseSchema.safeParse(
+        await adapter.pull(event, parsed.data)
+    );
+    if (
+        !result.success ||
+        getPullResponseContractError(parsed.data, result.data)
+    ) {
+        throw createError({
+            statusCode: 502,
+            statusMessage: 'Invalid pull response',
+        });
+    }
 
     // Record successful request for rate limiting
     recordSyncRequest(session.user.id, 'sync:pull');
 
-    return result;
+    return result.data;
 });

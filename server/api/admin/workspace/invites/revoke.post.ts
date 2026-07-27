@@ -3,9 +3,12 @@ import { z } from 'zod';
 import { requireAdminApiContext } from '../../../../admin/api';
 import { getAuthWorkspaceStore } from '../../../../auth/store/registry';
 import { isAdminEnabled } from '../../../../utils/admin/is-admin-enabled';
+import { resolveAdminWorkspaceTarget } from '../../../../admin/workspace-target';
+import { getWorkspaceAccessStore } from '../../../../admin/stores/registry';
 
 const BodySchema = z.object({
     inviteId: z.string().min(1),
+    workspaceId: z.string().min(1).optional(),
 });
 
 function isMissingConvexFunctionError(error: unknown, functionName: string): boolean {
@@ -28,20 +31,29 @@ export default defineEventHandler(async (event) => {
     });
     setResponseHeader(event, 'Cache-Control', 'no-store');
 
-    const session = adminCtx.session;
-    if (!session?.workspace || !session.user) {
-        throw createError({
-            statusCode: 403,
-            statusMessage: 'Workspace admin session required',
-        });
-    }
-
-    const workspaceId = session.workspace.id;
-    const userId = session.user.id;
-
     const body = BodySchema.safeParse(await readBody(event));
     if (!body.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
+    }
+    const workspaceId = resolveAdminWorkspaceTarget(
+        adminCtx,
+        body.data.workspaceId
+    );
+    const workspace = await getWorkspaceAccessStore(event).getWorkspace({
+        workspaceId,
+    });
+    if (!workspace) {
+        throw createError({
+            statusCode: 404,
+            statusMessage: 'Workspace not found',
+        });
+    }
+    const userId = adminCtx.session?.user?.id ?? workspace.ownerUserId;
+    if (!userId) {
+        throw createError({
+            statusCode: 409,
+            statusMessage: 'Workspace has no owner to attribute this action to',
+        });
     }
 
     const config = useRuntimeConfig();

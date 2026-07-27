@@ -28,6 +28,7 @@ import {
     MAX_TOOL_ARGUMENT_BYTES,
     MAX_TOOL_DURABLE_RESULT_BYTES,
 } from '~~/shared/chat/tool-limits';
+import type { WorkflowToolRegistrationPolicy } from '~~/shared/chat/workflow-tool-policy';
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
 import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
@@ -77,6 +78,7 @@ export interface RegisteredTool {
     enabled: Ref<boolean>;
     lastError: Ref<string | null>;
     runtime: ToolRuntime;
+    workflowPolicy?: WorkflowToolRegistrationPolicy;
     /** Removes this exact registration; returns false after replacement/disposal. */
     dispose: () => boolean;
     _owner: symbol;
@@ -87,6 +89,7 @@ interface RegisterOptions {
     override?: boolean; // allow replacing an existing tool
     enabled?: boolean; // explicit initial enabled state
     runtime?: ToolRuntime;
+    workflowPolicy?: WorkflowToolRegistrationPolicy;
 }
 
 const TOOL_STORAGE_KEY = 'or3.tools.enabled';
@@ -293,6 +296,7 @@ export function useToolRegistry() {
             enabled: ref(initialEnabled),
             lastError: ref(null),
             runtime,
+            workflowPolicy: opts.workflowPolicy,
             _owner: owner,
             _stopWatcher: () => undefined,
             dispose: () => {

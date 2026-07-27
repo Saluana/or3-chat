@@ -3,7 +3,6 @@
 // Provides consistent SDK initialization and common request options
 
 import { OpenRouter } from '@openrouter/sdk';
-import { patchOpenRouterClientForWorkflowCompat } from './sdk-v1-compat';
 import { normalizeOpenRouterBaseUrl } from './url';
 
 export interface OpenRouterClientConfig {
@@ -32,17 +31,6 @@ export function createOpenRouterClient(
         httpReferer: DEFAULT_HEADERS['HTTP-Referer'],
         appTitle: DEFAULT_HEADERS['X-Title'],
     });
-}
-
-/**
- * Create an OpenRouter client compatible with or3-workflow-core's flat chat.send API.
- */
-export function createWorkflowOpenRouterClient(
-    config: OpenRouterClientConfig = {}
-): OpenRouter {
-    return patchOpenRouterClientForWorkflowCompat(
-        createOpenRouterClient(config)
-    );
 }
 
 /**

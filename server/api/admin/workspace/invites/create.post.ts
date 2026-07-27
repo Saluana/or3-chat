@@ -4,11 +4,14 @@ import { requireAdminApiContext } from '../../../../admin/api';
 import { getAuthWorkspaceStore } from '../../../../auth/store/registry';
 import { createInviteToken, hashInviteToken } from '../../../../auth/invite-token';
 import { isAdminEnabled } from '../../../../utils/admin/is-admin-enabled';
+import { resolveAdminWorkspaceTarget } from '../../../../admin/workspace-target';
+import { getWorkspaceAccessStore } from '../../../../admin/stores/registry';
 
 const BodySchema = z.object({
     email: z.string().email().max(320),
     role: z.enum(['owner', 'editor', 'viewer']).default('viewer'),
     expiresInSeconds: z.number().int().min(60).max(60 * 60 * 24 * 30).optional(),
+    workspaceId: z.string().min(1).optional(),
 });
 
 function isMissingConvexFunctionError(error: unknown, functionName: string): boolean {
@@ -31,21 +34,32 @@ export default defineEventHandler(async (event) => {
     });
     setResponseHeader(event, 'Cache-Control', 'no-store');
 
-    const session = adminCtx.session;
-    if (!session?.workspace || !session.user) {
-        throw createError({
-            statusCode: 403,
-            statusMessage: 'Workspace admin session required',
-        });
-    }
-
     const body = BodySchema.safeParse(await readBody(event));
     if (!body.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
     }
 
-    const workspaceId = session.workspace.id;
-    const invitedByUserId = session.user.id;
+    const workspaceId = resolveAdminWorkspaceTarget(
+        adminCtx,
+        body.data.workspaceId
+    );
+    const workspace = await getWorkspaceAccessStore(event).getWorkspace({
+        workspaceId,
+    });
+    if (!workspace) {
+        throw createError({
+            statusCode: 404,
+            statusMessage: 'Workspace not found',
+        });
+    }
+    const invitedByUserId =
+        adminCtx.session?.user?.id ?? workspace.ownerUserId;
+    if (!invitedByUserId) {
+        throw createError({
+            statusCode: 409,
+            statusMessage: 'Workspace has no owner to attribute this invite to',
+        });
+    }
 
     const config = useRuntimeConfig();
     const authConfig = config.auth as { invite?: { tokenSecret?: string; tokenTtlSeconds?: number } };

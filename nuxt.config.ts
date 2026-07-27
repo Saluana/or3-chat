@@ -20,6 +20,13 @@ const disableNonCorePlugins = isNonCorePluginDiscoveryDisabled(
 const isWizardUiProcess = process.env.OR3_WIZARD_UI_ENABLED === 'true';
 const isScrollTestHarnessEnabled =
     process.env.OR3_SCROLL_TEST_HARNESS === 'true';
+const isProductionJourneyTestHarnessEnabled =
+    process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS === 'true';
+const productionJourneyPort = Number(process.env.PW_PORT || 3000);
+const productionJourneyOpenRouterBaseUrl =
+    `http://127.0.0.1:${
+        Number.isInteger(productionJourneyPort) ? productionJourneyPort : 3000
+    }/api/__or3-e2e`;
 const isStaticGenerateBuild = process.argv.includes('generate');
 const isStaticCloudDisabledBuild = isStaticGenerateBuild && !isSsrAuthEnabled;
 const shouldLoadCloudProviderModules =
@@ -405,6 +412,12 @@ export default defineNuxtConfig({
         ...(isScrollTestHarnessEnabled
             ? { '/__or3-scroll-test': { ssr: false } }
             : {}),
+        ...(isProductionJourneyTestHarnessEnabled
+            ? {
+                  '/__or3-chat-journey-test': { ssr: false },
+                  '/__or3-document-journey-test': { ssr: false },
+              }
+            : {}),
     },
     compatibilityDate: '2025-07-15',
     runtimeConfig: {
@@ -412,8 +425,10 @@ export default defineNuxtConfig({
         openrouterApiKey:
             or3CloudConfig.services.llm?.openRouter?.instanceApiKey || '',
         openrouterBaseUrl:
-            or3CloudConfig.services.llm?.openRouter?.baseUrl ||
-            'https://openrouter.ai/api/v1',
+            isProductionJourneyTestHarnessEnabled
+                ? productionJourneyOpenRouterBaseUrl
+                : or3CloudConfig.services.llm?.openRouter?.baseUrl ||
+                  'https://openrouter.ai/api/v1',
         openrouterAllowUserOverride:
             or3CloudConfig.services.llm?.openRouter?.allowUserOverride ?? true,
         openrouterRequireUserKey:
@@ -535,8 +550,10 @@ export default defineNuxtConfig({
                     or3CloudConfig.services.llm?.openRouter?.requireUserKey ??
                     false,
                 baseUrl:
-                    or3CloudConfig.services.llm?.openRouter?.baseUrl ||
-                    'https://openrouter.ai/api/v1',
+                    isProductionJourneyTestHarnessEnabled
+                        ? productionJourneyOpenRouterBaseUrl
+                        : or3CloudConfig.services.llm?.openRouter?.baseUrl ||
+                          'https://openrouter.ai/api/v1',
             },
             storage: {
                 enabled: effectiveStorageEnabled,
@@ -869,6 +886,14 @@ export default defineNuxtConfig({
                         if (/^_nuxt\/KaTeX_/i.test(entry.url)) return false;
                         if (/^_nuxt\/katex\..*\.css$/i.test(entry.url))
                             return false;
+                        // The exact tokenizer is a worker-only, on-demand asset.
+                        // Do not force its ~1 MB gzip payload into every PWA
+                        // installation; the browser will cache it after use.
+                        if (
+                            entry.url.endsWith('.js') &&
+                            entry.size > 1.5 * 1024 * 1024
+                        )
+                            return false;
                         return true;
                     }),
                     warnings: [],
@@ -1103,15 +1128,36 @@ export default defineNuxtConfig({
     ].filter(Boolean) as string[],
     hooks: {
         'pages:extend'(pages) {
-            if (!isScrollTestHarnessEnabled) return;
-            pages.push({
-                name: 'or3-scroll-test-harness',
-                path: '/__or3-scroll-test',
-                file: resolve(
-                    __dirname,
-                    'tests/e2e/fixtures/Or3ScrollCanary.vue'
-                ),
-            });
+            if (isScrollTestHarnessEnabled) {
+                pages.push({
+                    name: 'or3-scroll-test-harness',
+                    path: '/__or3-scroll-test',
+                    file: resolve(
+                        __dirname,
+                        'tests/e2e/fixtures/Or3ScrollCanary.vue'
+                    ),
+                });
+            }
+            if (isProductionJourneyTestHarnessEnabled) {
+                pages.push(
+                    {
+                        name: 'or3-chat-journey-test-harness',
+                        path: '/__or3-chat-journey-test',
+                        file: resolve(
+                            __dirname,
+                            'tests/e2e/fixtures/ProductionChatJourney.vue'
+                        ),
+                    },
+                    {
+                        name: 'or3-document-journey-test-harness',
+                        path: '/__or3-document-journey-test',
+                        file: resolve(
+                            __dirname,
+                            'tests/e2e/fixtures/ProductionDocumentJourney.vue'
+                        ),
+                    }
+                );
+            }
         },
         listen(_server, listener) {
             if (isWizardUiProcess) return;

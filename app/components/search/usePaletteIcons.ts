@@ -15,6 +15,7 @@ export function usePaletteIcons(): {
     const chat = useIcon('palette.chat');
     const document = useIcon('palette.document');
     const project = useIcon('palette.project');
+    const prompt = useIcon('palette.prompt');
     const workflow = useIcon('palette.workflow');
     const image = useIcon('palette.image');
     const setting = useIcon('palette.setting');
@@ -26,6 +27,7 @@ export function usePaletteIcons(): {
         chat: chat.value,
         document: document.value,
         project: project.value,
+        prompt: prompt.value,
         workflow: workflow.value,
         image: image.value,
         setting: setting.value,

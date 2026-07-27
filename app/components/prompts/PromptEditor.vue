@@ -1,11 +1,13 @@
 <template>
     <div
-        class="prompt-editor-shell flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
+        class="prompt-editor-shell flex h-full w-full flex-col bg-[var(--md-surface)]"
     >
-        <div class="prompt-editor-header flex items-center pb-5">
+        <div
+            class="prompt-editor-header flex shrink-0 items-center gap-2 border-b border-[var(--md-border-color)] p-3 sm:p-4"
+        >
             <UButton
                 v-bind="backButtonProps"
-                @click="emit('back')"
+                @click="handleBack"
                 :icon="useIcon('shell.back').value"
                 aria-label="Back to list"
             />
@@ -14,6 +16,22 @@
                 v-bind="promptTitleInputProps"
                 class="prompt-editor-title-input flex-1"
                 @update:model-value="onTitleChange"
+            />
+            <UButton
+                v-if="record"
+                v-bind="favoriteButtonProps"
+                :icon="
+                    record.favorite
+                        ? useIcon('catalog.star.filled').value
+                        : useIcon('catalog.star').value
+                "
+                :aria-label="
+                    record.favorite
+                        ? 'Remove from favorites'
+                        : 'Add to favorites'
+                "
+                :aria-pressed="record.favorite"
+                @click="toggleFavorite"
             />
             <div class="prompt-editor-status-wrapper flex items-center gap-1">
                 <UTooltip :text="statusText">
@@ -39,8 +57,58 @@
             </div>
             <div
                 v-else
-                class="prompt-editor-body-shell w-full max-w-[820px] mx-auto p-8 pb-24"
+                class="prompt-editor-body-shell mx-auto w-full max-w-[900px] p-4 pb-24 sm:p-8"
             >
+                <div
+                    class="mb-5 rounded-[var(--md-border-radius)] border border-[var(--md-border-color)] p-3"
+                >
+                    <div
+                        class="text-[11px] font-semibold uppercase tracking-wider text-[var(--md-on-surface-variant)]"
+                    >
+                        Tags
+                    </div>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        <button
+                            v-for="tag in record.tags"
+                            :key="tag"
+                            type="button"
+                            class="inline-flex items-center gap-1 rounded-full border border-[var(--md-border-color)] px-2.5 py-1 text-xs hover:bg-[var(--md-surface-hover)]"
+                            :aria-label="`Remove ${tag} tag`"
+                            @click="removeTag(tag)"
+                        >
+                            {{ tag }}
+                            <UIcon
+                                :name="useIcon('ui.close').value"
+                                class="h-3 w-3"
+                            />
+                        </button>
+                        <span
+                            v-if="!record.tags.length"
+                            class="text-xs text-[var(--md-on-surface-variant)]"
+                        >
+                            No tags
+                        </span>
+                    </div>
+                    <div class="mt-2 flex items-center gap-2">
+                        <UInput
+                            v-model="tagDraft"
+                            size="sm"
+                            class="min-w-0 flex-1"
+                            placeholder="Add a tag"
+                            aria-label="Add prompt tag"
+                            @keydown.enter.prevent="addTag"
+                        />
+                        <UButton
+                            size="sm"
+                            color="neutral"
+                            variant="outline"
+                            :disabled="!tagDraft.trim()"
+                            @click="addTag"
+                        >
+                            Add
+                        </UButton>
+                    </div>
+                </div>
                 <EditorContent
                     :editor="editor as Editor"
                     class="prompt-editor-content prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
@@ -63,13 +131,21 @@ import { Editor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions/placeholder';
 import { useDebounceFn } from '@vueuse/core';
-import { getPrompt, updatePrompt, type PromptRecord } from '~/db/prompts';
+import {
+    getPrompt,
+    updatePrompt,
+    type PromptRecord,
+    type UpdatePromptPatch,
+} from '~/db/prompts';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
 
 const props = defineProps<{ promptId: string }>();
-const emit = defineEmits<{ (e: 'back'): void }>();
+const emit = defineEmits<{
+    (e: 'back'): void;
+    (e: 'saved', prompt: PromptRecord): void;
+}>();
 
 const record = ref<PromptRecord | null>(null);
 const loading = ref(true);
@@ -77,6 +153,7 @@ const titleDraft = ref('');
 const editor = ref<Editor | null>(null);
 const pendingTitle = ref<string | undefined>();
 const pendingContent = ref<any | undefined>();
+const tagDraft = ref('');
 const status = ref<'idle' | 'saving' | 'error' | 'loading'>('loading');
 
 async function load(id: string) {
@@ -109,7 +186,7 @@ async function flush() {
         return;
     status.value = 'saving';
     try {
-        const patch: any = {};
+        const patch: UpdatePromptPatch = {};
         if (pendingTitle.value !== undefined) patch.title = pendingTitle.value;
         if (pendingContent.value !== undefined)
             patch.content = pendingContent.value;
@@ -118,6 +195,7 @@ async function flush() {
             record.value = updated;
             titleDraft.value = updated.title;
             status.value = 'idle';
+            emit('saved', updated);
         } else {
             status.value = 'error';
         }
@@ -128,6 +206,54 @@ async function flush() {
         pendingTitle.value = undefined;
         pendingContent.value = undefined;
     }
+}
+
+async function updateMetadata(patch: UpdatePromptPatch) {
+    if (!record.value) return;
+    status.value = 'saving';
+    try {
+        const updated = await updatePrompt(record.value.id, patch);
+        if (!updated) {
+            status.value = 'error';
+            return;
+        }
+        record.value = updated;
+        status.value = 'idle';
+        emit('saved', updated);
+    } catch (error) {
+        status.value = 'error';
+        console.warn('[PromptEditor] metadata save failed', error);
+    }
+}
+
+function toggleFavorite() {
+    if (!record.value) return;
+    void updateMetadata({ favorite: !record.value.favorite });
+}
+
+function addTag() {
+    if (!record.value) return;
+    const tag = tagDraft.value.trim();
+    if (!tag) return;
+    tagDraft.value = '';
+    void updateMetadata({ tags: [...record.value.tags, tag] });
+}
+
+function removeTag(tagToRemove: string) {
+    if (!record.value) return;
+    const key = tagToRemove.toLocaleLowerCase();
+    void updateMetadata({
+        tags: record.value.tags.filter(
+            (tag) => tag.toLocaleLowerCase() !== key
+        ),
+    });
+}
+
+async function handleBack() {
+    const cancel = (scheduleSave as unknown as { cancel?: () => void }).cancel;
+    cancel?.();
+    await flush();
+    emit('back');
 }
 
 function onTitleChange() {
@@ -196,6 +322,7 @@ onBeforeUnmount(() => {
     // vueuse's useDebounceFn returns a callable with a cancel() method
     const cancel = (scheduleSave as unknown as { cancel?: () => void }).cancel;
     cancel?.();
+    void flush();
     editor.value?.destroy();
 });
 
@@ -244,10 +371,17 @@ const backButtonProps = computed(() => {
         size: 'sm' as const,
         ...buildThemeOverrideProps(overrides.value, {
             baseClass:
-                'prompt-editor-back-btn flex items-center justify-center h-[40px] w-[40px] mr-3',
+                'prompt-editor-back-btn flex items-center justify-center h-[36px] w-[36px]',
         }),
     };
 });
+
+const favoriteButtonProps = computed(() => ({
+    variant: 'ghost' as const,
+    color: 'neutral' as const,
+    size: 'sm' as const,
+    square: true,
+}));
 
 const statusText = computed(() => {
     switch (status.value) {

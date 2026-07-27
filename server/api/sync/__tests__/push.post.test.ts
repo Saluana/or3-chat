@@ -95,6 +95,13 @@ function makeBaseBody() {
     };
 }
 
+function successfulPushResult(opId: string) {
+    return {
+        results: [{ opId, success: true, serverVersion: 7 }],
+        serverVersion: 7,
+    };
+}
+
 describe('POST /api/sync/push', () => {
     beforeEach(() => {
         readBodyMock.mockReset();
@@ -111,7 +118,19 @@ describe('POST /api/sync/push', () => {
         checkSyncRateLimitMock.mockReset().mockReturnValue({ allowed: true, remaining: 10 });
         recordSyncRequestMock.mockReset();
         getSyncRateLimitStatsMock.mockReset().mockReturnValue({ limit: 200, remaining: 100 });
-        pushMock.mockReset().mockResolvedValue({ results: [], serverVersion: 7 });
+        pushMock.mockReset().mockImplementation(
+            async (
+                _event: H3Event,
+                batch: { ops: Array<{ stamp: { opId: string } }> }
+            ) => ({
+                results: batch.ops.map((op) => ({
+                    opId: op.stamp.opId,
+                    success: true,
+                    serverVersion: 7,
+                })),
+                serverVersion: 7,
+            })
+        );
         getActiveSyncGatewayAdapterMock.mockReset().mockReturnValue({
             id: 'adapter-1',
             push: pushMock as any,
@@ -171,7 +190,11 @@ describe('POST /api/sync/push', () => {
         };
         readBodyMock.mockResolvedValue(body);
 
-        await expect(handler(makeEvent())).resolves.toEqual({ results: [], serverVersion: 7 });
+        await expect(handler(makeEvent())).resolves.toEqual(
+            successfulPushResult(
+                'a1b2c3d4-5678-4abc-8def-123456789002'
+            )
+        );
     });
 
     it('returns 401 when unauthenticated or missing user/workspace', async () => {
@@ -237,7 +260,9 @@ describe('POST /api/sync/push', () => {
         const body = makeBaseBody();
         readBodyMock.mockResolvedValue(body);
 
-        await expect(handler(makeEvent())).resolves.toEqual({ results: [], serverVersion: 7 });
+        await expect(handler(makeEvent())).resolves.toEqual(
+            successfulPushResult(STAMP_1.opId)
+        );
 
         expect(pushMock).toHaveBeenCalledWith(expect.anything(), body);
         expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'sync:push');
@@ -275,7 +300,11 @@ describe('POST /api/sync/push', () => {
             ],
         });
 
-        await expect(handler(makeEvent())).resolves.toEqual({ results: [], serverVersion: 7 });
+        await expect(handler(makeEvent())).resolves.toEqual(
+            successfulPushResult(
+                'a1b2c3d4-5678-4abc-8def-123456789003'
+            )
+        );
         const firstCall = pushMock.mock.calls[0]?.[1] as
             | { ops?: Array<{ payload?: Record<string, unknown> }> }
             | undefined;
@@ -316,6 +345,43 @@ describe('POST /api/sync/push', () => {
             ],
         });
 
-        await expect(handler(makeEvent())).resolves.toEqual({ results: [], serverVersion: 7 });
+        await expect(handler(makeEvent())).resolves.toEqual(
+            successfulPushResult(
+                'a1b2c3d4-5678-4abc-8def-123456789004'
+            )
+        );
+    });
+
+    it.each([
+        ['missing', { results: [], serverVersion: 7 }],
+        [
+            'duplicate',
+            {
+                results: [
+                    {
+                        opId: STAMP_1.opId,
+                        success: true,
+                        serverVersion: 7,
+                    },
+                    {
+                        opId: STAMP_1.opId,
+                        success: true,
+                        serverVersion: 7,
+                    },
+                ],
+                serverVersion: 7,
+            },
+        ],
+    ])('returns 502 for %s operation IDs in adapter results', async (_label, response) => {
+        const handler = (await import('../push.post')).default as (
+            event: H3Event
+        ) => Promise<unknown>;
+        readBodyMock.mockResolvedValue(makeBaseBody());
+        pushMock.mockResolvedValue(response);
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 502,
+        });
+        expect(recordSyncRequestMock).not.toHaveBeenCalled();
     });
 });

@@ -7,7 +7,11 @@
  * This is Layer 1 of the auth protection (client/universal).
  * Layer 2 is the server middleware that protects APIs.
  */
-import { defineNuxtRouteMiddleware, navigateTo } from '#app';
+import {
+    defineNuxtRouteMiddleware,
+    navigateTo,
+    useNuxtData,
+} from '#app';
 
 type AdminSessionKind = 'super_admin' | 'workspace_admin';
 
@@ -55,6 +59,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
                 Accept: 'application/json',
             },
         });
+        useNuxtData<{ authenticated: boolean; kind: AdminSessionKind }>(
+            'admin:auth:session'
+        ).data.value = data;
 
         if (data.authenticated && data.kind === 'super_admin') {
             return;

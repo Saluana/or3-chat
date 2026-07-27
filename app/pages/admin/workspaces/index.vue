@@ -1,11 +1,11 @@
 <template>
     <div class="space-y-6">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 class="text-2xl font-semibold">Workspaces</h1>
                     <p class="text-sm opacity-70">Manage all workspaces in the deployment</p>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex flex-wrap gap-2">
                     <UButton
                         to="/admin/admin-users"
                         variant="soft"
@@ -28,12 +28,14 @@
             <div class="flex flex-wrap gap-4">
                 <UInput
                     v-model="search"
+                    aria-label="Search workspaces"
                     placeholder="Search workspaces..."
                     :icon="searchIcon"
                     class="flex-1 min-w-[200px]"
                 />
                 <USelectMenu
                     v-model="showDeleted"
+                    aria-label="Workspace visibility filter"
                     :options="[
                         { label: 'Active Only', value: false },
                         { label: 'Show Deleted', value: true },
@@ -64,17 +66,17 @@
                     :key="workspace.id"
                     class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] hover:bg-[var(--md-surface-container-low)] transition-colors"
                 >
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-4">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="min-w-0 flex items-center gap-4">
                             <div class="w-10 h-10 rounded-lg bg-[var(--md-surface-container-high)] flex items-center justify-center">
                                 <UIcon :name="workspaceIcon" class="w-5 h-5 text-[var(--md-primary)]" />
                             </div>
-                            <div>
-                                <div class="font-medium flex items-center gap-2">
+                            <div class="min-w-0">
+                                <div class="font-medium flex flex-wrap items-center gap-2">
                                     {{ workspace.name }}
                                     <UBadge v-if="workspace.deleted" color="error" variant="soft">Deleted</UBadge>
                                 </div>
-                            <div class="text-sm opacity-70">
+                            <div class="break-words text-sm opacity-70">
                                 {{ workspace.memberCount }} members · Owner: {{ workspace.ownerEmail || workspace.ownerUserId || 'Unknown' }}
                             </div>
                                 <div class="text-xs opacity-50">
@@ -96,7 +98,7 @@
                 </div>
 
                 <!-- Pagination -->
-                <div class="flex items-center justify-between pt-4">
+                <div class="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
                     <div class="text-sm opacity-70">
                         Showing {{ workspaces?.length ?? 0 }} of {{ total }} workspaces
                     </div>

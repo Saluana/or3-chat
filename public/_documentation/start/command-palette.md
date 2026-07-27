@@ -1,8 +1,9 @@
 # Command Palette
 
 The command palette is the fastest way to move around OR3. It searches the full
-contents of your workspace — chats, documents, projects, images, dashboard
-pages, and plugin records — and it runs commands without leaving the keyboard.
+contents of your workspace — chats, documents, projects, system prompts, images,
+dashboard pages, and plugin records — and it runs commands without leaving the
+keyboard.
 
 ## Opening it
 
@@ -31,6 +32,7 @@ Search runs over full content, not just titles:
 | Chats | Thread titles and message bodies |
 | Documents | Titles and document text |
 | Projects | Project names and descriptions |
+| Prompts | Prompt titles, instruction bodies, tags, and favorite state |
 | Images | File names and captions |
 | Dashboard | Page titles and descriptions |
 | Commands | Command labels, descriptions, and keywords |
@@ -46,6 +48,7 @@ Click a chip, or type a prefix followed by a colon:
 chat: astilbe
 doc: roadmap
 project: marketing
+prompt: roleplay
 image: garden
 cmd: theme
 ```
@@ -79,6 +82,10 @@ Every result has a primary action — usually *Open* — plus optional secondary
 actions such as *Open in new pane*, *Reveal in sidebar*, or plugin-provided
 actions. The palette closes after a successful action unless the action opts out
 (for example, a toggle you may want to press twice).
+
+Prompt results open the selected prompt directly in edit mode. The
+**Open system prompts** and **New system prompt** commands open the library home
+and a fresh editor respectively.
 
 If an action fails, the palette stays open, keeps your active result, and shows
 a recoverable error message so you can retry or pick something else.

@@ -15,9 +15,14 @@ vi.mock('h3', () => ({
     },
 }));
 
-const requireAdminApiMock = vi.fn();
+const requireAdminApiContextMock = vi.fn();
 vi.mock('../../../../admin/api', () => ({
-    requireAdminApi: requireAdminApiMock as any,
+    requireAdminApiContext: requireAdminApiContextMock as any,
+}));
+
+const resolveAdminWorkspaceTargetMock = vi.fn();
+vi.mock('../../../../admin/workspace-target', () => ({
+    resolveAdminWorkspaceTarget: resolveAdminWorkspaceTargetMock as any,
 }));
 
 const getWorkspaceSettingsStoreMock = vi.fn();
@@ -37,9 +42,10 @@ function makeEvent(): H3Event {
 describe('POST /api/admin/plugins/workspace-settings', () => {
     beforeEach(() => {
         readBodyMock.mockReset();
-        requireAdminApiMock.mockReset().mockResolvedValue({
-            workspace: { id: 'ws-1' },
+        requireAdminApiContextMock.mockReset().mockResolvedValue({
+            kind: 'super_admin',
         });
+        resolveAdminWorkspaceTargetMock.mockReset().mockReturnValue('ws-1');
         getWorkspaceSettingsStoreMock.mockReset().mockReturnValue({});
         setPluginSettingsMock.mockReset().mockResolvedValue(undefined);
     });

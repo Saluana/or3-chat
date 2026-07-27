@@ -101,9 +101,7 @@
                                         v-model:reasoning-effort="
                                             reasoningEffort
                                         "
-                                        @open-system-prompts="
-                                            showSystemPrompts = true
-                                        "
+                                        @open-system-prompts="openSystemPrompts"
                                         @open-model-catalog="
                                             showModelCatalog = true
                                         "
@@ -315,14 +313,6 @@
                 :is="$theme.activeComponents.value['model-catalog-modal']"
                 v-model:showModal="showModelCatalog"
             />
-            <component
-                :is="$theme.activeComponents.value['system-prompts-modal']"
-                v-model:showModal="showSystemPrompts"
-                :thread-id="props.threadId"
-                :pane-id="props.paneId"
-                @selected="handlePromptSelected"
-                @closed="handlePromptModalClosed"
-            />
             <OpenRouterKeyModal v-model:open="showKeyModal" />
         </ClientOnly>
     </div>
@@ -340,6 +330,7 @@ import {
     defineAsyncComponent,
 } from 'vue';
 import { useOr3Config } from '~/composables/useOr3Config';
+import { useSystemPromptsModal } from '~/composables/chat/useSystemPromptsModal';
 import { resolveOpenRouterKeyAvailability } from '~/core/auth/openRouterKeyAvailability';
 import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';
 import { Editor, EditorContent } from '@tiptap/vue-3';
@@ -511,8 +502,17 @@ onBeforeUnmount(() => {
 });
 
 const showModelCatalog = ref(false);
-const showSystemPrompts = ref(false);
 const showKeyModal = ref(false);
+const systemPromptsModal = useSystemPromptsModal();
+
+function openSystemPrompts() {
+    systemPromptsModal.open({
+        mode: 'home',
+        threadId: props.threadId,
+        paneId: props.paneId,
+        onSelected: handlePromptSelected,
+    });
+}
 
 const emit = defineEmits<{
     (
@@ -863,10 +863,6 @@ onBeforeUnmount(() => {
 
 const handlePromptSelected = (id: string) => {
     if (!props.threadId) emit('pending-prompt-selected', id);
-};
-
-const handlePromptModalClosed = () => {
-    /* modal closed */
 };
 
 // Emit live height via useResizeObserver (VueUse handles cleanup automatically)

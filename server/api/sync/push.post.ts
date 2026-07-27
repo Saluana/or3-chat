@@ -13,7 +13,9 @@
 import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
 import {
     PushBatchSchema,
+    PushResultSchema,
     TABLE_PAYLOAD_SCHEMAS,
+    getPushResultContractError,
 } from '~~/shared/sync/schemas';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
@@ -118,10 +120,21 @@ export default defineEventHandler(async (event) => {
     }
 
     // Dispatch to adapter
-    const result = await adapter.push(event, normalizedBatch);
+    const result = PushResultSchema.safeParse(
+        await adapter.push(event, normalizedBatch)
+    );
+    if (
+        !result.success ||
+        getPushResultContractError(normalizedBatch, result.data)
+    ) {
+        throw createError({
+            statusCode: 502,
+            statusMessage: 'Invalid push response',
+        });
+    }
 
     // Record successful request for rate limiting
     recordSyncRequest(session.user.id, 'sync:push');
 
-    return result;
+    return result.data;
 });

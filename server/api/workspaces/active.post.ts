@@ -5,7 +5,11 @@
  * Sets the active workspace for the current user.
  */
 import { defineEventHandler, readBody, createError } from 'h3';
-import { requireWorkspaceSession, resolveWorkspaceStore } from './_helpers';
+import {
+    requireWorkspaceSession,
+    resolveTargetWorkspaceSession,
+    resolveWorkspaceStore,
+} from './_helpers';
 import { requireCan } from '../../auth/can';
 import { invalidateSharedSessionCacheForIdentity } from '../../auth/session';
 import { useRuntimeConfig } from '#imports';
@@ -27,16 +31,11 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
     }
 
-    const targetMembership = (await store.listUserWorkspaces(session.user.id)).find(
-        (workspace) => workspace.id === workspaceId
+    const targetSession = await resolveTargetWorkspaceSession(
+        session,
+        store,
+        workspaceId
     );
-    const targetSession = {
-        ...session,
-        workspace: targetMembership
-            ? { id: targetMembership.id, name: targetMembership.name }
-            : undefined,
-        role: targetMembership?.role,
-    };
 
     requireCan(targetSession, 'workspace.read', {
         kind: 'workspace',

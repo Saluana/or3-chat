@@ -1,6 +1,6 @@
 <template>
     <div class="space-y-6">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 class="text-2xl font-semibold">Admin Users</h1>
                     <p class="text-sm opacity-70">Manage deployment admin access</p>
@@ -20,8 +20,11 @@
                 <h2 class="text-lg font-medium mb-4">Grant Admin Access</h2>
                 
                 <div class="flex gap-4">
+                    <label for="admin-user-search" class="sr-only">Search users by email</label>
                     <UInput
                         v-model="searchQuery"
+                        id="admin-user-search"
+                        name="admin-user-search"
                         placeholder="Search by email..."
                         icon="i-heroicons-magnifying-glass"
                         class="flex-1"
@@ -33,16 +36,16 @@
                     <div
                         v-for="user in searchResults"
                         :key="user.userId"
-                        class="flex items-center justify-between p-3 rounded-lg bg-[var(--md-surface-container-low)]"
+                        class="flex flex-col gap-3 p-3 rounded-lg bg-[var(--md-surface-container-low)] sm:flex-row sm:items-center sm:justify-between"
                     >
-                        <div class="flex items-center gap-3">
+                        <div class="min-w-0 flex items-center gap-3">
                             <div class="w-8 h-8 rounded-full bg-[var(--md-primary-container)] flex items-center justify-center">
                                 <span class="text-xs font-medium text-[var(--md-on-primary-container)]">
                                     {{ (user.email || user.userId).substring(0, 2).toUpperCase() }}
                                 </span>
                             </div>
-                            <div>
-                                <div class="font-medium">{{ user.email || user.userId }}</div>
+                            <div class="min-w-0">
+                                <div class="break-all font-medium">{{ user.email || user.userId }}</div>
                                 <div v-if="user.displayName" class="text-xs opacity-50">{{ user.displayName }}</div>
                             </div>
                         </div>
@@ -94,16 +97,16 @@
                     <div
                         v-for="admin in admins"
                         :key="admin.userId"
-                        class="flex items-center justify-between p-3 rounded-lg bg-[var(--md-surface-container-low)]"
+                        class="flex flex-col gap-3 p-3 rounded-lg bg-[var(--md-surface-container-low)] sm:flex-row sm:items-center sm:justify-between"
                     >
-                        <div class="flex items-center gap-3">
+                        <div class="min-w-0 flex items-center gap-3">
                             <div class="w-8 h-8 rounded-full bg-[var(--md-primary-container)] flex items-center justify-center">
                                 <span class="text-xs font-medium text-[var(--md-on-primary-container)]">
                                     {{ (admin.email || admin.userId).substring(0, 2).toUpperCase() }}
                                 </span>
                             </div>
-                            <div>
-                                <div class="font-medium">{{ admin.email || admin.userId }}</div>
+                            <div class="min-w-0">
+                                <div class="break-all font-medium">{{ admin.email || admin.userId }}</div>
                                 <div class="text-xs opacity-50">Granted {{ formatDate(admin.createdAt) }}</div>
                             </div>
                         </div>

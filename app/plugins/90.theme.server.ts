@@ -1,10 +1,14 @@
 import { ref, shallowRef, type Ref } from 'vue';
-import { callWithNuxt, type NuxtApp } from '#app';
+import type { NuxtApp } from '#app';
 import { useAppConfig, useHead, useRuntimeConfig } from '#imports';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import type { CompiledTheme, ThemePlugin } from '~/theme/_shared/types';
 import { IconRegistry } from '~/theme/_shared/icon-registry';
 import { prepareThemeEntry } from '~/theme/_shared/prepare-theme';
+import {
+    buildThemeHead,
+    type ResolvedThemeStylesheet,
+} from '~/theme/_shared/theme-head';
 import {
     loadThemeManifest,
     resolveThemeStylesheetHref,
@@ -29,9 +33,21 @@ import {
     createThemeComponentMap,
 } from '~/theme/_shared/theme-components-registry';
 
+type NuxtUseHeadInput = Parameters<typeof useHead>[0];
+type NuxtReactiveHead = Exclude<
+    Extract<NuxtUseHeadInput, { readonly value: unknown }>['value'],
+    false | null | undefined
+>;
+
 export default defineNuxtPlugin(async (nuxtApp) => {
     const ACTIVE_THEME_COOKIE = 'or3_active_theme';
     const iconRegistry = new IconRegistry();
+
+    // Register one request-scoped head entry while the plugin's Vue/Nuxt
+    // injection context is synchronously available. Async theme activation only
+    // updates this ref; it must never invoke useHead itself.
+    const themeHead = shallowRef<NuxtReactiveHead | null>(null);
+    useHead(themeHead);
 
     const manifestResult = await loadThemeManifest();
     const manifestEntries = manifestResult.entries;
@@ -366,37 +382,10 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         recordInitialAppConfigPatch(patch);
         syncActiveComponents();
 
-        // Inject CSS variables and stylesheets into the head for SSR/Static builds
+        // Resolve the complete SSR head contribution, then patch the single head
+        // entry registered synchronously at plugin startup.
         if (compiledTheme) {
-            const headConfig: any = {
-                htmlAttrs: {
-                    'data-theme': target,
-                },
-                style: [],
-                link: [],
-            };
-
-            if (compiledTheme.cssVariables) {
-                headConfig.style.push({
-                    id: `or3-theme-vars-${target}`,
-                    innerHTML: compiledTheme.cssVariables,
-                    tagPriority: 'critical',
-                    'data-theme-style': target,
-                });
-            }
-
-            // Inject generated CSS file if present
-            if (compiledTheme.hasStyleSelectors) {
-                headConfig.link.push({
-                    key: `or3-theme-css-${target}`,
-                    rel: 'stylesheet',
-                    href: `/themes/${target}.css`,
-                    tagPriority: 'critical',
-                    'data-theme-css': target,
-                });
-            }
-
-            // Inject theme stylesheets
+            const resolvedStylesheets: ResolvedThemeStylesheet[] = [];
             if (
                 compiledTheme.stylesheets &&
                 compiledTheme.stylesheets.length > 0
@@ -409,19 +398,22 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                             manifestEntry
                         );
                         if (href) {
-                            headConfig.link.push({
-                                key: `or3-theme-extra-${target}-${stylesheet}`,
-                                rel: 'stylesheet',
-                                href: href,
-                                'data-theme-stylesheet': target,
+                            resolvedStylesheets.push({
+                                source: stylesheet,
+                                href,
                             });
                         }
                     }
                 }
             }
 
-            // Use callWithNuxt to preserve context through async operations
-            await callWithNuxt(nuxtApp, () => useHead(headConfig));
+            // Keep the shared builder independent from the installed Unhead
+            // version; Nuxt owns the concrete reactive-head type at this boundary.
+            themeHead.value = buildThemeHead(
+                target,
+                compiledTheme,
+                resolvedStylesheets
+            ) as unknown as NuxtReactiveHead;
         }
 
         bumpResolversVersion();

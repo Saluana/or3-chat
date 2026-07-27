@@ -52,7 +52,6 @@ describe('can()', () => {
             'workspace.settings.manage',
             'users.manage',
             'plugins.manage',
-            'admin.access',
         ];
 
         it.each(ownerPermissions)('allows %s permission for owner', (permission) => {
@@ -109,6 +108,13 @@ describe('can()', () => {
     });
 
     describe('admin access', () => {
+        it('denies admin.access to a workspace owner without a deployment grant', () => {
+            const decision = can(mockOwnerSession, 'admin.access');
+
+            expect(decision.allowed).toBe(false);
+            expect(decision.reason).toBe('forbidden');
+        });
+
         it('allows admin.access when deploymentAdmin=true regardless of role', () => {
             const decision = can(
                 {

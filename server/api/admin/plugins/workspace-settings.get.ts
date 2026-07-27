@@ -6,15 +6,17 @@
  */
 import { defineEventHandler, getQuery, createError } from 'h3';
 import { z } from 'zod';
-import { requireAdminApi } from '../../../admin/api';
+import { requireAdminApiContext } from '../../../admin/api';
 import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 import {
     getPluginAccessPolicy,
     getPluginSettings,
 } from '../../../admin/plugins/workspace-plugin-store';
+import { resolveAdminWorkspaceTarget } from '../../../admin/workspace-target';
 
 const QuerySchema = z.object({
     pluginId: z.string().min(1),
+    workspaceId: z.string().min(1).optional(),
 });
 
 /**
@@ -28,7 +30,7 @@ const QuerySchema = z.object({
  * - Returns key-value pairs.
  */
 export default defineEventHandler(async (event) => {
-    const session = await requireAdminApi(event, {
+    const context = await requireAdminApiContext(event, {
         ownerOnly: true,
         allowWorkspaceAdmin: true,
     });
@@ -38,10 +40,10 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
     }
 
-    const workspaceId = session.workspace?.id;
-    if (!workspaceId) {
-        throw createError({ statusCode: 400, statusMessage: 'Workspace not resolved' });
-    }
+    const workspaceId = resolveAdminWorkspaceTarget(
+        context,
+        query.data.workspaceId
+    );
 
     const store = getWorkspaceSettingsStore(event);
     const settings = await getPluginSettings(

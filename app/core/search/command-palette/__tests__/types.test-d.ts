@@ -40,6 +40,7 @@ describe('palette domain type contracts', () => {
             | 'document'
             | 'pane-app'
             | 'project'
+            | 'system-prompt'
             | 'dashboard'
             | 'image'
             | 'command'

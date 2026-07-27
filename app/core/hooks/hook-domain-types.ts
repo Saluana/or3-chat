@@ -123,6 +123,8 @@ export interface PromptEntity {
     id: string;
     name: string;
     text: string;
+    tags?: string[];
+    favorite?: boolean;
 }
 
 export interface AttachmentEntity {

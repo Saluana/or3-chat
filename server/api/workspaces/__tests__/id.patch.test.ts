@@ -18,10 +18,13 @@ vi.mock('h3', () => ({
 }));
 
 const requireWorkspaceSessionMock = vi.fn();
+const resolveTargetWorkspaceSessionMock = vi.fn();
 const updateWorkspaceMock = vi.fn();
 const requireCanMock = vi.fn();
 vi.mock('../_helpers', () => ({
     requireWorkspaceSession: (...args: unknown[]) => requireWorkspaceSessionMock(...args),
+    resolveTargetWorkspaceSession: (...args: unknown[]) =>
+        resolveTargetWorkspaceSessionMock(...args),
     resolveWorkspaceStore: () => ({
         updateWorkspace: (...args: unknown[]) => updateWorkspaceMock(...args),
     }),
@@ -44,6 +47,13 @@ describe('PATCH /api/workspaces/:id', () => {
             workspace: { id: 'ws-1' },
             role: 'owner',
         });
+        resolveTargetWorkspaceSessionMock.mockReset().mockImplementation(
+            async (session: Record<string, unknown>, _store: unknown, workspaceId: string) => ({
+                ...session,
+                workspace: { id: workspaceId, name: 'Workspace 2' },
+                role: 'owner',
+            })
+        );
         updateWorkspaceMock.mockReset().mockResolvedValue(undefined);
         requireCanMock.mockReset();
     });
@@ -83,7 +93,9 @@ describe('PATCH /api/workspaces/:id', () => {
 
         await expect(handler(makeEvent())).resolves.toEqual({ ok: true });
         expect(requireCanMock).toHaveBeenCalledWith(
-            expect.objectContaining({ workspace: { id: 'ws-1' } }),
+            expect.objectContaining({
+                workspace: expect.objectContaining({ id: 'ws-2' }),
+            }),
             'workspace.write',
             { kind: 'workspace', id: 'ws-2' }
         );

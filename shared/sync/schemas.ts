@@ -114,6 +114,15 @@ export const SyncChangeSchema = z.object({
     stamp: ChangeStampSchema,
 });
 
+/**
+ * Reusable change-list schema for provider packages.
+ *
+ * Providers must import this pre-composed schema instead of wrapping
+ * `SyncChangeSchema` with their own Zod instance. Composing schemas from two
+ * installed Zod minors creates incompatible private `_zod` types.
+ */
+export const SyncChangesSchema = z.array(SyncChangeSchema);
+
 // ============================================================
 // TABLE PAYLOAD SCHEMAS
 // ============================================================
@@ -231,11 +240,41 @@ export const PullRequestSchema = z.object({
     tables: z.array(z.string()).optional(),
 });
 
-export const PullResponseSchema = z.object({
-    changes: z.array(SyncChangeSchema),
-    nextCursor: z.number().int().nonnegative(),
-    hasMore: z.boolean(),
-});
+export const PullResponseSchema = z
+    .object({
+        changes: SyncChangesSchema,
+        nextCursor: z.number().int().nonnegative(),
+        hasMore: z.boolean(),
+    })
+    .superRefine((response, ctx) => {
+        let previousVersion = 0;
+        const opIds = new Set<string>();
+        for (const [index, change] of response.changes.entries()) {
+            if (change.serverVersion <= previousVersion) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['changes', index, 'serverVersion'],
+                    message: 'Pull changes must be strictly ordered by serverVersion',
+                });
+            }
+            if (change.serverVersion > response.nextCursor) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['changes', index, 'serverVersion'],
+                    message: 'Pull change exceeds nextCursor',
+                });
+            }
+            if (opIds.has(change.stamp.opId)) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['changes', index, 'stamp', 'opId'],
+                    message: 'Pull response contains a duplicate opId',
+                });
+            }
+            previousVersion = change.serverVersion;
+            opIds.add(change.stamp.opId);
+        }
+    });
 
 export const SnapshotRequestSchema = z.object({
     scope: SyncScopeSchema,
@@ -267,21 +306,61 @@ export const SnapshotItemSchema = z.discriminatedUnion('kind', [
     }),
 ]);
 
-export const SnapshotResponseSchema = z.object({
-    workspaceId: z.string().min(1),
-    snapshotId: z.string().min(1),
-    highWatermark: z.number().int().nonnegative(),
-    items: z.array(SnapshotItemSchema).max(1000),
-    nextPageToken: z.string().min(1).max(4096).nullable(),
-});
+export const SnapshotResponseSchema = z
+    .object({
+        workspaceId: z.string().min(1),
+        snapshotId: z.string().min(1),
+        highWatermark: z.number().int().nonnegative(),
+        items: z.array(SnapshotItemSchema).max(1000),
+        nextPageToken: z.string().min(1).max(4096).nullable(),
+    })
+    .superRefine((response, ctx) => {
+        let previousKey: string | null = null;
+        const logicalKeys = new Set<string>();
+        for (const [index, item] of response.items.entries()) {
+            const logicalKey = `${item.tableName}\0${item.pk}`;
+            const orderedKey = `${logicalKey}\0${item.kind}`;
+            if (previousKey !== null && orderedKey <= previousKey) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['items', index],
+                    message: 'Snapshot items must be strictly ordered',
+                });
+            }
+            if (logicalKeys.has(logicalKey)) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['items', index],
+                    message:
+                        'Snapshot contains duplicate or contradictory entries for one record',
+                });
+            }
+            previousKey = orderedKey;
+            logicalKeys.add(logicalKey);
+        }
+    });
 
-export const PushBatchSchema = z.object({
-    scope: SyncScopeSchema,
-    ops: z.array(PendingOpSchema),
-});
+export const PushBatchSchema = z
+    .object({
+        scope: SyncScopeSchema,
+        ops: z.array(PendingOpSchema),
+    })
+    .superRefine((batch, ctx) => {
+        const opIds = new Set<string>();
+        for (const [index, op] of batch.ops.entries()) {
+            if (opIds.has(op.stamp.opId)) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['ops', index, 'stamp', 'opId'],
+                    message: 'Push batch contains a duplicate opId',
+                });
+            }
+            opIds.add(op.stamp.opId);
+        }
+    });
 
 export const PushResultItemSchema = z.object({
-    opId: z.string(),
+    opId: z.string().min(1),
     success: z.boolean(),
     serverVersion: z.number().int().positive().optional(),
     error: z.string().optional(),
@@ -305,10 +384,84 @@ export const PushResultItemSchema = z.object({
         .optional(),
 });
 
-export const PushResultSchema = z.object({
-    results: z.array(PushResultItemSchema),
-    serverVersion: z.number().int().nonnegative(),
-});
+export const PushResultSchema = z
+    .object({
+        results: z.array(PushResultItemSchema),
+        serverVersion: z.number().int().nonnegative(),
+    })
+    .superRefine((response, ctx) => {
+        const opIds = new Set<string>();
+        for (const [index, result] of response.results.entries()) {
+            if (opIds.has(result.opId)) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['results', index, 'opId'],
+                    message: 'Push response contains a duplicate opId',
+                });
+            }
+            if (
+                result.serverVersion !== undefined &&
+                result.serverVersion > response.serverVersion
+            ) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['results', index, 'serverVersion'],
+                    message: 'Push result serverVersion exceeds response serverVersion',
+                });
+            }
+            opIds.add(result.opId);
+        }
+    });
+
+export function getPullResponseContractError(
+    request: z.infer<typeof PullRequestSchema>,
+    response: z.infer<typeof PullResponseSchema>
+): string | null {
+    if (response.nextCursor < request.cursor) {
+        return 'Pull response cursor regressed';
+    }
+    if (response.hasMore && response.nextCursor <= request.cursor) {
+        return 'Pull response hasMore did not advance the cursor';
+    }
+    if (
+        response.changes.some(
+            (change) => change.serverVersion <= request.cursor
+        )
+    ) {
+        return 'Pull response contains a change at or before the requested cursor';
+    }
+    return null;
+}
+
+export function getSnapshotResponseContractError(
+    request: z.infer<typeof SnapshotRequestSchema>,
+    response: z.infer<typeof SnapshotResponseSchema>
+): string | null {
+    if (response.workspaceId !== request.scope.workspaceId) {
+        return 'Snapshot response workspace does not match the request';
+    }
+    if (response.items.length > request.pageSize) {
+        return 'Snapshot response exceeds the requested page size';
+    }
+    return null;
+}
+
+export function getPushResultContractError(
+    batch: z.infer<typeof PushBatchSchema>,
+    response: z.infer<typeof PushResultSchema>
+): string | null {
+    const expected = new Set(batch.ops.map((op) => op.stamp.opId));
+    const actual = new Set(response.results.map((result) => result.opId));
+    if (actual.size !== expected.size) {
+        return 'Push response does not contain exactly one result per operation';
+    }
+    for (const opId of expected) {
+        if (!actual.has(opId)) {
+            return `Push response is missing result for operation ${opId}`;
+        }
+    }
+    return null;
+}
 
 // ============================================================
 // LOCAL STATE SCHEMAS

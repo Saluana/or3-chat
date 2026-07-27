@@ -12,10 +12,16 @@
  * - Uploading or downloading file blobs
  * - Rendering attachment previews
  */
+import Dexie from 'dexie';
 import { getDb } from './client';
 import type { FileMeta } from './schema';
 import { parseFileHashes, serializeFileHashes } from './files-util';
-import { createOrRefFile, derefFile, getFileMeta } from './files';
+import {
+    changeRefCount,
+    createOrRefFile,
+    derefFile,
+    getFileMeta,
+} from './files';
 import { useHooks } from '../core/hooks/useHooks';
 import { nowSec, nextClock, getWriteTxTableNames } from './util';
 
@@ -89,29 +95,62 @@ export async function addFilesToMessage(
             if (!msg) throw new Error('message not found');
             const existing = parseFileHashes(msg.file_hashes);
             const newHashes: string[] = [];
+            const provisionalRefIncrements = new Map<string, number>();
             for (const f of files) {
                 // Handle blob variant
                 if ('blob' in f && f.blob instanceof Blob) {
-                    const meta = await createOrRefFile(
-                        f.blob,
-                        f.name || 'file'
+                    const meta = await Dexie.waitFor(
+                        createOrRefFile(f.blob, f.name || 'file')
                     );
                     newHashes.push(meta.hash);
+                    provisionalRefIncrements.set(
+                        meta.hash,
+                        (provisionalRefIncrements.get(meta.hash) ?? 0) + 1
+                    );
                 }
                 // Handle hash variant
                 else if ('hash' in f && typeof f.hash === 'string') {
                     // Validate meta exists
-                    const meta = await getFileMeta(f.hash);
+                    const meta = await Dexie.waitFor(getFileMeta(f.hash));
                     if (meta) newHashes.push(meta.hash);
                 }
             }
             const combined = existing.concat(newHashes);
             // Provide hook for validation & pruning
-            const filtered = await hooks.applyFilters(
-                'db.messages.files.validate:filter:hashes',
-                combined
+            const filtered = await Dexie.waitFor(
+                hooks.applyFilters(
+                    'db.messages.files.validate:filter:hashes',
+                    combined
+                )
             );
-            const serialized = serializeFileHashes(filtered);
+            const candidates = new Set(combined);
+            const accepted = Array.isArray(filtered)
+                ? filtered.filter((hash) => candidates.has(hash))
+                : [];
+            const serialized = serializeFileHashes(accepted);
+            const finalHashes = parseFileHashes(serialized);
+            const existingSet = new Set(existing);
+            const finalSet = new Set(finalHashes);
+            const affectedHashes = new Set([
+                ...existingSet,
+                ...finalSet,
+                ...provisionalRefIncrements.keys(),
+            ]);
+
+            // createOrRefFile provisionally increments every Blob attempt.
+            // Reconcile that work against the actual unique edge transition
+            // after validation, deduplication, and per-message limits.
+            for (const hash of affectedHashes) {
+                const desiredDelta =
+                    Number(finalSet.has(hash)) - Number(existingSet.has(hash));
+                const provisionalDelta =
+                    provisionalRefIncrements.get(hash) ?? 0;
+                const adjustment = desiredDelta - provisionalDelta;
+                if (adjustment !== 0) {
+                    await changeRefCount(hash, adjustment);
+                }
+            }
+
             await db.messages.put({
                 ...msg,
                 file_hashes: serialized,

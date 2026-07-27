@@ -395,12 +395,22 @@ const controls = computed(() =>
         descriptorKey: selectedDescriptorKey.value,
     })
 );
-let refreshTimer: ReturnType<typeof setInterval> | undefined;
+let lastRefreshFingerprint = '';
 
 function refresh() {
-    records.value = manager?.listRecords() ?? [];
-    divergences.value = manager?.listDivergences() ?? [];
-    managerV2Records.value = managerV2?.listRecords() ?? [];
+    const nextRecords = manager?.listRecords() ?? [];
+    const nextDivergences = manager?.listDivergences() ?? [];
+    const nextManagerV2Records = managerV2?.listRecords() ?? [];
+    const fingerprint = JSON.stringify({
+        records: nextRecords,
+        divergences: nextDivergences,
+        managerV2Records: nextManagerV2Records,
+    });
+    if (fingerprint === lastRefreshFingerprint) return;
+    lastRefreshFingerprint = fingerprint;
+    records.value = nextRecords;
+    divergences.value = nextDivergences;
+    managerV2Records.value = nextManagerV2Records;
     if (!selectedDescriptorKey.value && managerV2Records.value[0]) {
         selectedDescriptorKey.value =
             managerV2Records.value[0].descriptor.descriptorKey;
@@ -436,10 +446,14 @@ async function runControl(controlId: RuntimeControlId) {
 
 onMounted(() => {
     refresh();
-    refreshTimer = setInterval(refresh, 1000);
+    window.addEventListener('or3:workspace-plugin-reconcile', refresh);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
 });
 
 onBeforeUnmount(() => {
-    if (refreshTimer) clearInterval(refreshTimer);
+    window.removeEventListener('or3:workspace-plugin-reconcile', refresh);
+    window.removeEventListener('focus', refresh);
+    document.removeEventListener('visibilitychange', refresh);
 });
 </script>

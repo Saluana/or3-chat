@@ -242,6 +242,18 @@ export interface WorkflowMessageData {
     /** Version counter for reactivity tracking */
     version?: number;
 
+    /**
+     * Durable run journal for wave/tool restart safety (R7).
+     * Owned by BackgroundJobRunStore; opaque to the UI.
+     */
+    runJournal?: {
+        nextSequence: number;
+        snapshot?: unknown;
+        events: unknown[];
+        intents: unknown[];
+        receipts: unknown[];
+    };
+
     /** Execution result metadata (populated on completion) */
     result?: {
         /** Whether execution completed successfully */

@@ -21,6 +21,8 @@ export function useAdminSession() {
         {
             key: 'admin:auth:session',
             dedupe: 'defer',
+            getCachedData: (key, nuxtApp) =>
+                nuxtApp.payload.data[key] ?? nuxtApp.static.data[key],
             ...adminFetchOptions,
             server: false,
         }

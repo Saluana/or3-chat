@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigateToMock = vi.fn((path: string) => path);
+const cachedSession = { data: { value: undefined as AdminSessionResponse | undefined } };
 
 vi.mock('#app', () => ({
     defineNuxtRouteMiddleware: (handler: unknown) => handler,
     navigateTo: (path: string) => navigateToMock(path),
+    useNuxtData: () => cachedSession,
 }));
 
 type AdminSessionKind = 'super_admin' | 'workspace_admin';
@@ -28,6 +30,7 @@ describe('admin-auth middleware', () => {
         vi.resetModules();
         navigateToMock.mockClear();
         requestFetchMock.mockReset();
+        cachedSession.data.value = undefined;
     });
 
     it('skips checks for the admin login page', async () => {
@@ -47,6 +50,10 @@ describe('admin-auth middleware', () => {
 
         await expect(middleware({ path: '/admin/system' })).resolves.toBeUndefined();
         expect(navigateToMock).not.toHaveBeenCalled();
+        expect(cachedSession.data.value).toEqual({
+            authenticated: true,
+            kind: 'super_admin',
+        });
     });
 
     it('redirects workspace admins from /admin to workspace-scoped landing', async () => {

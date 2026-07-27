@@ -193,11 +193,19 @@ export class OutboxManager {
 
             // Get pending ops (limited to prevent O(N) memory usage)
             // We fetch more than maxBatchSize to allow for some coalescing
+            const scanLimit = this.config.maxBatchSize * 10;
             const pendingOps = [
-                ...(await this.db.pending_ops.where('status').equals('pending').toArray()),
-                ...(await this.db.pending_ops.where('status').equals('retry_wait').toArray()),
-            ]
-                .slice(0, this.config.maxBatchSize * 10);
+                ...(await this.db.pending_ops
+                    .where('status')
+                    .equals('pending')
+                    .limit(scanLimit)
+                    .toArray()),
+                ...(await this.db.pending_ops
+                    .where('status')
+                    .equals('retry_wait')
+                    .limit(scanLimit)
+                    .toArray()),
+            ].slice(0, scanLimit);
             if (generation !== this.lifecycleGeneration) return false;
             
             // Sort by createdAt to ensure correct order

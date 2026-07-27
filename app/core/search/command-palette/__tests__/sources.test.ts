@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildChatResources } from '../sources/chat-source';
 import { postToDocumentResource } from '../sources/document-source';
 import { projectToResource } from '../sources/project-source';
 import { fileMetaToResource, isImageFileMeta } from '../sources/image-source';
 import { postToPluginResource } from '../sources/plugin-post-source';
 import { createDefaultCoreCommandSpecs } from '../sources/command-source';
+import { postToPromptResource } from '../sources/prompt-source';
 import type { PaletteLoadContext } from '../types';
 
 const context: PaletteLoadContext = {
@@ -154,6 +155,67 @@ describe('palette source adapters', () => {
         expect(resource.primaryAction.target.kind).toBe('pane-app');
     });
 
+    it('indexes prompt content, tags, and favorite metadata for editing', () => {
+        const resource = postToPromptResource({
+            id: 'prompt-1',
+            title: 'Dungeon master',
+            content: JSON.stringify({
+                type: 'doc',
+                content: [
+                    {
+                        type: 'paragraph',
+                        content: [
+                            {
+                                type: 'text',
+                                text: 'Build an immersive adventure',
+                            },
+                        ],
+                    },
+                ],
+            }),
+            postType: 'prompt',
+            meta: JSON.stringify({
+                tags: ['Roleplay', 'Writing'],
+                favorite: true,
+            }),
+            created_at: 1,
+            updated_at: 2,
+            deleted: false,
+            clock: 1,
+        });
+
+        expect(resource.content).toContain('immersive adventure');
+        expect(resource.keywords).toEqual(
+            expect.arrayContaining(['Roleplay', 'Writing', 'favorite'])
+        );
+        expect(resource.metadata).toEqual({
+            favorite: true,
+            tags: 'Roleplay, Writing',
+        });
+        expect(resource.primaryAction.target).toEqual({
+            kind: 'system-prompt',
+            mode: 'edit',
+            promptId: 'prompt-1',
+        });
+    });
+
+    it('does not expose empty TipTap JSON as a prompt subtitle', () => {
+        const resource = postToPromptResource({
+            id: 'prompt-empty',
+            title: 'Empty prompt',
+            content: JSON.stringify({ type: 'doc', content: [] }),
+            postType: 'prompt',
+            meta: '',
+            created_at: 1,
+            updated_at: 2,
+            deleted: false,
+            clock: 1,
+        });
+
+        expect(resource.content).toBe('');
+        expect(resource.subtitle).toBe('System prompt');
+    });
+
     it('fails loudly when a core command host handler is missing', async () => {
         const command = createDefaultCoreCommandSpecs({}).find(
             (entry) => entry.id === 'new-chat'
@@ -162,5 +224,19 @@ describe('palette source adapters', () => {
             ok: false,
             error: { code: 'navigation-failed' },
         });
+    });
+
+    it('registers prompt library and new prompt commands', () => {
+        const specs = createDefaultCoreCommandSpecs({
+            openSystemPrompts: vi.fn(),
+            newSystemPrompt: vi.fn(),
+        });
+
+        expect(specs.map((entry) => entry.id)).toEqual(
+            expect.arrayContaining([
+                'open-system-prompts',
+                'new-system-prompt',
+            ])
+        );
     });
 });
