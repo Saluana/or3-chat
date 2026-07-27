@@ -423,6 +423,16 @@ export function getWorkspaceDb(workspaceId: string): Or3DB {
     
     // Check if we're at capacity and will evict
     if (workspaceDbCache.size >= MAX_CACHED_WORKSPACE_DBS) {
+        // Keep the active connection hot in the LRU. Evicting it would leave
+        // activeDb pointing at a closed instance while a later lookup creates
+        // a second instance for the same IndexedDB database.
+        if (
+            activeWorkspaceId &&
+            activeWorkspaceId !== workspaceId &&
+            workspaceDbCache.has(activeWorkspaceId)
+        ) {
+            workspaceDbCache.get(activeWorkspaceId);
+        }
         console.debug(`[db:client] Workspace DB cache full (${workspaceDbCache.size}/${MAX_CACHED_WORKSPACE_DBS}), will evict LRU`);
     }
     

@@ -18,6 +18,9 @@ Compatibility guide for common OR3 Cloud provider combinations.
 - Auth, sync, and storage providers can be mixed as long as each selected provider package is installed and configured.
 - Background provider and limits provider are independent knobs.
 - Static builds must keep SSR auth disabled.
+- The executable source of truth is
+  `shared/cloud/provider-compatibility.ts`; the provider contract test verifies
+  every row resolves to installed packages with the required role.
 
 ## Package Resolution Rules
 
@@ -25,9 +28,29 @@ Compatibility guide for common OR3 Cloud provider combinations.
 - Local IDs like `custom`, `memory`, `redis`, and `postgres` are intentionally not package-resolved.
 - Wizard-generated modules and config-derived modules are merged.
 
+## Standalone Clone Release Blocker
+
+The development manifest currently uses sibling `file:../...` dependencies for
+providers, workflows, and `or3-scroll`. A checkout without those siblings
+cannot complete `bun install --frozen-lockfile`.
+
+Do not replace those links with the currently published versions merely to make
+an isolated install pass. The published workflow packages do not expose the
+current execution/run-store/gateway API, the published SQLite provider does not
+expose `./webhooks/sqlite-store`, and published provider artifacts predate
+current storage/admin contracts.
+
+The safe release sequence is:
+
+1. Build, test, version-bump, and publish the current sibling packages.
+2. Pin those new immutable versions in `or3-chat`.
+3. Regenerate `bun.lock`.
+4. Verify from an empty cache and checkout with no siblings:
+   `bun install --frozen-lockfile`, provider compatibility tests, type-check,
+   and the production build.
+
 ## Related
 
 - [providers](./providers)
 - [or3-cloud-wizard](./or3-cloud-wizard)
 - [migration-default-stack](./migration-default-stack)
-

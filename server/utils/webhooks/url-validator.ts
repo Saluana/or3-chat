@@ -38,6 +38,10 @@ export async function validateWebhookUrl(
         throw new Error('Webhook URL must use http or https');
     }
 
+    if (parsed.username || parsed.password) {
+        throw new Error('Webhook URL cannot include credentials');
+    }
+
     if (requireHttps && parsed.protocol !== 'https:') {
         throw new Error('Webhook URL must use HTTPS');
     }

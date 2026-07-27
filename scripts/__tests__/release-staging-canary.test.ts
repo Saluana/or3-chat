@@ -20,6 +20,7 @@ function config(): StagingCanaryConfig {
             backgroundProvider: 'convex',
             viewerSuppressionRequiredForCorrectness: false,
         },
+        shortSoakCycles: 3,
         scenarios: {
             auth: [
                 {
@@ -93,6 +94,92 @@ function config(): StagingCanaryConfig {
                     expect: { json: { complete: true } },
                 },
             ],
+            failureInjection: [
+                {
+                    id: 'convex-fault',
+                    path: '/fault/convex',
+                    faultTarget: 'convex',
+                    faultPhase: 'inject',
+                    expect: { status: 503 },
+                },
+                {
+                    id: 'convex-recovery',
+                    path: '/fault/recovered',
+                    faultTarget: 'convex',
+                    faultPhase: 'recover',
+                    expect: { json: { recovered: true } },
+                },
+                {
+                    id: 'object-storage-fault',
+                    path: '/fault/object-storage',
+                    faultTarget: 'object-storage',
+                    faultPhase: 'inject',
+                    expect: { status: 503 },
+                },
+                {
+                    id: 'object-storage-recovery',
+                    path: '/fault/recovered',
+                    faultTarget: 'object-storage',
+                    faultPhase: 'recover',
+                    expect: { json: { recovered: true } },
+                },
+                {
+                    id: 'openrouter-fault',
+                    path: '/fault/openrouter',
+                    faultTarget: 'openrouter',
+                    faultPhase: 'inject',
+                    expect: { status: 502 },
+                },
+                {
+                    id: 'openrouter-recovery',
+                    path: '/fault/recovered',
+                    faultTarget: 'openrouter',
+                    faultPhase: 'recover',
+                    expect: { json: { recovered: true } },
+                },
+                {
+                    id: 'network-partition',
+                    path: '/fault/network-partition',
+                    faultTarget: 'network-partition',
+                    faultPhase: 'inject',
+                    expect: { status: 503 },
+                },
+                {
+                    id: 'network-recovery',
+                    path: '/fault/recovered',
+                    faultTarget: 'network-partition',
+                    faultPhase: 'recover',
+                    expect: { json: { recovered: true } },
+                },
+                {
+                    id: 'partial-outage-recovery',
+                    path: '/fault/partial-recovery',
+                    faultTarget: 'partial-provider-outage',
+                    faultPhase: 'inject',
+                    expect: { json: { recovered: true } },
+                },
+                {
+                    id: 'partial-outage-recovery',
+                    path: '/fault/recovered',
+                    faultTarget: 'partial-provider-outage',
+                    faultPhase: 'recover',
+                    expect: { json: { recovered: true } },
+                },
+            ],
+            shortSoak: [
+                {
+                    id: 'soak-a',
+                    path: '/soak',
+                    instance: 'a',
+                    expect: { json: { healthy: true } },
+                },
+                {
+                    id: 'soak-b',
+                    path: '/soak',
+                    instance: 'b',
+                    expect: { json: { healthy: true } },
+                },
+            ],
         },
     };
 }
@@ -149,6 +236,17 @@ describe('staging release canary', () => {
                     restoredProviderSnapshot: true,
                 });
             }
+            if (url.pathname === '/fault/convex') return json({}, 503);
+            if (url.pathname === '/fault/object-storage') return json({}, 503);
+            if (url.pathname === '/fault/openrouter') return json({}, 502);
+            if (url.pathname === '/fault/network-partition') return json({}, 503);
+            if (url.pathname === '/fault/partial-recovery') {
+                return json({ recovered: true });
+            }
+            if (url.pathname === '/fault/recovered') {
+                return json({ recovered: true });
+            }
+            if (url.pathname === '/soak') return json({ healthy: true });
             return json({ error: 'not found' }, 404);
         };
 
@@ -166,6 +264,12 @@ describe('staging release canary', () => {
             )
         ).toHaveLength(3);
         expect(calls).toContain('GET /api/health');
+        expect(
+            evidence.steps.filter((step) => step.scenario === 'shortSoak')
+        ).toHaveLength(6);
+        expect(
+            evidence.steps.filter((step) => step.scenario === 'failureInjection')
+        ).toHaveLength(10);
     });
 
     it('fails closed and records a mismatched staged assertion', async () => {
@@ -184,6 +288,15 @@ describe('staging release canary', () => {
                     restoredProviderSnapshot: true,
                 });
             }
+            if (path === '/fault/convex') return json({}, 503);
+            if (path === '/fault/object-storage') return json({}, 503);
+            if (path === '/fault/openrouter') return json({}, 502);
+            if (path === '/fault/network-partition') return json({}, 503);
+            if (path === '/fault/partial-recovery') {
+                return json({ recovered: true });
+            }
+            if (path === '/fault/recovered') return json({ recovered: true });
+            if (path === '/soak') return json({ healthy: true });
             if (path === '/sync/assert') return json({ converged: true });
             if (path === '/jobs/assert') return json({ complete: true });
             return json({});
@@ -226,6 +339,17 @@ describe('staging release canary', () => {
                         restoredProviderSnapshot: true,
                     });
                 }
+                if (path === '/fault/convex') return json({}, 503);
+                if (path === '/fault/object-storage') return json({}, 503);
+                if (path === '/fault/openrouter') return json({}, 502);
+                if (path === '/fault/network-partition') return json({}, 503);
+                if (path === '/fault/partial-recovery') {
+                    return json({ recovered: true });
+                }
+                if (path === '/fault/recovered') {
+                    return json({ recovered: true });
+                }
+                if (path === '/soak') return json({ healthy: true });
                 return json({});
             },
         });
@@ -233,6 +357,36 @@ describe('staging release canary', () => {
         expect(evidence.status).toBe('failed');
         expect(evidence.topologyErrors).toContain(
             'rolling-restart evidence must exercise at least two named instances'
+        );
+    });
+
+    it('rejects unbounded soak and incomplete failure-injection matrices', async () => {
+        const tooLong = config();
+        tooLong.shortSoakCycles = 26;
+        await expect(runStagingCanary(tooLong)).rejects.toThrow(
+            'shortSoakCycles must be an integer between 2 and 25'
+        );
+
+        const missingFault = config();
+        missingFault.scenarios.failureInjection =
+            missingFault.scenarios.failureInjection.filter(
+                (step) => step.faultTarget !== 'openrouter'
+            );
+        await expect(runStagingCanary(missingFault)).rejects.toThrow(
+            'failureInjection is missing targets: openrouter'
+        );
+
+        const missingRecovery = config();
+        missingRecovery.scenarios.failureInjection =
+            missingRecovery.scenarios.failureInjection.filter(
+                (step) =>
+                    !(
+                        step.faultTarget === 'convex' &&
+                        step.faultPhase === 'recover'
+                    )
+            );
+        await expect(runStagingCanary(missingRecovery)).rejects.toThrow(
+            'failureInjection target convex requires inject and recover phases'
         );
     });
 });

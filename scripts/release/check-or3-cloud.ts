@@ -29,6 +29,11 @@ const providers = [
 
 const gates: Gate[] = [
     {
+        label: 'Provider compatibility matrix',
+        cwd: root,
+        command: ['bun', 'run', 'test:cloud:provider-compatibility'],
+    },
+    {
         label: 'Host type-check',
         cwd: root,
         command: ['bun', 'run', 'type-check'],
@@ -42,6 +47,11 @@ const gates: Gate[] = [
         label: 'Cloud browser harnesses',
         cwd: root,
         command: ['bun', 'run', 'test:e2e:cloud'],
+    },
+    {
+        label: 'Populated workspace performance',
+        cwd: root,
+        command: ['bun', 'run', 'performance:workspace:check'],
     },
     {
         label: 'OR3 Cloud CLI bundle',
@@ -79,9 +89,19 @@ if (!quick) {
             command: ['bun', 'run', 'build'],
         },
         {
+            label: 'SSR production asset budgets',
+            cwd: root,
+            command: ['bun', 'run', 'performance:production-build:check'],
+        },
+        {
             label: 'Static production build',
             cwd: root,
             command: ['bun', 'run', 'generate:static'],
+        },
+        {
+            label: 'Static production asset budgets',
+            cwd: root,
+            command: ['bun', 'run', 'performance:production-build:check'],
         }
     );
 }

@@ -158,4 +158,45 @@ describe('createGatewayStorageProvider', () => {
             })
         ).rejects.toThrow('[gateway-storage] /api/storage/presign-upload failed: 500 Boom');
     });
+
+    it('isolates a transient S3/R2 gateway outage to one request', async () => {
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce({
+                ok: false,
+                status: 503,
+                text: vi.fn(async () => 'object storage unavailable'),
+            } as unknown as Response)
+            .mockResolvedValueOnce(okJson({
+                url: 'https://storage.test/download',
+                expiresAt: 42,
+                method: 'GET',
+                storageId: 'storage-1',
+            }));
+        vi.stubGlobal('fetch', fetchMock);
+        const provider = createGatewayStorageProvider({
+            id: 's3-compatible',
+        });
+
+        await expect(
+            provider.getPresignedUploadUrl({
+                workspaceId: 'ws-1',
+                hash: 'sha256:abc',
+                mimeType: 'image/png',
+                sizeBytes: 3,
+            })
+        ).rejects.toThrow('503 object storage unavailable');
+
+        await expect(
+            provider.getPresignedDownloadUrl({
+                workspaceId: 'ws-1',
+                hash: 'sha256:abc',
+                storageId: 'storage-1',
+            })
+        ).resolves.toMatchObject({
+            url: 'https://storage.test/download',
+            storageId: 'storage-1',
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
 });

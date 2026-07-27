@@ -39,6 +39,15 @@ describe('validateWebhookUrl', () => {
     });
 
     it.each([
+        'https://user@example.com/hooks',
+        'https://user:secret@example.com/hooks',
+    ])('rejects embedded URL credentials: %s', async (url) => {
+        await expect(validateWebhookUrl(url)).rejects.toThrow(
+            /credentials/i
+        );
+    });
+
+    it.each([
         'http://127.0.0.1/hooks',
         'http://10.0.0.1/hooks',
         'http://192.168.1.1/hooks',
@@ -68,6 +77,18 @@ describe('validateWebhookUrl', () => {
             validateWebhookUrl('https://example.com/hooks', {
                 blockPrivateIps: true,
                 resolver: privateResolver,
+            })
+        ).rejects.toThrow(/private ip/i);
+    });
+
+    it('rejects mixed public and private DNS answers', async () => {
+        await expect(
+            validateWebhookUrl('https://example.com/hooks', {
+                blockPrivateIps: true,
+                resolver: async () => [
+                    { address: '8.8.8.8', family: 4 },
+                    { address: '169.254.169.254', family: 4 },
+                ],
             })
         ).rejects.toThrow(/private ip/i);
     });

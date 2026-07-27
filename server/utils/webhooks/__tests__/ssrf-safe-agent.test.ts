@@ -2,6 +2,7 @@
 import type { LookupAddress, LookupOptions } from 'node:dns';
 import { describe, expect, it } from 'vitest';
 import { createSsrfSafeLookup } from '../ssrf-safe-agent';
+import { validateWebhookUrl } from '../url-validator';
 
 type LookupResult = {
     address: string | LookupAddress[];
@@ -116,6 +117,31 @@ describe('ssrf-safe webhook lookup', () => {
             runLookup({
                 hostname: 'rebind.example',
                 addresses: [{ address: '192.168.1.22', family: 4 }],
+            })
+        ).rejects.toMatchObject({
+            code: 'EPRIVATEIP',
+        });
+    });
+
+    it('blocks DNS rebinding between URL validation and connection lookup', async () => {
+        const hostname = 'rebind.example';
+        const parsed = await validateWebhookUrl(
+            `https://${hostname}/webhook`,
+            {
+                blockPrivateIps: true,
+                resolver: async () => [
+                    { address: '8.8.8.8', family: 4 },
+                ],
+            }
+        );
+        expect(parsed.hostname).toBe(hostname);
+
+        await expect(
+            runLookup({
+                hostname,
+                addresses: [
+                    { address: '169.254.169.254', family: 4 },
+                ],
             })
         ).rejects.toMatchObject({
             code: 'EPRIVATEIP',

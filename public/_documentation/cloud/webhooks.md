@@ -474,6 +474,7 @@ Signing secrets are encrypted at rest using AES-256-GCM with the `OR3_WEBHOOKS_E
 
 Webhook URLs must:
 - Use `https://` or `http://` protocol
+- Not contain embedded username/password credentials
 - Not resolve to private IP addresses (when SSRF protection is enabled)
 - Be reachable within the configured delivery timeout
 

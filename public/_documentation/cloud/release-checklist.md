@@ -22,6 +22,8 @@ The command must complete successfully. It verifies:
   Clerk, and Convex providers
 - SSR production build
 - static production build
+- populated-workspace performance profile
+- production JavaScript and CSS artifact budgets
 
 Do not promote a candidate from a dirty worktree. Record the clean commit SHA
 and retain the complete command output with the release artifacts.
@@ -68,6 +70,24 @@ For more than one application instance:
       job are active.
 - [ ] The restart assertions are observed from a different instance and use
       the shared external provider as the source of truth.
+- [ ] Failure injection records both the expected failure and recovery for
+      Convex, S3/R2-compatible object storage, OpenRouter, a client network
+      partition, and a partial provider outage where healthy providers remain
+      usable.
+- [ ] The bounded short soak runs on at least two named instances and continues
+      to observe shared sync convergence, shared job state, and deep health.
+
+The canary config requires `shortSoakCycles` between 2 and 25 and caps the
+expanded soak at 100 HTTP requests. Every request has a 15-second default
+deadline; `timeoutMs` may lower or raise it up to 60 seconds. Failure-injection
+steps use `faultTarget` so an omitted dependency fails configuration validation
+instead of silently weakening the release evidence. Each target must have both
+`faultPhase: "inject"` and `faultPhase: "recover"` steps.
+
+The example paths are intentionally deployment-neutral. Canary control routes
+must be authenticated, namespaced to disposable fixtures, and implemented by
+the deployment environment; the public OR3 application does not expose
+unprotected fault toggles.
 
 ## Promotion Rule
 

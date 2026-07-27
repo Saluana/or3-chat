@@ -19,6 +19,17 @@ export type CanaryHttpStep = {
     instance?: string;
     headers?: Record<string, string>;
     body?: unknown;
+    /** Per-request deadline. Defaults to 15 seconds and is capped at 60 seconds. */
+    timeoutMs?: number;
+    /** Declares the dependency exercised by a failure-injection step. */
+    faultTarget?:
+        | 'convex'
+        | 'object-storage'
+        | 'openrouter'
+        | 'network-partition'
+        | 'partial-provider-outage';
+    /** Failure-injection evidence must pair injection with recovery. */
+    faultPhase?: 'inject' | 'recover';
     expect?: {
         status?: number;
         json?: Record<string, unknown>;
@@ -32,7 +43,9 @@ export type CanaryScenarioName =
     | 'backgroundJobs'
     | 'backupRestore'
     | 'rollback'
-    | 'rollingRestart';
+    | 'rollingRestart'
+    | 'failureInjection'
+    | 'shortSoak';
 
 export type StagingCanaryConfig = {
     baseUrl: string;
@@ -43,6 +56,8 @@ export type StagingCanaryConfig = {
     };
     topology: ProviderTopology;
     requestHeaders?: Record<string, string>;
+    /** Repeats the shortSoak scenario; constrained to 2-25 cycles. */
+    shortSoakCycles: number;
     scenarios: Record<CanaryScenarioName, CanaryHttpStep[]>;
 };
 
@@ -160,9 +175,68 @@ function validateConfig(config: StagingCanaryConfig): void {
         'backupRestore',
         'rollback',
         'rollingRestart',
+        'failureInjection',
+        'shortSoak',
     ] as const) {
         if (!config.scenarios?.[name]?.length) {
             throw new Error(`scenarios.${name} must contain at least one step`);
+        }
+    }
+    if (
+        !Number.isInteger(config.shortSoakCycles) ||
+        config.shortSoakCycles < 2 ||
+        config.shortSoakCycles > 25
+    ) {
+        throw new Error('shortSoakCycles must be an integer between 2 and 25');
+    }
+    if (config.shortSoakCycles * config.scenarios.shortSoak.length > 100) {
+        throw new Error('shortSoak is limited to 100 total requests');
+    }
+    const requiredFaultTargets = new Set<NonNullable<CanaryHttpStep['faultTarget']>>([
+        'convex',
+        'object-storage',
+        'openrouter',
+        'network-partition',
+        'partial-provider-outage',
+    ]);
+    for (const step of config.scenarios.failureInjection) {
+        if (step.faultTarget) requiredFaultTargets.delete(step.faultTarget);
+    }
+    if (requiredFaultTargets.size) {
+        throw new Error(
+            `failureInjection is missing targets: ${[...requiredFaultTargets].join(', ')}`
+        );
+    }
+    for (const target of [
+        'convex',
+        'object-storage',
+        'openrouter',
+        'network-partition',
+        'partial-provider-outage',
+    ] as const) {
+        const phases = new Set(
+            config.scenarios.failureInjection
+                .filter((step) => step.faultTarget === target)
+                .map((step) => step.faultPhase)
+        );
+        if (!phases.has('inject') || !phases.has('recover')) {
+            throw new Error(
+                `failureInjection target ${target} requires inject and recover phases`
+            );
+        }
+    }
+    for (const steps of Object.values(config.scenarios)) {
+        for (const step of steps) {
+            if (
+                step.timeoutMs !== undefined &&
+                (!Number.isInteger(step.timeoutMs) ||
+                    step.timeoutMs < 1 ||
+                    step.timeoutMs > 60_000)
+            ) {
+                throw new Error(
+                    `${step.id}.timeoutMs must be an integer between 1 and 60000`
+                );
+            }
         }
     }
 }
@@ -187,8 +261,34 @@ export async function runStagingCanary(
                 'rolling-restart evidence must exercise at least two named instances'
             );
         }
+        const soakInstances = new Set(
+            config.scenarios.shortSoak
+                .map((step) => step.instance)
+                .filter((instance): instance is string => Boolean(instance))
+        );
+        if (soakInstances.size < 2) {
+            topologyErrors.push(
+                'multi-instance short-soak evidence must exercise at least two named instances'
+            );
+        }
     }
     const steps: CanaryStepEvidence[] = [];
+    const configuredScenarios = Object.entries(config.scenarios).flatMap(
+        ([scenario, steps]): Array<[CanaryScenarioName, CanaryHttpStep[]]> => {
+            const name = scenario as CanaryScenarioName;
+            if (name !== 'shortSoak') return [[name, steps]];
+            return Array.from(
+                { length: config.shortSoakCycles },
+                (_, cycle): [CanaryScenarioName, CanaryHttpStep[]] => [
+                    'shortSoak',
+                    steps.map((step) => ({
+                        ...step,
+                        id: `${step.id}@${cycle + 1}`,
+                    })),
+                ]
+            );
+        }
+    );
     const allScenarios: Array<['health' | CanaryScenarioName, CanaryHttpStep[]]> = [
         [
             'health',
@@ -200,9 +300,7 @@ export async function runStagingCanary(
                 },
             ],
         ],
-        ...Object.entries(config.scenarios) as Array<
-            [CanaryScenarioName, CanaryHttpStep[]]
-        >,
+        ...configuredScenarios,
     ];
 
     for (const [scenario, scenarioSteps] of allScenarios) {
@@ -227,6 +325,7 @@ export async function runStagingCanary(
                         step.body === undefined
                             ? undefined
                             : JSON.stringify(step.body),
+                    signal: AbortSignal.timeout(step.timeoutMs ?? 15_000),
                 });
                 const expectedStatus = step.expect?.status ?? 200;
                 if (response.status !== expectedStatus) {

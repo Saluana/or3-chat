@@ -44,7 +44,10 @@ export function getRateLimitProvider(): RateLimitProvider {
                 cachedProvider = registered;
             } else {
                 console.warn('[rate-limit] Provider not registered, using memory:', storageProvider);
-                cachedProvider = memoryRateLimitProvider;
+                // Do not cache a startup fallback. Provider plugins register
+                // during server initialization, and a request racing that
+                // registration must not pin this process to local-only limits.
+                return memoryRateLimitProvider;
             }
             break;
         }

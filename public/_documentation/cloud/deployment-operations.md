@@ -128,7 +128,9 @@ The authoritative gate is the
 3. Retain the JSON evidence beside the clean commit and immutable artifact.
    A passing report covers deep provider health, auth, sync, storage,
    background jobs, isolated backup/restore, rollback, and rolling-restart
-   assertions.
+   assertions. It also requires a bounded multi-instance short soak and explicit
+   failure/recovery evidence for Convex, S3/R2-compatible object storage,
+   OpenRouter, network partitions, and partial provider outages.
 
 The canary runner is deployment-provider neutral: each scenario is a sequence
 of HTTP operations with an expected status and optional dotted JSON assertions.
@@ -147,6 +149,20 @@ The rolling-restart scenario must begin sync and background work before
 restarting an instance, then verify convergence and job completion through
 another instance. External providers must remain the source of truth across
 the restart.
+
+The short soak repeats its configured steps 2-25 times, with a hard cap of 100
+requests. At least two named instances must be exercised in multi-instance
+topologies. Requests time out after 15 seconds by default (`timeoutMs` is capped
+at 60 seconds), preventing an unavailable dependency from hanging the promotion
+job indefinitely.
+
+Fault steps declare a `faultTarget` and an `inject` or `recover` `faultPhase`;
+the config is rejected unless every target has both phases. Expected injected
+502/503 responses count as successful evidence only when their exact status is
+configured; subsequent recovery assertions must independently prove convergence
+or provider health.
+Fault-control endpoints are deployment-owned and must require short-lived
+credentials.
 
 ## Related
 

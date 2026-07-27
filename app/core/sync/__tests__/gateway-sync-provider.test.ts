@@ -399,6 +399,44 @@ describe('GatewaySyncProvider', () => {
         unsubscribe();
     });
 
+    it('recovers polling after a transient Convex gateway outage', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const onChanges = vi.fn();
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                makeErrorResponse(503, 'Convex temporarily unavailable')
+            )
+            .mockResolvedValueOnce(
+                makeOkResponse({
+                    changes: [change(1, 'op-1')],
+                    nextCursor: 1,
+                    hasMore: false,
+                })
+            );
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
+        const unsubscribe = await provider.subscribe(
+            { workspaceId: 'ws-1' },
+            ['messages'],
+            onChanges,
+            { cursor: 0, limit: 10 }
+        );
+
+        await vi.advanceTimersByTimeAsync(100);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(onChanges).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(100);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(onChanges).toHaveBeenCalledWith([
+            expect.objectContaining({ serverVersion: 1 }),
+        ]);
+        unsubscribe();
+    });
+
     it('honors Retry-After HTTP dates and caps excessive delays', async () => {
         vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
         vi.spyOn(Math, 'random').mockReturnValue(0);

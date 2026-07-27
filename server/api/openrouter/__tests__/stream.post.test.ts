@@ -315,4 +315,29 @@ describe('POST /api/openrouter/stream credential authorization', () => {
             unregisterServerTool('boundary_tool');
         }
     });
+
+    it('isolates a transient OpenRouter network outage and serves the next request', async () => {
+        const fetchMock = vi
+            .fn()
+            .mockRejectedValueOnce(new TypeError('network partition'))
+            .mockResolvedValueOnce(
+                new Response('data: [DONE]\n\n', {
+                    status: 200,
+                    headers: { 'Content-Type': 'text/event-stream' },
+                })
+            );
+        vi.stubGlobal('fetch', fetchMock);
+
+        await expect(
+            handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }))
+        ).resolves.toBe('Failed to reach OpenRouter');
+        expect(setResponseStatusMock).toHaveBeenLastCalledWith(
+            expect.anything(),
+            502
+        );
+
+        await handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }));
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(sendStreamMock).toHaveBeenCalledTimes(1);
+    });
 });

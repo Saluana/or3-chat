@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LRUCache } from 'lru-cache';
+import Dexie from 'dexie';
 import {
     evictWorkspaceDb,
     getWorkspaceDb,
@@ -20,12 +21,15 @@ const mockDb = {
 // We'll test the LRU cache logic separately since we can't easily mock the module
 
 describe('Workspace DB Cache LRU', () => {
-    afterEach(() => {
+    afterEach(async () => {
         const { keys } = getWorkspaceDbCacheStats();
         for (const key of keys) {
             evictWorkspaceDb(key);
         }
         setActiveWorkspaceDb(null);
+        await Promise.all(
+            keys.map((key) => Dexie.delete(`or3-db-${key}`))
+        );
         vi.restoreAllMocks();
     });
 
@@ -110,7 +114,7 @@ describe('Workspace DB Cache LRU', () => {
         expect(keys.includes('ws-b')).toBe(true);
     });
 
-    it('can evict active workspace if many DBs are created without switching', () => {
+    it('retains the active workspace while evicting inactive LRU entries', () => {
         setActiveWorkspaceDb('ws-active');
         const { max } = getWorkspaceDbCacheStats();
 
@@ -119,7 +123,33 @@ describe('Workspace DB Cache LRU', () => {
         }
 
         const { keys } = getWorkspaceDbCacheStats();
-        expect(keys.includes('ws-active')).toBe(false);
+        expect(keys.includes('ws-active')).toBe(true);
+        expect(keys.includes('ws-other-0')).toBe(false);
+    });
+
+    it('reopens a cached workspace cleanly after browser storage eviction', async () => {
+        const workspaceId = `ws-eviction-${crypto.randomUUID()}`;
+        const original = getWorkspaceDb(workspaceId);
+        await original.open();
+        await original.kv.put({
+            id: 'before-eviction',
+            name: 'before-eviction',
+            value: 'present',
+        } as never);
+        original.close();
+        await Dexie.delete(original.name);
+
+        const recovered = getWorkspaceDb(workspaceId);
+        expect(recovered).toBe(original);
+        await recovered.open();
+        await expect(recovered.kv.count()).resolves.toBe(0);
+        await expect(
+            recovered.kv.put({
+                id: 'after-eviction',
+                name: 'after-eviction',
+                value: 'recovered',
+            } as never)
+        ).resolves.toBe('after-eviction');
     });
 });
 

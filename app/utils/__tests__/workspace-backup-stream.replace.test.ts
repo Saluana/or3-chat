@@ -44,14 +44,15 @@ function backupBlob(lines: unknown[]): Blob {
 
 function header(
     db: BackupTestDb,
-    tables: Array<{ name: string; rowCount: number; inbound: boolean }>
+    tables: Array<{ name: string; rowCount: number; inbound: boolean }>,
+    databaseVersion = db.verno
 ) {
     return {
         type: 'meta',
         format: WORKSPACE_BACKUP_FORMAT,
         version: WORKSPACE_BACKUP_VERSION,
         databaseName: db.name,
-        databaseVersion: db.verno,
+        databaseVersion,
         createdAt: new Date(0).toISOString(),
         tables,
     };
@@ -151,6 +152,148 @@ describe('workspace backup replace safety', () => {
                 overwriteValues: true,
             })
         ).rejects.toThrow(/truncated|terminal marker/i);
+
+        await expectSeedRowsPreserved(db);
+    });
+
+    it('rejects a newer database version before clearing existing rows', async () => {
+        const db = createDb();
+        await seed(db);
+        const file = backupBlob([
+            header(
+                db,
+                [
+                    { name: 'messages', rowCount: 0, inbound: true },
+                    { name: 'projects', rowCount: 0, inbound: true },
+                ],
+                db.verno + 1
+            ),
+            { type: 'end' },
+        ]);
+
+        await expect(
+            importWorkspaceStream({
+                db: db as any,
+                file,
+                clearTables: true,
+                overwriteValues: true,
+            })
+        ).rejects.toThrow(/newer app version/i);
+
+        await expectSeedRowsPreserved(db);
+    });
+
+    it('restores an older compatible backup version', async () => {
+        const db = createDb();
+        await seed(db);
+        const file = backupBlob([
+            header(
+                db,
+                [
+                    { name: 'messages', rowCount: 1, inbound: true },
+                    { name: 'projects', rowCount: 1, inbound: true },
+                ],
+                0
+            ),
+            { type: 'table-start', table: 'messages' },
+            {
+                type: 'rows',
+                table: 'messages',
+                rows: [{ id: 'message-restored', value: 'older-backup' }],
+            },
+            { type: 'table-end', table: 'messages' },
+            { type: 'table-start', table: 'projects' },
+            {
+                type: 'rows',
+                table: 'projects',
+                rows: [{ id: 'project-restored', value: 'older-backup' }],
+            },
+            { type: 'table-end', table: 'projects' },
+            { type: 'end' },
+        ]);
+
+        await importWorkspaceStream({
+            db: db as any,
+            file,
+            clearTables: true,
+            overwriteValues: true,
+        });
+
+        await expect(db.messages.toArray()).resolves.toEqual([
+            { id: 'message-restored', value: 'older-backup' },
+        ]);
+        await expect(db.projects.toArray()).resolves.toEqual([
+            { id: 'project-restored', value: 'older-backup' },
+        ]);
+    });
+
+    it.each([
+        {
+            name: 'malformed JSON after a table begins',
+            suffix: ['{"type":"rows","table":"messages","rows":['],
+        },
+        {
+            name: 'an unsupported record type',
+            suffix: [
+                JSON.stringify({
+                    type: 'script',
+                    table: 'messages',
+                    rows: [],
+                }),
+            ],
+        },
+    ])('rolls back replace mode for $name', async ({ suffix }) => {
+        const db = createDb();
+        await seed(db);
+        const prefix = [
+            header(db, [
+                { name: 'messages', rowCount: 0, inbound: true },
+                { name: 'projects', rowCount: 0, inbound: true },
+            ]),
+            { type: 'table-start', table: 'messages' },
+        ].map((line) => JSON.stringify(line));
+        const file = new Blob([`${[...prefix, ...suffix].join('\n')}\n`]);
+
+        await expect(
+            importWorkspaceStream({
+                db: db as any,
+                file,
+                clearTables: true,
+                overwriteValues: true,
+            })
+        ).rejects.toThrow();
+
+        await expectSeedRowsPreserved(db);
+    });
+
+    it('rejects records appended after the terminal marker and rolls back', async () => {
+        const db = createDb();
+        await seed(db);
+        const file = backupBlob([
+            header(db, [
+                { name: 'messages', rowCount: 0, inbound: true },
+                { name: 'projects', rowCount: 0, inbound: true },
+            ]),
+            { type: 'table-start', table: 'messages' },
+            { type: 'table-end', table: 'messages' },
+            { type: 'table-start', table: 'projects' },
+            { type: 'table-end', table: 'projects' },
+            { type: 'end' },
+            {
+                type: 'rows',
+                table: 'messages',
+                rows: [{ id: 'smuggled', value: 'ignored-before-fix' }],
+            },
+        ]);
+
+        await expect(
+            importWorkspaceStream({
+                db: db as any,
+                file,
+                clearTables: true,
+                overwriteValues: true,
+            })
+        ).rejects.toThrow(/after terminal marker|trailing/i);
 
         await expectSeedRowsPreserved(db);
     });

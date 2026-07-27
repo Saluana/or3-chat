@@ -601,6 +601,12 @@ export async function importWorkspaceStream({
                 const raw = next.value.trim();
                 if (!raw) continue;
 
+                if (sawEnd) {
+                    throw new Error(
+                        'Backup contains trailing records after terminal marker.'
+                    );
+                }
+
                 const entry = JSON.parse(raw) as WorkspaceBackupLine;
 
                 if (entry.type === 'table-start') {
@@ -731,8 +737,10 @@ export async function importWorkspaceStream({
                         );
                     }
                     sawEnd = true;
-                    break;
+                    continue;
                 }
+
+                throw new Error('Backup contains an unsupported record type.');
             }
 
             if (!sawEnd) {

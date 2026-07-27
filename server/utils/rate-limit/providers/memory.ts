@@ -46,6 +46,14 @@ export class MemoryRateLimitProvider implements RateLimitProvider {
     readonly name = 'memory';
 
     async checkAndRecord(key: string, config: RateLimitConfig): Promise<RateLimitResult> {
+        if (!isValidRateLimitConfig(config)) {
+            return {
+                allowed: false,
+                remaining: 0,
+                retryAfterMs: 0,
+            };
+        }
+
         const now = Date.now();
         const windowStart = now - config.windowMs;
 
@@ -80,6 +88,14 @@ export class MemoryRateLimitProvider implements RateLimitProvider {
     }
 
     async getStats(key: string, config: RateLimitConfig): Promise<RateLimitStats | null> {
+        if (!isValidRateLimitConfig(config)) {
+            return {
+                limit: 0,
+                remaining: 0,
+                resetMs: 0,
+            };
+        }
+
         const now = Date.now();
         const windowStart = now - config.windowMs;
 
@@ -99,6 +115,15 @@ export class MemoryRateLimitProvider implements RateLimitProvider {
             resetMs: entry.windowStart + config.windowMs - now,
         };
     }
+}
+
+function isValidRateLimitConfig(config: RateLimitConfig): boolean {
+    return (
+        Number.isSafeInteger(config.windowMs) &&
+        config.windowMs > 0 &&
+        Number.isSafeInteger(config.maxRequests) &&
+        config.maxRequests > 0
+    );
 }
 
 /**

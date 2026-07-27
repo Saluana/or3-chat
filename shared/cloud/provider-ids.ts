@@ -1,16 +1,19 @@
 export const AUTH_PROVIDER_IDS = {
     clerk: 'clerk',
+    basicAuth: 'basic-auth',
     custom: 'custom',
 } as const;
 
 export const SYNC_PROVIDER_IDS = {
     convex: 'convex',
+    sqlite: 'sqlite',
     firebase: 'firebase',
     custom: 'custom',
 } as const;
 
 export const STORAGE_PROVIDER_IDS = {
     convex: 'convex',
+    fs: 'fs',
     s3: 's3',
     custom: 'custom',
 } as const;
@@ -30,17 +33,20 @@ export const BACKGROUND_PROVIDER_IDS = {
 
 export const AUTH_PROVIDER_ID_LIST = [
     AUTH_PROVIDER_IDS.clerk,
+    AUTH_PROVIDER_IDS.basicAuth,
     AUTH_PROVIDER_IDS.custom,
 ] as const;
 
 export const SYNC_PROVIDER_ID_LIST = [
     SYNC_PROVIDER_IDS.convex,
+    SYNC_PROVIDER_IDS.sqlite,
     SYNC_PROVIDER_IDS.firebase,
     SYNC_PROVIDER_IDS.custom,
 ] as const;
 
 export const STORAGE_PROVIDER_ID_LIST = [
     STORAGE_PROVIDER_IDS.convex,
+    STORAGE_PROVIDER_IDS.fs,
     STORAGE_PROVIDER_IDS.s3,
     STORAGE_PROVIDER_IDS.custom,
 ] as const;

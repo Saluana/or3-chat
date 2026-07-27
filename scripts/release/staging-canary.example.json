@@ -15,6 +15,7 @@
   "requestHeaders": {
     "authorization": "Bearer replace-with-short-lived-canary-token"
   },
+  "shortSoakCycles": 5,
   "scenarios": {
     "auth": [
       { "id": "sign-in", "method": "POST", "path": "/api/canary/auth/sign-in", "expect": { "status": 200, "json": { "authenticated": true } } },
@@ -53,6 +54,24 @@
       { "id": "restart-a", "method": "POST", "path": "/api/canary/reliability/restart", "instance": "a", "expect": { "status": 200 } },
       { "id": "active-sync-survived", "path": "/api/canary/reliability/sync", "instance": "b", "expect": { "status": 200, "json": { "converged": true } } },
       { "id": "active-job-survived", "path": "/api/canary/reliability/job", "instance": "b", "expect": { "status": 200, "json": { "complete": true } } }
+    ],
+    "failureInjection": [
+      { "id": "convex-unavailable", "method": "POST", "path": "/api/canary/faults/convex", "faultTarget": "convex", "faultPhase": "inject", "expect": { "status": 503 } },
+      { "id": "convex-recovered", "path": "/api/canary/faults/convex/assert", "faultTarget": "convex", "faultPhase": "recover", "expect": { "status": 200, "json": { "recovered": true } } },
+      { "id": "s3-r2-unavailable", "method": "POST", "path": "/api/canary/faults/object-storage", "faultTarget": "object-storage", "faultPhase": "inject", "expect": { "status": 503 } },
+      { "id": "s3-r2-recovered", "path": "/api/canary/faults/object-storage/assert", "faultTarget": "object-storage", "faultPhase": "recover", "expect": { "status": 200, "json": { "recovered": true, "checksumVerified": true } } },
+      { "id": "openrouter-unavailable", "method": "POST", "path": "/api/canary/faults/openrouter", "faultTarget": "openrouter", "faultPhase": "inject", "expect": { "status": 502 } },
+      { "id": "openrouter-recovered", "path": "/api/canary/faults/openrouter/assert", "faultTarget": "openrouter", "faultPhase": "recover", "expect": { "status": 200, "json": { "recovered": true } } },
+      { "id": "network-partition", "method": "POST", "path": "/api/canary/faults/network-partition", "faultTarget": "network-partition", "faultPhase": "inject", "expect": { "status": 503 } },
+      { "id": "network-rejoined", "path": "/api/canary/faults/network-partition/assert", "faultTarget": "network-partition", "faultPhase": "recover", "expect": { "status": 200, "json": { "converged": true, "queueEmpty": true } } },
+      { "id": "partial-provider-outage", "method": "POST", "path": "/api/canary/faults/partial", "faultTarget": "partial-provider-outage", "faultPhase": "inject", "expect": { "status": 200, "json": { "healthyProvidersStayedAvailable": true, "failedProviderIsolated": true } } },
+      { "id": "partial-provider-recovered", "path": "/api/canary/faults/partial/assert", "faultTarget": "partial-provider-outage", "faultPhase": "recover", "expect": { "status": 200, "json": { "allProvidersHealthy": true } } }
+    ],
+    "shortSoak": [
+      { "id": "instance-a-health", "path": "/api/health?deep=true", "instance": "a", "timeoutMs": 5000, "expect": { "status": 200, "json": { "status": "ok" } } },
+      { "id": "instance-b-health", "path": "/api/health?deep=true", "instance": "b", "timeoutMs": 5000, "expect": { "status": 200, "json": { "status": "ok" } } },
+      { "id": "shared-sync-converged", "path": "/api/canary/reliability/sync", "instance": "b", "timeoutMs": 5000, "expect": { "status": 200, "json": { "converged": true } } },
+      { "id": "shared-job-readable", "path": "/api/canary/reliability/job", "instance": "a", "timeoutMs": 5000, "expect": { "status": 200, "json": { "complete": true } } }
     ]
   }
 }

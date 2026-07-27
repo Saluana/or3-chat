@@ -11,6 +11,7 @@ import {
     discoverNonCorePlugins,
     isNonCorePluginDiscoveryDisabled,
 } from './shared/plugins/safe-mode';
+import { providerIdToModuleId } from './shared/cloud/provider-compatibility';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
@@ -34,14 +35,6 @@ const shouldLoadCloudProviderModules =
 
 const convexUrl = or3CloudConfig.sync.convex?.url || '';
 const convexAdminKey = or3CloudConfig.sync.convex?.adminKey || '';
-
-const LOCAL_PROVIDER_IDS = new Set(['custom', 'memory', 'redis', 'postgres']);
-
-function providerIdToModuleId(providerId: string): string | null {
-    const id = providerId.trim();
-    if (!id || LOCAL_PROVIDER_IDS.has(id)) return null;
-    return `or3-provider-${id}/nuxt`;
-}
 
 function isPackageInstalled(pkgName: string): boolean {
     return existsSync(resolve(__dirname, 'node_modules', pkgName));

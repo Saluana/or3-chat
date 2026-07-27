@@ -30,7 +30,7 @@ Stream backups restore in-place without reloading the page, and the hooks system
 
 -   **Verify the version**: the metadata check blocks backups created by a newer schema. Update the app first if you see a version mismatch error.
 -   **Keep originals read-only**: store exported files in a secure, immutable location (cloud drive, external disk) so accidental edits cannot corrupt the JSON Lines structure.
--   **Trust the source**: only import files you created or obtained from a trusted collaborator. The importer validates table names and row shapes, but unexpected content can still clutter your workspace.
+-   **Trust the source**: only import files you created or obtained from a trusted collaborator. The importer rejects unknown record types, duplicate/trailing content after the terminal marker, undeclared tables, and row-count mismatches.
 -   **Stay powered**: because imports run in a single transaction, avoid closing the tab or letting your device sleep until the completion announcement appears in the live region.
 -   **Test on a fresh profile**: if you are unsure about the state of a backup, try importing it into a separate browser profile first to validate the contents before touching your main workspace.
 

@@ -122,6 +122,7 @@ const backup = useWorkspaceBackup();
 -   **Abort handling**: If the user cancels a save picker, the export resets to idle without surfacing an error.
 -   **Version checks**: Both Dexie and stream imports validate database name/version; importing something from a newer schema raises a clear error.
 -   **Replace safety**: A streaming replace backup must declare every table in the current workspace schema. Empty, partial, or truncated backups fail without clearing existing rows; use append mode for an intentional partial-table merge.
+-   **Strict stream grammar**: Unknown record types and any non-empty content after the terminal marker are rejected. Replace imports remain transactional, so these failures restore the pre-import rows.
 -   **Chunk sizing**: Streaming exports use `STREAM_CHUNK_SIZE = 500` rows; Dexie imports default to ~1 MB chunks (`DEFAULT_KILOBYTES_PER_CHUNK`). Adjust in utilities if you need different throughput.
 -   **Overwrite semantics**: In append mode, `overwriteValues` lets you merge data without wiping tables—set it via UI toggle before calling `importWorkspace`.
 -   **Cleanup**: Call `reset()` after successful operations if you want to start a new flow without refreshing the page.

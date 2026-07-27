@@ -105,4 +105,24 @@ describe('MemoryRateLimitProvider', () => {
         expect(stats).not.toBeNull();
         expect(stats!.remaining).toBe(5);
     });
+
+    it.each([
+        { windowMs: 0, maxRequests: 5 },
+        { windowMs: -1, maxRequests: 5 },
+        { windowMs: Number.NaN, maxRequests: 5 },
+        { windowMs: 60_000, maxRequests: 0 },
+        { windowMs: 60_000, maxRequests: -1 },
+        { windowMs: 60_000, maxRequests: Number.POSITIVE_INFINITY },
+    ])('fails closed for invalid configuration %o', async (invalidConfig) => {
+        const result = await provider.checkAndRecord(
+            `invalid:${String(invalidConfig.windowMs)}:${String(invalidConfig.maxRequests)}`,
+            invalidConfig
+        );
+
+        expect(result).toEqual({
+            allowed: false,
+            remaining: 0,
+            retryAfterMs: 0,
+        });
+    });
 });
