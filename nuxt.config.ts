@@ -3,7 +3,6 @@ import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'path';
 import * as ts from 'typescript';
-import { createLogger } from 'vite';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
 import { printStartupBanner as printOr3StartupBanner } from './shared/dev/startup-banner';
@@ -12,6 +11,7 @@ import {
     isNonCorePluginDiscoveryDisabled,
 } from './shared/plugins/safe-mode';
 import { providerIdToModuleId } from './shared/cloud/provider-compatibility';
+import { stripBrokenOpenRouterSourcemapsPlugin } from './plugins/vite-strip-broken-openrouter-sourcemaps';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
@@ -331,18 +331,6 @@ const webhooksConfig = {
     encryptionKey: or3CloudConfig.webhooks?.encryptionKey ?? '',
     maxRetryHours: or3CloudConfig.webhooks?.maxRetryHours ?? 1,
     logRetentionHours: or3CloudConfig.webhooks?.logRetentionHours ?? 72,
-};
-
-const viteLogger = createLogger();
-const viteWarn = viteLogger.warn;
-viteLogger.warn = (msg, options) => {
-    if (
-        msg.includes('Failed to load source map for') &&
-        msg.includes('/node_modules/@openrouter/sdk/')
-    ) {
-        return;
-    }
-    viteWarn(msg, options);
 };
 
 export default defineNuxtConfig({
@@ -989,7 +977,6 @@ export default defineNuxtConfig({
         ],
     },
     vite: {
-        customLogger: viteLogger,
         resolve: {
             alias: [
                 {
@@ -1037,6 +1024,7 @@ export default defineNuxtConfig({
             },
         },
         plugins: [
+            stripBrokenOpenRouterSourcemapsPlugin(),
             themeCompilerPlugin({
                 failOnError: true,
                 showWarnings: true,
