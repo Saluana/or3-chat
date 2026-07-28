@@ -3,6 +3,10 @@ import {
     registerPaletteCommand,
 } from '../registry';
 import {
+    projectProfileItems,
+    resolvedWorkspaceProfile,
+} from '~/core/workspace-profiles/projection';
+import {
     CORE_PALETTE_CATEGORIES,
     type PaletteCommandHandler,
     type PaletteResource,
@@ -21,7 +25,27 @@ export function createCommandPaletteSource(): PaletteSearchSource {
         order: 10,
         async load(context) {
             context.signal?.throwIfAborted();
-            return listPaletteCommands().map(commandToResource);
+            const projected = projectProfileItems(
+                'commands',
+                listPaletteCommands()
+            );
+            const pinned = new Set(
+                resolvedWorkspaceProfile.value.commands.pinned
+            );
+            const ordered = [
+                ...projected.filter((command) => pinned.has(command.id)),
+                ...projected.filter((command) => !pinned.has(command.id)),
+            ];
+            return ordered.map((command) => {
+                const resource = commandToResource(command);
+                return {
+                    ...resource,
+                    metadata: {
+                        ...resource.metadata,
+                        pinned: pinned.has(command.id),
+                    },
+                };
+            });
         },
     };
 }

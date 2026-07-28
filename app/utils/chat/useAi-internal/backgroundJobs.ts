@@ -96,6 +96,38 @@ export const BACKGROUND_JOB_MAX_RETRY_DELAY_MS = 10_000;
  */
 export const backgroundJobTrackers = new Map<string, BackgroundJobTracker>();
 
+export type BackgroundJobTrackerLifecycleEvent = {
+    readonly type: 'created' | 'removed';
+    readonly tracker: BackgroundJobTracker;
+};
+
+const backgroundJobTrackerLifecycleListeners = new Set<
+    (event: BackgroundJobTrackerLifecycleEvent) => void
+>();
+
+export function subscribeBackgroundJobTrackerLifecycle(
+    listener: (event: BackgroundJobTrackerLifecycleEvent) => void
+): () => void {
+    backgroundJobTrackerLifecycleListeners.add(listener);
+    return () => {
+        backgroundJobTrackerLifecycleListeners.delete(listener);
+    };
+}
+
+function notifyBackgroundJobTrackerLifecycle(
+    event: BackgroundJobTrackerLifecycleEvent
+): void {
+    for (const listener of [
+        ...backgroundJobTrackerLifecycleListeners,
+    ]) {
+        try {
+            listener(event);
+        } catch {
+            // Observers cannot interrupt canonical background job tracking.
+        }
+    }
+}
+
 function bgStreamLog(
     _stage: string,
     _details?: Record<string, unknown>
@@ -295,6 +327,10 @@ async function handleBackgroundStatus(
         tracker.polling = false;
         tracker.streaming = false;
         backgroundJobTrackers.delete(tracker.jobId);
+        notifyBackgroundJobTrackerLifecycle({
+            type: 'removed',
+            tracker,
+        });
         void abortBackgroundJob(tracker.jobId);
         return false;
     }
@@ -882,6 +918,10 @@ export function ensureBackgroundJobTracker(
         resolveCompletion,
     };
     backgroundJobTrackers.set(params.jobId, tracker);
+    notifyBackgroundJobTrackerLifecycle({
+        type: 'created',
+        tracker,
+    });
     bgStreamLog('tracker-created', {
         jobId: tracker.jobId,
         threadId: tracker.threadId,

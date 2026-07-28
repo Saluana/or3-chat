@@ -12,7 +12,7 @@ import {
 } from '../../admin/plugins/workspace-plugin-store';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { checkPluginAccess } from '../../utils/plugins/access/require-plugin-access';
-import { createDescriptorKey } from '../../../shared/plugins/descriptor-key';
+import { createDescriptorKey } from '~~/shared/plugins/descriptor-key';
 import { resolveBundledPluginArtifact } from '../../../shared/plugins/bundled-plugin-catalog';
 import { mergePluginGatePolicy } from '../../../shared/plugins/access-policy';
 import type {

@@ -105,6 +105,7 @@
         "@openrouter/sdk": "^1.1.6",
         "@or3/plugin-sdk": "file:./packages/plugin-sdk",
         "@orama/orama": "^3.1.16",
+        "@or3/intern-client": "file:../or3-intern/clients/typescript",
         "@tiptap/core": "^3.28.0",
         "@tiptap/extension-image": "^3.28.0",
         "@tiptap/extension-list": "^3.28.0",

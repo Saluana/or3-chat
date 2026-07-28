@@ -157,6 +157,7 @@ import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { isMobile } from '~/state/global';
+import { projectProfileItems } from '~/core/workspace-profiles/projection';
 
 const props = defineProps<{
     showModal: boolean;
@@ -205,6 +206,14 @@ const coreItems: DashboardPlugin[] = [
                 icon: useIcon('dashboard.plugins').value,
                 component: () => import('./AiPage.vue'),
             },
+            {
+                id: 'workspace-profile-settings',
+                title: 'Workspace Profile',
+                description:
+                    'Choose how navigation, dashboard tools, commands, and initial panes are arranged.',
+                icon: 'i-lucide-panels-top-left',
+                component: () => import('./WorkspaceProfileSettings.vue'),
+            },
         ],
     },
     {
@@ -238,7 +247,7 @@ for (const item of coreItems) {
 const {
     state,
     resolvedPageComponent,
-    dashboardItems,
+    dashboardItems: rawDashboardItems,
     landingPages,
     headerPluginLabel,
     activePageTitle,
@@ -246,6 +255,10 @@ const {
     openPage,
     goBack,
 } = useDashboardNavigation({ baseItems: coreItems });
+
+const dashboardItems = computed(() =>
+    projectProfileItems('dashboard', rawDashboardItems.value)
+);
 
 const handlePluginClick = (pluginId: string) => {
     void openPlugin(pluginId);

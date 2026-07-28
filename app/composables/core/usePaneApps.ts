@@ -1,5 +1,6 @@
 import {
     computed,
+    defineAsyncComponent,
     reactive,
     markRaw,
     type Component,
@@ -112,12 +113,36 @@ const reactiveRegistry = reactive({ registry });
 
 const DEFAULT_ORDER = 200;
 
+function isAsyncComponentLoader(
+    component: PaneAppDef['component']
+): component is () => Promise<Component> {
+    if (typeof component !== 'function') return false;
+    const candidate = component as {
+        setup?: unknown;
+        render?: unknown;
+        __asyncLoader?: unknown;
+    };
+    return (
+        !candidate.setup &&
+        !candidate.render &&
+        !candidate.__asyncLoader
+    );
+}
+
 function normalizePaneApp(def: PaneAppDef): RegisteredPaneApp {
     return {
         ...def,
         component: markRaw(
-            typeof def.component === 'function'
-                ? def.component
+            isAsyncComponentLoader(def.component)
+                ? defineAsyncComponent({
+                      loader: def.component,
+                      timeout: 15000,
+                      suspensible: false,
+                      onError(_error, retry, fail, attempts) {
+                          if (attempts <= 2) retry();
+                          else fail();
+                      },
+                  })
                 : markRaw(def.component)
         ),
         order: def.order ?? DEFAULT_ORDER,

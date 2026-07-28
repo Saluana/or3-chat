@@ -826,6 +826,24 @@
             ]
         },
         {
+            "title": "Architecture",
+            "path": "/architecture",
+            "files": [
+                {
+                    "name": "activity-external-agents.md",
+                    "path": "/architecture/activity-external-agents",
+                    "category": "Architecture",
+                    "summary": "Ownership, lifecycle, security, extension, troubleshooting, and non-goals for the Activity Center and or3-intern-backed External Agents."
+                },
+                {
+                    "name": "workspace-profiles.md",
+                    "path": "/architecture/workspace-profiles",
+                    "category": "Reference",
+                    "summary": "Workspace Profile V1 schema, immutable resolution, fallback, workspace selection, SSR lifecycle, theme recommendations, versioning, and security."
+                }
+            ]
+        },
+        {
             "title": "Plugins",
             "path": "/plugins",
             "files": [

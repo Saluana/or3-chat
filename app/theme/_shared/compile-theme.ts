@@ -37,6 +37,9 @@ export function compileThemeDefinition(
         icons: assets.icons ?? definition.icons,
         customComponents: definition.customComponents,
         componentContractVersion: definition.componentContractVersion,
+        workspaceProfiles: definition.workspaceProfiles,
+        recommendedWorkspaceProfileId:
+            definition.recommendedWorkspaceProfileId,
     });
 }
 

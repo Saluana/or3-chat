@@ -150,7 +150,7 @@ describe('pane apps contribution adapter', () => {
                 id: 'a-pane',
                 label: 'Async',
                 order: 200,
-                componentIdentity: true,
+                componentIdentity: false,
                 postType: 'custom-post',
                 callbackIdentity: true,
             },

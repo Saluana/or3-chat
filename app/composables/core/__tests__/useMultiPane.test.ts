@@ -172,6 +172,26 @@ describe('useMultiPane - newPaneForApp', () => {
         expect(multiPane.panes.value).toHaveLength(2);
     });
 
+    it('reacts to a profile/deployment pane-limit change', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        const maxPanes = ref(2);
+        const multiPane = useMultiPane({ maxPanes });
+
+        multiPane.addPane();
+        expect(multiPane.panes.value).toHaveLength(2);
+        expect(multiPane.canAddPane.value).toBe(false);
+
+        maxPanes.value = 3;
+        expect(multiPane.canAddPane.value).toBe(true);
+        multiPane.addPane();
+        expect(multiPane.panes.value).toHaveLength(3);
+
+        maxPanes.value = 1;
+        expect(multiPane.canAddPane.value).toBe(false);
+        // Lowering policy never destroys existing active panes.
+        expect(multiPane.panes.value).toHaveLength(3);
+    });
+
     it('does not create pane for unregistered app', async () => {
         const { useMultiPane } = await import('../useMultiPane');
 

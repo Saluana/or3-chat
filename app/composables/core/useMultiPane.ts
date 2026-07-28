@@ -52,7 +52,7 @@ export interface PaneState {
 
 export interface UseMultiPaneOptions {
     initialThreadId?: string;
-    maxPanes?: number; // default 3
+    maxPanes?: MaybeRefOrGetter<number>; // default 3
     onFlushDocument?: (id: string) => void | Promise<void>;
     loadMessagesFor?: (id: string) => Promise<MultiPaneMessage[]>; // override for tests
     minPaneWidth?: number; // minimum width per pane in pixels (default 280)
@@ -247,7 +247,7 @@ export function useMultiPane(
 ): UseMultiPaneApi {
     const {
         initialThreadId = '',
-        maxPanes = 3,
+        maxPanes: configuredMaxPanes = 3,
         minPaneWidth = 280,
         maxPaneWidth = 2000,
         storageKey = 'pane-widths',
@@ -291,14 +291,19 @@ export function useMultiPane(
             options.allowMultiplePanes === undefined ||
             toValue(options.allowMultiplePanes)
     );
+    const maxPanes = computed(() =>
+        Math.max(1, Math.floor(toValue(configuredMaxPanes)))
+    );
     const canAddPane = computed(
         () =>
             multiplePanesAllowed.value &&
-            panes.value.length + pendingPaneCreations.value < maxPanes
+            panes.value.length + pendingPaneCreations.value < maxPanes.value
     );
     const newWindowTooltip = computed(() => {
         if (!multiplePanesAllowed.value) return 'Single pane on this display';
-        return canAddPane.value ? 'New window' : `Max ${maxPanes} windows`;
+        return canAddPane.value
+            ? 'New window'
+            : `Max ${maxPanes.value} windows`;
     });
 
     const loadMessagesFor = options.loadMessagesFor || defaultLoadMessagesFor;
@@ -740,7 +745,7 @@ export function useMultiPane(
         if (!canAddPane.value) {
             if (import.meta.dev) {
                 console.warn(
-                    `[multiPane] newPaneForApp: Cannot add pane, limit reached (${maxPanes})`
+                    `[multiPane] newPaneForApp: Cannot add pane, limit reached (${maxPanes.value})`
                 );
             }
             return;
@@ -763,7 +768,11 @@ export function useMultiPane(
         // Reserve capacity before awaiting app-owned initialization. Without a
         // reservation, concurrent launches can all pass the same pane-limit
         // check and overfill the workspace.
-        if (panes.value.length + pendingPaneCreations.value >= maxPanes) return;
+        if (
+            panes.value.length + pendingPaneCreations.value >=
+            maxPanes.value
+        )
+            return;
         pendingPaneCreations.value++;
 
         // Create pane skeleton
@@ -788,7 +797,7 @@ export function useMultiPane(
             }
 
             // Synchronous pane additions may have consumed the reserved slot.
-            if (panes.value.length >= maxPanes) return;
+            if (panes.value.length >= maxPanes.value) return;
 
             // Push pane and activate
             const prevIndex = activePaneIndex.value;

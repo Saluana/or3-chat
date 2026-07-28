@@ -21,6 +21,7 @@ import type {
     ValidationError,
 } from './types';
 import { THEME_COMPONENT_CONTRACT_VERSION } from './types';
+import { WorkspaceProfileV1Schema } from '../../core/workspace-profiles/schema';
 
 /**
  * `ValidationResult`
@@ -339,6 +340,52 @@ export function validateThemeDefinition(
             message: 'isDefault should be a boolean',
             file: 'theme.ts',
             suggestion: 'Set isDefault to true or false, or omit the property',
+        });
+    }
+
+    const bundledProfileIds = new Set<string>();
+    if (config.workspaceProfiles !== undefined) {
+        if (!Array.isArray(config.workspaceProfiles)) {
+            errors.push({
+                severity: 'error',
+                code: 'THEME_023',
+                message: 'workspaceProfiles must be an array',
+                file: 'theme.ts',
+            });
+        } else {
+            for (const [index, profile] of config.workspaceProfiles.entries()) {
+                const parsed = WorkspaceProfileV1Schema.safeParse(profile);
+                if (!parsed.success) {
+                    errors.push({
+                        severity: 'error',
+                        code: 'THEME_023',
+                        message: `Invalid workspace profile at index ${index}: ${parsed.error.issues[0]?.message ?? 'invalid profile'}`,
+                        file: 'theme.ts',
+                    });
+                    continue;
+                }
+                if (bundledProfileIds.has(parsed.data.id)) {
+                    errors.push({
+                        severity: 'error',
+                        code: 'THEME_023',
+                        message: `Duplicate bundled workspace profile id "${parsed.data.id}"`,
+                        file: 'theme.ts',
+                    });
+                }
+                bundledProfileIds.add(parsed.data.id);
+            }
+        }
+    }
+    if (
+        config.recommendedWorkspaceProfileId !== undefined &&
+        !bundledProfileIds.has(config.recommendedWorkspaceProfileId)
+    ) {
+        errors.push({
+            severity: 'error',
+            code: 'THEME_024',
+            message:
+                'recommendedWorkspaceProfileId must reference a bundled workspace profile',
+            file: 'theme.ts',
         });
     }
 

@@ -52,6 +52,13 @@ import {
     markChatSendHandled,
 } from '~/utils/chat/send-interception';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
+import { getDb } from '~/db/client';
+import type { Message } from '~/db';
+import { getActivityRegistry } from '~/core/activity/registry';
+import {
+    createWorkflowActivitySource,
+    type WorkflowActivityMessage,
+} from '~/core/activity/adapters/workflow';
 
 // Types for lazy-loaded modules
 interface SlashCommandsModule {
@@ -103,6 +110,7 @@ type SDKAttachmentPayload = {
 // ─────────────────────────────────────────────────────────────
 
 let activeController: WorkflowExecutionController | null = null;
+let activeWorkflowMessageId: string | null = null;
 const pendingHitlRequests = new Map<
     string,
     {
@@ -145,10 +153,14 @@ export function consumeWorkflowHandlingFlag(): boolean {
  * Stop the currently running workflow execution.
  * Can be called from anywhere in the app.
  */
-export function stopWorkflowExecution(): boolean {
-    if (activeController) {
+export function stopWorkflowExecution(messageId?: string): boolean {
+    if (
+        activeController &&
+        (!messageId || messageId === activeWorkflowMessageId)
+    ) {
         activeController.stop();
         activeController = null;
+        activeWorkflowMessageId = null;
         return true;
     }
     return false;
@@ -381,6 +393,68 @@ export default defineNuxtPlugin((nuxtApp) => {
         retry: retryWorkflowMessage,
         respondHitl: respondToHitlRequest,
     };
+    const toActivityMessage = (
+        row: Message | undefined
+    ): WorkflowActivityMessage | undefined => {
+        if (!row || !isWorkflowMessageData(row.data)) return undefined;
+        return {
+            id: row.id,
+            threadId: row.thread_id,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            data: row.data,
+        };
+    };
+    const activitySourceHandle = getActivityRegistry().register(
+        createWorkflowActivitySource({
+            store: {
+                async list() {
+                    const rows = await getDb()
+                        .messages.where('data.type')
+                        .equals('workflow-execution')
+                        .toArray();
+                    return rows
+                        .map(toActivityMessage)
+                        .filter(
+                            (
+                                item
+                            ): item is WorkflowActivityMessage =>
+                                item !== undefined
+                        );
+                },
+                async get(messageId) {
+                    return toActivityMessage(
+                        await getDb().messages.get(messageId)
+                    );
+                },
+            },
+            updates: {
+                subscribe(listener) {
+                    return hooks.on(
+                        'workflow.execution:action:state_update',
+                        ({ messageId, state }) => {
+                            if (!isWorkflowMessageData(state)) return;
+                            listener(messageId, state);
+                        }
+                    );
+                },
+            },
+            actions: {
+                cancel(messageId) {
+                    return stopWorkflowExecution(messageId);
+                },
+                retry: retryWorkflowMessage,
+                respond(_messageId, requestId, action, jobId) {
+                    return respondToHitlRequest(
+                        requestId,
+                        action,
+                        undefined,
+                        jobId
+                    );
+                },
+            },
+        })
+    );
 
     // Listen for stop-stream event to stop workflow execution (with cleanup to avoid leaks in HMR)
     const stopAbort = new AbortController();
@@ -1044,11 +1118,13 @@ export default defineNuxtPlugin((nuxtApp) => {
         });
 
         activeController = controller;
+        activeWorkflowMessageId = assistantContext.id;
 
         // Handle completion
         controller.promise
             .then(async ({ result, stopped }) => {
                 activeController = null;
+                activeWorkflowMessageId = null;
 
                 const finalOutput = result?.finalOutput ?? result?.output ?? '';
                 accumulator.finalize({
@@ -1084,6 +1160,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             })
             .catch((error) => {
                 activeController = null;
+                activeWorkflowMessageId = null;
                 accumulator.finalize({ error });
                 emitStateUpdateSync();
                 persist(true);
@@ -1308,6 +1385,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         import.meta.hot.dispose(() => {
             stopAbort.abort();
             editorExtensionsCleanup?.();
+            activitySourceHandle.dispose();
         });
     }
 

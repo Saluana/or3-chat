@@ -106,7 +106,7 @@ describe('V1 pane app profile', () => {
         consoleError.mockRestore();
     });
 
-    it('defaults order, preserves order-only ties, marks identity raw, and does not wrap async loaders', () => {
+    it('defaults order, preserves ties, marks components raw, and wraps async loaders', async () => {
         const { registerPaneApp, getPaneApp, listPaneApps } = usePaneApps();
         const firstComponent = { name: 'First' };
         const loader = async () => ({ name: 'Async' });
@@ -117,7 +117,15 @@ describe('V1 pane app profile', () => {
         expect(getPaneApp('z-pane')?.order).toBe(200);
         expect(getPaneApp('z-pane')?.component).toBe(firstComponent);
         expect(isReactive(getPaneApp('z-pane')?.component)).toBe(false);
-        expect(getPaneApp('a-pane')?.component).toBe(loader);
+        const asyncComponent = getPaneApp('a-pane')?.component as {
+            __asyncLoader?: () => Promise<unknown>;
+        };
+        expect(asyncComponent).not.toBe(loader);
+        expect(isReactive(asyncComponent)).toBe(false);
+        expect(asyncComponent.__asyncLoader).toBeTypeOf('function');
+        expect(await asyncComponent.__asyncLoader?.()).toEqual({
+            name: 'Async',
+        });
     });
 
     it('returns exact-owner handles and has no access-policy filtering surface', () => {

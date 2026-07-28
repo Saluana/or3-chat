@@ -246,6 +246,8 @@ import { useIcon } from '~/composables/useIcon';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarSections';
 import { useOr3Config } from '~/composables/useOr3Config';
+import { resolvedWorkspaceProfile } from '~/core/workspace-profiles/projection';
+import { isMobile } from '~/state/global';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 type SidebarCombinedItem =
@@ -438,29 +440,51 @@ const combinedItems = computed(() => {
         });
     }
 
-    result.push({
-        key: 'page-link-chats',
-        type: 'page-link',
-        label: 'Chats',
-        class: 'mb-1.5',
-        description: 'View your chat history',
-        icon: iconChats.value,
-        pageId: 'sidebar-chats',
-        accent: 'chats',
-    });
-
-    if (documentsEnabled.value) {
-        result.push({
-            key: 'page-link-docs',
+    const pageLinks: SidebarCombinedItem[] = [
+        {
+            key: 'page-link-chats',
             type: 'page-link',
-            label: 'Documents',
-            description: 'View your documents',
-            icon: iconDocs.value,
-            pageId: 'sidebar-docs',
+            label: 'Chats',
             class: 'mb-1.5',
-            accent: 'docs',
-        });
-    }
+            description: 'View your chat history',
+            icon: iconChats.value,
+            pageId: 'sidebar-chats',
+            accent: 'chats',
+        },
+        ...(documentsEnabled.value
+            ? [
+                  {
+                      key: 'page-link-docs',
+                      type: 'page-link' as const,
+                      label: 'Documents',
+                      description: 'View your documents',
+                      icon: iconDocs.value,
+                      pageId: 'sidebar-docs',
+                      class: 'mb-1.5',
+                      accent: 'docs' as const,
+                  },
+              ]
+            : []),
+    ];
+    const navigationOrder = isMobile.value
+        ? resolvedWorkspaceProfile.value.mobile.bottomNavigation
+        : resolvedWorkspaceProfile.value.navigation.items;
+    pageLinks.sort(
+        (left, right) =>
+            navigationOrder.indexOf(
+                left.type === 'page-link' ? left.pageId : ''
+            ) -
+            navigationOrder.indexOf(
+                right.type === 'page-link' ? right.pageId : ''
+            )
+    );
+    result.push(
+        ...pageLinks.filter(
+            (item) =>
+                item.type === 'page-link' &&
+                navigationOrder.includes(item.pageId)
+        )
+    );
 
     // Projects section (single item that renders the whole section)
     if (props.activeSections.projects && !isCompletelyEmpty.value) {

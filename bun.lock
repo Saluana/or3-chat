@@ -8,6 +8,7 @@
         "@noble/hashes": "^2.2.0",
         "@nuxt/ui": "4.10.0",
         "@openrouter/sdk": "^1.1.6",
+        "@or3/intern-client": "file:../or3-intern/clients/typescript",
         "@or3/plugin-sdk": "file:./packages/plugin-sdk",
         "@orama/orama": "^3.1.16",
         "@tiptap/core": "^3.28.0",
@@ -628,6 +629,8 @@
     "@one-ini/wasm": ["@one-ini/wasm@0.1.1", "", {}, "sha512-XuySG1E38YScSJoMlqovLru4KTUNSjgVTIjyh7qMX6aNN5HY5Ct5LhRJdxO79JtTzKfzV/bnWpz+zquYrISsvw=="],
 
     "@openrouter/sdk": ["@openrouter/sdk@1.1.7", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-R8BzrhQow3WcwFHoeChG64E1hg5pHDyAaWL9cR84G4A4Xkn4wRtjjWdTIbyXabFXIRo3D2j5jqrL2bt5BZplXA=="],
+
+    "@or3/intern-client": ["@or3/intern-client@file:../or3-intern/clients/typescript", {}],
 
     "@or3/plugin-sdk": ["@or3/plugin-sdk@file:packages/plugin-sdk", { "devDependencies": { "typescript": "^5.9.3" } }],
 

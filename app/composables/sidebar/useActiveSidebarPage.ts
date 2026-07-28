@@ -23,6 +23,11 @@ import type {
 import { useHooks } from '~/core/hooks/useHooks';
 import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
+import {
+    resolvedWorkspaceProfile,
+    workspaceProfileDefaultPage,
+} from '~/core/workspace-profiles/projection';
+import { isMobile } from '~/state/global';
 
 /**
  * Default page ID used when no specific page is requested or available.
@@ -38,13 +43,15 @@ const STORAGE_KEY = 'or3-active-sidebar-page';
 const storedActivePageId = useLocalStorage<string>(STORAGE_KEY, DEFAULT_PAGE_ID);
 
 // Global singleton state (similar to useSidebarPages registry pattern)
+interface ActiveSidebarPageState {
+    activePageId: ReturnType<typeof ref<string>>;
+    previousPageId: ReturnType<typeof ref<string | null>>;
+    initialRequestedPageId: string | null;
+    isInitialized: boolean;
+}
+
 const g = globalThis as {
-    __or3ActiveSidebarPageState?: {
-        activePageId: ReturnType<typeof ref<string>>;
-        previousPageId: ReturnType<typeof ref<string | null>>;
-        initialRequestedPageId: string | null;
-        isInitialized: boolean;
-    };
+    __or3ActiveSidebarPageState?: ActiveSidebarPageState;
 };
 
 /**
@@ -52,12 +59,12 @@ const g = globalThis as {
  *
  * Ensures consistent state across all component instances.
  */
-if (!g.__or3ActiveSidebarPageState) {
+function createActiveSidebarPageState(): ActiveSidebarPageState {
     const storedId = storedActivePageId.value;
     const initialRequestedPageId =
         storedId && storedId !== DEFAULT_PAGE_ID ? storedId : null;
 
-    g.__or3ActiveSidebarPageState = {
+    return {
         activePageId: ref<string>(
             initialRequestedPageId
                 ? DEFAULT_PAGE_ID
@@ -67,6 +74,15 @@ if (!g.__or3ActiveSidebarPageState) {
         initialRequestedPageId,
         isInitialized: false, // Track if we've run the mount logic
     };
+}
+
+if (!g.__or3ActiveSidebarPageState) {
+    g.__or3ActiveSidebarPageState = createActiveSidebarPageState();
+}
+
+export function __resetActiveSidebarPageForTests(): void {
+    storedActivePageId.value = DEFAULT_PAGE_ID;
+    g.__or3ActiveSidebarPageState = createActiveSidebarPageState();
 }
 
 /**
@@ -96,6 +112,12 @@ export function useActiveSidebarPage() {
     const activePageId = state.activePageId;
     const previousPageId = state.previousPageId;
     const initialRequestedPageId = state.initialRequestedPageId;
+    const activeProfilePageIds = () =>
+        isMobile.value
+            ? resolvedWorkspaceProfile.value.mobile.bottomNavigation
+            : resolvedWorkspaceProfile.value.navigation.items;
+    const activeProfileDefaultPage = () =>
+        workspaceProfileDefaultPage(isMobile.value);
 
     // Computed for the active page definition
     const activePageDef = computed<RegisteredSidebarPage | null>(() => {
@@ -119,7 +141,12 @@ export function useActiveSidebarPage() {
             return false;
         }
 
-        const nextPage = getSidebarPage(id) || getSidebarPage(DEFAULT_PAGE_ID);
+        const nextPage =
+            (activeProfilePageIds().includes(id)
+                ? getSidebarPage(id)
+                : undefined) ||
+            getSidebarPage(activeProfileDefaultPage()) ||
+            getSidebarPage(DEFAULT_PAGE_ID);
         if (!nextPage) {
             if (import.meta.dev) {
                 console.warn(
@@ -251,7 +278,7 @@ export function useActiveSidebarPage() {
      * @returns True if reset succeeded, false if it failed.
      */
     async function resetToDefault(): Promise<boolean> {
-        return await setActivePage(DEFAULT_PAGE_ID);
+        return await setActivePage(activeProfileDefaultPage());
     }
 
     /**
@@ -266,9 +293,34 @@ export function useActiveSidebarPage() {
             console.warn(
                 `[useActiveSidebarPage] Active page ${pageId} not found, resetting to default`
             );
-            activePageId.value = DEFAULT_PAGE_ID;
+            void setActivePage(activeProfileDefaultPage());
         }
     });
+
+    const stopProfileVisibilityWatch = watch(
+        () => ({
+            profileId: resolvedWorkspaceProfile.value.id,
+            pageIds: activeProfilePageIds().join('|'),
+            defaultPageId: activeProfileDefaultPage(),
+            mobile: isMobile.value,
+        }),
+        (projection, previousProjection) => {
+            const current = activePageId.value ?? DEFAULT_PAGE_ID;
+            const available = projection.pageIds
+                ? projection.pageIds.split('|')
+                : [];
+            const followedPreviousDefault =
+                projection.mobile &&
+                previousProjection !== undefined &&
+                projection.defaultPageId !==
+                    previousProjection.defaultPageId &&
+                current === previousProjection.defaultPageId;
+            if (!available.includes(current) || followedPreviousDefault) {
+                void setActivePage(projection.defaultPageId);
+            }
+        }
+    );
+    onUnmounted(stopProfileVisibilityWatch);
 
     // Only run initialization logic once globally
     /**
@@ -278,14 +330,23 @@ export function useActiveSidebarPage() {
      * Ensures proper cleanup on component unmount.
      */
     onMounted(() => {
-        if (state.isInitialized || !initialRequestedPageId) return;
+        if (state.isInitialized) return;
         state.isInitialized = true;
+        const requestedPageId =
+            initialRequestedPageId ?? activeProfileDefaultPage();
+
+        if (
+            activePageId.value === requestedPageId &&
+            getSidebarPage(requestedPageId)
+        ) {
+            return;
+        }
 
         const attemptActivation = async () => {
-            await setActivePage(initialRequestedPageId);
+            await setActivePage(requestedPageId);
         };
 
-        if (getSidebarPage(initialRequestedPageId)) {
+        if (getSidebarPage(requestedPageId)) {
             void attemptActivation();
             return;
         }
@@ -295,7 +356,7 @@ export function useActiveSidebarPage() {
         stopWatch = watch(
             () => listSidebarPages.value.map((page) => page.id),
             (ids) => {
-                if (ids.includes(initialRequestedPageId)) {
+                if (ids.includes(requestedPageId)) {
                     void attemptActivation();
                     stopWatch?.();
                     stopWatch = null;

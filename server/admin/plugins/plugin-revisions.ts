@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { canonicalJson } from '../../../shared/plugins/descriptor-key';
+import { canonicalJson } from '~~/shared/plugins/descriptor-key';
 import type { PluginGatePolicyNormalized } from '../../../shared/plugins/access-policy';
 import type { Sha256 } from '../../../shared/plugins/runtime-descriptor';
 

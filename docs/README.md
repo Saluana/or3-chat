@@ -36,6 +36,8 @@ Welcome to the OR3 Chat system documentation. This guide covers plugin developme
 ## Architecture
 
 -   **[Streaming Core](streaming-core.md)** - Streaming implementation details
+-   **[Activity and External Agents](activity-external-agents.md)** - Ownership, security, extension flow, and troubleshooting
+-   **[Workspace Profiles](workspace-profiles.md)** - Schema, resolution, lifecycle, theme packaging, and security
 -   **[Core Hook Map](core-hook-map.md)** - Hook system mapping
 -   **[Hooks Augmentation](hooks-augmentation.md)** - Extending the hook system
 -   **[Tokenizer Optimization](tokenizer-optimization.md)** - Tokenizer performance

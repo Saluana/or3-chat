@@ -10,7 +10,7 @@ const pageShell = readFileSync(
 describe('PageShell mobile pane policy', () => {
     it('disables pane creation and only renders the active pane on mobile', () => {
         expect(pageShell).toContain(
-            'allowMultiplePanes: computed(() => !isMobile.value)'
+            '() => !isMobile.value && profilePaneLimit.value > 1'
         );
         expect(pageShell).toContain(
             'v-show="!isMobile || i === activePaneIndex"'

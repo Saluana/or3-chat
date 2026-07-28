@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { defineComponent, h, nextTick, type Component } from 'vue';
+import { flushPromises, mount } from '@vue/test-utils';
 import { usePaneApps, type PaneAppDef } from '../usePaneApps';
 
 describe('usePaneApps', () => {
@@ -177,13 +179,14 @@ describe('usePaneApps', () => {
         expect(app?.order).toBe(200);
     });
 
-    it('handles async components', () => {
+    it('wraps async loaders so Vue does not render their Promise value', async () => {
         const { registerPaneApp, getPaneApp } = usePaneApps();
 
-        const asyncFactory = async () => ({
+        const loaded = {
             name: 'Async',
             template: '<div>async</div>',
-        });
+        };
+        const asyncFactory = async () => loaded;
 
         registerPaneApp({
             id: 'async-app',
@@ -192,7 +195,24 @@ describe('usePaneApps', () => {
         });
 
         const app = getPaneApp('async-app');
-        expect(app?.component).toBe(asyncFactory);
+        expect(app?.component).not.toBe(asyncFactory);
+        const asyncLoader = (
+            app?.component as Component & {
+                __asyncLoader?: () => Promise<Component>;
+            }
+        ).__asyncLoader;
+        expect(asyncLoader).toBeTypeOf('function');
+        expect(await asyncLoader?.()).toBe(loaded);
+
+        const wrapper = mount(
+            defineComponent({
+                setup: () => () => h(app!.component),
+            })
+        );
+        await flushPromises();
+        await nextTick();
+        expect(wrapper.text()).toBe('async');
+        expect(wrapper.text()).not.toContain('[object Promise]');
     });
 
     it('preserves createInitialRecord callback', () => {

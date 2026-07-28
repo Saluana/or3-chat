@@ -1,5 +1,6 @@
 import type { Component, Ref, ShallowRef } from 'vue';
 import type { RuntimeResolver } from './runtime-resolver';
+import type { WorkspaceProfileV1 } from '../../core/workspace-profiles/schema';
 
 /**
  * @module app/theme/_shared/types
@@ -308,6 +309,15 @@ export interface ThemeDefinition {
 
     /** Compatibility version for trusted custom component replacements */
     componentContractVersion?: ThemeComponentContractVersion;
+
+    /**
+     * Optional declarative workspace layouts packaged by the theme.
+     * They are registered as choices only; activating a theme never applies one.
+     */
+    workspaceProfiles?: WorkspaceProfileV1[];
+
+    /** Optional profile surfaced as an explicit recommendation action. */
+    recommendedWorkspaceProfileId?: string;
 }
 
 export interface ThemeFontSet {
@@ -445,6 +455,12 @@ export interface CompiledTheme {
 
     /** Compatibility version for trusted custom component replacements */
     componentContractVersion?: ThemeComponentContractVersion;
+
+    /** Validated declarative profiles bundled with this theme. */
+    workspaceProfiles?: WorkspaceProfileV1[];
+
+    /** Recommendation metadata only; never an automatic selection. */
+    recommendedWorkspaceProfileId?: string;
 }
 
 /**

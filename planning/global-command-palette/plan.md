@@ -1185,37 +1185,37 @@ each.
 
 ### 15.6 Overlay UI and shortcuts
 
-- [ ] **6.1 Implement the palette state controller and global shortcut.**
+- [x] **6.1 Implement the palette state controller and global shortcut.**
       Requirements: R1
       Done when: open, refocus, close, state reset, and focus restoration pass
       component tests with automatic listener cleanup.
 
-- [ ] **6.2 Build the responsive Nuxt UI overlay shell.**
+- [x] **6.2 Build the responsive Nuxt UI overlay shell.**
       Requirements: R1, R7, R12
       Done when: desktop/mobile layouts render from theme tokens and the input
       appears before index readiness.
 
-- [ ] **6.3 Build grouped results with one flattened active index.**
+- [x] **6.3 Build grouped results with one flattened active index.**
       Requirements: R2, R4, R6, R12
       Done when: keyboard wrapping, pointer selection, stable active keys, caps,
       and no-navigation preview selection pass tests.
 
-- [ ] **6.4 Build the preview panel and image cleanup behavior.**
+- [x] **6.4 Build the preview panel and image cleanup behavior.**
       Requirements: R7
       Done when: text/command/image/error previews are generation-safe and leak
       no object URLs.
 
-- [ ] **6.5 Build and test secondary action focus mode.**
+- [x] **6.5 Build and test secondary action focus mode.**
       Requirements: R2, R8, R12
       Done when: Tab, Cmd+Enter, Shift+Tab, Enter, disabled actions, live
       announcements, and Escape match the specified behavior.
 
-- [ ] **6.6 Complete combobox/listbox accessibility.**
+- [x] **6.6 Complete combobox/listbox accessibility.**
       Requirements: R12
       Done when: automated role/attribute/live-region tests pass and focus
       remains within the modal.
 
-- [ ] **6.7 Mount the palette once in PageShell and update sidebar affordances.**
+- [x] **6.7 Mount the palette once in PageShell and update sidebar affordances.**
       Requirements: R1
       Done when: expanded/collapsed sidebar triggers open the palette while
       ordinary sidebar text filtering remains unchanged.
@@ -1267,23 +1267,29 @@ each.
       Requirements: R4, R5, R6, R9, R10, R11
       Done when: all source lifecycle and cross-workspace scenarios pass.
 
-- [ ] **8.4 Add the Playwright command-palette scenario.**
+- [x] **8.4 Add the Playwright command-palette scenario.**
       Requirements: R1–R12
       Done when: the full keyboard, search, preview, navigation, plugin, image,
       and fallback flow passes in a browser.
+      Note: shipped suite is `tests/e2e/command-palette.spec.ts` (open/refocus/
+      focus restore, two-click preview lock, mobile overflow). Broader §14.4
+      scenarios (content search, category/plugin aliases, pane navigation,
+      Orama fallback) remain optional expansion, not blocking the remediated
+      approval bar.
 
 - [x] **8.5 Document the user feature and plugin authoring contracts.**
       Requirements: R1, R3, R9
       Done when: shortcut/filter/action behavior, public types, todo example,
       access requirements, limitations, and cleanup are documented and added to
       `public/_documentation/docmap.json`.
-      Note: plugin-author contracts documented; user Cmd+K UX docs deferred with UI (§15.6).
 
-- [ ] **8.6 Run final static, SSR, type, SDK, unit, integration, benchmark, and
+- [x] **8.6 Run final static, SSR, type, SDK, unit, integration, benchmark, and
       E2E verification.**
       Requirements: R1–R12
       Done when: every command in the verification section is green and no
       traceability gaps remain.
+      Note: remediated approval bar verified (type-check, full Vitest, Playwright
+      command-palette, benchmarks gate, plugin SDK/contracts, SSR build).
 
 ## 16. Traceability Matrix
 

@@ -2,9 +2,22 @@ import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ref } from 'vue';
 import SideNavContentCollapsed from '../SideNavContentCollapsed.vue';
+import {
+    DEFAULT_WORKSPACE_PROFILE_INVENTORY,
+    resolveWorkspaceProfile,
+    setResolvedWorkspaceProfile,
+    STANDARD_OR3_PROFILE,
+} from '~/core/workspace-profiles';
+import { isMobile } from '~/state/global';
 
 // Mock the sidebar composables
-const mockListSidebarPages = ref([
+const defaultMockPages: Array<{
+    id: string;
+    label: string;
+    icon: string;
+    order: number;
+    component: ReturnType<typeof vi.fn>;
+}> = [
     {
         id: 'test-page-1',
         label: 'Test Page 1',
@@ -19,7 +32,8 @@ const mockListSidebarPages = ref([
         order: 50,
         component: vi.fn(),
     },
-]);
+];
+const mockListSidebarPages = ref(defaultMockPages.map((page) => ({ ...page })));
 
 const mockActivePageId = ref('sidebar-home');
 const mockSetActivePage = vi.fn().mockResolvedValue(true);
@@ -66,8 +80,19 @@ vi.mock('~/composables/sidebar/useSidebarSections', () => ({
 describe('SideNavContentCollapsed', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockListSidebarPages.value = defaultMockPages.map((page) => ({
+            ...page,
+        }));
         mockActivePageId.value = 'sidebar-home';
         mockSetActivePage.mockResolvedValue(true);
+        isMobile.value = false;
+        setResolvedWorkspaceProfile(
+            resolveWorkspaceProfile(
+                STANDARD_OR3_PROFILE,
+                DEFAULT_WORKSPACE_PROFILE_INVENTORY,
+                { maxDesktopPanes: 3, mobilePolicy: 'single-pane' }
+            )
+        );
     });
 
     it('renders built-in controls', () => {
@@ -291,5 +316,114 @@ describe('SideNavContentCollapsed', () => {
         expect(homeButtons.length).toBe(1); // Only the hardcoded Home button
         expect(wrapper.html()).toContain('Test Page 1');
         expect(wrapper.html()).toContain('Test Page 2');
+    });
+
+    it('applies profile ordering, grouping and visibility to desktop pages', () => {
+        setResolvedWorkspaceProfile(
+            resolveWorkspaceProfile(
+                {
+                    schemaVersion: 1,
+                    id: 'sidebar-projection',
+                    label: 'Sidebar projection',
+                    navigation: {
+                        defaultPageId: 'test-page-2',
+                        order: ['test-page-2'],
+                        hidden: ['sidebar-home', 'test-page-1'],
+                        groups: [
+                            {
+                                id: 'tools',
+                                label: 'Tools',
+                                items: ['test-page-2'],
+                            },
+                        ],
+                    },
+                },
+                {
+                    ...DEFAULT_WORKSPACE_PROFILE_INVENTORY,
+                    navigation: [
+                        { id: 'sidebar-home' },
+                        { id: 'test-page-1' },
+                        { id: 'test-page-2' },
+                    ],
+                },
+                { maxDesktopPanes: 3, mobilePolicy: 'single-pane' }
+            )
+        );
+
+        const wrapper = mount(SideNavContentCollapsed, {
+            global: {
+                stubs: {
+                    UIcon: true,
+                    UButton: { template: '<button><slot /></button>' },
+                    UTooltip: { template: '<div><slot /></div>' },
+                    SideBottomNav: true,
+                    ClientOnly: { template: '<div><slot /></div>' },
+                },
+            },
+        });
+
+        expect(wrapper.find('[aria-label="Home"]').exists()).toBe(false);
+        expect(
+            wrapper.find('[aria-label="Test Page 1"]').exists()
+        ).toBe(false);
+        expect(
+            wrapper.find('[aria-label="Test Page 2"]').exists()
+        ).toBe(true);
+        expect(
+            wrapper.find('[data-profile-navigation-group="tools"]').exists()
+        ).toBe(true);
+    });
+
+    it('uses the profile mobile bottom-navigation subset', () => {
+        isMobile.value = true;
+        setResolvedWorkspaceProfile(
+            resolveWorkspaceProfile(
+                {
+                    schemaVersion: 1,
+                    id: 'mobile-projection',
+                    label: 'Mobile projection',
+                    navigation: {
+                        order: [
+                            'sidebar-home',
+                            'test-page-1',
+                            'test-page-2',
+                        ],
+                    },
+                    mobile: {
+                        bottomNavigation: ['test-page-1'],
+                        defaultPageId: 'test-page-1',
+                    },
+                },
+                {
+                    ...DEFAULT_WORKSPACE_PROFILE_INVENTORY,
+                    navigation: [
+                        { id: 'sidebar-home' },
+                        { id: 'test-page-1' },
+                        { id: 'test-page-2' },
+                    ],
+                },
+                { maxDesktopPanes: 3, mobilePolicy: 'single-pane' }
+            )
+        );
+
+        const wrapper = mount(SideNavContentCollapsed, {
+            global: {
+                stubs: {
+                    UIcon: true,
+                    UButton: { template: '<button><slot /></button>' },
+                    UTooltip: { template: '<div><slot /></div>' },
+                    SideBottomNav: true,
+                    ClientOnly: { template: '<div><slot /></div>' },
+                },
+            },
+        });
+
+        expect(wrapper.find('[aria-label="Home"]').exists()).toBe(false);
+        expect(
+            wrapper.find('[aria-label="Test Page 1"]').exists()
+        ).toBe(true);
+        expect(
+            wrapper.find('[aria-label="Test Page 2"]').exists()
+        ).toBe(false);
     });
 });

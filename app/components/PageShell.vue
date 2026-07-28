@@ -29,6 +29,13 @@
             class="flex-1 h-dvh w-full relative"
             :class="legacyCompatClasses.height"
             :style="paneChromeClearanceStyle"
+            :data-workspace-profile="resolvedProfile.id"
+            :data-profile-pane-limit="
+                resolvedProfile.workspace.desktopPaneLimit
+            "
+            :data-profile-mobile-policy="
+                resolvedProfile.workspace.mobilePolicy
+            "
         >
             <div
                 id="top-nav"
@@ -298,6 +305,8 @@ import {
     useSystemPromptsModal,
     type SystemPromptsModalMode,
 } from '~/composables/chat/useSystemPromptsModal';
+import { useWorkspaceProfiles } from '~/composables/workspace-profiles/useWorkspaceProfiles';
+import type { WorkspaceProfileInitialPane } from '~/core/workspace-profiles';
 
 const legacyCompatClasses = {
     height: `h-[${'100dvh'}]`,
@@ -334,6 +343,14 @@ const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
 const minPaneWidth = 280;
 const { isMobile } = useResponsiveState();
+const {
+    resolvedProfile,
+    initialPaneRequest,
+    acknowledgeInitialPanes,
+} = useWorkspaceProfiles();
+const profilePaneLimit = computed(
+    () => resolvedProfile.value.workspace.desktopPaneLimit
+);
 
 // ---------------- Multi-pane ----------------
 const {
@@ -349,6 +366,9 @@ const {
     setPaneThread,
     loadMessagesFor,
     ensureAtLeastOne,
+    newPaneForApp,
+    setPaneApp,
+    updatePane,
     getPaneWidth,
     handleResize,
     persistPaneWidths,
@@ -356,14 +376,16 @@ const {
     paneWidths,
 } = useMultiPane({
     initialThreadId: props.initialThreadId,
-    maxPanes: 3,
+    maxPanes: profilePaneLimit,
     onFlushDocument: async (id) => {
         await captureDocumentEditor(id);
         await flushDocument(id);
     },
     minPaneWidth: 280,
     maxPaneWidth: 2000,
-    allowMultiplePanes: computed(() => !isMobile.value),
+    allowMultiplePanes: computed(
+        () => !isMobile.value && profilePaneLimit.value > 1
+    ),
 });
 
 const themePlugin = useNuxtApp().$theme as ThemePlugin | undefined;
@@ -551,6 +573,8 @@ const activeChatThreadId = computed(() => {
 // --------------- Initializers ---------------
 
 let validateToken = 0;
+const shellMounted = ref(false);
+let applyingInitialPaneToken: number | null = null;
 
 async function validateThread(id: string): Promise<ValidationStatus> {
     return validateDbRecordWithRetry({
@@ -652,6 +676,106 @@ async function initInitial() {
     hasSyncedInitial.value = true;
     updateUrl(true);
 }
+
+async function configureProfilePane(
+    index: number,
+    pane: WorkspaceProfileInitialPane
+): Promise<void> {
+    if (pane.id === 'chat') {
+        updatePane(index, {
+            mode: 'chat',
+            documentId: undefined,
+            threadId: '',
+            messages: [],
+            validating: false,
+        });
+        if (pane.recordId) await setPaneThread(index, pane.recordId);
+        return;
+    }
+    if (pane.id === 'doc') {
+        updatePane(index, {
+            mode: 'doc',
+            documentId: pane.recordId,
+            threadId: '',
+            messages: [],
+            validating: false,
+        });
+        return;
+    }
+    await setPaneApp(index, pane.id, { recordId: pane.recordId });
+}
+
+async function applyInitialPaneRequest(): Promise<void> {
+    const request = initialPaneRequest.value;
+    if (
+        !shellMounted.value ||
+        !request ||
+        applyingInitialPaneToken === request.token
+    ) {
+        return;
+    }
+    applyingInitialPaneToken = request.token;
+    try {
+        if (props.initialThreadId || props.initialDocumentId) {
+            await acknowledgeInitialPanes(request.token);
+            return;
+        }
+        ensureAtLeastOne();
+        const first = panes.value[0];
+        const firstIsBlank =
+            first?.mode === 'chat' &&
+            !first.threadId &&
+            !first.documentId &&
+            first.messages.length === 0;
+        if (!request.replaceExisting && !firstIsBlank) {
+            await acknowledgeInitialPanes(request.token);
+            return;
+        }
+        if (request.replaceExisting) {
+            while (panes.value.length > 1) {
+                await closePane(panes.value.length - 1);
+            }
+        }
+
+        const requestedPanes = request.panes.slice(
+            0,
+            resolvedProfile.value.workspace.desktopPaneLimit
+        );
+        if (requestedPanes[0]) {
+            await configureProfilePane(0, requestedPanes[0]);
+        }
+        for (const pane of requestedPanes.slice(1)) {
+            if (!canAddPane.value) break;
+            if (pane.id === 'chat' || pane.id === 'doc') {
+                addPane();
+                await configureProfilePane(panes.value.length - 1, pane);
+            } else {
+                await newPaneForApp(pane.id, {
+                    initialRecordId: pane.recordId,
+                });
+            }
+        }
+        setActive(0);
+        await acknowledgeInitialPanes(request.token);
+    } catch (error) {
+        console.error('[workspace-profiles] Initial pane application failed', error);
+        toast.add({
+            title: 'Layout setup incomplete',
+            description:
+                'Your profile is active, but its initial panes could not be opened.',
+            color: 'warning',
+        });
+    } finally {
+        applyingInitialPaneToken = null;
+    }
+}
+
+watch(
+    () => initialPaneRequest.value?.token,
+    () => {
+        void applyInitialPaneRequest();
+    }
+);
 
 function redirectNotFound(kind: 'chat' | 'doc') {
     hasSyncedInitial.value = true;
@@ -1045,10 +1169,12 @@ useHookEffect('db.documents.delete:action:hard:after', handleDocumentDeletion, {
 });
 
 // --------------- Mount ---------------
-onMounted(() => {
-    initInitial();
+onMounted(async () => {
+    await initInitial();
     syncTheme();
     ensureAtLeastOne();
+    shellMounted.value = true;
+    await applyInitialPaneRequest();
 
     // Expose sidebar layout API globally for plugins
     const sidebarLayoutApi: SidebarLayoutApi = {
