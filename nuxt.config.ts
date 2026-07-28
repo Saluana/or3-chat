@@ -21,6 +21,8 @@ const disableNonCorePlugins = isNonCorePluginDiscoveryDisabled(
 const isWizardUiProcess = process.env.OR3_WIZARD_UI_ENABLED === 'true';
 const isScrollTestHarnessEnabled =
     process.env.OR3_SCROLL_TEST_HARNESS === 'true';
+const isAgentVisualTestHarnessEnabled =
+    process.env.OR3_AGENT_VISUAL_TEST_HARNESS === 'true';
 const isProductionJourneyTestHarnessEnabled =
     process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS === 'true';
 const productionJourneyPort = Number(process.env.PW_PORT || 3000);
@@ -367,6 +369,9 @@ export default defineNuxtConfig({
         '/_tests/**': { ssr: false },
         ...(isScrollTestHarnessEnabled
             ? { '/__or3-scroll-test': { ssr: false } }
+            : {}),
+        ...(isAgentVisualTestHarnessEnabled
+            ? { '/__or3-agent-visual-test': { ssr: false } }
             : {}),
         ...(isProductionJourneyTestHarnessEnabled
             ? {
@@ -1075,6 +1080,16 @@ export default defineNuxtConfig({
                     file: resolve(
                         __dirname,
                         'tests/e2e/fixtures/Or3ScrollCanary.vue'
+                    ),
+                });
+            }
+            if (isAgentVisualTestHarnessEnabled) {
+                pages.push({
+                    name: 'or3-agent-visual-test-harness',
+                    path: '/__or3-agent-visual-test',
+                    file: resolve(
+                        __dirname,
+                        'tests/e2e/fixtures/ExternalAgentVisualHarness.vue',
                     ),
                 });
             }

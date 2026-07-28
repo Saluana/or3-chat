@@ -83,6 +83,7 @@ function snapshot(
     capabilities: { hostId: "host-1", execAvailable: true },
     runners: [],
     sessions: [session],
+    sessionRefs: [],
     ...overrides,
   };
 }

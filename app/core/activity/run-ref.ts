@@ -1,5 +1,5 @@
+export const ACTIVITY_DASHBOARD_APP_ID = 'or3:activity';
 export const ACTIVITY_DETAIL_PANE_APP_ID = 'or3-activity-detail';
-export const ACTIVITY_SIDEBAR_PAGE_ID = 'or3-activity';
 
 export interface ActivityRunRef {
     readonly sourceId: string;
@@ -31,4 +31,3 @@ export function decodeActivityRunRef(
         return null;
     }
 }
-

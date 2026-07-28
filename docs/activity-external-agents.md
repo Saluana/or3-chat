@@ -17,6 +17,10 @@ The aggregator isolates list, detail, subscription, and action failures by
 source. Event identity is stable across reconnects, text deltas are coalesced,
 and a stale event cannot replace a terminal state.
 
+Activity is registered as a Dashboard app rather than permanent primary
+navigation. Its responsive master-detail view keeps filters and run context
+together; direct run references can still open in the shared pane system.
+
 ## External-agent security boundary
 
 OR3 Chat never starts a provider CLI. A trusted `or3-intern` host owns runner

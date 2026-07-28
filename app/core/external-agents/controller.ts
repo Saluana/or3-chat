@@ -2,6 +2,10 @@ import {
   buildExternalAgentRunnerOptions,
   validateExternalAgentLaunch,
 } from "./launcher";
+import {
+  presentExternalAgentError,
+  sanitizeExternalAgentPayload,
+} from "./presentation";
 import type {
   ExternalAgentApproval,
   ExternalAgentArtifact,
@@ -89,11 +93,7 @@ function firstString(
 }
 
 function redactErrorMessage(error: unknown, fallback: string): string {
-  const message = error instanceof Error ? error.message : fallback;
-  return message
-    .replace(/Bearer\s+[^\s"']+/gi, "Bearer [REDACTED]")
-    .replace(/([?&](?:token|api[_-]?key|secret)=)[^&\s]+/gi, "$1[REDACTED]")
-    .replace(/\b(?:sk|or3)[-_][A-Za-z0-9_-]{12,}\b/g, "[REDACTED]");
+  return presentExternalAgentError(error, fallback).message;
 }
 
 function randomId(prefix: string): string {
@@ -196,7 +196,7 @@ function sessionFromRemote(
     appSessionKey: remote.app_session_key,
     runnerId: remote.runner_id,
     title: ref?.title || `Agent session ${remote.id.slice(0, 8)}`,
-    status: "queued",
+    status: ref?.status ?? "queued",
     createdAt: remoteDate(remote.created_at),
     updatedAt: remoteDate(remote.updated_at),
     streamState: "idle",
@@ -259,10 +259,19 @@ function normalizeTimelineEvent(
   sessionId: string,
   event: ExternalRemoteEvent,
 ): ExternalAgentTimelineEvent {
-  const payload = record(event.payload);
-  const type = timelineType(event.type, payload);
+  const rawPayload = record(event.payload);
+  const type = timelineType(event.type, rawPayload);
+  const payload = sanitizeExternalAgentPayload(rawPayload, event.type);
   const text =
-    event.text ||
+    (type === "error"
+      ? presentExternalAgentError(
+          event.text ??
+            firstString(rawPayload, ["error", "error_message", "message"]),
+        ).message
+      : event.text &&
+          !/https?:\/\/|set-cookie|authorization|headers?/i.test(event.text)
+        ? event.text.slice(0, 24_000)
+        : undefined) ||
     firstString(payload, [
       "delta",
       "text",
@@ -290,9 +299,6 @@ function normalizeTimelineEvent(
     text,
     payload: Object.freeze({
       ...payload,
-      rawType: event.type,
-      stream: event.stream,
-      jobId: event.job_id,
     }),
   });
 }
@@ -460,6 +466,7 @@ export class ExternalAgentController {
       readiness: this.#readiness,
       capabilities: this.#capabilities,
       runners: Object.freeze([...this.#runners]),
+      sessionRefs: Object.freeze([...this.#sessionRefs]),
       sessions: Object.freeze(
         [...this.#sessions.values()].sort(
           (left, right) =>
@@ -1105,12 +1112,7 @@ export class ExternalAgentController {
       });
       this.#assertSessionGeneration(session);
       session.actionError = undefined;
-      await this.#refreshTurn(
-        session,
-        session.activeTurnId,
-        client,
-        lease,
-      );
+      await this.#refreshTurn(session, session.activeTurnId, client, lease);
     } catch (error) {
       if (this.#isStaleResponseError(error)) throw error;
       session.status = previousStatus;
@@ -1395,12 +1397,7 @@ export class ExternalAgentController {
       limit: MAX_REHYDRATED_TURNS,
       signal: this.#hostController?.signal,
     });
-    this.#assertSessionRefresh(
-      session,
-      generation,
-      lease,
-      refreshVersion,
-    );
+    this.#assertSessionRefresh(session, generation, lease, refreshVersion);
     const turns = new Map(
       session.turns.map((turn) => [turn.id, turn] as const),
     );
@@ -1427,12 +1424,7 @@ export class ExternalAgentController {
           signal: this.#hostController?.signal,
         },
       );
-      this.#assertSessionRefresh(
-        session,
-        generation,
-        lease,
-        refreshVersion,
-      );
+      this.#assertSessionRefresh(session, generation, lease, refreshVersion);
       for (const event of events.events.slice(-limit)) {
         this.#ingestRemoteEvent(session, event);
       }
@@ -1462,12 +1454,7 @@ export class ExternalAgentController {
         signal: this.#hostController?.signal,
       }),
     ]);
-    this.#assertSessionRefresh(
-      session,
-      generation,
-      lease,
-      refreshVersion,
-    );
+    this.#assertSessionRefresh(session, generation, lease, refreshVersion);
     const index = session.turns.findIndex(
       (candidate) => candidate.id === turn.id,
     );
@@ -1493,12 +1480,7 @@ export class ExternalAgentController {
     }
     this.#rememberSession(session);
     await this.#persist(lease);
-    this.#assertSessionRefresh(
-      session,
-      generation,
-      lease,
-      refreshVersion,
-    );
+    this.#assertSessionRefresh(session, generation, lease, refreshVersion);
   }
 
   #mergeTurn(
@@ -1532,7 +1514,9 @@ export class ExternalAgentController {
     session.activeTurnId = latest.id;
     if (!preserveTerminal) session.status = nextStatus;
     session.output = latest.final_text ?? session.output;
-    session.error = latest.error ?? session.error;
+    session.error = latest.error
+      ? presentExternalAgentError(latest.error).message
+      : session.error;
     session.updatedAt = remoteDate(
       latest.completed_at ?? latest.started_at ?? latest.requested_at,
     );
@@ -1615,7 +1599,7 @@ export class ExternalAgentController {
     }
     session.artifacts = session.artifacts.slice(-MAX_SESSION_ARTIFACTS);
     if (normalized.type === "error") {
-      session.error = normalized.text ?? "External agent failed";
+      session.error = presentExternalAgentError(normalized.text).message;
     }
     if (Date.parse(normalized.occurredAt) >= Date.parse(session.updatedAt)) {
       session.updatedAt = normalized.occurredAt;
@@ -1710,6 +1694,14 @@ export class ExternalAgentController {
       title: session.title,
       runnerId: session.runnerId,
       updatedAt: session.updatedAt,
+      status: session.status,
+      pendingApprovalCount: session.approvals.filter(
+        (approval) => approval.status === "pending",
+      ).length,
+      preview: (session.output ?? session.turns.at(-1)?.user_message)?.slice(
+        0,
+        240,
+      ),
     };
     this.#sessionRefs = [
       ref,

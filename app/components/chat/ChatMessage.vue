@@ -272,7 +272,7 @@
 
             <!-- Action buttons: overlap bubble border half outside -->
             <div
-                v-if="!editing"
+                v-if="!editing && interactive"
                 :class="[
                     'absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap',
                     `cm-actions-${roleVariant}`,
@@ -381,7 +381,14 @@ import { useMessageActions } from '~/composables/chat/useMessageActions';
 // UI message now exposed as UiChatMessage with .text field
 type UIMessage = UiChatMessage & { pre_html?: string };
 type MessageWithUiState = UIMessage & { _expanded?: boolean };
-const props = defineProps<{ message: MessageWithUiState; threadId?: string }>();
+const props = withDefaults(
+    defineProps<{
+        message: MessageWithUiState;
+        threadId?: string;
+        interactive?: boolean;
+    }>(),
+    { interactive: true },
+);
 const emit = defineEmits<{
     (e: 'retry', id: string): void;
     (e: 'continue', id: string): void;

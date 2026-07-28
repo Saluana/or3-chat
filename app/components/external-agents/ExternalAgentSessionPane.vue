@@ -1,252 +1,333 @@
 <template>
   <section
-    class="h-full min-h-0 overflow-y-auto bg-[var(--md-surface)] p-3 sm:p-5"
-    aria-label="External agent session"
+    class="relative flex h-full min-h-0 flex-col overflow-hidden bg-[var(--md-surface)]"
+    aria-label="External agent conversation"
   >
-    <div v-if="isLauncher" class="mx-auto max-w-2xl space-y-4">
-      <header>
-        <h1 class="text-lg font-semibold">New external agent session</h1>
-        <p class="text-sm text-[var(--md-on-surface-variant)]">
-          Provider choices and safety modes come from the selected host.
-        </p>
-      </header>
-      <ExternalAgentLauncher @launched="replaceWithSession" />
-    </div>
-
-    <div v-else-if="loading" class="grid min-h-48 place-items-center text-sm">
-      Loading canonical session…
-    </div>
-    <UAlert
-      v-else-if="loadError"
-      color="error"
-      variant="soft"
-      title="Session unavailable"
-      :description="loadError"
-    />
-
-    <div v-else-if="session" class="mx-auto max-w-5xl space-y-4">
-      <header
-        class="rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container)] p-4"
-      >
+    <template v-if="isLauncher">
+      <div class="min-h-0 flex-1 overflow-y-auto">
         <div
-          class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+          class="mx-auto flex min-h-full max-w-3xl flex-col items-center justify-center px-5 pb-40 pt-12 text-center"
         >
-          <div class="min-w-0">
-            <div class="mb-1 flex flex-wrap items-center gap-2">
-              <UBadge :color="statusColor" variant="soft">
-                {{ session.status.replace("_", " ") }}
-              </UBadge>
-              <span class="text-xs text-[var(--md-on-surface-variant)]">
-                {{ session.runnerId }} · {{ session.hostId }}
-              </span>
-              <span
-                v-if="session.streamState === 'disconnected'"
-                class="text-xs text-[var(--md-error)]"
-              >
-                Live updates disconnected
-              </span>
-            </div>
-            <h1 class="truncate text-lg font-semibold">{{ session.title }}</h1>
-          </div>
-          <UButton
-            v-if="canCancel"
-            size="sm"
-            color="error"
-            variant="soft"
-            icon="i-lucide-square"
-            :loading="pendingAction === 'cancel'"
-            :disabled="Boolean(pendingAction)"
-            @click="cancel"
+          <div
+            class="mb-5 grid size-14 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)]"
           >
-            Cancel
-          </UButton>
+            <UIcon name="i-lucide-bot" class="size-7" />
+          </div>
+          <h1 class="text-2xl font-semibold">What should the agent do?</h1>
+          <p class="mt-2 max-w-xl text-sm text-[var(--md-on-surface-variant)]">
+            Agents work like chat, with tools, approvals, and files appearing
+            alongside the conversation.
+          </p>
         </div>
-        <p
-          v-if="session.actionError"
-          class="mt-3 text-sm text-[var(--md-error)]"
-        >
-          {{ session.actionError }}
-        </p>
-      </header>
+      </div>
+      <div
+        class="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-[var(--md-surface)] via-[var(--md-surface)] to-transparent px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-12"
+      >
+        <div class="pointer-events-auto mx-auto max-w-3xl">
+          <ExternalAgentLauncher @launched="replaceWithSession" />
+        </div>
+      </div>
+    </template>
 
+    <div
+      v-else-if="loading"
+      class="grid min-h-0 flex-1 place-items-center text-sm text-[var(--md-on-surface-variant)]"
+    >
+      <div class="flex items-center gap-2">
+        <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
+        Loading conversation…
+      </div>
+    </div>
+
+    <div
+      v-else-if="loadError"
+      class="grid min-h-0 flex-1 place-items-center p-6"
+    >
       <UAlert
-        v-if="
-          snapshot?.connectionState === 'offline' ||
-          snapshot?.connectionState === 'disconnected'
-        "
-        color="warning"
-        variant="soft"
-        title="Host disconnected"
-        description="Reconnect from the Agents sidebar to resume canonical updates."
-      />
-      <UAlert
-        v-if="session.error"
         color="error"
         variant="soft"
-        title="Agent error"
-        :description="session.error"
+        title="Conversation unavailable"
+        :description="loadError"
       />
+    </div>
 
-      <section v-if="pendingApprovals.length" class="space-y-2">
-        <h2 class="text-sm font-semibold">Approvals</h2>
-        <article
-          v-for="approval in pendingApprovals"
-          :key="approval.id"
-          class="rounded-[var(--md-border-radius)] border border-[var(--md-extended-color-warning-color)]/50 p-3"
-        >
-          <strong class="text-sm">{{ approval.title }}</strong>
-          <p
-            v-if="approval.description"
-            class="mt-1 text-sm text-[var(--md-on-surface-variant)]"
-          >
-            {{ approval.description }}
-          </p>
-          <div class="mt-3 flex flex-wrap justify-end gap-2">
-            <UButton
-              size="sm"
-              color="error"
-              variant="soft"
-              :loading="pendingAction === `deny:${approval.id}`"
-              :disabled="Boolean(pendingAction) || !canDecideApproval"
-              @click="decide('deny', approval.id)"
+    <template v-else-if="session && projection">
+      <header
+        class="z-10 flex shrink-0 items-center gap-3 border-b border-[var(--md-outline-variant)] bg-[var(--md-surface)]/95 px-3 py-2 backdrop-blur sm:px-5"
+      >
+        <div class="min-w-0 flex-1">
+          <div class="flex min-w-0 items-center gap-2">
+            <h1 class="truncate text-sm font-semibold">{{ session.title }}</h1>
+            <span
+              class="hidden truncate text-xs text-[var(--md-on-surface-variant)] sm:inline"
             >
-              Deny
-            </UButton>
-            <UButton
-              size="sm"
-              :loading="pendingAction === `approve:${approval.id}`"
-              :disabled="Boolean(pendingAction) || !canDecideApproval"
-              @click="decide('approve', approval.id)"
-            >
-              Approve
-            </UButton>
+              {{ runnerLabel }}
+            </span>
           </div>
-        </article>
-      </section>
-
-      <section v-if="session.artifacts.length" class="space-y-2">
-        <h2 class="text-sm font-semibold">Files and diffs</h2>
-        <div class="grid gap-2 lg:grid-cols-2">
-          <article
-            v-for="artifact in session.artifacts"
-            :key="artifact.id"
-            class="min-w-0 rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] p-3"
+          <p
+            v-if="connectionWarning"
+            class="truncate text-xs text-[var(--md-error)]"
           >
-            <div class="flex items-center justify-between gap-2">
-              <strong class="truncate text-sm">{{ artifact.label }}</strong>
-              <div class="flex items-center gap-2">
-                <UBadge color="neutral" variant="soft">{{
-                  artifact.kind
-                }}</UBadge>
-                <UButton
-                  v-if="artifact.artifactId && !artifact.content"
-                  size="xs"
-                  variant="soft"
-                  :loading="pendingAction === `artifact:${artifact.id}`"
-                  :disabled="
-                    Boolean(pendingAction) || !canLoadArtifact(artifact.id)
-                  "
-                  @click="loadArtifact(artifact.id)"
-                >
-                  Load
-                </UButton>
+            {{ connectionWarning }}
+          </p>
+        </div>
+        <UBadge :color="statusColor" variant="soft">
+          {{ statusLabel }}
+        </UBadge>
+        <UButton
+          v-if="canCancel"
+          size="sm"
+          color="error"
+          variant="ghost"
+          icon="i-lucide-square"
+          aria-label="Stop agent"
+          :loading="pendingAction === 'cancel'"
+          :disabled="Boolean(pendingAction)"
+          @click="cancel"
+        />
+        <UPopover>
+          <UButton
+            size="sm"
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-ellipsis"
+            aria-label="Conversation options"
+          />
+          <template #content>
+            <div class="w-72 space-y-2 p-3">
+              <p class="text-xs text-[var(--md-on-surface-variant)]">
+                Agent activity is summarized here. Operational details remain
+                available for troubleshooting.
+              </p>
+              <details v-if="projection.diagnostics.length">
+                <summary class="cursor-pointer text-xs font-medium">
+                  Technical details
+                </summary>
+                <ol class="mt-2 max-h-56 space-y-2 overflow-y-auto">
+                  <li
+                    v-for="entry in projection.diagnostics"
+                    :key="entry.id"
+                    class="text-xs text-[var(--md-on-surface-variant)]"
+                  >
+                    {{ entry.summary }}
+                  </li>
+                </ol>
+              </details>
+            </div>
+          </template>
+        </UPopover>
+      </header>
+
+      <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto">
+        <main
+          class="mx-auto flex w-full max-w-[768px] flex-col px-2 pb-48 pt-3 sm:px-4"
+          aria-live="polite"
+        >
+          <div
+            v-if="!projection.turns.length"
+            class="grid min-h-52 place-items-center text-sm text-[var(--md-on-surface-variant)]"
+          >
+            Waiting for the conversation to begin…
+          </div>
+
+          <article
+            v-for="turn in projection.turns"
+            :key="turn.id"
+            class="flex flex-col"
+          >
+            <ChatMessage
+              v-if="turn.userMessage"
+              :message="turn.userMessage"
+              :interactive="false"
+            />
+            <ChatMessage
+              v-if="turn.assistantMessage"
+              :message="turn.assistantMessage"
+              :interactive="false"
+            />
+
+            <div
+              v-for="approval in turn.approvals"
+              :key="approval.id"
+              class="mx-2 mb-4 rounded-[var(--md-border-radius)] border border-[var(--md-extended-color-warning-color)]/60 bg-[var(--md-surface-container-low)] p-3 sm:mx-5"
+            >
+              <div class="flex items-start gap-3">
+                <UIcon
+                  name="i-lucide-shield-alert"
+                  class="mt-0.5 size-5 shrink-0"
+                />
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <strong class="text-sm">{{ approval.title }}</strong>
+                    <UBadge
+                      :color="
+                        approval.status === 'pending'
+                          ? 'warning'
+                          : approval.status === 'approved'
+                            ? 'success'
+                            : 'neutral'
+                      "
+                      size="xs"
+                      variant="soft"
+                    >
+                      {{ approval.status }}
+                    </UBadge>
+                  </div>
+                  <p
+                    v-if="approval.description"
+                    class="mt-1 whitespace-pre-wrap text-sm text-[var(--md-on-surface-variant)]"
+                  >
+                    {{ approval.description }}
+                  </p>
+                  <div
+                    v-if="approval.status === 'pending'"
+                    class="mt-3 flex justify-end gap-2"
+                  >
+                    <UButton
+                      size="sm"
+                      color="error"
+                      variant="soft"
+                      :loading="pendingAction === `deny:${approval.id}`"
+                      :disabled="Boolean(pendingAction) || !canDecideApproval"
+                      @click="decide('deny', approval.id)"
+                    >
+                      Deny
+                    </UButton>
+                    <UButton
+                      size="sm"
+                      :loading="pendingAction === `approve:${approval.id}`"
+                      :disabled="Boolean(pendingAction) || !canDecideApproval"
+                      @click="decide('approve', approval.id)"
+                    >
+                      Approve
+                    </UButton>
+                  </div>
+                </div>
               </div>
             </div>
-            <pre
-              v-if="artifact.content"
-              class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words bg-[var(--md-surface-container-low)] p-2 text-xs"
-              >{{ artifact.content }}</pre
+
+            <div
+              v-if="turn.artifacts.length"
+              class="mx-2 mb-5 grid gap-2 sm:mx-5 sm:grid-cols-2"
             >
-          </article>
-        </div>
-      </section>
-
-      <section v-if="session.output" class="space-y-2">
-        <h2 class="text-sm font-semibold">Output</h2>
-        <pre
-          class="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)] p-3 text-sm"
-          >{{ session.output }}</pre
-        >
-      </section>
-
-      <section class="space-y-2">
-        <h2 class="text-sm font-semibold">Timeline</h2>
-        <div
-          v-if="!session.events.length"
-          class="rounded-[var(--md-border-radius)] border border-dashed border-[var(--md-outline-variant)] p-6 text-center text-sm text-[var(--md-on-surface-variant)]"
-        >
-          Waiting for agent events…
-        </div>
-        <ol v-else class="space-y-2">
-          <li
-            v-for="event in session.events"
-            :key="event.id"
-            class="rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-3"
-          >
-            <div class="flex items-center justify-between gap-3">
-              <span class="text-xs font-semibold uppercase tracking-wide">{{
-                event.type
-              }}</span>
-              <time class="text-xs text-[var(--md-on-surface-variant)]">
-                {{ new Date(event.occurredAt).toLocaleString() }}
-              </time>
+              <article
+                v-for="artifact in turn.artifacts"
+                :key="artifact.id"
+                class="min-w-0 rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-3"
+              >
+                <div class="flex items-center gap-2">
+                  <UIcon
+                    :name="
+                      artifact.kind === 'diff'
+                        ? 'i-lucide-file-diff'
+                        : 'i-lucide-file'
+                    "
+                    class="size-4 shrink-0"
+                  />
+                  <strong class="min-w-0 flex-1 truncate text-sm">
+                    {{ artifact.label }}
+                  </strong>
+                  <UBadge size="xs" color="neutral" variant="soft">
+                    {{ artifact.kind }}
+                  </UBadge>
+                </div>
+                <pre
+                  v-if="artifact.preview"
+                  class="mt-2 line-clamp-5 whitespace-pre-wrap break-words text-xs text-[var(--md-on-surface-variant)]"
+                  >{{ artifact.preview }}</pre
+                >
+                <div class="mt-3 flex flex-wrap justify-end gap-1">
+                  <UButton
+                    v-if="artifact.content"
+                    size="xs"
+                    variant="ghost"
+                    icon="i-lucide-copy"
+                    @click="copyArtifact(artifact.content)"
+                  >
+                    Copy
+                  </UButton>
+                  <UButton
+                    v-if="artifact.artifactId && !artifact.content"
+                    size="xs"
+                    variant="soft"
+                    :loading="pendingAction === `artifact:${artifact.id}`"
+                    :disabled="
+                      Boolean(pendingAction) || !canLoadArtifact(artifact.id)
+                    "
+                    @click="loadArtifact(artifact.id)"
+                  >
+                    Load
+                  </UButton>
+                </div>
+              </article>
             </div>
-            <p
-              class="mt-1 whitespace-pre-wrap break-words text-sm text-[var(--md-on-surface-variant)]"
-            >
-              {{ eventText(event) }}
-            </p>
-          </li>
-        </ol>
-      </section>
 
-      <form
-        class="space-y-2 border-t border-[var(--md-outline-variant)] pt-4"
-        @submit.prevent="followUp"
-      >
-        <label class="text-sm font-semibold" for="external-agent-follow-up"
-          >Follow up</label
-        >
-        <UTextarea
-          id="external-agent-follow-up"
-          v-model="followUpText"
-          :rows="3"
-          autoresize
-          class="w-full"
-          placeholder="Ask the agent to continue, revise, or explain…"
-        />
-        <div class="flex justify-end">
-          <UButton
-            type="submit"
-            :loading="pendingAction === 'follow-up'"
-            :disabled="
-              !followUpText.trim() ||
-              Boolean(pendingAction) ||
-              !connected ||
-              !canFollowUp
-            "
+            <UAlert
+              v-if="turn.error"
+              class="mx-2 mb-5 sm:mx-5"
+              color="error"
+              variant="soft"
+              title="The agent could not continue"
+              :description="turn.error.message"
+              :actions="
+                turn.error.action === 'retry'
+                  ? [
+                      {
+                        label: 'Try again',
+                        onClick: retryTurn,
+                      },
+                    ]
+                  : undefined
+              "
+            />
+          </article>
+
+          <p
+            v-if="session.actionError"
+            class="mx-5 mb-4 text-sm text-[var(--md-error)]"
           >
-            Send follow-up
-          </UButton>
-        </div>
-      </form>
-      <p
-        v-if="connected && !canFollowUp"
-        class="text-xs text-[var(--md-on-surface-variant)]"
+            {{ session.actionError }}
+          </p>
+        </main>
+      </div>
+
+      <div
+        class="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-[var(--md-surface)] via-[var(--md-surface)] to-transparent px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-12"
       >
-        Follow-up becomes available after the current turn finishes when the
-        provider advertises continuation support.
-      </p>
-    </div>
+        <div class="pointer-events-auto mx-auto max-w-[768px]">
+          <ExternalAgentComposer
+            ref="composer"
+            v-model="followUpText"
+            :running="projection.isRunning"
+            :loading="pendingAction === 'follow-up'"
+            :disabled="!connected || (!canFollowUp && !projection.isRunning)"
+            :placeholder="
+              projection.isRunning
+                ? 'The agent is working…'
+                : 'Ask the agent to continue, revise, or explain…'
+            "
+            @send="followUp"
+            @stop="cancel"
+          >
+            <template #leading>
+              <span class="text-xs text-[var(--md-on-surface-variant)]">
+                {{ composerHint }}
+              </span>
+            </template>
+          </ExternalAgentComposer>
+        </div>
+      </div>
+    </template>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
-import type {
-  ExternalAgentSession,
-  ExternalAgentTimelineEvent,
-} from "~/core/external-agents/types";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
+import ExternalAgentComposer from "./ExternalAgentComposer.vue";
+import ExternalAgentLauncher from "./ExternalAgentLauncher.vue";
+import type { ExternalAgentSession } from "~/core/external-agents/types";
+import { projectExternalAgentConversation } from "~/core/external-agents/presentation";
+import { presentExternalAgentError } from "~/core/external-agents/presentation";
 import {
   decodeExternalAgentSessionRef,
   encodeExternalAgentSessionRef,
@@ -267,6 +348,8 @@ const loading = ref(false);
 const loadError = ref<string | null>(null);
 const followUpText = ref("");
 const pendingAction = ref<string | null>(null);
+const scroller = ref<HTMLElement | null>(null);
+const composer = ref<{ focus: () => void } | null>(null);
 
 const isLauncher = computed(
   () => !props.recordId || props.recordId === EXTERNAL_AGENT_LAUNCHER_REF,
@@ -285,6 +368,9 @@ const session = computed(() => {
     ) ?? null
   );
 });
+const projection = computed(() =>
+  session.value ? projectExternalAgentConversation(session.value) : null,
+);
 const connected = computed(
   () =>
     snapshot.value?.connectionState === "online" ||
@@ -301,17 +387,38 @@ const canDecideApproval = computed(() =>
 const canFollowUp = computed(() =>
   Boolean(session.value && runtime.controller?.canFollowUp(session.value)),
 );
-const pendingApprovals = computed(
-  () =>
-    session.value?.approvals.filter(
-      (approval) => approval.status === "pending",
-    ) ?? [],
-);
 const statusColor = computed(() => {
   if (session.value?.status === "failed") return "error";
   if (session.value?.status === "waiting_approval") return "warning";
   if (session.value?.status === "succeeded") return "success";
   return "neutral";
+});
+const statusLabel = computed(() =>
+  session.value?.status === "waiting_approval"
+    ? "needs approval"
+    : (session.value?.status ?? "queued").replace("_", " "),
+);
+const runnerLabel = computed(
+  () =>
+    snapshot.value?.runners.find(
+      (runner) => runner.id === session.value?.runnerId,
+    )?.display_name ??
+    session.value?.runnerId ??
+    "Agent",
+);
+const connectionWarning = computed(() => {
+  if (session.value?.streamState === "disconnected")
+    return "Live updates paused";
+  if (!connected.value) return "Host disconnected";
+  return null;
+});
+const composerHint = computed(() => {
+  if (!connected.value) return "Reconnect the host to continue";
+  if (session.value?.status === "waiting_approval")
+    return "Resolve the approval above to continue";
+  if (projection.value?.isRunning) return "Working — stop to interrupt";
+  if (!canFollowUp.value) return "This provider cannot continue this session";
+  return `${runnerLabel.value} · follow-up`;
 });
 
 async function load() {
@@ -323,8 +430,10 @@ async function load() {
   try {
     await controller.ensureSession(refValue.hostId, refValue.remoteSessionId);
   } catch (cause) {
-    loadError.value =
-      cause instanceof Error ? cause.message : "Session load failed";
+    loadError.value = presentExternalAgentError(
+      cause,
+      "This conversation could not be loaded.",
+    ).message;
   } finally {
     loading.value = false;
   }
@@ -347,8 +456,6 @@ async function cancel() {
   pendingAction.value = "cancel";
   try {
     await runtime.controller.cancel(session.value.remoteSessionId);
-  } catch {
-    // The controller preserves canonical state and exposes a retryable error.
   } finally {
     pendingAction.value = null;
   }
@@ -363,15 +470,14 @@ async function decide(decision: "approve" | "deny", approvalId: string) {
       decision,
       approvalId,
     );
-  } catch {
-    // The controller preserves canonical state and exposes a retryable error.
   } finally {
     pendingAction.value = null;
   }
 }
 
 async function followUp() {
-  if (!session.value || !runtime.controller) return;
+  if (!session.value || !runtime.controller || !followUpText.value.trim())
+    return;
   pendingAction.value = "follow-up";
   try {
     await runtime.controller.followUp(
@@ -379,11 +485,15 @@ async function followUp() {
       followUpText.value,
     );
     followUpText.value = "";
-  } catch {
-    // The controller exposes the canonical failure without clearing input.
+    await nextTick();
+    composer.value?.focus();
   } finally {
     pendingAction.value = null;
   }
+}
+
+async function retryTurn() {
+  composer.value?.focus();
 }
 
 function canLoadArtifact(artifactId: string): boolean {
@@ -401,30 +511,35 @@ async function loadArtifact(artifactId: string) {
       session.value.remoteSessionId,
       artifactId,
     );
-  } catch {
-    // The controller exposes a retryable artifact error on canonical state.
   } finally {
     pendingAction.value = null;
   }
 }
 
-function eventText(event: ExternalAgentTimelineEvent): string {
-  if (event.text) return event.text;
-  return Object.entries(event.payload)
-    .filter(
-      ([key, value]) =>
-        value !== undefined && value !== null && key !== "rawType",
-    )
-    .map(
-      ([key, value]) =>
-        `${key}: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`,
-    )
-    .join(" · ");
+async function copyArtifact(content: string) {
+  await navigator.clipboard?.writeText(content);
+}
+
+function scrollToBottom() {
+  requestAnimationFrame(() => {
+    if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight;
+  });
 }
 
 watch(
   () => props.recordId,
   () => void load(),
 );
-onMounted(() => void load());
+watch(
+  () => [
+    session.value?.events.length,
+    session.value?.turns.length,
+    session.value?.status,
+  ],
+  scrollToBottom,
+);
+onMounted(() => {
+  void load();
+  scrollToBottom();
+});
 </script>

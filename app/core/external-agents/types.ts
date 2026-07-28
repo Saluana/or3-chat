@@ -184,6 +184,9 @@ export interface ExternalAgentSessionRef {
   readonly title?: string;
   readonly runnerId?: string;
   readonly updatedAt?: string;
+  readonly status?: ExternalAgentRunStatus;
+  readonly pendingApprovalCount?: number;
+  readonly preview?: string;
 }
 
 export interface ExternalAgentPersistenceSnapshot {
@@ -346,6 +349,7 @@ export interface ExternalAgentStoreSnapshot {
   readonly capabilities: ExternalAgentCapabilities | null;
   readonly runners: readonly ExternalAgentRunner[];
   readonly sessions: readonly ExternalAgentSession[];
+  readonly sessionRefs: readonly ExternalAgentSessionRef[];
 }
 
 export type ExternalAgentStoreEvent =

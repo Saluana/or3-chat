@@ -29,6 +29,12 @@ function toSummary(
   controller: ExternalAgentController,
   session: ExternalAgentSession,
 ): ActivityRunSummary {
+  const runner =
+    controller.snapshot.runners.find((item) => item.id === session.runnerId)
+      ?.display_name ?? "Agent";
+  const host =
+    controller.snapshot.hosts.find((item) => item.id === session.hostId)
+      ?.name ?? "trusted host";
   return Object.freeze({
     id: session.remoteSessionId,
     sourceId: EXTERNAL_AGENT_ACTIVITY_SOURCE_ID,
@@ -38,7 +44,7 @@ function toSummary(
     startedAt: session.createdAt,
     updatedAt: session.updatedAt,
     completedAt: session.completedAt,
-    summary: `${session.runnerId} on ${session.hostId}`,
+    summary: `${runner} on ${host}`,
     actions: actionsForSession(controller, session),
   });
 }

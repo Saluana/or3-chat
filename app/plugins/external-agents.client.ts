@@ -108,17 +108,30 @@ export default defineNuxtPlugin((nuxtApp) => {
   async function openSession(session: ExternalAgentSession) {
     const api = getGlobalMultiPaneApi();
     if (!api) throw new Error("Workspace pane host is unavailable");
+    const recordId = encodeExternalAgentSessionRef({
+      hostId: session.hostId,
+      remoteSessionId: session.remoteSessionId,
+    });
+    const index = api.activePaneIndex.value;
+    if (api.panes.value[index]) {
+      await api.setPaneApp(index, EXTERNAL_AGENT_PANE_APP_ID, { recordId });
+      return;
+    }
     await api.newPaneForApp(EXTERNAL_AGENT_PANE_APP_ID, {
-      initialRecordId: encodeExternalAgentSessionRef({
-        hostId: session.hostId,
-        remoteSessionId: session.remoteSessionId,
-      }),
+      initialRecordId: recordId,
     });
   }
 
   async function openLauncher() {
     const api = getGlobalMultiPaneApi();
     if (!api) throw new Error("Workspace pane host is unavailable");
+    const index = api.activePaneIndex.value;
+    if (api.panes.value[index]) {
+      await api.setPaneApp(index, EXTERNAL_AGENT_PANE_APP_ID, {
+        recordId: EXTERNAL_AGENT_LAUNCHER_REF,
+      });
+      return;
+    }
     await api.newPaneForApp(EXTERNAL_AGENT_PANE_APP_ID, {
       initialRecordId: EXTERNAL_AGENT_LAUNCHER_REF,
     });

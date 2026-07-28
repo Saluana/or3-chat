@@ -1,9 +1,5 @@
 <template>
-  <form
-    class="space-y-3"
-    aria-label="New external agent session"
-    @submit.prevent="launch"
-  >
+  <div class="space-y-3" aria-label="New external agent session">
     <div
       v-if="!availableOptions.length"
       class="text-sm text-[var(--md-on-surface-variant)]"
@@ -12,103 +8,108 @@
     </div>
 
     <template v-else>
-      <label class="block space-y-1">
-        <span class="text-xs font-semibold">Provider</span>
-        <USelectMenu
-          v-model="runnerId"
-          :items="runnerItems"
-          value-key="value"
-          label-key="label"
-          class="w-full"
-          aria-label="External agent provider"
-        />
-      </label>
+      <ExternalAgentComposer
+        v-model="instruction"
+        :loading="launching"
+        placeholder="Describe the change, investigation, or review…"
+        @send="launch"
+      >
+        <template #leading>
+          <span class="truncate text-xs text-[var(--md-on-surface-variant)]">
+            {{ selectedOption?.runner.display_name ?? "Choose an agent" }}
+            <template v-if="cwd"> · {{ cwd }}</template>
+          </span>
+        </template>
+        <template #settings>
+          <div class="space-y-3">
+            <h2 class="text-sm font-semibold">Agent settings</h2>
+            <label class="block space-y-1">
+              <span class="text-xs font-semibold">Provider</span>
+              <USelectMenu
+                v-model="runnerId"
+                :items="runnerItems"
+                value-key="value"
+                label-key="label"
+                class="w-full"
+                aria-label="External agent provider"
+              />
+            </label>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="block space-y-1">
+                <span class="text-xs font-semibold">Mode</span>
+                <USelectMenu
+                  v-model="mode"
+                  :items="modeItems"
+                  value-key="value"
+                  label-key="label"
+                  class="w-full"
+                  aria-label="External agent mode"
+                />
+              </label>
+              <label class="block space-y-1">
+                <span class="text-xs font-semibold">Isolation</span>
+                <USelectMenu
+                  v-model="isolation"
+                  :items="isolationItems"
+                  value-key="value"
+                  label-key="label"
+                  class="w-full"
+                  aria-label="External agent isolation"
+                />
+              </label>
+            </div>
 
-      <label class="block space-y-1">
-        <span class="text-xs font-semibold">Instruction</span>
-        <UTextarea
-          v-model="instruction"
-          :rows="compact ? 3 : 5"
-          autoresize
-          class="w-full"
-          placeholder="Describe the change, investigation, or review…"
-          aria-label="External agent instruction"
-        />
-      </label>
+            <label class="block space-y-1">
+              <span class="text-xs font-semibold">Workspace root</span>
+              <UInput
+                v-if="selectedOption?.customCwd"
+                v-model="cwd"
+                class="w-full"
+                placeholder="Host workspace path (optional)"
+                aria-label="External agent workspace root"
+              />
+              <USelectMenu
+                v-else-if="rootItems.length"
+                v-model="cwd"
+                :items="rootItems"
+                value-key="value"
+                label-key="label"
+                class="w-full"
+                aria-label="External agent workspace root"
+              />
+              <p v-else class="text-xs text-[var(--md-on-surface-variant)]">
+                The host will use its configured default working directory.
+              </p>
+              <span
+                class="block text-[11px] text-[var(--md-on-surface-variant)]"
+              >
+                The host validates and enforces this root.
+              </span>
+            </label>
 
-      <div class="grid gap-3 sm:grid-cols-2">
-        <label class="block space-y-1">
-          <span class="text-xs font-semibold">Mode</span>
-          <USelectMenu
-            v-model="mode"
-            :items="modeItems"
-            value-key="value"
-            label-key="label"
-            class="w-full"
-            aria-label="External agent mode"
-          />
-        </label>
-        <label class="block space-y-1">
-          <span class="text-xs font-semibold">Isolation</span>
-          <USelectMenu
-            v-model="isolation"
-            :items="isolationItems"
-            value-key="value"
-            label-key="label"
-            class="w-full"
-            aria-label="External agent isolation"
-          />
-        </label>
-      </div>
+            <label v-if="modelItems.length" class="block space-y-1">
+              <span class="text-xs font-semibold">Model (optional)</span>
+              <USelectMenu
+                :model-value="selectedModelValue"
+                :items="modelItems"
+                value-key="value"
+                label-key="label"
+                class="w-full"
+                aria-label="External agent model"
+                @update:model-value="setModel"
+              />
+            </label>
 
-      <label class="block space-y-1">
-        <span class="text-xs font-semibold">Workspace root</span>
-        <UInput
-          v-if="selectedOption?.customCwd"
-          v-model="cwd"
-          class="w-full"
-          placeholder="Host workspace path (optional)"
-          aria-label="External agent workspace root"
-        />
-        <USelectMenu
-          v-else-if="rootItems.length"
-          v-model="cwd"
-          :items="rootItems"
-          value-key="value"
-          label-key="label"
-          class="w-full"
-          aria-label="External agent workspace root"
-        />
-        <p
-          v-else
-          class="text-xs text-[var(--md-on-surface-variant)]"
-        >
-          The host will use its configured default working directory.
-        </p>
-        <span class="block text-[11px] text-[var(--md-on-surface-variant)]">
-          The host validates and enforces this root.
-        </span>
-      </label>
-
-      <label v-if="modelItems.length" class="block space-y-1">
-        <span class="text-xs font-semibold">Model (optional)</span>
-        <USelectMenu
-          v-model="model"
-          :items="modelItems"
-          value-key="value"
-          label-key="label"
-          class="w-full"
-          aria-label="External agent model"
-        />
-      </label>
-
-      <UCheckbox
-        v-if="dangerousSelection"
-        v-model="confirmDangerous"
-        color="error"
-        label="I understand this grants dangerous full access"
-        description="Only use this mode on a trusted host and workspace."
-      />
+            <UCheckbox
+              v-if="dangerousSelection"
+              v-model="confirmDangerous"
+              color="error"
+              label="I understand this grants dangerous full access"
+              description="Only use this mode on a trusted host and workspace."
+            />
+          </div>
+        </template>
+      </ExternalAgentComposer>
 
       <UAlert
         v-if="error"
@@ -117,25 +118,16 @@
         title="Could not launch agent"
         :description="error"
       />
-
-      <div class="flex justify-end">
-        <UButton
-          type="submit"
-          icon="i-lucide-play"
-          :loading="launching"
-          :disabled="!instruction.trim() || launching"
-        >
-          Launch agent
-        </UButton>
-      </div>
     </template>
-  </form>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import ExternalAgentComposer from "./ExternalAgentComposer.vue";
 import type { ExternalAgentSession } from "~/core/external-agents/types";
 import { buildExternalAgentRunnerOptions } from "~/core/external-agents/launcher";
+import { presentExternalAgentError } from "~/core/external-agents/presentation";
 import { useExternalAgentRuntime } from "~/core/external-agents/runtime";
 
 const props = withDefaults(
@@ -149,13 +141,16 @@ const emit = defineEmits<{
   launched: [session: ExternalAgentSession];
 }>();
 
+/** ComboboxItem rejects empty string values (reserved for clearing). */
+const HOST_DEFAULT_MODEL_VALUE = "host_default";
+
 const runtime = useExternalAgentRuntime();
 const runnerId = ref("");
 const instruction = ref("");
 const mode = ref("review");
 const isolation = ref("host_readonly");
 const cwd = ref("");
-const model = ref("");
+const model = ref<string | null>(null);
 const confirmDangerous = ref(false);
 const launching = ref(false);
 const error = ref<string | null>(null);
@@ -207,14 +202,15 @@ const rootItems = computed(() =>
 const modelItems = computed(() => {
   const raw = selectedOption.value?.runner.models ?? [];
   return [
-    { value: "", label: "Host default" },
+    { value: HOST_DEFAULT_MODEL_VALUE, label: "Host default" },
     ...raw
       .map((candidate) => {
         const id = typeof candidate.id === "string" ? candidate.id : "";
-        if (!id) return null;
+        if (!id || id === HOST_DEFAULT_MODEL_VALUE) return null;
         const provider =
           typeof candidate.provider === "string" ? candidate.provider : "";
         const value = provider && !id.includes("/") ? `${provider}/${id}` : id;
+        if (!value || value === HOST_DEFAULT_MODEL_VALUE) return null;
         return {
           value,
           label:
@@ -233,6 +229,14 @@ const modelItems = computed(() => {
       ),
   ];
 });
+const selectedModelValue = computed(
+  () => model.value ?? HOST_DEFAULT_MODEL_VALUE,
+);
+
+function setModel(value: string) {
+  model.value =
+    !value || value === HOST_DEFAULT_MODEL_VALUE ? null : value;
+}
 const dangerousSelection = computed(() => {
   const option = selectedOption.value;
   return Boolean(
@@ -258,7 +262,7 @@ watch(
     mode.value = option.defaultMode;
     isolation.value = option.defaultIsolation;
     cwd.value = option.defaultCwd || option.roots[0] || "";
-    model.value = "";
+    model.value = null;
     confirmDangerous.value = false;
   },
   { immediate: true },
@@ -283,14 +287,16 @@ async function launch() {
       cwd: cwd.value || undefined,
       mode: mode.value,
       isolation: isolation.value,
-      model: model.value || undefined,
+      model: model.value ?? undefined,
       confirmDangerous: confirmDangerous.value,
     });
     instruction.value = "";
     emit("launched", session);
   } catch (cause) {
-    error.value =
-      cause instanceof Error ? cause.message : "Agent launch failed";
+    error.value = presentExternalAgentError(
+      cause,
+      "The agent could not be started.",
+    ).message;
   } finally {
     launching.value = false;
   }

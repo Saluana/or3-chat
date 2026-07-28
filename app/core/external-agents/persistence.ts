@@ -45,7 +45,16 @@ function parseHost(value: unknown): ExternalAgentHost | null {
 
 function parseSessionRef(value: unknown): ExternalAgentSessionRef | null {
   if (!isRecord(value)) return null;
-  const { hostId, remoteSessionId, title, runnerId, updatedAt } = value;
+  const {
+    hostId,
+    remoteSessionId,
+    title,
+    runnerId,
+    updatedAt,
+    status,
+    pendingApprovalCount,
+    preview,
+  } = value;
   if (typeof hostId !== "string" || typeof remoteSessionId !== "string") {
     return null;
   }
@@ -55,6 +64,21 @@ function parseSessionRef(value: unknown): ExternalAgentSessionRef | null {
     title: typeof title === "string" ? title : undefined,
     runnerId: typeof runnerId === "string" ? runnerId : undefined,
     updatedAt: typeof updatedAt === "string" ? updatedAt : undefined,
+    status:
+      status === "queued" ||
+      status === "running" ||
+      status === "waiting_approval" ||
+      status === "succeeded" ||
+      status === "failed" ||
+      status === "cancelled"
+        ? status
+        : undefined,
+    pendingApprovalCount:
+      typeof pendingApprovalCount === "number" &&
+      Number.isFinite(pendingApprovalCount)
+        ? Math.max(0, Math.floor(pendingApprovalCount))
+        : undefined,
+    preview: typeof preview === "string" ? preview.slice(0, 240) : undefined,
   };
 }
 
@@ -88,9 +112,7 @@ export function createWorkspaceExternalAgentPersistence(): ExternalAgentPersiste
   return {
     bind(workspaceId) {
       const targetDb =
-        workspaceId === "local"
-          ? getDefaultDb()
-          : getWorkspaceDb(workspaceId);
+        workspaceId === "local" ? getDefaultDb() : getWorkspaceDb(workspaceId);
       return {
         workspaceId,
         async load() {

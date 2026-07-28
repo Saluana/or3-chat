@@ -1,16 +1,15 @@
 import { defineComponent, h } from 'vue';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import ActivitySidebarPage from '../ActivitySidebarPage.vue';
+import ActivityDashboardPage from '../ActivityDashboardPage.vue';
 import ActivityDetailPane from '../ActivityDetailPane.vue';
+import ActivityRunList from '../ActivityRunList.vue';
 import { encodeActivityRunRef } from '~/core/activity/run-ref';
 
 const mocks = vi.hoisted(() => ({
     listRuns: vi.fn(),
     getRun: vi.fn(),
     executeAction: vi.fn(),
-    openApp: vi.fn(),
-    switchToApp: vi.fn(),
     subscriptionDispose: vi.fn(),
 }));
 
@@ -31,13 +30,6 @@ vi.mock('~/core/activity/registry', () => ({
             disposed: false,
             dispose: mocks.subscriptionDispose,
         }),
-    }),
-}));
-
-vi.mock('~/composables/sidebar/useSidebarEnvironment', () => ({
-    useSidebarMultiPane: () => ({
-        openApp: mocks.openApp,
-        switchToApp: mocks.switchToApp,
     }),
 }));
 
@@ -80,6 +72,22 @@ const AlertStub = defineComponent({
         };
     },
 });
+const DetailStub = defineComponent({
+    props: {
+        recordId: {
+            type: String,
+            required: true,
+        },
+    },
+    setup(props) {
+        return () =>
+            h(
+                'div',
+                { 'data-testid': 'activity-detail' },
+                props.recordId
+            );
+    },
+});
 
 const global = {
     stubs: {
@@ -119,9 +127,18 @@ describe('Activity Center components', () => {
         });
     });
 
-    it('renders running runs and replaces the active pane with the detail app', async () => {
-        const wrapper = mount(ActivitySidebarPage, { global });
+    it('renders running runs and opens detail inside the dashboard app', async () => {
+        const wrapper = mount(ActivityDashboardPage, {
+            global: {
+                ...global,
+                stubs: {
+                    ...global.stubs,
+                    ActivityDetailPane: DetailStub,
+                },
+            },
+        });
         await flushPromises();
+        expect(wrapper.text()).toContain('Choose an activity');
         expect(wrapper.text()).toContain('Research workflow');
         expect(wrapper.text()).toContain('running');
         expect(wrapper.text()).toContain('Workflows · workflow');
@@ -129,13 +146,14 @@ describe('Activity Center components', () => {
             .findAll('button')
             .find((button) => button.text().includes('Research workflow'))
             ?.trigger('click');
-        expect(mocks.switchToApp).toHaveBeenCalledWith(
-            'or3-activity-detail',
-            expect.objectContaining({
-                recordId: expect.any(String),
+        await flushPromises();
+        expect(wrapper.find('[data-testid="activity-detail"]').text()).toBe(
+            encodeActivityRunRef({
+                sourceId: 'or3.workflow',
+                runId: 'run-1',
             })
         );
-        expect(mocks.openApp).not.toHaveBeenCalled();
+        expect(wrapper.text()).not.toContain('Choose an activity');
         wrapper.unmount();
         expect(mocks.subscriptionDispose).toHaveBeenCalled();
     });
@@ -156,7 +174,7 @@ describe('Activity Center components', () => {
                 },
             ],
         });
-        const wrapper = mount(ActivitySidebarPage, { global });
+        const wrapper = mount(ActivityRunList, { global });
         await flushPromises();
         await wrapper
             .findAll('button')

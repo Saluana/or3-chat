@@ -31,12 +31,11 @@ export const MINIMAL_CHAT_PROFILE: WorkspaceProfileV1 = {
     hidden: [
       "sidebar-docs",
       "or3-workflows-page",
-      "or3-activity",
       "or3-external-agents",
     ],
   },
   dashboard: {
-    hidden: ["core:images"],
+    hidden: ["core:images", "or3:activity"],
   },
   workspace: {
     initialPanes: [{ id: "chat" }],
@@ -91,11 +90,13 @@ export const CODING_WORKSPACE_PROFILE: WorkspaceProfileV1 = {
     defaultPageId: "sidebar-home",
     order: [
       "or3-external-agents",
-      "or3-activity",
       "or3-workflows-page",
       "sidebar-chats",
       "sidebar-home",
     ],
+  },
+  dashboard: {
+    order: ["or3:activity"],
   },
   workspace: {
     initialPanes: [{ id: "chat" }, { id: "or3-external-agent" }],
@@ -115,7 +116,6 @@ export const CODING_WORKSPACE_PROFILE: WorkspaceProfileV1 = {
   mobile: {
     bottomNavigation: [
       "or3-external-agents",
-      "or3-activity",
       "sidebar-chats",
       "sidebar-home",
     ],

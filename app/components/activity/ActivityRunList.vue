@@ -1,5 +1,5 @@
 <template>
-    <section class="flex h-full min-h-0 flex-col" aria-label="Activity Center">
+    <section class="flex h-full min-h-0 flex-col" aria-label="Activity runs">
         <header class="shrink-0 space-y-2 border-b border-[var(--md-outline-variant)] px-3 py-3">
             <div class="flex items-center justify-between gap-2">
                 <div>
@@ -79,7 +79,13 @@
                 v-for="run in runs"
                 :key="`${run.sourceId}:${run.id}`"
                 type="button"
-                class="mb-1 w-full rounded-[var(--md-border-radius)] border border-transparent px-2 py-2 text-left transition hover:border-[var(--md-outline-variant)] hover:bg-[var(--md-surface-variant)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
+                :class="[
+                    'mb-1 w-full rounded-[var(--md-border-radius)] border px-2 py-2 text-left transition hover:border-[var(--md-outline-variant)] hover:bg-[var(--md-surface-variant)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]',
+                    selectedRecordId === runRecordId(run)
+                        ? 'border-[var(--md-primary)] bg-[var(--md-surface-variant)]'
+                        : 'border-transparent',
+                ]"
+                :aria-pressed="selectedRecordId === runRecordId(run)"
                 @click="openRun(run.sourceId, run.id)"
             >
                 <div class="flex items-start justify-between gap-2">
@@ -122,13 +128,19 @@ import type {
     ActivityRunSummary,
 } from '~/core/activity/contract';
 import {
-    ACTIVITY_DETAIL_PANE_APP_ID,
     encodeActivityRunRef,
 } from '~/core/activity/run-ref';
-import { useSidebarMultiPane } from '~/composables/sidebar/useSidebarEnvironment';
 import { getKvByName, setKvByName } from '~/db/kv';
 
-defineOptions({ name: 'or3-activity-sidebar-page' });
+defineOptions({ name: 'or3-activity-run-list' });
+
+defineProps<{
+    selectedRecordId?: string | null;
+}>();
+
+const emit = defineEmits<{
+    select: [recordId: string];
+}>();
 
 type ActivityFilter =
     | 'running'
@@ -144,7 +156,6 @@ const filterOptions: Array<{ id: ActivityFilter; label: string }> = [
     { id: 'completed', label: 'Completed' },
 ];
 const registry = getActivityRegistry();
-const multiPane = useSidebarMultiPane();
 const filter = ref<ActivityFilter>('running');
 const runs = ref<ActivityRunSummary[]>([]);
 const degradedSources = ref<
@@ -196,9 +207,14 @@ async function selectFilter(value: ActivityFilter) {
     await load();
 }
 
-async function openRun(sourceId: string, runId: string) {
-    await multiPane.switchToApp(ACTIVITY_DETAIL_PANE_APP_ID, {
-        recordId: encodeActivityRunRef({ sourceId, runId }),
+function openRun(sourceId: string, runId: string) {
+    emit('select', encodeActivityRunRef({ sourceId, runId }));
+}
+
+function runRecordId(run: ActivityRunSummary): string {
+    return encodeActivityRunRef({
+        sourceId: run.sourceId,
+        runId: run.id,
     });
 }
 

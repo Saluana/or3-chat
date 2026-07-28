@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { defineComponent, h, shallowRef } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -46,8 +48,15 @@ vi.mock("~/core/external-agents/runtime", () => ({
 vi.mock("~/utils/multiPaneApi", () => ({
   getGlobalMultiPaneApi: () => ({
     panes: shallowRef([{ id: "pane-1" }]),
+    activePaneIndex: shallowRef(0),
     newPaneForApp: mocks.newPaneForApp,
     setPaneApp: mocks.setPaneApp,
+  }),
+}));
+
+vi.mock("~/composables/sidebar/useActiveSidebarPage", () => ({
+  useActiveSidebarPage: () => ({
+    setActivePage: vi.fn(),
   }),
 }));
 
@@ -142,6 +151,7 @@ function snapshot(
       },
     ],
     sessions: [session],
+    sessionRefs: [],
     ...overrides,
   };
 }
@@ -262,6 +272,38 @@ const LauncherStub = defineComponent({
     return () => h("div", "Launcher");
   },
 });
+const SlotStub = defineComponent({
+  setup(_, { slots }) {
+    return () =>
+      h("div", [slots.default?.(), slots.content?.(), slots.body?.()]);
+  },
+});
+const EmptyStateStub = defineComponent({
+  props: { title: String, description: String },
+  setup(props, { slots }) {
+    return () => h("div", [props.title, props.description, slots.actions?.()]);
+  },
+});
+const GroupHeaderStub = defineComponent({
+  props: { label: String },
+  emits: ["toggle"],
+  setup(props) {
+    return () => h("div", props.label);
+  },
+});
+const ChatMessageStub = defineComponent({
+  props: { message: { type: Object, required: true } },
+  setup(props) {
+    return () =>
+      h("div", [
+        String((props.message as { text?: string }).text ?? ""),
+        ...(
+          (props.message as { toolCalls?: Array<{ name: string }> })
+            .toolCalls ?? []
+        ).map((tool) => tool.name),
+      ]);
+  },
+});
 
 const global = {
   stubs: {
@@ -273,6 +315,13 @@ const global = {
     UBadge: BadgeStub,
     UAlert: AlertStub,
     UIcon: true,
+    UTooltip: SlotStub,
+    UPopover: SlotStub,
+    UModal: SlotStub,
+    ClientOnly: SlotStub,
+    SidebarEmptyState: EmptyStateStub,
+    SidebarGroupHeader: GroupHeaderStub,
+    ChatMessage: ChatMessageStub,
     ExternalAgentLauncher: LauncherStub,
   },
 };
@@ -319,25 +368,36 @@ describe("External Agents components", () => {
     mocks.controller.canReadArtifact.mockReturnValue(true);
   });
 
-  it("renders degraded connection plus running, approvals, failed and recent sections responsively", async () => {
+  it("prioritizes searchable, time-grouped history and keeps connection management secondary", async () => {
     const wrapper = mount(ExternalAgentsSidebarPage, { global });
     await flushPromises();
-    await wrapper
-      .findAll("button")
-      .find((button) => button.text() === "Add host")
-      ?.trigger("click");
 
-    expect(wrapper.text()).toContain("Capability discovery is incomplete");
-    expect(wrapper.text()).toContain("pre-issued service access token");
-    expect(wrapper.text()).toContain("Secure QR pairing is not supported");
-    expect(wrapper.text()).toContain("Health: ok");
-    expect(wrapper.text()).toContain("Readiness: unavailable");
-    expect(wrapper.text()).toContain("Running");
-    expect(wrapper.text()).toContain("Approvals");
-    expect(wrapper.text()).toContain("Failed");
-    expect(wrapper.text()).toContain("Recent");
+    expect(wrapper.text()).toContain("Agent host has limited availability");
+    expect(wrapper.text()).toContain("New agent");
+    expect(wrapper.find('[aria-label="Search agent sessions"]').exists()).toBe(
+      true,
+    );
+    expect(wrapper.text()).toContain("Add a trusted host");
     expect(wrapper.text()).toContain("Fix mobile layout");
     expect(wrapper.find("section").classes()).toContain("flex");
+  });
+
+  it("opens a session in the active pane", async () => {
+    const wrapper = mount(ExternalAgentsSidebarPage, { global });
+    await flushPromises();
+
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Fix mobile layout"))
+      ?.trigger("click");
+
+    expect(mocks.setPaneApp).toHaveBeenCalledWith(0, "or3-external-agent", {
+      recordId: encodeExternalAgentSessionRef({
+        hostId: "host-1",
+        remoteSessionId: "session-1",
+      }),
+    });
+    expect(mocks.newPaneForApp).not.toHaveBeenCalled();
   });
 
   it("renders offline recovery states in both sidebar and session pane", async () => {
@@ -361,13 +421,13 @@ describe("External Agents components", () => {
     });
     await flushPromises();
 
-    expect(sidebar.text()).toContain("Host offline");
     expect(sidebar.text()).toContain("Host could not be reached");
-    expect(pane.text()).toContain("Host disconnected");
-    expect(pane.text()).toContain("Reconnect from the Agents sidebar");
+    expect(sidebar.text()).toContain("Host could not be reached");
+    expect(pane.text()).toContain("Live updates paused");
+    expect(pane.text()).toContain("Reconnect the host to continue");
   });
 
-  it("renders timeline, files, approvals, errors and real actions in a mobile-safe pane", async () => {
+  it("renders a conversation with compact activity, files, approvals, redacted errors and real actions", async () => {
     const wrapper = mount(ExternalAgentSessionPane, {
       props: {
         paneId: "pane-1",
@@ -384,8 +444,8 @@ describe("External Agents components", () => {
     expect(wrapper.text()).toContain("+ responsive");
     expect(wrapper.text()).toContain("Allow edit");
     expect(wrapper.text()).toContain("A recoverable warning");
-    expect(wrapper.find("section").classes()).toContain("p-3");
-    expect(wrapper.html()).toContain("sm:p-5");
+    expect(wrapper.text()).not.toContain("Timeline");
+    expect(wrapper.text()).not.toContain("session-1");
 
     await wrapper
       .findAll("button")
@@ -397,10 +457,7 @@ describe("External Agents components", () => {
       "approval-1",
     );
 
-    await wrapper
-      .findAll("button")
-      .find((button) => button.text() === "Cancel")
-      ?.trigger("click");
+    await wrapper.find('[aria-label="Stop agent"]').trigger("click");
     expect(mocks.controller.cancel).toHaveBeenCalledWith("session-1");
 
     await wrapper
@@ -439,5 +496,21 @@ describe("External Agents components", () => {
       confirmDangerous: false,
     });
     expect(wrapper.emitted("launched")?.[0]?.[0]).toBe(session);
+  });
+
+  it("uses a non-empty sentinel for the host-default model option", () => {
+    // Reka ComboboxItem rejects value="" (reserved for clearing selection).
+    const source = readFileSync(
+      resolve(
+        process.cwd(),
+        "app/components/external-agents/ExternalAgentLauncher.vue",
+      ),
+      "utf8",
+    );
+    expect(source).toContain('HOST_DEFAULT_MODEL_VALUE = "host_default"');
+    expect(source).toContain(
+      '{ value: HOST_DEFAULT_MODEL_VALUE, label: "Host default" }',
+    );
+    expect(source).not.toContain('{ value: "", label: "Host default" }');
   });
 });

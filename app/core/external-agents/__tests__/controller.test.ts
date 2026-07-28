@@ -233,7 +233,7 @@ describe("ExternalAgentController", () => {
         baseUrl: "https://host.test",
         token: "pre-issued-token",
       }),
-    ).rejects.toThrow("host rejected credential");
+    ).rejects.toThrow("reconnect its provider account");
 
     expect(saved.state.hosts).toEqual([]);
     expect(remove).toHaveBeenCalledOnce();
