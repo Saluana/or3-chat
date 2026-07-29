@@ -92,6 +92,10 @@ describe('workspace logout cleanup plugin', () => {
         await vi.waitFor(() => {
             expect(logoutCleanup).toHaveBeenCalledTimes(1);
         });
+        expect(logoutCleanup).toHaveBeenCalledWith(
+            expect.anything(),
+            { preserveExternalAgentCredentials: true }
+        );
     });
 
     it('does not clear workspace DBs when session is authenticated', async () => {

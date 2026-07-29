@@ -84,6 +84,10 @@ export interface ExternalRemoteTurn {
   readonly final_text?: string;
   readonly error?: string;
   readonly runner_job_id?: string;
+  readonly model?: string;
+  readonly mode?: string;
+  readonly isolation?: string;
+  readonly cwd?: string;
   readonly [key: string]: unknown;
 }
 
@@ -168,6 +172,10 @@ export interface ExternalAgentSession {
   updatedAt: string;
   completedAt?: string;
   activeTurnId?: string;
+  model?: string;
+  mode?: string;
+  isolation?: string;
+  cwd?: string;
   output?: string;
   error?: string;
   actionError?: string;
@@ -209,6 +217,21 @@ export interface ExternalAgentCredentialVault {
   put(reference: string, secret: string): Promise<void>;
   resolve(reference: string): Promise<string | null>;
   remove(reference: string): Promise<void>;
+}
+
+export interface ExternalAgentPinCredentialVaultStatus {
+  readonly supported: boolean;
+  readonly configured: boolean;
+  readonly locked: boolean;
+  readonly persistedCredentialCount: number;
+}
+
+export interface ExternalAgentPinCredentialVault extends ExternalAgentCredentialVault {
+  readonly supportsPinPersistence: true;
+  getStatus(): ExternalAgentPinCredentialVaultStatus;
+  putPersistent(reference: string, secret: string, pin: string): Promise<void>;
+  unlock(pin: string): Promise<void>;
+  lock(): void;
 }
 
 export interface ExternalAgentCreateSessionInput {
@@ -335,6 +358,15 @@ export interface ExternalAgentLaunchInput {
   readonly isolation: string;
   readonly model?: string;
   readonly continuationMode?: string;
+  readonly confirmDangerous?: boolean;
+}
+
+export interface ExternalAgentFollowUpInput {
+  readonly instruction: string;
+  readonly cwd?: string;
+  readonly mode: string;
+  readonly isolation: string;
+  readonly model?: string;
   readonly confirmDangerous?: boolean;
 }
 

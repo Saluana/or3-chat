@@ -68,10 +68,36 @@ function adaptInternClient(client: InternClient): ExternalAgentClient {
 const createClient: ExternalAgentClientFactory = ({
   host,
   resolveCredential,
-}) =>
-  adaptInternClient(
+}) => {
+  let requestSequence = 0;
+  const fetchWithoutCache = ((
+    input: Parameters<typeof globalThis.fetch>[0],
+    init?: Parameters<typeof globalThis.fetch>[1],
+  ) => {
+    const method =
+      init?.method ??
+      (typeof Request !== "undefined" && input instanceof Request
+        ? input.method
+        : "GET");
+    let requestInput = input;
+    if (
+      method.toUpperCase() === "GET" &&
+      (typeof input === "string" || input instanceof URL)
+    ) {
+      const url = new URL(String(input));
+      url.searchParams.set(
+        "_or3_request",
+        `${Date.now()}-${++requestSequence}`,
+      );
+      requestInput = url;
+    }
+    return globalThis.fetch(requestInput, { ...init, cache: "no-store" });
+  }) as typeof fetch;
+
+  return adaptInternClient(
     createInternClient({
       baseUrl: host.baseUrl,
+      fetch: fetchWithoutCache,
       resolveAuth: async () => {
         const token = await resolveCredential();
         return token ? { token } : null;
@@ -80,6 +106,7 @@ const createClient: ExternalAgentClientFactory = ({
       streamConnectTimeoutMs: 20_000,
     }),
   );
+};
 
 export function runExternalAgentBackground(
   task: () => Promise<unknown>,

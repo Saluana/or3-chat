@@ -157,6 +157,7 @@
                         props.message.role === 'assistant' &&
                         props.message.pending &&
                         !hasContent &&
+                        !hasOrderedAssistantParts &&
                         !props.message.reasoning_text
                     "
                     class="loading-generating animate-in"
@@ -181,6 +182,7 @@
                 <ChatToolCallIndicator
                     v-if="
                         props.message.role === 'assistant' &&
+                        !hasOrderedAssistantParts &&
                         Array.isArray(props.message.toolCalls) &&
                         props.message.toolCalls.length > 0
                     "
@@ -188,7 +190,7 @@
                 />
 
                 <div
-                    v-if="hasContent"
+                    v-if="hasContent || hasOrderedAssistantParts"
                     :class="[
                         'message-body min-w-0 max-w-full overflow-x-hidden',
                         `cm-body-${roleVariant}`,
@@ -221,6 +223,36 @@
                             }}
                         </button>
                     </div>
+                    <template v-else-if="hasOrderedAssistantParts">
+                        <template
+                            v-for="part in orderedAssistantBlocks"
+                            :key="part.id"
+                        >
+                            <StreamMarkdown
+                                v-if="part.type === 'text'"
+                                :content="processAssistantMarkdown(part.text)"
+                                :shiki-theme="currentShikiTheme"
+                                :class="[
+                                    streamMdClasses,
+                                    'cm-markdown-assistant',
+                                ]"
+                                :allowed-image-prefixes="[
+                                    'data:image/',
+                                    'blob:',
+                                ]"
+                                :parse-incomplete-markdown="
+                                    props.message.pending === true &&
+                                    part.id === lastOrderedTextPartId
+                                "
+                                code-block-show-line-numbers
+                                class="[&>p:first-child]:mt-0 [&>p:last-child]:mb-0 prose-headings:first:mt-5!"
+                            />
+                            <ChatToolCallIndicator
+                                v-else
+                                :tool-calls="part.toolCalls"
+                            />
+                        </template>
+                    </template>
                     <StreamMarkdown
                         :key="props.message.id"
                         v-else
@@ -228,6 +260,9 @@
                         :shiki-theme="currentShikiTheme"
                         :class="[streamMdClasses, 'cm-markdown-assistant']"
                         :allowed-image-prefixes="['data:image/', 'blob:']"
+                        :parse-incomplete-markdown="
+                            props.message.pending === true
+                        "
                         code-block-show-line-numbers
                         class="[&>p:first-child]:mt-0 [&>p:last-child]:mb-0 prose-headings:first:mt-5!"
                     />
@@ -367,14 +402,21 @@ import WorkflowChatMessage from './WorkflowChatMessage.vue';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { shallowRef } from 'vue';
 import { useToast } from '#imports';
-import type { UiChatMessage } from '~/utils/chat/uiMessages';
+import type {
+    ToolCallInfo,
+    UiChatMessage,
+    UiChatMessagePart,
+} from '~/utils/chat/uiMessages';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useRafFn, useClipboard } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useMessageThumbnails } from '~/composables/chat/useMessageThumbnails';
-import { useMessageMarkdown } from '~/composables/chat/useMessageMarkdown';
+import {
+    processAssistantMarkdown,
+    useMessageMarkdown,
+} from '~/composables/chat/useMessageMarkdown';
 import { useMessageEditing } from '~/composables/chat/useMessageEditing';
 import { useMessageActions } from '~/composables/chat/useMessageActions';
 
@@ -571,6 +613,47 @@ const innerClass = computed(() => ({
 
 // Detect if assistant message currently has any textual content yet
 const hasContent = computed(() => (props.message.text || '').trim().length > 0);
+const orderedAssistantParts = computed(() =>
+    props.message.role === 'assistant' && Array.isArray(props.message.parts)
+        ? props.message.parts
+        : []
+);
+type OrderedAssistantBlock =
+    | Extract<UiChatMessagePart, { type: 'text' }>
+    | {
+          id: string;
+          type: 'tools';
+          toolCalls: ToolCallInfo[];
+      };
+const orderedAssistantBlocks = computed<OrderedAssistantBlock[]>(() => {
+    const blocks: OrderedAssistantBlock[] = [];
+    for (const part of orderedAssistantParts.value) {
+        if (part.type === 'text') {
+            blocks.push(part);
+            continue;
+        }
+        const previous = blocks.at(-1);
+        if (previous?.type === 'tools') {
+            previous.toolCalls.push(part.toolCall);
+            continue;
+        }
+        blocks.push({
+            id: `${part.id}:group`,
+            type: 'tools',
+            toolCalls: [part.toolCall],
+        });
+    }
+    return blocks;
+});
+const hasOrderedAssistantParts = computed(
+    () => orderedAssistantParts.value.length > 0
+);
+const lastOrderedTextPartId = computed(
+    () =>
+        [...orderedAssistantParts.value]
+            .reverse()
+            .find((part) => part.type === 'text')?.id
+);
 
 const messageThumbRef = computed(() => props.message);
 const {

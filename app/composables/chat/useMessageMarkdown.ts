@@ -10,6 +10,14 @@ type MessageLike = {
 
 const FILE_HASH_IMG_RE = /!\[[^\]]*]\(file-hash:([a-f0-9-]{6,})\)/gi;
 
+export function processAssistantMarkdown(markdown: string): string {
+    if (!markdown.includes('file-hash:')) return markdown;
+    return markdown.replace(
+        FILE_HASH_IMG_RE,
+        (_, hash) => `![file-hash:${hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`
+    );
+}
+
 export function useMessageMarkdown(message: Ref<MessageLike>) {
     const assistantMarkdown = computed(() =>
         message.value.role === 'assistant' ? message.value.text || '' : ''
@@ -23,16 +31,8 @@ export function useMessageMarkdown(message: Ref<MessageLike>) {
         if (markdown === lastProcessedInput) {
             return lastProcessedOutput;
         }
-        if (!markdown.includes('file-hash:')) {
-            lastProcessedInput = markdown;
-            lastProcessedOutput = markdown;
-            return markdown;
-        }
         lastProcessedInput = markdown;
-        lastProcessedOutput = markdown.replace(
-            FILE_HASH_IMG_RE,
-            (_, hash) => `![file-hash:${hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`
-        );
+        lastProcessedOutput = processAssistantMarkdown(markdown);
         return lastProcessedOutput;
     });
 

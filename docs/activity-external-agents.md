@@ -50,11 +50,23 @@ metadata plus an opaque credential reference, and sends the token through the
 shared client's authorization-header resolver. This is not secure QR/device
 pairing.
 
-The default browser credential vault is intentionally memory-only, so a full
-reload requires the user to enter the token again. Deployments with a native or
-platform secure store can inject it with
-`registerExternalAgentCredentialVault`; raw tokens never enter workspace KV,
-URLs, logs, or session references.
+The default browser credential vault is session-only unless the user explicitly
+selects **Remember token on this device**. Remembered tokens are encrypted with
+AES-256-GCM using a non-exportable key derived from the user's PIN with
+PBKDF2-HMAC-SHA-256 (600,000 iterations and a random salt). Only ciphertext,
+salt, IVs, and KDF parameters enter device-local browser storage. The PIN and
+derived key remain in memory and must be supplied again after a reload.
+
+PIN protection does not make low-entropy PINs equivalent to an OS keychain. An
+attacker who copies browser storage can attempt guesses offline, so the UI
+requires at least six digits and displays an explicit warning. Forgotten PINs
+cannot be recovered; the saved ciphertext can only be removed and the access
+token re-entered.
+
+Deployments with a native or platform secure store can replace the browser
+fallback with `registerExternalAgentCredentialVault`. Raw tokens never enter
+workspace KV, sync, exports, URLs, logs, session references, conversations, or
+Activity.
 
 `@or3/intern-client` exposes the secure pairing approval exchange, but that
 exchange returns an enrollment certificate rather than a bearer credential. A
@@ -68,6 +80,12 @@ Session discovery is scoped to the active workspace with
 `or3-chat:<workspace-id>:` application-session keys. Rehydration merges the
 host's canonical scoped session list with lightweight local references; remote
 history is never copied into workspace storage.
+
+Historical panes wait for an in-progress host reconnect and retry automatically
+when the connection becomes usable. If a re-enrolled service advertises a new
+host identity at the same trusted endpoint, lightweight session references are
+rebound to the active identity. Attempting to open a session whose distinct host
+has no credential does not tear down the currently healthy connection.
 
 ## Adding an Activity source
 
@@ -102,6 +120,60 @@ Runner support belongs in `or3-intern`, not OR3 Chat:
 Unknown providers and capabilities remain visible as protocol data but are not
 assumed safe or executable.
 
+## What users see
+
+Agents are conversations with the ability to act. The normal session pane shows
+the instruction, response, compact tool activity, approvals, and files. It does
+not show transport events, request IDs, endpoints, or provider payloads.
+Operational events remain available through Activity and the explicitly opened,
+redacted **Technical details** disclosure.
+
+Assistant turns are reconstructed from the canonical ordered turn-event stream,
+not from a flattened final response. Text segments and tool calls therefore
+remain in provider order during live execution and after reconnect or reload:
+
+    assistant text → tool lifecycle → assistant text → next tool
+
+One tool lifecycle keeps one stable presentation item; progress and completion
+update it in place. The service persists each normalized event before broadcast,
+while the client frame-batches snapshots and renders the transcript with the
+same bottom-anchored `Or3Scroll` surface as Chat. Only the live trailing
+Markdown segment receives incomplete-Markdown repair.
+
+The New Agent screen uses the selected runner's live model catalog from
+`GET /internal/v1/chat-runners`. Model IDs are runner-owned and are submitted
+unchanged. For example, Codex advertises and receives `gpt-5.6-luna`; OR3 must
+not rewrite it as `openai/gpt-5.6-luna`. Provider names are display metadata
+that help people browse the searchable, virtualized model list. A model appears
+only when that runner currently advertises it; OR3 does not merge one
+provider's catalog into another.
+
+Connection management and execution controls are secondary:
+
+- a new run normally needs only an instruction;
+- runner, model, permissions, and workspace live in the composer settings;
+- host enrollment and token storage live in Connection settings;
+- healthy-but-partially-supported hosts do not produce a persistent warning
+  when at least one usable agent is available.
+
+## Approval behavior
+
+Codex and OpenCode both advertise inline approval decisions when their native
+runtimes and the host approval broker are available.
+
+1. The runner pauses before a protected action.
+2. `or3-intern` evaluates the request and emits one normalized approval event.
+3. OR3 renders one inline card with **Approve** and **Deny**.
+4. Approve authorizes the broker request and responds to the still-running
+   native Codex or OpenCode session.
+5. Deny closes the request and the affected turn without performing the action.
+6. The resolved card remains in history, and a pending badge appears in Agents
+   and Activity.
+
+If the native runner has already stopped, `or3-intern` preserves the broker
+decision as a fallback token rather than pretending the action resumed. OR3
+shows a concise retryable error and keeps the canonical prior state.
+
 ## Troubleshooting
 
 - **One source is degraded:** inspect that source diagnostic; other sources
@@ -112,8 +184,14 @@ assumed safe or executable.
   health, readiness, and runner capabilities.
 - **Runner is unavailable:** install/authenticate it on the host and refresh
   discovery. OR3 Chat cannot repair a provider CLI.
+- **A model is missing:** open Agent connections and choose **Refresh agents**.
+  The service asks each native runner for its current model catalog. Update or
+  authenticate that runner if its own catalog still omits the model.
 - **Approval or cancel failed:** retry after connection recovery. The UI
   intentionally does not forge a terminal state.
+- **Provider credits are unavailable:** reconnect or fund that provider, or
+  choose another advertised model. Permission UI cannot be exercised until the
+  provider starts the turn.
 
 ## Non-goals
 

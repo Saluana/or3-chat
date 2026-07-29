@@ -53,7 +53,7 @@
 
     <template v-else-if="session && projection">
       <header
-        class="z-10 flex shrink-0 items-center gap-3 border-b border-[var(--md-outline-variant)] bg-[var(--md-surface)]/95 px-3 py-2 backdrop-blur sm:px-5"
+        class="pane-chrome-clearance-header z-10 shrink-0 border-b border-[var(--md-outline-variant)] bg-[var(--md-surface)]/95 backdrop-blur"
       >
         <div class="min-w-0 flex-1">
           <div class="flex min-w-0 items-center gap-2">
@@ -118,178 +118,189 @@
         </UPopover>
       </header>
 
-      <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto">
-        <main
-          class="mx-auto flex w-full max-w-[768px] flex-col px-2 pb-48 pt-3 sm:px-4"
+      <div
+        v-if="!projection.turns.length"
+        class="grid min-h-0 flex-1 place-items-center text-sm text-[var(--md-on-surface-variant)]"
+      >
+        Waiting for the conversation to begin…
+      </div>
+      <ClientOnly v-else>
+        <Or3Scroll
+          :items="conversationTurns"
+          :item-key="(turn) => turn.id"
+          :estimate-height="240"
+          :overscan="5500"
+          :prefetch-overscan="5500"
+          :content-key="session.remoteSessionId"
+          mutation-mode="append-prepend"
+          maintain-bottom
+          :bottom-threshold="5"
+          :padding-top="12"
+          :padding-bottom="192"
+          class="min-h-0 flex-1"
           aria-live="polite"
         >
-          <div
-            v-if="!projection.turns.length"
-            class="grid min-h-52 place-items-center text-sm text-[var(--md-on-surface-variant)]"
-          >
-            Waiting for the conversation to begin…
-          </div>
-
-          <article
-            v-for="turn in projection.turns"
-            :key="turn.id"
-            class="flex flex-col"
-          >
-            <ChatMessage
-              v-if="turn.userMessage"
-              :message="turn.userMessage"
-              :interactive="false"
-            />
-            <ChatMessage
-              v-if="turn.assistantMessage"
-              :message="turn.assistantMessage"
-              :interactive="false"
-            />
-
-            <div
-              v-for="approval in turn.approvals"
-              :key="approval.id"
-              class="mx-2 mb-4 rounded-[var(--md-border-radius)] border border-[var(--md-extended-color-warning-color)]/60 bg-[var(--md-surface-container-low)] p-3 sm:mx-5"
+          <template #default="{ item: turn }">
+            <article
+              :key="turn.id"
+              class="mx-auto flex w-full max-w-[768px] flex-col px-2 sm:px-4"
             >
-              <div class="flex items-start gap-3">
-                <UIcon
-                  name="i-lucide-shield-alert"
-                  class="mt-0.5 size-5 shrink-0"
-                />
-                <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <strong class="text-sm">{{ approval.title }}</strong>
-                    <UBadge
-                      :color="
-                        approval.status === 'pending'
-                          ? 'warning'
-                          : approval.status === 'approved'
-                            ? 'success'
-                            : 'neutral'
-                      "
-                      size="xs"
-                      variant="soft"
+              <ChatMessage
+                v-if="turn.userMessage"
+                :message="turn.userMessage"
+                :interactive="false"
+              />
+              <ChatMessage
+                v-if="turn.assistantMessage"
+                :message="turn.assistantMessage"
+                :interactive="false"
+              />
+
+              <div
+                v-for="approval in turn.approvals"
+                :key="approval.id"
+                class="mx-2 mb-4 rounded-[var(--md-border-radius)] border border-[var(--md-extended-color-warning-color)]/60 bg-[var(--md-surface-container-low)] p-3 sm:mx-5"
+              >
+                <div class="flex items-start gap-3">
+                  <UIcon
+                    name="i-lucide-shield-alert"
+                    class="mt-0.5 size-5 shrink-0"
+                  />
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <strong class="text-sm">{{ approval.title }}</strong>
+                      <UBadge
+                        :color="
+                          approval.status === 'pending'
+                            ? 'warning'
+                            : approval.status === 'approved'
+                              ? 'success'
+                              : 'neutral'
+                        "
+                        size="xs"
+                        variant="soft"
+                      >
+                        {{ approval.status }}
+                      </UBadge>
+                    </div>
+                    <p
+                      v-if="approval.description"
+                      class="mt-1 whitespace-pre-wrap text-sm text-[var(--md-on-surface-variant)]"
                     >
-                      {{ approval.status }}
-                    </UBadge>
-                  </div>
-                  <p
-                    v-if="approval.description"
-                    class="mt-1 whitespace-pre-wrap text-sm text-[var(--md-on-surface-variant)]"
-                  >
-                    {{ approval.description }}
-                  </p>
-                  <div
-                    v-if="approval.status === 'pending'"
-                    class="mt-3 flex justify-end gap-2"
-                  >
-                    <UButton
-                      size="sm"
-                      color="error"
-                      variant="soft"
-                      :loading="pendingAction === `deny:${approval.id}`"
-                      :disabled="Boolean(pendingAction) || !canDecideApproval"
-                      @click="decide('deny', approval.id)"
+                      {{ approval.description }}
+                    </p>
+                    <div
+                      v-if="approval.status === 'pending'"
+                      class="mt-3 flex justify-end gap-2"
                     >
-                      Deny
-                    </UButton>
-                    <UButton
-                      size="sm"
-                      :loading="pendingAction === `approve:${approval.id}`"
-                      :disabled="Boolean(pendingAction) || !canDecideApproval"
-                      @click="decide('approve', approval.id)"
-                    >
-                      Approve
-                    </UButton>
+                      <UButton
+                        size="sm"
+                        color="error"
+                        variant="soft"
+                        :loading="pendingAction === `deny:${approval.id}`"
+                        :disabled="Boolean(pendingAction) || !canDecideApproval"
+                        @click="decide('deny', approval.id)"
+                      >
+                        Deny
+                      </UButton>
+                      <UButton
+                        size="sm"
+                        :loading="pendingAction === `approve:${approval.id}`"
+                        :disabled="Boolean(pendingAction) || !canDecideApproval"
+                        @click="decide('approve', approval.id)"
+                      >
+                        Approve
+                      </UButton>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div
-              v-if="turn.artifacts.length"
-              class="mx-2 mb-5 grid gap-2 sm:mx-5 sm:grid-cols-2"
-            >
-              <article
-                v-for="artifact in turn.artifacts"
-                :key="artifact.id"
-                class="min-w-0 rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-3"
+              <div
+                v-if="turn.artifacts.length"
+                class="mx-2 mb-5 grid gap-2 sm:mx-5 sm:grid-cols-2"
               >
-                <div class="flex items-center gap-2">
-                  <UIcon
-                    :name="
-                      artifact.kind === 'diff'
-                        ? 'i-lucide-file-diff'
-                        : 'i-lucide-file'
-                    "
-                    class="size-4 shrink-0"
-                  />
-                  <strong class="min-w-0 flex-1 truncate text-sm">
-                    {{ artifact.label }}
-                  </strong>
-                  <UBadge size="xs" color="neutral" variant="soft">
-                    {{ artifact.kind }}
-                  </UBadge>
-                </div>
-                <pre
-                  v-if="artifact.preview"
-                  class="mt-2 line-clamp-5 whitespace-pre-wrap break-words text-xs text-[var(--md-on-surface-variant)]"
-                  >{{ artifact.preview }}</pre
+                <article
+                  v-for="artifact in turn.artifacts"
+                  :key="artifact.id"
+                  class="min-w-0 rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-3"
                 >
-                <div class="mt-3 flex flex-wrap justify-end gap-1">
-                  <UButton
-                    v-if="artifact.content"
-                    size="xs"
-                    variant="ghost"
-                    icon="i-lucide-copy"
-                    @click="copyArtifact(artifact.content)"
+                  <div class="flex items-center gap-2">
+                    <UIcon
+                      :name="
+                        artifact.kind === 'diff'
+                          ? 'i-lucide-file-diff'
+                          : 'i-lucide-file'
+                      "
+                      class="size-4 shrink-0"
+                    />
+                    <strong class="min-w-0 flex-1 truncate text-sm">
+                      {{ artifact.label }}
+                    </strong>
+                    <UBadge size="xs" color="neutral" variant="soft">
+                      {{ artifact.kind }}
+                    </UBadge>
+                  </div>
+                  <pre
+                    v-if="artifact.preview"
+                    class="mt-2 line-clamp-5 whitespace-pre-wrap break-words text-xs text-[var(--md-on-surface-variant)]"
+                    >{{ artifact.preview }}</pre
                   >
-                    Copy
-                  </UButton>
-                  <UButton
-                    v-if="artifact.artifactId && !artifact.content"
-                    size="xs"
-                    variant="soft"
-                    :loading="pendingAction === `artifact:${artifact.id}`"
-                    :disabled="
-                      Boolean(pendingAction) || !canLoadArtifact(artifact.id)
-                    "
-                    @click="loadArtifact(artifact.id)"
-                  >
-                    Load
-                  </UButton>
-                </div>
-              </article>
-            </div>
+                  <div class="mt-3 flex flex-wrap justify-end gap-1">
+                    <UButton
+                      v-if="artifact.content"
+                      size="xs"
+                      variant="ghost"
+                      icon="i-lucide-copy"
+                      @click="copyArtifact(artifact.content)"
+                    >
+                      Copy
+                    </UButton>
+                    <UButton
+                      v-if="artifact.artifactId && !artifact.content"
+                      size="xs"
+                      variant="soft"
+                      :loading="pendingAction === `artifact:${artifact.id}`"
+                      :disabled="
+                        Boolean(pendingAction) || !canLoadArtifact(artifact.id)
+                      "
+                      @click="loadArtifact(artifact.id)"
+                    >
+                      Load
+                    </UButton>
+                  </div>
+                </article>
+              </div>
 
-            <UAlert
-              v-if="turn.error"
-              class="mx-2 mb-5 sm:mx-5"
-              color="error"
-              variant="soft"
-              title="The agent could not continue"
-              :description="turn.error.message"
-              :actions="
-                turn.error.action === 'retry'
-                  ? [
-                      {
-                        label: 'Try again',
-                        onClick: retryTurn,
-                      },
-                    ]
-                  : undefined
-              "
-            />
-          </article>
+              <UAlert
+                v-if="turn.error"
+                class="mx-2 mb-5 sm:mx-5"
+                color="error"
+                variant="soft"
+                title="The agent could not continue"
+                :description="turn.error.message"
+                :actions="
+                  turn.error.action === 'retry'
+                    ? [
+                        {
+                          label: 'Prepare retry',
+                          onClick: () => retryTurn(turn.userMessage?.text),
+                        },
+                      ]
+                    : undefined
+                "
+              />
+            </article>
+          </template>
+        </Or3Scroll>
+      </ClientOnly>
 
-          <p
-            v-if="session.actionError"
-            class="mx-5 mb-4 text-sm text-[var(--md-error)]"
-          >
-            {{ session.actionError }}
-          </p>
-        </main>
-      </div>
+      <p
+        v-if="session.actionError"
+        class="absolute inset-x-5 bottom-44 z-30 mx-auto max-w-[728px] rounded-[var(--md-border-radius)] bg-[var(--md-error-container)] p-3 text-sm text-[var(--md-on-error-container)]"
+      >
+        {{ session.actionError }}
+      </p>
 
       <div
         class="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-[var(--md-surface)] via-[var(--md-surface)] to-transparent px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-12"
@@ -301,6 +312,7 @@
             :running="projection.isRunning"
             :loading="pendingAction === 'follow-up'"
             :disabled="!connected || (!canFollowUp && !projection.isRunning)"
+            :settings-disabled="!connected"
             :placeholder="
               projection.isRunning
                 ? 'The agent is working…'
@@ -314,6 +326,18 @@
                 {{ composerHint }}
               </span>
             </template>
+            <template #settings>
+              <ExternalAgentSettingsPanel
+                v-model:runner-id="followUpRunnerId"
+                v-model:mode="followUpMode"
+                v-model:isolation="followUpIsolation"
+                v-model:cwd="followUpCwd"
+                v-model:model="followUpModel"
+                v-model:confirm-dangerous="followUpConfirmDangerous"
+                :runners="snapshot?.runners ?? []"
+                runner-locked
+              />
+            </template>
           </ExternalAgentComposer>
         </div>
       </div>
@@ -323,9 +347,16 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { Or3Scroll } from "or3-scroll";
+import "or3-scroll/style.css";
 import ExternalAgentComposer from "./ExternalAgentComposer.vue";
 import ExternalAgentLauncher from "./ExternalAgentLauncher.vue";
+import ExternalAgentSettingsPanel from "./ExternalAgentSettingsPanel.vue";
 import type { ExternalAgentSession } from "~/core/external-agents/types";
+import {
+  buildExternalAgentRunnerOptions,
+  isValidExternalAgentPolicyCombination,
+} from "~/core/external-agents/launcher";
 import { projectExternalAgentConversation } from "~/core/external-agents/presentation";
 import { presentExternalAgentError } from "~/core/external-agents/presentation";
 import {
@@ -345,11 +376,18 @@ const props = defineProps<{
 const runtime = useExternalAgentRuntime();
 const snapshot = runtime.snapshot;
 const loading = ref(false);
+const loadInFlight = ref(false);
 const loadError = ref<string | null>(null);
 const followUpText = ref("");
 const pendingAction = ref<string | null>(null);
-const scroller = ref<HTMLElement | null>(null);
 const composer = ref<{ focus: () => void } | null>(null);
+const followUpRunnerId = ref("");
+const followUpMode = ref("");
+const followUpIsolation = ref("");
+const followUpCwd = ref("");
+const followUpModel = ref<string | null>(null);
+const followUpConfirmDangerous = ref(false);
+const initializedSettingsSession = ref("");
 
 const isLauncher = computed(
   () => !props.recordId || props.recordId === EXTERNAL_AGENT_LAUNCHER_REF,
@@ -370,6 +408,9 @@ const session = computed(() => {
 });
 const projection = computed(() =>
   session.value ? projectExternalAgentConversation(session.value) : null,
+);
+const conversationTurns = computed(() =>
+  projection.value ? [...projection.value.turns] : [],
 );
 const connected = computed(
   () =>
@@ -396,7 +437,9 @@ const statusColor = computed(() => {
 const statusLabel = computed(() =>
   session.value?.status === "waiting_approval"
     ? "needs approval"
-    : (session.value?.status ?? "queued").replace("_", " "),
+    : session.value?.status === "succeeded"
+      ? "completed"
+      : (session.value?.status ?? "queued").replace("_", " "),
 );
 const runnerLabel = computed(
   () =>
@@ -406,8 +449,45 @@ const runnerLabel = computed(
     session.value?.runnerId ??
     "Agent",
 );
+const runnerOptions = computed(() =>
+  buildExternalAgentRunnerOptions(snapshot.value?.runners ?? []),
+);
+const followUpRunnerOption = computed(() =>
+  runnerOptions.value.find(
+    (option) => option.runner.id === session.value?.runnerId,
+  ),
+);
+const followUpIsolationItems = computed(() =>
+  (followUpRunnerOption.value?.isolations ?? []).filter((item) =>
+    isValidExternalAgentPolicyCombination(followUpMode.value, item.id),
+  ),
+);
+const dangerousFollowUpSelection = computed(() => {
+  const option = followUpRunnerOption.value;
+  return Boolean(
+    option?.modes.find((item) => item.id === followUpMode.value)?.dangerous ||
+    option?.isolations.find((item) => item.id === followUpIsolation.value)
+      ?.dangerous,
+  );
+});
+const followUpModelLabel = computed(() => {
+  if (!followUpModel.value) return "";
+  const candidate = followUpRunnerOption.value?.runner.models?.find(
+    (item) => item.id === followUpModel.value,
+  );
+  return typeof candidate?.display_name === "string" &&
+    candidate.display_name.trim()
+    ? candidate.display_name.trim()
+    : followUpModel.value;
+});
 const connectionWarning = computed(() => {
-  if (session.value?.streamState === "disconnected")
+  if (
+    session.value?.streamState === "disconnected" &&
+    session.value?.status !== "succeeded" &&
+    session.value?.status !== "failed" &&
+    session.value?.status !== "cancelled" &&
+    session.value?.status !== "waiting_approval"
+  )
     return "Live updates paused";
   if (!connected.value) return "Host disconnected";
   return null;
@@ -417,24 +497,46 @@ const composerHint = computed(() => {
   if (session.value?.status === "waiting_approval")
     return "Resolve the approval above to continue";
   if (projection.value?.isRunning) return "Working — stop to interrupt";
-  if (!canFollowUp.value) return "This provider cannot continue this session";
-  return `${runnerLabel.value} · follow-up`;
+  if (!canFollowUp.value) return "This agent can't continue this conversation";
+  return followUpModelLabel.value
+    ? `${runnerLabel.value} · ${followUpModelLabel.value}`
+    : runnerLabel.value;
 });
 
 async function load() {
   const controller = runtime.controller;
   const refValue = sessionRef.value;
-  if (!controller || !refValue || session.value) return;
+  if (!controller || !refValue) return;
+  if (session.value) {
+    loadError.value = null;
+    loading.value = false;
+    return;
+  }
+  if (snapshot.value?.connectionState === "connecting") {
+    loadError.value = null;
+    loading.value = true;
+    return;
+  }
+  if (loadInFlight.value) return;
+  loadInFlight.value = true;
   loading.value = true;
   loadError.value = null;
   try {
-    await controller.ensureSession(refValue.hostId, refValue.remoteSessionId);
+    const loaded = await controller.ensureSession(
+      refValue.hostId,
+      refValue.remoteSessionId,
+    );
+    loadError.value = null;
+    if (loaded.hostId !== refValue.hostId) {
+      await replaceWithSession(loaded);
+    }
   } catch (cause) {
     loadError.value = presentExternalAgentError(
       cause,
       "This conversation could not be loaded.",
     ).message;
   } finally {
+    loadInFlight.value = false;
     loading.value = false;
   }
 }
@@ -480,10 +582,14 @@ async function followUp() {
     return;
   pendingAction.value = "follow-up";
   try {
-    await runtime.controller.followUp(
-      session.value.remoteSessionId,
-      followUpText.value,
-    );
+    await runtime.controller.followUp(session.value.remoteSessionId, {
+      instruction: followUpText.value,
+      cwd: followUpCwd.value || undefined,
+      mode: followUpMode.value,
+      isolation: followUpIsolation.value,
+      model: followUpModel.value ?? undefined,
+      confirmDangerous: followUpConfirmDangerous.value,
+    });
     followUpText.value = "";
     await nextTick();
     composer.value?.focus();
@@ -492,7 +598,11 @@ async function followUp() {
   }
 }
 
-async function retryTurn() {
+async function retryTurn(message?: string) {
+  if (!followUpText.value.trim() && message?.trim()) {
+    followUpText.value = message.trim();
+  }
+  await nextTick();
   composer.value?.focus();
 }
 
@@ -520,26 +630,53 @@ async function copyArtifact(content: string) {
   await navigator.clipboard?.writeText(content);
 }
 
-function scrollToBottom() {
-  requestAnimationFrame(() => {
-    if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight;
-  });
-}
-
 watch(
-  () => props.recordId,
+  () => [
+    props.recordId,
+    snapshot.value?.connectionState,
+    session.value?.hostId,
+  ],
   () => void load(),
 );
 watch(
-  () => [
-    session.value?.events.length,
-    session.value?.turns.length,
-    session.value?.status,
-  ],
-  scrollToBottom,
+  [session, followUpRunnerOption],
+  ([currentSession, option]) => {
+    if (!currentSession || !option) return;
+    const sessionKey = `${currentSession.hostId}:${currentSession.remoteSessionId}`;
+    if (initializedSettingsSession.value === sessionKey) return;
+    const latest = currentSession.turns.at(-1);
+    followUpRunnerId.value = currentSession.runnerId;
+    followUpMode.value =
+      latest?.mode ?? currentSession.mode ?? option.defaultMode;
+    followUpIsolation.value =
+      latest?.isolation ?? currentSession.isolation ?? option.defaultIsolation;
+    followUpCwd.value =
+      latest?.cwd ??
+      currentSession.cwd ??
+      option.defaultCwd ??
+      option.roots[0] ??
+      "";
+    followUpModel.value = latest?.model ?? currentSession.model ?? null;
+    followUpConfirmDangerous.value = false;
+    initializedSettingsSession.value = sessionKey;
+  },
+  { immediate: true },
 );
+watch(followUpMode, () => {
+  if (
+    !followUpIsolationItems.value.some(
+      (item) => item.id === followUpIsolation.value,
+    )
+  ) {
+    followUpIsolation.value = followUpIsolationItems.value[0]?.id ?? "";
+  }
+});
+watch([followUpMode, followUpIsolation], () => {
+  if (!dangerousFollowUpSelection.value) {
+    followUpConfirmDangerous.value = false;
+  }
+});
 onMounted(() => {
   void load();
-  scrollToBottom();
 });
 </script>

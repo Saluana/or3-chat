@@ -20,9 +20,40 @@ export function setExternalAgentController(
     (scope.__or3ExternalAgentSnapshot = shallowRef(null));
   snapshot.value = controller?.snapshot ?? null;
   if (controller) {
-    scope.__or3ExternalAgentSnapshotDispose = controller.subscribe((event) => {
-      if (event.type === "snapshot") snapshot.value = event.snapshot;
+    let queuedSnapshot: ExternalAgentStoreSnapshot | null = null;
+    let frameId: number | null = null;
+    let microtaskQueued = false;
+    let disposed = false;
+    const flush = () => {
+      frameId = null;
+      microtaskQueued = false;
+      if (disposed || !queuedSnapshot) return;
+      snapshot.value = queuedSnapshot;
+      queuedSnapshot = null;
+    };
+    const unsubscribe = controller.subscribe((event) => {
+      if (event.type !== "snapshot") return;
+      queuedSnapshot = event.snapshot;
+      if (frameId !== null || microtaskQueued) return;
+      if (typeof globalThis.requestAnimationFrame === "function") {
+        frameId = globalThis.requestAnimationFrame(flush);
+      } else {
+        microtaskQueued = true;
+        queueMicrotask(flush);
+      }
     });
+    scope.__or3ExternalAgentSnapshotDispose = () => {
+      disposed = true;
+      unsubscribe();
+      if (
+        frameId !== null &&
+        typeof globalThis.cancelAnimationFrame === "function"
+      ) {
+        globalThis.cancelAnimationFrame(frameId);
+      }
+      frameId = null;
+      queuedSnapshot = null;
+    };
   }
 }
 

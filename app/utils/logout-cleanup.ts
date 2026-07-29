@@ -30,6 +30,14 @@ interface NuxtAppWithSync extends NuxtApp {
     $syncEngine?: SyncEngine;
 }
 
+interface LogoutCleanupOptions {
+    /**
+     * Keep device-encrypted agent credentials during startup reconciliation.
+     * An explicit authenticated -> signed-out transition still clears them.
+     */
+    preserveExternalAgentCredentials?: boolean;
+}
+
 /**
  * `logoutCleanup`
  *
@@ -41,7 +49,10 @@ interface NuxtAppWithSync extends NuxtApp {
  * - Clears workspace DBs flagged for removal on logout
  * - Clears OpenRouter API keys and transient flags
  */
-export async function logoutCleanup(nuxtApp?: NuxtAppWithSync) {
+export async function logoutCleanup(
+    nuxtApp?: NuxtAppWithSync,
+    options: LogoutCleanupOptions = {}
+) {
     try {
         await nuxtApp?.$syncEngine?.stop?.();
     } catch {
@@ -60,7 +71,7 @@ export async function logoutCleanup(nuxtApp?: NuxtAppWithSync) {
 
     // Clear local/session storage auth remnants and transient caches
     if (typeof localStorage !== 'undefined') {
-        [
+        const keys = [
             'openrouter_api_key',
             'openrouter_state',
             'openrouter_code_verifier',
@@ -69,7 +80,11 @@ export async function logoutCleanup(nuxtApp?: NuxtAppWithSync) {
             'or3:background-streaming-available',
             'or3.tools.enabled',
             'last_selected_model',
-        ].forEach((key) => localStorage.removeItem(key));
+        ];
+        if (!options.preserveExternalAgentCredentials) {
+            keys.push('or3.external-agents.credentials.v1');
+        }
+        keys.forEach((key) => localStorage.removeItem(key));
     }
     if (typeof sessionStorage !== 'undefined') {
         [

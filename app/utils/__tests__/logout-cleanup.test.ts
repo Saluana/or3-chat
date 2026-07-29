@@ -70,6 +70,7 @@ describe('logoutCleanup', () => {
         localStorage.setItem('openrouter_api_key', 'sk-test');
         localStorage.setItem('openrouter_state', 'state');
         localStorage.setItem('or3.tools.enabled', '{"test":true}');
+        localStorage.setItem('or3.external-agents.credentials.v1', 'encrypted-vault');
         localStorage.setItem('last_selected_model', 'openai/test');
         sessionStorage.setItem('openrouter_state', 'state');
         const { logoutCleanup } = await import('~/utils/logout-cleanup');
@@ -83,7 +84,21 @@ describe('logoutCleanup', () => {
         expect(localStorage.getItem('openrouter_api_key')).toBeNull();
         expect(localStorage.getItem('openrouter_state')).toBeNull();
         expect(localStorage.getItem('or3.tools.enabled')).toBeNull();
+        expect(localStorage.getItem('or3.external-agents.credentials.v1')).toBeNull();
         expect(localStorage.getItem('last_selected_model')).toBeNull();
         expect(sessionStorage.getItem('openrouter_state')).toBeNull();
+    });
+
+    it('preserves device-encrypted agent credentials during startup reconciliation', async () => {
+        localStorage.setItem('or3.external-agents.credentials.v1', 'encrypted-vault');
+        const { logoutCleanup } = await import('~/utils/logout-cleanup');
+
+        await logoutCleanup(undefined, {
+            preserveExternalAgentCredentials: true,
+        });
+
+        expect(localStorage.getItem('or3.external-agents.credentials.v1')).toBe(
+            'encrypted-vault'
+        );
     });
 });

@@ -125,7 +125,7 @@ export function buildExternalAgentRunnerOption(
     (item) =>
       item.id === requestedDefaultIsolation &&
       !item.dangerous &&
-      validPolicyCombination(defaultMode, item.id),
+      isValidExternalAgentPolicyCombination(defaultMode, item.id),
   )
     ? requestedDefaultIsolation
     : safeIsolationForMode;
@@ -162,7 +162,10 @@ export function buildExternalAgentRunnerOptions(
   );
 }
 
-function validPolicyCombination(mode: string, isolation: string): boolean {
+export function isValidExternalAgentPolicyCombination(
+  mode: string,
+  isolation: string,
+): boolean {
   if (mode === "review") {
     return (
       isolation === "host_readonly" || isolation === "sandbox_workspace_write"
@@ -213,11 +216,15 @@ export function validateExternalAgentLaunch(
   const isolation = option.isolations.find(
     (item) => item.id === input.isolation,
   );
-  if (!mode || !isolation || !validPolicyCombination(mode.id, isolation.id)) {
+  if (
+    !mode ||
+    !isolation ||
+    !isValidExternalAgentPolicyCombination(mode.id, isolation.id)
+  ) {
     return {
       ok: false,
       code: "capability_unavailable",
-      message: "This provider did not advertise the selected safety policy",
+      message: "That safety setup is not available. Choose another mode.",
     };
   }
   const cwd = input.cwd?.trim();

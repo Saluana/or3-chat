@@ -17,6 +17,9 @@ const mocks = vi.hoisted(() => ({
     availableRunnerOptions: vi.fn(),
     addTrustedHost: vi.fn(),
     reconnect: vi.fn(),
+    unlockCredentials: vi.fn(),
+    lockCredentials: vi.fn(),
+    clearActiveHostCredential: vi.fn(),
     switchHost: vi.fn(),
     disconnect: vi.fn(),
     launch: vi.fn(),
@@ -29,6 +32,12 @@ const mocks = vi.hoisted(() => ({
     canDecideApproval: vi.fn(),
     canFollowUp: vi.fn(),
     canReadArtifact: vi.fn(),
+    pinCredentialStatus: {
+      supported: true as const,
+      configured: false,
+      locked: false,
+      persistedCredentialCount: 0,
+    },
     snapshot: null as ExternalAgentStoreSnapshot | null,
   },
   snapshot: null as unknown as ReturnType<
@@ -361,7 +370,16 @@ describe("External Agents components", () => {
       },
     ]);
     mocks.controller.reconnect.mockResolvedValue(true);
+    mocks.controller.unlockCredentials.mockResolvedValue(undefined);
+    mocks.controller.clearActiveHostCredential.mockResolvedValue(undefined);
+    mocks.controller.pinCredentialStatus = {
+      supported: true,
+      configured: false,
+      locked: false,
+      persistedCredentialCount: 0,
+    };
     mocks.controller.launch.mockResolvedValue(session);
+    mocks.controller.ensureSession.mockResolvedValue(session);
     mocks.controller.canCancel.mockReturnValue(true);
     mocks.controller.canDecideApproval.mockReturnValue(true);
     mocks.controller.canFollowUp.mockReturnValue(true);
@@ -372,7 +390,7 @@ describe("External Agents components", () => {
     const wrapper = mount(ExternalAgentsSidebarPage, { global });
     await flushPromises();
 
-    expect(wrapper.text()).toContain("Agent host has limited availability");
+    expect(wrapper.text()).not.toContain("limited availability");
     expect(wrapper.text()).toContain("New agent");
     expect(wrapper.find('[aria-label="Search agent sessions"]').exists()).toBe(
       true,
@@ -400,6 +418,75 @@ describe("External Agents components", () => {
     expect(mocks.newPaneForApp).not.toHaveBeenCalled();
   });
 
+  it("offers opt-in PIN encryption with an explicit offline-attack warning", async () => {
+    const wrapper = mount(ExternalAgentsSidebarPage, { global });
+    await flushPromises();
+
+    await wrapper.find('input[type="checkbox"]').setValue(true);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Local encrypted storage");
+    expect(wrapper.text()).toContain("may be brute-forced");
+    expect(wrapper.find('[aria-label="Credential PIN"]').exists()).toBe(true);
+    expect(wrapper.find('[aria-label="Confirm credential PIN"]').exists()).toBe(
+      true,
+    );
+  });
+
+  it("passes the confirmed PIN only when persistent token storage is selected", async () => {
+    const wrapper = mount(ExternalAgentsSidebarPage, { global });
+    await flushPromises();
+
+    await wrapper.find('input[placeholder="Host name"]').setValue("Laptop");
+    await wrapper
+      .find('input[placeholder="http://127.0.0.1:9100"]')
+      .setValue("http://127.0.0.1:9100");
+    await wrapper
+      .find('input[placeholder="Access token"]')
+      .setValue("agent-token");
+    await wrapper.find('input[type="checkbox"]').setValue(true);
+    await wrapper.find('[aria-label="Credential PIN"]').setValue("482915");
+    await wrapper
+      .find('[aria-label="Confirm credential PIN"]')
+      .setValue("482915");
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+
+    expect(mocks.controller.addTrustedHost).toHaveBeenCalledWith({
+      name: "Laptop",
+      baseUrl: "http://127.0.0.1:9100",
+      token: "agent-token",
+      persistencePin: "482915",
+    });
+  });
+
+  it("unlocks a saved token with the PIN before reconnecting", async () => {
+    const value = snapshot({
+      connectionState: "disconnected",
+      connectionError: "Saved agent credentials are locked.",
+    });
+    mocks.snapshot = shallowRef(value);
+    mocks.controller.snapshot = value;
+    mocks.controller.pinCredentialStatus = {
+      supported: true,
+      configured: true,
+      locked: true,
+      persistedCredentialCount: 1,
+    };
+    const wrapper = mount(ExternalAgentsSidebarPage, { global });
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Device PIN"]').setValue("482915");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Unlock and reconnect"))
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(mocks.controller.unlockCredentials).toHaveBeenCalledWith("482915");
+    expect(mocks.controller.reconnect).toHaveBeenCalledWith();
+  });
+
   it("renders offline recovery states in both sidebar and session pane", async () => {
     const value = snapshot({
       connectionState: "offline",
@@ -423,8 +510,50 @@ describe("External Agents components", () => {
 
     expect(sidebar.text()).toContain("Host could not be reached");
     expect(sidebar.text()).toContain("Host could not be reached");
-    expect(pane.text()).toContain("Live updates paused");
+    expect(pane.text()).toContain("Host disconnected");
     expect(pane.text()).toContain("Reconnect the host to continue");
+  });
+
+  it("retries a historical conversation after reconnect and repairs its stale host reference", async () => {
+    const disconnected = snapshot({
+      connectionState: "disconnected",
+      sessions: [],
+    });
+    mocks.snapshot = shallowRef(disconnected);
+    mocks.controller.snapshot = disconnected;
+    mocks.controller.ensureSession
+      .mockRejectedValueOnce(
+        new Error("Connect a trusted or3-intern host first"),
+      )
+      .mockResolvedValueOnce(session);
+    const wrapper = mount(ExternalAgentSessionPane, {
+      props: {
+        paneId: "pane-1",
+        recordId: encodeExternalAgentSessionRef({
+          hostId: "older-host-identity",
+          remoteSessionId: "session-1",
+        }),
+      },
+      global,
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Conversation unavailable");
+
+    mocks.snapshot.value = snapshot({
+      connectionState: "online",
+      sessions: [],
+    });
+    await flushPromises();
+
+    expect(mocks.controller.ensureSession).toHaveBeenCalledTimes(2);
+    expect(mocks.setPaneApp).toHaveBeenCalledWith(0, "or3-external-agent", {
+      recordId: encodeExternalAgentSessionRef({
+        hostId: "host-1",
+        remoteSessionId: "session-1",
+      }),
+    });
+    expect(wrapper.text()).not.toContain("Conversation unavailable");
   });
 
   it("renders a conversation with compact activity, files, approvals, redacted errors and real actions", async () => {
@@ -470,6 +599,92 @@ describe("External Agents components", () => {
     );
   });
 
+  it("keeps turn settings available after launch while locking the runner", async () => {
+    const completedSession: ExternalAgentSession = {
+      ...session,
+      status: "succeeded",
+      mode: "review",
+      isolation: "host_readonly",
+      cwd: "/workspace",
+      model: "gpt-5.6-luna",
+      activeTurnId: undefined,
+      approvals: [],
+      turns: [
+        {
+          id: "turn-1",
+          session_id: "session-1",
+          sequence: 1,
+          status: "succeeded",
+          continuation_mode: "replay",
+          requested_at: Date.now() - 1_000,
+          completed_at: Date.now(),
+          user_message: "Initial request",
+          final_text: "Done",
+          mode: "review",
+          isolation: "host_readonly",
+          cwd: "/workspace",
+          model: "gpt-5.6-luna",
+        },
+      ],
+    };
+    mocks.snapshot.value = snapshot({
+      sessions: [completedSession],
+      runners: [
+        {
+          id: "codex",
+          display_name: "Codex",
+          status: "available",
+          auth_status: "ready",
+          supports: {
+            chat: { chatSelectable: true, chatReplay: true },
+          },
+          models: [
+            { id: "gpt-5.6-luna", display_name: "GPT-5.6 Luna" },
+            { id: "gpt-5.6-sol", display_name: "GPT-5.6 Sol" },
+          ],
+          workspace_roots: ["/workspace"],
+          default_cwd: "/workspace",
+        },
+      ],
+    });
+
+    const wrapper = mount(ExternalAgentSessionPane, {
+      props: {
+        paneId: "pane-1",
+        recordId: encodeExternalAgentSessionRef({
+          hostId: "host-1",
+          remoteSessionId: "session-1",
+        }),
+      },
+      global,
+    });
+    await flushPromises();
+
+    const runnerSelect = wrapper.find(
+      'select[aria-label="External agent provider"]',
+    );
+    expect(runnerSelect.exists()).toBe(true);
+    expect(runnerSelect.attributes("disabled")).toBeDefined();
+
+    await wrapper
+      .find('select[aria-label="External agent model"]')
+      .setValue("gpt-5.6-sol");
+    await wrapper
+      .find('textarea[aria-label="Message the agent"]')
+      .setValue("Try a stronger model");
+    await wrapper.find('form[aria-label="Agent composer"]').trigger("submit");
+    await flushPromises();
+
+    expect(mocks.controller.followUp).toHaveBeenCalledWith("session-1", {
+      instruction: "Try a stronger model",
+      cwd: "/workspace",
+      mode: "review",
+      isolation: "host_readonly",
+      model: "gpt-5.6-sol",
+      confirmDangerous: false,
+    });
+  });
+
   it("launches only through the controller using advertised provider values", async () => {
     const launcherGlobal = {
       ...global,
@@ -503,14 +718,68 @@ describe("External Agents components", () => {
     const source = readFileSync(
       resolve(
         process.cwd(),
-        "app/components/external-agents/ExternalAgentLauncher.vue",
+        "app/components/external-agents/ExternalAgentSettingsPanel.vue",
       ),
       "utf8",
     );
     expect(source).toContain('HOST_DEFAULT_MODEL_VALUE = "host_default"');
     expect(source).toContain(
-      '{ value: HOST_DEFAULT_MODEL_VALUE, label: "Host default" }',
+      '{ value: HOST_DEFAULT_MODEL_VALUE, label: "Recommended (default)" }',
     );
     expect(source).not.toContain('{ value: "", label: "Host default" }');
+  });
+
+  it("submits the runner's authoritative model id without inventing a provider prefix", async () => {
+    mocks.snapshot.value = snapshot({
+      runners: [
+        {
+          id: "codex",
+          display_name: "Codex",
+          status: "available",
+          auth_status: "ready",
+          supports: {
+            chat: { chatSelectable: true, chatReplay: true },
+          },
+          models: [
+            {
+              id: "gpt-5.6-luna",
+              display_name: "GPT-5.6 Luna",
+              provider: "openai",
+              provider_name: "OpenAI Codex",
+            },
+          ],
+          workspace_roots: ["/workspace"],
+          default_cwd: "/workspace",
+        },
+      ],
+    });
+    mocks.controller.launch.mockResolvedValue(session);
+
+    const wrapper = mount(ExternalAgentLauncher, {
+      global: {
+        ...global,
+        stubs: {
+          ...global.stubs,
+          ExternalAgentLauncher: false,
+        },
+      },
+    });
+    await flushPromises();
+
+    const modelSelect = wrapper.find(
+      'select[aria-label="External agent model"]',
+    );
+    expect(modelSelect.text()).toContain("GPT-5.6 Luna · OpenAI Codex");
+    await modelSelect.setValue("gpt-5.6-luna");
+    await wrapper.find("textarea").setValue("Say hello");
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+
+    expect(mocks.controller.launch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runnerId: "codex",
+        model: "gpt-5.6-luna",
+      }),
+    );
   });
 });

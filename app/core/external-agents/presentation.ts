@@ -6,7 +6,11 @@ import type {
   ExternalAgentTimelineEvent,
   ExternalRemoteTurn,
 } from "./types";
-import type { ToolCallInfo, UiChatMessage } from "~/utils/chat/uiMessages";
+import type {
+  ToolCallInfo,
+  UiChatMessage,
+  UiChatMessagePart,
+} from "~/utils/chat/uiMessages";
 
 const MAX_PRESENTATION_TEXT = 24_000;
 const MAX_DIAGNOSTICS = 50;
@@ -25,8 +29,10 @@ const ALLOWED_PRESENTATION_KEYS = new Set([
   "request_type",
   "decision",
   "status",
+  "state",
   "detail",
   "description",
+  "reason",
   "message",
   "name",
   "tool",
@@ -45,6 +51,10 @@ const ALLOWED_PRESENTATION_KEYS = new Set([
   "artifactId",
   "label",
   "content",
+  "type",
+  "item_type",
+  "stream_kind",
+  "delta",
 ]);
 
 function record(value: unknown): Record<string, unknown> {
@@ -112,6 +122,30 @@ export function sanitizeExternalAgentPayload(
     const text = cleanString(candidate);
     if (text) output[key] = text;
   }
+  const args = record(input.args);
+  const reason = cleanString(args.reason);
+  if (reason && !output.reason) output.reason = reason;
+  const data = record(input.data);
+  const state = record(data.state);
+  const nestedOperationId = [
+    data.call_id,
+    data.callId,
+    data.tool_call_id,
+    data.toolCallId,
+    data.message_id,
+    data.messageId,
+    data.id,
+  ].find((candidate) => typeof candidate === "string");
+  if (nestedOperationId && !output.operation_id) {
+    output.operation_id = nestedOperationId.slice(0, 500);
+  }
+  const nestedToolName = cleanString(data.tool ?? data.name, 500);
+  if (nestedToolName && !output.name) output.name = nestedToolName;
+  const nestedDetail = cleanString(
+    data.path ?? data.command ?? state.title,
+    2_000,
+  );
+  if (nestedDetail && !output.detail) output.detail = nestedDetail;
   if (rawType) output.rawType = rawType.slice(0, 120);
   return Object.freeze(output);
 }
@@ -145,8 +179,9 @@ export function presentExternalAgentError(
         : "";
   const lower = source.toLowerCase();
   if (
-    lower.includes("insufficient") &&
-    (lower.includes("credit") || lower.includes("balance"))
+    (lower.includes("insufficient") &&
+      (lower.includes("credit") || lower.includes("balance"))) ||
+    lower.includes("not enough credits")
   ) {
     return {
       message:
@@ -172,6 +207,7 @@ export function presentExternalAgentError(
     lower.includes("offline") ||
     lower.includes("network") ||
     lower.includes("fetch") ||
+    lower.includes("connect") ||
     lower.includes("connection") ||
     lower.includes("econn")
   ) {
@@ -185,12 +221,24 @@ export function presentExternalAgentError(
     lower.includes("model") &&
     (lower.includes("unavailable") ||
       lower.includes("not found") ||
+      lower.includes("not supported") ||
       lower.includes("unsupported"))
   ) {
     return {
       message: "The selected model is unavailable for this agent.",
       action: "change-model",
       category: "model",
+    };
+  }
+  if (
+    lower.includes("approval reject") ||
+    lower.includes("approval denied") ||
+    lower.includes("request denied")
+  ) {
+    return {
+      message: "You denied this request. No changes were made.",
+      action: "retry",
+      category: "cancelled",
     };
   }
   if (lower.includes("cancel") || lower.includes("abort")) {
@@ -246,33 +294,20 @@ function appendDelta(current: string, delta: string): string {
   return `${current}${delta}`;
 }
 
-function assistantText(
-  turn: ExternalRemoteTurn,
-  events: readonly ExternalAgentTimelineEvent[],
-): string {
-  const finalText = cleanString(turn.final_text);
-  if (finalText) return finalText;
-  let text = "";
-  for (const event of events) {
-    if (event.type !== "message") continue;
-    const candidate = cleanStreamText(event.text);
-    if (!candidate) continue;
-    const rawType = String(event.payload.rawType ?? "").toLowerCase();
-    if (rawType.includes("delta") || rawType.includes("chunk")) {
-      text = appendDelta(text, candidate);
-    } else {
-      text = candidate.startsWith(text)
-        ? candidate
-        : appendDelta(text, candidate);
-    }
-  }
-  return text;
-}
+type OperationKind =
+  | "tests"
+  | "search"
+  | "read"
+  | "edit"
+  | "command"
+  | "other";
 
-function operationLabel(event: ExternalAgentTimelineEvent): string {
-  const hint = [
+function operationHint(event: ExternalAgentTimelineEvent): string {
+  return [
     event.payload.name,
     event.payload.tool,
+    event.payload.title,
+    event.payload.item_type,
     event.payload.summary,
     event.payload.command,
     event.payload.path,
@@ -281,13 +316,65 @@ function operationLabel(event: ExternalAgentTimelineEvent): string {
     .filter((value): value is string => typeof value === "string")
     .join(" ")
     .toLowerCase();
-  if (/test|vitest|jest|pytest|xcodebuild/.test(hint)) return "Running tests";
-  if (/search|find|grep|glob/.test(hint)) return "Searching the workspace";
-  if (/read|open|inspect/.test(hint)) return "Reading files";
-  if (/edit|write|patch|create|delete/.test(hint)) return "Editing files";
-  if (/build|compile|typecheck|lint/.test(hint)) return "Checking the project";
-  if (/shell|command|exec|terminal/.test(hint)) return "Running a command";
-  return cleanString(event.text, 160) ?? "Agent activity";
+}
+
+function operationKind(event: ExternalAgentTimelineEvent): OperationKind {
+  const hint = operationHint(event);
+  if (/test|vitest|jest|pytest|xcodebuild/.test(hint)) return "tests";
+  if (/search|find|grep|glob/.test(hint)) return "search";
+  if (/read|open|inspect/.test(hint)) return "read";
+  if (/edit|write|patch|create|delete|file_change/.test(hint)) return "edit";
+  if (/shell|command|exec|terminal|bash/.test(hint)) return "command";
+  return "other";
+}
+
+function operationLabel(
+  event: ExternalAgentTimelineEvent,
+  status: ToolCallInfo["status"] = "loading",
+): string {
+  const kind = operationKind(event);
+  const complete = status === "complete";
+  if (kind === "tests") return complete ? "Ran tests" : "Running tests";
+  if (kind === "search")
+    return complete ? "Searched the workspace" : "Searching the workspace";
+  if (kind === "read") return complete ? "Read files" : "Reading files";
+  if (kind === "edit") return complete ? "Edited files" : "Editing files";
+  if (kind === "command")
+    return complete ? "Ran a command" : "Running a command";
+
+  const hint = [
+    event.payload.name,
+    event.payload.tool,
+    event.payload.title,
+    event.payload.item_type,
+    event.payload.summary,
+    event.payload.command,
+    event.payload.path,
+    event.payload.rawType,
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+  if (/build|compile|typecheck|lint/.test(hint))
+    return complete ? "Checked the project" : "Checking the project";
+  return (
+    cleanString(event.payload.title, 160) ??
+    cleanString(event.payload.name, 160) ??
+    cleanString(event.text, 160) ??
+    (complete ? "Completed an action" : "Working")
+  );
+}
+
+function operationId(event: ExternalAgentTimelineEvent): string | undefined {
+  return [
+    event.payload.operation_id,
+    event.payload.operationId,
+    event.payload.call_id,
+    event.payload.callId,
+    event.payload.id,
+  ].find(
+    (value): value is string => typeof value === "string" && Boolean(value),
+  );
 }
 
 function activityStatus(
@@ -307,33 +394,159 @@ function activityStatus(
       : "loading";
 }
 
-function activityItems(
+function isReasoningEvent(event: ExternalAgentTimelineEvent): boolean {
+  const kind =
+    `${event.payload.rawType ?? ""} ${event.payload.stream_kind ?? ""}`.toLowerCase();
+  return kind.includes("reasoning") || kind.includes("thought");
+}
+
+interface AssistantPresentation {
+  readonly text: string;
+  readonly reasoningText?: string;
+  readonly tools: readonly ToolCallInfo[];
+  readonly parts: readonly UiChatMessagePart[];
+}
+
+function assistantPresentation(
+  turn: ExternalRemoteTurn,
   events: readonly ExternalAgentTimelineEvent[],
   turnStatus: ExternalAgentRunStatus,
-): ToolCallInfo[] {
-  const items = new Map<string, ToolCallInfo>();
+): AssistantPresentation {
+  const parts: UiChatMessagePart[] = [];
+  const toolPartIndexes = new Map<string, number>();
+  const activeToolByLabel = new Map<string, string>();
+  let reasoningText = "";
+  let activeTextPart: Extract<UiChatMessagePart, { type: "text" }> | null =
+    null;
+
   for (const event of events) {
+    if (event.type === "message") {
+      const candidate = cleanStreamText(event.text);
+      if (!candidate) continue;
+      if (isReasoningEvent(event)) {
+        reasoningText = appendDelta(reasoningText, candidate);
+        continue;
+      }
+      if (!activeTextPart) {
+        activeTextPart = {
+          id: `${turn.id}:text:${event.sequence}`,
+          type: "text",
+          text: "",
+        };
+        parts.push(activeTextPart);
+      }
+      activeTextPart.text = appendDelta(activeTextPart.text, candidate);
+      continue;
+    }
     if (event.type !== "tool") continue;
-    const explicitKey = [
-      event.payload.operation_id,
-      event.payload.operationId,
-      event.payload.call_id,
-      event.payload.callId,
-    ].find((value) => typeof value === "string");
-    const label = operationLabel(event);
-    const key = String(explicitKey ?? label);
+
+    activeTextPart = null;
     const status = activityStatus(event, turnStatus);
-    items.set(key, {
+    const label = operationLabel(event, status);
+    const kind = operationKind(event);
+    const explicitKey = operationId(event);
+    let key = explicitKey ?? activeToolByLabel.get(label);
+    if (!key) key = `event-${event.sequence}`;
+
+    const existingIndex = toolPartIndexes.get(key);
+    const existingPart =
+      existingIndex === undefined ? undefined : parts[existingIndex];
+    const existingCall =
+      existingPart?.type === "tool" ? existingPart.toolCall : undefined;
+    const detail = cleanString(event.payload.detail, 4_000);
+    const toolCall: ToolCallInfo = {
       id: key,
-      name: label,
-      label:
-        status === "complete"
-          ? label.replace(/^Running /, "").replace(/^Editing /, "Edited ")
-          : label,
+      name: existingCall?.name ?? operationLabel(event, "loading"),
+      label,
       status,
-    });
+      args:
+        detail &&
+        (kind === "command" || kind === "read" || kind === "edit")
+          ? detail
+          : existingCall?.args,
+      result:
+        detail && status === "complete" && kind === "search"
+          ? detail
+          : existingCall?.result,
+      error:
+        status === "error"
+          ? cleanString(event.payload.message ?? event.payload.reason, 2_000)
+          : existingCall?.error,
+    };
+    if (existingIndex === undefined) {
+      toolPartIndexes.set(key, parts.length);
+      parts.push({
+        id: `${turn.id}:tool:${key}`,
+        type: "tool",
+        toolCall,
+      });
+    } else {
+      parts[existingIndex] = {
+        id: `${turn.id}:tool:${key}`,
+        type: "tool",
+        toolCall,
+      };
+    }
+    if (status === "loading" || status === "pending") {
+      activeToolByLabel.set(label, key);
+    } else if (activeToolByLabel.get(label) === key) {
+      activeToolByLabel.delete(label);
+    }
   }
-  return [...items.values()];
+
+  const finalText = cleanString(turn.final_text);
+  const streamedText = parts
+    .filter(
+      (
+        part,
+      ): part is Extract<UiChatMessagePart, { type: "text" }> =>
+        part.type === "text",
+    )
+    .map((part) => part.text)
+    .join("");
+  if (finalText && finalText !== streamedText) {
+    if (streamedText && finalText.startsWith(streamedText)) {
+      const lastText = [...parts]
+        .reverse()
+        .find(
+          (
+            part,
+          ): part is Extract<UiChatMessagePart, { type: "text" }> =>
+            part.type === "text",
+        );
+      if (lastText) lastText.text += finalText.slice(streamedText.length);
+    } else if (!streamedText || !streamedText.includes(finalText)) {
+      parts.push({
+        id: `${turn.id}:text:final`,
+        type: "text",
+        text: finalText,
+      });
+    }
+  }
+
+  const text = parts
+    .filter(
+      (
+        part,
+      ): part is Extract<UiChatMessagePart, { type: "text" }> =>
+        part.type === "text",
+    )
+    .map((part) => part.text)
+    .join("");
+  const tools = parts
+    .filter(
+      (
+        part,
+      ): part is Extract<UiChatMessagePart, { type: "tool" }> =>
+        part.type === "tool",
+    )
+    .map((part) => part.toolCall);
+  return {
+    text,
+    reasoningText,
+    tools,
+    parts,
+  };
 }
 
 function statusForTurn(turn: ExternalRemoteTurn): ExternalAgentRunStatus {
@@ -357,8 +570,7 @@ function projectTurn(
     .filter((event) => event.turnId === turn.id)
     .sort((left, right) => left.sequence - right.sequence);
   const status = statusForTurn(turn);
-  const text = assistantText(turn, events);
-  const tools = activityItems(events, status);
+  const assistant = assistantPresentation(turn, events, status);
   const pending = status === "queued" || status === "running";
   const error = turn.error
     ? presentExternalAgentError(turn.error)
@@ -376,13 +588,15 @@ function projectTurn(
       }
     : undefined;
   const assistantMessage: UiChatMessage | undefined =
-    text || tools.length || pending
+    assistant.text || assistant.tools.length || pending
       ? {
           id: `${turn.id}:assistant`,
           role: "assistant",
-          text,
+          text: assistant.text,
           pending,
-          toolCalls: tools,
+          toolCalls: [...assistant.tools],
+          parts: [...assistant.parts],
+          reasoning_text: assistant.reasoningText,
           error: error?.message,
         }
       : undefined;
@@ -441,21 +655,6 @@ export function projectExternalAgentConversation(
         left.requested_at - right.requested_at,
     )
     .map((turn) => projectTurn(session, turn));
-  if (session.output && turns.length) {
-    const last = turns.at(-1)!;
-    if (!last.assistantMessage?.text) {
-      turns[turns.length - 1] = {
-        ...last,
-        assistantMessage: {
-          id: `${last.id}:assistant`,
-          role: "assistant",
-          text: cleanString(session.output) ?? "",
-          pending: false,
-          toolCalls: last.assistantMessage?.toolCalls,
-        },
-      };
-    }
-  }
   const diagnostics = session.events.slice(-MAX_DIAGNOSTICS).map((event) => ({
     id: event.id,
     occurredAt: event.occurredAt,

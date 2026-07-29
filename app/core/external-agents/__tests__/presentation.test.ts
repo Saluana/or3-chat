@@ -117,6 +117,155 @@ describe("external agent presentation", () => {
     ]);
   });
 
+  it("ignores reconciled runner diagnostics and presents real command details", () => {
+    const projection = projectExternalAgentConversation(
+      session({
+        events: [
+          event("diagnostic-1", 1, "metric", undefined, {
+            rawType: "runner_output",
+            type: "runtime.started",
+          }),
+          event("diagnostic-2", 2, "metric", undefined, {
+            rawType: "runner_output",
+            type: "message.part.updated",
+          }),
+          event("command-start", 3, "tool", undefined, {
+            rawType: "item.started",
+            operation_id: "command-1",
+            item_type: "command_execution",
+            status: "inProgress",
+            title: "Command run",
+            detail: "bun run test",
+          }),
+          event("command-done", 4, "tool", undefined, {
+            rawType: "item.completed",
+            operation_id: "command-1",
+            item_type: "command_execution",
+            status: "completed",
+            title: "Command run",
+            detail: "bun run test",
+          }),
+        ],
+      }),
+    );
+
+    expect(projection.turns[0]?.assistantMessage?.parts).toEqual([
+      {
+        id: "turn-1:tool:command-1",
+        type: "tool",
+        toolCall: expect.objectContaining({
+          id: "command-1",
+          name: "Running a command",
+          label: "Ran a command",
+          status: "complete",
+          args: "bun run test",
+        }),
+      },
+    ]);
+    expect(
+      projection.turns[0]?.assistantMessage?.toolCalls,
+    ).toHaveLength(1);
+  });
+
+  it("preserves text and tool calls in their original event order", () => {
+    const projection = projectExternalAgentConversation(
+      session({
+        events: [
+          event("1", 1, "message", "I’ll inspect the project.", {
+            rawType: "text_delta",
+          }),
+          event("2", 2, "tool", undefined, {
+            rawType: "item.started",
+            operation_id: "read-1",
+            title: "Read README.md",
+            status: "running",
+          }),
+          event("3", 3, "tool", undefined, {
+            rawType: "item.completed",
+            operation_id: "read-1",
+            title: "Read README.md",
+            status: "completed",
+          }),
+          event("4", 4, "message", " It is a Nuxt application.", {
+            rawType: "text_delta",
+          }),
+          event("5", 5, "tool", undefined, {
+            rawType: "item.started",
+            operation_id: "tests-1",
+            title: "Run tests",
+            status: "running",
+          }),
+        ],
+      }),
+    );
+
+    expect(projection.turns[0]?.assistantMessage?.parts).toEqual([
+      {
+        id: "turn-1:text:1",
+        type: "text",
+        text: "I’ll inspect the project.",
+      },
+      {
+        id: "turn-1:tool:read-1",
+        type: "tool",
+        toolCall: expect.objectContaining({
+          id: "read-1",
+          status: "complete",
+        }),
+      },
+      {
+        id: "turn-1:text:4",
+        type: "text",
+        text: " It is a Nuxt application.",
+      },
+      {
+        id: "turn-1:tool:tests-1",
+        type: "tool",
+        toolCall: expect.objectContaining({
+          id: "tests-1",
+          status: "loading",
+        }),
+      },
+    ]);
+  });
+
+  it("does not reuse a prior turn result while a follow-up is waiting for text", () => {
+    const projection = projectExternalAgentConversation(
+      session({
+        output: "The previous answer.",
+        turns: [
+          {
+            id: "turn-1",
+            session_id: "session-secret",
+            sequence: 1,
+            status: "succeeded",
+            continuation_mode: "native",
+            requested_at: 1,
+            completed_at: 2,
+            user_message: "First question",
+            final_text: "The previous answer.",
+          },
+          {
+            id: "turn-2",
+            session_id: "session-secret",
+            sequence: 2,
+            status: "running",
+            continuation_mode: "native",
+            requested_at: 3,
+            user_message: "Follow-up question",
+          },
+        ],
+        activeTurnId: "turn-2",
+      }),
+    );
+
+    expect(projection.turns[0]?.assistantMessage?.text).toBe(
+      "The previous answer.",
+    );
+    expect(projection.turns[1]?.assistantMessage?.text).toBe("");
+    expect(projection.turns[1]?.assistantMessage?.pending).toBe(true);
+  });
+
   it("keeps approvals and artifacts associated with their turn", () => {
     const projection = projectExternalAgentConversation(
       session({
@@ -215,5 +364,22 @@ responseHeaders={"set-cookie":"token=secret"}`,
     });
     expect(error.message).not.toContain("https://");
     expect(error.message).not.toContain("secret");
+  });
+
+  it("presents a denied approval as a user decision, not a provider error", () => {
+    expect(presentExternalAgentError("approval reject")).toEqual({
+      message: "You denied this request. No changes were made.",
+      action: "retry",
+      category: "cancelled",
+    });
+  });
+
+  it("normalizes terse provider credit errors", () => {
+    expect(presentExternalAgentError("Not Enough Credits")).toEqual({
+      message:
+        "This agent could not continue because its model account has insufficient credits.",
+      action: "provider-settings",
+      category: "credits",
+    });
   });
 });

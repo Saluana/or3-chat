@@ -121,12 +121,24 @@ const sessions: ExternalAgentSession[] = [
         },
       },
       {
-        id: "running-tests",
+        id: "running-follow-up",
         hostId: "local-host",
         hostGeneration: 1,
         sessionId: "running",
         turnId: "turn-running",
         sequence: 3,
+        occurredAt: new Date().toISOString(),
+        type: "message",
+        text: " Next I’m **running the focused tests",
+        payload: { rawType: "text_delta" },
+      },
+      {
+        id: "running-tests",
+        hostId: "local-host",
+        hostGeneration: 1,
+        sessionId: "running",
+        turnId: "turn-running",
+        sequence: 4,
         occurredAt: new Date().toISOString(),
         type: "tool",
         payload: {
@@ -210,7 +222,7 @@ const sessions: ExternalAgentSession[] = [
     ],
     events: [
       {
-        id: "completed-tests",
+        id: "completed-edit",
         hostId: "local-host",
         hostGeneration: 1,
         sessionId: "completed",
@@ -219,10 +231,66 @@ const sessions: ExternalAgentSession[] = [
         occurredAt: new Date().toISOString(),
         type: "tool",
         payload: {
-          rawType: "tool.completed",
-          operation_id: "tests",
-          name: "vitest",
+          rawType: "item.completed",
+          operation_id: "edit",
+          item_type: "file_change",
+          title: "Edit file",
           status: "completed",
+          detail: "app/components/ExternalAgentComposer.vue",
+        },
+      },
+      {
+        id: "completed-read",
+        hostId: "local-host",
+        hostGeneration: 1,
+        sessionId: "completed",
+        turnId: "turn-completed",
+        sequence: 2,
+        occurredAt: new Date().toISOString(),
+        type: "tool",
+        payload: {
+          rawType: "item.completed",
+          operation_id: "read",
+          item_type: "dynamic_tool_call",
+          title: "read",
+          status: "completed",
+          detail: "app/components/chat/ChatInputDropper.vue",
+        },
+      },
+      {
+        id: "completed-command",
+        hostId: "local-host",
+        hostGeneration: 1,
+        sessionId: "completed",
+        turnId: "turn-completed",
+        sequence: 3,
+        occurredAt: new Date().toISOString(),
+        type: "tool",
+        payload: {
+          rawType: "item.completed",
+          operation_id: "command",
+          item_type: "command_execution",
+          title: "Command run",
+          status: "completed",
+          detail: "bun run test -- ExternalAgents",
+        },
+      },
+      {
+        id: "completed-search",
+        hostId: "local-host",
+        hostGeneration: 1,
+        sessionId: "completed",
+        turnId: "turn-completed",
+        sequence: 4,
+        occurredAt: new Date().toISOString(),
+        type: "tool",
+        payload: {
+          rawType: "item.completed",
+          operation_id: "search",
+          item_type: "dynamic_tool_call",
+          title: "glob",
+          status: "completed",
+          detail: "4 matching files",
         },
       },
     ],
@@ -306,7 +374,18 @@ const snapshot: ExternalAgentStoreSnapshot = {
           approvalDecisions: true,
         },
       },
-      models: [],
+      models: [
+        {
+          id: "gpt-5.6-luna",
+          display_name: "GPT-5.6 Luna",
+          provider_name: "OpenAI Codex",
+        },
+        {
+          id: "gpt-5.6-sol",
+          display_name: "GPT-5.6 Sol",
+          provider_name: "OpenAI Codex",
+        },
+      ],
     },
   ],
   sessions: state.value === "empty" || state.value === "new" ? [] : sessions,
@@ -316,6 +395,12 @@ const snapshot: ExternalAgentStoreSnapshot = {
 const listeners = new Set<(event: ExternalAgentStoreEvent) => void>();
 const fakeController = {
   snapshot,
+  pinCredentialStatus: {
+    supported: true,
+    configured: false,
+    locked: false,
+    persistedCredentialCount: 0,
+  },
   subscribe(listener: (event: ExternalAgentStoreEvent) => void) {
     listeners.add(listener);
     listener({ type: "snapshot", snapshot });
@@ -342,6 +427,9 @@ const fakeController = {
   async reconnect() {
     return true;
   },
+  async unlockCredentials() {},
+  lockCredentials() {},
+  async clearActiveHostCredential() {},
   async switchHost() {
     return true;
   },

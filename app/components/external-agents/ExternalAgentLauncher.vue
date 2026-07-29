@@ -21,93 +21,15 @@
           </span>
         </template>
         <template #settings>
-          <div class="space-y-3">
-            <h2 class="text-sm font-semibold">Agent settings</h2>
-            <label class="block space-y-1">
-              <span class="text-xs font-semibold">Provider</span>
-              <USelectMenu
-                v-model="runnerId"
-                :items="runnerItems"
-                value-key="value"
-                label-key="label"
-                class="w-full"
-                aria-label="External agent provider"
-              />
-            </label>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <label class="block space-y-1">
-                <span class="text-xs font-semibold">Mode</span>
-                <USelectMenu
-                  v-model="mode"
-                  :items="modeItems"
-                  value-key="value"
-                  label-key="label"
-                  class="w-full"
-                  aria-label="External agent mode"
-                />
-              </label>
-              <label class="block space-y-1">
-                <span class="text-xs font-semibold">Isolation</span>
-                <USelectMenu
-                  v-model="isolation"
-                  :items="isolationItems"
-                  value-key="value"
-                  label-key="label"
-                  class="w-full"
-                  aria-label="External agent isolation"
-                />
-              </label>
-            </div>
-
-            <label class="block space-y-1">
-              <span class="text-xs font-semibold">Workspace root</span>
-              <UInput
-                v-if="selectedOption?.customCwd"
-                v-model="cwd"
-                class="w-full"
-                placeholder="Host workspace path (optional)"
-                aria-label="External agent workspace root"
-              />
-              <USelectMenu
-                v-else-if="rootItems.length"
-                v-model="cwd"
-                :items="rootItems"
-                value-key="value"
-                label-key="label"
-                class="w-full"
-                aria-label="External agent workspace root"
-              />
-              <p v-else class="text-xs text-[var(--md-on-surface-variant)]">
-                The host will use its configured default working directory.
-              </p>
-              <span
-                class="block text-[11px] text-[var(--md-on-surface-variant)]"
-              >
-                The host validates and enforces this root.
-              </span>
-            </label>
-
-            <label v-if="modelItems.length" class="block space-y-1">
-              <span class="text-xs font-semibold">Model (optional)</span>
-              <USelectMenu
-                :model-value="selectedModelValue"
-                :items="modelItems"
-                value-key="value"
-                label-key="label"
-                class="w-full"
-                aria-label="External agent model"
-                @update:model-value="setModel"
-              />
-            </label>
-
-            <UCheckbox
-              v-if="dangerousSelection"
-              v-model="confirmDangerous"
-              color="error"
-              label="I understand this grants dangerous full access"
-              description="Only use this mode on a trusted host and workspace."
-            />
-          </div>
+          <ExternalAgentSettingsPanel
+            v-model:runner-id="runnerId"
+            v-model:mode="mode"
+            v-model:isolation="isolation"
+            v-model:cwd="cwd"
+            v-model:model="model"
+            v-model:confirm-dangerous="confirmDangerous"
+            :runners="runners"
+          />
         </template>
       </ExternalAgentComposer>
 
@@ -125,8 +47,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import ExternalAgentComposer from "./ExternalAgentComposer.vue";
+import ExternalAgentSettingsPanel from "./ExternalAgentSettingsPanel.vue";
 import type { ExternalAgentSession } from "~/core/external-agents/types";
-import { buildExternalAgentRunnerOptions } from "~/core/external-agents/launcher";
+import {
+  buildExternalAgentRunnerOptions,
+  isValidExternalAgentPolicyCombination,
+} from "~/core/external-agents/launcher";
 import { presentExternalAgentError } from "~/core/external-agents/presentation";
 import { useExternalAgentRuntime } from "~/core/external-agents/runtime";
 
@@ -140,9 +66,6 @@ const props = withDefaults(
 const emit = defineEmits<{
   launched: [session: ExternalAgentSession];
 }>();
-
-/** ComboboxItem rejects empty string values (reserved for clearing). */
-const HOST_DEFAULT_MODEL_VALUE = "host_default";
 
 const runtime = useExternalAgentRuntime();
 const runnerId = ref("");
@@ -158,6 +81,7 @@ const error = ref<string | null>(null);
 const options = computed(() =>
   buildExternalAgentRunnerOptions(runtime.snapshot.value?.runners ?? []),
 );
+const runners = computed(() => runtime.snapshot.value?.runners ?? []);
 const availableOptions = computed(() =>
   options.value.filter((option) => option.available),
 );
@@ -165,78 +89,16 @@ const selectedOption = computed(() =>
   options.value.find((option) => option.runner.id === runnerId.value),
 );
 
-const runnerItems = computed(() =>
-  options.value.map((option) => ({
-    value: option.runner.id,
-    label: option.available
-      ? option.runner.display_name
-      : `${option.runner.display_name} — ${option.unavailableReason}`,
-    disabled: !option.available,
-  })),
-);
-const modeItems = computed(() =>
-  (selectedOption.value?.modes ?? []).map((item) => ({
-    value: item.id,
-    label: item.dangerous ? `${item.label} ⚠` : item.label,
-  })),
-);
 const isolationItems = computed(() =>
-  (selectedOption.value?.isolations ?? []).map((item) => ({
-    value: item.id,
-    label: item.dangerous ? `${item.label} ⚠` : item.label,
-  })),
-);
-const rootItems = computed(() =>
-  [
-    ...(selectedOption.value?.defaultCwd
-      ? [selectedOption.value.defaultCwd]
-      : []),
-    ...(selectedOption.value?.roots ?? []),
-  ]
-    .filter((root, index, all) => all.indexOf(root) === index)
-    .map((root) => ({
-      value: root,
-      label: root,
+  (selectedOption.value?.isolations ?? [])
+    .filter((item) =>
+      isValidExternalAgentPolicyCombination(mode.value, item.id),
+    )
+    .map((item) => ({
+      value: item.id,
+      label: item.dangerous ? `${item.label} ⚠` : item.label,
     })),
 );
-const modelItems = computed(() => {
-  const raw = selectedOption.value?.runner.models ?? [];
-  return [
-    { value: HOST_DEFAULT_MODEL_VALUE, label: "Host default" },
-    ...raw
-      .map((candidate) => {
-        const id = typeof candidate.id === "string" ? candidate.id : "";
-        if (!id || id === HOST_DEFAULT_MODEL_VALUE) return null;
-        const provider =
-          typeof candidate.provider === "string" ? candidate.provider : "";
-        const value = provider && !id.includes("/") ? `${provider}/${id}` : id;
-        if (!value || value === HOST_DEFAULT_MODEL_VALUE) return null;
-        return {
-          value,
-          label:
-            typeof candidate.display_name === "string"
-              ? candidate.display_name
-              : value,
-        };
-      })
-      .filter(
-        (
-          item,
-        ): item is {
-          value: string;
-          label: string;
-        } => Boolean(item),
-      ),
-  ];
-});
-const selectedModelValue = computed(
-  () => model.value ?? HOST_DEFAULT_MODEL_VALUE,
-);
-
-function setModel(value: string) {
-  model.value =
-    !value || value === HOST_DEFAULT_MODEL_VALUE ? null : value;
-}
 const dangerousSelection = computed(() => {
   const option = selectedOption.value;
   return Boolean(
@@ -267,6 +129,13 @@ watch(
   },
   { immediate: true },
 );
+
+watch(mode, () => {
+  const compatible = isolationItems.value;
+  if (!compatible.some((item) => item.value === isolation.value)) {
+    isolation.value = compatible[0]?.value ?? "";
+  }
+});
 
 watch([mode, isolation], () => {
   if (!dangerousSelection.value) confirmDangerous.value = false;

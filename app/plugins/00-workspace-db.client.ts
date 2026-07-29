@@ -29,7 +29,10 @@ export default defineNuxtPlugin(async () => {
 
     await refresh();
     if (await shouldRunLogoutCleanup(data.value?.session?.authenticated)) {
-        await logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
+        await logoutCleanup(
+            nuxtApp as Parameters<typeof logoutCleanup>[0],
+            { preserveExternalAgentCredentials: true }
+        );
     }
 
     // Initialize the unified workspace manager

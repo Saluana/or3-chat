@@ -4,6 +4,7 @@ import type {
   ExternalAgentClient,
   ExternalAgentCredentialVault,
   ExternalAgentHost,
+  ExternalAgentPinCredentialVault,
   ExternalAgentPersistence,
   ExternalAgentPersistenceSnapshot,
   ExternalRemoteEvent,
@@ -104,10 +105,31 @@ function vault(
   };
 }
 
+function pinVault(): ExternalAgentPinCredentialVault {
+  const base = vault();
+  return {
+    ...base,
+    supportsPinPersistence: true,
+    getStatus: () => ({
+      supported: true,
+      configured: false,
+      locked: false,
+      persistedCredentialCount: 0,
+    }),
+    putPersistent: vi.fn(async (reference, secret) => {
+      await base.put(reference, secret);
+    }),
+    unlock: vi.fn(async () => {}),
+    lock: vi.fn(),
+  };
+}
+
 function fakeClient(
   input: {
     events?: ExternalRemoteEvent[];
     stream?: ExternalRemoteStreamEvent[];
+    streamNeverEnds?: boolean;
+    startError?: Error;
     abortError?: Error;
     decideError?: Error;
   } = {},
@@ -146,17 +168,31 @@ function fakeClient(
     listSessions: vi.fn(async () => ({ sessions: [] })),
     getSession: vi.fn(async () => remoteSession),
     listTurns: vi.fn(async () => ({ turns: [remoteTurn] })),
-    startTurn: vi.fn(async () => ({
-      session_id: "session-1",
-      turn_id: "turn-1",
-      status: "running",
-    })),
+    startTurn: vi.fn(async () => {
+      if (input.startError) throw input.startError;
+      return {
+        session_id: "session-1",
+        turn_id: "turn-1",
+        status: "running",
+      };
+    }),
     getTurn: vi.fn(async () => remoteTurn),
     listTurnEvents: vi.fn(async () => ({
       events: input.events ?? [],
     })),
-    async *streamTurn() {
+    async *streamTurn(_sessionId, _turnId, options) {
       for (const event of input.stream ?? []) yield event;
+      if (input.streamNeverEnds) {
+        await new Promise<void>((resolve) => {
+          if (options?.signal?.aborted) {
+            resolve();
+            return;
+          }
+          options?.signal?.addEventListener("abort", () => resolve(), {
+            once: true,
+          });
+        });
+      }
     },
     abortTurn: vi.fn(async () => {
       if (input.abortError) throw input.abortError;
@@ -209,6 +245,33 @@ describe("ExternalAgentController", () => {
     expect(serialized).not.toContain("or3-super-secret-token");
     expect(saved.state.hosts[0]?.credentialRef).toMatch(/^intern-credential-/);
     expect(controller.snapshot.connectionState).toBe("online");
+    expect(client.readiness).not.toHaveBeenCalled();
+  });
+
+  it("uses PIN-protected persistence only when explicitly requested", async () => {
+    const saved = persistence();
+    const secrets = pinVault();
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: secrets,
+      createClient: () => fakeClient(),
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await controller.addTrustedHost({
+      name: "Laptop",
+      baseUrl: "https://host.test",
+      token: "remember-me",
+      persistencePin: "482915",
+    });
+
+    expect(secrets.putPersistent).toHaveBeenCalledWith(
+      expect.stringMatching(/^intern-credential-/),
+      "remember-me",
+      "482915",
+    );
+    expect(JSON.stringify(saved.state)).not.toContain("remember-me");
   });
 
   it("does not save a pre-authorized host when verification fails", async () => {
@@ -359,6 +422,80 @@ describe("ExternalAgentController", () => {
     expect(new Set(saves)).toEqual(new Set(["workspace-c"]));
   });
 
+  it("keeps the healthy host connected when another saved host has no credential", async () => {
+    const unavailableHost: ExternalAgentHost = {
+      ...host,
+      id: "host-without-credential",
+      baseUrl: "https://other-host.test",
+      credentialRef: "missing-credential",
+    };
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host, unavailableHost],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => fakeClient(),
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await expect(controller.switchHost(unavailableHost.id)).resolves.toBe(
+      false,
+    );
+
+    expect(controller.snapshot.activeHostId).toBe(host.id);
+    expect(controller.snapshot.connectionState).toBe("online");
+    expect(controller.snapshot.runners[0]?.id).toBe("codex");
+  });
+
+  it("rebinds historical sessions from an older identity for the same host URL", async () => {
+    const oldIdentity: ExternalAgentHost = {
+      ...host,
+      id: "older-host-identity",
+      credentialRef: "older-missing-credential",
+    };
+    const saved = persistence({
+      hosts: [host, oldIdentity],
+      activeHostId: host.id,
+      sessionRefs: [
+        {
+          hostId: oldIdentity.id,
+          remoteSessionId: remoteSession.id,
+          title: "Historical conversation",
+        },
+      ],
+    });
+    const client = fakeClient();
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+
+    await controller.initialize();
+
+    expect(controller.snapshot.connectionState).toBe("online");
+    expect(controller.snapshot.sessionRefs).toContainEqual(
+      expect.objectContaining({
+        hostId: host.id,
+        remoteSessionId: remoteSession.id,
+      }),
+    );
+    expect(controller.snapshot.sessionRefs).not.toContainEqual(
+      expect.objectContaining({ hostId: oldIdentity.id }),
+    );
+    await expect(
+      controller.ensureSession(oldIdentity.id, remoteSession.id),
+    ).resolves.toMatchObject({
+      hostId: host.id,
+      remoteSessionId: remoteSession.id,
+    });
+    expect(controller.snapshot.activeHostId).toBe(host.id);
+  });
+
   it("rejects a late add-host completion without writing into the new workspace", async () => {
     const saved = persistence();
     const health = deferred<{
@@ -428,6 +565,300 @@ describe("ExternalAgentController", () => {
     });
   });
 
+  it("keeps completed item events as tool lifecycle updates", async () => {
+    const toolEvents: ExternalRemoteEvent[] = [
+      {
+        id: 29,
+        turn_id: "turn-1",
+        seq: 0,
+        type: "runner_output",
+        payload: { type: "message.part.updated" },
+      },
+      {
+        id: 30,
+        turn_id: "turn-1",
+        seq: 1,
+        type: "item.started",
+        payload: {
+          type: "item.started",
+          item_type: "command_execution",
+          status: "inProgress",
+          title: "Run tests",
+          data: { id: "call-1", command: "bun run test" },
+        },
+      },
+      {
+        id: 31,
+        turn_id: "turn-1",
+        seq: 2,
+        type: "item.completed",
+        payload: {
+          type: "item.completed",
+          item_type: "command_execution",
+          status: "completed",
+          title: "Run tests",
+          data: { id: "call-1", command: "bun run test" },
+        },
+      },
+    ];
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => fakeClient({ events: toolEvents }),
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    const launched = await controller.launch({
+      runnerId: "codex",
+      instruction: "Run the tests",
+      mode: "review",
+      isolation: "host_readonly",
+    });
+
+    expect(launched.events.map((candidate) => candidate.type)).toEqual([
+      "metric",
+      "tool",
+      "tool",
+    ]);
+    expect(launched.events[1]?.payload.operation_id).toBe("call-1");
+    expect(launched.events[2]?.payload.status).toBe("completed");
+  });
+
+  it("applies model and safety overrides to follow-up turns without changing runners", async () => {
+    const client = fakeClient();
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    const launched = await controller.launch({
+      runnerId: "codex",
+      instruction: "Review the change",
+      mode: "review",
+      isolation: "host_readonly",
+    });
+    launched.status = "succeeded";
+    launched.activeTurnId = undefined;
+
+    await controller.followUp(launched.remoteSessionId, {
+      instruction: "Now use the stronger model",
+      mode: "safe_edit",
+      isolation: "host_workspace_write",
+      model: "gpt-5.6-sol",
+      confirmDangerous: false,
+    });
+
+    expect(client.startTurn).toHaveBeenLastCalledWith(
+      launched.remoteSessionId,
+      {
+        user_message: "Now use the stronger model",
+        continuation_mode: "replay",
+        model: "gpt-5.6-sol",
+        mode: "safe_edit",
+        isolation: "host_workspace_write",
+        cwd: undefined,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(launched).toMatchObject({
+      runnerId: "codex",
+      model: "gpt-5.6-sol",
+      mode: "safe_edit",
+      isolation: "host_workspace_write",
+    });
+  });
+
+  it("treats a streamed runtime error as terminal even when the wrapper reports success", async () => {
+    const runtimeError: ExternalRemoteEvent = {
+      id: 20,
+      turn_id: "turn-1",
+      seq: 20,
+      ts: 1_730_000_000_400,
+      type: "runtime.error",
+      text: "The selected model is not supported for this account.",
+      payload: {
+        status: "failed",
+        message: "The selected model is not supported for this account.",
+      },
+    };
+    const client = fakeClient({
+      stream: [{ event: "runtime.error", json: runtimeError }],
+    });
+    const saved = persistence({
+      hosts: [host],
+      activeHostId: host.id,
+      sessionRefs: [],
+    });
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    const session = await controller.launch({
+      runnerId: "codex",
+      instruction: "Use an unavailable model",
+      mode: "review",
+      isolation: "host_readonly",
+    });
+
+    await vi.waitFor(() => {
+      expect(session.status).toBe("failed");
+      expect(session.streamState).toBe("idle");
+    });
+    expect(session.turns[0]).toMatchObject({
+      status: "failed",
+      error: "The selected model is unavailable for this agent.",
+    });
+    expect(session.error).toBe(
+      "The selected model is unavailable for this agent.",
+    );
+    expect(saved.state.sessionRefs[0]?.status).toBe("failed");
+  });
+
+  it("does not treat a failed provider dependency as a failed agent turn", async () => {
+    const dependencyFailure: ExternalRemoteEvent = {
+      id: 20,
+      turn_id: "turn-1",
+      seq: 20,
+      ts: 1_730_000_000_400,
+      type: "runner_output",
+      payload: {
+        type: "mcpServer/startupStatus/updated",
+        name: "optional-tool",
+        status: "failed",
+        error: "This optional tool is not logged in.",
+      },
+    };
+    const completion: ExternalRemoteEvent = {
+      id: 21,
+      turn_id: "turn-1",
+      seq: 21,
+      ts: 1_730_000_000_500,
+      type: "completion",
+      payload: { status: "succeeded" },
+    };
+    const client = fakeClient({
+      stream: [
+        { event: "runner_output", json: dependencyFailure },
+        { event: "completion", json: completion },
+      ],
+    });
+    const saved = persistence({
+      hosts: [host],
+      activeHostId: host.id,
+      sessionRefs: [],
+    });
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    const session = await controller.launch({
+      runnerId: "codex",
+      instruction: "Continue without an optional tool",
+      mode: "review",
+      isolation: "host_readonly",
+    });
+
+    await vi.waitFor(() => {
+      expect(session.status).toBe("succeeded");
+      expect(session.streamState).toBe("idle");
+    });
+    expect(session.error).toBeUndefined();
+  });
+
+  it("keeps reconciling when the provider stream closes before the turn", async () => {
+    const terminalTurn = {
+      ...remoteTurn,
+      status: "failed",
+      completed_at: 1_730_000_000_500,
+      error: "selected model not supported",
+    };
+    const client = fakeClient();
+    let reads = 0;
+    client.getTurn = vi.fn(async () => {
+      reads += 1;
+      return reads <= 2 ? remoteTurn : terminalTurn;
+    });
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    const session = await controller.launch({
+      runnerId: "codex",
+      instruction: "Wait for canonical completion",
+      mode: "review",
+      isolation: "host_readonly",
+    });
+
+    await vi.waitFor(
+      () => {
+        expect(session.status).toBe("failed");
+        expect(session.streamState).toBe("idle");
+      },
+      { timeout: 3_000 },
+    );
+  });
+
+  it("persists a failed session when its first turn cannot start", async () => {
+    const saved = persistence({
+      hosts: [host],
+      activeHostId: host.id,
+      sessionRefs: [],
+    });
+    const client = fakeClient({
+      startError: new Error("selected model unsupported"),
+    });
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await expect(
+      controller.launch({
+        runnerId: "codex",
+        instruction: "Start a failing turn",
+        mode: "review",
+        isolation: "host_readonly",
+      }),
+    ).rejects.toThrow("unsupported");
+
+    expect(controller.getSession("session-1")).toMatchObject({
+      status: "failed",
+      error: "The selected model is unavailable for this agent.",
+    });
+    expect(saved.state.sessionRefs[0]?.status).toBe("failed");
+  });
+
   it("discovers workspace-scoped canonical sessions that have no local ref", async () => {
     const saved = persistence({
       hosts: [host],
@@ -450,6 +881,15 @@ describe("ExternalAgentController", () => {
         },
       ],
     }));
+    client.listTurns = vi.fn(async () => ({
+      turns: [
+        {
+          ...remoteTurn,
+          session_id: discovered.id,
+          user_message: "Review the sidebar history",
+        },
+      ],
+    }));
     const controller = new ExternalAgentController({
       persistence: saved.adapter,
       credentials: vault({ "cred-1": "token" }),
@@ -469,12 +909,14 @@ describe("ExternalAgentController", () => {
     expect(controller.getSession("session-discovered", host.id)).toMatchObject({
       appSessionKey: "or3-chat:workspace-a:session-from-another-client",
       hostGeneration: 1,
+      title: "Review the sidebar history",
     });
     expect(controller.getSession("session-foreign", host.id)).toBeUndefined();
     expect(saved.state.sessionRefs).toContainEqual(
       expect.objectContaining({
         hostId: host.id,
         remoteSessionId: "session-discovered",
+        title: "Review the sidebar history",
       }),
     );
   });
@@ -618,6 +1060,79 @@ describe("ExternalAgentController", () => {
     ).rejects.toThrow("approval unavailable");
     expect(session.approvals).toEqual(approvalBefore);
     expect(session.actionError).toContain("Remote approve failed");
+  });
+
+  it("coalesces provider approval aliases and repeated diffs into one useful item", async () => {
+    const events: ExternalRemoteEvent[] = [
+      {
+        id: 41,
+        turn_id: "turn-1",
+        seq: 41,
+        type: "request.opened",
+        payload: {
+          request_id: 0,
+          request_type: "command_execution_approval",
+          detail: "bun run test",
+          args: {
+            reason: "Run the test suite before finishing?",
+          },
+        },
+      },
+      {
+        id: 42,
+        turn_id: "turn-1",
+        seq: 42,
+        type: "approval_required",
+        payload: {
+          status: "approval_required",
+        },
+      },
+      ...[43, 44, 45].map(
+        (id): ExternalRemoteEvent => ({
+          id,
+          turn_id: "turn-1",
+          seq: id,
+          type: "turn.diff.updated",
+          payload: {
+            unified_diff: "--- a/file.ts\n+++ b/file.ts\n@@\n-old\n+new",
+          },
+        }),
+      ),
+    ];
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => fakeClient({ events }),
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    const session = await controller.launch({
+      runnerId: "codex",
+      instruction: "Make a safe change",
+      mode: "review",
+      isolation: "host_readonly",
+    });
+
+    expect(session.status).toBe("waiting_approval");
+    expect(session.streamState).toBe("idle");
+    expect(session.approvals).toEqual([
+      expect.objectContaining({
+        id: "0",
+        title: "Run this command?",
+        description: "Run the test suite before finishing?",
+        status: "pending",
+      }),
+    ]);
+    expect(session.artifacts).toHaveLength(1);
+    expect(session.artifacts[0]).toMatchObject({
+      kind: "diff",
+      label: "Proposed changes",
+    });
   });
 
   it("does not let a stale pending approval overwrite a terminal turn", async () => {

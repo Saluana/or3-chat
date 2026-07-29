@@ -58,6 +58,18 @@ export interface ToolCallInfo {
     completedAt?: number;
 }
 
+export type UiChatMessagePart =
+    | {
+          id: string;
+          type: 'text';
+          text: string;
+      }
+    | {
+          id: string;
+          type: 'tool';
+          toolCall: ToolCallInfo;
+      };
+
 /**
  * `UiChatMessage`
  *
@@ -73,6 +85,11 @@ export interface UiChatMessage {
     stream_id?: string;
     pending?: boolean;
     toolCalls?: ToolCallInfo[];
+    /**
+     * Ordered assistant content. When present, text and tool calls are rendered
+     * in the same sequence in which the provider emitted them.
+     */
+    parts?: UiChatMessagePart[];
     error?: string | null;
 
     // Workflow-specific fields (optional - no breaking changes)
