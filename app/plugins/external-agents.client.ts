@@ -204,6 +204,7 @@ export function runExternalAgentBackground(
 }
 
 export default defineNuxtPlugin((nuxtApp) => {
+  const runtimeConfig = useRuntimeConfig();
   const controller = new ExternalAgentController({
     persistence: createWorkspaceExternalAgentPersistence(),
     credentials: getExternalAgentCredentialVault(),
@@ -211,6 +212,56 @@ export default defineNuxtPlugin((nuxtApp) => {
     getWorkspaceScope: () => getActiveWorkspaceId() ?? "local",
   });
   setExternalAgentController(controller);
+
+  async function hydrateCloudHosts() {
+    if (
+      runtimeConfig.public.ssrAuthEnabled !== true ||
+      runtimeConfig.public.connect?.enabled !== true
+    ) {
+      return;
+    }
+    let response: {
+      environments?: Array<{
+        id: string;
+        name: string;
+        baseUrl: string;
+        accessToken: string;
+      }>;
+    };
+    try {
+      const result = await globalThis.fetch("/api/connect/environments", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!result.ok) return;
+      response = (await result.json()) as typeof response;
+    } catch {
+      // Offline/static installs intentionally have no OR3 Cloud environment API.
+      return;
+    }
+    const environments = response.environments ?? [];
+    for (const [index, environment] of environments.entries()) {
+      if (
+        !environment.name ||
+        !environment.baseUrl ||
+        !environment.accessToken
+      ) {
+        continue;
+      }
+      try {
+        await controller.restoreCloudHost({
+          environmentId: environment.id,
+          name: environment.name,
+          baseUrl: environment.baseUrl,
+          token: environment.accessToken,
+          activate:
+            controller.snapshot.activeHostId === null && index === 0,
+        });
+      } catch {
+        // Keep the environment in Cloud even when its computer is asleep.
+      }
+    }
+  }
 
   async function openSession(session: ExternalAgentSession) {
     const api = getGlobalMultiPaneApi();
@@ -305,7 +356,10 @@ export default defineNuxtPlugin((nuxtApp) => {
     import.meta.hot.dispose(cleanup);
   }
   runExternalAgentBackground(
-    () => controller.initialize(getActiveWorkspaceId() ?? "local"),
+    async () => {
+      await controller.initialize(getActiveWorkspaceId() ?? "local");
+      await hydrateCloudHosts();
+    },
     () => {
       console.warn(
         "[external-agents] Could not load workspace connection preferences",

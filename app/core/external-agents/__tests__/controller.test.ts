@@ -264,6 +264,42 @@ describe("ExternalAgentController", () => {
     expect(client.readiness).not.toHaveBeenCalled();
   });
 
+  it("restores cloud computers without replacing the user's active host", async () => {
+    const saved = persistence({
+      hosts: [host],
+      activeHostId: host.id,
+      sessionRefs: [],
+    });
+    const secrets = vault({ "cred-1": "local-token" });
+    const createClient = vi.fn(() => fakeClient());
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: secrets,
+      createClient,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await controller.restoreCloudHost({
+      environmentId: "env-studio",
+      name: "Studio Mac",
+      baseUrl: "https://env-studio.connect.or3.test",
+      token: "cloud-token",
+      activate: false,
+    });
+
+    expect(controller.snapshot.activeHostId).toBe(host.id);
+    expect(saved.state.hosts).toContainEqual(
+      expect.objectContaining({
+        id: "or3-connect:env-studio",
+        name: "Studio Mac",
+        credentialRef: "or3-connect-credential:env-studio",
+      }),
+    );
+    expect(JSON.stringify(saved.state)).not.toContain("cloud-token");
+    expect(createClient).toHaveBeenCalledTimes(1);
+  });
+
   it("uses PIN-protected persistence only when explicitly requested", async () => {
     const saved = persistence();
     const secrets = pinVault();

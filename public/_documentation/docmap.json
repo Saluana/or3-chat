@@ -758,6 +758,12 @@
                     "summary": "Deployment and operations runbook for OR3 Cloud SSR environments. Covers env groups, health checks, logging, scaling, rolling restarts, bounded multi-instance soak checks, and provider failure/recovery evidence."
                 },
                 {
+                    "name": "or3-connect.md",
+                    "path": "/cloud/or3-connect",
+                    "category": "Guide",
+                    "summary": "One-command remote computer setup for OR3 Cloud. Covers browser device authorization, verified bootstrap binaries, persistent macOS/Linux services, Cloudflare named tunnels, Convex environment persistence, security controls, revocation, and production configuration."
+                },
+                {
                     "name": "release-checklist.md",
                     "path": "/cloud/release-checklist",
                     "category": "Operations",

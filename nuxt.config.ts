@@ -416,6 +416,23 @@ export default defineNuxtConfig({
             convexUrl,
             convexAdminKey,
         },
+        connect: {
+            enabled: process.env.OR3_CONNECT_ENABLED === 'true',
+            publicURL: process.env.OR3_CONNECT_PUBLIC_URL || '',
+            encryptionKey: process.env.OR3_CONNECT_ENCRYPTION_KEY || '',
+            maxComputers: process.env.OR3_CONNECT_MAX_COMPUTERS
+                ? Number(process.env.OR3_CONNECT_MAX_COMPUTERS)
+                : 3,
+            cloudflare: {
+                accountId:
+                    process.env.OR3_CONNECT_CLOUDFLARE_ACCOUNT_ID || '',
+                zoneId: process.env.OR3_CONNECT_CLOUDFLARE_ZONE_ID || '',
+                apiToken:
+                    process.env.OR3_CONNECT_CLOUDFLARE_API_TOKEN || '',
+                hostnameSuffix:
+                    process.env.OR3_CONNECT_HOSTNAME_SUFFIX || '',
+            },
+        },
         storage: {
             enabled: effectiveStorageEnabled,
             provider: or3CloudConfig.storage.provider,
@@ -512,6 +529,11 @@ export default defineNuxtConfig({
                 enabled: effectiveSyncEnabled,
                 provider: or3CloudConfig.sync.provider,
                 convexUrl,
+            },
+            connect: {
+                enabled:
+                    effectiveSsrAuthEnabled &&
+                    process.env.OR3_CONNECT_ENABLED === 'true',
             },
             limits: publicLimitsConfig,
             branding: brandingConfig,

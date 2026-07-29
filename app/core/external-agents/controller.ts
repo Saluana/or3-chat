@@ -783,6 +783,7 @@ export class ExternalAgentController {
     readonly baseUrl: string;
     readonly token: string;
     readonly persistencePin?: string;
+    readonly activate?: boolean;
   }): Promise<ExternalAgentHost> {
     const lease = this.#requireWorkspaceLease();
     const baseUrl = normalizeBaseUrl(input.baseUrl);
@@ -839,10 +840,82 @@ export class ExternalAgentController {
       await this.#credentials.remove(previous.credentialRef);
       this.#assertWorkspaceLease(lease);
     }
-    this.#activeHostId = id;
+    if (input.activate !== false || !this.#activeHostId) {
+      this.#activeHostId = id;
+    }
     await this.#persist(lease);
     this.#assertWorkspaceLease(lease);
-    await this.connect(id, lease);
+    if (this.#activeHostId === id) {
+      await this.connect(id, lease);
+    } else {
+      this.#emit();
+    }
+    return host;
+  }
+
+  /**
+   * Restores an account-bound OR3 Cloud computer without making availability
+   * a prerequisite for appearing in history. The cloud control plane has
+   * already authenticated and authorized this host; health is reflected by
+   * the normal connection state after it is selected.
+   */
+  async restoreCloudHost(input: {
+    readonly environmentId: string;
+    readonly name: string;
+    readonly baseUrl: string;
+    readonly token: string;
+    readonly activate?: boolean;
+  }): Promise<ExternalAgentHost> {
+    const lease = this.#requireWorkspaceLease();
+    const environmentId = input.environmentId.trim();
+    const token = input.token.trim();
+    if (!environmentId || !token) {
+      throw new Error("Cloud computer details are incomplete.");
+    }
+    const baseUrl = normalizeBaseUrl(input.baseUrl);
+    const id = `or3-connect:${environmentId}`;
+    const previous =
+      this.#hosts.find((candidate) => candidate.id === id) ??
+      this.#hosts.find((candidate) => sameHostEndpoint(candidate.baseUrl, baseUrl));
+    const credentialRef =
+      previous?.credentialRef ?? `or3-connect-credential:${environmentId}`;
+    await this.#credentials.put(credentialRef, token);
+    this.#assertWorkspaceLease(lease);
+    const host: ExternalAgentHost = {
+      id,
+      name: input.name.trim() || previous?.name || environmentId,
+      baseUrl,
+      credentialRef,
+      trustedAt: previous?.trustedAt ?? nowIso(),
+      lastConnectedAt: previous?.lastConnectedAt,
+    };
+    this.#hosts = [
+      ...this.#hosts.filter(
+        (candidate) =>
+          candidate.id !== id &&
+          !sameHostEndpoint(candidate.baseUrl, baseUrl),
+      ),
+      host,
+    ];
+    if (
+      previous &&
+      previous.credentialRef !== credentialRef
+    ) {
+      await this.#credentials.remove(previous.credentialRef);
+      this.#assertWorkspaceLease(lease);
+    }
+    if (input.activate === true || !this.#activeHostId) {
+      this.#activeHostId = id;
+    } else if (previous && this.#activeHostId === previous.id) {
+      this.#activeHostId = id;
+    }
+    await this.#persist(lease);
+    this.#assertWorkspaceLease(lease);
+    if (this.#activeHostId === id) {
+      await this.connect(id, lease);
+    } else {
+      this.#emit();
+    }
     return host;
   }
 
