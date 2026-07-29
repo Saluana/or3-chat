@@ -15,17 +15,87 @@ import {
 } from "~/core/external-agents/refs";
 import { setExternalAgentController } from "~/core/external-agents/runtime";
 import type {
+  ExternalAgentAttachment,
   ExternalAgentClient,
   ExternalAgentClientFactory,
   ExternalAgentSession,
+  ExternalAgentUploadAttachment,
 } from "~/core/external-agents/types";
-import {
-  getActiveWorkspaceId,
-  subscribeActiveWorkspaceDb,
-} from "~/db/client";
+import { getActiveWorkspaceId, subscribeActiveWorkspaceDb } from "~/db/client";
 import { getGlobalMultiPaneApi } from "~/utils/multiPaneApi";
 
-function adaptInternClient(client: InternClient): ExternalAgentClient {
+export function adaptInternClient(client: InternClient): ExternalAgentClient {
+  const stageFiles = async (
+    attachments: readonly ExternalAgentUploadAttachment[],
+    options?: { signal?: AbortSignal },
+  ): Promise<readonly ExternalAgentAttachment[]> => {
+    if (!attachments.length) return [];
+    const rootsResponse = await client.transport.request<{
+      items?: Array<{
+        id: string;
+        writable?: boolean;
+      }>;
+    }>("/internal/v1/files/roots", {
+      signal: options?.signal,
+    });
+    const workspaceRoot = rootsResponse.items?.find(
+      (root) => root.id === "workspace",
+    );
+    if (!workspaceRoot) {
+      throw new Error(
+        "This host does not expose a workspace for agent attachments.",
+      );
+    }
+    if (workspaceRoot.writable === false) {
+      throw new Error(
+        "This host's workspace is read-only, so files cannot be attached.",
+      );
+    }
+
+    const batchName = `.or3-upload-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    await client.transport.request("/internal/v1/files/mkdir", {
+      method: "POST",
+      body: {
+        root_id: workspaceRoot.id,
+        path: ".",
+        name: batchName,
+      },
+      signal: options?.signal,
+    });
+
+    const staged: ExternalAgentAttachment[] = [];
+    for (const attachment of attachments) {
+      const form = new FormData();
+      form.set("root_id", workspaceRoot.id);
+      form.set("path", batchName);
+      form.set("file", attachment.data, attachment.name);
+      const uploaded = await client.transport.request<{
+        root_id?: string;
+        path?: string;
+      }>("/internal/v1/files/upload", {
+        method: "POST",
+        body: form,
+        signal: options?.signal,
+      });
+      const rootId = uploaded.root_id || workspaceRoot.id;
+      const path = uploaded.path || `${batchName}/${attachment.name}`;
+      staged.push({
+        id: `${rootId}:${path}`,
+        source: "workspace_ref",
+        kind: attachment.kind,
+        name: attachment.name,
+        mime_type: attachment.mimeType || undefined,
+        size_bytes: attachment.sizeBytes,
+        root_id: rootId,
+        path,
+        preview: path,
+      });
+    }
+    return staged;
+  };
+
   return {
     health: (options) => client.health(options),
     readiness: (options) => client.readiness(options),
@@ -41,7 +111,17 @@ function adaptInternClient(client: InternClient): ExternalAgentClient {
         { signal: input.signal },
       ),
     startTurn: (sessionId, input, options) =>
-      client.startTurn(sessionId, input, options),
+      client.startTurn(
+        sessionId,
+        {
+          ...input,
+          attachments: input.attachments?.map((attachment) => ({
+            ...attachment,
+          })),
+        },
+        options,
+      ),
+    stageFiles,
     getTurn: (sessionId, turnId, options) =>
       client.getTurn(sessionId, turnId, options),
     listTurnEvents: (sessionId, turnId, input = {}) =>

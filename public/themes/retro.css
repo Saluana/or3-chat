@@ -110,10 +110,10 @@
 }
 
 [data-theme="retro"] .tool-call-indicator {
-  background-color: var(--md-surface);
-  border-radius: var(--md-border-radius);
-  border: var(--md-border-width) solid var(--md-border-color);
-  overflow: hidden;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  overflow: visible;
   margin-top: 8px;
   margin-bottom: 8px;
 }
@@ -125,7 +125,7 @@
 
 [data-theme="retro"] .tool-call-indicator-summary {
   background: transparent !important;
-  padding: 10px 12px;
+  padding: 4px 0;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -133,13 +133,12 @@
 }
 
 [data-theme="retro"] .tool-call-indicator-summary:hover {
-  background-color: var(--md-surface-hover) !important;
+  color: var(--md-on-surface) !important;
 }
 
 [data-theme="retro"] .tool-call-expanded-content {
-  border-top: var(--md-border-width) solid var(--md-border-color);
-  padding: 12px;
-  background-color: var(--md-surface-container-lowest);
+  border-top: none;
+  background-color: transparent;
 }
 
 [data-theme="retro"] .retro-tool-call-content {

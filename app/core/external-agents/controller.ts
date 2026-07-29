@@ -31,13 +31,13 @@ import type {
   ExternalRemoteTurn,
 } from "./types";
 
-const MAX_TIMELINE_EVENTS = 500;
+const EVENT_PAGE_SIZE = 500;
+const MAX_TIMELINE_EVENTS_PER_TURN = 2_000;
 const MAX_SESSION_REFS = 100;
 const MAX_EAGER_REHYDRATED_SESSIONS = 20;
 const REHYDRATE_CONCURRENCY = 4;
 const MAX_REHYDRATED_TURNS = 20;
 const MAX_EVENT_TURNS = 5;
-const MAX_HISTORIC_TURN_EVENTS = 100;
 const MAX_SESSION_APPROVALS = 100;
 const MAX_SESSION_ARTIFACTS = 100;
 const MAX_ARTIFACT_FILES_PER_EVENT = 50;
@@ -637,6 +637,45 @@ export class ExternalAgentController {
     await this.#credentials.unlock(pin);
   }
 
+  isHostCredentialLocked(
+    requestedHostId: string,
+    remoteSessionId?: string,
+  ): boolean {
+    if (!isExternalAgentPinCredentialVault(this.#credentials)) return false;
+    const hostId = remoteSessionId
+      ? this.#resolveHistoricalHostId(requestedHostId, remoteSessionId)
+      : requestedHostId;
+    const host = this.#hosts.find((candidate) => candidate.id === hostId);
+    return Boolean(
+      host &&
+      this.#credentials.getStatus().locked &&
+      this.#credentials.hasPersistent?.(host.credentialRef),
+    );
+  }
+
+  async unlockHostCredential(
+    requestedHostId: string,
+    pin: string,
+    remoteSessionId?: string,
+  ): Promise<boolean> {
+    if (!isExternalAgentPinCredentialVault(this.#credentials)) {
+      throw new Error("PIN-protected credential storage is unavailable.");
+    }
+    const hostId = remoteSessionId
+      ? this.#resolveHistoricalHostId(requestedHostId, remoteSessionId)
+      : requestedHostId;
+    const host = this.#hosts.find((candidate) => candidate.id === hostId);
+    if (
+      !host ||
+      (this.#credentials.hasPersistent &&
+        !this.#credentials.hasPersistent(host.credentialRef))
+    ) {
+      throw new Error("This conversation no longer has a saved access token.");
+    }
+    await this.#credentials.unlock(pin);
+    return this.switchHost(hostId);
+  }
+
   lockCredentials(): void {
     if (!isExternalAgentPinCredentialVault(this.#credentials)) return;
     this.disconnect();
@@ -1215,6 +1254,13 @@ export class ExternalAgentController {
     const hostId = this.#activeHostId!;
     const generation = this.#generation;
     const instruction = input.instruction.trim();
+    const attachments = input.attachments?.length
+      ? await client.stageFiles(input.attachments, {
+          signal: this.#hostController?.signal,
+        })
+      : [];
+    this.#assertGeneration(hostId, generation);
+    this.#assertWorkspaceLease(lease);
     const appSessionKey = `${this.#workspaceSessionPrefix(true, lease)}${randomId("session")}`;
     const remote = await client.createSession(
       {
@@ -1247,6 +1293,7 @@ export class ExternalAgentController {
         remote.id,
         {
           user_message: instruction,
+          ...(attachments.length ? { attachments } : {}),
           continuation_mode: input.continuationMode ?? "replay",
           model: input.model?.trim() || undefined,
           mode: input.mode,
@@ -1306,6 +1353,7 @@ export class ExternalAgentController {
             isolation: input.isolation,
             model: input.model?.trim() || undefined,
             confirmDangerous: input.confirmDangerous,
+            attachments: input.attachments,
           };
     try {
       if (settings) {
@@ -1316,10 +1364,17 @@ export class ExternalAgentController {
         });
         if (!validation.ok) throw new Error(validation.message);
       }
+      const attachments = settings?.attachments?.length
+        ? await client.stageFiles(settings.attachments, {
+            signal: this.#hostController?.signal,
+          })
+        : [];
+      this.#assertSessionGeneration(session);
       const started = await client.startTurn(
         session.remoteSessionId,
         {
           user_message: text,
+          ...(attachments.length ? { attachments } : {}),
           continuation_mode: "replay",
           ...(settings
             ? {
@@ -1504,7 +1559,12 @@ export class ExternalAgentController {
     );
     const existing = this.getSession(remoteSessionId, hostId);
     if (existing) return existing;
-    if (hostId !== this.#activeHostId) {
+    if (
+      hostId !== this.#activeHostId ||
+      !this.#client ||
+      (this.#connectionState !== "online" &&
+        this.#connectionState !== "degraded")
+    ) {
       const connected = await this.switchHost(hostId);
       if (!connected) throw new Error("Could not reconnect session host");
       lease = this.#requireWorkspaceLease();
@@ -1691,21 +1751,15 @@ export class ExternalAgentController {
     if (!latest) return;
     this.#applyLatestTurn(session, latest);
     const eventTurns = session.turns.slice(-MAX_EVENT_TURNS);
-    for (const [index, turn] of eventTurns.entries()) {
-      const limit =
-        index === eventTurns.length - 1
-          ? MAX_TIMELINE_EVENTS
-          : MAX_HISTORIC_TURN_EVENTS;
-      const events = await client.listTurnEvents(
+    for (const turn of eventTurns) {
+      const events = await this.#listCanonicalTurnEvents(
+        client,
         session.remoteSessionId,
         turn.id,
-        {
-          limit,
-          signal: this.#hostController?.signal,
-        },
+        this.#hostController?.signal,
       );
       this.#assertSessionRefresh(session, generation, lease, refreshVersion);
-      for (const event of events.events.slice(-limit)) {
+      for (const event of events) {
         this.#ingestRemoteEvent(session, event);
       }
     }
@@ -1726,15 +1780,24 @@ export class ExternalAgentController {
   ): Promise<void> {
     const generation = session.hostGeneration;
     const refreshVersion = this.#nextSessionRefreshVersion(session);
-    const [turn, events] = await Promise.all([
-      client.getTurn(session.remoteSessionId, turnId, {
-        signal: this.#hostController?.signal,
-      }),
-      client.listTurnEvents(session.remoteSessionId, turnId, {
-        limit: MAX_TIMELINE_EVENTS,
-        signal: this.#hostController?.signal,
-      }),
-    ]);
+    const turn = await client.getTurn(session.remoteSessionId, turnId, {
+      signal: this.#hostController?.signal,
+    });
+    const terminal = isTerminal(
+      mapExternalAgentStatus(turn.status, session.status),
+    );
+    const afterSeq = terminal
+      ? 0
+      : session.events
+          .filter((event) => event.turnId === turnId)
+          .reduce((highest, event) => Math.max(highest, event.sequence), 0);
+    const events = await this.#listCanonicalTurnEvents(
+      client,
+      session.remoteSessionId,
+      turnId,
+      this.#hostController?.signal,
+      afterSeq,
+    );
     this.#assertSessionRefresh(session, generation, lease, refreshVersion);
     const index = session.turns.findIndex(
       (candidate) => candidate.id === turn.id,
@@ -1750,7 +1813,7 @@ export class ExternalAgentController {
       .slice(-MAX_REHYDRATED_TURNS);
     const latest = session.turns.at(-1);
     if (latest) this.#applyLatestTurn(session, latest);
-    for (const event of events.events.slice(-MAX_TIMELINE_EVENTS)) {
+    for (const event of events) {
       this.#ingestRemoteEvent(session, event);
     }
     if (
@@ -1794,6 +1857,34 @@ export class ExternalAgentController {
       };
     }
     return incoming;
+  }
+
+  async #listCanonicalTurnEvents(
+    client: ExternalAgentClient,
+    sessionId: string,
+    turnId: string,
+    signal?: AbortSignal,
+    initialAfterSeq = 0,
+  ): Promise<ExternalRemoteEvent[]> {
+    const events: ExternalRemoteEvent[] = [];
+    let afterSeq = initialAfterSeq;
+    while (events.length < MAX_TIMELINE_EVENTS_PER_TURN) {
+      const limit = Math.min(
+        EVENT_PAGE_SIZE,
+        MAX_TIMELINE_EVENTS_PER_TURN - events.length,
+      );
+      const page = await client.listTurnEvents(sessionId, turnId, {
+        afterSeq,
+        limit,
+        signal,
+      });
+      if (!page.events.length) break;
+      events.push(...page.events);
+      const nextSeq = Math.max(...page.events.map((event) => event.seq));
+      if (page.events.length < limit || nextSeq <= afterSeq) break;
+      afterSeq = nextSeq;
+    }
+    return events.slice(0, MAX_TIMELINE_EVENTS_PER_TURN);
   }
 
   #applyLatestTurn(
@@ -1870,12 +1961,38 @@ export class ExternalAgentController {
       remote,
     );
     if (session.events.some((event) => event.id === normalized.id)) return;
-    session.events = [...session.events, normalized]
+    const retainedTurns = session.turns.slice(-MAX_EVENT_TURNS);
+    const retainedTurnIds = new Set(retainedTurns.map((turn) => turn.id));
+    const turnOrder = new Map(
+      retainedTurns.map((turn, index) => [turn.id, index] as const),
+    );
+    const nextEvents = [...session.events, normalized].filter((event) =>
+      retainedTurnIds.has(event.turnId),
+    );
+    const boundedByTurn = new Map<string, ExternalAgentTimelineEvent[]>();
+    for (const event of nextEvents) {
+      const events = boundedByTurn.get(event.turnId) ?? [];
+      events.push(event);
+      boundedByTurn.set(event.turnId, events);
+    }
+    session.events = [...boundedByTurn.entries()]
+      .flatMap(([turnId, events]) =>
+        events
+          .sort(
+            (left, right) =>
+              left.sequence - right.sequence || left.id.localeCompare(right.id),
+          )
+          .slice(-MAX_TIMELINE_EVENTS_PER_TURN)
+          .map((event) => ({ turnId, event })),
+      )
       .sort(
         (left, right) =>
-          left.sequence - right.sequence || left.id.localeCompare(right.id),
+          (turnOrder.get(left.turnId) ?? Number.MAX_SAFE_INTEGER) -
+            (turnOrder.get(right.turnId) ?? Number.MAX_SAFE_INTEGER) ||
+          left.event.sequence - right.event.sequence ||
+          left.event.id.localeCompare(right.event.id),
       )
-      .slice(-MAX_TIMELINE_EVENTS);
+      .map(({ event }) => event);
     const approval = approvalFromEvent(normalized);
     if (approval) {
       let index = session.approvals.findIndex(

@@ -30,6 +30,60 @@
     </template>
 
     <div
+      v-else-if="hostCredentialLocked"
+      class="grid min-h-0 flex-1 place-items-center px-5 py-10"
+    >
+      <form
+        class="w-full max-w-sm rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-5 shadow-sm"
+        aria-label="Unlock agent conversation"
+        @submit.prevent="unlockConversation"
+      >
+        <span
+          class="grid size-11 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
+        >
+          <UIcon name="i-lucide-lock-keyhole" class="size-5" />
+        </span>
+        <h1 class="mt-4 text-lg font-semibold">Unlock this conversation</h1>
+        <p
+          class="mt-1 text-sm leading-relaxed text-[var(--md-on-surface-variant)]"
+        >
+          Enter your PIN to unlock {{ targetHostName }} and load this chat.
+        </p>
+        <UInput
+          v-model="unlockPin"
+          class="mt-5 w-full"
+          type="password"
+          inputmode="numeric"
+          autocomplete="current-password"
+          placeholder="Enter device PIN"
+          aria-label="Conversation PIN"
+          icon="i-lucide-key-round"
+          autofocus
+          :disabled="unlockPending"
+        />
+        <p
+          v-if="unlockError"
+          class="mt-2 text-sm text-[var(--md-error)]"
+          role="alert"
+        >
+          {{ unlockError }}
+        </p>
+        <UButton
+          class="mt-4 w-full justify-center"
+          type="submit"
+          icon="i-lucide-unlock"
+          :loading="unlockPending"
+          :disabled="!unlockPin.trim()"
+        >
+          Unlock conversation
+        </UButton>
+        <p class="mt-3 text-center text-xs text-[var(--md-on-surface-variant)]">
+          Your PIN stays on this device.
+        </p>
+      </form>
+    </div>
+
+    <div
       v-else-if="loading"
       class="grid min-h-0 flex-1 place-items-center text-sm text-[var(--md-on-surface-variant)]"
     >
@@ -126,6 +180,7 @@
       </div>
       <ClientOnly v-else>
         <Or3Scroll
+          ref="transcriptScroller"
           :items="conversationTurns"
           :item-key="(turn) => turn.id"
           :estimate-height="240"
@@ -135,26 +190,40 @@
           mutation-mode="append-prepend"
           maintain-bottom
           :bottom-threshold="5"
-          :padding-top="12"
+          :padding-top="28"
           :padding-bottom="192"
-          class="min-h-0 flex-1"
+          class="chat-message-list min-h-0 flex-1"
           aria-live="polite"
         >
           <template #default="{ item: turn }">
             <article
               :key="turn.id"
-              class="mx-auto flex w-full max-w-[768px] flex-col px-2 sm:px-4"
+              class="mx-auto w-full max-w-[768px] min-w-0"
             >
-              <ChatMessage
+              <div
                 v-if="turn.userMessage"
-                :message="turn.userMessage"
-                :interactive="false"
-              />
-              <ChatMessage
+                :class="CHAT_MESSAGE_ROW_CLASS"
+                :data-msg-id="turn.userMessage.id"
+              >
+                <component
+                  :is="themedChatMessageComponent"
+                  :message="turn.userMessage"
+                  :interactive="false"
+                  @content-resize="refreshTranscriptMeasurements"
+                />
+              </div>
+              <div
                 v-if="turn.assistantMessage"
-                :message="turn.assistantMessage"
-                :interactive="false"
-              />
+                :class="CHAT_MESSAGE_ROW_CLASS"
+                :data-msg-id="turn.assistantMessage.id"
+              >
+                <component
+                  :is="themedChatMessageComponent"
+                  :message="turn.assistantMessage"
+                  :interactive="false"
+                  @content-resize="refreshTranscriptMeasurements"
+                />
+              </div>
 
               <div
                 v-for="approval in turn.approvals"
@@ -346,13 +415,26 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  getCurrentInstance,
+  nextTick,
+  onMounted,
+  ref,
+  type Component,
+  watch,
+} from "vue";
 import { Or3Scroll } from "or3-scroll";
 import "or3-scroll/style.css";
+import ChatMessage from "~/components/chat/ChatMessage.vue";
+import { CHAT_MESSAGE_ROW_CLASS } from "~/components/chat/message-layout";
 import ExternalAgentComposer from "./ExternalAgentComposer.vue";
 import ExternalAgentLauncher from "./ExternalAgentLauncher.vue";
 import ExternalAgentSettingsPanel from "./ExternalAgentSettingsPanel.vue";
-import type { ExternalAgentSession } from "~/core/external-agents/types";
+import type {
+  ExternalAgentSession,
+  ExternalAgentUploadAttachment,
+} from "~/core/external-agents/types";
 import {
   buildExternalAgentRunnerOptions,
   isValidExternalAgentPolicyCombination,
@@ -378,9 +460,18 @@ const snapshot = runtime.snapshot;
 const loading = ref(false);
 const loadInFlight = ref(false);
 const loadError = ref<string | null>(null);
+const unlockPin = ref("");
+const unlockPending = ref(false);
+const unlockError = ref<string | null>(null);
 const followUpText = ref("");
 const pendingAction = ref<string | null>(null);
-const composer = ref<{ focus: () => void } | null>(null);
+const composer = ref<{
+  focus: () => void;
+  clearAttachments: () => void;
+} | null>(null);
+const transcriptScroller = ref<{
+  refreshMeasurements: () => void;
+} | null>(null);
 const followUpRunnerId = ref("");
 const followUpMode = ref("");
 const followUpIsolation = ref("");
@@ -388,6 +479,28 @@ const followUpCwd = ref("");
 const followUpModel = ref<string | null>(null);
 const followUpConfirmDangerous = ref(false);
 const initializedSettingsSession = ref("");
+const componentInstance = getCurrentInstance();
+const themedChatMessageComponent = computed(() => {
+  const theme = componentInstance?.appContext.config.globalProperties.$theme as
+    | {
+        activeComponents?: {
+          value?: Record<string, Component>;
+        };
+      }
+    | undefined;
+  return theme?.activeComponents?.value?.["chat-message"] ?? ChatMessage;
+});
+
+function refreshTranscriptMeasurements() {
+  void nextTick(() => {
+    transcriptScroller.value?.refreshMeasurements();
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => {
+        transcriptScroller.value?.refreshMeasurements();
+      });
+    }
+  });
+}
 
 const isLauncher = computed(
   () => !props.recordId || props.recordId === EXTERNAL_AGENT_LAUNCHER_REF,
@@ -404,6 +517,31 @@ const session = computed(() => {
         candidate.hostId === refValue.hostId &&
         candidate.remoteSessionId === refValue.remoteSessionId,
     ) ?? null
+  );
+});
+const targetHost = computed(() => {
+  const refValue = sessionRef.value;
+  if (!refValue) return null;
+  return (
+    snapshot.value?.hosts.find((host) => host.id === refValue.hostId) ?? null
+  );
+});
+const targetHostName = computed(
+  () => targetHost.value?.name || "this agent host",
+);
+const hostCredentialLocked = computed(() => {
+  const controller = runtime.controller;
+  const refValue = sessionRef.value;
+  // Credential lock state lives in the controller; reading the snapshot keeps
+  // this projection reactive when unlock/reconnect emits its next state.
+  void snapshot.value?.connectionState;
+  return Boolean(
+    controller &&
+    refValue &&
+    controller.isHostCredentialLocked(
+      refValue.hostId,
+      refValue.remoteSessionId,
+    ),
   );
 });
 const projection = computed(() =>
@@ -503,10 +641,15 @@ const composerHint = computed(() => {
     : runnerLabel.value;
 });
 
-async function load() {
+async function load(ignoreCredentialLock = false) {
   const controller = runtime.controller;
   const refValue = sessionRef.value;
   if (!controller || !refValue) return;
+  if (!ignoreCredentialLock && hostCredentialLocked.value) {
+    loadError.value = null;
+    loading.value = false;
+    return;
+  }
   if (session.value) {
     loadError.value = null;
     loading.value = false;
@@ -538,6 +681,34 @@ async function load() {
   } finally {
     loadInFlight.value = false;
     loading.value = false;
+  }
+}
+
+async function unlockConversation() {
+  const controller = runtime.controller;
+  const refValue = sessionRef.value;
+  if (!controller || !refValue || !unlockPin.value.trim()) return;
+  unlockPending.value = true;
+  unlockError.value = null;
+  try {
+    const connected = await controller.unlockHostCredential(
+      refValue.hostId,
+      unlockPin.value,
+      refValue.remoteSessionId,
+    );
+    if (!connected) {
+      unlockError.value = "This agent host could not reconnect. Try again.";
+      return;
+    }
+    unlockPin.value = "";
+    await load(true);
+  } catch (cause) {
+    unlockError.value = presentExternalAgentError(
+      cause,
+      "That PIN did not work. Try again.",
+    ).message;
+  } finally {
+    unlockPending.value = false;
   }
 }
 
@@ -577,20 +748,38 @@ async function decide(decision: "approve" | "deny", approvalId: string) {
   }
 }
 
-async function followUp() {
-  if (!session.value || !runtime.controller || !followUpText.value.trim())
+function attachmentOnlyFollowUp(
+  attachments: readonly ExternalAgentUploadAttachment[],
+): string {
+  if (attachments.length === 1) {
+    return `Use ${attachments[0]?.name || "the attached file"} as additional context.`;
+  }
+  return `Use the ${attachments.length} attached files as additional context.`;
+}
+
+async function followUp(
+  attachments: readonly ExternalAgentUploadAttachment[] = [],
+) {
+  if (
+    !session.value ||
+    !runtime.controller ||
+    (!followUpText.value.trim() && !attachments.length)
+  )
     return;
   pendingAction.value = "follow-up";
   try {
     await runtime.controller.followUp(session.value.remoteSessionId, {
-      instruction: followUpText.value,
+      instruction:
+        followUpText.value.trim() || attachmentOnlyFollowUp(attachments),
       cwd: followUpCwd.value || undefined,
       mode: followUpMode.value,
       isolation: followUpIsolation.value,
       model: followUpModel.value ?? undefined,
       confirmDangerous: followUpConfirmDangerous.value,
+      ...(attachments.length ? { attachments } : {}),
     });
     followUpText.value = "";
+    composer.value?.clearAttachments();
     await nextTick();
     composer.value?.focus();
   } finally {
@@ -635,6 +824,7 @@ watch(
     props.recordId,
     snapshot.value?.connectionState,
     session.value?.hostId,
+    hostCredentialLocked.value,
   ],
   () => void load(),
 );

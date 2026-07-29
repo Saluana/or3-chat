@@ -3,25 +3,7 @@
     gap: 0.45rem;
     width: 100%;
     padding: 0.45rem 0.5rem;
-    border: var(--md-border-width) solid color-mix(in oklab, var(--md-border-color), transparent 18%);
-    border-radius: 1.75rem;
-    background: color-mix(in oklab, var(--md-surface), white 4%);
-    box-shadow:
-        0 0 0 1px color-mix(in oklab, var(--md-border-color), transparent 74%),
-        0 1px 3px rgb(0 0 0 / 4%),
-        0 4px 12px -4px rgb(0 0 0 / 7%);
     backdrop-filter: blur(18px);
-    transition:
-        border-color 250ms ease,
-        box-shadow 350ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-.document-ai-composer:focus-within {
-    border-color: color-mix(in oklab, var(--md-primary), transparent 55%);
-    box-shadow:
-        0 0 0 1px color-mix(in oklab, var(--md-primary), transparent 88%),
-        0 0 0 4px color-mix(in oklab, var(--md-primary), transparent 94%),
-        0 2px 8px rgb(0 0 0 / 6%),
-        0 8px 24px -8px rgb(0 0 0 / 9%);
 }
 .composer-row {
     display: grid;

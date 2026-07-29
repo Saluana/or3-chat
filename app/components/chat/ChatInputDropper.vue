@@ -1,9 +1,9 @@
 <template>
-    <div
+    <ChatComposerShell
         id="chat-input-main"
-        ref="dropZoneRef"
+        ref="composerShell"
+        size="sm"
         :class="[
-            'chat-input-main flex flex-col bg-(--md-surface) mx-2 md:mx-0 items-stretch transition-all duration-300 relative cursor-text z-10',
             isDragging
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'hover:border-(--md-primary) focus-within:border-(--md-primary) dark:focus-within:border-gray-600',
@@ -315,7 +315,7 @@
             />
             <OpenRouterKeyModal v-model:open="showKeyModal" />
         </ClientOnly>
-    </div>
+    </ChatComposerShell>
 </template>
 
 <script setup lang="ts">
@@ -361,6 +361,7 @@ import type {
     UploadedImage,
 } from '~/components/chat/chat-input/types';
 import { useChatInputAttachments } from '~/components/chat/chat-input/useChatInputAttachments';
+import ChatComposerShell from '~/components/chat/ChatComposerShell.vue';
 import { useChatModelSelection } from '~/composables/chat/useChatModelSelection';
 import { useChatAttachmentDisplay } from '~/composables/chat/useChatAttachmentDisplay';
 import { useChatInputTheme } from '~/composables/chat/useChatInputTheme';
@@ -595,6 +596,7 @@ const {
 
 const or3Config = useOr3Config();
 const MAX_IMAGES = or3Config.limits.maxFilesPerMessage;
+const composerShell = ref<{ rootElement: HTMLElement | null } | null>(null);
 
 const {
     attachments,
@@ -887,6 +889,7 @@ const readEntryHeight = (entry: ResizeObserverEntry): number | null => {
 };
 
 onMounted(() => {
+    dropZoneRef.value = composerShell.value?.rootElement ?? null;
     const inst = getCurrentInstance();
     componentRootRef.value = (inst?.proxy?.$el as HTMLElement) || null;
 });

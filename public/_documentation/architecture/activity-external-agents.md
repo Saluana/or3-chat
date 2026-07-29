@@ -29,9 +29,13 @@ the canonical prior state.
 OR3 Chat currently connects a pre-authorized host with a service-issued bearer
 token; this is not secure QR/device pairing. It saves host metadata and an
 opaque credential reference only. The default vault keeps the token in memory,
-so reload requires reconnecting, while deployments can inject a platform
-secure vault with `registerExternalAgentCredentialVault`. Tokens never enter
-workspace KV, URLs, logs, or session references.
+unless the user explicitly remembers it with PIN encryption. After a reload,
+opening a conversation from a locked host shows a PIN prompt in that pane,
+unlocks the host encoded in the session reference, reconnects it, and restores
+the conversation automatically. This keeps multiple saved hosts distinct.
+Deployments can instead inject a platform secure vault with
+`registerExternalAgentCredentialVault`. Tokens never enter workspace KV, URLs,
+logs, or session references.
 
 The shared client's secure pairing exchange returns an enrollment certificate,
 not a request credential. Device signing/Noise key custody, certificate
@@ -42,6 +46,19 @@ adapter is the remaining connection limitation.
 Canonical session discovery uses the exact active-workspace prefix
 `or3-chat:<workspace-id>:` and merges host results with lightweight local refs;
 full remote history stays in `or3-intern`.
+
+Agent attachments follow the same host-owned boundary. OR3 Chat validates the
+browser selection against its configured count and size limits, uploads each
+file into a unique directory in the trusted host's writable `workspace` root,
+and sends only canonical `workspace_ref` metadata with the turn. Uploads use
+the same header credential resolver as runner-chat requests; file bytes and
+tokens are not persisted in OR3 Chat session references.
+
+The transcript resolves the active theme's same `chat-message` component and
+message-row geometry as primary Chat. Its composer uses the shared composer
+shell in `lg` mode; primary Chat and Document AI use the same shell in `sm`
+mode. The document editor also consumes the same `or3-prose` formatting
+primitive, keeping readable content consistent across all three panes.
 
 ## Extension flow
 

@@ -67,6 +67,8 @@ describe("BrowserExternalAgentCredentialVault", () => {
       crypto,
     });
     expect(reloaded.getStatus().locked).toBe(true);
+    expect(reloaded.hasPersistent("credential-1")).toBe(true);
+    expect(reloaded.hasPersistent("credential-2")).toBe(false);
     expect(await reloaded.resolve("credential-1")).toBeNull();
     await expect(reloaded.unlock("000000")).rejects.toThrow("could not unlock");
     await reloaded.unlock("482915");

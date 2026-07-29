@@ -2,6 +2,10 @@
 
 The Document AI agent turns a prompt into a bounded, reviewable TipTap edit proposal. Its composer supports saved and plugin-contributed `/` prompt commands, file attachments, and `@` references to another document or chat.
 
+The composer uses the shared `ChatComposerShell` in `sm` mode, matching primary
+Chat's border, focus halo, and compact geometry. The editable document consumes
+the same `or3-prose` formatting primitive as assistant messages.
+
 ## Composer commands
 
 - Type `/` at the start of an empty prompt to search saved and plugin Document AI actions.

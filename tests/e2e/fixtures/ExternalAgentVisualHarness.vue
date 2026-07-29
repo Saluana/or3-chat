@@ -350,8 +350,9 @@ const snapshot: ExternalAgentStoreSnapshot = {
     },
   ],
   activeHostId: "local-host",
-  connectionState: "online",
-  connectionError: null,
+  connectionState: state.value === "locked" ? "disconnected" : "online",
+  connectionError:
+    state.value === "locked" ? "Saved agent credentials are locked." : null,
   generation: 1,
   health: { status: "ok", runtimeAvailable: true },
   readiness: { status: "ready", ready: true },
@@ -397,9 +398,9 @@ const fakeController = {
   snapshot,
   pinCredentialStatus: {
     supported: true,
-    configured: false,
-    locked: false,
-    persistedCredentialCount: 0,
+    configured: state.value === "locked",
+    locked: state.value === "locked",
+    persistedCredentialCount: state.value === "locked" ? 1 : 0,
   },
   subscribe(listener: (event: ExternalAgentStoreEvent) => void) {
     listeners.add(listener);
@@ -425,6 +426,12 @@ const fakeController = {
   async readArtifact() {},
   async addTrustedHost() {},
   async reconnect() {
+    return true;
+  },
+  isHostCredentialLocked() {
+    return state.value === "locked";
+  },
+  async unlockHostCredential() {
     return true;
   },
   async unlockCredentials() {},

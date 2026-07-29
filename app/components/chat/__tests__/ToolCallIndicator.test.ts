@@ -60,6 +60,26 @@ describe('ToolCallIndicator', () => {
         expect(wrapper.text()).toContain('41 tests passed');
     });
 
+    it('requests a virtual-list remeasurement when details toggle', async () => {
+        const wrapper = mount(ToolCallIndicator, {
+            props: {
+                toolCalls: [
+                    {
+                        id: 'read',
+                        name: 'Read files',
+                        status: 'complete',
+                        args: '/workspace/README.md',
+                    },
+                ],
+            },
+            global,
+        });
+
+        await wrapper.find('details').trigger('toggle');
+
+        expect(wrapper.emitted('resize')).toHaveLength(1);
+    });
+
     it('groups consecutive activity into a compact Codex-style summary', () => {
         const wrapper = mount(ToolCallIndicator, {
             props: {

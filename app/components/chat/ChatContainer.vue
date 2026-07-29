@@ -35,7 +35,7 @@
                 <template #default="{ item, index }">
                     <div
                         :key="item.id || item.stream_id || index"
-                        class="messages-container mx-auto sm:max-w-[768px] px-1.5 pb-6 not-first:group relative w-full min-w-0 break-words"
+                        :class="CHAT_MESSAGE_ROW_CLASS"
                         :data-msg-id="item.id"
                         :data-stream-id="item.stream_id"
                     >
@@ -162,6 +162,7 @@ import {
 } from '~/core/auth/useUserApiKey';
 import { resolveOpenRouterKeyAvailability } from '~/core/auth/openRouterKeyAvailability';
 import ChatWelcomeCard from '~/components/chat/ChatWelcomeCard.vue';
+import { CHAT_MESSAGE_ROW_CLASS } from '~/components/chat/message-layout';
 import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';
 import { createMessageMediaPrefetchController } from '~/composables/chat/useMessageMediaPrefetch';
 import type {

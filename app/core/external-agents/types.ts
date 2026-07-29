@@ -229,6 +229,7 @@ export interface ExternalAgentPinCredentialVaultStatus {
 export interface ExternalAgentPinCredentialVault extends ExternalAgentCredentialVault {
   readonly supportsPinPersistence: true;
   getStatus(): ExternalAgentPinCredentialVaultStatus;
+  hasPersistent?(reference: string): boolean;
   putPersistent(reference: string, secret: string, pin: string): Promise<void>;
   unlock(pin: string): Promise<void>;
   lock(): void;
@@ -248,6 +249,7 @@ export interface ExternalAgentCreateSessionInput {
 
 export interface ExternalAgentStartTurnInput {
   readonly user_message: string;
+  readonly attachments?: readonly ExternalAgentAttachment[];
   readonly continuation_mode?: string;
   readonly model?: string;
   readonly mode?: string;
@@ -258,6 +260,36 @@ export interface ExternalAgentStartTurnInput {
   readonly thinking_level?: string;
   readonly approval_token?: string;
   readonly approval_autopilot?: boolean;
+}
+
+export type ExternalAgentAttachmentKind =
+  | "file"
+  | "image"
+  | "audio"
+  | "video"
+  | "text";
+
+export interface ExternalAgentUploadAttachment {
+  readonly id: string;
+  readonly kind: ExternalAgentAttachmentKind;
+  readonly name: string;
+  readonly mimeType?: string;
+  readonly sizeBytes?: number;
+  readonly data: Blob;
+}
+
+export interface ExternalAgentAttachment {
+  readonly id: string;
+  readonly source: "workspace_ref" | "local_artifact" | "text_block";
+  readonly kind: ExternalAgentAttachmentKind;
+  readonly name: string;
+  readonly mime_type?: string;
+  readonly size_bytes?: number;
+  readonly root_id?: string;
+  readonly path?: string;
+  readonly artifact_id?: string;
+  readonly preview?: string;
+  readonly content_excerpt?: string;
 }
 
 export interface ExternalAgentApprovalInput {
@@ -307,6 +339,10 @@ export interface ExternalAgentClient {
     job_id?: string;
     status: string;
   }>;
+  stageFiles(
+    attachments: readonly ExternalAgentUploadAttachment[],
+    options?: { signal?: AbortSignal },
+  ): Promise<readonly ExternalAgentAttachment[]>;
   getTurn(
     sessionId: string,
     turnId: string,
@@ -359,6 +395,7 @@ export interface ExternalAgentLaunchInput {
   readonly model?: string;
   readonly continuationMode?: string;
   readonly confirmDangerous?: boolean;
+  readonly attachments?: readonly ExternalAgentUploadAttachment[];
 }
 
 export interface ExternalAgentFollowUpInput {
@@ -368,6 +405,7 @@ export interface ExternalAgentFollowUpInput {
   readonly isolation: string;
   readonly model?: string;
   readonly confirmDangerous?: boolean;
+  readonly attachments?: readonly ExternalAgentUploadAttachment[];
 }
 
 export interface ExternalAgentStoreSnapshot {

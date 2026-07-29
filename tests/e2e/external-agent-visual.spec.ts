@@ -46,6 +46,7 @@ for (const state of [
   "approval",
   "completed",
   "failed",
+  "locked",
 ] as const) {
   test(`captures ${state} agent state`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 960 });
@@ -68,6 +69,26 @@ for (const state of [
     });
   });
 }
+
+test("offers pane-local recovery for the conversation's host", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await openHarness(page, "/__or3-agent-visual-test?state=locked");
+
+  await expect(
+    page.getByRole("heading", { name: "Unlock this conversation" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Enter your PIN to unlock Local or3-intern and load this chat.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "Conversation PIN" }),
+  ).toBeFocused();
+  await expect(page.getByText("Conversation unavailable")).toHaveCount(0);
+});
 
 test("captures narrow completed conversation", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -172,8 +193,20 @@ test("groups real tools and reveals useful details", async ({ page }) => {
 
   await activity.locator("summary").click();
 
-  await expect(activity).toContainText("bun run test -- ExternalAgents");
+  await expect(
+    activity.getByText("bun run test -- ExternalAgents", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    activity.getByText("app/components/chat/ChatInputDropper.vue", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(activity).toContainText(
     "app/components/chat/ChatInputDropper.vue",
   );
+  await page.screenshot({
+    path: resolve(outputDir, "agents-tool-details.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
 });

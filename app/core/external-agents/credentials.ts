@@ -140,6 +140,10 @@ export class BrowserExternalAgentCredentialVault implements ExternalAgentPinCred
     };
   }
 
+  hasPersistent(reference: string): boolean {
+    return Boolean(this.#read()?.entries[reference.trim()]);
+  }
+
   async put(reference: string, secret: string): Promise<void> {
     const normalized = validateCredential(reference, secret);
     await this.remove(normalized.reference);

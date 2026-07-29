@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ExternalAgentController } from "../controller";
+import { projectExternalAgentConversation } from "../presentation";
 import type {
   ExternalAgentClient,
   ExternalAgentCredentialVault,
@@ -7,6 +8,7 @@ import type {
   ExternalAgentPinCredentialVault,
   ExternalAgentPersistence,
   ExternalAgentPersistenceSnapshot,
+  ExternalAgentUploadAttachment,
   ExternalRemoteEvent,
   ExternalRemoteStreamEvent,
 } from "../types";
@@ -116,6 +118,7 @@ function pinVault(): ExternalAgentPinCredentialVault {
       locked: false,
       persistedCredentialCount: 0,
     }),
+    hasPersistent: () => false,
     putPersistent: vi.fn(async (reference, secret) => {
       await base.put(reference, secret);
     }),
@@ -176,6 +179,19 @@ function fakeClient(
         status: "running",
       };
     }),
+    stageFiles: vi.fn(
+      async (attachments: readonly ExternalAgentUploadAttachment[]) =>
+        attachments.map((attachment) => ({
+          id: `workspace:.or3-upload/${attachment.name}`,
+          source: "workspace_ref" as const,
+          kind: attachment.kind,
+          name: attachment.name,
+          mime_type: attachment.mimeType,
+          size_bytes: attachment.sizeBytes,
+          root_id: "workspace",
+          path: `.or3-upload/${attachment.name}`,
+        })),
+    ),
     getTurn: vi.fn(async () => remoteTurn),
     listTurnEvents: vi.fn(async () => ({
       events: input.events ?? [],
@@ -450,6 +466,105 @@ describe("ExternalAgentController", () => {
     expect(controller.snapshot.runners[0]?.id).toBe("codex");
   });
 
+  it("unlocks and reconnects the host that owns a historical session", async () => {
+    const hostB: ExternalAgentHost = {
+      ...host,
+      id: "host-2",
+      name: "Studio Mac",
+      baseUrl: "https://studio.test",
+      credentialRef: "cred-2",
+    };
+    let locked = true;
+    const unlock = vi.fn(async (pin: string) => {
+      if (pin !== "482915") throw new Error("Wrong PIN");
+      locked = false;
+    });
+    const credentials: ExternalAgentPinCredentialVault = {
+      supportsPinPersistence: true,
+      getStatus: () => ({
+        supported: true,
+        configured: true,
+        locked,
+        persistedCredentialCount: 1,
+      }),
+      hasPersistent: (reference) => reference === "cred-2",
+      async put() {},
+      async putPersistent() {},
+      async resolve(reference) {
+        if (reference === "cred-1") return "active-session-token";
+        return reference === "cred-2" && !locked ? "studio-token" : null;
+      },
+      async remove() {},
+      unlock,
+      lock() {
+        locked = true;
+      },
+    };
+    const connected: string[] = [];
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host, hostB],
+        activeHostId: host.id,
+        sessionRefs: [
+          {
+            hostId: hostB.id,
+            remoteSessionId: remoteSession.id,
+            title: "Studio conversation",
+          },
+        ],
+      }).adapter,
+      credentials,
+      createClient: ({ host: target }) => {
+        connected.push(target.id);
+        return fakeClient();
+      },
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    expect(controller.isHostCredentialLocked(host.id)).toBe(false);
+    expect(controller.isHostCredentialLocked(hostB.id, remoteSession.id)).toBe(
+      true,
+    );
+
+    await expect(
+      controller.unlockHostCredential(hostB.id, "482915", remoteSession.id),
+    ).resolves.toBe(true);
+
+    expect(unlock).toHaveBeenCalledWith("482915");
+    expect(controller.snapshot.activeHostId).toBe(hostB.id);
+    expect(connected).toEqual([host.id, hostB.id]);
+  });
+
+  it("reconnects the selected host before hydrating history after a refresh", async () => {
+    const client = fakeClient();
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+    controller.disconnect();
+
+    await expect(
+      controller.ensureSession(host.id, remoteSession.id),
+    ).resolves.toMatchObject({
+      hostId: host.id,
+      remoteSessionId: remoteSession.id,
+    });
+
+    expect(controller.snapshot.connectionState).toBe("online");
+    expect(client.getSession).toHaveBeenCalledWith(
+      remoteSession.id,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
   it("rebinds historical sessions from an older identity for the same host URL", async () => {
     const oldIdentity: ExternalAgentHost = {
       ...host,
@@ -629,6 +744,157 @@ describe("ExternalAgentController", () => {
     expect(launched.events[2]?.payload.status).toBe("completed");
   });
 
+  it("retains each turn's tool history when later turns have overlapping event sequences", async () => {
+    const saved = persistence({
+      hosts: [host],
+      activeHostId: host.id,
+      sessionRefs: [
+        {
+          hostId: host.id,
+          remoteSessionId: remoteSession.id,
+          title: "Multi-turn conversation",
+        },
+      ],
+    });
+    const turns = Array.from({ length: 3 }, (_, index) => ({
+      ...remoteTurn,
+      id: `turn-${index + 1}`,
+      sequence: index + 1,
+      status: "succeeded",
+      user_message: `Question ${index + 1}`,
+      final_text: `Answer ${index + 1}`,
+      completed_at: 1_730_000_001_000 + index,
+    }));
+    const eventsByTurn = new Map(
+      turns.map((turn, turnIndex) => [
+        turn.id,
+        Array.from(
+          { length: 250 },
+          (_, index): ExternalRemoteEvent => ({
+            id: turnIndex * 1_000 + index + 1,
+            turn_id: turn.id,
+            seq: index + 1,
+            ts: 1_730_000_000_300 + index,
+            type:
+              turn.id === "turn-3" && index === 39
+                ? "item.completed"
+                : "text_delta",
+            text:
+              turn.id === "turn-3" && index === 39
+                ? undefined
+                : `token-${index}`,
+            payload:
+              turn.id === "turn-3" && index === 39
+                ? {
+                    data: {
+                      id: "read-readme",
+                      name: "read",
+                      path: "README.md",
+                    },
+                    status: "completed",
+                  }
+                : undefined,
+          }),
+        ),
+      ]),
+    );
+    const client = fakeClient();
+    client.listTurns = vi.fn(async () => ({ turns }));
+    client.listTurnEvents = vi.fn(async (_sessionId, turnId, input = {}) => ({
+      events: (eventsByTurn.get(turnId) ?? [])
+        .filter((event) => event.seq > (input.afterSeq ?? 0))
+        .slice(0, input.limit),
+    }));
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+
+    await controller.initialize();
+
+    const rehydrated = controller.getSession(remoteSession.id, host.id);
+    expect(
+      rehydrated?.events.some(
+        (event) =>
+          event.turnId === "turn-3" &&
+          event.type === "tool" &&
+          event.payload.operation_id === "read-readme",
+      ),
+    ).toBe(true);
+    expect(new Set(rehydrated?.events.map((event) => event.turnId))).toEqual(
+      new Set(["turn-1", "turn-2", "turn-3"]),
+    );
+    expect(
+      rehydrated
+        ? projectExternalAgentConversation(rehydrated).turns[2]
+            ?.assistantMessage?.toolCalls
+        : [],
+    ).toEqual([
+      expect.objectContaining({
+        id: "read-readme",
+        status: "complete",
+      }),
+    ]);
+  });
+
+  it("paginates long canonical turns so late tool calls survive reload", async () => {
+    const saved = persistence({
+      hosts: [host],
+      activeHostId: host.id,
+      sessionRefs: [
+        {
+          hostId: host.id,
+          remoteSessionId: remoteSession.id,
+          title: "Long conversation",
+        },
+      ],
+    });
+    const events = Array.from(
+      { length: 650 },
+      (_, index): ExternalRemoteEvent => ({
+        id: index + 1,
+        turn_id: remoteTurn.id,
+        seq: index + 1,
+        type: index === 619 ? "item.completed" : "text_delta",
+        text: index === 619 ? undefined : "x",
+        payload:
+          index === 619
+            ? {
+                data: { id: "late-tool", name: "read", path: "README.md" },
+                status: "completed",
+              }
+            : undefined,
+      }),
+    );
+    const client = fakeClient();
+    client.listTurnEvents = vi.fn(async (_sessionId, _turnId, input = {}) => ({
+      events: events
+        .filter((event) => event.seq > (input.afterSeq ?? 0))
+        .slice(0, input.limit),
+    }));
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+
+    await controller.initialize();
+
+    expect(client.listTurnEvents).toHaveBeenCalledWith(
+      remoteSession.id,
+      remoteTurn.id,
+      expect.objectContaining({ afterSeq: 500, limit: 500 }),
+    );
+    expect(
+      controller
+        .getSession(remoteSession.id, host.id)
+        ?.events.some((event) => event.payload.operation_id === "late-tool"),
+    ).toBe(true);
+  });
+
   it("applies model and safety overrides to follow-up turns without changing runners", async () => {
     const client = fakeClient();
     const controller = new ExternalAgentController({
@@ -678,6 +944,65 @@ describe("ExternalAgentController", () => {
       mode: "safe_edit",
       isolation: "host_workspace_write",
     });
+  });
+
+  it("stages local files on the trusted host and sends workspace references with a turn", async () => {
+    const client = fakeClient();
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+    const file = new Blob(["export const answer = 42;"], {
+      type: "text/typescript",
+    });
+
+    await controller.launch({
+      runnerId: "codex",
+      instruction: "Review the attached module",
+      mode: "review",
+      isolation: "host_readonly",
+      attachments: [
+        {
+          id: "attachment-1",
+          kind: "text",
+          name: "answer.ts",
+          mimeType: "text/typescript",
+          sizeBytes: file.size,
+          data: file,
+        },
+      ],
+    });
+
+    expect(client.stageFiles).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          name: "answer.ts",
+          data: file,
+        }),
+      ],
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(client.startTurn).toHaveBeenCalledWith(
+      remoteSession.id,
+      expect.objectContaining({
+        user_message: "Review the attached module",
+        attachments: [
+          expect.objectContaining({
+            source: "workspace_ref",
+            root_id: "workspace",
+            path: ".or3-upload/answer.ts",
+          }),
+        ],
+      }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it("treats a streamed runtime error as terminal even when the wrapper reports success", async () => {

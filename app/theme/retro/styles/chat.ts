@@ -146,10 +146,10 @@ export const chatCssSelectors = {
     // Tool call indicator styling
     '.tool-call-indicator': {
         style: {
-            backgroundColor: 'var(--md-surface)',
-            borderRadius: 'var(--md-border-radius)',
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            overflow: 'hidden',
+            backgroundColor: 'transparent',
+            border: 'none',
+            boxShadow: 'none',
+            overflow: 'visible',
             marginTop: '8px',
             marginBottom: '8px',
         },
@@ -163,7 +163,7 @@ export const chatCssSelectors = {
     '.tool-call-indicator-summary': {
         style: {
             background: 'transparent !important',
-            padding: '10px 12px',
+            padding: '4px 0',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -172,14 +172,13 @@ export const chatCssSelectors = {
     },
     '.tool-call-indicator-summary:hover': {
         style: {
-            backgroundColor: 'var(--md-surface-hover) !important',
+            color: 'var(--md-on-surface) !important',
         },
     },
     '.tool-call-expanded-content': {
         style: {
-            borderTop: 'var(--md-border-width) solid var(--md-border-color)',
-            padding: '12px',
-            backgroundColor: 'var(--md-surface-container-lowest)',
+            borderTop: 'none',
+            backgroundColor: 'transparent',
         },
     },
     '.retro-tool-call-content': {

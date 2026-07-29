@@ -81,11 +81,25 @@ Session discovery is scoped to the active workspace with
 host's canonical scoped session list with lightweight local references; remote
 history is never copied into workspace storage.
 
+Agent attachments follow the same host-owned boundary. OR3 Chat validates the
+browser selection against its configured count and size limits, uploads each
+file into a unique directory in the trusted host's writable `workspace` root,
+and sends only canonical `workspace_ref` metadata with the turn. Uploads use
+the same header credential resolver as runner-chat requests; file bytes and
+tokens are not persisted in OR3 Chat session references.
+
 Historical panes wait for an in-progress host reconnect and retry automatically
 when the connection becomes usable. If a re-enrolled service advertises a new
 host identity at the same trusted endpoint, lightweight session references are
 rebound to the active identity. Attempting to open a session whose distinct host
 has no credential does not tear down the currently healthy connection.
+
+When a historical session belongs to a host whose remembered credential is
+PIN-locked after reload, the conversation pane shows an inline PIN unlock
+instead of an unavailable-host error. The unlock targets the host encoded in
+that session reference, reconnects that host, and then hydrates the
+conversation automatically. This keeps multiple saved hosts distinct while the
+shared PIN-derived vault key remains in memory for the current browser session.
 
 ## Adding an Activity source
 
@@ -136,9 +150,12 @@ remain in provider order during live execution and after reconnect or reload:
 
 One tool lifecycle keeps one stable presentation item; progress and completion
 update it in place. The service persists each normalized event before broadcast,
-while the client frame-batches snapshots and renders the transcript with the
-same bottom-anchored `Or3Scroll` surface as Chat. Only the live trailing
-Markdown segment receives incomplete-Markdown repair.
+while the client paginates canonical events and bounds them per turn. Event
+sequence numbers are turn-local and must never be sorted or evicted as one
+session-global sequence. The transcript uses the same bottom-anchored
+`Or3Scroll` surface as Chat and refreshes virtual measurements when tool details
+expand or collapse. Only the live trailing Markdown segment receives
+incomplete-Markdown repair.
 
 The New Agent screen uses the selected runner's live model catalog from
 `GET /internal/v1/chat-runners`. Model IDs are runner-owned and are submitted
@@ -155,6 +172,12 @@ Connection management and execution controls are secondary:
 - host enrollment and token storage live in Connection settings;
 - healthy-but-partially-supported hosts do not produce a persistent warning
   when at least one usable agent is available.
+
+The transcript resolves the active theme's same `chat-message` component and
+message-row geometry as primary Chat. Its composer uses the shared composer
+shell in `lg` mode; primary Chat and Document AI use the same shell in `sm`
+mode. Typography, focus treatment, and shell styling therefore stay aligned
+without duplicating pane-specific CSS.
 
 ## Approval behavior
 

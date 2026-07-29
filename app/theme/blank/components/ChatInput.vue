@@ -121,34 +121,6 @@ function forwardResize(payload: ResizePayload) {
     position: relative;
     overflow: visible;
     margin: 0 !important;
-    border: 1px solid color-mix(in srgb, var(--md-outline) 18%, transparent);
-    border-radius: 28px;
-    background: color-mix(in srgb, var(--md-surface) 92%, white 8%);
-    box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--md-outline) 6%, transparent),
-        0 1px 3px rgba(0, 0, 0, 0.04),
-        0 4px 12px -4px rgba(0, 0, 0, 0.06);
-    transition:
-        border-color 0.25s ease,
-        box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-        transform 0.2s ease;
-}
-
-:deep(.blank2-chat-dropper.chat-input-main:focus-within) {
-    border-color: color-mix(in srgb, var(--md-primary) 45%, transparent);
-    box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--md-primary) 12%, transparent),
-        0 0 0 4px color-mix(in srgb, var(--md-primary) 6%, transparent),
-        0 2px 8px rgba(0, 0, 0, 0.06),
-        0 8px 24px -8px rgba(0, 0, 0, 0.08);
-}
-
-:deep(.blank2-chat-dropper.chat-input-main:hover:not(:focus-within)) {
-    border-color: color-mix(in srgb, var(--md-outline) 32%, transparent);
-    box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--md-outline) 8%, transparent),
-        0 2px 6px rgba(0, 0, 0, 0.05),
-        0 6px 18px -6px rgba(0, 0, 0, 0.07);
 }
 
 /* ── Inner spacing ── */
@@ -507,28 +479,6 @@ function forwardResize(payload: ResizePayload) {
 
 /* ── Dark mode refinements ── */
 @media (prefers-color-scheme: dark) {
-    :deep(.blank2-chat-dropper.chat-input-main) {
-        background: color-mix(in srgb, var(--md-surface) 90%, white 10%);
-        border-color: color-mix(in srgb, var(--md-outline) 30%, transparent);
-        box-shadow:
-            0 0 0 1px color-mix(in srgb, var(--md-outline) 15%, transparent),
-            0 1px 4px rgba(0, 0, 0, 0.3),
-            0 4px 16px -4px rgba(0, 0, 0, 0.4);
-    }
-
-    :deep(.blank2-chat-dropper.chat-input-main:hover:not(:focus-within)) {
-        border-color: color-mix(in srgb, var(--md-outline) 55%, transparent);
-    }
-
-    :deep(.blank2-chat-dropper.chat-input-main:focus-within) {
-        border-color: color-mix(in srgb, var(--md-primary) 60%, transparent);
-        box-shadow:
-            0 0 0 1px color-mix(in srgb, var(--md-primary) 25%, transparent),
-            0 0 0 4px color-mix(in srgb, var(--md-primary) 12%, transparent),
-            0 2px 8px rgba(0, 0, 0, 0.3),
-            0 8px 24px -8px rgba(0, 0, 0, 0.4);
-    }
-
     :deep(.blank2-chat-dropper .ProseMirror p.is-editor-empty:first-child::before) {
         color: color-mix(in srgb, var(--md-on-surface) 50%, transparent);
     }
@@ -545,28 +495,6 @@ function forwardResize(payload: ResizePayload) {
 }
 
 [data-theme="blank"].dark {
-    :deep(.blank2-chat-dropper.chat-input-main) {
-        background: color-mix(in srgb, var(--md-surface) 90%, white 10%);
-        border-color: color-mix(in srgb, var(--md-outline) 30%, transparent);
-        box-shadow:
-            0 0 0 1px color-mix(in srgb, var(--md-outline) 15%, transparent),
-            0 1px 4px rgba(0, 0, 0, 0.3),
-            0 4px 16px -4px rgba(0, 0, 0, 0.4);
-    }
-
-    :deep(.blank2-chat-dropper.chat-input-main:hover:not(:focus-within)) {
-        border-color: color-mix(in srgb, var(--md-outline) 55%, transparent);
-    }
-
-    :deep(.blank2-chat-dropper.chat-input-main:focus-within) {
-        border-color: color-mix(in srgb, var(--md-primary) 60%, transparent);
-        box-shadow:
-            0 0 0 1px color-mix(in srgb, var(--md-primary) 25%, transparent),
-            0 0 0 4px color-mix(in srgb, var(--md-primary) 12%, transparent),
-            0 2px 8px rgba(0, 0, 0, 0.3),
-            0 8px 24px -8px rgba(0, 0, 0, 0.4);
-    }
-
     :deep(.blank2-chat-dropper .ProseMirror p.is-editor-empty:first-child::before) {
         color: color-mix(in srgb, var(--md-on-surface) 50%, transparent);
     }

@@ -11,6 +11,7 @@
                 'tool-call-indicator-details text-sm text-[var(--md-on-surface-variant)]',
                 detailsProps?.class ?? '',
             ]"
+            @toggle="onToggle"
         >
             <component
                 :is="isExpandable ? 'summary' : 'div'"
@@ -33,7 +34,7 @@
                     :name="groupIcon"
                     class="size-4 shrink-0"
                 />
-                <span class="truncate">{{ groupLabel }}</span>
+                <span class="min-w-0 leading-5">{{ groupLabel }}</span>
                 <UIcon
                     v-if="isExpandable"
                     name="i-lucide-chevron-down"
@@ -43,36 +44,39 @@
 
             <div
                 v-if="isExpandable"
-                class="tool-call-expanded-content ml-2 mt-2 space-y-3 border-l border-[var(--md-outline-variant)] py-1 pl-6"
+                class="tool-call-expanded-content ml-2 mt-1 min-w-0 space-y-3 border-l border-[var(--md-outline-variant)] py-1 pl-5"
             >
                 <div
                     v-for="(call, index) in detailedCalls"
                     :key="call.id || `tool-detail-${index}`"
-                    class="min-w-0 text-xs"
+                    class="tool-call-detail min-w-0 text-xs"
                 >
-                    <div
-                        v-if="detailedCalls.length > 1"
-                        class="mb-1 font-medium text-[var(--md-on-surface)]"
-                    >
-                        {{ call.label || call.name }}
+                    <div class="flex min-w-0 items-center gap-2">
+                        <UIcon
+                            :name="iconForCall(call)"
+                            class="size-3.5 shrink-0 text-[var(--md-on-surface-variant)]"
+                        />
+                        <span
+                            class="min-w-0 font-medium leading-5 text-[var(--md-on-surface)]"
+                        >
+                            {{ call.label || call.name }}
+                        </span>
                     </div>
                     <pre
                         v-if="call.args"
-                        class="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-[var(--md-border-radius)] bg-[var(--md-surface-container-low)] p-2 font-mono text-[11px] text-[var(--md-on-surface)]"
+                        class="tool-call-detail-value ml-5 mt-1 max-h-56 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-md bg-[var(--md-surface-container-low)] px-2.5 py-2 font-mono text-[11px] leading-5 text-[var(--md-on-surface)]"
                         >{{ formatArgs(call.args) }}</pre
                     >
-                    <div
+                    <pre
                         v-if="call.status === 'complete' && call.result"
-                        class="mt-1 whitespace-pre-wrap break-words"
+                        class="tool-call-detail-value ml-5 mt-1 max-h-56 max-w-full overflow-auto whitespace-pre-wrap break-all font-sans text-xs leading-5 text-[var(--md-on-surface-variant)]"
+                        >{{ formatResult(call.result) }}</pre
                     >
-                        {{ formatResult(call.result) }}
-                    </div>
-                    <div
+                    <pre
                         v-if="call.status === 'error' && call.error"
-                        class="mt-1 whitespace-pre-wrap break-words text-[var(--md-error)]"
+                        class="tool-call-detail-value ml-5 mt-1 max-h-56 max-w-full overflow-auto whitespace-pre-wrap break-all font-sans text-xs leading-5 text-[var(--md-error)]"
+                        >{{ call.error }}</pre
                     >
-                        {{ call.error }}
-                    </div>
                 </div>
             </div>
         </component>
@@ -98,6 +102,9 @@ type ToolKind = 'edit' | 'read' | 'command' | 'search' | 'tests' | 'other';
 
 const props = defineProps<{
     toolCalls: ToolCall[];
+}>();
+const emit = defineEmits<{
+    resize: [];
 }>();
 
 function hasDetails(call: ToolCall): boolean {
@@ -212,6 +219,20 @@ function formatResult(result: string): string {
     }
     return result;
 }
+
+function iconForCall(call: ToolCall): string {
+    const kind = toolKind(call);
+    if (kind === 'edit') return 'i-lucide-pencil';
+    if (kind === 'read') return 'i-lucide-file-search';
+    if (kind === 'command') return 'i-lucide-square-terminal';
+    if (kind === 'search') return 'i-lucide-search';
+    if (kind === 'tests') return 'i-lucide-badge-check';
+    return 'i-lucide-activity';
+}
+
+function onToggle() {
+    emit('resize');
+}
 </script>
 
 <style scoped>
@@ -225,5 +246,9 @@ function formatResult(result: string): string {
 
 .tool-call-indicator details[open] .tool-call-chevron {
     transform: rotate(180deg);
+}
+
+.tool-call-detail-value {
+    scrollbar-width: thin;
 }
 </style>

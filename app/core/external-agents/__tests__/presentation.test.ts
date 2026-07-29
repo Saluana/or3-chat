@@ -82,6 +82,37 @@ describe("external agent presentation", () => {
     expect(projection.turns[0]?.assistantMessage?.pending).toBe(true);
   });
 
+  it("treats a provider whole-message delta as a snapshot instead of duplicating text", () => {
+    const finalText = "Here’s the concise answer.";
+    const projection = projectExternalAgentConversation(
+      session({
+        status: "succeeded",
+        turns: [
+          {
+            ...session().turns[0]!,
+            status: "succeeded",
+            final_text: finalText,
+            completed_at: 1_753_611_201_000,
+          },
+        ],
+        events: [
+          event("1", 1, "message", "Here’s", { rawType: "text_delta" }),
+          event("2", 2, "message", " the concise", {
+            rawType: "text_delta",
+          }),
+          event("3", 3, "message", " answer.", {
+            rawType: "text_delta",
+          }),
+          event("4", 4, "message", finalText, {
+            rawType: "text_delta",
+          }),
+        ],
+      }),
+    );
+
+    expect(projection.turns[0]?.assistantMessage?.text).toBe(finalText);
+  });
+
   it("coalesces repeated tool lifecycle events into one logical item", () => {
     const projection = projectExternalAgentConversation(
       session({

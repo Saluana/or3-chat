@@ -9,6 +9,7 @@
 
     <template v-else>
       <ExternalAgentComposer
+        ref="composer"
         v-model="instruction"
         :loading="launching"
         placeholder="Describe the change, investigation, or review…"
@@ -48,7 +49,10 @@
 import { computed, ref, watch } from "vue";
 import ExternalAgentComposer from "./ExternalAgentComposer.vue";
 import ExternalAgentSettingsPanel from "./ExternalAgentSettingsPanel.vue";
-import type { ExternalAgentSession } from "~/core/external-agents/types";
+import type {
+  ExternalAgentSession,
+  ExternalAgentUploadAttachment,
+} from "~/core/external-agents/types";
 import {
   buildExternalAgentRunnerOptions,
   isValidExternalAgentPolicyCombination,
@@ -68,6 +72,7 @@ const emit = defineEmits<{
 }>();
 
 const runtime = useExternalAgentRuntime();
+const composer = ref<{ clearAttachments: () => void } | null>(null);
 const runnerId = ref("");
 const instruction = ref("");
 const mode = ref("review");
@@ -141,7 +146,18 @@ watch([mode, isolation], () => {
   if (!dangerousSelection.value) confirmDangerous.value = false;
 });
 
-async function launch() {
+function attachmentOnlyInstruction(
+  attachments: readonly ExternalAgentUploadAttachment[],
+): string {
+  if (attachments.length === 1) {
+    return `Review ${attachments[0]?.name || "the attached file"}.`;
+  }
+  return `Review the ${attachments.length} attached files.`;
+}
+
+async function launch(
+  attachments: readonly ExternalAgentUploadAttachment[] = [],
+) {
   const controller = runtime.controller;
   if (!controller) {
     error.value = "External Agents is not available.";
@@ -152,14 +168,17 @@ async function launch() {
   try {
     const session = await controller.launch({
       runnerId: runnerId.value,
-      instruction: instruction.value,
+      instruction:
+        instruction.value.trim() || attachmentOnlyInstruction(attachments),
       cwd: cwd.value || undefined,
       mode: mode.value,
       isolation: isolation.value,
       model: model.value ?? undefined,
       confirmDangerous: confirmDangerous.value,
+      ...(attachments.length ? { attachments } : {}),
     });
     instruction.value = "";
+    composer.value?.clearAttachments();
     emit("launched", session);
   } catch (cause) {
     error.value = presentExternalAgentError(

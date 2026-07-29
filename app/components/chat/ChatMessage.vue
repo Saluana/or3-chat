@@ -187,6 +187,7 @@
                         props.message.toolCalls.length > 0
                     "
                     :tool-calls="props.message.toolCalls"
+                    @resize="emit('content-resize')"
                 />
 
                 <div
@@ -250,6 +251,7 @@
                             <ChatToolCallIndicator
                                 v-else
                                 :tool-calls="part.toolCalls"
+                                @resize="emit('content-resize')"
                             />
                         </template>
                     </template>
@@ -439,6 +441,7 @@ const emit = defineEmits<{
     (e: 'begin-edit', id: string): void;
     (e: 'cancel-edit', id: string): void;
     (e: 'save-edit', id: string): void;
+    (e: 'content-resize'): void;
 }>();
 
 const copyIcon = useIcon('chat.message.copy');

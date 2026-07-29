@@ -7,6 +7,8 @@ import ExternalAgentsSidebarPage from "../ExternalAgentsSidebarPage.vue";
 import ExternalAgentSessionPane from "../ExternalAgentSessionPane.vue";
 import ExternalAgentLauncher from "../ExternalAgentLauncher.vue";
 import { encodeExternalAgentSessionRef } from "~/core/external-agents/refs";
+import { CORE_APP_COMPONENT_DEFAULTS } from "~/theme/_shared/theme-components-registry";
+import type { ThemePlugin } from "~/plugins/90.theme.client";
 import type {
   ExternalAgentSession,
   ExternalAgentStoreSnapshot,
@@ -18,6 +20,8 @@ const mocks = vi.hoisted(() => ({
     addTrustedHost: vi.fn(),
     reconnect: vi.fn(),
     unlockCredentials: vi.fn(),
+    isHostCredentialLocked: vi.fn(),
+    unlockHostCredential: vi.fn(),
     lockCredentials: vi.fn(),
     clearActiveHostCredential: vi.fn(),
     switchHost: vi.fn(),
@@ -371,6 +375,8 @@ describe("External Agents components", () => {
     ]);
     mocks.controller.reconnect.mockResolvedValue(true);
     mocks.controller.unlockCredentials.mockResolvedValue(undefined);
+    mocks.controller.isHostCredentialLocked.mockReturnValue(false);
+    mocks.controller.unlockHostCredential.mockResolvedValue(true);
     mocks.controller.clearActiveHostCredential.mockResolvedValue(undefined);
     mocks.controller.pinCredentialStatus = {
       supported: true,
@@ -556,6 +562,72 @@ describe("External Agents components", () => {
     expect(wrapper.text()).not.toContain("Conversation unavailable");
   });
 
+  it("unlocks the historical conversation host from its own pane", async () => {
+    const targetSession = {
+      ...session,
+      hostId: "host-2",
+      remoteSessionId: "session-2",
+    };
+    const disconnected = snapshot({
+      hosts: [
+        ...snapshot().hosts,
+        {
+          id: "host-2",
+          name: "Studio Mac",
+          baseUrl: "https://studio.test",
+          credentialRef: "studio-credential",
+          trustedAt: "2026-07-27T00:00:00.000Z",
+        },
+      ],
+      activeHostId: "host-1",
+      connectionState: "disconnected",
+      sessions: [],
+    });
+    mocks.snapshot = shallowRef(disconnected);
+    mocks.controller.snapshot = disconnected;
+    mocks.controller.isHostCredentialLocked.mockImplementation(
+      (hostId: string) => hostId === "host-2",
+    );
+    mocks.controller.unlockHostCredential.mockImplementation(async () => {
+      mocks.controller.isHostCredentialLocked.mockReturnValue(false);
+      return true;
+    });
+    mocks.controller.ensureSession.mockResolvedValue(targetSession);
+
+    const wrapper = mount(ExternalAgentSessionPane, {
+      props: {
+        paneId: "pane-1",
+        recordId: encodeExternalAgentSessionRef({
+          hostId: "host-2",
+          remoteSessionId: "session-2",
+        }),
+      },
+      global,
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Unlock this conversation");
+    expect(wrapper.text()).toContain("Studio Mac");
+    expect(wrapper.text()).not.toContain("Conversation unavailable");
+    expect(mocks.controller.ensureSession).not.toHaveBeenCalled();
+
+    await wrapper.find('[aria-label="Conversation PIN"]').setValue("482915");
+    await wrapper
+      .find('form[aria-label="Unlock agent conversation"]')
+      .trigger("submit");
+    await flushPromises();
+
+    expect(mocks.controller.unlockHostCredential).toHaveBeenCalledWith(
+      "host-2",
+      "482915",
+      "session-2",
+    );
+    expect(mocks.controller.ensureSession).toHaveBeenCalledWith(
+      "host-2",
+      "session-2",
+    );
+  });
+
   it("renders a conversation with compact activity, files, approvals, redacted errors and real actions", async () => {
     const wrapper = mount(ExternalAgentSessionPane, {
       props: {
@@ -597,6 +669,82 @@ describe("External Agents components", () => {
       "session-1",
       "artifact-2",
     );
+  });
+
+  it("renders agent prose through the active chat-message theme component and main-chat row geometry", async () => {
+    const formattedSession: ExternalAgentSession = {
+      ...session,
+      status: "succeeded",
+      activeTurnId: undefined,
+      approvals: [],
+      artifacts: [],
+      error: undefined,
+      turns: [
+        {
+          id: "turn-formatted",
+          session_id: "session-1",
+          sequence: 1,
+          status: "succeeded",
+          continuation_mode: "replay",
+          requested_at: Date.now() - 1_000,
+          completed_at: Date.now(),
+          user_message: "Explain the formatter",
+          final_text: "## Result\n\nUse **shared prose**.",
+        },
+      ],
+    };
+    mocks.snapshot.value = snapshot({ sessions: [formattedSession] });
+    const ThemedMessage = defineComponent({
+      props: { message: { type: Object, required: true } },
+      setup(props) {
+        return () =>
+          h(
+            "div",
+            { class: "active-theme-chat-message" },
+            String((props.message as { text?: string }).text ?? ""),
+          );
+      },
+    });
+    const wrapper = mount(ExternalAgentSessionPane, {
+      props: {
+        paneId: "pane-1",
+        recordId: encodeExternalAgentSessionRef({
+          hostId: "host-1",
+          remoteSessionId: "session-1",
+        }),
+      },
+      global: {
+        ...global,
+        config: {
+          globalProperties: {
+            $theme: {
+              activeComponents: shallowRef({
+                ...CORE_APP_COMPONENT_DEFAULTS,
+                "chat-message": ThemedMessage,
+              }),
+            } as unknown as ThemePlugin,
+          },
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.findAll(".active-theme-chat-message")).toHaveLength(2);
+    const rows = wrapper.findAll(".messages-container");
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.classes()).toEqual(
+        expect.arrayContaining([
+          "mx-auto",
+          "w-full",
+          "min-w-0",
+          "break-words",
+          "px-1.5",
+          "pb-6",
+          "sm:max-w-[768px]",
+        ]),
+      );
+    }
   });
 
   it("keeps turn settings available after launch while locking the runner", async () => {
@@ -711,6 +859,47 @@ describe("External Agents components", () => {
       confirmDangerous: false,
     });
     expect(wrapper.emitted("launched")?.[0]?.[0]).toBe(session);
+  });
+
+  it("previews a selected file and sends it through the external-agent controller", async () => {
+    const wrapper = mount(ExternalAgentLauncher, {
+      global: {
+        ...global,
+        stubs: {
+          ...global.stubs,
+          ExternalAgentLauncher: false,
+        },
+      },
+    });
+    await flushPromises();
+    const file = new File(["export default 42"], "answer.ts", {
+      type: "text/typescript",
+    });
+    const input = wrapper.find('input[type="file"]');
+    Object.defineProperty(input.element, "files", {
+      configurable: true,
+      value: [file],
+    });
+    await input.trigger("change");
+    await wrapper.find("textarea").setValue("Review this file");
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("answer.ts");
+    expect(mocks.controller.launch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instruction: "Review this file",
+        attachments: [
+          expect.objectContaining({
+            kind: "text",
+            name: "answer.ts",
+            mimeType: "text/typescript",
+            sizeBytes: file.size,
+            data: file,
+          }),
+        ],
+      }),
+    );
   });
 
   it("uses a non-empty sentinel for the host-default model option", () => {

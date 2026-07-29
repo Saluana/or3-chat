@@ -1,5 +1,13 @@
 <template>
-    <section v-theme="'document.ai'" class="document-ai-composer" :class="{ expanded: customizeOpen, reviewing: Boolean(proposal) }" data-context="document" aria-label="Document AI">
+    <ChatComposerShell
+        v-theme="'document.ai'"
+        tag="section"
+        size="sm"
+        class="document-ai-composer"
+        :class="{ expanded: customizeOpen, reviewing: Boolean(proposal) }"
+        data-context="document"
+        aria-label="Document AI"
+    >
         <div v-if="proposal" class="review-bar" aria-live="polite">
             <div class="review-bar-top">
                 <div class="review-bar-heading">
@@ -310,12 +318,13 @@
             <span class="status-dot" />
             {{ agentStatus || 'Working on your document…' }}
         </div>
-    </section>
+    </ChatComposerShell>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useToast } from '#imports';
+import ChatComposerShell from '~/components/chat/ChatComposerShell.vue';
 import type { DocumentAiAction, DocumentAiScope } from '~/composables/editor/useDocumentAiActions';
 import { useIcon } from '~/composables/useIcon';
 import { useScrollLock } from '~/composables/core/useScrollLock';

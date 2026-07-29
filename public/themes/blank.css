@@ -215,10 +215,9 @@
 }
 
 [data-theme="blank"] .tool-call-indicator {
-  background-color: var(--md-surface-hover);
-  border-radius: 12px;
+  background-color: transparent;
   border: none;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: none;
   margin-top: 8px;
   margin-bottom: 8px;
@@ -231,7 +230,7 @@
 
 [data-theme="blank"] .tool-call-indicator-summary {
   background: transparent !important;
-  padding: 10px 14px;
+  padding: 4px 0;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -239,13 +238,12 @@
 }
 
 [data-theme="blank"] .tool-call-indicator-summary:hover {
-  background-color: var(--md-surface-active) !important;
+  color: var(--md-on-surface) !important;
 }
 
 [data-theme="blank"] .tool-call-expanded-content {
-  border-top: 1px solid var(--md-border-color);
-  padding: 12px;
-  background-color: var(--md-surface);
+  border-top: none;
+  background-color: transparent;
 }
 
 [data-theme="blank"] .retro-tool-call-content {

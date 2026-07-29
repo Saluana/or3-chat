@@ -77,7 +77,7 @@
                         <span>{{ stats.readingMinutes }} min read</span>
                     </p>
 
-                    <EditorContent v-if="editor" :editor="editor" class="document-content" />
+                    <EditorContent v-if="editor" :editor="editor" class="document-content or3-prose" />
 
                     <BubbleMenu v-if="editor" v-theme="'document.selection-menu'" :editor="editor" :options="{ placement: 'top' }" class="selection-menu">
                         <UButton :icon="icons.bold" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('bold') }" aria-label="Bold" @click="editor.chain().focus().toggleBold().run()" />
@@ -1016,3 +1016,4 @@ async function createManualCheckpoint() {
 </script>
 
 <style scoped src="./DocumentEditorRoot.css"></style>
+<style scoped src="../../assets/css/or3-prose.css"></style>
