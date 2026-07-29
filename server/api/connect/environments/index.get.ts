@@ -1,7 +1,7 @@
 import { createError, defineEventHandler } from 'h3';
 import { requireWorkspaceSession } from '../../workspaces/_helpers';
 import { getConnectServerConfig } from '../../../connect/config';
-import { ConnectStore } from '../../../connect/convex-store';
+import { requireConnectStore } from '../../../connect/store/require';
 import { decryptConnectCredential } from '../../../connect/crypto';
 import { noStore } from '../../../connect/helpers';
 import type { ConnectAccessCredential } from '../../../connect/types';
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     if (!session.user?.id) {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
     }
-    const environments = await new ConnectStore().listEnvironmentsForUser(
+    const environments = await requireConnectStore().listEnvironmentsForUser(
         session.user.id
     );
     return {

@@ -3,17 +3,15 @@ import {
     defineEventHandler,
     getHeader,
 } from 'h3';
-import {
-    getConnectServerConfig,
-    getTunnelProvisioner,
-} from '../../../connect/config';
-import { ConnectStore } from '../../../connect/convex-store';
+import { getConnectServerConfig } from '../../../connect/config';
+import { requireConnectRelay } from '../../../connect/relay/require';
+import { requireConnectStore } from '../../../connect/store/require';
 import { hashConnectSecret } from '../../../connect/crypto';
 import { noStore } from '../../../connect/helpers';
 
 export default defineEventHandler(async (event) => {
     noStore(event);
-    const config = getConnectServerConfig(event);
+    getConnectServerConfig(event);
     const authorization = getHeader(event, 'authorization') ?? '';
     const token = authorization.startsWith('Bearer ')
         ? authorization.slice(7).trim()
@@ -21,14 +19,14 @@ export default defineEventHandler(async (event) => {
     if (token.length < 32) {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
     }
-    const store = new ConnectStore();
+    const store = requireConnectStore();
     const environment = await store.getEnvironmentByControlTokenHash(
         hashConnectSecret(token)
     );
     if (!environment || environment.status !== 'active') {
         throw createError({ statusCode: 404, statusMessage: 'Not Found' });
     }
-    await getTunnelProvisioner(config).revoke({
+    await requireConnectRelay().revoke({
         tunnelId: environment.tunnel_id,
         dnsRecordId: environment.dns_record_id,
     });

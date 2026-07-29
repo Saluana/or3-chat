@@ -37,6 +37,12 @@ const shouldLoadCloudProviderModules =
 
 const convexUrl = or3CloudConfig.sync.convex?.url || '';
 const convexAdminKey = or3CloudConfig.sync.convex?.adminKey || '';
+const isConnectEnabled = process.env.OR3_CONNECT_ENABLED === 'true';
+const connectProvider =
+    process.env.OR3_CONNECT_PROVIDER?.trim() ||
+    or3CloudConfig.sync.provider;
+const connectRelayProvider =
+    process.env.OR3_CONNECT_RELAY_PROVIDER?.trim() || 'cloudflare';
 
 function isPackageInstalled(pkgName: string): boolean {
     return existsSync(resolve(__dirname, 'node_modules', pkgName));
@@ -106,6 +112,7 @@ if (shouldLoadCloudProviderModules) {
         providerIdsFromConfig.add(or3CloudConfig.sync.provider);
     if (or3CloudConfig.storage.enabled)
         providerIdsFromConfig.add(or3CloudConfig.storage.provider);
+    if (isConnectEnabled) providerIdsFromConfig.add(connectProvider);
     if (
         or3CloudConfig.limits?.enabled &&
         or3CloudConfig.limits.storageProvider
@@ -200,6 +207,8 @@ const syncProviderAvailable =
 const storageProviderAvailable =
     isStaticCloudDisabledBuild ||
     isProviderAvailable(or3CloudConfig.storage.provider);
+const connectProviderAvailable =
+    isStaticCloudDisabledBuild || isProviderAvailable(connectProvider);
 
 const effectiveSsrAuthEnabled =
     isSsrAuthEnabled && authProviderAvailable && syncProviderAvailable;
@@ -215,6 +224,8 @@ const effectiveStorageEnabled =
     effectiveSsrAuthEnabled &&
     or3CloudConfig.storage.enabled &&
     storageProviderAvailable;
+const effectiveConnectEnabled =
+    effectiveSsrAuthEnabled && isConnectEnabled && connectProviderAvailable;
 
 if (isSsrAuthEnabled && !authProviderAvailable) {
     console.warn(
@@ -229,6 +240,11 @@ if (isSsrAuthEnabled && !syncProviderAvailable) {
 if (or3CloudConfig.storage.enabled && !storageProviderAvailable) {
     console.warn(
         `[or3-provider] Storage provider "${or3CloudConfig.storage.provider}" is not available. Cloud storage is disabled.`,
+    );
+}
+if (isConnectEnabled && !connectProviderAvailable) {
+    console.warn(
+        `[or3-provider] Connect provider "${connectProvider}" is not available. Remote access is disabled.`,
     );
 }
 // Branding defaults (sourced from or3Config)
@@ -417,7 +433,9 @@ export default defineNuxtConfig({
             convexAdminKey,
         },
         connect: {
-            enabled: process.env.OR3_CONNECT_ENABLED === 'true',
+            enabled: effectiveConnectEnabled,
+            provider: connectProvider,
+            relayProvider: connectRelayProvider,
             publicURL: process.env.OR3_CONNECT_PUBLIC_URL || '',
             encryptionKey: process.env.OR3_CONNECT_ENCRYPTION_KEY || '',
             maxComputers: process.env.OR3_CONNECT_MAX_COMPUTERS
@@ -531,9 +549,9 @@ export default defineNuxtConfig({
                 convexUrl,
             },
             connect: {
-                enabled:
-                    effectiveSsrAuthEnabled &&
-                    process.env.OR3_CONNECT_ENABLED === 'true',
+                enabled: effectiveConnectEnabled,
+                provider: connectProvider,
+                relayProvider: connectRelayProvider,
             },
             limits: publicLimitsConfig,
             branding: brandingConfig,

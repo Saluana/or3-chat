@@ -21,9 +21,10 @@ describe('OR3 Connect credential protection', () => {
     it('rejects tampering and keeps secret hashes domain separated', () => {
         const secret = 'a production-length encryption secret 1234567890';
         const ciphertext = encryptConnectCredential({ ok: true }, secret);
-        const tampered = `${ciphertext.slice(0, -1)}${
-            ciphertext.endsWith('a') ? 'b' : 'a'
-        }`;
+        const parts = ciphertext.split('.');
+        const tag = parts[2]!;
+        parts[2] = `${tag.startsWith('a') ? 'b' : 'a'}${tag.slice(1)}`;
+        const tampered = parts.join('.');
         expect(() => decryptConnectCredential(tampered, secret)).toThrow();
         expect(hashConnectSecret('value')).not.toBe(hashConnectSecret('other'));
     });

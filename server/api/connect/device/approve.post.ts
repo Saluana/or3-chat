@@ -1,19 +1,15 @@
 import { createError, defineEventHandler, getRequestIP, readBody } from 'h3';
 import { requireWorkspaceSession } from '../../workspaces/_helpers';
-import {
-    getConnectServerConfig,
-    getTunnelProvisioner,
-} from '../../../connect/config';
-import { ConnectStore } from '../../../connect/convex-store';
+import { getConnectServerConfig } from '../../../connect/config';
+import { requireConnectRelay } from '../../../connect/relay/require';
+import { requireConnectStore } from '../../../connect/store/require';
+import { ConnectStoreError } from '../../../connect/store/types';
 import {
     encryptConnectCredential,
     hashConnectSecret,
     randomURLSecret,
 } from '../../../connect/crypto';
-import {
-    noStore,
-    normalizeUserCode,
-} from '../../../connect/helpers';
+import { noStore, normalizeUserCode } from '../../../connect/helpers';
 import type { ConnectCredential } from '../../../connect/types';
 import { getRateLimitProvider } from '../../../utils/rate-limit/store';
 
@@ -38,7 +34,7 @@ export default defineEventHandler(async (event) => {
     const code = normalizeUserCode(body?.code);
     const name =
         typeof body?.name === 'string' ? body.name.trim().slice(0, 80) : '';
-    const store = new ConnectStore();
+    const store = requireConnectStore();
     const authorization = await store.getAuthorizationByUserHash(
         hashConnectSecret(code),
         Date.now()
@@ -51,7 +47,7 @@ export default defineEventHandler(async (event) => {
     }
     const environmentId = `env-${randomURLSecret(12).toLowerCase()}`;
     const controlToken = randomURLSecret(32);
-    const provisioner = getTunnelProvisioner(config);
+    const provisioner = requireConnectRelay();
     const tunnel = await provisioner.provision(environmentId);
     const credential: ConnectCredential = {
         accountId: session.user.id,
@@ -99,6 +95,13 @@ export default defineEventHandler(async (event) => {
                 dnsRecordId: tunnel.dnsRecordId,
             })
             .catch(() => undefined);
+        if (error instanceof ConnectStoreError) {
+            throw createError({
+                statusCode:
+                    error.code === 'environment_limit_reached' ? 409 : 404,
+                statusMessage: error.message,
+            });
+        }
         throw error;
     }
     return {

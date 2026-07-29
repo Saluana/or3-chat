@@ -6,7 +6,9 @@ import {
     setResponseStatus,
 } from 'h3';
 import { getConnectServerConfig } from '../../../connect/config';
-import { ConnectStore } from '../../../connect/convex-store';
+import { requireConnectRelay } from '../../../connect/relay/require';
+import { requireConnectStore } from '../../../connect/store/require';
+import { ConnectStoreError } from '../../../connect/store/types';
 import {
     hashConnectSecret,
     randomURLSecret,
@@ -20,10 +22,12 @@ import {
 import { getRateLimitProvider } from '../../../utils/rate-limit/store';
 
 const AUTHORIZATION_TTL_MS = 10 * 60 * 1000;
+const USER_CODE_ATTEMPTS = 5;
 
 export default defineEventHandler(async (event) => {
     noStore(event);
     const config = getConnectServerConfig(event);
+    requireConnectRelay();
     const ip = getRequestIP(event) || 'unknown';
     const rateLimit = await getRateLimitProvider().checkAndRecord(
         `connect:start:${ip}`,
@@ -38,17 +42,31 @@ export default defineEventHandler(async (event) => {
     const body = (await readBody(event)) as { host?: unknown };
     const host = parseConnectHost(body?.host);
     const deviceCode = randomURLSecret(32);
-    const userCode = createUserCode();
     const now = Date.now();
-    const store = new ConnectStore();
-    await store.createAuthorization({
-        deviceCodeHash: hashConnectSecret(deviceCode),
-        userCodeHash: hashConnectSecret(userCode),
-        userCodeDisplay: userCode,
-        host: storeConnectHost(host),
-        expiresAt: now + AUTHORIZATION_TTL_MS,
-        now,
-    });
+    const store = requireConnectStore();
+    let userCode = '';
+    for (let attempt = 0; attempt < USER_CODE_ATTEMPTS; attempt++) {
+        userCode = createUserCode();
+        try {
+            await store.createAuthorization({
+                deviceCodeHash: hashConnectSecret(deviceCode),
+                userCodeHash: hashConnectSecret(userCode),
+                userCodeDisplay: userCode,
+                host: storeConnectHost(host),
+                expiresAt: now + AUTHORIZATION_TTL_MS,
+                now,
+            });
+            break;
+        } catch (error) {
+            if (
+                !(error instanceof ConnectStoreError) ||
+                error.code !== 'conflict' ||
+                attempt === USER_CODE_ATTEMPTS - 1
+            ) {
+                throw error;
+            }
+        }
+    }
     const verificationUri = `${config.publicURL.replace(/\/$/, '')}/connect`;
     setResponseStatus(event, 201);
     return {

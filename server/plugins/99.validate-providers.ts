@@ -8,6 +8,8 @@ import { listProviderIds } from '../auth/registry';
 import { listAuthWorkspaceStoreIds } from '../auth/store/registry';
 import { listSyncGatewayAdapterIds } from '../sync/gateway/registry';
 import { listStorageGatewayAdapterIds } from '../storage/gateway/registry';
+import { listConnectStoreIds } from '../connect/store/registry';
+import { listConnectRelayIds } from '../connect/relay/registry';
 import { useRuntimeConfig } from '#imports';
 
 function isStrictMode(): boolean {
@@ -59,6 +61,24 @@ export default defineNitroPlugin(() => {
             errors.push(
                 `storage.provider "${storageProviderId}" is not registered. ` +
                     `Install the provider package that registers it (e.g. or3-provider-${storageProviderId}).`
+            );
+        }
+    }
+
+    if (config.connect?.enabled) {
+        const connectProviderId = config.connect.provider;
+        const connectStores = listConnectStoreIds();
+        if (!connectStores.includes(connectProviderId)) {
+            errors.push(
+                `connect.provider "${connectProviderId}" is not registered. ` +
+                    `Install a provider package with OR3 Connect support (e.g. or3-provider-${connectProviderId}).`
+            );
+        }
+        const relayProviderId = config.connect.relayProvider;
+        const relayProviders = listConnectRelayIds();
+        if (!relayProviders.includes(relayProviderId)) {
+            errors.push(
+                `connect.relayProvider "${relayProviderId}" is not registered.`
             );
         }
     }

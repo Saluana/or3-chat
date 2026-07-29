@@ -1,7 +1,7 @@
 import { createError, defineEventHandler, getRequestIP, readBody } from 'h3';
 import { requireWorkspaceSession } from '../../workspaces/_helpers';
 import { getConnectServerConfig } from '../../../connect/config';
-import { ConnectStore } from '../../../connect/convex-store';
+import { requireConnectStore } from '../../../connect/store/require';
 import { hashConnectSecret } from '../../../connect/crypto';
 import {
     noStore,
@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
     }
     const body = (await readBody(event)) as { code?: unknown };
     const code = normalizeUserCode(body?.code);
-    const store = new ConnectStore();
+    const store = requireConnectStore();
     const authorization = await store.getAuthorizationByUserHash(
         hashConnectSecret(code),
         Date.now()

@@ -1,6 +1,6 @@
 import { createError, defineEventHandler, readBody } from 'h3';
 import { getConnectServerConfig } from '../../../connect/config';
-import { ConnectStore } from '../../../connect/convex-store';
+import { requireConnectStore } from '../../../connect/store/require';
 import {
     decryptConnectCredential,
     hashConnectSecret,
@@ -24,10 +24,11 @@ export default defineEventHandler(async (event) => {
         });
     }
     parseConnectHost(body.host);
-    const authorization = await new ConnectStore().getAuthorizationByDeviceHash(
-        hashConnectSecret(deviceCode),
-        Date.now()
-    );
+    const authorization =
+        await requireConnectStore().getAuthorizationByDeviceHash(
+            hashConnectSecret(deviceCode),
+            Date.now()
+        );
     if (!authorization) {
         return { status: 'expired' };
     }

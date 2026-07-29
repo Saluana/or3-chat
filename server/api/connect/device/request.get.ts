@@ -1,7 +1,7 @@
 import { createError, defineEventHandler, getQuery, getRequestIP } from 'h3';
 import { requireWorkspaceSession } from '../../workspaces/_helpers';
 import { getConnectServerConfig } from '../../../connect/config';
-import { ConnectStore } from '../../../connect/convex-store';
+import { requireConnectStore } from '../../../connect/store/require';
 import { hashConnectSecret } from '../../../connect/crypto';
 import {
     noStore,
@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'Enter the code shown on your computer.',
         });
     }
-    const authorization = await new ConnectStore().getAuthorizationByUserHash(
+    const authorization = await requireConnectStore().getAuthorizationByUserHash(
         hashConnectSecret(code),
         Date.now()
     );
