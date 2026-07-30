@@ -2,6 +2,7 @@
     <!--
     Nuxt UI Popover anchored to a virtual reference derived from TipTap's clientRect.
     We render only the content slot via portal; no trigger UI needed.
+    The panel styling is fully handled by MentionsList.
   -->
     <UPopover
         :open="open"

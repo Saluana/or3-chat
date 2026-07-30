@@ -2,6 +2,7 @@
     <!--
         Workflow Slash Command Popover
         Wraps WorkflowList in a UPopover anchored to the TipTap cursor position.
+        The panel styling is fully handled by WorkflowList.
     -->
     <UPopover
         :open="open"

@@ -1,6 +1,8 @@
 @reference '../../assets/css/main.css';
 
 [data-theme="blank"] {
+    --chat-composer-border-radius: 28px;
+
     /* ── Base reset: borderless, shadowless ── */
     .theme-btn {
         @apply flex items-center justify-center border-0 shadow-none;

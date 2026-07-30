@@ -5,6 +5,7 @@
                 ? 'px-0 justify-center w-[64px]'
                 : 'px-3 justify-between w-full',
             'flex items-center min-h-12 max-h-12 header-pattern py-2 border-b-(--md-border-width) border-(--md-border-color)',
+            { 'sidebar-header--retro': activeTheme === 'retro' },
             sidebarHeaderProps.class || '',
         ]"
         id="top-header"
@@ -47,7 +48,10 @@ import {
     type StyleValue,
     type ComputedRef,
 } from 'vue';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import {
+    useThemeOverrides,
+    useThemeResolver,
+} from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 
 const props = defineProps({
@@ -58,6 +62,7 @@ const props = defineProps({
 const emit = defineEmits(['toggle']);
 
 const theme = useNuxtApp().$theme as ThemePlugin | undefined;
+const { activeTheme } = useThemeResolver();
 const runtimeConfig = useRuntimeConfig();
 const appName = computed(
     () => runtimeConfig.public?.branding?.appName || 'OR3'
@@ -188,6 +193,12 @@ function onToggle() {
     background-repeat: repeat-x;
     background-position: left center;
     background-size: auto 100%;
+}
+
+/* The Retro header pattern already supplies its own visual edge. */
+.sidebar-header--retro {
+    border-bottom: 0 !important;
+    box-shadow: none !important;
 }
 
 /* Retro logo title: pixel shadow + underline accent (no stroke) */

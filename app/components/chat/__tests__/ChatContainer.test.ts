@@ -47,14 +47,17 @@ vi.mock('~/utils/chat/uiMessages', () => ({
 const chatInstances: Array<{
     ensureHistorySynced: ReturnType<typeof vi.fn>;
     clear: ReturnType<typeof vi.fn>;
+    switchThread: ReturnType<typeof vi.fn>;
+    setPendingPrompt: ReturnType<typeof vi.fn>;
 }> = [];
 
 const makeChatInstance = vi.hoisted(
     () => (overrides: Record<string, unknown> = {}) => {
+        const threadId = { value: 'thread-1' as string | undefined };
         const instance = {
             messages: { value: [] },
             loading: { value: false },
-            threadId: { value: 'thread-1' },
+            threadId,
             streamId: { value: undefined },
             streamState: { finalized: true },
             tailAssistant: { value: null },
@@ -66,6 +69,10 @@ const makeChatInstance = vi.hoisted(
             applyLocalEdit: vi.fn().mockReturnValue(false),
             ensureHistorySynced: vi.fn().mockResolvedValue(undefined),
             clear: vi.fn(),
+            setPendingPrompt: vi.fn(),
+            switchThread: vi.fn(async (nextThreadId: string | undefined) => {
+                threadId.value = nextThreadId;
+            }),
         };
         return { ...instance, ...overrides };
     }
@@ -77,6 +84,8 @@ const useChatMock = vi.hoisted(() =>
         chatInstances.push({
             ensureHistorySynced: instance.ensureHistorySynced,
             clear: instance.clear,
+            switchThread: instance.switchThread,
+            setPendingPrompt: instance.setPendingPrompt,
         });
         return instance;
     })
@@ -87,6 +96,8 @@ useChatMock.mockImplementation(() => {
     chatInstances.push({
         ensureHistorySynced: instance.ensureHistorySynced,
         clear: instance.clear,
+        switchThread: instance.switchThread,
+        setPendingPrompt: instance.setPendingPrompt,
     });
     return instance;
 });
@@ -299,6 +310,10 @@ describe('ChatContainer', () => {
         await wrapper.setProps({ threadId: 'thread-2' });
         await nextTick();
 
-        expect(chatInstances[1]?.ensureHistorySynced).toHaveBeenCalledTimes(1);
+        // Thread switches rebind in place — do not recreate useChat outside setup.
+        expect(useChatMock).toHaveBeenCalledTimes(1);
+        expect(chatInstances[0]?.switchThread).toHaveBeenCalledWith('thread-2', {
+            pendingPromptId: undefined,
+        });
     });
 });

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineComponent, h, shallowRef } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ExternalAgentsSidebarPage from "../ExternalAgentsSidebarPage.vue";
 import ExternalAgentSessionPane from "../ExternalAgentSessionPane.vue";
 import ExternalAgentLauncher from "../ExternalAgentLauncher.vue";
@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
     clearActiveHostCredential: vi.fn(),
     switchHost: vi.fn(),
     disconnect: vi.fn(),
+    forgetHost: vi.fn(),
     launch: vi.fn(),
     ensureSession: vi.fn(),
     cancel: vi.fn(),
@@ -47,13 +48,25 @@ const mocks = vi.hoisted(() => ({
   snapshot: null as unknown as ReturnType<
     typeof shallowRef<ExternalAgentStoreSnapshot | null>
   >,
+  refreshCloudHosts: vi.fn(),
   newPaneForApp: vi.fn(),
   setPaneApp: vi.fn(),
 }));
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 vi.mock("~/core/external-agents/runtime", () => ({
   useExternalAgentRuntime: () => ({
     controller: mocks.controller,
+    refreshCloudHosts: mocks.refreshCloudHosts,
     snapshot: mocks.snapshot,
   }),
 }));
@@ -340,6 +353,10 @@ const global = {
 };
 
 describe("External Agents components", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     const value = snapshot();
@@ -378,6 +395,8 @@ describe("External Agents components", () => {
     mocks.controller.isHostCredentialLocked.mockReturnValue(false);
     mocks.controller.unlockHostCredential.mockResolvedValue(true);
     mocks.controller.clearActiveHostCredential.mockResolvedValue(undefined);
+    mocks.controller.forgetHost.mockResolvedValue(undefined);
+    mocks.refreshCloudHosts.mockResolvedValue(undefined);
     mocks.controller.pinCredentialStatus = {
       supported: true,
       configured: false,
@@ -401,7 +420,11 @@ describe("External Agents components", () => {
     expect(wrapper.find('[aria-label="Search agent sessions"]').exists()).toBe(
       true,
     );
-    expect(wrapper.text()).toContain("Add a trusted host");
+    expect(wrapper.text()).toContain("Connect another computer");
+    expect(wrapper.text()).toContain("npx or3 connect");
+    expect(wrapper.text()).toContain(
+      "Advanced: add another host by URL and token",
+    );
     expect(wrapper.text()).toContain("Fix mobile layout");
     expect(wrapper.find("section").classes()).toContain("flex");
   });
@@ -466,6 +489,35 @@ describe("External Agents components", () => {
     });
   });
 
+  it("recovers a session-only credential inside the selected host card", async () => {
+    const value = snapshot({
+      connectionState: "disconnected",
+      connectionError:
+        "A credential is required to reconnect this trusted host.",
+    });
+    mocks.snapshot = shallowRef(value);
+    mocks.controller.snapshot = value;
+    const wrapper = mount(ExternalAgentsSidebarPage, { global });
+    await flushPromises();
+
+    const reauthForm = wrapper.find(
+      'form[aria-label="Reconnect trusted host"]',
+    );
+    expect(reauthForm.exists()).toBe(true);
+    expect(reauthForm.text()).toContain("updates only the selected trusted host");
+    await reauthForm
+      .find('[aria-label="Token for selected host"]')
+      .setValue("replacement-token");
+    await reauthForm.trigger("submit");
+    await flushPromises();
+
+    expect(mocks.controller.reconnect).toHaveBeenCalledWith(
+      "replacement-token",
+      undefined,
+    );
+    expect(mocks.controller.addTrustedHost).not.toHaveBeenCalled();
+  });
+
   it("unlocks a saved token with the PIN before reconnecting", async () => {
     const value = snapshot({
       connectionState: "disconnected",
@@ -491,6 +543,166 @@ describe("External Agents components", () => {
 
     expect(mocks.controller.unlockCredentials).toHaveBeenCalledWith("482915");
     expect(mocks.controller.reconnect).toHaveBeenCalledWith();
+  });
+
+  it("reconciles cloud inventory before the explicit host refresh", async () => {
+    const wrapper = mount(ExternalAgentsSidebarPage, { global });
+    await flushPromises();
+
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().trim() === "Refresh")
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(mocks.refreshCloudHosts).toHaveBeenCalledOnce();
+    expect(mocks.controller.reconnect).toHaveBeenCalledOnce();
+    expect(
+      mocks.refreshCloudHosts.mock.invocationCallOrder[0],
+    ).toBeLessThan(mocks.controller.reconnect.mock.invocationCallOrder[0]!);
+  });
+
+  it("labels going offline as local-only and keeps cloud access intact", async () => {
+    const value = snapshot({
+      hosts: [
+        {
+          id: "or3-connect:environment-a",
+          name: "Studio Mac",
+          baseUrl: "https://studio.connect.example.test",
+          credentialRef: "or3-connect-credential:environment-a",
+          trustedAt: "2026-07-27T00:00:00.000Z",
+        },
+      ],
+      activeHostId: "or3-connect:environment-a",
+      connectionState: "online",
+      connectionError: null,
+    });
+    mocks.snapshot = shallowRef(value);
+    mocks.controller.snapshot = value;
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const wrapper = mount(ExternalAgentsSidebarPage, { global });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Go offline for now");
+    expect(wrapper.text()).toContain(
+      "The computer stays linked to this workspace until you remove it",
+    );
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().trim() === "Go offline for now")
+      ?.trigger("click");
+
+    expect(mocks.controller.disconnect).toHaveBeenCalledOnce();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mocks.controller.forgetHost).not.toHaveBeenCalled();
+    expect(mocks.refreshCloudHosts).not.toHaveBeenCalled();
+  });
+
+  it("confirms cloud revocation before reconciling local metadata", async () => {
+    const value = snapshot({
+      hosts: [
+        {
+          id: "or3-connect:environment-a",
+          name: "Studio Mac",
+          baseUrl: "https://studio.connect.example.test",
+          credentialRef: "or3-connect-credential:environment-a",
+          trustedAt: "2026-07-27T00:00:00.000Z",
+        },
+      ],
+      activeHostId: "or3-connect:environment-a",
+      connectionState: "offline",
+      connectionError: "Computer is asleep.",
+    });
+    mocks.snapshot = shallowRef(value);
+    mocks.controller.snapshot = value;
+    const response = deferred<Response>();
+    const fetchMock = vi.fn(() => response.promise);
+    vi.stubGlobal("fetch", fetchMock);
+    const wrapper = mount(ExternalAgentsSidebarPage, { global });
+    await flushPromises();
+
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().trim() === "Remove computer")
+      ?.trigger("click");
+    expect(
+      wrapper.find('[data-testid="cloud-computer-removal-confirmation"]').text(),
+    ).toContain("revokes this workspace's remote access");
+
+    await wrapper
+      .findAll("button")
+      .find(
+        (button) => button.text().trim() === "Remove and revoke access",
+      )
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(mocks.refreshCloudHosts).not.toHaveBeenCalled();
+    expect(mocks.controller.forgetHost).not.toHaveBeenCalled();
+    response.resolve({ ok: true } as Response);
+    await flushPromises();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/connect/environments/remove",
+      {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Or3-Connect-Intent": "remove",
+        },
+        body: JSON.stringify({ environmentId: "environment-a" }),
+      },
+    );
+    expect(mocks.refreshCloudHosts).toHaveBeenCalledOnce();
+    expect(mocks.controller.forgetHost).not.toHaveBeenCalled();
+  });
+
+  it("keeps a cloud computer visible when revocation is not confirmed", async () => {
+    const value = snapshot({
+      hosts: [
+        {
+          id: "or3-connect:environment-a",
+          name: "Studio Mac",
+          baseUrl: "https://studio.connect.example.test",
+          credentialRef: "or3-connect-credential:environment-a",
+          trustedAt: "2026-07-27T00:00:00.000Z",
+        },
+      ],
+      activeHostId: "or3-connect:environment-a",
+      connectionState: "offline",
+    });
+    mocks.snapshot = shallowRef(value);
+    mocks.controller.snapshot = value;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        json: async () => ({ statusMessage: "Relay cleanup is unavailable." }),
+      })),
+    );
+    const wrapper = mount(ExternalAgentsSidebarPage, { global });
+    await flushPromises();
+
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().trim() === "Remove computer")
+      ?.trigger("click");
+    await wrapper
+      .findAll("button")
+      .find(
+        (button) => button.text().trim() === "Remove and revoke access",
+      )
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(
+      wrapper.find('[data-testid="cloud-computer-removal-confirmation"]').text(),
+    ).toContain("Relay cleanup is unavailable.");
+    expect(mocks.refreshCloudHosts).not.toHaveBeenCalled();
+    expect(mocks.controller.forgetHost).not.toHaveBeenCalled();
   });
 
   it("renders offline recovery states in both sidebar and session pane", async () => {
@@ -544,7 +756,7 @@ describe("External Agents components", () => {
     });
     await flushPromises();
 
-    expect(wrapper.text()).toContain("Conversation unavailable");
+    expect(wrapper.text()).toContain("Conversation temporarily offline");
 
     mocks.snapshot.value = snapshot({
       connectionState: "online",
@@ -559,8 +771,98 @@ describe("External Agents components", () => {
         remoteSessionId: "session-1",
       }),
     });
-    expect(wrapper.text()).not.toContain("Conversation unavailable");
+    expect(
+      wrapper.find('[data-testid="conversation-load-recovery"]').exists(),
+    ).toBe(false);
   });
+
+  it("offers retry and reconnect inline for an offline conversation", async () => {
+    const value = snapshot({
+      connectionState: "offline",
+      sessions: [],
+    });
+    mocks.snapshot = shallowRef(value);
+    mocks.controller.snapshot = value;
+    mocks.controller.ensureSession.mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+    const wrapper = mount(ExternalAgentSessionPane, {
+      props: {
+        paneId: "pane-1",
+        recordId: encodeExternalAgentSessionRef({
+          hostId: "host-1",
+          remoteSessionId: "session-1",
+        }),
+      },
+      global,
+    });
+    await flushPromises();
+
+    const recovery = wrapper.find(
+      '[data-testid="conversation-load-recovery"]',
+    );
+    expect(recovery.text()).toContain("Conversation temporarily offline");
+    expect(recovery.text()).toContain("Retry");
+    expect(recovery.text()).toContain("Reconnect host");
+    await recovery
+      .findAll("button")
+      .find((button) => button.text() === "Reconnect host")
+      ?.trigger("click");
+    await flushPromises();
+    expect(mocks.controller.reconnect).toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      name: "unauthorized",
+      error: new Error("Access token is unauthorized"),
+      title: "This host needs its access token",
+      settings: true,
+    },
+    {
+      name: "stale host",
+      error: new Error("Trusted host was not found"),
+      title: "The saved host changed",
+      settings: true,
+    },
+    {
+      name: "transient server error",
+      error: new Error("Service is temporarily unavailable"),
+      title: "Conversation unavailable",
+      settings: false,
+    },
+  ])(
+    "maps $name to an actionable in-pane recovery",
+    async ({ error, title, settings }) => {
+      const value = snapshot({
+        connectionState: "online",
+        sessions: [],
+      });
+      mocks.snapshot = shallowRef(value);
+      mocks.controller.snapshot = value;
+      mocks.controller.ensureSession.mockRejectedValue(error);
+      const wrapper = mount(ExternalAgentSessionPane, {
+        props: {
+          paneId: "pane-1",
+          recordId: encodeExternalAgentSessionRef({
+            hostId: "host-1",
+            remoteSessionId: "session-1",
+          }),
+        },
+        global,
+      });
+      await flushPromises();
+
+      const recovery = wrapper.find(
+        '[data-testid="conversation-load-recovery"]',
+      );
+      expect(recovery.text()).toContain(title);
+      expect(recovery.text()).toContain("Retry");
+      expect(recovery.text().includes("Open connection settings")).toBe(
+        settings,
+      );
+    },
+  );
 
   it("unlocks the historical conversation host from its own pane", async () => {
     const targetSession = {
@@ -788,7 +1090,12 @@ describe("External Agents components", () => {
           },
           models: [
             { id: "gpt-5.6-luna", display_name: "GPT-5.6 Luna" },
-            { id: "gpt-5.6-sol", display_name: "GPT-5.6 Sol" },
+            {
+              id: "gpt-5.6-sol",
+              display_name: "GPT-5.6 Sol",
+              reasoning: ["low", "medium", "high", "xhigh"],
+              reasoning_default: "medium",
+            },
           ],
           workspace_roots: ["/workspace"],
           default_cwd: "/workspace",
@@ -818,6 +1125,9 @@ describe("External Agents components", () => {
       .find('select[aria-label="External agent model"]')
       .setValue("gpt-5.6-sol");
     await wrapper
+      .find('select[aria-label="External agent reasoning level"]')
+      .setValue("high");
+    await wrapper
       .find('textarea[aria-label="Message the agent"]')
       .setValue("Try a stronger model");
     await wrapper.find('form[aria-label="Agent composer"]').trigger("submit");
@@ -829,6 +1139,7 @@ describe("External Agents components", () => {
       mode: "review",
       isolation: "host_readonly",
       model: "gpt-5.6-sol",
+      thinkingLevel: "high",
       confirmDangerous: false,
     });
   });
@@ -859,6 +1170,338 @@ describe("External Agents components", () => {
       confirmDangerous: false,
     });
     expect(wrapper.emitted("launched")?.[0]?.[0]).toBe(session);
+  });
+
+  it("gives a first-time user the Connect command instead of a dead end", async () => {
+    mocks.snapshot.value = snapshot({
+      hosts: [],
+      activeHostId: null,
+      connectionState: "disconnected",
+      runners: [],
+      sessions: [],
+    });
+    const wrapper = mount(ExternalAgentLauncher, {
+      global: {
+        ...global,
+        stubs: {
+          ...global.stubs,
+          ExternalAgentLauncher: false,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Connect your computer");
+    expect(wrapper.text()).toContain("npx or3 connect");
+    expect(wrapper.text()).toContain("Copy Connect command");
+    expect(wrapper.text()).toContain("Advanced: connect by URL and token");
+  });
+
+  it("explains runner authentication and offers discovery refresh", async () => {
+    mocks.snapshot.value = snapshot({
+      connectionState: "degraded",
+      runners: [
+        {
+          ...snapshot().runners[0]!,
+          auth_status: "unknown",
+        },
+      ],
+      sessions: [],
+    });
+    const wrapper = mount(ExternalAgentLauncher, {
+      global: {
+        ...global,
+        stubs: {
+          ...global.stubs,
+          ExternalAgentLauncher: false,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Sign in to Codex");
+    expect(wrapper.text()).toContain("sign-in could not be verified");
+    expect(wrapper.text()).toContain("Refresh agents");
+  });
+
+  it("preserves every advanced launcher choice across equivalent snapshots", async () => {
+    const runner = {
+      ...snapshot().runners[0]!,
+      supports: {
+        chat: {
+          chatSelectable: true,
+          chatReplay: true,
+          customCwd: true,
+        },
+        dangerousBypassFlag: true,
+      },
+      models: [
+        {
+          id: "gpt-default",
+          display_name: "GPT Default",
+          default: true,
+          reasoning: ["low", "high"],
+          reasoning_default: "low",
+        },
+      ],
+    };
+    mocks.snapshot.value = snapshot({ runners: [runner], sessions: [] });
+    const wrapper = mount(ExternalAgentLauncher, {
+      global: {
+        ...global,
+        stubs: {
+          ...global.stubs,
+          ExternalAgentLauncher: false,
+        },
+      },
+    });
+    await flushPromises();
+
+    await wrapper
+      .find('select[aria-label="External agent mode"]')
+      .setValue("sandbox_auto");
+    await flushPromises();
+    await wrapper
+      .find('select[aria-label="External agent isolation"]')
+      .setValue("sandbox_dangerous");
+    await wrapper
+      .find('[aria-label="External agent workspace root"]')
+      .setValue("/workspace/custom");
+    await wrapper
+      .find('select[aria-label="External agent model"]')
+      .setValue("gpt-default");
+    await wrapper
+      .find('select[aria-label="External agent reasoning level"]')
+      .setValue("high");
+    await wrapper.find('input[type="checkbox"]').setValue(true);
+    await flushPromises();
+
+    mocks.snapshot.value = snapshot({
+      runners: [{ ...runner }],
+      sessions: [{ ...session }],
+      generation: 2,
+    });
+    await flushPromises();
+
+    expect(
+      (wrapper.find('select[aria-label="External agent mode"]')
+        .element as HTMLSelectElement).value,
+    ).toBe("sandbox_auto");
+    expect(
+      (wrapper.find('select[aria-label="External agent isolation"]')
+        .element as HTMLSelectElement).value,
+    ).toBe("sandbox_dangerous");
+    expect(
+      (wrapper.find('[aria-label="External agent workspace root"]')
+        .element as HTMLInputElement).value,
+    ).toBe("/workspace/custom");
+    expect(
+      (wrapper.find('select[aria-label="External agent model"]')
+        .element as HTMLSelectElement).value,
+    ).toBe("gpt-default");
+    expect(
+      (wrapper.find('select[aria-label="External agent reasoning level"]')
+        .element as HTMLSelectElement).value,
+    ).toBe("high");
+    expect(
+      (wrapper.find('input[type="checkbox"]').element as HTMLInputElement)
+        .checked,
+    ).toBe(true);
+  });
+
+  it("preserves text and attachments added while a launch is pending", async () => {
+    const pendingLaunch = deferred<ExternalAgentSession>();
+    mocks.controller.launch.mockReturnValueOnce(pendingLaunch.promise);
+    const wrapper = mount(ExternalAgentLauncher, {
+      global: {
+        ...global,
+        stubs: {
+          ...global.stubs,
+          ExternalAgentLauncher: false,
+        },
+      },
+    });
+    await flushPromises();
+
+    const firstFile = new File(["first"], "first.ts", {
+      type: "text/typescript",
+    });
+    const secondFile = new File(["second"], "second.ts", {
+      type: "text/typescript",
+    });
+    const input = wrapper.find('input[type="file"]');
+    Object.defineProperty(input.element, "files", {
+      configurable: true,
+      value: [firstFile],
+    });
+    await input.trigger("change");
+    await wrapper.find("textarea").setValue("Review the first draft");
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+
+    await wrapper.find("textarea").setValue("This is my next request");
+    Object.defineProperty(input.element, "files", {
+      configurable: true,
+      value: [secondFile],
+    });
+    await input.trigger("change");
+    pendingLaunch.resolve(session);
+    await flushPromises();
+
+    expect(wrapper.find("textarea").element.value).toBe(
+      "This is my next request",
+    );
+    expect(wrapper.text()).toContain("first.ts");
+    expect(wrapper.text()).toContain("second.ts");
+  });
+
+  it("preserves a newer launch draft when the request fails", async () => {
+    const pendingLaunch = deferred<ExternalAgentSession>();
+    mocks.controller.launch.mockReturnValueOnce(pendingLaunch.promise);
+    const wrapper = mount(ExternalAgentLauncher, {
+      global: {
+        ...global,
+        stubs: {
+          ...global.stubs,
+          ExternalAgentLauncher: false,
+        },
+      },
+    });
+    await flushPromises();
+
+    const textarea = wrapper.find("textarea");
+    await textarea.setValue("Review the failing draft");
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+    await textarea.setValue("Keep this newer launch draft");
+
+    pendingLaunch.reject(new Error("Host unavailable"));
+    await flushPromises();
+
+    expect((textarea.element as HTMLTextAreaElement).value).toBe(
+      "Keep this newer launch draft",
+    );
+    expect(wrapper.text()).toContain("Host unavailable");
+  });
+
+  it("preserves text and attachments added while a follow-up is pending", async () => {
+    const completedSession: ExternalAgentSession = {
+      ...session,
+      status: "succeeded",
+      activeTurnId: undefined,
+      approvals: [],
+      error: undefined,
+      turns: [
+        {
+          id: "turn-1",
+          session_id: "session-1",
+          sequence: 1,
+          status: "succeeded",
+          continuation_mode: "replay",
+          requested_at: Date.now() - 1_000,
+          completed_at: Date.now(),
+          user_message: "Initial request",
+          final_text: "Done",
+        },
+      ],
+    };
+    mocks.snapshot.value = snapshot({ sessions: [completedSession] });
+    const pendingFollowUp = deferred<void>();
+    mocks.controller.followUp.mockReturnValueOnce(pendingFollowUp.promise);
+    const wrapper = mount(ExternalAgentSessionPane, {
+      props: {
+        paneId: "pane-1",
+        recordId: encodeExternalAgentSessionRef({
+          hostId: "host-1",
+          remoteSessionId: "session-1",
+        }),
+      },
+      global,
+    });
+    await flushPromises();
+
+    const firstFile = new File(["first"], "first.md", {
+      type: "text/markdown",
+    });
+    const secondFile = new File(["second"], "second.md", {
+      type: "text/markdown",
+    });
+    const input = wrapper.find('input[type="file"]');
+    Object.defineProperty(input.element, "files", {
+      configurable: true,
+      value: [firstFile],
+    });
+    await input.trigger("change");
+    const textarea = wrapper.find(
+      'textarea[aria-label="Message the agent"]',
+    );
+    await textarea.setValue("Review the first follow-up");
+    await wrapper
+      .find('form[aria-label="Agent composer"]')
+      .trigger("submit");
+    await flushPromises();
+
+    await textarea.setValue("This is my next follow-up");
+    Object.defineProperty(input.element, "files", {
+      configurable: true,
+      value: [secondFile],
+    });
+    await input.trigger("change");
+    pendingFollowUp.resolve();
+    await flushPromises();
+
+    expect((textarea.element as HTMLTextAreaElement).value).toBe(
+      "This is my next follow-up",
+    );
+    expect(wrapper.text()).toContain("first.md");
+    expect(wrapper.text()).toContain("second.md");
+  });
+
+  it("preserves a newer follow-up draft when the request fails", async () => {
+    const completedSession: ExternalAgentSession = {
+      ...session,
+      status: "succeeded",
+      activeTurnId: undefined,
+      approvals: [],
+      error: undefined,
+      turns: [],
+    };
+    mocks.snapshot.value = snapshot({ sessions: [completedSession] });
+    const pendingFollowUp = deferred<void>();
+    mocks.controller.followUp.mockReturnValueOnce(pendingFollowUp.promise);
+    const errorHandler = vi.fn();
+    const wrapper = mount(ExternalAgentSessionPane, {
+      props: {
+        paneId: "pane-1",
+        recordId: encodeExternalAgentSessionRef({
+          hostId: "host-1",
+          remoteSessionId: "session-1",
+        }),
+      },
+      global: {
+        ...global,
+        config: { errorHandler },
+      },
+    });
+    await flushPromises();
+
+    const textarea = wrapper.find(
+      'textarea[aria-label="Message the agent"]',
+    );
+    await textarea.setValue("Review the failing follow-up");
+    await wrapper
+      .find('form[aria-label="Agent composer"]')
+      .trigger("submit");
+    await flushPromises();
+    await textarea.setValue("Keep this newer follow-up draft");
+
+    pendingFollowUp.reject(new Error("Host unavailable"));
+    await flushPromises();
+
+    expect((textarea.element as HTMLTextAreaElement).value).toBe(
+      "Keep this newer follow-up draft",
+    );
+    expect(errorHandler).toHaveBeenCalledOnce();
   });
 
   it("previews a selected file and sends it through the external-agent controller", async () => {
@@ -918,6 +1561,28 @@ describe("External Agents components", () => {
     expect(source).not.toContain('{ value: "", label: "Host default" }');
   });
 
+  it("keeps the full settings panel reachable in short or zoomed viewports", async () => {
+    const wrapper = mount(ExternalAgentLauncher, {
+      global: {
+        ...global,
+        stubs: {
+          ...global.stubs,
+          ExternalAgentLauncher: false,
+        },
+      },
+    });
+    await flushPromises();
+
+    const region = wrapper.find(
+      '[data-testid="external-agent-settings-scroll-region"]',
+    );
+    expect(region.classes()).toContain(
+      "max-h-[min(42rem,calc(100dvh-2rem))]",
+    );
+    expect(region.classes()).toContain("overflow-y-auto");
+    expect(region.classes()).toContain("overscroll-contain");
+  });
+
   it("submits the runner's authoritative model id without inventing a provider prefix", async () => {
     mocks.snapshot.value = snapshot({
       runners: [
@@ -935,6 +1600,8 @@ describe("External Agents components", () => {
               display_name: "GPT-5.6 Luna",
               provider: "openai",
               provider_name: "OpenAI Codex",
+              reasoning: ["low", "medium", "high"],
+              reasoning_default: "medium",
             },
           ],
           workspace_roots: ["/workspace"],
@@ -960,6 +1627,12 @@ describe("External Agents components", () => {
     );
     expect(modelSelect.text()).toContain("GPT-5.6 Luna · OpenAI Codex");
     await modelSelect.setValue("gpt-5.6-luna");
+    const reasoningSelect = wrapper.find(
+      'select[aria-label="External agent reasoning level"]',
+    );
+    expect(reasoningSelect.exists()).toBe(true);
+    expect(reasoningSelect.text()).toContain("Model default (Medium)");
+    await reasoningSelect.setValue("high");
     await wrapper.find("textarea").setValue("Say hello");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
@@ -968,6 +1641,54 @@ describe("External Agents components", () => {
       expect.objectContaining({
         runnerId: "codex",
         model: "gpt-5.6-luna",
+        thinkingLevel: "high",
+      }),
+    );
+  });
+
+  it("binds nondefault reasoning to the advertised default model", async () => {
+    mocks.snapshot.value = snapshot({
+      runners: [
+        {
+          ...snapshot().runners[0]!,
+          models: [
+            {
+              id: "gpt-default",
+              display_name: "GPT Default",
+              default: true,
+              reasoning: ["low", "high"],
+              reasoning_default: "low",
+            },
+          ],
+        },
+      ],
+    });
+    const wrapper = mount(ExternalAgentLauncher, {
+      global: {
+        ...global,
+        stubs: {
+          ...global.stubs,
+          ExternalAgentLauncher: false,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(
+      (wrapper.find('select[aria-label="External agent model"]')
+        .element as HTMLSelectElement).value,
+    ).toBe("host_default");
+    await wrapper
+      .find('select[aria-label="External agent reasoning level"]')
+      .setValue("high");
+    await wrapper.find("textarea").setValue("Investigate");
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+
+    expect(mocks.controller.launch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gpt-default",
+        thinkingLevel: "high",
       }),
     );
   });

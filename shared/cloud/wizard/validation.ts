@@ -44,6 +44,8 @@ import {
     getAdminPasswordPolicyFailures,
 } from './admin-dashboard';
 import { deriveEnvFromAnswers } from './derive';
+import { resolveEffectiveConnectProvider } from './connect-provider';
+import { validateCloudflareValidationAttestation } from './cloudflare-attestation';
 import type { WizardAnswers, WizardValidationResult } from './types';
 
 function isEmail(value: string): boolean {
@@ -60,7 +62,7 @@ function parseUrl(value: string): boolean {
 }
 
 function isSecretLikeKey(key: string): boolean {
-    return /(SECRET|KEY|TOKEN|PASSWORD)/i.test(key);
+    return /(SECRET|KEY|TOKEN|PASSWORD|ATTESTATION)/i.test(key);
 }
 
 function redactValue(key: string, value: string): string {
@@ -73,7 +75,8 @@ function redactValue(key: string, value: string): string {
  *
  * Behavior:
  * - Derives env and Convex env from answers.
- * - Redacts any key containing `SECRET`, `KEY`, `TOKEN`, or `PASSWORD`.
+ * - Redacts any key containing `SECRET`, `KEY`, `TOKEN`, `PASSWORD`, or
+ *   `ATTESTATION`.
  * - Groups output into "OR3 .env", "Convex backend env", and
  *   "Provider modules" sections.
  *
@@ -122,7 +125,9 @@ function validateFieldLevel(answers: WizardAnswers): {
     const warnings: string[] = [];
     const usesConvex =
         (answers.syncEnabled && answers.syncProvider === 'convex') ||
-        (answers.storageEnabled && answers.storageProvider === 'convex');
+        (answers.storageEnabled && answers.storageProvider === 'convex') ||
+        (answers.connectEnabled &&
+            resolveEffectiveConnectProvider(answers) === 'convex');
 
     if (!answers.instanceDir.trim()) {
         errors.push('instanceDir is required.');
@@ -191,6 +196,89 @@ function validateFieldLevel(answers: WizardAnswers): {
         if (!sqlitePath) errors.push('OR3_SQLITE_DB_PATH is required for sqlite sync.');
     }
 
+    if (answers.connectEnabled) {
+        if (!answers.ssrAuthEnabled) {
+            errors.push(
+                'OR3_CONNECT_ENABLED requires SSR_AUTH_ENABLED=true because remote computers are owned by signed-in accounts.'
+            );
+        }
+
+        const publicUrl = answers.connectPublicUrl?.trim() ?? '';
+        if (!publicUrl) {
+            errors.push('OR3_CONNECT_PUBLIC_URL is required when OR3 Connect is enabled.');
+        } else if (!parseUrl(publicUrl)) {
+            errors.push('OR3_CONNECT_PUBLIC_URL must be a valid URL.');
+        } else {
+            const parsed = new URL(publicUrl);
+            if (parsed.protocol !== 'https:') {
+                const message = 'OR3_CONNECT_PUBLIC_URL must use HTTPS for remote access.';
+                if (answers.deploymentTarget === 'prod-build') {
+                    errors.push(message);
+                } else {
+                    warnings.push(message);
+                }
+            }
+        }
+
+        const encryptionKey = answers.connectEncryptionKey?.trim() ?? '';
+        if (!encryptionKey) {
+            errors.push(
+                'OR3_CONNECT_ENCRYPTION_KEY is required when OR3 Connect is enabled.'
+            );
+        } else if (encryptionKey.length < 32) {
+            errors.push('OR3_CONNECT_ENCRYPTION_KEY must be at least 32 characters.');
+        }
+
+        if (!Number.isInteger(answers.connectMaxComputers)) {
+            errors.push('OR3_CONNECT_MAX_COMPUTERS must be an integer.');
+        } else if (
+            answers.connectMaxComputers < 1 ||
+            answers.connectMaxComputers > 100
+        ) {
+            errors.push('OR3_CONNECT_MAX_COMPUTERS must be between 1 and 100.');
+        }
+
+        if (answers.connectRelayProvider === 'cloudflare') {
+            const apiToken = answers.connectCloudflareApiToken?.trim() ?? '';
+            const hostname = answers.connectHostnameSuffix?.trim() ?? '';
+            if (!apiToken) {
+                errors.push(
+                    'OR3_CONNECT_CLOUDFLARE_API_TOKEN is required for the Cloudflare relay.'
+                );
+            }
+            if (!hostname) {
+                errors.push(
+                    'OR3_CONNECT_HOSTNAME_SUFFIX is required for the Cloudflare relay.'
+                );
+            } else if (
+                hostname.includes('://') ||
+                hostname.includes('/') ||
+                !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(hostname)
+            ) {
+                errors.push(
+                    'OR3_CONNECT_HOSTNAME_SUFFIX must be a hostname such as connect.example.com.'
+                );
+            }
+            if (apiToken && hostname) {
+                const attestation = validateCloudflareValidationAttestation({
+                    attestation:
+                        answers.connectCloudflareValidationAttestation,
+                    config: {
+                        accountId: answers.connectCloudflareAccountId,
+                        zoneId: answers.connectCloudflareZoneId,
+                        apiToken,
+                        hostnameSuffix: hostname,
+                    },
+                });
+                if (!attestation.valid) {
+                    warnings.push(
+                        'Cloudflare tunnel and DNS permissions will be verified automatically before settings are applied.'
+                    );
+                }
+            }
+        }
+    }
+
     const needsConvexUrl = answers.ssrAuthEnabled && usesConvex;
     if (needsConvexUrl) {
         const url = answers.convexUrl?.trim() ?? '';
@@ -198,6 +286,11 @@ function validateFieldLevel(answers: WizardAnswers): {
             errors.push('VITE_CONVEX_URL is required when Convex provider is selected.');
         } else if (!parseUrl(url)) {
             errors.push('VITE_CONVEX_URL must be a valid URL.');
+        }
+        if (!(answers.convexSelfHostedAdminKey?.trim() ?? '')) {
+            errors.push(
+                'A Convex server deployment key is required for internal OR3 server operations.'
+            );
         }
     }
 
@@ -272,7 +365,7 @@ function validateFieldLevel(answers: WizardAnswers): {
     if (
         answers.ssrAuthEnabled &&
         answers.authProvider === 'clerk' &&
-        (answers.syncProvider === 'convex' || answers.storageProvider === 'convex')
+        usesConvex
     ) {
         if (!answers.convexClerkIssuerUrl?.trim()) {
             warnings.push(

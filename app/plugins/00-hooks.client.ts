@@ -2,6 +2,7 @@ import { defineNuxtPlugin, useRuntimeConfig } from '#app';
 import type { HookEngine } from '../core/hooks/hooks';
 import { getOrCreateClientHookEngine } from '../core/hooks/runtime-kernel';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
+import { setHookEngine } from '~/core/hooks/useHooks';
 
 // Client: keep a singleton across HMR to avoid duplicate engines
 export default defineNuxtPlugin(() => {
@@ -17,6 +18,8 @@ export default defineNuxtPlugin(() => {
     }
 
     const typed = createTypedHookEngine(engine);
+    // Enable inject-free access from async utilities (reportError, storage, etc.).
+    setHookEngine(typed);
     return {
         provide: {
             hooks: typed,

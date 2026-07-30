@@ -60,8 +60,8 @@ function visibleFieldKeys(step: WizardStep, answers: WizardAnswers): string[] {
 describe('or3 cloud wizard validation', () => {
     it('validates recommended stack with required secrets', () => {
         const result = validateAnswers(validRecommendedAnswers(), { strict: true });
+        expect(result.errors, result.errors.join('\n')).toHaveLength(0);
         expect(result.ok).toBe(true);
-        expect(result.errors).toHaveLength(0);
     });
 
     it('fails when fs root is not absolute', () => {
@@ -97,9 +97,10 @@ describe('or3 cloud wizard validation', () => {
             storageEnabled: false,
             storageProvider: 'fs',
             convexUrl: 'https://demo-123.convex.cloud',
+            convexSelfHostedAdminKey: 'prod:demo-123|server-deployment-key',
         });
+        expect(result.errors, result.errors.join('\n')).toHaveLength(0);
         expect(result.ok).toBe(true);
-        expect(result.errors).toHaveLength(0);
     });
 
     it('redacts secret values in review output', () => {
@@ -182,10 +183,13 @@ describe('or3 cloud wizard validation', () => {
             (option) => option.label
         );
         expect(presetLabels).toContain(
-            'Default local stack — auto-uses Basic Auth + SQLite + Filesystem'
+            'This device only — private, offline, and no account'
         );
         expect(presetLabels).toContain(
-            'Clerk + Convex stack — auto-uses Clerk + Convex + Convex'
+            'Self-hosted OR3 — accounts, SQLite, and filesystem storage'
+        );
+        expect(presetLabels).toContain(
+            'Clerk + Convex — managed authentication and data'
         );
         expect(presetLabels).toContain(
             'Custom — manually choose auth/sync/storage providers'

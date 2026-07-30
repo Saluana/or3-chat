@@ -36,14 +36,14 @@ export default defineNitroPlugin(() => {
             const apiToken = cloudflare?.apiToken?.trim() ?? '';
             const hostnameSuffix =
                 cloudflare?.hostnameSuffix?.trim() ?? '';
-            if (!accountId || !zoneId || !apiToken || !hostnameSuffix) {
+            if (!apiToken || !hostnameSuffix) {
                 throw new Error(
                     'The Cloudflare Connect relay is not fully configured.'
                 );
             }
             return new CloudflareTunnelProvisioner({
-                accountId,
-                zoneId,
+                accountId: accountId || undefined,
+                zoneId: zoneId || undefined,
                 apiToken,
                 hostnameSuffix,
             });

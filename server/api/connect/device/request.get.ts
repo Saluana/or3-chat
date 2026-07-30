@@ -2,7 +2,7 @@ import { createError, defineEventHandler, getQuery, getRequestIP } from 'h3';
 import { requireWorkspaceSession } from '../../workspaces/_helpers';
 import { getConnectServerConfig } from '../../../connect/config';
 import { requireConnectStore } from '../../../connect/store/require';
-import { hashConnectSecret } from '../../../connect/crypto';
+import { createConnectUserCodeLookup } from '../../../connect/crypto';
 import {
     noStore,
     normalizeUserCode,
@@ -11,7 +11,7 @@ import { getRateLimitProvider } from '../../../utils/rate-limit/store';
 
 export default defineEventHandler(async (event) => {
     noStore(event);
-    getConnectServerConfig(event);
+    const config = getConnectServerConfig(event);
     const session = await requireWorkspaceSession(event);
     const lookupLimit = await getRateLimitProvider().checkAndRecord(
         `connect:lookup:${session.user?.id ?? 'anonymous'}:${getRequestIP(event) || 'unknown'}`,
@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
         });
     }
     const authorization = await requireConnectStore().getAuthorizationByUserHash(
-        hashConnectSecret(code),
+        createConnectUserCodeLookup(code, config.encryptionKey),
         Date.now()
     );
     if (!authorization || authorization.status !== 'pending') {
@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
         });
     }
     return {
-        code: authorization.user_code_display,
+        code,
         computer: {
             name: authorization.host.name,
             platform: authorization.host.platform,

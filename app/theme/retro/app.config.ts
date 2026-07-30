@@ -107,12 +107,12 @@ export default {
         // Global input overrides
         input: {
             slots: {
-                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)] max-lg:text-[16px]!',
+                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus-visible:ring-0! focus-visible:outline-none! max-lg:text-[16px]!',
             },
             variants: {
                 variant: {
                     outline:
-                        'text-highlighted bg-default ring-0 focus-visible:ring-1 focus-visible:ring-[color:var(--md-primary)] retro-shadow',
+                        'text-highlighted bg-default ring-0 retro-shadow',
                 },
                 // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
                 leading: { true: 'ps-10!' },
@@ -126,7 +126,7 @@ export default {
         },
         select: {
             slots: {
-                base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! retro-shadow focus:ring-1 focus:ring-[color:var(--md-primary)] max-lg:text-[16px]!',
+                base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! retro-shadow max-lg:text-[16px]!',
                 content: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! theme-shadow',
                 item: 'rounded-[var(--md-border-radius)] data-highlighted:before:bg-[var(--md-surface-hover)]',
             },
@@ -263,7 +263,7 @@ export default {
         },
         textarea: {
             slots: {
-                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)] max-lg:text-[16px]!',
+                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus-visible:ring-0! focus-visible:outline-none! max-lg:text-[16px]!',
             },
         },
         selectMenu: {

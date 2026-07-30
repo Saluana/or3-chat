@@ -64,6 +64,23 @@ const FIELD_ERROR_RULES: Array<{
     { key: 'clerkSecretKey', patterns: ['NUXT_CLERK_SECRET_KEY'] },
     { key: 'sqliteDbPath', patterns: ['OR3_SQLITE_DB_PATH'] },
     { key: 'convexUrl', patterns: ['VITE_CONVEX_URL'] },
+    { key: 'connectPublicUrl', patterns: ['OR3_CONNECT_PUBLIC_URL'] },
+    {
+        key: 'connectEncryptionKey',
+        patterns: ['OR3_CONNECT_ENCRYPTION_KEY'],
+    },
+    {
+        key: 'connectMaxComputers',
+        patterns: ['OR3_CONNECT_MAX_COMPUTERS'],
+    },
+    {
+        key: 'connectCloudflareApiToken',
+        patterns: ['OR3_CONNECT_CLOUDFLARE_API_TOKEN'],
+    },
+    {
+        key: 'connectHostnameSuffix',
+        patterns: ['OR3_CONNECT_HOSTNAME_SUFFIX'],
+    },
     { key: 'fsRoot', patterns: ['OR3_STORAGE_FS_ROOT'] },
     { key: 'fsTokenSecret', patterns: ['OR3_STORAGE_FS_TOKEN_SECRET'] },
     { key: 's3Endpoint', patterns: ['OR3_STORAGE_S3_ENDPOINT'] },
@@ -124,6 +141,10 @@ const STEP_ERROR_RULES: Array<{
     {
         stepId: 'provider-storage',
         patterns: ['OR3_STORAGE_FS_', 'OR3_STORAGE_S3_'],
+    },
+    {
+        stepId: 'connect',
+        patterns: ['OR3_CONNECT_'],
     },
     {
         stepId: 'openrouter-limits-security',
@@ -475,7 +496,13 @@ export function useWizardSession() {
         const patch: Partial<WizardAnswers> = {};
         for (const step of steps) {
             for (const field of getVisibleFields(step, answers.value)) {
-                if (!field.secret || !field.required) continue;
+                if (
+                    !field.secret ||
+                    !field.required ||
+                    field.autoGenerate === false
+                ) {
+                    continue;
+                }
                 const current = answers.value[field.key];
                 if (typeof current === 'string' && current.trim().length > 0) {
                     continue;
@@ -640,6 +667,22 @@ export function useWizardSession() {
                 credentials: {
                     convexUrl: values.convexUrl ?? '',
                     convexSelfHostedAdminKey: values.convexSelfHostedAdminKey ?? '',
+                },
+            };
+        }
+
+        if (
+            step.id === 'connect' &&
+            values.connectEnabled &&
+            values.connectRelayProvider === 'cloudflare'
+        ) {
+            return {
+                providerId: 'cloudflare-connect',
+                credentials: {
+                    apiToken: values.connectCloudflareApiToken ?? '',
+                    hostnameSuffix: values.connectHostnameSuffix ?? '',
+                    accountId: values.connectCloudflareAccountId ?? '',
+                    zoneId: values.connectCloudflareZoneId ?? '',
                 },
             };
         }

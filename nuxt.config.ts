@@ -12,6 +12,7 @@ import {
 } from './shared/plugins/safe-mode';
 import { providerIdToModuleId } from './shared/cloud/provider-compatibility';
 import { stripBrokenOpenRouterSourcemapsPlugin } from './plugins/vite-strip-broken-openrouter-sourcemaps';
+import { resolveConnectCloudflareReadiness } from './shared/cloud/wizard/cloudflare-attestation';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
@@ -43,6 +44,9 @@ const connectProvider =
     or3CloudConfig.sync.provider;
 const connectRelayProvider =
     process.env.OR3_CONNECT_RELAY_PROVIDER?.trim() || 'cloudflare';
+const strictConnectConfig =
+    process.env.NODE_ENV === 'production' ||
+    process.env.OR3_STRICT_CONFIG === 'true';
 
 function isPackageInstalled(pkgName: string): boolean {
     return existsSync(resolve(__dirname, 'node_modules', pkgName));
@@ -224,8 +228,23 @@ const effectiveStorageEnabled =
     effectiveSsrAuthEnabled &&
     or3CloudConfig.storage.enabled &&
     storageProviderAvailable;
-const effectiveConnectEnabled =
+const requestedConnectEnabled =
     effectiveSsrAuthEnabled && isConnectEnabled && connectProviderAvailable;
+const connectCloudflareConfig = {
+    accountId: process.env.OR3_CONNECT_CLOUDFLARE_ACCOUNT_ID || '',
+    zoneId: process.env.OR3_CONNECT_CLOUDFLARE_ZONE_ID || '',
+    apiToken: process.env.OR3_CONNECT_CLOUDFLARE_API_TOKEN || '',
+    hostnameSuffix: process.env.OR3_CONNECT_HOSTNAME_SUFFIX || '',
+};
+const connectReadiness = resolveConnectCloudflareReadiness({
+    requestedEnabled: requestedConnectEnabled,
+    strict: strictConnectConfig,
+    relayProvider: connectRelayProvider,
+    attestation:
+        process.env.OR3_CONNECT_CLOUDFLARE_VALIDATION_ATTESTATION,
+    config: connectCloudflareConfig,
+});
+const effectiveConnectEnabled = connectReadiness.enabled;
 
 if (isSsrAuthEnabled && !authProviderAvailable) {
     console.warn(
@@ -246,6 +265,16 @@ if (isConnectEnabled && !connectProviderAvailable) {
     console.warn(
         `[or3-provider] Connect provider "${connectProvider}" is not available. Remote access is disabled.`,
     );
+}
+if (connectReadiness.status === 'degraded') {
+    console.warn(
+        `[or3-connect] ${connectReadiness.message} OR3 Chat will start with remote Connect disabled.`
+    );
+} else if (
+    strictConnectConfig &&
+    connectReadiness.status === 'unverified'
+) {
+    console.warn(`[or3-connect] ${connectReadiness.message}`);
 }
 // Branding defaults (sourced from or3Config)
 const appName = or3Config.site.name;
@@ -434,13 +463,18 @@ export default defineNuxtConfig({
         },
         connect: {
             enabled: effectiveConnectEnabled,
+            requestedEnabled: requestedConnectEnabled,
+            readinessStatus: connectReadiness.status,
+            readinessMessage: connectReadiness.message || '',
+            cloudflareValidationAttestation:
+                process.env
+                    .OR3_CONNECT_CLOUDFLARE_VALIDATION_ATTESTATION ||
+                '',
             provider: connectProvider,
             relayProvider: connectRelayProvider,
             publicURL: process.env.OR3_CONNECT_PUBLIC_URL || '',
             encryptionKey: process.env.OR3_CONNECT_ENCRYPTION_KEY || '',
-            maxComputers: process.env.OR3_CONNECT_MAX_COMPUTERS
-                ? Number(process.env.OR3_CONNECT_MAX_COMPUTERS)
-                : 3,
+            maxComputers: process.env.OR3_CONNECT_MAX_COMPUTERS ?? '3',
             cloudflare: {
                 accountId:
                     process.env.OR3_CONNECT_CLOUDFLARE_ACCOUNT_ID || '',
@@ -550,6 +584,8 @@ export default defineNuxtConfig({
             },
             connect: {
                 enabled: effectiveConnectEnabled,
+                status: connectReadiness.status,
+                statusMessage: connectReadiness.message || '',
                 provider: connectProvider,
                 relayProvider: connectRelayProvider,
             },

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildExternalAgentRunnerOption,
+  resolveEffectiveExternalAgentModel,
+  resolveExternalAgentModelReasoning,
+  runnerUsability,
   validateExternalAgentLaunch,
 } from "../launcher";
 import type { ExternalAgentRunner } from "../types";
@@ -107,6 +110,21 @@ describe("external agent launcher policy", () => {
     ).toMatchObject({ available: false });
   });
 
+  it.each([
+    ["available", "ready", true, "ready"],
+    ["available", "unknown", false, "authentication_required"],
+    ["available", "signed_out", false, "authentication_required"],
+    ["not_installed", "ready", false, "provider_unavailable"],
+    ["unavailable", "ready", false, "provider_unavailable"],
+  ] as const)(
+    "uses one usability result for status=%s auth=%s",
+    (status, authStatus, usable, code) => {
+      const candidate = runner({ status, auth_status: authStatus });
+      expect(runnerUsability(candidate)).toMatchObject({ usable, code });
+      expect(buildExternalAgentRunnerOption(candidate).available).toBe(usable);
+    },
+  );
+
   it("rejects policy combinations that the host would reject", () => {
     expect(
       validateExternalAgentLaunch([runner()], {
@@ -162,4 +180,139 @@ describe("external agent launcher policy", () => {
       }),
     ).toMatchObject({ ok: true });
   });
+
+  it("resolves reasoning levels from model capabilities and option descriptors", () => {
+    expect(
+      resolveExternalAgentModelReasoning(
+        runner({
+          models: [
+            {
+              id: "gpt-5.6-sol",
+              default: true,
+              reasoning: ["low", "medium", "high", "xhigh"],
+              reasoning_default: "medium",
+            },
+          ],
+        }),
+        null,
+      ),
+    ).toEqual({
+      values: ["low", "medium", "high", "xhigh"],
+      defaultValue: "medium",
+    });
+
+    expect(
+      resolveExternalAgentModelReasoning(
+        runner({
+          id: "opencode",
+          models: [
+            {
+              id: "kimi-k2.5",
+              options: [
+                {
+                  id: "thinking",
+                  type: "select",
+                  values: [{ value: "low" }, { value: "high" }],
+                  default_value: "high",
+                },
+              ],
+            },
+          ],
+        }),
+        "kimi-k2.5",
+      ),
+    ).toEqual({
+      values: ["low", "high"],
+      defaultValue: "high",
+    });
+  });
+
+  it("rejects reasoning levels the selected model does not advertise", () => {
+    const candidate = runner({
+      models: [
+        {
+          id: "gpt-5.6-sol",
+          reasoning: ["low", "medium", "high"],
+        },
+      ],
+    });
+
+    expect(
+      validateExternalAgentLaunch([candidate], {
+        runnerId: "codex",
+        instruction: "Review",
+        mode: "review",
+        isolation: "host_readonly",
+        model: "gpt-5.6-sol",
+        thinkingLevel: "xhigh",
+      }),
+    ).toMatchObject({
+      ok: false,
+      code: "capability_unavailable",
+    });
+    expect(
+      validateExternalAgentLaunch([candidate], {
+        runnerId: "codex",
+        instruction: "Review",
+        mode: "review",
+        isolation: "host_readonly",
+        model: "gpt-5.6-sol",
+        thinkingLevel: "high",
+      }),
+    ).toMatchObject({ ok: true });
+  });
+
+  it.each([
+    {
+      name: "Codex",
+      id: "codex",
+      model: {
+        id: "gpt-5.6-sol",
+        default: true,
+        reasoning: ["low", "high"],
+      },
+    },
+    {
+      name: "OpenCode",
+      id: "opencode",
+      model: {
+        id: "kimi-k2.5",
+        default: true,
+        options: [
+          {
+            id: "thinking",
+            type: "select",
+            values: [{ value: "low" }, { value: "high" }],
+          },
+        ],
+      },
+    },
+  ])(
+    "binds $name reasoning to the advertised default model",
+    ({ id, model }) => {
+      const candidate = runner({
+        id,
+        display_name: id,
+        models: [model],
+      });
+      expect(
+        resolveEffectiveExternalAgentModel(candidate, null, "high"),
+      ).toBe(model.id);
+      expect(
+        validateExternalAgentLaunch([candidate], {
+          runnerId: id,
+          instruction: "Review",
+          mode: "review",
+          isolation: "host_readonly",
+          thinkingLevel: "high",
+        }),
+      ).toMatchObject({
+        ok: true,
+        input: {
+          model: model.id,
+          thinkingLevel: "high",
+        },
+      });
+    },
+  );
 });

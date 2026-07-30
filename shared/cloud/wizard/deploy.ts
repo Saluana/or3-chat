@@ -31,6 +31,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { deriveEnvFromAnswers } from './derive';
+import { resolveEffectiveConnectProvider } from './connect-provider';
 import type { WizardAnswers, WizardDeployResult } from './types';
 
 type CommandSpec = {
@@ -44,12 +45,21 @@ type CommandSpec = {
 function usesConvexProvider(
     answers: Pick<
         WizardAnswers,
-        'syncEnabled' | 'syncProvider' | 'storageEnabled' | 'storageProvider'
+        | 'syncEnabled'
+        | 'syncProvider'
+        | 'storageEnabled'
+        | 'storageProvider'
+        | 'connectEnabled'
+        | 'connectProvider'
+        | 'allAdvancedEnabled'
+        | 'connectAdvancedEnabled'
     >
 ): boolean {
     return (
         (answers.syncEnabled && answers.syncProvider === 'convex') ||
-        (answers.storageEnabled && answers.storageProvider === 'convex')
+        (answers.storageEnabled && answers.storageProvider === 'convex') ||
+        (answers.connectEnabled &&
+            resolveEffectiveConnectProvider(answers) === 'convex')
     );
 }
 
@@ -320,21 +330,44 @@ export async function deployAnswers(
     }
 
     if (answers.deploymentTarget === 'prod-build') {
+        const nextSteps = [
+            'Run `bun run preview` to start the production preview server.',
+            'Open http://localhost:3000 in your browser.',
+        ];
+        if (answers.ssrAuthEnabled) {
+            nextSteps.push('Sign in with your bootstrap/admin account.');
+            nextSteps.push('Open the admin panel and verify providers are healthy.');
+        }
+        if (answers.connectEnabled) {
+            nextSteps.push(
+                'After the public URL is live, connect a computer with `npx or3 connect`.'
+            );
+        }
         return {
             started: true,
             commands: printableCommands,
             instructions:
                 'Build complete. Start the production preview with: bun run preview',
             accessUrl: 'http://localhost:3000',
-            nextSteps: [
-                'Run `bun run preview` to start the production preview server.',
-                'Open http://localhost:3000 in your browser.',
-                'Sign in with your bootstrap/admin account.',
-                'Open the admin panel and verify providers are healthy.',
-            ],
+            nextSteps,
         };
     }
 
+    const nextSteps = ['Open http://localhost:3000 in your browser.'];
+    if (answers.ssrAuthEnabled) {
+        nextSteps.push('Sign in with your bootstrap/admin account.');
+        nextSteps.push('Open the admin panel and verify auth/sync/storage status.');
+    }
+    if (answers.connectEnabled) {
+        nextSteps.push(
+            'Connect requires a public HTTPS URL; once it is reachable, run `npx or3 connect`.'
+        );
+    }
+    if (usesConvexProvider(answers)) {
+        nextSteps.push(
+            'Keep an eye on `bunx convex dev --once` output while using Convex.'
+        );
+    }
     return {
         started: true,
         commands: printableCommands,
@@ -344,11 +377,6 @@ export async function deployAnswers(
                 ? 'Local dev is running. Re-run `bunx convex dev --once` after editing Convex functions.'
                 : 'Local dev is running.',
         accessUrl: 'http://localhost:3000',
-        nextSteps: [
-            'Open http://localhost:3000 in your browser.',
-            'Sign in with your bootstrap/admin account.',
-            'Open the admin panel and verify auth/sync/storage status.',
-            'If using Convex, keep an eye on `bunx convex dev --once` output.',
-        ],
+        nextSteps,
     };
 }

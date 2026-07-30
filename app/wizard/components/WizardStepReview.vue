@@ -151,6 +151,7 @@ import type {
     WizardValidationResult,
 } from '~~/shared/cloud/wizard/types';
 import { buildApplyOnlySuccessBody } from '~~/shared/cloud/wizard/next-steps';
+import { resolveEffectiveConnectProvider } from '~~/shared/cloud/wizard/connect-provider';
 
 type DeployResponse = {
     ok: boolean;
@@ -201,7 +202,7 @@ const successBanner = computed(() => {
     }
     return {
         title: 'Settings applied',
-        body: buildApplyOnlySuccessBody(),
+        body: buildApplyOnlySuccessBody(props.answers.connectEnabled),
     };
 });
 
@@ -228,6 +229,26 @@ const summaryGroups = computed(() => [
             { label: 'Sync Provider', value: props.answers.syncEnabled ? props.answers.syncProvider : 'Disabled' },
             { label: 'Storage Provider', value: props.answers.storageEnabled ? props.answers.storageProvider : 'Disabled' },
         ],
+    },
+    {
+        label: 'Remote Access',
+        rows: props.answers.connectEnabled
+            ? [
+                  { label: 'OR3 Connect', value: 'Enabled' },
+                  {
+                      label: 'Connection Records',
+                      value: resolveEffectiveConnectProvider(props.answers),
+                  },
+                  {
+                      label: 'Relay',
+                      value: props.answers.connectRelayProvider,
+                  },
+                  {
+                      label: 'Public URL',
+                      value: props.answers.connectPublicUrl || 'Not set',
+                  },
+              ]
+            : [{ label: 'OR3 Connect', value: 'Disabled' }],
     },
 ]);
 </script>

@@ -25,7 +25,7 @@ export const sidebarOverrides = {
     'input#sidebar.search': {
         class: 'mb-4',
         ui: {
-            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)] text-[14px]! h-[40px]!',
+            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus-visible:ring-0! focus-visible:outline-none! text-[14px]! h-[40px]!',
         },
     },
     'selectmenu#sidebar.project-select': {
@@ -133,7 +133,7 @@ export const sidebarOverrides = {
         },
     },
     'div#sidebar.header': {
-        class: 'header-pattern flex items-center min-h-12 max-h-12 py-2 border-b-(--md-border-width) border-(--md-border-color)',
+        class: 'header-pattern flex items-center min-h-12 max-h-12 py-2',
     },
     'div#sidebar.header:collapsed': {
         class: 'px-0 justify-center w-[63px]! border-r-[1px]',

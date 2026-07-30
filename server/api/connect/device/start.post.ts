@@ -2,7 +2,6 @@ import {
     createError,
     defineEventHandler,
     getRequestIP,
-    readBody,
     setResponseStatus,
 } from 'h3';
 import { getConnectServerConfig } from '../../../connect/config';
@@ -10,6 +9,7 @@ import { requireConnectRelay } from '../../../connect/relay/require';
 import { requireConnectStore } from '../../../connect/store/require';
 import { ConnectStoreError } from '../../../connect/store/types';
 import {
+    createConnectUserCodeLookup,
     hashConnectSecret,
     randomURLSecret,
 } from '../../../connect/crypto';
@@ -19,7 +19,8 @@ import {
     parseConnectHost,
     storeConnectHost,
 } from '../../../connect/helpers';
-import { getRateLimitProvider } from '../../../utils/rate-limit/store';
+import { readLimitedJsonBody } from '../../../utils/security/limited-json-body';
+import { getConnectRateLimitProvider } from '../../../connect/rate-limit';
 
 const AUTHORIZATION_TTL_MS = 10 * 60 * 1000;
 const USER_CODE_ATTEMPTS = 5;
@@ -29,7 +30,7 @@ export default defineEventHandler(async (event) => {
     const config = getConnectServerConfig(event);
     requireConnectRelay();
     const ip = getRequestIP(event) || 'unknown';
-    const rateLimit = await getRateLimitProvider().checkAndRecord(
+    const rateLimit = await getConnectRateLimitProvider(config).checkAndRecord(
         `connect:start:${ip}`,
         { windowMs: 60_000, maxRequests: 10 }
     );
@@ -39,7 +40,7 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'Too many connection attempts. Try again shortly.',
         });
     }
-    const body = (await readBody(event)) as { host?: unknown };
+    const body = await readLimitedJsonBody<{ host?: unknown }>(event);
     const host = parseConnectHost(body?.host);
     const deviceCode = randomURLSecret(32);
     const now = Date.now();
@@ -50,8 +51,10 @@ export default defineEventHandler(async (event) => {
         try {
             await store.createAuthorization({
                 deviceCodeHash: hashConnectSecret(deviceCode),
-                userCodeHash: hashConnectSecret(userCode),
-                userCodeDisplay: userCode,
+                userCodeHash: createConnectUserCodeLookup(
+                    userCode,
+                    config.encryptionKey
+                ),
                 host: storeConnectHost(host),
                 expiresAt: now + AUTHORIZATION_TTL_MS,
                 now,

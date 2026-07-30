@@ -4,6 +4,7 @@ import type { ExternalAgentStoreSnapshot } from "./types";
 
 type ExternalAgentRuntimeGlobal = typeof globalThis & {
   __or3ExternalAgentController?: ExternalAgentController;
+  __or3ExternalAgentCloudHostRefresh?: () => Promise<void>;
   __or3ExternalAgentSnapshot?: ShallowRef<ExternalAgentStoreSnapshot | null>;
   __or3ExternalAgentSnapshotDispose?: () => void;
 };
@@ -64,8 +65,23 @@ export function getExternalAgentController():
     .__or3ExternalAgentController;
 }
 
+export function setExternalAgentCloudHostRefresh(
+  refresh: (() => Promise<void>) | undefined,
+): void {
+  const scope = globalThis as ExternalAgentRuntimeGlobal;
+  scope.__or3ExternalAgentCloudHostRefresh = refresh;
+}
+
+export function getExternalAgentCloudHostRefresh():
+  | (() => Promise<void>)
+  | undefined {
+  return (globalThis as ExternalAgentRuntimeGlobal)
+    .__or3ExternalAgentCloudHostRefresh;
+}
+
 export function useExternalAgentRuntime(): {
   readonly controller: ExternalAgentController | undefined;
+  readonly refreshCloudHosts: (() => Promise<void>) | undefined;
   readonly snapshot: ShallowRef<ExternalAgentStoreSnapshot | null>;
 } {
   const scope = globalThis as ExternalAgentRuntimeGlobal;
@@ -74,6 +90,7 @@ export function useExternalAgentRuntime(): {
     (scope.__or3ExternalAgentSnapshot = shallowRef(null));
   return {
     controller: scope.__or3ExternalAgentController,
+    refreshCloudHosts: scope.__or3ExternalAgentCloudHostRefresh,
     snapshot,
   };
 }
@@ -83,5 +100,6 @@ export function resetExternalAgentRuntimeForTests(): void {
   scope.__or3ExternalAgentSnapshotDispose?.();
   delete scope.__or3ExternalAgentSnapshotDispose;
   delete scope.__or3ExternalAgentController;
+  delete scope.__or3ExternalAgentCloudHostRefresh;
   delete scope.__or3ExternalAgentSnapshot;
 }

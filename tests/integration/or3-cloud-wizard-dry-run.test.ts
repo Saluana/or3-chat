@@ -100,6 +100,7 @@ describe('or3 cloud wizard dry-run flows', () => {
             clerkPublishableKey: 'pk_test_123',
             clerkSecretKey: 'sk_test_123',
             convexUrl: 'https://test.convex.cloud',
+            convexSelfHostedAdminKey: 'prod:test-deployment|test-server-key',
             convexClerkIssuerUrl: 'https://clerk.example.com',
             convexAdminJwtSecret: 'convex-admin-secret',
             openrouterInstanceApiKey: 'or-instance-key',

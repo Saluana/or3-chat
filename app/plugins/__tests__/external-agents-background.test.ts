@@ -3,11 +3,25 @@ import type { InternClient } from "@or3/intern-client";
 
 let runExternalAgentBackground: typeof import("../external-agents.client").runExternalAgentBackground;
 let adaptInternClient: typeof import("../external-agents.client").adaptInternClient;
+let isCurrentCloudHostWorkspace: typeof import("../external-agents.client").isCurrentCloudHostWorkspace;
+let createCloudHostReconciler: typeof import("../external-agents.client").createCloudHostReconciler;
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
 
 beforeAll(async () => {
   vi.stubGlobal("defineNuxtPlugin", (plugin: unknown) => plugin);
-  ({ runExternalAgentBackground, adaptInternClient } =
-    await import("../external-agents.client"));
+  ({
+    runExternalAgentBackground,
+    adaptInternClient,
+    isCurrentCloudHostWorkspace,
+    createCloudHostReconciler,
+  } = await import("../external-agents.client"));
 });
 
 describe("external agent attachment staging", () => {
@@ -65,6 +79,81 @@ describe("external agent attachment staging", () => {
 });
 
 describe("external agent plugin background startup", () => {
+  it("drops a cloud-host response after the active workspace changes", () => {
+    expect(
+      isCurrentCloudHostWorkspace("workspace-a", "workspace-a", "workspace-b"),
+    ).toBe(false);
+    expect(
+      isCurrentCloudHostWorkspace("workspace-b", "workspace-a", "workspace-b"),
+    ).toBe(false);
+    expect(
+      isCurrentCloudHostWorkspace("workspace-b", "workspace-b", "workspace-b"),
+    ).toBe(true);
+  });
+
+  it("applies only the newest active workspace inventory when responses finish out of order", async () => {
+    let activeWorkspaceId: string | null = "workspace-a";
+    const responseA = deferred<Response>();
+    const responseB = deferred<Response>();
+    const fetch = vi
+      .fn()
+      .mockReturnValueOnce(responseA.promise)
+      .mockReturnValueOnce(responseB.promise);
+    const reconcileCloudHosts = vi.fn(async () => undefined);
+    const reconciler = createCloudHostReconciler({
+      controller: { reconcileCloudHosts },
+      fetch,
+      getActiveWorkspaceId: () => activeWorkspaceId,
+      isEnabled: () => true,
+      isDisposed: () => false,
+    });
+
+    const reconcileA = reconciler.reconcile("workspace-a");
+    activeWorkspaceId = "workspace-b";
+    const reconcileB = reconciler.reconcile("workspace-b");
+    responseB.resolve({
+      ok: true,
+      json: async () => ({
+        workspaceId: "workspace-b",
+        environments: [
+          {
+            id: "env-b",
+            name: "Workspace B computer",
+            baseUrl: "https://env-b.connect.or3.test",
+            accessToken: "token-b",
+          },
+        ],
+      }),
+    } as Response);
+    await reconcileB;
+    responseA.resolve({
+      ok: true,
+      json: async () => ({
+        workspaceId: "workspace-a",
+        environments: [
+          {
+            id: "env-a",
+            name: "Workspace A computer",
+            baseUrl: "https://env-a.connect.or3.test",
+            accessToken: "token-a",
+          },
+        ],
+      }),
+    } as Response);
+    await reconcileA;
+
+    expect(reconcileCloudHosts).toHaveBeenCalledOnce();
+    expect(reconcileCloudHosts).toHaveBeenCalledWith("workspace-b", [
+      {
+        environmentId: "env-b",
+        name: "Workspace B computer",
+        baseUrl: "https://env-b.connect.or3.test",
+        token: "token-b",
+      },
+    ]);
+    reconciler.dispose();
+  });
+
   it("returns without waiting for initialization and contains failures", async () => {
     let finish!: () => void;
     const task = vi.fn(

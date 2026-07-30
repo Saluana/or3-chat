@@ -37,7 +37,12 @@ export function useChatModelSelection(options: {
     modelReasoningEfforts: Readonly<Ref<OpenRouterReasoningEffort[]>>;
     modelSupportsThinking: Readonly<Ref<boolean>>;
 } {
-    const { favoriteModels, getFavoriteModels, catalog } = useModelStore();
+    const {
+        favoriteModels,
+        getFavoriteModels,
+        catalog,
+        fetchModels,
+    } = useModelStore();
     const { settings } = useAiSettings();
     const selectedModel = ref(DEFAULT_MODEL);
     const webSearchEnabled = ref(false);
@@ -48,16 +53,18 @@ export function useChatModelSelection(options: {
 
     const selectedModelMeta = computed<OpenRouterModel | undefined>(() => {
         const modelId = stripThinkingSuffix(selectedModel.value);
+        const matchesSelectedModel = (model: OpenRouterModel) =>
+            model.id === modelId || model.canonical_slug === modelId;
         return (
-            catalog.value.find((model) => model.id === modelId) ??
-            favoriteModels.value.find((model) => model.id === modelId)
+            catalog.value.find(matchesSelectedModel) ??
+            favoriteModels.value.find(matchesSelectedModel)
         );
     });
     const modelReasoningEfforts = computed(() =>
         getSupportedReasoningEfforts(selectedModelMeta.value)
     );
-    const modelSupportsThinking = computed(
-        () => modelReasoningEfforts.value.length > 0
+    const modelSupportsThinking = computed(() =>
+        modelSupportsReasoning(selectedModelMeta.value)
     );
 
     function applyNewChatDefault(): void {
@@ -72,6 +79,7 @@ export function useChatModelSelection(options: {
     }
 
     onMounted(async () => {
+        const catalogHydration = fetchModels().catch(() => undefined);
         await getFavoriteModels();
         if (!process.client) return;
         if (persistedModel.value) {
@@ -79,6 +87,7 @@ export function useChatModelSelection(options: {
         }
         applyNewChatDefault();
         window.addEventListener('or3:model-selected', onCatalogModelSelected);
+        await catalogHydration;
     });
     onBeforeUnmount(() => {
         if (process.client) {

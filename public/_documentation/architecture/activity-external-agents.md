@@ -60,6 +60,11 @@ shell in `lg` mode; primary Chat and Document AI use the same shell in `sm`
 mode. The document editor also consumes the same `or3-prose` formatting
 primitive, keeping readable content consistent across all three panes.
 
+Codex and OpenCode model entries may advertise reasoning levels and a default.
+The agent settings show those values only for the selected capable model and
+send an explicit override as `thinking_level` on the next turn. Selecting Model
+default omits the override so the runner retains its advertised default.
+
 ## Extension flow
 
 To add Activity support, adapt the existing source of truth, provide stable

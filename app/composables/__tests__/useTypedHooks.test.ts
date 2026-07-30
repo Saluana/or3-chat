@@ -1,14 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHookEngine } from '../../core/hooks/hooks';
-import { useHooks } from '../../core/hooks/useHooks';
+import { setHookEngine, useHooks } from '../../core/hooks/useHooks';
+import { createTypedHookEngine } from '../../core/hooks/typed-hooks';
 
 // Provide a HookEngine for useHooks via #app mock
 const hookEngine = createHookEngine();
-vi.mock('#app', () => ({ useNuxtApp: () => ({ $hooks: hookEngine }) }));
+const typedHooks = createTypedHookEngine(hookEngine);
+vi.mock('#app', () => ({ useNuxtApp: () => ({ $hooks: typedHooks }) }));
+vi.mock('nuxt/app', () => ({ useNuxtApp: () => ({ $hooks: typedHooks }) }));
 
 describe('useHooks typed integration', () => {
     beforeEach(() => {
         hookEngine.removeAllCallbacks();
+        setHookEngine(null);
     });
 
     it('registers typed action and executes', async () => {

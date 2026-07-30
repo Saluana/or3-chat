@@ -534,7 +534,9 @@ async function promptField(
             const hasCurrentValue =
                 typeof currentValue === 'string' && currentValue.length > 0;
             const canAutoGenerate =
-                Boolean(field.secret) && Boolean(field.required);
+                Boolean(field.secret) &&
+                Boolean(field.required) &&
+                field.autoGenerate !== false;
             const value = await prompt.password(field.label, {
                 required:
                     field.required &&
@@ -623,7 +625,7 @@ async function validatePathFieldIfNeeded(
 }
 
 type ConnectionTestTarget = {
-    providerId: 'clerk' | 'convex' | 's3';
+    providerId: 'clerk' | 'convex' | 's3' | 'cloudflare-connect';
     label: string;
     credentials: Record<string, string>;
 };
@@ -680,6 +682,26 @@ function getConnectionTestTarget(
         };
     }
 
+    if (
+        step.id === 'connect' &&
+        answers.connectEnabled &&
+        answers.connectRelayProvider === 'cloudflare'
+    ) {
+        const apiToken = answers.connectCloudflareApiToken?.trim() ?? '';
+        const hostnameSuffix = answers.connectHostnameSuffix?.trim() ?? '';
+        if (!apiToken || !hostnameSuffix) return null;
+        return {
+            providerId: 'cloudflare-connect',
+            label: 'Cloudflare',
+            credentials: {
+                apiToken,
+                hostnameSuffix,
+                accountId: answers.connectCloudflareAccountId?.trim() ?? '',
+                zoneId: answers.connectCloudflareZoneId?.trim() ?? '',
+            },
+        };
+    }
+
     return null;
 }
 
@@ -711,6 +733,10 @@ function findValidationFailureStepId(
         {
             stepId: 'provider-storage',
             patterns: ['OR3_STORAGE_FS_', 'OR3_STORAGE_S3_'],
+        },
+        {
+            stepId: 'connect',
+            patterns: ['OR3_CONNECT_'],
         },
         {
             stepId: 'convex-env',
@@ -812,7 +838,8 @@ function printSaveThesePanel(
     for (const gen of generatedSecrets) {
         if (
             gen.key === 'adminPassword' ||
-            gen.key === 'basicAuthBootstrapPassword'
+            gen.key === 'basicAuthBootstrapPassword' ||
+            gen.key === 'connectEncryptionKey'
         ) {
             continue;
         }
@@ -839,6 +866,7 @@ function printCheatSheet(answers: WizardAnswers): void {
     const lines = ['', '  ┌─ Next steps ──────────────────────────────'];
     for (const line of buildCheatSheetLines({
         ssrAuthEnabled: answers.ssrAuthEnabled,
+        connectEnabled: answers.connectEnabled,
     })) {
         lines.push(`  │  ${line}`);
     }
@@ -1030,7 +1058,7 @@ async function runFastInit(flags: CliFlags): Promise<void> {
 function printHelp(): void {
     console.log(`or3-cloud commands
 
-  or3-cloud init [--preset recommended|clerk-convex] [--instance-dir <path>] [--env-file .env|.env.local] [--dry-run] [--cli] [--manual] [--fast] [--ui] [--ui-port <port>] [--enable-install] [--package-manager bun|npm] [--no-focused-prompts]
+  or3-cloud init [--preset personal-local|recommended|clerk-convex] [--instance-dir <path>] [--env-file .env|.env.local] [--dry-run] [--cli] [--manual] [--fast] [--ui] [--ui-port <port>] [--enable-install] [--package-manager bun|npm] [--no-focused-prompts]
   or3-cloud validate [--env-file .env|.env.local] [--strict]
   or3-cloud doctor [--env-file .env|.env.local] [--strict]
   or3-cloud presets list
@@ -1303,6 +1331,7 @@ async function runInit(flags: CliFlags): Promise<void> {
                             typeof nextValue === 'string' &&
                             field.secret &&
                             field.required &&
+                            field.autoGenerate !== false &&
                             nextValue.trim().length === 0
                         ) {
                             nextValue =

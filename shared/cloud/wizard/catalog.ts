@@ -53,6 +53,9 @@ export const SECRET_ANSWER_KEYS: Array<keyof WizardAnswers> = [
     's3SecretAccessKey',
     's3SessionToken',
     'convexSelfHostedAdminKey',
+    'connectEncryptionKey',
+    'connectCloudflareApiToken',
+    'connectCloudflareValidationAttestation',
     'adminPassword',
 ];
 
@@ -105,6 +108,17 @@ export const WIZARD_OWNED_ENV_KEYS = [
     'OR3_SQLITE_PRAGMA_SYNCHRONOUS',
     'OR3_SQLITE_ALLOW_IN_MEMORY',
     'OR3_SQLITE_STRICT',
+    'OR3_CONNECT_ENABLED',
+    'OR3_CONNECT_PROVIDER',
+    'OR3_CONNECT_RELAY_PROVIDER',
+    'OR3_CONNECT_PUBLIC_URL',
+    'OR3_CONNECT_ENCRYPTION_KEY',
+    'OR3_CONNECT_MAX_COMPUTERS',
+    'OR3_CONNECT_CLOUDFLARE_ACCOUNT_ID',
+    'OR3_CONNECT_CLOUDFLARE_ZONE_ID',
+    'OR3_CONNECT_CLOUDFLARE_API_TOKEN',
+    'OR3_CONNECT_CLOUDFLARE_VALIDATION_ATTESTATION',
+    'OR3_CONNECT_HOSTNAME_SUFFIX',
     'OR3_STORAGE_FS_ROOT',
     'OR3_STORAGE_FS_TOKEN_SECRET',
     'OR3_STORAGE_FS_URL_TTL_SECONDS',
@@ -407,10 +421,11 @@ export const providerCatalog: WizardProviderDescriptor[] = [
             {
                 key: 'convexSelfHostedAdminKey',
                 type: 'password',
-                label: 'Admin Key (only for self-hosted Convex)',
-                help: 'Only needed if you\'re running your own Convex server. Skip this for Convex Cloud.',
+                label: 'Server deployment key',
+                help: 'Required for OR3 server operations. For Convex Cloud, create a deployment-scoped key with `npx convex deployment token create or3-server`; for self-hosted Convex, use the deployment admin key.',
+                required: true,
                 secret: true,
-                tier: 'advanced',
+                tier: 'core',
             },
             {
                 key: 'convexSelfHostedSiteUrl',
@@ -623,6 +638,9 @@ export function getProviderDescriptor(kind: WizardProviderDescriptor['kind'], id
 export function inferWizardModeFromPresetName(
     presetName?: string
 ): WizardMode {
+    if (presetName === 'personal-local') {
+        return 'personal-local';
+    }
     if (presetName === 'legacy-clerk-convex' || presetName === 'clerk-convex') {
         return 'preset-clerk-convex';
     }
@@ -634,6 +652,7 @@ export function inferWizardModeFromPresetName(
 
 export function isWizardMode(value: unknown): value is WizardMode {
     return (
+        value === 'personal-local' ||
         value === 'preset-local' ||
         value === 'preset-clerk-convex' ||
         value === 'custom'
@@ -655,6 +674,16 @@ export function applyWizardModeDefaults(
     wizardMode: WizardMode
 ): WizardAnswers {
     switch (wizardMode) {
+        case 'personal-local':
+            return {
+                ...answers,
+                wizardMode: 'personal-local',
+                presetName: 'personal-local',
+                ssrAuthEnabled: false,
+                syncEnabled: false,
+                storageEnabled: false,
+                connectEnabled: false,
+            };
         case 'preset-local':
             return {
                 ...answers,
@@ -666,6 +695,7 @@ export function applyWizardModeDefaults(
                 syncProvider: 'sqlite',
                 storageEnabled: true,
                 storageProvider: 'fs',
+                connectProvider: 'sqlite',
             };
         case 'preset-clerk-convex':
             return {
@@ -678,6 +708,7 @@ export function applyWizardModeDefaults(
                 syncProvider: 'convex',
                 storageEnabled: true,
                 storageProvider: 'convex',
+                connectProvider: 'convex',
             };
         case 'custom':
         default:
@@ -705,6 +736,8 @@ export function normalizeAdvancedToggles(
             allAdvancedEnabled || Boolean(answers.storageAdvancedEnabled),
         cloudAdvancedEnabled:
             allAdvancedEnabled || Boolean(answers.cloudAdvancedEnabled),
+        connectAdvancedEnabled:
+            allAdvancedEnabled || Boolean(answers.connectAdvancedEnabled),
     };
 }
 
@@ -726,7 +759,6 @@ const ADVANCED_SECTION_KEYS = {
         'sqlitePragmaSynchronous',
         'sqliteAllowInMemory',
         'sqliteStrict',
-        'convexSelfHostedAdminKey',
         'convexSelfHostedSiteUrl',
     ],
     storage: [
@@ -749,8 +781,15 @@ const ADVANCED_SECTION_KEYS = {
         'forwardedForHeader',
         'strictConfig',
     ],
+    connect: [
+        'connectProvider',
+        'connectRelayProvider',
+        'connectMaxComputers',
+        'connectCloudflareAccountId',
+        'connectCloudflareZoneId',
+    ],
 } as const satisfies Record<
-    'base' | 'auth' | 'sync' | 'storage' | 'cloud',
+    'base' | 'auth' | 'sync' | 'storage' | 'cloud' | 'connect',
     ReadonlyArray<keyof WizardAnswers>
 >;
 
@@ -794,6 +833,11 @@ export function applySkippedAdvancedDefaults(
     }
     if (!next.cloudAdvancedEnabled) {
         next = resetAdvancedSectionToDefaults(next, defaults, 'cloud');
+    }
+    if (!next.connectAdvancedEnabled) {
+        next = resetAdvancedSectionToDefaults(next, defaults, 'connect');
+        next.connectProvider =
+            next.syncProvider === 'convex' ? 'convex' : 'sqlite';
     }
 
     return next;
@@ -862,8 +906,17 @@ function readEnvNumber(
 }
 
 function inferWizardModeFromProviderSelection(
-    answers: Pick<WizardAnswers, 'authProvider' | 'syncProvider' | 'storageProvider'>
+    answers: Pick<
+        WizardAnswers,
+        | 'ssrAuthEnabled'
+        | 'authProvider'
+        | 'syncProvider'
+        | 'storageProvider'
+    >
 ): WizardMode {
+    if (!answers.ssrAuthEnabled) {
+        return 'personal-local';
+    }
     if (
         answers.authProvider === 'basic-auth' &&
         answers.syncProvider === 'sqlite' &&
@@ -884,6 +937,7 @@ function inferWizardModeFromProviderSelection(
 }
 
 function presetNameFromWizardMode(wizardMode: WizardMode): string | undefined {
+    if (wizardMode === 'personal-local') return 'personal-local';
     if (wizardMode === 'preset-local') return 'recommended';
     if (wizardMode === 'preset-clerk-convex') return 'legacy-clerk-convex';
     return undefined;
@@ -961,6 +1015,30 @@ export function mapEnvToWizardAnswers(
     assignString('sqlitePragmaSynchronous', 'OR3_SQLITE_PRAGMA_SYNCHRONOUS');
     assignBoolean('sqliteAllowInMemory', 'OR3_SQLITE_ALLOW_IN_MEMORY');
     assignBoolean('sqliteStrict', 'OR3_SQLITE_STRICT');
+
+    assignBoolean('connectEnabled', 'OR3_CONNECT_ENABLED');
+    assignString('connectProvider', 'OR3_CONNECT_PROVIDER');
+    assignString('connectRelayProvider', 'OR3_CONNECT_RELAY_PROVIDER');
+    assignString('connectPublicUrl', 'OR3_CONNECT_PUBLIC_URL');
+    assignString('connectEncryptionKey', 'OR3_CONNECT_ENCRYPTION_KEY');
+    assignNumber('connectMaxComputers', 'OR3_CONNECT_MAX_COMPUTERS');
+    assignString(
+        'connectCloudflareAccountId',
+        'OR3_CONNECT_CLOUDFLARE_ACCOUNT_ID'
+    );
+    assignString(
+        'connectCloudflareZoneId',
+        'OR3_CONNECT_CLOUDFLARE_ZONE_ID'
+    );
+    assignString(
+        'connectCloudflareApiToken',
+        'OR3_CONNECT_CLOUDFLARE_API_TOKEN'
+    );
+    assignString(
+        'connectCloudflareValidationAttestation',
+        'OR3_CONNECT_CLOUDFLARE_VALIDATION_ATTESTATION'
+    );
+    assignString('connectHostnameSuffix', 'OR3_CONNECT_HOSTNAME_SUFFIX');
 
     assignString('convexUrl', 'VITE_CONVEX_URL');
     assignString('convexSelfHostedAdminKey', 'CONVEX_SELF_HOSTED_ADMIN_KEY');
@@ -1066,6 +1144,7 @@ export function createDefaultAnswers(
         syncAdvancedEnabled: false,
         storageAdvancedEnabled: false,
         cloudAdvancedEnabled: false,
+        connectAdvancedEnabled: false,
         featuresAdvancedEnabled: false,
         or3SiteName: 'OR3',
         or3DefaultTheme: 'retro',
@@ -1089,6 +1168,13 @@ export function createDefaultAnswers(
         sqlitePragmaSynchronous: 'NORMAL',
         sqliteAllowInMemory: false,
         sqliteStrict: false,
+        connectEnabled: false,
+        connectProvider: 'sqlite',
+        connectRelayProvider: 'cloudflare',
+        connectMaxComputers: 3,
+        connectCloudflareAccountId: '',
+        connectCloudflareZoneId: '',
+        connectCloudflareValidationAttestation: '',
         storageEnabled: true,
         storageProvider: 'fs',
         fsRoot: '/tmp/or3-storage',
@@ -1121,6 +1207,7 @@ export function createDefaultAnswers(
     };
 
     const hasProviderOverride =
+        envOverrides.ssrAuthEnabled !== undefined ||
         envOverrides.authProvider !== undefined ||
         envOverrides.syncProvider !== undefined ||
         envOverrides.storageProvider !== undefined;
@@ -1154,12 +1241,40 @@ export const recommendedPreset: WizardPreset = {
         syncAdvancedEnabled: false,
         storageAdvancedEnabled: false,
         cloudAdvancedEnabled: false,
+        connectAdvancedEnabled: false,
         authProvider: 'basic-auth',
         syncProvider: 'sqlite',
         storageProvider: 'fs',
         ssrAuthEnabled: true,
         syncEnabled: true,
         storageEnabled: true,
+        connectEnabled: false,
+        connectProvider: 'sqlite',
+        deploymentTarget: 'local-dev',
+    },
+};
+
+/**
+ * Built-in preset for a private, browser-only installation.
+ * It never enables accounts, remote access, sync, or server-side file storage.
+ */
+export const personalLocalPreset: WizardPreset = {
+    name: 'personal-local',
+    createdAt: new Date(0).toISOString(),
+    answers: {
+        presetName: 'personal-local',
+        wizardMode: 'personal-local',
+        allAdvancedEnabled: false,
+        baseAdvancedEnabled: false,
+        authAdvancedEnabled: false,
+        syncAdvancedEnabled: false,
+        storageAdvancedEnabled: false,
+        cloudAdvancedEnabled: false,
+        connectAdvancedEnabled: false,
+        ssrAuthEnabled: false,
+        syncEnabled: false,
+        storageEnabled: false,
+        connectEnabled: false,
         deploymentTarget: 'local-dev',
     },
 };
@@ -1180,12 +1295,15 @@ export const legacyPreset: WizardPreset = {
         syncAdvancedEnabled: false,
         storageAdvancedEnabled: false,
         cloudAdvancedEnabled: false,
+        connectAdvancedEnabled: false,
         authProvider: 'clerk',
         syncProvider: 'convex',
         storageProvider: 'convex',
         ssrAuthEnabled: true,
         syncEnabled: true,
         storageEnabled: true,
+        connectEnabled: false,
+        connectProvider: 'convex',
         deploymentTarget: 'local-dev',
     },
 };

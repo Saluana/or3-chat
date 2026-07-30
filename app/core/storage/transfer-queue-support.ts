@@ -35,7 +35,7 @@ export type TransferExecutionContext = {
     db: Or3DB;
 };
 
-type RecoverableTransferError = Error & {
+export type RecoverableTransferError = Error & {
     transferState: RecoverableFileTransferState;
 };
 
@@ -43,12 +43,24 @@ export function recoverableTransferError(
     state: RecoverableFileTransferState,
     message: string
 ): RecoverableTransferError {
+    // Expected reconciliation races (pre-commit / temporary remote gap).
     const error = err('ERR_STORAGE_FILE_NOT_FOUND', message, {
+        severity: 'info',
         tags: { domain: 'storage', stage: 'download' },
-        retryable: false,
+        retryable: true,
     }) as unknown as RecoverableTransferError;
     error.transferState = state;
     return error;
+}
+
+export function isRecoverableTransferError(
+    error: unknown
+): error is RecoverableTransferError {
+    if (!error || typeof error !== 'object' || !('transferState' in error)) {
+        return false;
+    }
+    const state = (error as { transferState?: unknown }).transferState;
+    return state === 'pending_upload' || state === 'remote_missing';
 }
 
 export function resolveUploadMethod(presign: {

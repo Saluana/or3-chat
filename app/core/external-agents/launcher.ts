@@ -1,4 +1,8 @@
-import type { ExternalAgentLaunchInput, ExternalAgentRunner } from "./types";
+import type {
+  ExternalAgentLaunchInput,
+  ExternalAgentModelReasoning,
+  ExternalAgentRunner,
+} from "./types";
 
 export interface ExternalAgentLaunchOption {
   readonly id: string;
@@ -9,6 +13,7 @@ export interface ExternalAgentLaunchOption {
 export interface ExternalAgentRunnerOption {
   readonly runner: ExternalAgentRunner;
   readonly available: boolean;
+  readonly usability: ExternalAgentRunnerUsability;
   readonly unavailableReason?: string;
   readonly modes: readonly ExternalAgentLaunchOption[];
   readonly isolations: readonly ExternalAgentLaunchOption[];
@@ -17,6 +22,18 @@ export interface ExternalAgentRunnerOption {
   readonly defaultMode: string;
   readonly defaultIsolation: string;
   readonly defaultCwd: string;
+}
+
+export type ExternalAgentRunnerUsabilityCode =
+  | "ready"
+  | "provider_unavailable"
+  | "authentication_required"
+  | "chat_unavailable";
+
+export interface ExternalAgentRunnerUsability {
+  readonly usable: boolean;
+  readonly code: ExternalAgentRunnerUsabilityCode;
+  readonly reason?: string;
 }
 
 export type ExternalAgentLaunchValidation =
@@ -57,6 +74,139 @@ function stringArray(value: unknown): string[] {
     .filter(Boolean);
 }
 
+function normalizedUniqueValues(values: readonly string[]): string[] {
+  return [
+    ...new Set(
+      values.map((value) => value.toLowerCase().trim()).filter(Boolean),
+    ),
+  ];
+}
+
+function modelOptionReasoning(
+  candidate: Readonly<Record<string, unknown>>,
+): ExternalAgentModelReasoning | null {
+  const options = Array.isArray(candidate.options) ? candidate.options : [];
+  for (const rawOption of options) {
+    const option = record(rawOption);
+    const id = String(option.id ?? "").toLowerCase();
+    const type = String(option.type ?? "").toLowerCase();
+    if (
+      !id.includes("reasoning") &&
+      !id.includes("thinking") &&
+      !type.includes("reasoning") &&
+      !type.includes("thinking")
+    ) {
+      continue;
+    }
+    const values = normalizedUniqueValues(
+      (Array.isArray(option.values) ? option.values : []).flatMap((rawValue) => {
+        if (typeof rawValue === "string") return [rawValue];
+        const value = record(rawValue).value;
+        return typeof value === "string" ? [value] : [];
+      }),
+    );
+    if (!values.length) continue;
+    const requestedDefault = String(
+      option.current_value ?? option.default_value ?? "",
+    )
+      .toLowerCase()
+      .trim();
+    return {
+      values,
+      defaultValue: values.includes(requestedDefault)
+        ? requestedDefault
+        : undefined,
+    };
+  }
+  return null;
+}
+
+export function resolveExternalAgentModelReasoning(
+  runner: ExternalAgentRunner | undefined,
+  modelId?: string | null,
+): ExternalAgentModelReasoning | null {
+  if (!runner) return null;
+  const models = runner.models ?? [];
+  const candidate = modelId
+    ? models.find((model) => String(model.id ?? "").trim() === modelId.trim())
+    : models.find((model) => model.default === true);
+  if (!candidate) return null;
+  const values = normalizedUniqueValues(stringArray(candidate.reasoning));
+  if (!values.length) return modelOptionReasoning(candidate);
+  const requestedDefault = String(candidate.reasoning_default ?? "")
+    .toLowerCase()
+    .trim();
+  return {
+    values,
+    defaultValue: values.includes(requestedDefault)
+      ? requestedDefault
+      : undefined,
+  };
+}
+
+function advertisedDefaultModelId(
+  runner: ExternalAgentRunner | undefined,
+): string | undefined {
+  const id = runner?.models?.find((model) => model.default === true)?.id;
+  return typeof id === "string" && id.trim() ? id.trim() : undefined;
+}
+
+export function resolveEffectiveExternalAgentModel(
+  runner: ExternalAgentRunner | undefined,
+  modelId?: string | null,
+  thinkingLevel?: string | null,
+): string | undefined {
+  const requested = modelId?.trim();
+  if (requested) return requested;
+  return thinkingLevel?.trim() ? advertisedDefaultModelId(runner) : undefined;
+}
+
+export function runnerUsability(
+  runner: ExternalAgentRunner,
+): ExternalAgentRunnerUsability {
+  const status = String(runner.status ?? "unknown")
+    .trim()
+    .toLowerCase();
+  if (status !== "available") {
+    const readableStatus = status.replaceAll("_", " ") || "unknown";
+    return {
+      usable: false,
+      code: "provider_unavailable",
+      reason:
+        status === "not_installed" || status === "missing"
+          ? `${runner.display_name} is not installed on this host`
+          : `${runner.display_name} is ${readableStatus}`,
+    };
+  }
+
+  const authStatus = String(runner.auth_status ?? "unknown")
+    .trim()
+    .toLowerCase();
+  if (authStatus !== "ready") {
+    const readableStatus = authStatus.replaceAll("_", " ") || "unknown";
+    return {
+      usable: false,
+      code: "authentication_required",
+      reason:
+        authStatus === "unknown"
+          ? `${runner.display_name} sign-in could not be verified`
+          : `${runner.display_name} authentication is ${readableStatus}`,
+    };
+  }
+
+  const supports = record(runner.supports);
+  const chat = record(runner.chat_capabilities ?? supports.chat);
+  if (chat.chatSelectable !== true) {
+    return {
+      usable: false,
+      code: "chat_unavailable",
+      reason: `${runner.display_name} does not advertise chat sessions`,
+    };
+  }
+
+  return { usable: true, code: "ready" };
+}
+
 function advertisedRoots(runner: ExternalAgentRunner): string[] {
   const runtime = record(runner.runtime);
   const roots = [
@@ -73,11 +223,8 @@ export function buildExternalAgentRunnerOption(
 ): ExternalAgentRunnerOption {
   const supports = record(runner.supports);
   const chat = record(runner.chat_capabilities ?? supports.chat);
-  const selectable = chat.chatSelectable === true;
-  const available =
-    runner.status === "available" &&
-    runner.auth_status === "ready" &&
-    selectable;
+  const usability = runnerUsability(runner);
+  const available = usability.usable;
   const modes: ExternalAgentLaunchOption[] = [
     { id: "review", label: "Review only", dangerous: false },
     { id: "safe_edit", label: "Safe edit", dangerous: false },
@@ -133,13 +280,8 @@ export function buildExternalAgentRunnerOption(
   return Object.freeze({
     runner,
     available,
-    unavailableReason: available
-      ? undefined
-      : runner.status !== "available"
-        ? `Provider is ${runner.status.replaceAll("_", " ")}`
-        : runner.auth_status !== "ready"
-          ? `Authentication is ${runner.auth_status.replaceAll("_", " ")}`
-          : "Chat sessions are not advertised by this provider",
+    usability,
+    unavailableReason: usability.reason,
     modes: Object.freeze(modes),
     isolations: Object.freeze(isolations),
     roots: Object.freeze(advertisedRoots(runner)),
@@ -253,5 +395,33 @@ export function validateExternalAgentLaunch(
       message: "Confirm dangerous full access before continuing",
     };
   }
-  return { ok: true, runner: option, input };
+  const thinkingLevel = input.thinkingLevel?.toLowerCase().trim();
+  const effectiveModel = resolveEffectiveExternalAgentModel(
+    option.runner,
+    input.model,
+    thinkingLevel,
+  );
+  if (thinkingLevel) {
+    const reasoning = resolveExternalAgentModelReasoning(
+      option.runner,
+      effectiveModel,
+    );
+    if (!reasoning?.values.includes(thinkingLevel)) {
+      return {
+        ok: false,
+        code: "capability_unavailable",
+        message:
+          "That reasoning level is not available for the selected model.",
+      };
+    }
+  }
+  return {
+    ok: true,
+    runner: option,
+    input: {
+      ...input,
+      model: effectiveModel,
+      thinkingLevel: thinkingLevel || undefined,
+    },
+  };
 }

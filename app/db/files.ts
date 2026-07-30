@@ -378,6 +378,11 @@ export async function ensureFileBlob(
         if (!queue) return undefined;
         return await queue.ensureDownloadedBlob(hash);
     } catch (error) {
+        const { isRecoverableTransferError } = await import(
+            '~/core/storage/transfer-queue-support'
+        );
+        // Expected pre-commit / remote-gap races — no error telemetry.
+        if (isRecoverableTransferError(error)) return undefined;
         reportError(error, {
             silent: true,
             tags: { domain: 'storage', stage: 'download' },

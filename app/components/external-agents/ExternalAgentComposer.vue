@@ -113,7 +113,10 @@
                 <UIcon name="i-lucide-sliders-horizontal" class="size-4" />
               </UButton>
               <template #content>
-                <div class="w-[min(22rem,calc(100vw-2rem))] p-4">
+                <div
+                  class="max-h-[min(42rem,calc(100dvh-2rem))] w-[min(22rem,calc(100vw-2rem))] overscroll-contain overflow-y-auto p-4 [scrollbar-gutter:stable]"
+                  data-testid="external-agent-settings-scroll-region"
+                >
                   <slot name="settings" />
                 </div>
               </template>
@@ -395,9 +398,21 @@ function removeAttachment(id: string) {
   if (removed) releasePreview(removed);
 }
 
-function clearAttachments() {
+function clearAttachments(
+  expected?: readonly ExternalAgentUploadAttachment[],
+): boolean {
+  if (
+    expected &&
+    (attachments.value.length !== expected.length ||
+      attachments.value.some(
+        (attachment, index) => attachment.id !== expected[index]?.id,
+      ))
+  ) {
+    return false;
+  }
   attachments.value.forEach(releasePreview);
   attachments.value = [];
+  return true;
 }
 
 function attachmentIcon(attachment: ComposerAttachment): string {

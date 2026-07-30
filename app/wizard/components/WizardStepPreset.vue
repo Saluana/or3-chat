@@ -12,18 +12,27 @@
             </p>
         </header>
 
-        <div
+        <fieldset
             v-if="wizardModeField"
-            class="grid gap-4 md:grid-cols-3"
+            class="grid gap-4 md:grid-cols-2"
         >
-            <button
+            <legend class="sr-only">
+                {{ wizardModeField.label || step.title }}
+            </legend>
+            <label
                 v-for="option in wizardModeField.options ?? []"
                 :key="String(option.value)"
-                type="button"
-                class="group relative rounded-[var(--md-border-radius)] border px-4 py-4 text-left transition-colors"
+                class="group relative cursor-pointer rounded-[var(--md-border-radius)] border px-4 py-4 text-left transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--md-primary)]"
                 :class="cardClass(option.value)"
-                @click="emit('update-field', wizardModeField.key, option.value)"
             >
+                <input
+                    class="sr-only"
+                    type="radio"
+                    name="or3-cloud-wizard-mode"
+                    :value="String(option.value)"
+                    :checked="answers.wizardMode === option.value"
+                    @change="emit('update-field', wizardModeField.key, option.value)"
+                />
                 <span
                     v-if="option.value === 'preset-local'"
                     class="absolute -top-2.5 right-3 rounded-full bg-[var(--md-primary)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--md-on-primary,#fff)]"
@@ -37,14 +46,21 @@
                     />
                 </div>
                 <div class="text-sm font-semibold">{{ option.label }}</div>
+                <span
+                    v-if="answers.wizardMode === option.value"
+                    class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--md-primary)]"
+                >
+                    <UIcon name="i-heroicons-check-circle" class="size-4" />
+                    Selected
+                </span>
                 <p
                     v-if="option.description"
                     class="mt-1.5 whitespace-pre-line text-xs leading-relaxed text-[var(--md-secondary)]"
                 >
                     {{ option.description }}
                 </p>
-            </button>
-        </div>
+            </label>
+        </fieldset>
 
         <div class="space-y-5">
             <WizardFieldRenderer
@@ -105,6 +121,7 @@ function cardClass(value: WizardFieldOption['value']): string {
 }
 
 function presetIcon(value: WizardFieldOption['value']): string {
+    if (value === 'personal-local') return 'i-heroicons-computer-desktop';
     if (value === 'preset-local') return 'i-heroicons-server-stack';
     if (value === 'preset-clerk-convex') return 'i-heroicons-cloud';
     return 'i-heroicons-wrench-screwdriver';

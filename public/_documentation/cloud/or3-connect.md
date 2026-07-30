@@ -52,6 +52,7 @@ OR3_CONNECT_RELAY_PROVIDER=cloudflare
 OR3_CONNECT_PUBLIC_URL=https://or3.chat
 OR3_CONNECT_ENCRYPTION_KEY=<at-least-32-random-characters>
 OR3_CONNECT_MAX_COMPUTERS=3
+# Optional overrides; normally discovered from the hostname:
 OR3_CONNECT_CLOUDFLARE_ACCOUNT_ID=...
 OR3_CONNECT_CLOUDFLARE_ZONE_ID=...
 OR3_CONNECT_CLOUDFLARE_API_TOKEN=...
@@ -61,8 +62,10 @@ OR3_CONNECT_HOSTNAME_SUFFIX=connect.or3.chat
 `OR3_CONNECT_PROVIDER` is optional and defaults to `OR3_SYNC_PROVIDER`.
 `OR3_CONNECT_RELAY_PROVIDER` defaults to `cloudflare`.
 
-The Cloudflare API token needs Tunnel Edit and DNS Edit for the selected
-account/zone. It is server-only.
+The Cloudflare API token needs Tunnel Edit, DNS Edit, and Zone Read for the
+selected account/zone. It is server-only. Account and zone IDs are optional:
+OR3 selects the longest zone matching `OR3_CONNECT_HOSTNAME_SUFFIX`. Operators
+who do not grant Zone Read can provide both IDs explicitly.
 
 SQLite migrations run automatically at server startup. When using
 `OR3_CONNECT_PROVIDER=convex`, deploy the updated Convex schema/functions before

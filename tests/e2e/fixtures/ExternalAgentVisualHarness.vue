@@ -3,7 +3,9 @@
     class="agent-visual-shell grid h-dvh min-h-0 overflow-hidden bg-[var(--md-surface)]"
     :style="{
       display: 'grid',
-      gridTemplateColumns: narrow ? 'minmax(0, 1fr)' : '22rem minmax(0, 1fr)',
+      gridTemplateColumns: narrow
+        ? 'minmax(0, 1fr)'
+        : `${sidebarWidth}px minmax(0, 1fr)`,
       height: '100dvh',
       minHeight: '0',
       overflow: 'hidden',
@@ -21,12 +23,14 @@
       pane-id="visual-agent-pane"
       :record-id="recordId"
     />
-    <output class="sr-only" data-testid="ready">ready</output>
+    <output class="sr-only" data-testid="ready">
+      {{ ready ? "ready" : "loading" }}
+    </output>
   </main>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import ExternalAgentsSidebarPage from "~/components/external-agents/ExternalAgentsSidebarPage.vue";
 import ExternalAgentSessionPane from "~/components/external-agents/ExternalAgentSessionPane.vue";
 import {
@@ -45,6 +49,15 @@ import type {
 import type { ExternalAgentController } from "~/core/external-agents/controller";
 
 const route = useRoute();
+const { $theme } = useNuxtApp();
+const colorMode = useColorMode();
+const ready = ref(false);
+const sidebarWidth = computed(() => {
+  const requested = Number(route.query.sidebarWidth);
+  return Number.isFinite(requested)
+    ? Math.min(480, Math.max(220, requested))
+    : 352;
+});
 const narrow = ref(
   typeof window !== "undefined" &&
     window.matchMedia("(max-width: 720px)").matches,
@@ -454,9 +467,23 @@ const recordId = computed(() =>
       }),
 );
 
-if (route.query.theme === "dark") {
-  useColorMode().preference = "dark";
-}
+onMounted(async () => {
+  await nextTick();
+  const requestedTheme = String(route.query.uiTheme ?? "");
+  if (["blank", "cyberpunk", "retro"].includes(requestedTheme)) {
+    await $theme.setActiveTheme(requestedTheme);
+    document.documentElement.setAttribute("data-theme", requestedTheme);
+  }
+  if (route.query.theme === "dark" || route.query.theme === "light") {
+    colorMode.preference = route.query.theme;
+  }
+  await nextTick();
+  if (route.query.theme === "dark" || route.query.theme === "light") {
+    document.documentElement.classList.remove("dark", "light");
+    document.documentElement.classList.add(route.query.theme);
+  }
+  ready.value = true;
+});
 
 onBeforeUnmount(resetExternalAgentRuntimeForTests);
 </script>

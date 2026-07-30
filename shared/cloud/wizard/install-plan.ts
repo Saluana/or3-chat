@@ -31,6 +31,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { getProviderDescriptor } from './catalog';
+import { resolveEffectiveConnectProvider } from './connect-provider';
 import type { WizardAnswers } from './types';
 
 /** Supported package managers for dependency installation. */
@@ -234,6 +235,22 @@ export function createDependencyInstallPlan(
             storageProvider?.dependencies.forEach((dependency) => {
                 packageSet.add(dependency.packageName);
                 addReason(reasons, dependency.packageName, dependency.reason);
+            });
+        }
+
+        if (answers.connectEnabled) {
+            const connectProviderId = resolveEffectiveConnectProvider(answers);
+            const connectProvider = getProviderDescriptor(
+                'sync',
+                connectProviderId
+            );
+            connectProvider?.dependencies.forEach((dependency) => {
+                packageSet.add(dependency.packageName);
+                addReason(
+                    reasons,
+                    dependency.packageName,
+                    `OR3 Connect persistence: ${dependency.reason}`
+                );
             });
         }
     }

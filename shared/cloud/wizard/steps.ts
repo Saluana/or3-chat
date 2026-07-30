@@ -67,6 +67,10 @@ function isCloudAdvancedEnabled(answers: WizardAnswers): boolean {
     return answers.allAdvancedEnabled || answers.cloudAdvancedEnabled;
 }
 
+function isConnectAdvancedEnabled(answers: WizardAnswers): boolean {
+    return answers.allAdvancedEnabled || answers.connectAdvancedEnabled;
+}
+
 function withVisibleWhen(
     field: WizardField,
     visibleWhen: (answers: WizardAnswers) => boolean
@@ -266,16 +270,28 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     help: 'Choose a preset for a fast path, or custom to manually pick providers.',
                     options: [
                         {
-                            label: 'Default local stack — auto-uses Basic Auth + SQLite + Filesystem',
-                            value: 'preset-local',
+                            label: 'This device only — private, offline, and no account',
+                            value: 'personal-local',
+                            description:
+                                'Everything stays in this browser. No remote access or server account is configured.',
                         },
                         {
-                            label: 'Clerk + Convex stack — auto-uses Clerk + Convex + Convex',
+                            label: 'Self-hosted OR3 — accounts, SQLite, and filesystem storage',
+                            value: 'preset-local',
+                            description:
+                                'The recommended server setup. You can optionally connect remote agent computers.',
+                        },
+                        {
+                            label: 'Clerk + Convex — managed authentication and data',
                             value: 'preset-clerk-convex',
+                            description:
+                                'For deployments already using Clerk and Convex.',
                         },
                         {
                             label: 'Custom — manually choose auth/sync/storage providers',
                             value: 'custom',
+                            description:
+                                'Choose each backend and advanced deployment setting yourself.',
                         },
                     ],
                 },
@@ -464,6 +480,138 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
         'storage'
     );
     if (storageStep) steps.push(storageStep);
+
+    steps.push({
+        id: 'connect',
+        title: 'Remote Agent Computers',
+        description:
+            'Optionally reach computers running or3-intern from anywhere.\n' +
+            'OR3 uses an outbound encrypted tunnel, so you do not need to open a port or install a VPN.',
+        fields: [
+            {
+                key: 'connectEnabled',
+                type: 'boolean',
+                label: 'Access your agent computers remotely?',
+                help: 'Leave this off if you only use agents on the same device or local network.',
+                defaultValue: false,
+                tier: 'core',
+            },
+            {
+                key: 'connectPublicUrl',
+                type: 'text',
+                label: 'Public OR3 URL',
+                help: 'The HTTPS address where people sign in, such as https://chat.example.com.',
+                required: true,
+                tier: 'core',
+                visibleWhen: (current) => current.connectEnabled,
+            },
+            {
+                key: 'connectHostnameSuffix',
+                type: 'text',
+                label: 'Remote computer domain',
+                help: 'A Cloudflare-managed hostname such as connect.example.com. Individual computers receive private subdomains beneath it.',
+                required: true,
+                tier: 'core',
+                visibleWhen: (current) =>
+                    current.connectEnabled &&
+                    current.connectRelayProvider === 'cloudflare',
+            },
+            {
+                key: 'connectCloudflareApiToken',
+                type: 'password',
+                label: 'Cloudflare authorization token',
+                help: 'Use a server-only token with Tunnel Edit, DNS Edit, and Zone Read. OR3 never shows this token after setup.',
+                required: true,
+                secret: true,
+                autoGenerate: false,
+                tier: 'core',
+                visibleWhen: (current) =>
+                    current.connectEnabled &&
+                    current.connectRelayProvider === 'cloudflare',
+            },
+            {
+                key: 'connectEncryptionKey',
+                type: 'password',
+                label: 'Credential encryption key',
+                help: 'Leave blank and OR3 will generate this server-only key for you.',
+                required: true,
+                secret: true,
+                autoGenerate: true,
+                tier: 'core',
+                visibleWhen: (current) => current.connectEnabled,
+            },
+            {
+                key: 'connectAdvancedEnabled',
+                type: 'boolean',
+                label: 'Show advanced remote access options?',
+                help: 'Provider overrides, raw Cloudflare IDs, and the connected-computer limit.',
+                defaultValue: false,
+                tier: 'core',
+                visibleWhen: (current) => current.connectEnabled,
+            },
+            {
+                key: 'connectProvider',
+                type: 'select',
+                label: 'Connection record provider',
+                help: 'Normally this should match your sync database.',
+                tier: 'advanced',
+                options: [
+                    { label: 'SQLite', value: 'sqlite' },
+                    { label: 'Convex', value: 'convex' },
+                    { label: 'Custom registered provider', value: 'custom' },
+                ],
+                visibleWhen: (current) =>
+                    current.connectEnabled &&
+                    isConnectAdvancedEnabled(current),
+            },
+            {
+                key: 'connectRelayProvider',
+                type: 'select',
+                label: 'Remote relay provider',
+                tier: 'advanced',
+                options: [
+                    { label: 'Cloudflare Tunnel', value: 'cloudflare' },
+                    { label: 'Custom registered relay', value: 'custom' },
+                ],
+                visibleWhen: (current) =>
+                    current.connectEnabled &&
+                    isConnectAdvancedEnabled(current),
+            },
+            {
+                key: 'connectMaxComputers',
+                type: 'number',
+                label: 'Maximum computers per account',
+                help: 'Three is a safe default. Increase this only when your deployment needs it.',
+                tier: 'advanced',
+                visibleWhen: (current) =>
+                    current.connectEnabled &&
+                    isConnectAdvancedEnabled(current),
+            },
+            {
+                key: 'connectCloudflareAccountId',
+                type: 'text',
+                label: 'Cloudflare account ID override',
+                help: 'Optional. OR3 normally discovers this from the remote computer domain.',
+                tier: 'advanced',
+                visibleWhen: (current) =>
+                    current.connectEnabled &&
+                    current.connectRelayProvider === 'cloudflare' &&
+                    isConnectAdvancedEnabled(current),
+            },
+            {
+                key: 'connectCloudflareZoneId',
+                type: 'text',
+                label: 'Cloudflare zone ID override',
+                help: 'Optional. OR3 normally discovers the matching zone.',
+                tier: 'advanced',
+                visibleWhen: (current) =>
+                    current.connectEnabled &&
+                    current.connectRelayProvider === 'cloudflare' &&
+                    isConnectAdvancedEnabled(current),
+            },
+        ],
+        canSkip: (current) => !current.ssrAuthEnabled,
+    });
 
     steps.push({
         id: 'openrouter-limits-security',

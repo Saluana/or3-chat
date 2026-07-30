@@ -955,6 +955,61 @@ describe('FileTransferQueue', () => {
         expect(cached).toBeDefined();
     });
 
+    it('waitForTransfer rejects pending_upload as a recoverable error', async () => {
+        const meta = makeMeta({ storage_id: undefined });
+        const db = createDbStub([meta], []);
+        const provider: ObjectStorageProvider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(async () => ({ url: 'https://upload.example', expiresAt: Date.now() })),
+            getPresignedDownloadUrl: vi.fn(async () => ({ url: 'https://download.example', expiresAt: Date.now() })),
+        };
+        const queue = new FileTransferQueue(db as any, provider);
+
+        await db.file_transfers.put({
+            id: 'pending-dl',
+            hash: meta.hash,
+            workspace_id: 'ws-1',
+            direction: 'download',
+            bytes_total: 0,
+            bytes_done: 0,
+            state: 'pending_upload',
+            attempts: 0,
+            created_at: 1,
+            updated_at: 1,
+            last_error: 'Remote upload has not been committed yet',
+        } as FileTransfer);
+
+        await expect(queue.waitForTransfer('pending-dl')).rejects.toMatchObject({
+            transferState: 'pending_upload',
+            message: 'Remote upload has not been committed yet',
+        });
+        expect(provider.getPresignedDownloadUrl).not.toHaveBeenCalled();
+    });
+
+    it('ensureDownloadedBlob returns undefined when download parks as pending_upload', async () => {
+        const meta = makeMeta({ storage_id: undefined });
+        const db = createDbStub([meta], []);
+        const provider: ObjectStorageProvider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(async () => ({ url: 'https://upload.example', expiresAt: Date.now() })),
+            getPresignedDownloadUrl: vi.fn(async () => ({ url: 'https://download.example', expiresAt: Date.now() })),
+        };
+        const queue = new FileTransferQueue(db as any, provider, {
+            concurrency: 1,
+            dbResolver: () => db as any,
+        });
+        (queue as any).workspaceId = 'ws-1';
+
+        const blobPromise = queue.ensureDownloadedBlob(meta.hash);
+        await pumpQueue();
+        await expect(blobPromise).resolves.toBeUndefined();
+        expect(provider.getPresignedDownloadUrl).not.toHaveBeenCalled();
+    });
+
     it('disposes timers, waiters, lease renewals, and running requests idempotently', async () => {
         const meta = makeMeta();
         const db = createDbStub([meta], []);

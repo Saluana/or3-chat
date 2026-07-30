@@ -239,6 +239,8 @@ export function useChat(
     const hooks = useHooks();
     const { activePromptContent } = useActivePrompt();
     const threadIdRef = ref<string | undefined>(initialThreadId);
+    // Mutable so ChatContainer can update without re-calling useChat() outside setup.
+    const pendingPromptIdRef = ref<string | undefined>(pendingPromptId);
     const historyLoadedFor = ref<string | null>(
         options.historyAlreadyLoaded && initialThreadId
             ? initialThreadId
@@ -1348,7 +1350,8 @@ export function useChat(
         if (!canSend) return { status: 'rejected', requestId, reason: 'client_limit' };
 
         if (!threadIdRef.value) {
-            let effectivePromptId: string | null = pendingPromptId || null;
+            let effectivePromptId: string | null =
+                pendingPromptIdRef.value || null;
             if (!effectivePromptId) {
                 try {
                     effectivePromptId = await getDefaultPromptId();
@@ -2511,6 +2514,90 @@ export function useChat(
         streamAcc.reset();
     }
 
+    function setPendingPrompt(promptId: string | null | undefined) {
+        pendingPromptIdRef.value = promptId || undefined;
+    }
+
+    /**
+     * Rebind this instance to another thread without re-entering setup-only
+     * composables (useToast/useHooks/useSessionContext).
+     */
+    async function switchThread(
+        nextThreadId: string | undefined,
+        switchOptions: {
+            seedMessages?: ChatMessage[];
+            pendingPromptId?: string | null;
+            historyAlreadyLoaded?: boolean;
+        } = {}
+    ): Promise<void> {
+        if (disposed) {
+            throw new Error('Cannot switchThread on a disposed useChat instance');
+        }
+
+        const currentId = threadIdRef.value;
+        if (nextThreadId && currentId && nextThreadId === currentId) {
+            if (switchOptions.pendingPromptId !== undefined) {
+                setPendingPrompt(switchOptions.pendingPromptId);
+            }
+            return;
+        }
+
+        const isBackgroundActive =
+            backgroundStreamingAllowed.value &&
+            (backgroundJobId.value || backgroundJobMode.value !== 'none');
+        const isForegroundStreamActive =
+            loading.value &&
+            !backgroundJobId.value &&
+            backgroundJobMode.value === 'none' &&
+            Boolean(abortController.value);
+
+        if (isBackgroundActive || isForegroundStreamActive) {
+            // Keep durable background/foreground work alive; detach UI bindings.
+            detached.value = true;
+            clearBackgroundJobSubscriptions({ keepTracking: true });
+        } else if (abortController.value) {
+            aborted.value = true;
+            try {
+                abortController.value.abort();
+            } catch {
+                /* intentionally empty */
+            }
+            streamAcc.finalize({ aborted: true });
+            abortController.value = null;
+            clearBackgroundJobSubscriptions({ keepTracking: false });
+        } else {
+            clearBackgroundJobSubscriptions({ keepTracking: false });
+        }
+
+        threadIdRef.value = nextThreadId;
+        if (switchOptions.pendingPromptId !== undefined) {
+            setPendingPrompt(switchOptions.pendingPromptId);
+        }
+        historyLoadedFor.value =
+            switchOptions.historyAlreadyLoaded && nextThreadId
+                ? nextThreadId
+                : null;
+        backgroundJobId.value = null;
+        backgroundJobMode.value = 'none';
+        loading.value = false;
+        requestState.value = { status: 'idle' };
+        activeRequestId = null;
+        activeRequestScope = null;
+        aborted.value = false;
+        streamId.value = undefined;
+        tailAssistant.value = null;
+        streamAcc.reset();
+        detached.value = false;
+
+        if (switchOptions.seedMessages) {
+            replaceCanonicalHistory(switchOptions.seedMessages);
+        } else {
+            clearConversation({ persistence: 'preserve' });
+        }
+
+        await ensureHistorySynced();
+    }
+
     function clear() {
 
         const isBackgroundActive =
@@ -2749,5 +2836,7 @@ export function useChat(
         clear,
         clearConversation,
         dispose,
+        switchThread,
+        setPendingPrompt,
     };
 }
