@@ -1,10 +1,10 @@
+import { registerEditorToolbarButton } from '~/composables/editor/useEditorToolbar';
 import {
-    registerEditorToolbarButton,
     registerEditorExtension,
-} from '~/composables';
+    type EditorExtension,
+} from '~/composables/editor/useEditorNodes';
 import type { Editor } from '@tiptap/vue-3';
 import AutocompleteState from './EditorAutocomplete/state';
-import type { EditorExtension } from '~/composables/editor/useEditorNodes';
 
 export default defineNuxtPlugin(() => {
     try {
@@ -18,9 +18,8 @@ export default defineNuxtPlugin(() => {
                 id: 'editor-autocomplete:extension',
                 order: 100, // Load before most plugins but after core
                 factory: async () => {
-                    const mod = await import(
-                        /* @vite-ignore */ './EditorAutocomplete/TiptapExtension'
-                    );
+                    const mod =
+                        await import('./EditorAutocomplete/TiptapExtension');
                     return (mod as any).AutocompleteExtension;
                 },
             } as EditorExtension);

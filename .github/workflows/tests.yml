@@ -1,0 +1,70 @@
+name: Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 9 * * 1-5'
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'server/**'
+      - 'shared/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'vitest.config.ts'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'server/**'
+      - 'shared/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'vitest.config.ts'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/tests.yml'
+
+jobs:
+  core:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run test
+      - run: bun run test:scripts
+      - run: bun run test:release-policy
+
+  full:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run test:full
+
+  browser-critical:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:e2e:storage
+      - run: bun run test:e2e:admin-auth

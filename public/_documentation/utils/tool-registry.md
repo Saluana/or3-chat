@@ -14,7 +14,7 @@ The tool registry provides:
 - **Reactive state** — Vue-powered reactivity for UI toggles and enabled states
 - **Persistent preferences** — User choices saved to localStorage
 - **Type safety** — Full TypeScript support with shared JSON Schema draft-07 validation
-- **Lifecycle management** — Automatic cleanup on HMR and unmount
+- **Lifecycle management** — Ownership-bound disposers plus explicit HMR/unmount cleanup
 - **Error handling** — Built-in timeout and error tracking per tool
 
 ---
@@ -195,7 +195,9 @@ Execute a tool by name with JSON-stringified arguments.
 ```ts
 function executeTool(
     name: string,
-    argsJson: string
+    argsJson: string,
+    context?: ToolExecutionContext,
+    admission?: ToolExecutionAdmission
 ): Promise<{
     result: string | null;
     toolName: string;
@@ -205,6 +207,12 @@ function executeTool(
 ```
 
 Handles parsing, full JSON Schema validation, timeout, and error tracking automatically. The same validator is used by the browser and server registries, including nested requirements, types, enums, numeric/string bounds, and `additionalProperties`.
+
+Provider-visible chat calls pass an admission snapshot so disabled,
+server-only, or definition-changed tools cannot execute. The legacy direct
+`executeTool(name, argsJson)` overload remains compatible and does not enforce
+runtime placement on its own; callers handling untrusted model output must use
+the admitted execution path.
 
 ### `setEnabled(name, enabled)`
 

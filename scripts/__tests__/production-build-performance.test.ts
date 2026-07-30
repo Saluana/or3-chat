@@ -56,6 +56,58 @@ describe('production build performance inspection', () => {
         expect(stats.css.rawBytes).toBe(20);
     });
 
+    test('summarizes precache, resource hints, and precompressed assets', () => {
+        const root = fixture();
+        const publicRoot = resolve(root, 'public');
+        const entryPath = resolve(publicRoot, '_nuxt', 'entry.js');
+        const cssPath = resolve(publicRoot, '_nuxt', 'entry.css');
+        const entry = 'const entry = "entry";'.repeat(80);
+        const css = 'body { color: red; }'.repeat(80);
+        writeFileSync(entryPath, entry);
+        writeFileSync(cssPath, css);
+        writeFileSync(`${entryPath}.gz`, 'gzip');
+        writeFileSync(`${entryPath}.br`, 'brotli');
+        writeFileSync(`${cssPath}.gz`, 'gzip');
+        writeFileSync(`${cssPath}.br`, 'brotli');
+        writeFileSync(
+            resolve(publicRoot, 'sw.js'),
+            'self.precacheAndRoute([{url:"_nuxt/entry.js",revision:null},{url:"_nuxt/entry.css",revision:null}],{});'
+        );
+        writeFileSync(
+            resolve(publicRoot, 'index.html'),
+            [
+                '<link href="/_nuxt/entry.js" rel="modulepreload">',
+                '<link rel="prefetch" href="/_nuxt/entry.css">',
+            ].join('')
+        );
+
+        const stats = inspectProductionBuild(root);
+
+        expect(stats.precache).toMatchObject({
+            present: true,
+            files: 2,
+            rawBytes: Buffer.byteLength(entry) + Buffer.byteLength(css),
+            missing: [],
+        });
+        expect(stats.rootHtml.modulepreload).toMatchObject({
+            files: 1,
+            rawBytes: Buffer.byteLength(entry),
+            missing: [],
+        });
+        expect(stats.rootHtml.prefetch).toMatchObject({
+            files: 1,
+            rawBytes: Buffer.byteLength(css),
+            missing: [],
+        });
+        expect(stats.compression).toMatchObject({
+            eligibleFiles: 2,
+            gzipFiles: 2,
+            brotliFiles: 2,
+            missingGzip: [],
+            missingBrotli: [],
+        });
+    });
+
     test('rejects a missing production output', () => {
         const root = resolve(
             process.cwd(),

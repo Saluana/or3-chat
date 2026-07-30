@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
+test.skip(
+    process.env.OR3_SCROLL_TEST_HARNESS !== 'true',
+    'Scroll canary suite requires OR3_SCROLL_TEST_HARNESS=true'
+);
+
 type CanaryApi = {
     getSnapshot(): {
         renderedRows: number;

@@ -36,8 +36,8 @@ function readProviderManifest(packageName: string) {
 
 describe('installed provider package contract', () => {
     it.each(Object.values(PROVIDER_PACKAGE_CONTRACTS))(
-        '$packageName exposes an installable Nuxt module',
-        ({ packageName }) => {
+        '$packageName loads its exported Nuxt module implementation',
+        async ({ packageName }) => {
             const spec = dependencySpecs[packageName];
             expect(spec).toBeTruthy();
             const { path, manifest } = readProviderManifest(packageName);
@@ -48,6 +48,10 @@ describe('installed provider package contract', () => {
                 : nuxtExport?.import;
             expect(target).toBeTruthy();
             expect(existsSync(resolve(path, '..', target!))).toBe(true);
+
+            const moduleId = `${packageName}/nuxt`;
+            const implementation = await import(/* @vite-ignore */ moduleId);
+            expect(implementation.default).toBeTypeOf('function');
         },
     );
 });

@@ -30,6 +30,8 @@ This is the backward-compatible default for existing tools.
 - `server`
   - Server-only intent.
   - Register in `server/plugins/**` via `registerServerTool(...)`.
+  - Provider-mediated client execution rejects it through the admission check.
+    The legacy direct registry call does not enforce placement by itself.
 
 ## Execution Paths
 

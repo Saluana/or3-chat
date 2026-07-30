@@ -12,6 +12,11 @@ import { ensureExtensionsDirs, EXTENSIONS_BASE_DIR } from '../paths';
 
 const PLUGIN_ID = 'uninstall-security-plugin';
 const pluginDir = join(EXTENSIONS_BASE_DIR, 'plugins', PLUGIN_ID);
+const legacyPluginDir = join(
+    EXTENSIONS_BASE_DIR,
+    'plugins',
+    'uninstall-security-legacy-directory'
+);
 
 async function seedPlugin() {
     await ensureExtensionsDirs();
@@ -34,6 +39,7 @@ async function seedPlugin() {
 
 async function cleanup() {
     await fs.rm(pluginDir, { recursive: true, force: true });
+    await fs.rm(legacyPluginDir, { recursive: true, force: true });
     invalidateExtensionsCache();
 }
 
@@ -123,5 +129,27 @@ describe('uninstallExtension security edges', () => {
             'Extension identity mismatch'
         );
         await expect(fs.access(pluginDir)).resolves.toBeUndefined();
+    });
+
+    it('removes a uniquely matched legacy directory by manifest id', async () => {
+        await ensureExtensionsDirs();
+        await fs.mkdir(legacyPluginDir, { recursive: true });
+        await fs.writeFile(
+            join(legacyPluginDir, 'or3.manifest.json'),
+            JSON.stringify({
+                kind: 'plugin',
+                id: PLUGIN_ID,
+                name: 'Legacy Directory',
+                version: '0.0.1',
+                capabilities: [],
+            }),
+            'utf8'
+        );
+
+        await uninstallExtension('plugin', PLUGIN_ID);
+
+        await expect(fs.access(legacyPluginDir)).rejects.toMatchObject({
+            code: 'ENOENT',
+        });
     });
 });

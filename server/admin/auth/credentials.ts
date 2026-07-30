@@ -1,14 +1,14 @@
 /**
  * Admin credentials file management.
- * Stores hashed admin credentials at .data/admin-credentials.json
+ * Stores hashed admin credentials under OR3_ADMIN_DATA_DIR (default: .data)
  * with atomic writes and restricted permissions (0600).
  */
 import { readFile, writeFile, mkdir, access, chmod } from 'fs/promises';
-import { join } from 'path';
 import { constants } from 'fs';
-
-const DATA_DIR = '.data';
-const CREDENTIALS_FILE = join(DATA_DIR, 'admin-credentials.json');
+import {
+    resolveAdminCredentialsPath,
+    resolveAdminDataDir,
+} from './data-paths';
 
 export type AdminCredentialsFile = {
     username: string;
@@ -22,7 +22,7 @@ export type AdminCredentialsFile = {
  */
 async function ensureDataDir(): Promise<void> {
     try {
-        await mkdir(DATA_DIR, { mode: 0o700, recursive: true });
+        await mkdir(resolveAdminDataDir(), { mode: 0o700, recursive: true });
     } catch (err: unknown) {
         if (err && typeof err === 'object' && 'code' in err && err.code !== 'EEXIST') {
             throw err;
@@ -35,7 +35,7 @@ async function ensureDataDir(): Promise<void> {
  */
 export async function credentialsFileExists(): Promise<boolean> {
     try {
-        await access(CREDENTIALS_FILE, constants.F_OK);
+        await access(resolveAdminCredentialsPath(), constants.F_OK);
         return true;
     } catch {
         return false;
@@ -48,7 +48,7 @@ export async function credentialsFileExists(): Promise<boolean> {
  */
 export async function readAdminCredentials(): Promise<AdminCredentialsFile | null> {
     try {
-        const content = await readFile(CREDENTIALS_FILE, 'utf-8');
+        const content = await readFile(resolveAdminCredentialsPath(), 'utf-8');
         return JSON.parse(content) as AdminCredentialsFile;
     } catch (err: unknown) {
         if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
@@ -68,7 +68,8 @@ export async function writeAdminCredentials(
 ): Promise<void> {
     await ensureDataDir();
 
-    const tempFile = `${CREDENTIALS_FILE}.tmp`;
+    const credentialsFile = resolveAdminCredentialsPath();
+    const tempFile = `${credentialsFile}.tmp`;
     const content = JSON.stringify(credentials, null, 2);
 
     // Write to temp file with restricted permissions
@@ -77,10 +78,10 @@ export async function writeAdminCredentials(
     // Atomic rename
     // Note: In Node.js, fs.rename is atomic on most platforms
     const { rename } = await import('fs/promises');
-    await rename(tempFile, CREDENTIALS_FILE);
+    await rename(tempFile, credentialsFile);
 
     // Ensure correct permissions on the final file
-    await chmod(CREDENTIALS_FILE, 0o600);
+    await chmod(credentialsFile, 0o600);
 }
 
 /**

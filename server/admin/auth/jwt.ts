@@ -6,6 +6,10 @@ import type { H3Event } from 'h3';
 import { getCookie, setCookie, deleteCookie } from 'h3';
 import jwt from 'jsonwebtoken';
 import { useRuntimeConfig } from '#imports';
+import {
+    resolveAdminDataDir,
+    resolveAdminJwtSecretPath,
+} from './data-paths';
 
 const COOKIE_NAME = 'or3_admin';
 const COOKIE_PATH = '/';
@@ -42,7 +46,8 @@ export type AdminJwtClaims = {
 
 /**
  * Get the JWT secret from runtime config or generate one.
- * The secret is persisted in .data/admin-jwt-secret if auto-generated.
+ * The secret is persisted under OR3_ADMIN_DATA_DIR (default: .data) if
+ * auto-generated.
  */
 async function getJwtSecret(event: H3Event): Promise<string> {
     const config = useRuntimeConfig(event);
@@ -62,21 +67,25 @@ async function getJwtSecret(event: H3Event): Promise<string> {
 
     // Development-only: auto-generate and persist a secret
     const { readFile, writeFile, mkdir } = await import('fs/promises');
-    const { join } = await import('path');
     const { randomBytes } = await import('crypto');
 
-    const secretFile = join('.data', 'admin-jwt-secret');
+    const secretFile = resolveAdminJwtSecretPath();
 
     try {
         const secret = await readFile(secretFile, 'utf-8');
         return secret.trim();
-    } catch {
-        // Generate new secret - ensure .data directory exists
-        try {
-            await mkdir('.data', { recursive: true });
-        } catch {
-            // Directory might already exist
+    } catch (error: unknown) {
+        if (
+            !error
+            || typeof error !== 'object'
+            || !('code' in error)
+            || error.code !== 'ENOENT'
+        ) {
+            throw error;
         }
+
+        // Generate new secret - ensure the configured data directory exists
+        await mkdir(resolveAdminDataDir(), { mode: 0o700, recursive: true });
         const secret = randomBytes(32).toString('hex');
         await writeFile(secretFile, secret, { mode: 0o600 });
         return secret;

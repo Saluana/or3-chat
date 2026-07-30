@@ -14,6 +14,12 @@ export const ADMIN_HEADERS = { 'x-or3-admin-intent': 'admin' } as const;
 
 export type ExtensionKind = 'plugin' | 'theme' | 'admin_plugin';
 
+function extensionKindLabel(kind: ExtensionKind): string {
+    if (kind === 'admin_plugin') return 'Admin plugin';
+    if (kind === 'plugin') return 'Plugin';
+    return 'Theme';
+}
+
 export type ExtensionItem = {
     id: string;
     name: string;
@@ -55,9 +61,10 @@ export async function installExtension(options: ExtensionInstallOptions): Promis
         
         if (message.toLowerCase().includes('already installed')) {
             const { confirm } = useConfirmDialog();
+            const label = extensionKindLabel(options.kind);
             const confirmed = await confirm({
-                title: `${options.kind === 'plugin' ? 'Plugin' : 'Theme'} Already Installed`,
-                message: `This ${options.kind === 'plugin' ? 'plugin' : 'theme'} is already installed. Do you want to replace it with the new version?`,
+                title: `${label} Already Installed`,
+                message: `This ${label.toLowerCase()} is already installed. Do you want to replace it with the new version?`,
                 danger: true,
                 confirmText: 'Replace',
             });
@@ -97,9 +104,10 @@ export async function installExtensionFromUrl(options: ExtensionUrlInstallOption
 
         if (message.toLowerCase().includes('already installed')) {
             const { confirm } = useConfirmDialog();
+            const label = extensionKindLabel(options.kind);
             const confirmed = await confirm({
-                title: `${options.kind === 'plugin' ? 'Plugin' : 'Theme'} Already Installed`,
-                message: `This ${options.kind === 'plugin' ? 'plugin' : 'theme'} is already installed. Do you want to replace it with the new version?`,
+                title: `${label} Already Installed`,
+                message: `This ${label.toLowerCase()} is already installed. Do you want to replace it with the new version?`,
                 danger: true,
                 confirmText: 'Replace',
             });
@@ -120,13 +128,10 @@ export async function uninstallExtension(
     onSuccess?: () => Promise<void>
 ): Promise<void> {
     const { confirm } = useConfirmDialog();
-    const label = kind === 'plugin' ? 'Plugin' : 'Theme';
+    const label = extensionKindLabel(kind);
     const confirmed = await confirm({
         title: `Uninstall ${label}`,
-        message:
-            kind === 'plugin'
-                ? `Uninstall "${id}" from the site? It will no longer be available in any workspace.`
-                : `Uninstall "${id}" from the site? It will no longer be available to users.`,
+        message: `Uninstall "${id}" from the site? It will no longer be available to users.`,
         danger: true,
         confirmText: 'Uninstall',
     });

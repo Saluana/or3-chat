@@ -21,13 +21,13 @@ function fixtureRoot(): string {
 function addPlugin(
     root: string,
     id: string,
-    options: { entry?: string; files: Record<string, string> }
+    options: { entry?: string; manifestId?: string; files: Record<string, string> }
 ): void {
     const pluginRoot = resolve(root, 'extensions/plugins', id);
     mkdirSync(pluginRoot, { recursive: true });
     const manifest = {
         kind: 'plugin',
-        id,
+        id: options.manifestId ?? id,
         name: id,
         version: '1.0.0',
         ...(options.entry ? { runtime: { client: { entry: options.entry } } } : {}),
@@ -95,6 +95,49 @@ describe('bundled plugin catalog generator', () => {
         expect(generated.issues).toEqual([
             'missing: client entry is absent from this host build (client/missing.client.ts)',
             'wrong-extension: client entry is outside the V1 client glob (client/main.ts)',
+        ]);
+    });
+
+    it('keys bundled modules by manifest id when the directory differs', () => {
+        const root = fixtureRoot();
+        addPlugin(root, 'legacy-directory', {
+            manifestId: 'plugin.stable-id',
+            files: { 'plugin.client.ts': 'export default {}' },
+        });
+
+        const generated = generateBundledPluginCatalog({
+            repoRoot: root,
+            hostBuildId: 'build-1',
+        });
+
+        expect(generated.catalog.entries).toEqual([
+            {
+                pluginId: 'plugin.stable-id',
+                clientEntry: 'plugin.client.ts',
+                moduleKey: '../../extensions/plugins/legacy-directory/plugin.client.ts',
+            },
+        ]);
+    });
+
+    it('excludes ambiguous duplicate manifest ids', () => {
+        const root = fixtureRoot();
+        addPlugin(root, 'first-directory', {
+            manifestId: 'plugin.duplicate',
+            files: { 'plugin.client.ts': 'export default {}' },
+        });
+        addPlugin(root, 'second-directory', {
+            manifestId: 'plugin.duplicate',
+            files: { 'plugin.client.ts': 'export default {}' },
+        });
+
+        const generated = generateBundledPluginCatalog({
+            repoRoot: root,
+            hostBuildId: 'build-1',
+        });
+
+        expect(generated.catalog.entries).toEqual([]);
+        expect(generated.issues).toEqual([
+            'second-directory: duplicate plugin id plugin.duplicate (already declared by first-directory)',
         ]);
     });
 

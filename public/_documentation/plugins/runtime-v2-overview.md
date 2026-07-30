@@ -1,6 +1,17 @@
 # Plugin Runtime V2 Overview
 
-Plugin Runtime V2 adds digest-addressed packages, a frozen V1 compatibility line, `@or3/plugin-sdk` authoring, and optional isolation. Production defaults for V2 manager, hook engine, module loader, and isolation remain **off** until separate reviewed promotions.
+Plugin Runtime V2 adds digest-addressed packages, a frozen V1 compatibility
+line, `@or3/plugin-sdk` authoring, and optional isolation. The generation-safe
+manager is promoted by default, but it currently manages bundled V1
+descriptors. The V2 hook engine, digest module loader, and isolation remain off
+by default.
+
+> **Integration status:** V2 package storage, pointer promotion, module loading,
+> isolation, and SDK host construction are implemented and covered as component
+> and compatibility-test surfaces. The production workspace client still
+> activates bundled V1 descriptors, and the standard extension installer does
+> not yet perform the immutable V2 candidate/promotion workflow. Do not treat
+> enabling a V2 flag as an end-to-end package cutover.
 
 ## What stays the same (V1)
 

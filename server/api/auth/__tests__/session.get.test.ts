@@ -10,6 +10,7 @@ const getSyncRateLimitStatsMock = vi.fn();
 const getClientIpMock = vi.fn(() => '127.0.0.1');
 const normalizeProxyTrustConfigMock = vi.fn(() => ({}));
 const canMock = vi.fn();
+const resolveEntitlementsMock = vi.fn();
 
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
@@ -29,6 +30,10 @@ vi.mock('../../../auth/session', () => ({
 
 vi.mock('../../../auth/can', () => ({
     can: canMock as any,
+}));
+
+vi.mock('../../../auth/entitlements/registry', () => ({
+    resolveEntitlements: resolveEntitlementsMock as any,
 }));
 
 vi.mock('../../../utils/auth/is-ssr-auth-enabled', () => ({
@@ -93,6 +98,7 @@ describe('GET /api/auth/session', () => {
         getClientIpMock.mockReset().mockReturnValue('127.0.0.1');
         normalizeProxyTrustConfigMock.mockReset().mockReturnValue({});
         canMock.mockReset().mockReturnValue({ allowed: true });
+        resolveEntitlementsMock.mockReset().mockResolvedValue([]);
     });
 
     it('never allows caching session responses', () => {
@@ -123,6 +129,7 @@ describe('GET /api/auth/session', () => {
                 user: { id: 'user-1' },
                 workspace: { id: 'workspace-1', name: 'Workspace' },
                 role: 'owner',
+                entitlements: [],
             },
             appAccessAllowed: false,
         });
@@ -133,6 +140,28 @@ describe('GET /api/auth/session', () => {
                 kind: 'workspace',
                 id: 'workspace-1',
             }
+        );
+    });
+
+    it('includes resolved entitlements in the client session', async () => {
+        const session = {
+            authenticated: true,
+            user: { id: 'user-1' },
+            workspace: { id: 'workspace-1', name: 'Workspace' },
+            role: 'owner',
+        };
+        resolveSessionContextMock.mockResolvedValue(session);
+        resolveEntitlementsMock.mockResolvedValue(['paid', 'beta']);
+
+        await expect(handler(makeEvent())).resolves.toMatchObject({
+            session: {
+                ...session,
+                entitlements: ['paid', 'beta'],
+            },
+        });
+        expect(resolveEntitlementsMock).toHaveBeenCalledWith(
+            expect.anything(),
+            session
         );
     });
 });

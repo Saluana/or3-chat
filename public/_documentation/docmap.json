@@ -884,6 +884,12 @@
                     "summary": "Manifest V2 contract: engines, runtime entrypoints, grants, trust, settings/stateCompatibility, and canonical package digests via plugin-runtime CLI inspect/pack."
                 },
                 {
+                    "name": "admin-plugins.md",
+                    "path": "/plugins/admin-plugins",
+                    "category": "Reference",
+                    "summary": "Admin plugin V1 package layout, page and widget registration APIs, install and rebuild requirements, safe mode behavior, and current lifecycle limitations."
+                },
+                {
                     "name": "command-palette.md",
                     "path": "/plugins/command-palette",
                     "category": "Reference",

@@ -31,7 +31,7 @@ Welcome to the OR3 Chat system documentation. This guide covers plugin developme
 
 ## Testing
 
--   **[Custom Pane Apps Testing](testing/custom-pane-apps.md)** - Testing strategies for pane applications
+-   **[Test strategy and custom pane apps](testing/custom-pane-apps.md)** - Fast, integration, compatibility, release, live, and browser test lanes
 
 ## Architecture
 

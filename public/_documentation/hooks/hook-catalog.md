@@ -31,6 +31,10 @@ See also: `hooks.md` for engine API, `hook-keys.md` and `hook-types.md` for deta
 | `ai.chat.stream:action:error`         | action | `[ctx: AiStreamErrorPayload]`                    | —                                  |
 | `ai.chat.retry:action:before`         | action | `[payload: AiRetryBeforePayload]`                | —                                  |
 | `ai.chat.retry:action:after`          | action | `[payload: AiRetryAfterPayload]`                 | —                                  |
+| `ai.document.edit:filter:request`     | filter | `[request: DocumentAiEditRequestPayload]`        | `DocumentAiEditRequestPayload`     |
+| `ai.document.edit:action:before`      | action | `[request: DocumentAiEditRequestPayload]`        | —                                  |
+| `ai.document.edit:action:after`       | action | `[result: DocumentAiEditResultPayload]`          | —                                  |
+| `ai.document.edit:action:error`       | action | `[result: DocumentAiEditResultPayload]`          | —                                  |
 
 ---
 
@@ -41,6 +45,9 @@ See also: `hooks.md` for engine API, `hook-keys.md` and `hook-types.md` for deta
 | `ui.pane.active:action`         | action | `[payload: UiPaneActivePayload]`                             | —                       |
 | `ui.pane.blur:action`           | action | `[payload: UiPaneBlurPayload]`                               | —                       |
 | `ui.pane.switch:action`         | action | `[payload: UiPaneSwitchPayload]`                             | —                       |
+| `ui.pane.open:action:after`     | action | `[payload: UiPaneActivePayload]`                             | —                       |
+| `ui.pane.close:action:before`   | action | `[payload: UiPaneActivePayload]`                             | —                       |
+| `ui.pane.close:action:after`    | action | `[payload: UiPaneActivePayload]`                             | —                       |
 | `ui.pane.thread:filter:select`  | filter | `[requestedId: string, pane: PaneState, previousId: string]` | `string \| '' \| false` |
 | `ui.pane.thread:action:changed` | action | `[payload: UiPaneThreadChangedPayload]`                      | —                       |
 | `ui.pane.doc:filter:select`     | filter | `[requestedId: string, pane: PaneState, previousId: string]` | `string \| '' \| false` |
@@ -60,6 +67,7 @@ Notes
 | Key                         | Kind   | Args (tuple)                                  | Returns                            |
 | --------------------------- | ------ | --------------------------------------------- | ---------------------------------- |
 | `files.attach:filter:input` | filter | `[payload: FilesAttachInputPayload \| false]` | `FilesAttachInputPayload \| false` |
+| `db.messages.files.validate:filter:hashes` | filter | `[hashes: string[]]` | `string[]` |
 
 Notes
 
@@ -90,6 +98,7 @@ Notes
 | -------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------ | ------------------- |
 | `branch.fork:action:before`      | action | `[payload: BranchForkBeforePayload]`                                                                               | —                   |
 | `branch.fork:action:after`       | action | `[payload: ThreadEntity]`                                                                                          | —                   |
+| `branch.fork:filter:options`     | filter | `[options: BranchForkOptions]`                                                                                     | `BranchForkOptions` |
 | `branch.retry:filter:options`    | filter | `[opts: { assistantMessageId: string; mode?: BranchMode; titleOverride?: string }]`                                | same shape as input |
 | `branch.retry:action:before`     | action | `[payload: { assistantMessageId: string; precedingUserId: string; mode: BranchMode }]`                             | —                   |
 | `branch.retry:action:after`      | action | `[payload: { assistantMessageId: string; precedingUserId: string; newThreadId: string; mode: BranchMode }]`        | —                   |
@@ -161,6 +170,8 @@ Special cases
 -   `db.files.refchange:action:after`
 -   `db.kv.upsertByName:action:after`
 -   `db.kv.deleteByName:action:hard:before|after`
+-   `db.threads.getSystemPrompt:filter:output` — `[value: string | null]` → `string | null`
+-   `db.documents.title:filter` — `[title: string, context: { phase: 'create' | 'update'; id: string; rawTitle?: string | null; existing?: DocumentEntity }]` → `string`
 
 Returns quick-reference
 
@@ -172,23 +183,51 @@ Returns quick-reference
 
 ## App and errors (observed in code)
 
-| Key                                       | Kind   | Args (tuple)                                            | Returns |
-| ----------------------------------------- | ------ | ------------------------------------------------------- | ------- |
-| `app.init:action:after`                   | action | `[nuxtApp: any]`                                        | —       |
-| `error:raised`                            | action | `[error: unknown]`                                      | —       |
-| `error:<domain>`                          | action | `[error: unknown]`                                      | —       |
-| `ai.chat.error:action`                    | action | `[payload: { error: unknown }]`                         | —       |
-| `chat.systemPrompt.select:action:after`   | action | `[payload: { id: string; content: any }]`               | —       |
-| `chat.systemPrompt.default:action:update` | action | `[id: string]`                                          | —       |
-| `ui.sidebar.select:action:before`         | action | `[payload: { kind: 'chat' \| 'doc'; id: string }]`      | —       |
-| `ui.sidebar.select:action:after`          | action | `[payload: { kind: 'chat' \| 'doc'; id: string }]`      | —       |
-| `ui.chat.new:action:after`                | action | `[payload: {}]`                                         | —       |
-| `editor.created:action:after`             | action | `[payload: { editor: any }]`                            | —       |
-| `editor.updated:action:after`             | action | `[payload: { editor: any }]`                            | —       |
+| Key                                       | Kind   | Args (tuple)                                            | Returns     |
+| ----------------------------------------- | ------ | ------------------------------------------------------- | ----------- |
+| `app.init:action:after`                   | action | `[nuxtApp: any]`                                        | —           |
+| `error:raised`                            | action | `[error: unknown]`                                      | —           |
+| `error:<domain>`                          | action | `[error: unknown]`                                      | —           |
+| `ai.chat.error:action`                    | action | `[payload: { error: unknown }]`                         | —           |
+| `chat.systemPrompt.select:action:after`   | action | `[payload: { id: string; content: any }]`               | —           |
+| `chat.systemPrompt.default:action:update` | action | `[id: string]`                                          | —           |
+| `ui.sidebar.select:action:before`         | action | `[payload: { kind: 'chat' \| 'doc'; id: string }]`      | —           |
+| `ui.sidebar.select:action:after`          | action | `[payload: { kind: 'chat' \| 'doc'; id: string }]`      | —           |
+| `ui.chat.new:action:after`                | action | `[payload: {}]`                                         | —           |
+| `editor.created:action:after`             | action | `[payload: { editor: any }]`                            | —           |
+| `editor.updated:action:after`             | action | `[payload: { editor: any }]`                            | —           |
+| `editor:request-extensions`               | action | `[undefined]`                                           | —           |
+| `ui.chat.editor:filter:extensions`        | filter | `[extensions: unknown[]]`                               | `unknown[]` |
+| `ui.chat.editor:action:before_send`       | action | `[json: Record<string, unknown>]`                       | —           |
 
 Notes
 
 -   These are gathered from call sites across `app/**` and may evolve; prefer wildcard listeners for families like `error:*`.
+
+---
+
+## Authentication
+
+| Key                              | Kind   | Args (tuple)                                                   | Returns          |
+| -------------------------------- | ------ | -------------------------------------------------------------- | ---------------- |
+| `auth.access:filter:decision`    | filter | `[decision: AccessDecision, context: { session: SessionContext \| null }]` | `AccessDecision` |
+| `auth.user:action:created`       | action | `[{ userId: string; provider: string }]`                        | —                |
+| `auth.workspace:action:created`  | action | `[{ workspaceId: string; userId: string }]`                     | —                |
+
+---
+
+## Storage
+
+| Key                                          | Kind   | Args (tuple)                                           | Returns                                  |
+| -------------------------------------------- | ------ | ------------------------------------------------------ | ---------------------------------------- |
+| `storage.files.upload:action:before`         | action | `[payload: StorageFileUploadBeforePayload]`            | —                                        |
+| `storage.files.upload:action:after`          | action | `[payload: StorageFileUploadAfterPayload]`             | —                                        |
+| `storage.files.download:action:before`       | action | `[payload: StorageFileDownloadBeforePayload]`          | —                                        |
+| `storage.files.download:action:after`        | action | `[payload: StorageFileDownloadAfterPayload]`           | —                                        |
+| `storage.files.url:filter:options`           | filter | `[options: StorageFileUrlOptionsPayload]`              | `StorageFileUrlOptionsPayload`           |
+| `storage.files.upload:filter:policy`         | filter | `[policy: StorageFileUploadPolicyPayload \| false]`    | `StorageFileUploadPolicyPayload \| false` |
+| `storage.files.gc:action:run`                | action | `[payload: StorageFileGcPayload]`                      | —                                        |
+| `storage:action:error`                       | action | `[{ message?: string } & Record<string, unknown>]`     | —                                        |
 
 ---
 

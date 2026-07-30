@@ -25,6 +25,7 @@ import {
     discoverThemeSourceFiles,
     importThemeSourceModule,
 } from './theme-discovery';
+import { basename, dirname } from 'node:path';
 
 /**
  * Theme Compiler
@@ -33,6 +34,8 @@ import {
  */
 export class ThemeCompiler {
     private knownContexts = [...KNOWN_THEME_CONTEXTS];
+
+    constructor(private readonly generatedOutputRoot = process.cwd()) {}
 
     /**
      * Compile all themes in the app/theme directory
@@ -52,6 +55,7 @@ export class ThemeCompiler {
                 );
                 results.push({
                     name: themePath,
+                    dirName: basename(dirname(themePath)),
                     theme: {} as CompiledTheme,
                     errors: [
                         {
@@ -104,6 +108,8 @@ export class ThemeCompiler {
     private async compileTheme(
         themePath: string
     ): Promise<ThemeCompilationResult> {
+        const themeDir = dirname(themePath);
+        const dirName = basename(themeDir);
         // Extension themes (and some core themes) import via Nuxt `~` aliases.
         // Plain dynamic import() cannot resolve those outside Vite.
         const themeModule = await importThemeSourceModule<
@@ -123,6 +129,7 @@ export class ThemeCompiler {
         if (!validation.valid) {
             return {
                 name: definition.name || 'unknown',
+                dirName,
                 theme: {} as CompiledTheme,
                 errors,
                 warnings,
@@ -131,9 +138,8 @@ export class ThemeCompiler {
         }
 
         // Load and validate icons.config.ts if present
-        const { join, dirname } = await import('path');
+        const { join } = await import('path');
         const { existsSync } = await import('fs');
-        const themeDir = dirname(themePath);
         const iconConfigPath = join(themeDir, 'icons.config.ts');
         let themeIcons: Record<string, string> | undefined;
 
@@ -211,6 +217,7 @@ export class ThemeCompiler {
 
         return {
             name: definition.name,
+            dirName,
             theme: compiledTheme,
             errors,
             warnings,
@@ -365,7 +372,7 @@ export interface ThemeDirective {
 export type ThemeDirectiveValue = ThemeIdentifier | ThemeDirective;
 `;
 
-        const typesDir = join(process.cwd(), 'types');
+        const typesDir = join(this.generatedOutputRoot, 'types');
         await mkdir(typesDir, { recursive: true });
 
         const typesPath = join(typesDir, 'theme-generated.d.ts');
@@ -389,12 +396,12 @@ export type ThemeDirectiveValue = ThemeIdentifier | ThemeDirective;
     private async generateMetadataManifest(
         results: ThemeCompilationResult[]
     ): Promise<void> {
-        const { writeFile, readFile } = await import('fs/promises');
-        const { join } = await import('path');
+        const { writeFile, readFile, mkdir } = await import('fs/promises');
+        const { dirname, join } = await import('path');
         const metadata = results
             .map((result) => ({
                 name: result.name,
-                dirName: result.name,
+                dirName: result.dirName ?? result.name,
                 displayName: result.theme.displayName,
                 description: result.theme.description,
                 isDefault: Boolean(result.theme.isDefault),
@@ -416,9 +423,10 @@ export interface GeneratedThemeMetadata {
 export const GENERATED_THEME_METADATA: readonly GeneratedThemeMetadata[] = ${JSON.stringify(metadata, null, 4)} as const;
 `;
         const outputPath = join(
-            process.cwd(),
+            this.generatedOutputRoot,
             'app/theme/_shared/theme-manifest.generated.ts'
         );
+        await mkdir(dirname(outputPath), { recursive: true });
         let previous = '';
         try {
             previous = await readFile(outputPath, 'utf8');

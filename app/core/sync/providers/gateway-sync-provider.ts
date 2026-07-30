@@ -102,34 +102,63 @@ function parseRetryAfterHeader(value: string | null): number | undefined {
     return delta;
 }
 
+const REDACTED_ERROR_VALUE = '[REDACTED]';
+
+function extractJsonErrorText(value: unknown): string | null {
+    if (typeof value !== 'object' || value === null) return null;
+    const object = value as Record<string, unknown>;
+    if (typeof object.message === 'string') return object.message;
+    if (typeof object.error === 'string') return object.error;
+    if (typeof object.error === 'object' && object.error !== null) {
+        return extractJsonErrorText(object.error);
+    }
+    return object.error === undefined ? null : String(object.error);
+}
+
+function redactErrorSecrets(text: string): string {
+    return text
+        .replace(
+            /((?:["']?authorization["']?)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|(?:Basic|Bearer)\s+[A-Za-z0-9._~+/-]+=*|[^\s,;}\]]+)/giu,
+            `$1${REDACTED_ERROR_VALUE}`
+        )
+        .replace(
+            /\bBearer\s+[A-Za-z0-9._~+/-]+=*/giu,
+            `Bearer ${REDACTED_ERROR_VALUE}`
+        )
+        .replace(
+            /\bsk-(?:or-v1-)?[A-Za-z0-9_-]{8,}\b/giu,
+            REDACTED_ERROR_VALUE
+        )
+        .replace(
+            /\beyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/gu,
+            REDACTED_ERROR_VALUE
+        )
+        .replace(
+            /((?:["']?(?:password|passphrase|token|api[_-]?key|secret|authorization|access[_-]?token|refresh[_-]?token)["']?)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}\]]+)/giu,
+            `$1${REDACTED_ERROR_VALUE}`
+        );
+}
+
 /**
  * Truncate and sanitize error text for user-facing display.
- * Removes JSON blobs, stack traces, and limits length.
+ * Extracts useful JSON messages and removes stacks, source locations, and secrets.
  */
 function sanitizeErrorText(text: string, maxLength: number = 200): string {
-    // Try to parse as JSON and extract a meaningful error message
+    let candidate = text;
     try {
         const parsed: unknown = JSON.parse(text);
-        if (typeof parsed === 'object' && parsed !== null) {
-            const obj = parsed as Record<string, unknown>;
-            if (typeof obj.message === 'string') {
-                return obj.message.slice(0, maxLength);
-            }
-            if (obj.error !== undefined) {
-                return String(obj.error).slice(0, maxLength);
-            }
-        }
+        candidate = extractJsonErrorText(parsed) ?? text;
     } catch {
         // Not JSON, continue with text sanitization
     }
 
     // Remove stack traces (lines starting with "at " or containing file paths)
-    const lines = text.split('\n').filter(line => {
+    const lines = candidate.split('\n').filter(line => {
         const trimmed = line.trim();
         return !trimmed.startsWith('at ') && !trimmed.match(/\.(ts|js|vue):\d+/);
     });
 
-    const cleaned = lines.join(' ').trim();
+    const cleaned = redactErrorSecrets(lines.join(' ').trim());
     return cleaned.slice(0, maxLength);
 }
 

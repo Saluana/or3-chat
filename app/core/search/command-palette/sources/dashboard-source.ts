@@ -52,14 +52,15 @@ export function collectDashboardResources(): PaletteResource[] {
     const resources: PaletteResource[] = [];
 
     for (const plugin of plugins) {
-        if (!getPluginGateDecision(plugin.id, plugin.access).allowed) continue;
+        const ownerPluginId = plugin.pluginId ?? plugin.id;
+        if (!getPluginGateDecision(ownerPluginId, plugin.access).allowed) continue;
         const category = categoryForPlugin(plugin);
         resources.push(pluginToResource(plugin, category));
 
         const pages = listDashboardPluginPages(plugin.id);
         for (const page of pages) {
             if (
-                !getPluginGateDecision(plugin.id, page.access ?? plugin.access)
+                !getPluginGateDecision(ownerPluginId, page.access ?? plugin.access)
                     .allowed
             ) {
                 continue;

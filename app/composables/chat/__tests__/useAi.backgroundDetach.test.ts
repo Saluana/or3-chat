@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ref } from 'vue';
+import { effectScope, nextTick, ref } from 'vue';
 
 const startBackgroundStreamMock = vi.fn();
 const ensureBackgroundJobTrackerMock = vi.fn();
@@ -9,6 +9,7 @@ const runForegroundStreamLoopMock = vi.fn();
 const appendMessageMock = vi.fn();
 const upsertMessageMock = vi.fn();
 const hookOnMock = vi.fn();
+const hookDisposeMock = vi.fn();
 const hookDoActionMock = vi.fn(async () => {});
 const hookApplyFiltersMock = vi.fn(async (_name: string, value: unknown) => value);
 const messagesByThreadMock = vi.fn<() => Promise<any[]>>(async () => []);
@@ -330,7 +331,7 @@ describe('useChat background detach race', () => {
             },
         };
 
-        hookOnMock.mockImplementation(() => vi.fn());
+        hookOnMock.mockImplementation(() => hookDisposeMock);
         hookDoActionMock.mockResolvedValue(undefined);
         hookApplyFiltersMock.mockImplementation(
             async (_name: string, value: unknown) => value
@@ -751,5 +752,21 @@ describe('useChat background detach race', () => {
             pending: false,
             error: 'stream_interrupted',
         });
+    });
+
+    it('disposes hook listeners when its Vue scope stops during background tracking', async () => {
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const scope = effectScope();
+        const chat = scope.run(() => useChat([], 'thread-1'));
+
+        expect(chat).toBeDefined();
+        chat!.backgroundJobMode.value = 'background';
+        chat!.backgroundJobId.value = 'job-1';
+
+        scope.stop();
+        await nextTick();
+
+        expect(hookDisposeMock).toHaveBeenCalledTimes(1);
     });
 });

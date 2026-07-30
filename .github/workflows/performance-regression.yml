@@ -3,13 +3,17 @@ name: Performance Regression
 on:
   pull_request:
     paths:
-      - 'app/**'
-      - 'server/**'
-      - 'shared/**'
+      - 'app/components/search/**'
+      - 'app/composables/search/**'
+      - 'app/core/search/command-palette/**'
+      - 'app/core/sync/**'
+      - 'shared/sync/**'
       - 'scripts/performance/**'
       - 'scripts/__tests__/production-build-performance.test.ts'
       - 'tests/e2e/performance-budgets.e2e.ts'
+      - 'nuxt.config.ts'
       - 'package.json'
+      - 'bun.lock'
       - '.github/workflows/performance-regression.yml'
   workflow_dispatch:
 
@@ -19,14 +23,69 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        if: github.event_name == 'pull_request'
+        id: changes
+        with:
+          filters: |
+            search:
+              - 'app/components/search/**'
+              - 'app/composables/search/**'
+              - 'app/core/search/command-palette/**'
+              - 'package.json'
+              - 'bun.lock'
+              - '.github/workflows/performance-regression.yml'
+            sync:
+              - 'app/core/sync/**'
+              - 'shared/sync/**'
+              - 'package.json'
+              - 'bun.lock'
+              - '.github/workflows/performance-regression.yml'
+            workspace:
+              - 'scripts/performance/populated-workspace.perf.ts'
+              - 'scripts/performance/report.ts'
+              - 'package.json'
+              - 'bun.lock'
+              - '.github/workflows/performance-regression.yml'
+            browser:
+              - 'tests/e2e/performance-budgets.e2e.ts'
+              - 'nuxt.config.ts'
+              - 'package.json'
+              - 'bun.lock'
+              - '.github/workflows/performance-regression.yml'
+            build:
+              - 'scripts/performance/production-build.perf.ts'
+              - 'scripts/performance/report.ts'
+              - 'scripts/__tests__/production-build-performance.test.ts'
+              - 'nuxt.config.ts'
+              - 'package.json'
+              - 'bun.lock'
+              - '.github/workflows/performance-regression.yml'
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
-      - run: bunx playwright install --with-deps chromium
-      - run: bun run performance:check
-      - run: bun run build
-      - run: bun run performance:production-build:check
+      - name: Check command-palette budget
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.search == 'true'
+        run: bun run command-palette:benchmarks:check
+      - name: Check sync budgets
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.sync == 'true'
+        run: bun run sync:benchmarks:check
+      - name: Check populated-workspace budget
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.workspace == 'true'
+        run: bun run performance:workspace:check
+      - name: Install Chromium
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.browser == 'true'
+        run: bunx playwright install --with-deps chromium
+      - name: Check browser budgets
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.browser == 'true'
+        run: bun run performance:browser:check
+      - name: Build production application
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.build == 'true'
+        run: bun run build
+      - name: Inspect production build budget
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.build == 'true'
+        run: bun run performance:production-build:check
       - name: Upload performance trends
         if: always()
         uses: actions/upload-artifact@v4

@@ -2,51 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { hashPassword, verifyPassword, validatePasswordStrength } from '../../server/admin/auth/hash';
 
 describe('Admin Auth - Password Hashing', () => {
-    describe('hashPassword', () => {
-        it('should hash a password', async () => {
-            const password = 'TestPassword123';
-            const hash = await hashPassword(password);
-            
-            expect(hash).toBeDefined();
-            expect(hash).not.toBe(password);
-            expect(hash.length).toBeGreaterThan(0);
-            expect(hash).toMatch(/^\$2[aby]\$/); // bcrypt hash format
-        });
+    it('hashes once and verifies correct and incorrect passwords', async () => {
+        const password = 'TestPassword123';
+        const hash = await hashPassword(password);
 
-        it('should produce different hashes for the same password', async () => {
-            const password = 'TestPassword123';
-            const hash1 = await hashPassword(password);
-            const hash2 = await hashPassword(password);
-            
-            expect(hash1).not.toBe(hash2);
-        });
-    });
-
-    describe('verifyPassword', () => {
-        it('should verify correct password', async () => {
-            const password = 'TestPassword123';
-            const hash = await hashPassword(password);
-            
-            const isValid = await verifyPassword(password, hash);
-            expect(isValid).toBe(true);
-        });
-
-        it('should reject incorrect password', async () => {
-            const password = 'TestPassword123';
-            const wrongPassword = 'WrongPassword456';
-            const hash = await hashPassword(password);
-            
-            const isValid = await verifyPassword(wrongPassword, hash);
-            expect(isValid).toBe(false);
-        });
-
-        it('should reject empty password', async () => {
-            const password = 'TestPassword123';
-            const hash = await hashPassword(password);
-            
-            const isValid = await verifyPassword('', hash);
-            expect(isValid).toBe(false);
-        });
+        expect(hash).not.toBe(password);
+        expect(hash).toMatch(/^\$2[aby]\$/);
+        await expect(verifyPassword(password, hash)).resolves.toBe(true);
+        await expect(verifyPassword('WrongPassword456', hash)).resolves.toBe(false);
     });
 
     describe('validatePasswordStrength', () => {

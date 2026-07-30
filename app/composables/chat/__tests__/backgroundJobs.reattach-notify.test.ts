@@ -154,6 +154,78 @@ describe('backgroundJobs reattach + notifications', () => {
         backgroundJobTrackers.clear();
     });
 
+    it('closes the live transport and resets tracking flags when stopped', async () => {
+        const close = vi.fn();
+        subscribeBackgroundJobStreamMock.mockImplementation(() => close);
+        const {
+            ensureBackgroundJobTracker,
+            stopBackgroundJobTracking,
+            backgroundJobTrackers,
+        } = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = ensureBackgroundJobTracker({
+            jobId: 'job-1',
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'msg-1',
+            useSse: true,
+        });
+
+        stopBackgroundJobTracking(tracker);
+
+        expect(close).toHaveBeenCalledTimes(1);
+        expect(tracker).toMatchObject({
+            active: false,
+            polling: false,
+            streaming: false,
+            streamUnsubscribe: undefined,
+        });
+        backgroundJobTrackers.clear();
+    });
+
+    it('delivers primed abort state while isolating a throwing subscriber', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        pollJobStatusMock.mockResolvedValue(
+            makeStatus('aborted', {
+                content: 'partial',
+                content_length: 7,
+            })
+        );
+        const {
+            ensureBackgroundJobTracker,
+            stopBackgroundJobTracking,
+            primeBackgroundJobUpdate,
+            backgroundJobTrackers,
+        } = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = ensureBackgroundJobTracker({
+            jobId: 'job-1',
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'msg-1',
+            useSse: true,
+        });
+        stopBackgroundJobTracking(tracker);
+        const throwing = vi.fn(() => {
+            throw new Error('subscriber failed');
+        });
+        const delivered = vi.fn();
+        tracker.subscribers.add({ onAbort: throwing });
+        tracker.subscribers.add({ onAbort: delivered });
+        tracker.polling = true;
+
+        await primeBackgroundJobUpdate(tracker);
+
+        expect(throwing).toHaveBeenCalledTimes(1);
+        expect(delivered).toHaveBeenCalledWith(
+            expect.objectContaining({
+                status: expect.objectContaining({ status: 'aborted' }),
+                content: 'partial',
+            })
+        );
+        expect(tracker.active).toBe(false);
+        expect(tracker.polling).toBe(false);
+        expect(backgroundJobTrackers.has('job-1')).toBe(false);
+    });
+
     it('uses one live reconciliation transport for multiple viewers of one job', async () => {
         subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
         const {

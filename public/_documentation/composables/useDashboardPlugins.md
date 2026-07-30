@@ -100,7 +100,7 @@ Use `resolvedPageComponent` to mount the current page inside a `<component>`.
 ### Plugin registry
 
 ```ts
-registerDashboardPlugin(plugin: DashboardPlugin): void;
+registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle;
 unregisterDashboardPlugin(id: string): void;
 useDashboardPlugins(): ComputedRef<DashboardPlugin[]>;
 listRegisteredDashboardPluginIds(): string[];

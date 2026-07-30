@@ -9,7 +9,9 @@ V1 plugin authoring remains supported through the entire Plugin Runtime V2 line.
 1. `bun run plugin-runtime:cli -- create --id <id> --dir <path>`
 2. Depend on `@or3/plugin-sdk` and call `defineOr3Plugin()`
 3. `validate` / `test` / `pack` via `plugin-runtime:cli`
-4. Install the digest-addressed package; leave V1 plugins in place until cutover
+4. Pack and inspect the digest-addressed package in the compatibility harness.
+   Keep the V1 plugin in place: production candidate installation/promotion and
+   SDK activation are not yet connected end to end.
 
 ## Import map
 

@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Cloud Chaos', () => {
+    test.skip(
+        process.env.OR3_E2E_STRESS !== 'true',
+        'Chaos tests require OR3_E2E_STRESS=true'
+    );
+
     test('intermittent adapter failures recover without corruption', async ({ page }) => {
         await page.goto('/_tests/_test-cloud-chaos');
         await page.waitForLoadState('networkidle');

@@ -126,6 +126,16 @@ Don’t:
 -   Integration tests: session resolution, push/pull cycles, conflict resolution, blob uploads/downloads.
 -   E2E: multi-device sync, offline recovery, auth gating.
 
+### Test lanes and future agent policy
+
+-   During normal implementation, run the narrowest affected file(s) or `bun run test:changed`.
+-   `bun run test` is the fast production-backed core lane. It intentionally excludes live, release-policy, script, broad integration, and frozen plugin-compatibility gates.
+-   Use `bun run test:integration`, `bun run test:scripts`, `bun run test:release-policy`, or `bun run test:plugin-compatibility` only when the change touches that lane.
+-   Reserve `bun run test:full` for cross-cutting/high-risk changes, scheduled CI, and release qualification.
+-   Never use a broad Playwright command for credential-writing, paid-network, visual-artifact, stress, or performance suites. Use the named `test:e2e:*` harness.
+-   Do not add permanently skipped tests, test-local reimplementations of production behavior, source-string assertions for cosmetic details, or a new test file when an existing canonical suite can hold the case.
+-   Prefer compact output (`dot`, failed output only) so successful checks do not consume agent tokens.
+
 ### Using test driven development (TDD) is encouraged.
 
 Test-Driven Development (TDD)

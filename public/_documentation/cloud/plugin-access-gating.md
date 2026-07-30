@@ -46,13 +46,20 @@ The `pluginEnabled` check only applies to **installed extension plugins** (those
 
 The client uses `getPluginGateDecision(pluginId, policy)` from `app/utils/plugins/access-gate.ts`. The logic is optimistic-first, then authoritative:
 
-1. **Immediate local decision** — computed from the cached session context. This renders instantly without a network round-trip, so the UI doesn't flicker on load.
-2. **Server decision fetch** (when `SSR_AUTH_ENABLED=true`) — `GET /api/plugins/access?pluginId=...` is called asynchronously and its result replaces the local one.
+1. **Immediate local decision** — computed from the cached session context, including its host-resolved entitlement IDs. This renders instantly without a network round-trip, so the UI doesn't flicker on load.
+2. **Server decision fetch** (when `SSR_AUTH_ENABLED=true`) — `GET /api/plugins/access?pluginId=...` is called asynchronously and reconciled with the local decision.
 3. **Conservative merge** — `allowed` only if *both* the local and server decisions allow it. If the server says no, the local yes is overridden.
 
-Decisions are cached per plugin, keyed on `authenticated|userId|workspaceId|role`. When any of those change (e.g., workspace switch or sign-in), the entire decision cache is invalidated automatically.
+Decisions are cached per plugin and scoped by
+`authenticated|userId|workspaceId|role|entitlements`. When any of those change
+(for example, workspace switch, sign-in, or an entitlement refresh), the
+decision cache is invalidated automatically.
 
-This gating runs for every registered dashboard plugin, sidebar page, section, and action.
+This gating runs for dashboard plugins/pages, sidebar surfaces, pane apps,
+document/thread history actions, project-tree actions, editor toolbar buttons,
+and editor node/mark/extension descriptors. Standalone registries require the
+contribution to provide its owning `pluginId` when workspace enablement or
+server policy lookup should apply.
 
 ---
 
@@ -115,7 +122,12 @@ A `viewer` will not see this item in the dashboard, and even if they navigate di
 - Verify the shape of `plugins.settings.<id>.access` in workspace settings. A malformed override silently falls back to plugin defaults.
 
 **Plugin ID instability (works once, breaks on reload):**
-- Plugin IDs must be stable and identical in both the manifest (`or3.manifest.json`) and the runtime registration. A mismatch means the manifest defaults are never found, so decisions are based on zero policy context.
+- An installable workspace plugin's manifest ID and exported workspace-plugin
+  ID must match.
+- Contribution IDs may be separately namespaced. The workspace runtime injects
+  the owning manifest ID into its dashboard, sidebar-page, pane-app, and
+  message-action registrations. Plugins that call standalone registries
+  directly should set the optional `pluginId` field themselves.
 
 ## Related
 

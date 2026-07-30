@@ -375,17 +375,23 @@ Rules:
 - `id` must be **kebab-case**, no spaces, no path separators.
 - `id` must **not** collide with a built-in theme (`blank`, `retro`, `cyberpunk`). If it does, install will fail with a conflict error.
 - `kind` must be `"theme"`.
-- `version` follows semver.
+- SemVer is recommended for `version`. Legacy V1 manifests currently accept any
+  non-empty version string; Manifest V2 enforces semantic versions.
 - This tutorial authors `theme.ts`, so it uses `trusted-code`. Prefer the
   declarative tier and `or3.theme.json` when no code or Vue replacements are
   needed.
+- Keeping the theme definition `name` equal to the manifest `id` is recommended
+  for clarity, but the compiler tracks the installed source directory
+  separately and no longer requires them to match.
 
 ---
 
 ## Part 8 — Package as ZIP
 
-A theme ZIP is just a flat archive of your theme folder contents with
-`or3.manifest.json` at the root (not nested inside a subdirectory).
+A theme ZIP contains your theme folder and one `or3.manifest.json`. A flat
+archive with the manifest at the ZIP root is recommended. The installer also
+accepts an enclosing source/archive directory (such as GitHub-generated ZIPs)
+and strips the directory prefix during installation.
 
 ```bash
 # From your repo root
@@ -404,7 +410,7 @@ await $`cd app/theme/${id} && zip -r ../../../${id}-v1.0.0.zip . -x "*.DS_Store"
 console.log(`Packaged → ${id}-v1.0.0.zip`);
 ```
 
-**ZIP structure must look like this** (manifest at root, not in a subfolder):
+**Recommended ZIP structure**:
 
 ```
 ocean-dark-v1.0.0.zip
@@ -437,8 +443,9 @@ There are two ways to install from the admin panel:
 3. Upload your `ocean-dark-v1.0.0.zip`.
 4. The server extracts the ZIP, validates the manifest, writes to
    `extensions/themes/ocean-dark/`, and symlinks it into `app/theme/ocean-dark/`.
-5. **Restart the dev server** (or your production Nuxt process) for the new
-   theme to be discovered by `import.meta.glob`.
+5. **Restart the dev server** for the new theme to be discovered by
+   `import.meta.glob`. In production, rebuild/redeploy and restart; restarting
+   an unchanged bundle cannot add a build-time-discovered theme module.
 6. After restart, select **Ocean Dark** in Settings → Theme.
 
 ### Option B — Import from URL
@@ -512,7 +519,8 @@ code for compatibility.
 
 In the admin panel → **Themes**, click **Uninstall** on any installed
 extension theme. Built-in themes (blank, retro, cyberpunk) do not show an
-Uninstall button — remove them from the repo directly.
+Uninstall button — remove them from the repo directly. Rebuild/redeploy a
+production bundle after uninstall so it no longer contains the removed module.
 
 ---
 
@@ -520,7 +528,7 @@ Uninstall button — remove them from the repo directly.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Theme not appearing after install | Dev server not restarted | `bun run dev` again |
+| Theme not appearing after install | Dev server not restarted, or production bundle not rebuilt | Restart development; rebuild/redeploy production |
 | `"conflicts with a built-in theme directory"` | Your `id` matches a built-in | Rename your theme |
 | `"Invalid manifest"` | Missing `kind`, `id`, or `name` in manifest | Check `or3.manifest.json` |
 | `"Invalid archive path"` | Path traversal (`..`) in ZIP | Re-zip cleanly: `zip -r . -x "*.DS_Store"` |

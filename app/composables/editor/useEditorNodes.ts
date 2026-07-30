@@ -3,6 +3,8 @@ import type { Node, Mark, Extension } from '@tiptap/core';
 import type { LazyEditorExtensionFactory } from './useEditorExtensionLoader';
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
 import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 
 /**
  * @module app/composables/editor/useEditorNodes
@@ -42,6 +44,10 @@ import { getContributionSurfaceKernel } from '~/composables/plugins/contribution
 export interface EditorNode {
     /** Unique id (stable across reloads). */
     id: string;
+    /** Owning plugin used for enabled-state and server access checks. */
+    pluginId?: string;
+    /** Optional per-contribution access requirements. */
+    access?: PluginGatePolicy;
     /** TipTap Node extension instance. */
     extension: Node;
     /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
@@ -68,6 +74,10 @@ export interface EditorNode {
 export interface EditorMark {
     /** Unique id (stable across reloads). */
     id: string;
+    /** Owning plugin used for enabled-state and server access checks. */
+    pluginId?: string;
+    /** Optional per-contribution access requirements. */
+    access?: PluginGatePolicy;
     /** TipTap Mark extension instance. */
     extension: Mark;
     /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
@@ -94,6 +104,10 @@ export interface EditorMark {
 export interface EditorExtension {
     /** Unique id (stable across reloads). */
     id: string;
+    /** Owning plugin used for enabled-state and server access checks. */
+    pluginId?: string;
+    /** Optional per-contribution access requirements. */
+    access?: PluginGatePolicy;
     /** TipTap Extension instance. */
     extension?: Extension;
     /** Optional lazy factory to create the extension without pulling TipTap into entry. */
@@ -172,6 +186,13 @@ function listV2Entries<T extends { id: string; order?: number }>(
     return items
         .map((item) => reactive(item) as T)
         .sort(compareEditorEntries);
+}
+
+function isEditorEntryAllowed(entry: {
+    pluginId?: string;
+    access?: PluginGatePolicy;
+}): boolean {
+    return getPluginGateDecision(entry.pluginId, entry.access).allowed;
 }
 
 function syncNodesReactiveList() {
@@ -361,12 +382,14 @@ export function unregisterEditorExtension(id: string) {
  * - Returning a defensive copy
  */
 export function listEditorNodes(): EditorNode[] {
-    if (useV2Surface()) return listV2Entries(nodeV2Kernel.items.value);
-    return [...nodesReactiveList.items].sort((a, b) => {
-        const orderDiff = (a.order ?? 200) - (b.order ?? 200);
-        // Stable sort: tie-break by id
-        return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);
-    });
+    const nodes = useV2Surface()
+        ? listV2Entries(nodeV2Kernel.items.value)
+        : [...nodesReactiveList.items].sort((a, b) => {
+              const orderDiff = (a.order ?? 200) - (b.order ?? 200);
+              // Stable sort: tie-break by id
+              return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);
+          });
+    return nodes.filter(isEditorEntryAllowed);
 }
 
 /**
@@ -385,12 +408,14 @@ export function listEditorNodes(): EditorNode[] {
  * - Returning a defensive copy
  */
 export function listEditorMarks(): EditorMark[] {
-    if (useV2Surface()) return listV2Entries(markV2Kernel.items.value);
-    return [...marksReactiveList.items].sort((a, b) => {
-        const orderDiff = (a.order ?? 200) - (b.order ?? 200);
-        // Stable sort: tie-break by id
-        return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);
-    });
+    const marks = useV2Surface()
+        ? listV2Entries(markV2Kernel.items.value)
+        : [...marksReactiveList.items].sort((a, b) => {
+              const orderDiff = (a.order ?? 200) - (b.order ?? 200);
+              // Stable sort: tie-break by id
+              return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);
+          });
+    return marks.filter(isEditorEntryAllowed);
 }
 
 /**
@@ -409,12 +434,14 @@ export function listEditorMarks(): EditorMark[] {
  * - Returning a defensive copy
  */
 export function listEditorExtensions(): EditorExtension[] {
-    if (useV2Surface()) return listV2Entries(extensionV2Kernel.items.value);
-    return [...extensionsReactiveList.items].sort((a, b) => {
-        const orderDiff = (a.order ?? 200) - (b.order ?? 200);
-        // Stable sort: tie-break by id
-        return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);
-    });
+    const extensions = useV2Surface()
+        ? listV2Entries(extensionV2Kernel.items.value)
+        : [...extensionsReactiveList.items].sort((a, b) => {
+              const orderDiff = (a.order ?? 200) - (b.order ?? 200);
+              // Stable sort: tie-break by id
+              return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);
+          });
+    return extensions.filter(isEditorEntryAllowed);
 }
 
 /**

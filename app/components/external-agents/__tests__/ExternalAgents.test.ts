@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { defineComponent, h, shallowRef } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -1543,22 +1541,6 @@ describe("External Agents components", () => {
         ],
       }),
     );
-  });
-
-  it("uses a non-empty sentinel for the host-default model option", () => {
-    // Reka ComboboxItem rejects value="" (reserved for clearing selection).
-    const source = readFileSync(
-      resolve(
-        process.cwd(),
-        "app/components/external-agents/ExternalAgentSettingsPanel.vue",
-      ),
-      "utf8",
-    );
-    expect(source).toContain('HOST_DEFAULT_MODEL_VALUE = "host_default"');
-    expect(source).toContain(
-      '{ value: HOST_DEFAULT_MODEL_VALUE, label: "Recommended (default)" }',
-    );
-    expect(source).not.toContain('{ value: "", label: "Host default" }');
   });
 
   it("keeps the full settings panel reachable in short or zoomed viewports", async () => {

@@ -20,6 +20,11 @@ const budgets = {
     domContentLoadedMs: Number(process.env.OR3_PERF_MAX_DCL_MS || 2_500),
 };
 
+test.skip(
+    process.env.OR3_E2E_PERFORMANCE !== 'true',
+    'Performance budgets require OR3_E2E_PERFORMANCE=true'
+);
+
 test('browser Core Web Vitals stay inside release budgets', async ({
     page,
 }, testInfo) => {

@@ -45,6 +45,17 @@ if (!existsSync(publicRoot)) fail('missing .output/public');
 if (modeArg === 'ssr' && !existsSync(resolve(serverRoot, 'index.mjs'))) {
     fail('SSR build is missing .output/server/index.mjs');
 }
+if (
+    modeArg === 'ssr' &&
+    !existsSync(
+        resolve(
+            serverRoot,
+            'node_modules/better-sqlite3/build/Release/better_sqlite3.node'
+        )
+    )
+) {
+    fail('SSR build is missing the packaged better-sqlite3 native binding');
+}
 if (modeArg === 'static' && !existsSync(resolve(publicRoot, 'index.html'))) {
     fail('static generation is missing .output/public/index.html');
 }

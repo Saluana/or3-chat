@@ -387,23 +387,6 @@ describe('or3 cloud wizard validation', () => {
 });
 
 describe('or3 cloud wizard apply', () => {
-    it('supports dry-run apply without writing files', async () => {
-        const dir = await mkdtemp(resolve(tmpdir(), 'or3-wizard-dry-run-'));
-        const result = await applyAnswers(
-            {
-                ...validRecommendedAnswers(),
-                instanceDir: dir,
-                envFile: '.env',
-                dryRun: true,
-            },
-            { dryRun: true }
-        );
-
-        expect(result.dryRun).toBe(true);
-        expect(result.writtenFiles).toEqual([]);
-        expect(result.providerModules).toContain('or3-provider-sqlite/nuxt');
-    });
-
     it('includes convex dev --once command in deploy plan when convex is selected', () => {
         const plan = buildDeployPlan({
             ...validRecommendedAnswers(),

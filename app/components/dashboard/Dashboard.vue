@@ -151,7 +151,7 @@ import {
     useDashboardNavigation,
     registerDashboardPluginPage,
     type DashboardPlugin,
-} from '~/composables';
+} from '~/composables/dashboard/useDashboardPlugins';
 import { useRuntimeConfig } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useThemeOverrides } from '~/composables/useThemeResolver';

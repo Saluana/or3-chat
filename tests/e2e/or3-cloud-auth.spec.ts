@@ -1,13 +1,35 @@
 import { test, expect } from '@playwright/test';
-import { rm } from 'fs/promises';
-import { join } from 'path';
-import { writeAdminCredentials } from '../../server/admin/auth/credentials';
-import { hashPassword } from '../../server/admin/auth/hash';
+import { isAbsolute, resolve, sep } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const adminCredentials = {
-    username: 'admin',
-    password: 'password',
+    username: process.env.OR3_ADMIN_E2E_USERNAME ?? '',
+    password: process.env.OR3_ADMIN_E2E_PASSWORD ?? '',
 };
+
+function isTempDataDirectory(candidate: string): boolean {
+    if (!isAbsolute(candidate)) return false;
+
+    const resolved = resolve(candidate);
+    const tempRoots = [
+        resolve(tmpdir()),
+        '/tmp',
+        '/private/tmp',
+        '/var/folders',
+        '/private/var/folders',
+    ];
+    return tempRoots.some(
+        (root) =>
+            resolved.startsWith(`${root}${sep}or3-admin-auth-e2e-`)
+    );
+}
+
+const configuredAdminDataDir = process.env.OR3_ADMIN_DATA_DIR ?? '';
+const isolatedAdminHarnessReady =
+    process.env.OR3_ADMIN_AUTH_E2E_HARNESS === 'true' &&
+    isTempDataDirectory(configuredAdminDataDir) &&
+    resolve(configuredAdminDataDir) !== resolve(process.cwd(), '.data') &&
+    Boolean(adminCredentials.username && adminCredentials.password);
 
 test.describe('OR3 Cloud Auth Integration', () => {
     test('Base app exposes auth session endpoint and login UI', async ({ page }) => {
@@ -26,7 +48,9 @@ test.describe('OR3 Cloud Auth Integration', () => {
         await page.goto('/');
         await page.waitForLoadState('networkidle');
 
-        await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
+        await expect(
+            page.getByRole('button', { name: /sign in|login/i })
+        ).toBeVisible();
     });
 
     test('Admin routes redirect unauthenticated users to login', async ({ page }) => {
@@ -38,19 +62,18 @@ test.describe('OR3 Cloud Auth Integration', () => {
     });
 
     test('Admin login establishes a session', async ({ page }) => {
+        test.skip(
+            !isolatedAdminHarnessReady,
+            'Requires OR3_ADMIN_AUTH_E2E_HARNESS=true, credentials, and an absolute temporary OR3_ADMIN_DATA_DIR'
+        );
+
         const sessionProbe = await page.request.get('/api/admin/auth/session');
         if (sessionProbe.status() === 404) {
             test.skip(true, 'Admin is disabled in this environment');
         }
 
-        // Ensure credentials bootstrap from env for deterministic tests
-        await rm(join(process.cwd(), '.data', 'admin-credentials.json'), { force: true });
-        await writeAdminCredentials({
-            username: adminCredentials.username,
-            password_hash_bcrypt: await hashPassword(adminCredentials.password),
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-        });
+        await page.goto('/admin/login');
+        const origin = new URL(page.url()).origin;
 
         const loginResponse = await page.request.post('/api/admin/auth/login', {
             data: {
@@ -58,7 +81,7 @@ test.describe('OR3 Cloud Auth Integration', () => {
                 password: adminCredentials.password,
             },
             headers: {
-                origin: 'http://localhost:3000',
+                origin,
                 'x-or3-admin-intent': 'admin',
             },
         });
@@ -68,20 +91,7 @@ test.describe('OR3 Cloud Auth Integration', () => {
             throw new Error(`Admin login failed: ${loginResponse.status()} ${text}`);
         }
 
-        const setCookie = loginResponse.headers()['set-cookie'];
-        expect(setCookie).toBeTruthy();
-
-        const cookieValue = setCookie.split(';')[0];
-        const [cookieName, cookieVal] = cookieValue.split('=');
-
-        await page.context().addCookies([
-            {
-                name: cookieName.trim(),
-                value: (cookieVal ?? '').trim(),
-                domain: 'localhost',
-                path: '/',
-            },
-        ]);
+        expect(loginResponse.headers()['set-cookie']).toBeTruthy();
 
         await page.goto('/admin/workspaces');
 

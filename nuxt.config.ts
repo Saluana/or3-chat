@@ -781,6 +781,25 @@ export default defineNuxtConfig({
         },
     },
     nitro: {
+        // Emit precompressed variants for the self-hosted Node server while
+        // keeping the original assets for hosts that do their own compression.
+        compressPublicAssets: true,
+        // better-sqlite3 resolves its native binding dynamically at runtime.
+        // Explicit tracing keeps the platform-specific .node binary in the
+        // self-contained Node server output.
+        externals: {
+            // Nitro's production package tracing can flatten incompatible
+            // transitive packages into the server output. Bundle Dexie so SSR
+            // retains its ESM named exports, and bundle Unhead so Nuxt's v3
+            // renderer cannot be paired with Nuxt UI's transitive v2 runtime.
+            inline: ['dexie', 'unhead'],
+            traceInclude: [
+                resolve(
+                    __dirname,
+                    'node_modules/better-sqlite3/lib/index.js'
+                ),
+            ],
+        },
         // Server tsconfig needs preserveSymlinks for file:-linked provider packages.
         typescript: {
             tsConfig: {
@@ -921,7 +940,17 @@ export default defineNuxtConfig({
                 }),
             ],
             globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
-            globIgnores: ['streamsaver/**'],
+            globIgnores: [
+                'streamsaver/**',
+                // These assets remain available online, but are not required to
+                // install or operate the offline application shell.
+                'screenshots/chat-screenshot.png',
+                'screenshots/editor-screenshot.png',
+                'logos/logo-8bit-raw.png',
+                'logos/logo-xl.png',
+                'logos/logo-1024.png',
+                'logos/icon-logo.png',
+            ],
             importScripts: ['/sw-bypass-streamsaver.js'],
             runtimeCaching: [
                 // OpenRouter callback: prefer network, but fall back to the
@@ -1148,6 +1177,14 @@ export default defineNuxtConfig({
         // at runtime via isAdminEnabled() check in server/middleware/admin-gate.ts.
     ].filter(Boolean) as string[],
     hooks: {
+        'build:manifest'(manifest) {
+            // Dynamic imports still load on navigation and NuxtLink keeps its
+            // interaction prefetch. Avoid fetching every possible route from
+            // SSR-generated <link rel="prefetch"> tags during initial load.
+            for (const resource of Object.values(manifest)) {
+                resource.prefetch = false;
+            }
+        },
         'pages:extend'(pages) {
             if (isScrollTestHarnessEnabled) {
                 pages.push({

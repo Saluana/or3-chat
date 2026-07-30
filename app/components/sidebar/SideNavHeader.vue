@@ -3,9 +3,11 @@
         <div class="flex w-full items-center gap-2">
             <div class="relative flex-1">
                 <UInput
+                    id="sidebar-search"
                     ref="searchInputWrapper"
                     v-model="sidebarQuery"
                     v-bind="searchInputProps"
+                    name="sidebar-search"
                     aria-label="Search chats, documents, and projects"
                     class="w-full"
                     @keydown.escape.prevent.stop="onEscapeClear"

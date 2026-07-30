@@ -69,11 +69,11 @@ describe('shared authorization contract harness', () => {
     });
 });
 
-function memorySyncAdapter(name: string): SyncContractAdapter {
+function memorySyncAdapter(): SyncContractAdapter {
     let items: SnapshotItem[] = [];
     let highWatermark = 0;
     return {
-        name,
+        name: 'contract-harness-self-test',
         async reset() { items = []; highWatermark = 0; },
         async seedMaterialized(next, watermark) {
             items = structuredClone(Array.from(next)); highWatermark = watermark;
@@ -86,17 +86,17 @@ function memorySyncAdapter(name: string): SyncContractAdapter {
 }
 
 describe('shared sync contract harness', () => {
-    it.each(['sqlite', 'convex', 'convex-template'])('%s executes bootstrap and revision sentinels', async (name) => {
-        await expect(verifySyncContract(memorySyncAdapter(name))).resolves.toBeUndefined();
+    it('executes bootstrap and revision sentinels against its in-memory fixture', async () => {
+        await expect(verifySyncContract(memorySyncAdapter())).resolves.toBeUndefined();
     });
 });
 
 describe('shared storage and lease harnesses', () => {
-    it.each(['fs', 's3', 'convex'])('%s executes the canonical reference sentinel', async (name) => {
+    it('executes the canonical reference sentinel against its in-memory fixture', async () => {
         const blobs = new Set<string>();
         const references = new Set<string>();
         await verifyStorageReferenceContract({
-            name,
+            name: 'contract-harness-self-test',
             async put(hash) { blobs.add(hash); },
             async reference(hash) { references.add(hash); },
             async collect() {
