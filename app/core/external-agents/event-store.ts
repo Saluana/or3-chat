@@ -8,6 +8,7 @@ import type {
   ExternalAgentClient,
   ExternalAgentRunStatus,
   ExternalAgentSession,
+  ExternalAgentStoreEvent,
   ExternalAgentTimelineEvent,
   ExternalRemoteEvent,
   ExternalRemoteStreamEvent,
@@ -433,10 +434,7 @@ export class ExternalAgentEventStore {
     remote: ExternalRemoteEvent;
     isCurrent: () => boolean;
     emit: (
-      event: Extract<
-        import("./types").ExternalAgentStoreEvent,
-        { type: "timeline" }
-      >,
+      event: Extract<ExternalAgentStoreEvent, { type: "timeline" }>,
     ) => void;
   }): void {
     if (!input.isCurrent()) return;

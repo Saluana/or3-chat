@@ -3,10 +3,9 @@ import {
   runnerUsability,
   validateExternalAgentLaunch,
 } from "./launcher";
-import {
-  presentExternalAgentError,
-} from "./presentation";
+import { presentExternalAgentError } from "./presentation";
 import { isExternalAgentPinCredentialVault } from "./credentials";
+import { ExternalAgentConnectionSupervisor } from "./connection-supervisor";
 import {
   ExternalAgentEventStore,
   isTerminal,
@@ -14,10 +13,20 @@ import {
   MAX_EVENT_TURNS,
   remoteDate,
   shouldPauseStream,
-  streamPayload,
 } from "./event-store";
+import {
+  ExternalAgentHostRegistry,
+  fallbackExternalAgentHostId,
+  normalizeExternalAgentBaseUrl,
+  sameExternalAgentEndpoint,
+} from "./host-registry";
+import { ExternalAgentPersistenceAdapter } from "./persistence-adapter";
 import { ExternalAgentSnapshotPublisher } from "./snapshot-publisher";
-import { ExternalAgentSessionRepository } from "./session-repository";
+import {
+  ExternalAgentSessionRepository,
+  MAX_EXTERNAL_AGENT_SESSION_REFS,
+} from "./session-repository";
+import { ExternalAgentTurnCommandService } from "./turn-command-service";
 import type {
   ExternalAgentClient,
   ExternalAgentClientFactory,
@@ -28,7 +37,6 @@ import type {
   ExternalAgentPersistence,
   ExternalAgentPersistenceLease,
   ExternalAgentPersistenceSnapshot,
-  ExternalAgentRunStatus,
   ExternalAgentSession,
   ExternalAgentSessionRef,
   ExternalAgentStoreEvent,
@@ -38,12 +46,11 @@ import type {
   ExternalRemoteTurn,
 } from "./types";
 
-const MAX_SESSION_REFS = 100;
+export { mapExternalAgentStatus } from "./event-store";
+
 const MAX_EAGER_REHYDRATED_SESSIONS = 20;
 const REHYDRATE_CONCURRENCY = 4;
 const MAX_REHYDRATED_TURNS = 20;
-const STREAM_DISCONNECT_RECONCILE_INITIAL_MS = 1_000;
-const STREAM_DISCONNECT_RECONCILE_MAX_MS = 30_000;
 
 interface ExternalAgentWorkspaceLease {
   readonly workspaceId: string;
@@ -73,24 +80,6 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function waitForAbortableDelay(
-  delayMs: number,
-  signal: AbortSignal,
-): Promise<boolean> {
-  if (signal.aborted) return Promise.resolve(false);
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve(true);
-    }, delayMs);
-    const onAbort = () => {
-      clearTimeout(timer);
-      resolve(false);
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? { ...(value as Record<string, unknown>) }
@@ -110,50 +99,6 @@ function randomId(prefix: string): string {
       ? cryptoApi.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `${prefix}-${value}`;
-}
-
-function normalizeBaseUrl(value: string): string {
-  const parsed = new URL(value.trim());
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    throw new Error("Host URL must use HTTP or HTTPS");
-  }
-  const hostname = parsed.hostname
-    .toLowerCase()
-    .replace(/^\[/, "")
-    .replace(/\]$/, "");
-  const loopback =
-    hostname === "localhost" ||
-    hostname === "::1" ||
-    /^127(?:\.\d{1,3}){3}$/.test(hostname);
-  if (parsed.protocol === "http:" && !loopback) {
-    throw new Error(
-      "Remote hosts must use HTTPS; HTTP is allowed only for loopback hosts",
-    );
-  }
-  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
-    throw new Error(
-      "Host URL must not contain credentials, query parameters, or fragments",
-    );
-  }
-  return parsed.toString().replace(/\/+$/, "");
-}
-
-function fallbackHostId(baseUrl: string): string {
-  const parsed = new URL(baseUrl);
-  return (
-    parsed.host
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "or3-intern"
-  );
-}
-
-function sameHostEndpoint(left: string, right: string): boolean {
-  try {
-    return normalizeBaseUrl(left) === normalizeBaseUrl(right);
-  } catch {
-    return left.replace(/\/+$/, "") === right.replace(/\/+$/, "");
-  }
 }
 
 function sessionFromRemote(
@@ -198,13 +143,13 @@ export class ExternalAgentController {
   readonly #createClient: ExternalAgentClientFactory;
   readonly #getWorkspaceScope: () => string | null | undefined;
   readonly #publisher: ExternalAgentSnapshotPublisher;
+  readonly #hostRegistry = new ExternalAgentHostRegistry();
   readonly #sessions = new ExternalAgentSessionRepository();
   readonly #events = new ExternalAgentEventStore();
-  readonly #streamControllers = new Map<string, AbortController>();
-  #hostController: AbortController | null = null;
+  readonly #connections = new ExternalAgentConnectionSupervisor();
+  readonly #commands = new ExternalAgentTurnCommandService();
+  readonly #persistenceAdapter = new ExternalAgentPersistenceAdapter();
   #client: ExternalAgentClient | null = null;
-  #hosts: ExternalAgentHost[] = [];
-  #activeHostId: string | null = null;
   #connectionState: ExternalAgentStoreSnapshot["connectionState"] =
     "disconnected";
   #connectionError: string | null = null;
@@ -217,7 +162,6 @@ export class ExternalAgentController {
   #workspaceEpoch = 0;
   #cloudHostReconcileGeneration = 0;
   #disposed = false;
-  #persistTail: Promise<void> = Promise.resolve();
 
   constructor(options: ExternalAgentControllerOptions) {
     this.#persistence = options.persistence;
@@ -231,6 +175,22 @@ export class ExternalAgentController {
 
   get snapshot(): ExternalAgentStoreSnapshot {
     return this.#publisher.snapshot;
+  }
+
+  get #hosts(): readonly ExternalAgentHost[] {
+    return this.#hostRegistry.hosts;
+  }
+
+  set #hosts(hosts: ExternalAgentHost[]) {
+    this.#hostRegistry.replace(hosts);
+  }
+
+  get #activeHostId(): string | null {
+    return this.#hostRegistry.activeHostId;
+  }
+
+  set #activeHostId(hostId: string | null) {
+    this.#hostRegistry.setActive(hostId);
   }
 
   #createSnapshot(): ExternalAgentStoreSnapshot {
@@ -413,13 +373,13 @@ export class ExternalAgentController {
     readonly activate?: boolean;
   }): Promise<ExternalAgentHost> {
     const lease = this.#requireWorkspaceLease();
-    const baseUrl = normalizeBaseUrl(input.baseUrl);
+    const baseUrl = normalizeExternalAgentBaseUrl(input.baseUrl);
     const token = input.token.trim();
     if (!token) throw new Error("An access token is required");
     const credentialRef = randomId("intern-credential");
     const temporary: ExternalAgentHost = {
-      id: fallbackHostId(baseUrl),
-      name: input.name.trim() || fallbackHostId(baseUrl),
+      id: fallbackExternalAgentHostId(baseUrl),
+      name: input.name.trim() || fallbackExternalAgentHostId(baseUrl),
       baseUrl,
       credentialRef,
       trustedAt: nowIso(),
@@ -499,11 +459,12 @@ export class ExternalAgentController {
     if (!environmentId || !token) {
       throw new Error("Cloud computer details are incomplete.");
     }
-    const baseUrl = normalizeBaseUrl(input.baseUrl);
+    const baseUrl = normalizeExternalAgentBaseUrl(input.baseUrl);
     const id = `or3-connect:${environmentId}`;
     const previous =
-      this.#hosts.find((candidate) => candidate.id === id) ??
-      this.#hosts.find((candidate) => sameHostEndpoint(candidate.baseUrl, baseUrl));
+      this.#hostRegistry.find(id) ??
+      this.#hostRegistry.findByEndpoint(baseUrl);
+    const previousWasActive = previous?.id === this.#activeHostId;
     const credentialRef =
       previous?.credentialRef ?? `or3-connect-credential:${environmentId}`;
     await this.#credentials.put(credentialRef, token);
@@ -520,7 +481,7 @@ export class ExternalAgentController {
       ...this.#hosts.filter(
         (candidate) =>
           candidate.id !== id &&
-          !sameHostEndpoint(candidate.baseUrl, baseUrl),
+          !sameExternalAgentEndpoint(candidate.baseUrl, baseUrl),
       ),
       host,
     ];
@@ -533,7 +494,7 @@ export class ExternalAgentController {
     }
     if (input.activate === true || !this.#activeHostId) {
       this.#activeHostId = id;
-    } else if (previous && this.#activeHostId === previous.id) {
+    } else if (previousWasActive) {
       this.#activeHostId = id;
     }
     await this.#persist(lease);
@@ -576,7 +537,7 @@ export class ExternalAgentController {
       return {
         environmentId,
         name: environment.name.trim() || environmentId,
-        baseUrl: normalizeBaseUrl(environment.baseUrl),
+        baseUrl: normalizeExternalAgentBaseUrl(environment.baseUrl),
         token,
       };
     });
@@ -808,8 +769,7 @@ export class ExternalAgentController {
       host,
       resolveCredential: () => this.#credentials.resolve(host.credentialRef),
     });
-    const controller = new AbortController();
-    this.#hostController = controller;
+    const controller = this.#connections.beginHostRequest();
     this.#client = client;
     // Readiness is an operator/deployment probe and legitimately returns 503
     // when optional hardening is unavailable. Normal users only need liveness,
@@ -899,9 +859,9 @@ export class ExternalAgentController {
         const discovered = await client.listSessions(
           {
             appSessionKeyPrefix: prefix,
-            limit: MAX_SESSION_REFS,
+            limit: MAX_EXTERNAL_AGENT_SESSION_REFS,
           },
-          { signal: this.#hostController?.signal },
+          { signal: this.#connections.hostSignal },
         );
         this.#assertGeneration(hostId, generation);
         for (const remote of discovered.sessions) {
@@ -920,7 +880,7 @@ export class ExternalAgentController {
           generation !== this.#generation ||
           hostId !== this.#activeHostId ||
           !this.#isWorkspaceLeaseCurrent(expectedLease) ||
-          this.#hostController?.signal.aborted
+          this.#connections.hostSignal?.aborted
         ) {
           return;
         }
@@ -952,7 +912,7 @@ export class ExternalAgentController {
           const remote =
             target.remote ??
             (await client.getSession(target.ref!.remoteSessionId, {
-              signal: this.#hostController?.signal,
+              signal: this.#connections.hostSignal,
             }));
           if (
             generation !== this.#generation ||
@@ -1073,14 +1033,17 @@ export class ExternalAgentController {
     const generation = this.#generation;
     const instruction = effectiveInput.instruction.trim();
     const attachments = effectiveInput.attachments?.length
-      ? await client.stageFiles(effectiveInput.attachments, {
-          signal: this.#hostController?.signal,
-        })
+      ? await this.#commands.stageFiles(
+          client,
+          effectiveInput.attachments,
+          this.#connections.hostSignal,
+        )
       : [];
     this.#assertGeneration(hostId, generation);
     this.#assertWorkspaceLease(lease);
     const appSessionKey = `${this.#workspaceSessionPrefix(true, lease)}${randomId("session")}`;
-    const remote = await client.createSession(
+    const remote = await this.#commands.createSession(
+      client,
       {
         app_session_key: appSessionKey,
         runner_id: effectiveInput.runnerId,
@@ -1090,7 +1053,7 @@ export class ExternalAgentController {
         isolation: effectiveInput.isolation,
         cwd: effectiveInput.cwd?.trim() || undefined,
       },
-      { signal: this.#hostController?.signal },
+      this.#connections.hostSignal,
     );
     this.#assertGeneration(hostId, generation);
     this.#assertWorkspaceLease(lease);
@@ -1110,7 +1073,8 @@ export class ExternalAgentController {
     this.#emit({ type: "session", session });
 
     try {
-      const started = await client.startTurn(
+      const started = await this.#commands.startTurn(
+        client,
         remote.id,
         {
           user_message: instruction,
@@ -1123,7 +1087,7 @@ export class ExternalAgentController {
           isolation: effectiveInput.isolation,
           cwd: effectiveInput.cwd?.trim() || undefined,
         },
-        { signal: this.#hostController?.signal },
+        this.#connections.hostSignal,
       );
       this.#assertGeneration(hostId, generation);
       session.activeTurnId = started.turn_id;
@@ -1193,12 +1157,15 @@ export class ExternalAgentController {
           validation.input.thinkingLevel?.toLowerCase().trim() || undefined;
       }
       const attachments = settings?.attachments?.length
-        ? await client.stageFiles(settings.attachments, {
-            signal: this.#hostController?.signal,
-          })
+        ? await this.#commands.stageFiles(
+            client,
+            settings.attachments,
+            this.#connections.hostSignal,
+          )
         : [];
       this.#assertSessionGeneration(session);
-      const started = await client.startTurn(
+      const started = await this.#commands.startTurn(
+        client,
         session.remoteSessionId,
         {
           user_message: text,
@@ -1214,7 +1181,7 @@ export class ExternalAgentController {
               }
             : {}),
         },
-        { signal: this.#hostController?.signal },
+        this.#connections.hostSignal,
       );
       this.#assertSessionGeneration(session);
       if (settings) {
@@ -1253,9 +1220,12 @@ export class ExternalAgentController {
     }
     const previousStatus = session.status;
     try {
-      await client.abortTurn(session.remoteSessionId, session.activeTurnId, {
-        signal: this.#hostController?.signal,
-      });
+      await this.#commands.cancel(
+        client,
+        session.remoteSessionId,
+        session.activeTurnId,
+        this.#connections.hostSignal,
+      );
       this.#assertSessionGeneration(session);
       session.actionError = undefined;
       await this.#refreshTurn(session, session.activeTurnId, client, lease);
@@ -1297,12 +1267,13 @@ export class ExternalAgentController {
     if (!turnId) throw new Error("No pending approval is available");
     const previous = session.approvals.map((item) => ({ ...item }));
     try {
-      await client.decideTurn(
+      await this.#commands.decide(
+        client,
         session.remoteSessionId,
         turnId,
         decision === "approve" ? "approve" : "reject",
         { note },
-        { signal: this.#hostController?.signal },
+        this.#connections.hostSignal,
       );
       this.#assertSessionGeneration(session);
       session.actionError = undefined;
@@ -1339,13 +1310,11 @@ export class ExternalAgentController {
       throw new Error("This artifact is not available from the selected host");
     }
     try {
-      const remote = await client.readArtifact(
+      const remote = await this.#commands.readArtifact(
+        client,
         artifact.artifactId,
-        {
-          sessionKey: session.appSessionKey,
-          maxBytes: 256 * 1024,
-        },
-        { signal: this.#hostController?.signal },
+        session.appSessionKey,
+        this.#connections.hostSignal,
       );
       this.#assertSessionGeneration(session);
       this.#assertWorkspaceLease(lease);
@@ -1402,7 +1371,7 @@ export class ExternalAgentController {
     const client = this.#requireClient();
     const generation = this.#generation;
     const remote = await client.getSession(remoteSessionId, {
-      signal: this.#hostController?.signal,
+      signal: this.#connections.hostSignal,
     });
     this.#assertGeneration(hostId, generation);
     this.#assertWorkspaceLease(lease);
@@ -1555,7 +1524,7 @@ export class ExternalAgentController {
     const refreshVersion = this.#nextSessionRefreshVersion(session);
     const response = await client.listTurns(session.remoteSessionId, {
       limit: MAX_REHYDRATED_TURNS,
-      signal: this.#hostController?.signal,
+      signal: this.#connections.hostSignal,
     });
     this.#assertSessionRefresh(session, generation, lease, refreshVersion);
     const turns = new Map(
@@ -1582,7 +1551,7 @@ export class ExternalAgentController {
         client,
         session.remoteSessionId,
         turn.id,
-        this.#hostController?.signal,
+        this.#connections.hostSignal,
       );
       this.#assertSessionRefresh(session, generation, lease, refreshVersion);
       for (const event of events) {
@@ -1607,7 +1576,7 @@ export class ExternalAgentController {
     const generation = session.hostGeneration;
     const refreshVersion = this.#nextSessionRefreshVersion(session);
     const turn = await client.getTurn(session.remoteSessionId, turnId, {
-      signal: this.#hostController?.signal,
+      signal: this.#connections.hostSignal,
     });
     const terminal = isTerminal(
       mapExternalAgentStatus(turn.status, session.status),
@@ -1619,7 +1588,7 @@ export class ExternalAgentController {
       client,
       session.remoteSessionId,
       turnId,
-      this.#hostController?.signal,
+      this.#connections.hostSignal,
       afterSeq,
     );
     this.#assertSessionRefresh(session, generation, lease, refreshVersion);
@@ -1757,120 +1726,33 @@ export class ExternalAgentController {
       return;
     }
     const lease = this.#requireWorkspaceLease();
-    const key = this.#sessionKey(session.hostId, session.remoteSessionId);
-    this.#streamControllers.get(key)?.abort();
-    const controller = new AbortController();
-    this.#streamControllers.set(key, controller);
     const generation = session.hostGeneration;
-    const streamIsCurrent = () =>
-      !controller.signal.aborted &&
-      generation === this.#generation &&
-      session.hostId === this.#activeHostId &&
-      this.#isWorkspaceLeaseCurrent(lease) &&
-      this.#sessions.isCurrent(session);
-    const finishStream = () => {
-      controller.abort();
-      if (this.#streamControllers.get(key) === controller) {
-        this.#streamControllers.delete(key);
-      }
-    };
-    const afterSeq = this.#events.highestSequence(session, turnId);
-    session.streamState = "connecting";
-    this.#emit({ type: "session", session });
-
-    const reconcileDisconnectedStream = async () => {
-      let delayMs = 0;
-      while (streamIsCurrent()) {
-        if (
-          delayMs > 0 &&
-          !(await waitForAbortableDelay(delayMs, controller.signal))
-        ) {
-          return;
-        }
-        if (!streamIsCurrent()) return;
-        try {
-          await this.#refreshTurn(session, turnId, client, lease, {
-            persist: false,
-          });
-        } catch (error) {
-          if (controller.signal.aborted) return;
-          if (this.#isStaleResponseError(error)) {
-            finishStream();
-            return;
-          }
-        }
-        if (shouldPauseStream(session.status)) {
-          session.streamState = "idle";
-          this.#emit({ type: "session", session });
-          void this.#persist(lease).catch(() => undefined);
-          finishStream();
-          return;
-        }
-        session.streamState = "disconnected";
-        this.#emit({ type: "session", session });
-        delayMs =
-          delayMs === 0
-            ? STREAM_DISCONNECT_RECONCILE_INITIAL_MS
-            : Math.min(delayMs * 2, STREAM_DISCONNECT_RECONCILE_MAX_MS);
-      }
-    };
-
-    void (async () => {
-      try {
-        for await (const streamEvent of client.streamTurn(
-          session.remoteSessionId,
-          turnId,
-          { afterSeq, signal: controller.signal },
-        )) {
-          if (!streamIsCurrent()) return;
-          session.streamState = "connected";
-          const remote = streamPayload(streamEvent);
-          if (remote) this.#ingestRemoteEvent(session, remote);
-          if (
-            shouldPauseStream(session.status) ||
-            streamEvent.event === "done"
-          )
-            break;
-        }
-        if (!controller.signal.aborted) {
-          await reconcileDisconnectedStream();
-        }
-      } catch (error) {
-        if (
-          controller.signal.aborted ||
-          generation !== this.#generation ||
-          !this.#isWorkspaceLeaseCurrent(lease) ||
-          !this.#sessions.isCurrent(session) ||
-          this.#isStaleResponseError(error)
-        ) {
-          return;
-        }
-        session.streamState = "disconnected";
-        session.actionError = redactErrorMessage(
+    this.#connections.startTurnStream({
+      client,
+      session,
+      turnId,
+      afterSeq: this.#events.highestSequence(session, turnId),
+      isCurrent: () =>
+        generation === this.#generation &&
+        session.hostId === this.#activeHostId &&
+        this.#isWorkspaceLeaseCurrent(lease) &&
+        this.#sessions.isCurrent(session),
+      refresh: () =>
+        this.#refreshTurn(session, turnId, client, lease, { persist: false }),
+      ingest: (remote) => this.#ingestRemoteEvent(session, remote),
+      publishSession: () => this.#emit({ type: "session", session }),
+      persist: () => this.#persist(lease),
+      isStaleError: (error) => this.#isStaleResponseError(error),
+      presentError: (error) =>
+        redactErrorMessage(
           error,
           "Live updates disconnected. Reconnect to resume.",
-        );
-        this.#emit({ type: "session", session });
-        await reconcileDisconnectedStream();
-      } finally {
-        if (controller.signal.aborted || shouldPauseStream(session.status)) {
-          finishStream();
-        }
-      }
-    })();
+        ),
+    });
   }
 
   #abortActiveWork(): void {
-    this.#hostController?.abort();
-    this.#hostController = null;
-    for (const controller of this.#streamControllers.values()) {
-      controller.abort();
-    }
-    this.#streamControllers.clear();
-  }
-
-  #sessionKey(hostId: string, remoteSessionId: string): string {
-    return `${hostId}:${remoteSessionId}`;
+    this.#connections.abortAll();
   }
 
   #resolveHistoricalHostId(
@@ -1882,7 +1764,7 @@ export class ExternalAgentController {
       remoteSessionId,
       activeHostId: this.#activeHostId,
       hosts: this.#hosts,
-      sameEndpoint: sameHostEndpoint,
+      sameEndpoint: sameExternalAgentEndpoint,
     });
   }
 
@@ -1890,7 +1772,7 @@ export class ExternalAgentController {
     this.#sessions.rebindEquivalentRefs(
       hostId,
       this.#hosts,
-      sameHostEndpoint,
+      sameExternalAgentEndpoint,
     );
   }
 
@@ -1905,12 +1787,7 @@ export class ExternalAgentController {
       activeHostId: this.#activeHostId,
       sessionRefs: [...this.#sessions.refs],
     };
-    const save = this.#persistTail.then(
-      () => lease.persistence.save(snapshot),
-      () => lease.persistence.save(snapshot),
-    );
-    this.#persistTail = save.catch(() => undefined);
-    await save;
+    await this.#persistenceAdapter.save(lease.persistence, snapshot);
     this.#assertWorkspaceLease(lease);
   }
 }

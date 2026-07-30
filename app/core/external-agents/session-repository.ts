@@ -4,7 +4,7 @@ import type {
   ExternalAgentSessionRef,
 } from "./types";
 
-const MAX_SESSION_REFS = 100;
+export const MAX_EXTERNAL_AGENT_SESSION_REFS = 100;
 
 export function externalAgentSessionKey(
   hostId: string,
@@ -44,14 +44,11 @@ export class ExternalAgentSessionRepository {
     );
   }
 
-  get(hostId: string, remoteSessionId: string): ExternalAgentSession | undefined {
+  get(
+    hostId: string,
+    remoteSessionId: string,
+  ): ExternalAgentSession | undefined {
     return this.#sessions.get(externalAgentSessionKey(hostId, remoteSessionId));
-  }
-
-  find(remoteSessionId: string): ExternalAgentSession | undefined {
-    return this.values().find(
-      (session) => session.remoteSessionId === remoteSessionId,
-    );
   }
 
   isCurrent(session: ExternalAgentSession): boolean {
@@ -60,13 +57,6 @@ export class ExternalAgentSessionRepository {
 
   refsForHost(hostId: string): ExternalAgentSessionRef[] {
     return this.#refs.filter((ref) => ref.hostId === hostId);
-  }
-
-  findRef(hostId: string, remoteSessionId: string): ExternalAgentSessionRef | undefined {
-    return this.#refs.find(
-      (ref) =>
-        ref.hostId === hostId && ref.remoteSessionId === remoteSessionId,
-    );
   }
 
   removeRef(hostId: string, remoteSessionId: string): void {
@@ -137,7 +127,7 @@ export class ExternalAgentSessionRepository {
         (left, right) =>
           Date.parse(right.updatedAt ?? "") - Date.parse(left.updatedAt ?? ""),
       )
-      .slice(0, MAX_SESSION_REFS);
+      .slice(0, MAX_EXTERNAL_AGENT_SESSION_REFS);
   }
 
   resolveHistoricalHostId(input: {

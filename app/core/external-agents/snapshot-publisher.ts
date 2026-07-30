@@ -28,7 +28,11 @@ export class ExternalAgentSnapshotPublisher {
 
   subscribe(listener: StoreListener): () => void {
     this.#listeners.add(listener);
-    listener({ type: "snapshot", snapshot: this.snapshot });
+    try {
+      listener({ type: "snapshot", snapshot: this.snapshot });
+    } catch {
+      // A broken observer cannot prevent the controller from accepting others.
+    }
     return () => this.#listeners.delete(listener);
   }
 
