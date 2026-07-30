@@ -37,7 +37,7 @@ export function buildCheatSheetLines(context: NextStepsContext = {}): string[] {
         lines.push(`Admin dashboard:  ${appUrl}/admin`);
     }
     if (context.connectEnabled) {
-        lines.push('Connect a computer: npx or3 connect');
+        lines.push('Connect a computer: npx @or3/connect');
     }
     lines.push('Settings live in: .env');
     lines.push(`Re-run wizard:     ${WIZARD_INIT_COMMAND}`);
@@ -47,7 +47,7 @@ export function buildCheatSheetLines(context: NextStepsContext = {}): string[] {
 
 export function buildApplyOnlySuccessBody(connectEnabled = false): string {
     const connectMessage = connectEnabled
-        ? ' After OR3 is running publicly, connect a computer with npx or3 connect.'
+        ? ' After OR3 is running publicly, connect a computer with npx @or3/connect.'
         : '';
     return `Your .env and provider modules were written. Start the app with ${START_APP_COMMAND} (or bun start) when you are ready.${connectMessage}`;
 }

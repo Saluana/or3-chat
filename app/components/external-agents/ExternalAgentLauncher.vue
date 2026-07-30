@@ -167,7 +167,7 @@ import { presentExternalAgentError } from "~/core/external-agents/presentation";
 import { useExternalAgentRuntime } from "~/core/external-agents/runtime";
 import { useActiveSidebarPage } from "~/composables/sidebar/useActiveSidebarPage";
 
-const CONNECT_COMMAND = "npx or3 connect";
+const CONNECT_COMMAND = "npx @or3/connect";
 
 const props = withDefaults(
   defineProps<{

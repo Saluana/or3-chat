@@ -4,7 +4,7 @@ OR3 Connect makes a computer running `or3-intern` available to the signed-in
 OR3 Cloud account without a VPN or manual tunnel:
 
 ```bash
-npx or3 connect
+npx @or3/connect
 ```
 
 The command installs checksum-verified release binaries in `~/.or3/bin`, opens
@@ -15,11 +15,11 @@ short phrase; approve only when they match.
 ## User commands
 
 ```bash
-npx or3 connect
-or3-intern connect status
-or3-intern connect doctor
-or3-intern connect disconnect
-or3-intern connect uninstall
+npx @or3/connect
+npx @or3/connect status
+npx @or3/connect doctor
+npx @or3/connect disconnect
+npx @or3/connect uninstall
 ```
 
 `--no-service` keeps the connection in the current terminal. `--no-browser`

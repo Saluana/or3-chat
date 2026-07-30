@@ -7,9 +7,9 @@
 - [x] Authenticated environment hydration into Agents.
 - [x] Offline/static gating.
 - [x] Host CLI lifecycle, background services, status, doctor, disconnect.
-- [x] `npx or3 connect` verified bootstrap and tagged release workflow.
+- [x] `npx @or3/connect` verified bootstrap and tagged release workflow.
 - [x] Unit tests and operator documentation.
 - [ ] Configure production Cloudflare/Convex secrets and deploy schema.
-- [ ] Publish the first `or3` npm package and tagged `or3-intern` release.
+- [ ] Publish the first `@or3/connect` npm package and tagged `or3-intern` release.
 - [ ] Run a real cross-network macOS/Linux staging canary.
 - [ ] Add optional mobile QR as a secondary entry point.

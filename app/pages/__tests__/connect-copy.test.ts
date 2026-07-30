@@ -9,7 +9,7 @@ describe('Connect approval recovery copy', () => {
 
     it('exposes expiry recovery, live status, busy state, and focus targets', () => {
         expect(connectPageSource).toContain("state === 'expired'");
-        expect(connectPageSource).toContain('npx or3 connect');
+        expect(connectPageSource).toContain('npx @or3/connect');
         expect(connectPageSource).toContain('Code expires in');
         expect(connectPageSource).toContain('aria-live="polite"');
         expect(connectPageSource).toContain(':aria-busy="busy || monitoring"');

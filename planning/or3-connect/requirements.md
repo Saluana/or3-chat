@@ -1,6 +1,6 @@
 # OR3 Connect requirements
 
-- `npx or3 connect` is the normal setup: no pasted tokens, VPN, tunnel account, or QR required.
+- `npx @or3/connect` is the normal setup: no pasted tokens, VPN, tunnel account, or QR required.
 - Remote mode requires an authenticated OR3 Cloud account; offline/local mode remains account-free and exposes no remote controls.
 - macOS and Linux stay reachable after logout/reboot after one explicit administrator approval.
 - A browser device flow shows the same short code in terminal and browser.

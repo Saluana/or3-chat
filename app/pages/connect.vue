@@ -276,7 +276,7 @@ import {
     isExpiredConnectRequestError,
 } from '~/utils/connect-approval';
 
-const CONNECT_COMMAND = 'npx or3 connect';
+const CONNECT_COMMAND = 'npx @or3/connect';
 
 definePageMeta({
     layout: false,

@@ -421,7 +421,7 @@ describe("External Agents components", () => {
       true,
     );
     expect(wrapper.text()).toContain("Connect another computer");
-    expect(wrapper.text()).toContain("npx or3 connect");
+    expect(wrapper.text()).toContain("npx @or3/connect");
     expect(wrapper.text()).toContain(
       "Advanced: add another host by URL and token",
     );
@@ -1192,7 +1192,7 @@ describe("External Agents components", () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain("Connect your computer");
-    expect(wrapper.text()).toContain("npx or3 connect");
+    expect(wrapper.text()).toContain("npx @or3/connect");
     expect(wrapper.text()).toContain("Copy Connect command");
     expect(wrapper.text()).toContain("Advanced: connect by URL and token");
   });

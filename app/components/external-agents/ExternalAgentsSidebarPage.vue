@@ -997,7 +997,7 @@ interface HistoryItem {
   timeLabel: string;
 }
 
-const CONNECT_COMMAND = "npx or3 connect";
+const CONNECT_COMMAND = "npx @or3/connect";
 const runtime = useExternalAgentRuntime();
 const controller = runtime.controller;
 const snapshot = runtime.snapshot;

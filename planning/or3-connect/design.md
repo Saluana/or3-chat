@@ -1,7 +1,7 @@
 # OR3 Connect design
 
 ```text
-npx or3 connect
+npx @or3/connect
   → verified or3-intern + cloudflared
   → short-lived device authorization
   → authenticated /connect confirmation

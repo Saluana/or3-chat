@@ -340,7 +340,7 @@ export async function deployAnswers(
         }
         if (answers.connectEnabled) {
             nextSteps.push(
-                'After the public URL is live, connect a computer with `npx or3 connect`.'
+                'After the public URL is live, connect a computer with `npx @or3/connect`.'
             );
         }
         return {
@@ -360,7 +360,7 @@ export async function deployAnswers(
     }
     if (answers.connectEnabled) {
         nextSteps.push(
-            'Connect requires a public HTTPS URL; once it is reachable, run `npx or3 connect`.'
+            'Connect requires a public HTTPS URL; once it is reachable, run `npx @or3/connect`.'
         );
     }
     if (usesConvexProvider(answers)) {
