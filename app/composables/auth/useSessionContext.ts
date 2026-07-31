@@ -4,7 +4,7 @@
  */
 import { computed, ref, watchEffect } from 'vue';
 import { $fetch } from 'ofetch';
-import { useFetch, useRuntimeConfig, useState } from '#imports';
+import { useFetch, useRuntimeConfig, useState } from 'nuxt/app';
 import type { ComputedRef, Ref } from 'vue';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import { recoverClientSession } from '~/composables/auth/useClientSessionRecovery';

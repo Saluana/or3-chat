@@ -2,6 +2,11 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
+test.skip(
+  process.env.OR3_AGENT_VISUAL_TEST_HARNESS !== "true",
+  "Visual capture suite requires OR3_AGENT_VISUAL_TEST_HARNESS=true",
+);
+
 const outputDir = resolve("output/playwright/agents-after");
 test.describe.configure({ mode: "serial" });
 

@@ -27,7 +27,11 @@
  * @see getWizardSteps for the entry point
  * @see providerCatalog for provider field definitions
  */
-import { getProviderDescriptor, listImplementedProviders } from './catalog';
+import {
+    getProviderDescriptor,
+    isRecommendedSelfHostMode,
+    listImplementedProviders,
+} from './catalog';
 import {
     ADMIN_USERNAME_MIN_LENGTH,
     formatAdminPasswordPolicyFailure,
@@ -67,6 +71,29 @@ function isCloudAdvancedEnabled(answers: WizardAnswers): boolean {
     return answers.allAdvancedEnabled || answers.cloudAdvancedEnabled;
 }
 
+function isConnectAdvancedEnabled(answers: WizardAnswers): boolean {
+    return answers.allAdvancedEnabled || answers.connectAdvancedEnabled;
+}
+
+/**
+ * Short recommended path: Customize off + recommended self-host mode.
+ * Skips branding/themes/features/providers/sync/storage/connect/admin/AI.
+ * Guided (`preset-local`) keeps the email field; fast skips that too.
+ */
+function isSimplifiedRecommendedSetup(answers: WizardAnswers): boolean {
+    return (
+        isRecommendedSelfHostMode(answers.wizardMode) &&
+        !answers.targetAdvancedEnabled
+    );
+}
+
+function isFastRecommendedSetup(answers: WizardAnswers): boolean {
+    return (
+        answers.wizardMode === 'preset-local-fast' &&
+        !answers.targetAdvancedEnabled
+    );
+}
+
 function withVisibleWhen(
     field: WizardField,
     visibleWhen: (answers: WizardAnswers) => boolean
@@ -90,6 +117,12 @@ function providerFieldsStep(
     answers: WizardAnswers,
     kind: 'auth' | 'sync' | 'storage'
 ): WizardStep | null {
+    if (
+        isSimplifiedRecommendedSetup(answers) &&
+        (kind === 'sync' || kind === 'storage')
+    ) {
+        return null;
+    }
     const providerId =
         kind === 'auth'
             ? answers.authProvider
@@ -144,7 +177,7 @@ function providerFieldsStep(
 
     const fields: WizardField[] = [
         ...coreFields,
-        ...(advancedFields.length > 0
+        ...(advancedFields.length > 0 && !isSimplifiedRecommendedSetup(answers)
             ? [
                   {
                       key: advancedToggleKey,
@@ -169,6 +202,7 @@ function providerFieldsStep(
             if (!current.ssrAuthEnabled) return true;
             if (kind === 'sync') return !current.syncEnabled;
             if (kind === 'storage') return !current.storageEnabled;
+            if (kind === 'auth') return isFastRecommendedSetup(current);
             return false;
         },
     };
@@ -207,8 +241,8 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 {
                     key: 'targetAdvancedEnabled',
                     type: 'boolean',
-                    label: 'Customize install location & advanced options?',
-                    help: 'Only needed for unusual setups: different project folder, .env.local file, production build, or a no-changes preview.',
+                    label: 'Customize this setup?',
+                    help: 'Show branding, themes, features, provider choices, install location, and advanced security options.',
                     defaultValue: false,
                 },
                 {
@@ -232,15 +266,76 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     visibleWhen: (current) => current.targetAdvancedEnabled,
                 },
                 {
+                    key: 'packageManager',
+                    type: 'select',
+                    label: 'Package manager',
+                    help: 'This is detected automatically by the initializer.',
+                    options: [
+                        { label: 'npm', value: 'npm' },
+                        { label: 'Bun', value: 'bun' },
+                    ],
+                    visibleWhen: (current) => current.targetAdvancedEnabled,
+                },
+                {
                     key: 'deploymentTarget',
                     type: 'select',
                     label: 'How will you run this?',
-                    help: 'Choose "Local Dev" to try things out, or "Production" when you\'re ready to go live.',
+                    help: 'Use local development on this computer, Docker for a server, or configure without starting anything.',
                     options: [
-                        { label: 'Local Dev — for testing and development', value: 'local-dev' },
-                        { label: 'Production — ready to deploy', value: 'prod-build' },
+                        {
+                            label: 'Local development',
+                            value: 'local-dev',
+                        },
+                        {
+                            label: 'Docker — laptop, home server, or VPS',
+                            value: 'docker',
+                        },
+                        {
+                            label: 'Configure only',
+                            value: 'configure-only',
+                        },
                     ],
                     visibleWhen: (current) => current.targetAdvancedEnabled,
+                },
+                {
+                    key: 'dockerExposure',
+                    type: 'select',
+                    label: 'Docker access',
+                    help: 'Private mode listens only on this machine. Public mode adds Caddy with automatic HTTPS.',
+                    options: [
+                        {
+                            label: 'Private / local network',
+                            value: 'private',
+                        },
+                        {
+                            label: 'Public domain with HTTPS',
+                            value: 'public',
+                        },
+                    ],
+                    visibleWhen: (current) =>
+                        current.deploymentTarget === 'docker',
+                },
+                {
+                    key: 'publicDomain',
+                    type: 'text',
+                    label: 'Public domain',
+                    help: 'Point this hostname at the server before deploying, for example chat.example.com.',
+                    required: true,
+                    visibleWhen: (current) =>
+                        current.deploymentTarget === 'docker' &&
+                        current.dockerExposure === 'public',
+                    validate: (value) => {
+                        const domain = String(value ?? '').trim();
+                        if (
+                            !domain ||
+                            domain.includes('://') ||
+                            domain.includes('/') ||
+                            !domain.includes('.')
+                        ) {
+                            return 'Enter a hostname such as chat.example.com.';
+                        }
+                        return null;
+                    },
                 },
                 {
                     key: 'dryRun',
@@ -265,21 +360,46 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     label: 'Which starting point do you want?',
                     help: 'Choose a preset for a fast path, or custom to manually pick providers.',
                     options: [
+                        ...(answers.cloudSetupEntry
+                            ? []
+                            : [
+                                  {
+                                      label: 'This device only — private, offline, and no account',
+                                      value: 'personal-local',
+                                      description:
+                                          'Everything stays in this browser. No remote access or server account is configured.',
+                                  },
+                              ]),
                         {
-                            label: 'Default local stack — auto-uses Basic Auth + SQLite + Filesystem',
+                            label: 'Self-hosted OR3 — accounts, SQLite, and filesystem storage',
                             value: 'preset-local',
+                            description:
+                                'Recommended. Only asks for your admin email; secrets and paths are filled automatically.',
                         },
                         {
-                            label: 'Clerk + Convex stack — auto-uses Clerk + Convex + Convex',
+                            label: 'Use recommended defaults — skip questions',
+                            value: 'preset-local-fast',
+                            description:
+                                'Same stack as self-hosted, with auto-generated credentials (admin@example.com). Jump straight to review.',
+                        },
+                        {
+                            label: 'Clerk + Convex — managed authentication and data',
                             value: 'preset-clerk-convex',
+                            description:
+                                'For deployments already using Clerk and Convex.',
                         },
                         {
                             label: 'Custom — manually choose auth/sync/storage providers',
                             value: 'custom',
+                            description:
+                                'Choose each backend and advanced deployment setting yourself.',
                         },
                     ],
                 },
             ],
+            // Keep template selection visible so users can pick fast/Clerk/custom.
+            // Docker no longer auto-skips this — the short path still only needs email.
+            canSkip: () => false,
         },
         {
             id: 'branding',
@@ -319,6 +439,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     visibleWhen: isBaseAdvancedEnabled,
                 },
             ],
+            canSkip: isSimplifiedRecommendedSetup,
         },
         {
             id: 'themes',
@@ -359,6 +480,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                         current.themeInstallMode === 'install-selected',
                 },
             ],
+            canSkip: isSimplifiedRecommendedSetup,
         },
         {
             id: 'features',
@@ -378,6 +500,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 { key: 'mentionsEnabled', type: 'boolean', label: 'Mentions (@-mention documents and chats)', visibleWhen: (current) => current.featuresAdvancedEnabled },
                 { key: 'dashboardEnabled', type: 'boolean', label: 'Dashboard', visibleWhen: (current) => current.featuresAdvancedEnabled },
             ],
+            canSkip: isSimplifiedRecommendedSetup,
         },
         {
             id: 'providers',
@@ -437,7 +560,9 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                         current.ssrAuthEnabled && current.storageEnabled,
                 },
             ],
-            canSkip: (current) => current.wizardMode !== 'custom',
+            canSkip: (current) =>
+                current.wizardMode !== 'custom' &&
+                !current.targetAdvancedEnabled,
         },
     ];
 
@@ -464,6 +589,139 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
         'storage'
     );
     if (storageStep) steps.push(storageStep);
+
+    steps.push({
+        id: 'connect',
+        title: 'Remote Agent Computers',
+        description:
+            'Optionally reach computers running or3-intern from anywhere.\n' +
+            'OR3 uses an outbound encrypted tunnel, so you do not need to open a port or install a VPN.',
+        fields: [
+            {
+                key: 'connectEnabled',
+                type: 'boolean',
+                label: 'Access your agent computers remotely?',
+                help: 'Leave this off if you only use agents on the same device or local network.',
+                defaultValue: false,
+                tier: 'core',
+            },
+            {
+                key: 'connectPublicUrl',
+                type: 'text',
+                label: 'Public OR3 URL',
+                help: 'The HTTPS address where people sign in, such as https://chat.example.com.',
+                required: true,
+                tier: 'core',
+                visibleWhen: (current) => current.connectEnabled,
+            },
+            {
+                key: 'connectHostnameSuffix',
+                type: 'text',
+                label: 'Remote computer domain',
+                help: 'A Cloudflare-managed hostname such as connect.example.com. Individual computers receive private subdomains beneath it.',
+                required: true,
+                tier: 'core',
+                visibleWhen: (current) =>
+                    current.connectEnabled &&
+                    current.connectRelayProvider === 'cloudflare',
+            },
+            {
+                key: 'connectCloudflareApiToken',
+                type: 'password',
+                label: 'Cloudflare authorization token',
+                help: 'Use a server-only token with Tunnel Edit, DNS Edit, and Zone Read. OR3 never shows this token after setup.',
+                required: true,
+                secret: true,
+                autoGenerate: false,
+                tier: 'core',
+                visibleWhen: (current) =>
+                    current.connectEnabled &&
+                    current.connectRelayProvider === 'cloudflare',
+            },
+            {
+                key: 'connectEncryptionKey',
+                type: 'password',
+                label: 'Credential encryption key',
+                help: 'Leave blank and OR3 will generate this server-only key for you.',
+                required: true,
+                secret: true,
+                autoGenerate: true,
+                tier: 'core',
+                visibleWhen: (current) => current.connectEnabled,
+            },
+            {
+                key: 'connectAdvancedEnabled',
+                type: 'boolean',
+                label: 'Show advanced remote access options?',
+                help: 'Provider overrides, raw Cloudflare IDs, and the connected-computer limit.',
+                defaultValue: false,
+                tier: 'core',
+                visibleWhen: (current) => current.connectEnabled,
+            },
+            {
+                key: 'connectProvider',
+                type: 'select',
+                label: 'Connection record provider',
+                help: 'Normally this should match your sync database.',
+                tier: 'advanced',
+                options: [
+                    { label: 'SQLite', value: 'sqlite' },
+                    { label: 'Convex', value: 'convex' },
+                    { label: 'Custom registered provider', value: 'custom' },
+                ],
+                visibleWhen: (current) =>
+                    current.connectEnabled &&
+                    isConnectAdvancedEnabled(current),
+            },
+            {
+                key: 'connectRelayProvider',
+                type: 'select',
+                label: 'Remote relay provider',
+                tier: 'advanced',
+                options: [
+                    { label: 'Cloudflare Tunnel', value: 'cloudflare' },
+                    { label: 'Custom registered relay', value: 'custom' },
+                ],
+                visibleWhen: (current) =>
+                    current.connectEnabled &&
+                    isConnectAdvancedEnabled(current),
+            },
+            {
+                key: 'connectMaxComputers',
+                type: 'number',
+                label: 'Maximum computers per account',
+                help: 'Three is a safe default. Increase this only when your deployment needs it.',
+                tier: 'advanced',
+                visibleWhen: (current) =>
+                    current.connectEnabled &&
+                    isConnectAdvancedEnabled(current),
+            },
+            {
+                key: 'connectCloudflareAccountId',
+                type: 'text',
+                label: 'Cloudflare account ID override',
+                help: 'Optional. OR3 normally discovers this from the remote computer domain.',
+                tier: 'advanced',
+                visibleWhen: (current) =>
+                    current.connectEnabled &&
+                    current.connectRelayProvider === 'cloudflare' &&
+                    isConnectAdvancedEnabled(current),
+            },
+            {
+                key: 'connectCloudflareZoneId',
+                type: 'text',
+                label: 'Cloudflare zone ID override',
+                help: 'Optional. OR3 normally discovers the matching zone.',
+                tier: 'advanced',
+                visibleWhen: (current) =>
+                    current.connectEnabled &&
+                    current.connectRelayProvider === 'cloudflare' &&
+                    isConnectAdvancedEnabled(current),
+            },
+        ],
+        canSkip: (current) =>
+            !current.ssrAuthEnabled || isSimplifiedRecommendedSetup(current),
+    });
 
     steps.push({
         id: 'openrouter-limits-security',
@@ -589,6 +847,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 visibleWhen: isCloudAdvancedEnabled,
             },
         ],
+        canSkip: isSimplifiedRecommendedSetup,
     });
 
     steps.push({
@@ -626,7 +885,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
         description:
             'Set up a super admin account for the admin dashboard.\n' +
             'This is separate from user login — it\'s how you manage your instance.\n' +
-            'Leave the password blank to auto-generate a strong one (CLI: press Enter; browser: leave empty and continue).',
+            'The password is auto-generated unless you enable advanced options.',
         fields: [
             {
                 key: 'adminUsername',
@@ -658,10 +917,13 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 key: 'adminPassword',
                 type: 'password',
                 label: 'Admin password (leave blank to auto-generate)',
-                help: 'Choose a strong password, or leave blank and we\'ll generate a secure one for you.',
+                help: 'Leave blank and we\'ll generate a secure password for you.',
                 required: true,
                 secret: true,
-                tier: 'core',
+                autoGenerate: true,
+                tier: 'advanced',
+                visibleWhen: (current) =>
+                    current.targetAdvancedEnabled || current.allAdvancedEnabled,
                 validate: (value, answers) => {
                     const password = String(value ?? '').trim();
                     if (!password) return null;
@@ -685,7 +947,8 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 },
             },
         ],
-        canSkip: (current) => !current.ssrAuthEnabled,
+        canSkip: (current) =>
+            !current.ssrAuthEnabled || isSimplifiedRecommendedSetup(current),
     });
 
     const openRouterStepIndex = steps.findIndex(

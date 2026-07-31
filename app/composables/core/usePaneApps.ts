@@ -13,6 +13,8 @@ import {
 } from '~~/shared/plugins/registration-handle';
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
 import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 
 /**
  * Pane app definition: describes a custom pane application that can be registered
@@ -49,6 +51,10 @@ export interface PaneAppDef {
      * Optional ordering (lower = earlier in sorted lists). Defaults to 200.
      */
     order?: number;
+    /** Optional owning plugin id used for workspace policy lookup. */
+    pluginId?: string;
+    /** Optional access policy for this pane app. */
+    access?: PluginGatePolicy;
 }
 
 // RegisteredPaneApp is exactly PaneAppDef, but semantically represents a validated/normalized entry
@@ -80,6 +86,8 @@ const PaneAppDefSchema = z.object({
         .optional(),
     postType: z.string().optional(),
     createInitialRecord: z.function().optional(),
+    pluginId: z.string().optional(),
+    access: z.unknown().optional(),
 });
 
 type OwnedPaneApp = {
@@ -177,7 +185,7 @@ function useV2Surface(): boolean {
  *
  * Non-Goals:
  * - Does not lazy load or render apps itself
- * - Does not provide access control for pane apps
+ * - Access policies affect discovery and lookup, not server-side authorization
  *
  * @example
  * ```ts
@@ -244,22 +252,34 @@ export function usePaneApps() {
      * Get a registered pane app by id.
      */
     function getPaneApp(id: string): RegisteredPaneApp | undefined {
-        return useV2Surface()
+        const app = useV2Surface()
             ? v2Kernel.registry.get(id, undefined)
             : registry.get(id);
+        return app && getPluginGateDecision(app.pluginId, app.access).allowed
+            ? app
+            : undefined;
     }
 
     /**
      * List all registered pane apps, sorted by order (ascending).
      */
     const listPaneApps: ComputedRef<RegisteredPaneApp[]> = computed(() => {
-        if (useV2Surface()) return [...v2Kernel.items.value];
+        if (useV2Surface()) {
+            return v2Kernel.items.value.filter(
+                (app) => getPluginGateDecision(app.pluginId, app.access).allowed
+            );
+        }
         // Access reactive registry to establish dependency
         const currentRegistry = reactiveRegistry.registry;
         const apps = Array.from(currentRegistry.values());
-        return apps.sort(
-            (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
-        );
+        return apps
+            .filter(
+                (app) => getPluginGateDecision(app.pluginId, app.access).allowed
+            )
+            .sort(
+                (a, b) =>
+                    (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
+            );
     });
 
     return {

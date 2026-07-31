@@ -29,6 +29,7 @@ import {
     TRANSFER_RETENTION_SEC,
     getDefaultConcurrency,
     normalizeTransferMime,
+    isRecoverableTransferError,
     recoverableTransferError,
     resolveUploadMethod,
     toCommitMeta,
@@ -233,8 +234,13 @@ export class FileTransferQueue {
             transfer.state === 'remote_missing'
         ) {
             const errorMsg = transfer.last_error || 'Transfer failed';
-            this.rejectWaiters(id, errorMsg);
-            throw new Error(errorMsg);
+            const parkedError =
+                transfer.state === 'pending_upload' ||
+                transfer.state === 'remote_missing'
+                    ? recoverableTransferError(transfer.state, errorMsg)
+                    : new Error(errorMsg);
+            this.rejectWaiters(id, parkedError);
+            throw parkedError;
         }
 
         return waiterPromise;
@@ -263,7 +269,20 @@ export class FileTransferQueue {
         if (existing?.blob) return existing.blob;
         const transfer = await this.enqueue(hash, 'download');
         if (!transfer) return undefined;
-        await this.waitForTransfer(transfer.id);
+        try {
+            await this.waitForTransfer(transfer.id);
+        } catch (error) {
+            // Pre-commit / temporary remote gaps are expected; caller retries later.
+            if (isRecoverableTransferError(error)) return undefined;
+            const parked = await this.db.file_transfers.get(transfer.id);
+            if (
+                parked?.state === 'pending_upload' ||
+                parked?.state === 'remote_missing'
+            ) {
+                return undefined;
+            }
+            throw error;
+        }
         const row = await this.db.file_blobs.get(hash);
         return row?.blob;
     }
@@ -396,11 +415,14 @@ export class FileTransferQueue {
                     : undefined;
             if (recoverableState === 'pending_upload' || recoverableState === 'remote_missing') {
                 const message = error instanceof Error ? error.message : 'Transfer requires reconciliation';
+                const parkedError = isRecoverableTransferError(error)
+                    ? error
+                    : recoverableTransferError(recoverableState, message);
                 await this.safeUpdateTransfer(transfer.id, {
                     state: recoverableState,
                     last_error: message,
                 }, context.db);
-                this.rejectWaiters(transfer.id, message);
+                this.rejectWaiters(transfer.id, parkedError);
                 return;
             }
 
@@ -1051,12 +1073,14 @@ export class FileTransferQueue {
         this.waiters.delete(id);
     }
 
-    private rejectWaiters(id: string, message: string) {
+    private rejectWaiters(id: string, error: unknown) {
         const waiters = this.waiters.get(id);
         if (!waiters) return;
+        const rejection =
+            error instanceof Error ? error : new Error(String(error));
         waiters.forEach((waiter) => {
             clearTimeout(waiter.timeout);
-            waiter.reject(new Error(message));
+            waiter.reject(rejection);
         });
         this.waiters.delete(id);
     }

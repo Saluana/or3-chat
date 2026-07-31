@@ -1,199 +1,123 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePreviewCache } from '../usePreviewCache';
 
-describe('usePreviewCache - error handling', () => {
-    let cache: ReturnType<typeof usePreviewCache>;
+const originalUrl = globalThis.URL;
+let revokeObjectUrl: ReturnType<typeof vi.fn>;
 
+describe('usePreviewCache', () => {
     beforeEach(() => {
-        cache = usePreviewCache({ maxUrls: 10, maxBytes: 1000000 });
+        revokeObjectUrl = vi.fn();
+        (globalThis as any).URL = {
+            createObjectURL: vi.fn(),
+            revokeObjectURL: revokeObjectUrl,
+        };
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.spyOn(console, 'info').mockImplementation(() => {});
     });
 
-    it('rejects when loader throws an error', async () => {
-        const loader = async () => {
-            throw new Error('Loader failed');
-        };
-
-        await expect(cache.ensure('key1', loader)).rejects.toThrow('Loader failed');
+    afterEach(() => {
+        vi.restoreAllMocks();
+        (globalThis as any).URL = originalUrl;
     });
 
-    it('does not increment totalBytes when loader fails', async () => {
-        const loader = async () => {
-            throw new Error('Load error');
-        };
+    it('does not mutate cache state when its loader fails', async () => {
+        const cache = usePreviewCache({ maxUrls: 10, maxBytes: 1000 });
 
-        const metricsBefore = cache.metrics();
-
-        try {
-            await cache.ensure('key1', loader);
-        } catch {
-            // Expected
-        }
-
-        const metricsAfter = cache.metrics();
-
-        // Bytes should not have changed
-        expect(metricsAfter.bytes).toBe(metricsBefore.bytes);
+        await expect(
+            cache.ensure('broken', async () => {
+                throw new Error('Loader failed');
+            })
+        ).rejects.toThrow('Loader failed');
+        expect(cache.metrics()).toMatchObject({
+            urls: 0,
+            bytes: 0,
+            hits: 0,
+            misses: 0,
+        });
     });
 
-    it('does not add cache entry when loader fails', async () => {
-        const loader = async () => {
-            throw new Error('Load error');
-        };
+    it.each([
+        ['a string', 'invalid result', 'not an object'],
+        ['null', 'invalid result', null],
+        ['no URL', 'invalid url', { bytes: 10 }],
+        ['an empty URL', 'invalid url', { url: '', bytes: 10 }],
+        ['a non-string URL', 'invalid url', { url: 123, bytes: 10 }],
+    ])('rejects %s from the loader', async (_label, message, result) => {
+        const cache = usePreviewCache({ maxUrls: 10, maxBytes: 1000 });
 
-        try {
-            await cache.ensure('key1', loader);
-        } catch {
-            // Expected
-        }
-
-        const metrics = cache.metrics();
-
-        // No entry should have been added
-        expect(metrics.urls).toBe(0);
+        await expect(
+            cache.ensure('invalid', async () => result)
+        ).rejects.toThrow(message);
+        expect(cache.metrics().urls).toBe(0);
     });
 
-    it('rejects when loader returns invalid result (not an object)', async () => {
-        const loader = async () => {
-            return 'not an object' as any;
-        };
+    it('caches valid results and records hit and miss metrics', async () => {
+        const cache = usePreviewCache({ maxUrls: 10, maxBytes: 1000 });
+        const loader = vi.fn(async () => ({ url: 'blob:a', bytes: 4 }));
 
-        await expect(cache.ensure('key1', loader)).rejects.toThrow(
-            'invalid result'
+        await expect(cache.ensure('a', loader)).resolves.toBe('blob:a');
+        await expect(cache.ensure('a', loader)).resolves.toBe('blob:a');
+
+        expect(loader).toHaveBeenCalledTimes(1);
+        expect(cache.metrics()).toMatchObject({
+            urls: 1,
+            bytes: 4,
+            hits: 1,
+            misses: 1,
+        });
+    });
+
+    it('treats omitted byte counts as zero', async () => {
+        const cache = usePreviewCache({ maxUrls: 10, maxBytes: 1000 });
+
+        await cache.ensure('a', async () => ({ url: 'blob:a' }));
+
+        expect(cache.metrics()).toMatchObject({ urls: 1, bytes: 0 });
+    });
+
+    it('evicts the least recently used unpinned entry', async () => {
+        const cache = usePreviewCache({ maxUrls: 2, maxBytes: 1000 });
+        await cache.ensure('a', async () => ({ url: 'blob:a', bytes: 1 }));
+        await cache.ensure('b', async () => ({ url: 'blob:b', bytes: 1 }));
+        cache.promote('a', 1);
+
+        await cache.ensure('c', async () => ({ url: 'blob:c', bytes: 1 }));
+
+        expect(cache.peek('a')).toBe('blob:a');
+        expect(cache.peek('b')).toBeUndefined();
+        expect(cache.peek('c')).toBe('blob:c');
+        expect(cache.metrics().evictions).toBe(1);
+        expect(revokeObjectUrl).toHaveBeenCalledWith('blob:b');
+    });
+
+    it('allows a released pin to be evicted', async () => {
+        const cache = usePreviewCache({ maxUrls: 1, maxBytes: 1000 });
+        await cache.ensure(
+            'pinned',
+            async () => ({ url: 'blob:pinned', bytes: 1 }),
+            1
         );
+        cache.release('pinned');
+
+        await cache.ensure('replacement', async () => ({
+            url: 'blob:replacement',
+            bytes: 1,
+        }));
+
+        expect(cache.peek('pinned')).toBeUndefined();
+        expect(cache.peek('replacement')).toBe('blob:replacement');
     });
 
-    it('rejects when loader returns null', async () => {
-        const loader = async () => {
-            return null as any;
-        };
+    it('drops one entry or flushes all entries and revokes their URLs', async () => {
+        const cache = usePreviewCache({ maxUrls: 5, maxBytes: 1000 });
+        await cache.ensure('a', async () => ({ url: 'blob:a', bytes: 1 }));
+        await cache.ensure('b', async () => ({ url: 'blob:b', bytes: 2 }));
 
-        await expect(cache.ensure('key1', loader)).rejects.toThrow(
-            'invalid result'
-        );
-    });
-
-    it('rejects when loader returns object without url', async () => {
-        const loader = async () => {
-            return { bytes: 100 } as any;
-        };
-
-        await expect(cache.ensure('key1', loader)).rejects.toThrow('invalid url');
-    });
-
-    it('rejects when loader returns empty string url', async () => {
-        const loader = async () => {
-            return { url: '', bytes: 100 };
-        };
-
-        await expect(cache.ensure('key1', loader)).rejects.toThrow('invalid url');
-    });
-
-    it('rejects when loader returns non-string url', async () => {
-        const loader = async () => {
-            return { url: 123, bytes: 100 } as any;
-        };
-
-        await expect(cache.ensure('key1', loader)).rejects.toThrow('invalid url');
-    });
-
-    it('maintains consistent metrics after loader failure', async () => {
-        const goodLoader = async () => ({
-            url: 'https://example.com/image.png',
-            bytes: 1000,
-        });
-
-        const badLoader = async () => {
-            throw new Error('Failed');
-        };
-
-        // Add a successful entry
-        await cache.ensure('key1', goodLoader);
-
-        const metricsBefore = cache.metrics();
-
-        // Try to add a failing entry
-        try {
-            await cache.ensure('key2', badLoader);
-        } catch {
-            // Expected
-        }
-
-        const metricsAfter = cache.metrics();
-
-        // Metrics should remain consistent
-        expect(metricsAfter.urls).toBe(metricsBefore.urls);
-        expect(metricsAfter.bytes).toBe(metricsBefore.bytes);
-        expect(metricsAfter.hits).toBe(metricsBefore.hits);
-    });
-});
-
-describe('usePreviewCache - successful operations', () => {
-    let cache: ReturnType<typeof usePreviewCache>;
-
-    beforeEach(() => {
-        cache = usePreviewCache({ maxUrls: 10, maxBytes: 1000000 });
-    });
-
-    it('successfully caches valid result', async () => {
-        const loader = async () => ({
-            url: 'https://example.com/image.png',
-            bytes: 1000,
-        });
-
-        const url = await cache.ensure('key1', loader);
-
-        expect(url).toBe('https://example.com/image.png');
-
-        const metrics = cache.metrics();
-        expect(metrics.urls).toBe(1);
-        expect(metrics.bytes).toBe(1000);
-    });
-
-    it('handles missing bytes field gracefully', async () => {
-        const loader = async () => ({
-            url: 'https://example.com/image.png',
-            // bytes intentionally omitted
-        });
-
-        const url = await cache.ensure('key1', loader);
-
-        expect(url).toBe('https://example.com/image.png');
-
-        const metrics = cache.metrics();
-        expect(metrics.urls).toBe(1);
-        expect(metrics.bytes).toBe(0); // Default to 0
-    });
-
-    it('returns cached url on second access', async () => {
-        const loader = async () => ({
-            url: 'https://example.com/image.png',
-            bytes: 1000,
-        });
-
-        const url1 = await cache.ensure('key1', loader);
-        const url2 = await cache.ensure('key1', loader);
-
-        expect(url1).toBe(url2);
-
-        const metrics = cache.metrics();
-        expect(metrics.hits).toBe(1);
-        expect(metrics.misses).toBe(1);
-    });
-
-    it('increments hits counter on cache hit', async () => {
-        const loader = async () => ({
-            url: 'https://example.com/image.png',
-            bytes: 1000,
-        });
-
-        await cache.ensure('key1', loader);
-
-        const metricsBefore = cache.metrics();
-
-        await cache.ensure('key1', loader);
-
-        const metricsAfter = cache.metrics();
-
-        expect(metricsAfter.hits).toBe(metricsBefore.hits + 1);
+        expect(cache.drop('a')).toBe(true);
+        expect(cache.drop('missing')).toBe(false);
+        expect(cache.flushAll()).toEqual(['b']);
+        expect(cache.metrics()).toMatchObject({ urls: 0, bytes: 0 });
+        expect(revokeObjectUrl).toHaveBeenCalledWith('blob:a');
+        expect(revokeObjectUrl).toHaveBeenCalledWith('blob:b');
     });
 });

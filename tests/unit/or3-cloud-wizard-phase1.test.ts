@@ -80,6 +80,97 @@ describe('or3 cloud wizard phase 1 enhancements', () => {
         expect(first).not.toBe(second);
     });
 
+    it('prepares hidden self-hosted secrets and reuses login credentials for admin', async () => {
+        const wizardHome = await mkdtemp(
+            resolve(tmpdir(), 'or3-wizard-self-hosted-')
+        );
+        const previousWizardHome = process.env.OR3_CLOUD_WIZARD_HOME;
+        process.env.OR3_CLOUD_WIZARD_HOME = wizardHome;
+        try {
+            const api = new Or3CloudWizardApi();
+            const session = await api.createSession({
+                presetName: 'recommended',
+                instanceDir: '/tmp/or3',
+                deploymentTarget: 'docker',
+                includeSecrets: false,
+                prefillFromEnv: false,
+            });
+            expect(session.answers.basicAuthJwtSecret).toBeUndefined();
+
+            const withSecrets = await api.getSession(session.id, {
+                includeSecrets: true,
+            });
+            expect(withSecrets.answers.basicAuthJwtSecret).toHaveLength(48);
+            expect(withSecrets.answers.fsTokenSecret).toHaveLength(48);
+
+            await api.submitAnswers(session.id, {
+                basicAuthBootstrapEmail: 'owner@example.com',
+                basicAuthBootstrapPassword: 'GeneratedPassword123',
+            });
+            const updated = await api.getSession(session.id, {
+                includeSecrets: true,
+            });
+            expect(updated.answers.adminUsername).toBe('owner@example.com');
+            expect(updated.answers.adminPassword).toBe(
+                'GeneratedPassword123'
+            );
+        } finally {
+            if (previousWizardHome === undefined) {
+                delete process.env.OR3_CLOUD_WIZARD_HOME;
+            } else {
+                process.env.OR3_CLOUD_WIZARD_HOME = previousWizardHome;
+            }
+            await rm(wizardHome, { recursive: true, force: true });
+        }
+    });
+
+    it('regenerates required self-hosted secrets after a process restart', async () => {
+        const wizardHome = await mkdtemp(
+            resolve(tmpdir(), 'or3-wizard-resume-secrets-')
+        );
+        const previousWizardHome = process.env.OR3_CLOUD_WIZARD_HOME;
+        process.env.OR3_CLOUD_WIZARD_HOME = wizardHome;
+        try {
+            const api = new Or3CloudWizardApi();
+            const session = await api.createSession({
+                presetName: 'recommended',
+                instanceDir: '/tmp/or3',
+                deploymentTarget: 'docker',
+                includeSecrets: false,
+                prefillFromEnv: false,
+            });
+            await api.submitAnswers(session.id, {
+                basicAuthBootstrapEmail: 'owner@example.com',
+            });
+
+            const secretStore = (
+                globalThis as typeof globalThis & {
+                    [key: symbol]: Map<string, unknown>;
+                }
+            )[Symbol.for('or3.cloud.wizard.transientSessionSecrets')];
+            secretStore.delete(session.id);
+
+            const resumed = await api.resumeSession(session.id, {
+                existingEnvMap: {},
+            });
+            expect(resumed.answers.basicAuthJwtSecret).toHaveLength(48);
+            expect(resumed.answers.basicAuthRefreshSecret).toHaveLength(48);
+            expect(resumed.answers.fsTokenSecret).toHaveLength(48);
+            expect(resumed.answers.basicAuthBootstrapPassword).toHaveLength(24);
+            expect(resumed.answers.adminPassword).toBe(
+                resumed.answers.basicAuthBootstrapPassword
+            );
+            expect(resumed.answers.adminUsername).toBe('owner@example.com');
+        } finally {
+            if (previousWizardHome === undefined) {
+                delete process.env.OR3_CLOUD_WIZARD_HOME;
+            } else {
+                process.env.OR3_CLOUD_WIZARD_HOME = previousWizardHome;
+            }
+            await rm(wizardHome, { recursive: true, force: true });
+        }
+    });
+
     it('validates and optionally creates missing directories', async () => {
         const api = new Or3CloudWizardApi();
         const sandbox = await mkdtemp(resolve(tmpdir(), 'or3-wizard-path-'));
@@ -110,6 +201,7 @@ describe('or3 cloud wizard phase 1 enhancements', () => {
 
         const convex = await api.testProviderConnection('convex', {
             convexUrl: 'https://demo.convex.cloud',
+            convexSelfHostedAdminKey: 'prod:deployment-key',
         });
         expect(convex.success).toBe(true);
 
@@ -119,5 +211,82 @@ describe('or3 cloud wizard phase 1 enhancements', () => {
             s3SecretAccessKey: '',
         });
         expect(s3Failure.success).toBe(false);
+    });
+
+    it('proves Cloudflare tunnel and DNS edit permissions with a cleaned-up canary', async () => {
+        const requests: Array<{ url: string; method: string }> = [];
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+                const url = String(input);
+                const method = init?.method ?? 'GET';
+                requests.push({ url, method });
+                if (url.endsWith('/user/tokens/verify')) {
+                    return Response.json({ success: true, result: { status: 'active' } });
+                }
+                if (url.includes('/zones?name=')) {
+                    return Response.json({
+                        success: true,
+                        result: url.includes('name=connect.example.com')
+                            ? [
+                                  {
+                                      id: 'zone-1',
+                                      name: 'connect.example.com',
+                                      account: { id: 'account-1' },
+                                  },
+                              ]
+                            : [],
+                    });
+                }
+                if (
+                    url.includes('/cfd_tunnel?') &&
+                    method === 'GET'
+                ) {
+                    return Response.json({ success: true, result: [] });
+                }
+                if (url.endsWith('/cfd_tunnel') && method === 'POST') {
+                    return Response.json({
+                        success: true,
+                        result: { id: 'tunnel-1', account_tag: 'account-1' },
+                    });
+                }
+                if (url.endsWith('/dns_records') && method === 'POST') {
+                    return Response.json({
+                        success: true,
+                        result: { id: 'dns-1' },
+                    });
+                }
+                if (
+                    url.includes('/dns_records?') &&
+                    method === 'GET'
+                ) {
+                    return Response.json({ success: true, result: [] });
+                }
+                return Response.json({ success: true, result: {} });
+            })
+        );
+
+        const result = await new Or3CloudWizardApi().testProviderConnection(
+            'cloudflare-connect',
+            {
+                apiToken: 'cloudflare-token',
+                hostnameSuffix: 'connect.example.com',
+            }
+        );
+
+        expect(result.success).toBe(true);
+        expect(
+            requests.some(
+                ({ url, method }) =>
+                    method === 'POST' && url.endsWith('/cfd_tunnel')
+            )
+        ).toBe(true);
+        expect(
+            requests.some(
+                ({ url, method }) =>
+                    method === 'POST' && url.endsWith('/dns_records')
+            )
+        ).toBe(true);
+        expect(requests.filter(({ method }) => method === 'DELETE')).toHaveLength(2);
     });
 });

@@ -911,7 +911,8 @@ The Notification Center is a **production-ready, extensible notification system*
 - `app/composables/notifications/useNotifications.ts` - Reactive API
 - `app/plugins/notification-listeners.client.ts` - Event listeners
 - `app/components/notifications/` - UI components
-- `tests/unit/background-streaming-notifications.test.ts` - Test examples
+- `app/core/notifications/__tests__/notification-service.test.ts` - Notification behavior
+- `app/plugins/__tests__/notification-listeners.test.ts` - Listener integration
 
 **Getting Started:**
 1. Use `useNotifications()` composable in your components

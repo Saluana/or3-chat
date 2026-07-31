@@ -11,26 +11,30 @@
                 data-test="system-prompts-header"
             >
                 <div class="min-w-0">
-                    <h2 class="m-0 truncate text-lg font-semibold">
+                    <!-- VT323 keeps modal titles readable; Press Start at text-lg overflows the header. -->
+                    <h2
+                        class="m-0 truncate font-vt323 text-base font-semibold leading-tight text-[var(--md-on-primary)]"
+                    >
                         System Prompts
                     </h2>
                     <p
-                        class="m-0 hidden text-xs text-[var(--md-on-surface-variant)] sm:block"
+                        class="m-0 hidden text-xs leading-snug text-[var(--md-on-primary)]/80 sm:block"
                     >
                         Browse, organize, edit, and apply system prompts.
                     </p>
                 </div>
                 <div class="flex shrink-0 items-center gap-2">
                     <UButton
-                        v-bind="iconButtonProps"
+                        v-bind="headerActionButtonProps"
                         class="sm:hidden"
                         data-test="system-prompts-new"
                         :icon="plusIcon"
+                        square
                         aria-label="New Prompt"
                         @click="createNewPrompt"
                     />
                     <UButton
-                        v-bind="newPromptButtonProps"
+                        v-bind="headerActionButtonProps"
                         class="hidden sm:inline-flex"
                         data-test="system-prompts-new-desktop"
                         :icon="plusIcon"
@@ -39,8 +43,9 @@
                         New Prompt
                     </UButton>
                     <UButton
-                        v-bind="iconButtonProps"
+                        v-bind="headerActionButtonProps"
                         :icon="closeIcon"
+                        square
                         aria-label="Close system prompts"
                         @click="open = false"
                     />
@@ -351,7 +356,7 @@
                                                 class="flex flex-wrap items-center gap-2"
                                             >
                                                 <h3
-                                                    class="m-0 truncate text-sm font-semibold"
+                                                    class="m-0 truncate font-vt323 text-sm font-semibold leading-tight"
                                                 >
                                                     {{
                                                         prompt.title ||
@@ -532,7 +537,7 @@
                                 <div class="flex items-start gap-2">
                                     <div class="min-w-0 flex-1">
                                         <h3
-                                            class="m-0 text-lg font-semibold leading-tight"
+                                            class="m-0 font-vt323 text-base font-semibold leading-tight"
                                         >
                                             {{
                                                 selectedPrompt.title ||
@@ -670,6 +675,7 @@
 
                                 <div class="mt-5 flex flex-wrap gap-2">
                                     <UButton
+                                        size="sm"
                                         color="neutral"
                                         variant="outline"
                                         :icon="editIcon"
@@ -680,6 +686,7 @@
                                         Edit
                                     </UButton>
                                     <UButton
+                                        size="sm"
                                         color="neutral"
                                         variant="outline"
                                         :icon="defaultIcon"
@@ -702,7 +709,7 @@
                             >
                                 <UButton
                                     block
-                                    size="lg"
+                                    size="md"
                                     color="primary"
                                     :disabled="!canUseInChat"
                                     :title="
@@ -943,6 +950,13 @@ const systemPromptsModalProps = computed(() => {
 const newPromptButtonProps = computed(() => ({
     size: 'sm' as const,
     color: 'primary' as const,
+}));
+
+/** Surface/solid actions read on the primary modal header (avoids primary-on-primary). */
+const headerActionButtonProps = computed(() => ({
+    size: 'sm' as const,
+    color: 'on-surface' as const,
+    variant: 'solid' as const,
 }));
 
 const iconButtonProps = computed(() => ({

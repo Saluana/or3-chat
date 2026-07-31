@@ -147,6 +147,50 @@ function isPathInside(root: string, candidate: string): boolean {
     return candidate === root || candidate.startsWith(normalizedRoot);
 }
 
+async function resolveExtensionTargetDirectory(
+    kindRoot: string,
+    kind: ExtensionKind,
+    id: string
+): Promise<string> {
+    const directTarget = resolve(kindRoot, id);
+    try {
+        await fs.access(directTarget);
+        return directTarget;
+    } catch (error) {
+        if (
+            !error ||
+            typeof error !== 'object' ||
+            !('code' in error) ||
+            (error as { code?: string }).code !== 'ENOENT'
+        ) {
+            throw error;
+        }
+    }
+
+    const matches: string[] = [];
+    for (const entry of await fs.readdir(kindRoot, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const candidate = resolve(kindRoot, entry.name);
+        if (!isPathInside(kindRoot, candidate)) continue;
+        try {
+            const manifest = Or3ExtensionManifestSchema.parse(
+                JSON.parse(
+                    await fs.readFile(join(candidate, 'or3.manifest.json'), 'utf8')
+                )
+            );
+            if (manifest.kind === kind && manifest.id === id) {
+                matches.push(candidate);
+            }
+        } catch {
+            // Invalid directories are not uninstall candidates.
+        }
+    }
+
+    if (matches.length === 0) throw new Error('Extension not found');
+    if (matches.length > 1) throw new Error('Extension identity is ambiguous');
+    return matches[0]!;
+}
+
 /**
  * Purpose:
  * Completely removes an extension from the filesystem.
@@ -156,7 +200,7 @@ function isPathInside(root: string, candidate: string): boolean {
  * verifies containment (including symlink realpath), then deletes recursively.
  *
  * @param kind - The category of the extension to remove.
- * @param id - The unique ID of the extension (matches its folder name).
+ * @param id - The unique manifest ID of the extension.
  */
 export async function uninstallExtension(
     kind: ExtensionKind,
@@ -170,7 +214,11 @@ export async function uninstallExtension(
     await ensureExtensionsDirs();
     const kindDir = getKindDir(kind);
     const kindRoot = resolve(EXTENSIONS_BASE_DIR, kindDir);
-    const targetDir = resolve(kindRoot, parsedId.data);
+    const targetDir = await resolveExtensionTargetDirectory(
+        kindRoot,
+        kind,
+        parsedId.data
+    );
 
     if (!isPathInside(kindRoot, targetDir)) {
         throw new Error('Invalid extension id');

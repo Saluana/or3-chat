@@ -73,6 +73,8 @@ export function generateBundledPluginCatalog(options: {
     const pluginsRoot = resolve(options.repoRoot, 'extensions/plugins');
     const entries: BundledPluginCatalogEntry[] = [];
     const issues: string[] = [];
+    const pluginDirectories = new Map<string, string>();
+    const duplicatePluginIds = new Set<string>();
     if (existsSync(pluginsRoot)) {
         for (const directory of readdirSync(pluginsRoot, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
             if (!directory.isDirectory()) continue;
@@ -86,13 +88,37 @@ export function generateBundledPluginCatalog(options: {
                 issues.push(`${directory.name}: invalid or3.manifest.json`);
                 continue;
             }
-            if (manifest.kind !== 'plugin' || manifest.id !== directory.name) continue;
+            if (
+                manifest.kind !== 'plugin' ||
+                typeof manifest.id !== 'string' ||
+                !/^[A-Za-z0-9._-]+$/.test(manifest.id) ||
+                manifest.id.includes('..')
+            ) {
+                continue;
+            }
+            const pluginId = manifest.id;
+            const previousDirectory = pluginDirectories.get(pluginId);
+            if (previousDirectory || duplicatePluginIds.has(pluginId)) {
+                if (!duplicatePluginIds.has(pluginId)) {
+                    issues.push(
+                        `${directory.name}: duplicate plugin id ${pluginId} (already declared by ${previousDirectory})`
+                    );
+                }
+                duplicatePluginIds.add(pluginId);
+                for (let index = entries.length - 1; index >= 0; index--) {
+                    if (entries[index]?.pluginId === pluginId) {
+                        entries.splice(index, 1);
+                    }
+                }
+                continue;
+            }
+            pluginDirectories.set(pluginId, directory.name);
             const clientEntries = listFiles(pluginRoot)
                 .map((file) => normalizedRelativePath(relative(pluginRoot, file)))
                 .filter((entry) => /\.client\.(?:ts|js|mjs)$/i.test(entry));
             for (const clientEntry of clientEntries) {
                 entries.push({
-                    pluginId: directory.name,
+                    pluginId,
                     clientEntry,
                     moduleKey: `../../extensions/plugins/${directory.name}/${clientEntry}`,
                 });

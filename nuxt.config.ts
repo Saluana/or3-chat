@@ -12,6 +12,7 @@ import {
 } from './shared/plugins/safe-mode';
 import { providerIdToModuleId } from './shared/cloud/provider-compatibility';
 import { stripBrokenOpenRouterSourcemapsPlugin } from './plugins/vite-strip-broken-openrouter-sourcemaps';
+import { resolveConnectCloudflareReadiness } from './shared/cloud/wizard/cloudflare-attestation';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
@@ -37,6 +38,39 @@ const shouldLoadCloudProviderModules =
 
 const convexUrl = or3CloudConfig.sync.convex?.url || '';
 const convexAdminKey = or3CloudConfig.sync.convex?.adminKey || '';
+const isConnectEnabled = process.env.OR3_CONNECT_ENABLED === 'true';
+const connectProvider =
+    process.env.OR3_CONNECT_PROVIDER?.trim() ||
+    or3CloudConfig.sync.provider;
+const connectRelayProvider =
+    process.env.OR3_CONNECT_RELAY_PROVIDER?.trim() || 'cloudflare';
+const strictConnectConfig =
+    process.env.NODE_ENV === 'production' ||
+    process.env.OR3_STRICT_CONFIG === 'true';
+
+const localPackageCandidates = [
+    {
+        find: /^or3-scroll$/,
+        replacement: resolve(__dirname, '../or3-vsc/src/lib/index.ts'),
+    },
+    {
+        find: /^or3-workflow-vue$/,
+        replacement: resolve(
+            __dirname,
+            '../or3-workflows/packages/workflow-vue/src/index.ts',
+        ),
+    },
+    {
+        find: /^or3-workflow-core$/,
+        replacement: resolve(
+            __dirname,
+            '../or3-workflows/packages/workflow-core/src/index.ts',
+        ),
+    },
+];
+const localPackageAliases = localPackageCandidates.filter(({ replacement }) =>
+    existsSync(replacement)
+);
 
 function isPackageInstalled(pkgName: string): boolean {
     return existsSync(resolve(__dirname, 'node_modules', pkgName));
@@ -106,6 +140,7 @@ if (shouldLoadCloudProviderModules) {
         providerIdsFromConfig.add(or3CloudConfig.sync.provider);
     if (or3CloudConfig.storage.enabled)
         providerIdsFromConfig.add(or3CloudConfig.storage.provider);
+    if (isConnectEnabled) providerIdsFromConfig.add(connectProvider);
     if (
         or3CloudConfig.limits?.enabled &&
         or3CloudConfig.limits.storageProvider
@@ -200,6 +235,8 @@ const syncProviderAvailable =
 const storageProviderAvailable =
     isStaticCloudDisabledBuild ||
     isProviderAvailable(or3CloudConfig.storage.provider);
+const connectProviderAvailable =
+    isStaticCloudDisabledBuild || isProviderAvailable(connectProvider);
 
 const effectiveSsrAuthEnabled =
     isSsrAuthEnabled && authProviderAvailable && syncProviderAvailable;
@@ -215,6 +252,23 @@ const effectiveStorageEnabled =
     effectiveSsrAuthEnabled &&
     or3CloudConfig.storage.enabled &&
     storageProviderAvailable;
+const requestedConnectEnabled =
+    effectiveSsrAuthEnabled && isConnectEnabled && connectProviderAvailable;
+const connectCloudflareConfig = {
+    accountId: process.env.OR3_CONNECT_CLOUDFLARE_ACCOUNT_ID || '',
+    zoneId: process.env.OR3_CONNECT_CLOUDFLARE_ZONE_ID || '',
+    apiToken: process.env.OR3_CONNECT_CLOUDFLARE_API_TOKEN || '',
+    hostnameSuffix: process.env.OR3_CONNECT_HOSTNAME_SUFFIX || '',
+};
+const connectReadiness = resolveConnectCloudflareReadiness({
+    requestedEnabled: requestedConnectEnabled,
+    strict: strictConnectConfig,
+    relayProvider: connectRelayProvider,
+    attestation:
+        process.env.OR3_CONNECT_CLOUDFLARE_VALIDATION_ATTESTATION,
+    config: connectCloudflareConfig,
+});
+const effectiveConnectEnabled = connectReadiness.enabled;
 
 if (isSsrAuthEnabled && !authProviderAvailable) {
     console.warn(
@@ -230,6 +284,21 @@ if (or3CloudConfig.storage.enabled && !storageProviderAvailable) {
     console.warn(
         `[or3-provider] Storage provider "${or3CloudConfig.storage.provider}" is not available. Cloud storage is disabled.`,
     );
+}
+if (isConnectEnabled && !connectProviderAvailable) {
+    console.warn(
+        `[or3-provider] Connect provider "${connectProvider}" is not available. Remote access is disabled.`,
+    );
+}
+if (connectReadiness.status === 'degraded') {
+    console.warn(
+        `[or3-connect] ${connectReadiness.message} OR3 Chat will start with remote Connect disabled.`
+    );
+} else if (
+    strictConnectConfig &&
+    connectReadiness.status === 'unverified'
+) {
+    console.warn(`[or3-connect] ${connectReadiness.message}`);
 }
 // Branding defaults (sourced from or3Config)
 const appName = or3Config.site.name;
@@ -416,6 +485,30 @@ export default defineNuxtConfig({
             convexUrl,
             convexAdminKey,
         },
+        connect: {
+            enabled: effectiveConnectEnabled,
+            requestedEnabled: requestedConnectEnabled,
+            readinessStatus: connectReadiness.status,
+            readinessMessage: connectReadiness.message || '',
+            cloudflareValidationAttestation:
+                process.env
+                    .OR3_CONNECT_CLOUDFLARE_VALIDATION_ATTESTATION ||
+                '',
+            provider: connectProvider,
+            relayProvider: connectRelayProvider,
+            publicURL: process.env.OR3_CONNECT_PUBLIC_URL || '',
+            encryptionKey: process.env.OR3_CONNECT_ENCRYPTION_KEY || '',
+            maxComputers: process.env.OR3_CONNECT_MAX_COMPUTERS ?? '3',
+            cloudflare: {
+                accountId:
+                    process.env.OR3_CONNECT_CLOUDFLARE_ACCOUNT_ID || '',
+                zoneId: process.env.OR3_CONNECT_CLOUDFLARE_ZONE_ID || '',
+                apiToken:
+                    process.env.OR3_CONNECT_CLOUDFLARE_API_TOKEN || '',
+                hostnameSuffix:
+                    process.env.OR3_CONNECT_HOSTNAME_SUFFIX || '',
+            },
+        },
         storage: {
             enabled: effectiveStorageEnabled,
             provider: or3CloudConfig.storage.provider,
@@ -512,6 +605,13 @@ export default defineNuxtConfig({
                 enabled: effectiveSyncEnabled,
                 provider: or3CloudConfig.sync.provider,
                 convexUrl,
+            },
+            connect: {
+                enabled: effectiveConnectEnabled,
+                status: connectReadiness.status,
+                statusMessage: connectReadiness.message || '',
+                provider: connectProvider,
+                relayProvider: connectRelayProvider,
             },
             limits: publicLimitsConfig,
             branding: brandingConfig,
@@ -705,6 +805,25 @@ export default defineNuxtConfig({
         },
     },
     nitro: {
+        // Emit precompressed variants for the self-hosted Node server while
+        // keeping the original assets for hosts that do their own compression.
+        compressPublicAssets: true,
+        // better-sqlite3 resolves its native binding dynamically at runtime.
+        // Explicit tracing keeps the platform-specific .node binary in the
+        // self-contained Node server output.
+        externals: {
+            // Nitro's production package tracing can flatten incompatible
+            // transitive packages into the server output. Bundle Dexie so SSR
+            // retains its ESM named exports, and bundle Unhead so Nuxt's v3
+            // renderer cannot be paired with Nuxt UI's transitive v2 runtime.
+            inline: ['dexie', 'unhead'],
+            traceInclude: [
+                resolve(
+                    __dirname,
+                    'node_modules/better-sqlite3/lib/index.js'
+                ),
+            ],
+        },
         // Server tsconfig needs preserveSymlinks for file:-linked provider packages.
         typescript: {
             tsConfig: {
@@ -845,7 +964,17 @@ export default defineNuxtConfig({
                 }),
             ],
             globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
-            globIgnores: ['streamsaver/**'],
+            globIgnores: [
+                'streamsaver/**',
+                // These assets remain available online, but are not required to
+                // install or operate the offline application shell.
+                'screenshots/chat-screenshot.png',
+                'screenshots/editor-screenshot.png',
+                'logos/logo-8bit-raw.png',
+                'logos/logo-xl.png',
+                'logos/logo-1024.png',
+                'logos/icon-logo.png',
+            ],
             importScripts: ['/sw-bypass-streamsaver.js'],
             runtimeCaching: [
                 // OpenRouter callback: prefer network, but fall back to the
@@ -983,29 +1112,10 @@ export default defineNuxtConfig({
     },
     vite: {
         resolve: {
-            alias: [
-                {
-                    find: /^or3-scroll$/,
-                    replacement: resolve(
-                        __dirname,
-                        '../or3-vsc/src/lib/index.ts',
-                    ),
-                },
-                {
-                    find: /^or3-workflow-vue$/,
-                    replacement: resolve(
-                        __dirname,
-                        '../or3-workflows/packages/workflow-vue/src/index.ts',
-                    ),
-                },
-                {
-                    find: /^or3-workflow-core$/,
-                    replacement: resolve(
-                        __dirname,
-                        '../or3-workflows/packages/workflow-core/src/index.ts',
-                    ),
-                },
-            ],
+            // Use sibling source checkouts during multi-repo development, but
+            // fall back to installed registry packages in generated projects
+            // and deployment images where those checkouts do not exist.
+            alias: localPackageAliases,
         },
         optimizeDeps: {
             exclude: [
@@ -1072,6 +1182,14 @@ export default defineNuxtConfig({
         // at runtime via isAdminEnabled() check in server/middleware/admin-gate.ts.
     ].filter(Boolean) as string[],
     hooks: {
+        'build:manifest'(manifest) {
+            // Dynamic imports still load on navigation and NuxtLink keeps its
+            // interaction prefetch. Avoid fetching every possible route from
+            // SSR-generated <link rel="prefetch"> tags during initial load.
+            for (const resource of Object.values(manifest)) {
+                resource.prefetch = false;
+            }
+        },
         'pages:extend'(pages) {
             if (isScrollTestHarnessEnabled) {
                 pages.push({

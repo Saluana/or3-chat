@@ -7,22 +7,24 @@
  * components, composables, and plugins.
  *
  * Behavior:
- * - Resolves the typed hook engine from the Nuxt app context (`$hooks`)
+ * - Resolves the typed hook engine from a client-side cache (set by the
+ *   `00-hooks` plugin) or from the Nuxt app context (`$hooks`)
  * - Throws if the engine is not available (indicates the `00-hooks` plugin
  *   has not loaded, which is a fatal configuration error)
  *
  * Constraints:
- * - Must be called within a Nuxt/Vue context (setup, plugin, middleware)
- * - Does not create fallback engines; a missing engine is always an error
+ * - Prefer `tryGetHooks()` from async / non-setup paths so `inject()` is
+ *   never called outside Vue setup
+ * - Client cache is a singleton; SSR must not write the global cache
  *
  * @see core/hooks/typed-hooks.ts for the TypedHookEngine interface
  * @see plugins/00-hooks for engine initialization
  */
-import { type HookEngine } from './hooks';
 import { type TypedHookEngine } from './typed-hooks';
 import { useNuxtApp as useNuxtAppBase } from 'nuxt/app';
 
-let cached: { engine: HookEngine; typed: TypedHookEngine } | null = null;
+/** Client-only singleton. Never set from SSR request plugins. */
+let cachedEngine: TypedHookEngine | null = null;
 
 type UseNuxtApp = typeof useNuxtAppBase;
 
@@ -32,26 +34,47 @@ function resolveUseNuxtApp(): UseNuxtApp {
 }
 
 /**
+ * Capture the typed hook engine during client plugin setup so async paths
+ * (storage queue, error reporting, media prefetch) can resolve hooks without
+ * calling `useNuxtApp()` / `inject()` outside Vue setup.
+ */
+export function setHookEngine(engine: TypedHookEngine | null): void {
+    cachedEngine = engine;
+}
+
+/**
+ * Non-injecting accessor for async / utility code.
+ * Returns null when the client plugin has not installed an engine yet.
+ */
+export function tryGetHooks(): TypedHookEngine | null {
+    return cachedEngine;
+}
+
+/**
  * Return a typed wrapper around the global HookEngine.
- * 
+ *
  * Behavior:
- * - Returns the typed hook engine provided by the 00-hooks plugin
- * - Throws in dev if the hook engine is not available (indicates plugin not loaded)
- * - In production, throws an error to avoid silent failures
- * 
- * This ensures all hooks go through the same engine instance and prevents
- * the creation of disconnected fallback engines that would cause hooks to not fire.
+ * - Prefers the client cache when present (safe outside setup)
+ * - Falls back to Nuxt `$hooks` when cache is empty (setup / tests / SSR)
+ * - Throws if the engine is not available
  */
 export function useHooks(): TypedHookEngine {
+    if (cachedEngine) return cachedEngine;
+
     const nuxt = resolveUseNuxtApp()();
     const provided = nuxt.$hooks as TypedHookEngine | undefined;
 
     if (!provided) {
-        const errorMsg = '[useHooks] Hook engine not initialized. Ensure 00-hooks plugin is loaded.';
+        const errorMsg =
+            '[useHooks] Hook engine not initialized. Ensure 00-hooks plugin is loaded.';
         if (import.meta.dev) {
             console.error(errorMsg);
         }
         throw new Error(errorMsg);
+    }
+
+    if (import.meta.client) {
+        cachedEngine = provided;
     }
 
     return provided;

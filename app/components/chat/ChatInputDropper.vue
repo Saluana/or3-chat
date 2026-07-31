@@ -69,7 +69,10 @@
                     <!-- Settings Button (stub) -->
                     <div class="chat-input-settings-btn relative shrink-0">
                         <ClientOnly>
-                            <UPopover class="chat-input-settings-popover">
+                            <UPopover
+                                v-model:open="settingsPopoverOpen"
+                                class="chat-input-settings-popover"
+                            >
                                 <UButton
                                     v-bind="settingsButtonProps"
                                     label="Open"
@@ -101,9 +104,12 @@
                                         v-model:reasoning-effort="
                                             reasoningEffort
                                         "
-                                        @open-system-prompts="openSystemPrompts"
+                                        @close="settingsPopoverOpen = false"
+                                        @open-system-prompts="
+                                            openSystemPromptsFromSettings
+                                        "
                                         @open-model-catalog="
-                                            showModelCatalog = true
+                                            openModelCatalogFromSettings
                                         "
                                     />
                                 </template>
@@ -504,6 +510,7 @@ onBeforeUnmount(() => {
 
 const showModelCatalog = ref(false);
 const showKeyModal = ref(false);
+const settingsPopoverOpen = ref(false);
 const systemPromptsModal = useSystemPromptsModal();
 
 function openSystemPrompts() {
@@ -513,6 +520,16 @@ function openSystemPrompts() {
         paneId: props.paneId,
         onSelected: handlePromptSelected,
     });
+}
+
+function openSystemPromptsFromSettings() {
+    settingsPopoverOpen.value = false;
+    openSystemPrompts();
+}
+
+function openModelCatalogFromSettings() {
+    settingsPopoverOpen.value = false;
+    showModelCatalog.value = true;
 }
 
 const emit = defineEmits<{

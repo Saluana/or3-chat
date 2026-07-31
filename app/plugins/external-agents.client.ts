@@ -1,4 +1,6 @@
 import { createInternClient, type InternClient } from "@or3/intern-client";
+import { watch } from "vue";
+import { useSessionContext } from "~/composables/auth/useSessionContext";
 import { usePaneApps } from "~/composables/core/usePaneApps";
 import { useSidebarPages } from "~/composables/sidebar/useSidebarPages";
 import { getActivityRegistry } from "~/core/activity/registry";
@@ -13,7 +15,10 @@ import {
   EXTERNAL_AGENT_PANE_APP_ID,
   EXTERNAL_AGENTS_SIDEBAR_PAGE_ID,
 } from "~/core/external-agents/refs";
-import { setExternalAgentController } from "~/core/external-agents/runtime";
+import {
+  setExternalAgentCloudHostRefresh,
+  setExternalAgentController,
+} from "~/core/external-agents/runtime";
 import type {
   ExternalAgentAttachment,
   ExternalAgentClient,
@@ -180,7 +185,14 @@ const createClient: ExternalAgentClientFactory = ({
       fetch: fetchWithoutCache,
       resolveAuth: async () => {
         const token = await resolveCredential();
-        return token ? { token } : null;
+        return token
+          ? {
+              token,
+              headers: host.id.startsWith("or3-connect:")
+                ? { "X-Or3-Auth-Method": "paired-device" }
+                : undefined,
+            }
+          : null;
       },
       defaultTimeoutMs: 15_000,
       streamConnectTimeoutMs: 20_000,
@@ -203,7 +215,131 @@ export function runExternalAgentBackground(
     });
 }
 
+export function isCurrentCloudHostWorkspace(
+  expectedWorkspaceId: string,
+  responseWorkspaceId: string | undefined,
+  activeWorkspaceId: string | null | undefined,
+): boolean {
+  return (
+    responseWorkspaceId === expectedWorkspaceId &&
+    (activeWorkspaceId ?? "local") === expectedWorkspaceId
+  );
+}
+
+interface CloudHostEnvironment {
+  readonly environmentId: string;
+  readonly name: string;
+  readonly baseUrl: string;
+  readonly token: string;
+}
+
+function parseCloudHostEnvironments(value: unknown): CloudHostEnvironment[] | null {
+  if (!Array.isArray(value)) return null;
+  const environments: CloudHostEnvironment[] = [];
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== "object") return null;
+    const record = candidate as Record<string, unknown>;
+    if (
+      typeof record.id !== "string" ||
+      typeof record.name !== "string" ||
+      typeof record.baseUrl !== "string" ||
+      typeof record.accessToken !== "string" ||
+      !record.id.trim() ||
+      !record.name.trim() ||
+      !record.baseUrl.trim() ||
+      !record.accessToken.trim()
+    ) {
+      return null;
+    }
+    environments.push({
+      environmentId: record.id,
+      name: record.name,
+      baseUrl: record.baseUrl,
+      token: record.accessToken,
+    });
+  }
+  return environments;
+}
+
+export function createCloudHostReconciler(input: {
+  readonly controller: Pick<ExternalAgentController, "reconcileCloudHosts">;
+  readonly fetch: (
+    request: Parameters<typeof globalThis.fetch>[0],
+    init?: Parameters<typeof globalThis.fetch>[1],
+  ) => Promise<Response>;
+  readonly getActiveWorkspaceId: () => string | null | undefined;
+  readonly isEnabled: () => boolean;
+  readonly isDisposed: () => boolean;
+}): {
+  readonly reconcile: (expectedWorkspaceId?: string) => Promise<void>;
+  readonly invalidate: () => void;
+  readonly dispose: () => void;
+} {
+  let generation = 0;
+  let requestController: AbortController | null = null;
+
+  const invalidate = () => {
+    generation += 1;
+    requestController?.abort();
+    requestController = null;
+  };
+  const reconcile = async (expectedWorkspaceId?: string) => {
+    if (!input.isEnabled() || input.isDisposed()) return;
+    const workspaceId =
+      expectedWorkspaceId?.trim() ||
+      input.getActiveWorkspaceId()?.trim() ||
+      "local";
+    if (
+      (input.getActiveWorkspaceId()?.trim() || "local") !== workspaceId
+    ) {
+      return;
+    }
+
+    const requestGeneration = ++generation;
+    requestController?.abort();
+    const controller = new AbortController();
+    requestController = controller;
+    try {
+      const result = await input.fetch("/api/connect/environments", {
+        credentials: "include",
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!result.ok) return;
+      const response = (await result.json()) as {
+        workspaceId?: string;
+        environments?: unknown;
+      };
+      if (
+        controller.signal.aborted ||
+        requestGeneration !== generation ||
+        input.isDisposed() ||
+        !isCurrentCloudHostWorkspace(
+          workspaceId,
+          response.workspaceId,
+          input.getActiveWorkspaceId(),
+        )
+      ) {
+        return;
+      }
+      const environments = parseCloudHostEnvironments(response.environments);
+      if (!environments) return;
+      await input.controller.reconcileCloudHosts(workspaceId, environments);
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
+    } finally {
+      if (requestController === controller) requestController = null;
+    }
+  };
+  return {
+    reconcile,
+    invalidate,
+    dispose: invalidate,
+  };
+}
+
 export default defineNuxtPlugin((nuxtApp) => {
+  const runtimeConfig = useRuntimeConfig();
   const controller = new ExternalAgentController({
     persistence: createWorkspaceExternalAgentPersistence(),
     credentials: getExternalAgentCredentialVault(),
@@ -211,6 +347,23 @@ export default defineNuxtPlugin((nuxtApp) => {
     getWorkspaceScope: () => getActiveWorkspaceId() ?? "local",
   });
   setExternalAgentController(controller);
+  let disposed = false;
+  const isDisposed = () => disposed;
+  const cloudHostReconciler = createCloudHostReconciler({
+    controller,
+    fetch: (...args) => globalThis.fetch(...args),
+    getActiveWorkspaceId,
+    isEnabled: () =>
+      runtimeConfig.public.ssrAuthEnabled === true &&
+      runtimeConfig.public.connect?.enabled === true,
+    isDisposed,
+  });
+  let controllerReady = false;
+  const refreshCloudHostInventory = async (expectedWorkspaceId?: string) => {
+    if (!controllerReady || disposed) return;
+    await cloudHostReconciler.reconcile(expectedWorkspaceId);
+  };
+  setExternalAgentCloudHostRefresh(() => refreshCloudHostInventory());
 
   async function openSession(session: ExternalAgentSession) {
     const api = getGlobalMultiPaneApi();
@@ -271,28 +424,73 @@ export default defineNuxtPlugin((nuxtApp) => {
     openSession,
   });
 
-  let disposed = false;
-  const isDisposed = () => disposed;
-  const stopWorkspaceSubscription = subscribeActiveWorkspaceDb((event) => {
+  const reportReconcileError = () => {
+    console.warn(
+      "[external-agents] Could not load workspace connection preferences",
+    );
+  };
+  const refreshCloudHostInventoryInBackground = () => {
     runExternalAgentBackground(
-      () => controller.reloadWorkspace(event.newWorkspaceId ?? "local"),
-      () => {
-        console.warn(
-          "[external-agents] Could not load workspace connection preferences",
-        );
+      () => refreshCloudHostInventory(),
+      reportReconcileError,
+      isDisposed,
+    );
+  };
+  const stopWorkspaceSubscription = subscribeActiveWorkspaceDb((event) => {
+    cloudHostReconciler.invalidate();
+    runExternalAgentBackground(
+      async () => {
+        const workspaceId = event.newWorkspaceId ?? "local";
+        await controller.reloadWorkspace(workspaceId);
+        controllerReady = true;
+        await refreshCloudHostInventory(workspaceId);
       },
+      reportReconcileError,
       isDisposed,
     );
   });
+  const sessionContext =
+    runtimeConfig.public.ssrAuthEnabled === true
+      ? useSessionContext()
+      : null;
+  const stopAuthSubscription = sessionContext
+    ? watch(
+        () => ({
+          authenticated:
+            sessionContext.data.value?.session?.authenticated ?? false,
+          workspaceId:
+            sessionContext.data.value?.session?.workspace?.id ?? null,
+        }),
+        (current, previous) => {
+          if (
+            current.authenticated &&
+            (!previous?.authenticated ||
+              current.workspaceId !== previous.workspaceId)
+          ) {
+            refreshCloudHostInventoryInBackground();
+          }
+        },
+      )
+    : () => undefined;
+  const onVisibilityResume = () => {
+    if (document.visibilityState === "visible") {
+      refreshCloudHostInventoryInBackground();
+    }
+  };
+  document.addEventListener("visibilitychange", onVisibilityResume);
   const cleanup = () => {
     if (disposed) return;
     disposed = true;
+    cloudHostReconciler.dispose();
     stopWorkspaceSubscription();
+    stopAuthSubscription();
+    document.removeEventListener("visibilitychange", onVisibilityResume);
     controller.dispose();
     commandHandles.forEach((handle) => handle.dispose());
     activityHandle.dispose();
     sidebarHandle();
     paneHandle.dispose();
+    setExternalAgentCloudHostRefresh(undefined);
     setExternalAgentController(undefined);
   };
   (
@@ -305,12 +503,13 @@ export default defineNuxtPlugin((nuxtApp) => {
     import.meta.hot.dispose(cleanup);
   }
   runExternalAgentBackground(
-    () => controller.initialize(getActiveWorkspaceId() ?? "local"),
-    () => {
-      console.warn(
-        "[external-agents] Could not load workspace connection preferences",
-      );
+    async () => {
+      const initialWorkspaceId = getActiveWorkspaceId() ?? "local";
+      await controller.initialize(initialWorkspaceId);
+      controllerReady = true;
+      await refreshCloudHostInventory(initialWorkspaceId);
     },
+    reportReconcileError,
     isDisposed,
   );
 });

@@ -23,6 +23,7 @@ export default <IconMap>{
     'chat.model.settings': 'tabler:adjustments',
     'chat.model.catalog': 'tabler:robot-face',
     'chat.system_prompt': 'tabler:script',
+    'chat.web_search': 'tabler:world',
     'chat.message.continue': 'tabler:message-circle-up',
 
     // Chat Messages

@@ -139,7 +139,12 @@ const errorId = computed(() =>
 );
 
 const showSecretGenerateButton = computed(
-    () => Boolean(props.field.secret && props.field.type === 'password')
+    () =>
+        Boolean(
+            props.field.secret &&
+                props.field.type === 'password' &&
+                props.field.autoGenerate !== false
+        )
 );
 
 const inputType = computed(() => {

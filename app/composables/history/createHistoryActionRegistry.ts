@@ -1,7 +1,12 @@
 import { createRegistry } from '../_registry';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 
 export interface HistoryActionRegistryItem<TDocument> {
     id: string;
+    /** Owning plugin used for enabled-state and server access checks. */
+    pluginId?: string;
+    /** Optional per-contribution access requirements. */
+    access?: PluginGatePolicy;
     icon: string;
     label: string;
     order?: number;

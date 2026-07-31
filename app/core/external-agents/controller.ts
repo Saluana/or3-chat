@@ -1,15 +1,33 @@
 import {
   buildExternalAgentRunnerOptions,
+  runnerUsability,
   validateExternalAgentLaunch,
 } from "./launcher";
-import {
-  presentExternalAgentError,
-  sanitizeExternalAgentPayload,
-} from "./presentation";
+import { presentExternalAgentError } from "./presentation";
 import { isExternalAgentPinCredentialVault } from "./credentials";
+import { ExternalAgentConnectionSupervisor } from "./connection-supervisor";
+import {
+  ExternalAgentEventStore,
+  isTerminal,
+  mapExternalAgentStatus,
+  MAX_EVENT_TURNS,
+  remoteDate,
+  shouldPauseStream,
+} from "./event-store";
+import {
+  ExternalAgentHostRegistry,
+  fallbackExternalAgentHostId,
+  normalizeExternalAgentBaseUrl,
+  sameExternalAgentEndpoint,
+} from "./host-registry";
+import { ExternalAgentPersistenceAdapter } from "./persistence-adapter";
+import { ExternalAgentSnapshotPublisher } from "./snapshot-publisher";
+import {
+  ExternalAgentSessionRepository,
+  MAX_EXTERNAL_AGENT_SESSION_REFS,
+} from "./session-repository";
+import { ExternalAgentTurnCommandService } from "./turn-command-service";
 import type {
-  ExternalAgentApproval,
-  ExternalAgentArtifact,
   ExternalAgentClient,
   ExternalAgentClientFactory,
   ExternalAgentCredentialVault,
@@ -19,29 +37,20 @@ import type {
   ExternalAgentPersistence,
   ExternalAgentPersistenceLease,
   ExternalAgentPersistenceSnapshot,
-  ExternalAgentRunStatus,
   ExternalAgentSession,
   ExternalAgentSessionRef,
   ExternalAgentStoreEvent,
   ExternalAgentStoreSnapshot,
-  ExternalAgentTimelineEvent,
   ExternalRemoteEvent,
   ExternalRemoteSession,
-  ExternalRemoteStreamEvent,
   ExternalRemoteTurn,
 } from "./types";
 
-const EVENT_PAGE_SIZE = 500;
-const MAX_TIMELINE_EVENTS_PER_TURN = 2_000;
-const MAX_SESSION_REFS = 100;
+export { mapExternalAgentStatus } from "./event-store";
+
 const MAX_EAGER_REHYDRATED_SESSIONS = 20;
 const REHYDRATE_CONCURRENCY = 4;
 const MAX_REHYDRATED_TURNS = 20;
-const MAX_EVENT_TURNS = 5;
-const MAX_SESSION_APPROVALS = 100;
-const MAX_SESSION_ARTIFACTS = 100;
-const MAX_ARTIFACT_FILES_PER_EVENT = 50;
-const STREAM_RECONCILE_INTERVAL_MS = 1_000;
 
 interface ExternalAgentWorkspaceLease {
   readonly workspaceId: string;
@@ -71,46 +80,10 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function waitForAbortableDelay(
-  delayMs: number,
-  signal: AbortSignal,
-): Promise<boolean> {
-  if (signal.aborted) return Promise.resolve(false);
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve(true);
-    }, delayMs);
-    const onAbort = () => {
-      clearTimeout(timer);
-      resolve(false);
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
-function remoteDate(value: number | undefined, fallback = Date.now()): string {
-  if (!value || !Number.isFinite(value))
-    return new Date(fallback).toISOString();
-  const millis = value < 1_000_000_000_000 ? value * 1000 : value;
-  return new Date(millis).toISOString();
-}
-
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? { ...(value as Record<string, unknown>) }
     : {};
-}
-
-function firstString(
-  input: Readonly<Record<string, unknown>>,
-  keys: readonly string[],
-): string | undefined {
-  for (const key of keys) {
-    const value = input[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return undefined;
 }
 
 function redactErrorMessage(error: unknown, fallback: string): string {
@@ -128,94 +101,6 @@ function randomId(prefix: string): string {
   return `${prefix}-${value}`;
 }
 
-function normalizeBaseUrl(value: string): string {
-  const parsed = new URL(value.trim());
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    throw new Error("Host URL must use HTTP or HTTPS");
-  }
-  const hostname = parsed.hostname
-    .toLowerCase()
-    .replace(/^\[/, "")
-    .replace(/\]$/, "");
-  const loopback =
-    hostname === "localhost" ||
-    hostname === "::1" ||
-    /^127(?:\.\d{1,3}){3}$/.test(hostname);
-  if (parsed.protocol === "http:" && !loopback) {
-    throw new Error(
-      "Remote hosts must use HTTPS; HTTP is allowed only for loopback hosts",
-    );
-  }
-  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
-    throw new Error(
-      "Host URL must not contain credentials, query parameters, or fragments",
-    );
-  }
-  return parsed.toString().replace(/\/+$/, "");
-}
-
-function fallbackHostId(baseUrl: string): string {
-  const parsed = new URL(baseUrl);
-  return (
-    parsed.host
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "or3-intern"
-  );
-}
-
-function sameHostEndpoint(left: string, right: string): boolean {
-  try {
-    return normalizeBaseUrl(left) === normalizeBaseUrl(right);
-  } catch {
-    return left.replace(/\/+$/, "") === right.replace(/\/+$/, "");
-  }
-}
-
-export function mapExternalAgentStatus(
-  value: string | undefined,
-  fallback: ExternalAgentRunStatus = "queued",
-): ExternalAgentRunStatus {
-  switch (String(value ?? "").toLowerCase()) {
-    case "queued":
-      return "queued";
-    case "starting":
-    case "running":
-    case "aborting":
-      return "running";
-    case "approval_required":
-    case "waiting_approval":
-      return "waiting_approval";
-    case "succeeded":
-    case "completed":
-    case "complete":
-    case "ok":
-      return "succeeded";
-    case "aborted":
-    case "cancelled":
-    case "canceled":
-    case "interrupted":
-      return "cancelled";
-    case "failed":
-    case "timed_out":
-    case "timeout":
-    case "error":
-      return "failed";
-    default:
-      return fallback;
-  }
-}
-
-function isTerminal(status: ExternalAgentRunStatus): boolean {
-  return (
-    status === "succeeded" || status === "failed" || status === "cancelled"
-  );
-}
-
-function shouldPauseStream(status: ExternalAgentRunStatus): boolean {
-  return isTerminal(status) || status === "waiting_approval";
-}
-
 function sessionFromRemote(
   hostId: string,
   hostGeneration: number,
@@ -228,7 +113,8 @@ function sessionFromRemote(
     remoteSessionId: remote.id,
     appSessionKey: remote.app_session_key,
     runnerId: remote.runner_id,
-    model: remote.model,
+    model: remote.model ?? ref?.model,
+    thinkingLevel: ref?.thinkingLevel,
     mode: remote.mode,
     isolation: remote.isolation,
     cwd: remote.cwd,
@@ -244,310 +130,6 @@ function sessionFromRemote(
   };
 }
 
-function timelineType(
-  rawType: string,
-  payload: Readonly<Record<string, unknown>>,
-): ExternalAgentTimelineEvent["type"] {
-  const type = `${rawType} ${String(payload.type ?? "")}`.trim().toLowerCase();
-  if (rawType.toLowerCase() === "runner_output") return "metric";
-  if (
-    type.includes("approval") ||
-    type.includes("user-input.requested") ||
-    (type.includes("request.opened") &&
-      String(payload.request_type ?? "").includes("approval"))
-  ) {
-    return "approval";
-  }
-  if (
-    type.includes("diff") ||
-    type.includes("file") ||
-    type.includes("artifact")
-  ) {
-    return "artifact";
-  }
-  if (type.includes("error") || type.includes("failed")) return "error";
-  if (
-    type.includes("token") ||
-    type.includes("usage") ||
-    type.includes("metric")
-  ) {
-    return "metric";
-  }
-  if (
-    type.includes("text") ||
-    type.includes("content") ||
-    type.includes("message") ||
-    type.includes("reasoning")
-  ) {
-    return "message";
-  }
-  if (
-    type.includes("item.started") ||
-    type.includes("item.updated") ||
-    type.includes("item.completed") ||
-    type.includes("tool.started") ||
-    type.includes("tool.updated") ||
-    type.includes("tool.completed") ||
-    type.includes("tool_use")
-  ) {
-    return "tool";
-  }
-  if (
-    type.includes("completed") ||
-    type.includes("completion") ||
-    type.includes("status") ||
-    type === "done"
-  ) {
-    return "status";
-  }
-  // Unknown runner wrapper events (for example runtime.started, session, and
-  // message.part.updated) are diagnostics, not user-facing tool calls.
-  return "metric";
-}
-
-function normalizeTimelineEvent(
-  hostId: string,
-  hostGeneration: number,
-  sessionId: string,
-  event: ExternalRemoteEvent,
-): ExternalAgentTimelineEvent {
-  const rawPayload = record(event.payload);
-  const type = timelineType(event.type, rawPayload);
-  const payload = sanitizeExternalAgentPayload(rawPayload, event.type);
-  const text =
-    (type === "error"
-      ? presentExternalAgentError(
-          event.text ??
-            firstString(rawPayload, ["error", "error_message", "message"]),
-        ).message
-      : event.text &&
-          !/https?:\/\/|set-cookie|authorization|headers?/i.test(event.text)
-        ? event.text.slice(0, 24_000)
-        : undefined) ||
-    firstString(payload, [
-      "delta",
-      "text",
-      "message",
-      "detail",
-      "summary",
-      "unified_diff",
-      "error",
-      "error_message",
-      "name",
-    ]);
-  const stableId =
-    typeof event.id === "number"
-      ? String(event.id)
-      : `${event.turn_id}:${event.seq}`;
-  return Object.freeze({
-    id: `${hostId}:${sessionId}:${stableId}`,
-    hostId,
-    hostGeneration,
-    sessionId,
-    turnId: event.turn_id,
-    sequence: event.seq,
-    occurredAt: remoteDate(event.ts),
-    type,
-    text,
-    payload: Object.freeze({
-      ...payload,
-    }),
-  });
-}
-
-function approvalFromEvent(
-  event: ExternalAgentTimelineEvent,
-): ExternalAgentApproval | null {
-  if (event.type !== "approval") return null;
-  const payload = event.payload;
-  const id =
-    firstString(payload, ["approval_id", "request_id", "requestId", "id"]) ??
-    String(
-      payload.approval_id ??
-        payload.request_id ??
-        `${event.turnId}:${event.sequence}`,
-    );
-  const rawType = String(payload.rawType ?? "").toLowerCase();
-  const decision = String(
-    payload.decision ?? payload.status ?? "",
-  ).toLowerCase();
-  let status: ExternalAgentApproval["status"] = "pending";
-  if (
-    rawType.includes("resolved") ||
-    rawType.includes("response") ||
-    decision
-  ) {
-    if (decision.includes("approve") || decision === "allow") {
-      status = "approved";
-    } else if (decision.includes("deny") || decision.includes("reject")) {
-      status = "denied";
-    } else if (decision.includes("cancel")) {
-      status = "cancelled";
-    }
-  }
-  const requestType =
-    firstString(payload, ["request_type", "title", "summary"]) ?? "";
-  const normalizedType = requestType.toLowerCase();
-  const title = normalizedType.includes("command")
-    ? "Run this command?"
-    : normalizedType.includes("file") ||
-        normalizedType.includes("write") ||
-        normalizedType.includes("edit")
-      ? "Allow these changes?"
-      : normalizedType.includes("network")
-        ? "Allow network access?"
-        : normalizedType.includes("tool") ||
-            normalizedType.includes("permission")
-          ? "Allow this action?"
-          : "Approval needed";
-  return {
-    id,
-    turnId: event.turnId,
-    title,
-    description:
-      firstString(payload, ["reason", "description", "detail", "message"]) ??
-      event.text,
-    status,
-  };
-}
-
-function isFallbackApprovalId(approval: ExternalAgentApproval): boolean {
-  return approval.id.startsWith(`${approval.turnId}:`);
-}
-
-function isGenericApproval(approval: ExternalAgentApproval): boolean {
-  return approval.title === "Approval needed" && !approval.description;
-}
-
-function mergeApproval(
-  existing: ExternalAgentApproval,
-  incoming: ExternalAgentApproval,
-): ExternalAgentApproval {
-  const incomingIsRicher =
-    isGenericApproval(existing) && !isGenericApproval(incoming);
-  return {
-    id:
-      (!isFallbackApprovalId(incoming) && isFallbackApprovalId(existing)) ||
-      (existing.id === "0" &&
-        incoming.id !== "0" &&
-        !isFallbackApprovalId(incoming))
-        ? incoming.id
-        : existing.id,
-    turnId: existing.turnId,
-    title: incomingIsRicher ? incoming.title : existing.title,
-    description:
-      (incomingIsRicher ? incoming.description : existing.description) ??
-      incoming.description,
-    status: incoming.status === "pending" ? existing.status : incoming.status,
-  };
-}
-
-function artifactsFromEvent(
-  event: ExternalAgentTimelineEvent,
-): ExternalAgentArtifact[] {
-  if (event.type !== "artifact") return [];
-  const payload = event.payload;
-  const output: ExternalAgentArtifact[] = [];
-  const diff = firstString(payload, ["unified_diff", "diff"]);
-  if (diff) {
-    output.push({
-      id: `${event.id}:diff`,
-      turnId: event.turnId,
-      kind: "diff",
-      label: "Proposed changes",
-      content: diff,
-    });
-  }
-  const files = Array.isArray(payload.files)
-    ? payload.files.slice(0, MAX_ARTIFACT_FILES_PER_EVENT)
-    : [];
-  for (const [index, candidate] of files.entries()) {
-    const file = record(candidate);
-    const path = firstString(file, ["path", "name", "file"]);
-    if (!path) continue;
-    output.push({
-      id: `${event.id}:file:${index}`,
-      turnId: event.turnId,
-      kind: "file",
-      label: path,
-      content: firstString(file, ["diff", "content"]),
-    });
-  }
-  const artifactId = firstString(payload, ["artifact_id", "artifactId"]);
-  if (artifactId) {
-    output.push({
-      id: `${event.id}:artifact:${artifactId}`,
-      turnId: event.turnId,
-      kind: "artifact",
-      label:
-        firstString(payload, ["label", "name"]) ?? `Artifact ${artifactId}`,
-      artifactId,
-    });
-  }
-  if (!output.length) {
-    output.push({
-      id: `${event.id}:artifact`,
-      turnId: event.turnId,
-      kind: "artifact",
-      label: event.text ?? "Agent artifact",
-    });
-  }
-  return output;
-}
-
-function streamPayload(
-  streamEvent: ExternalRemoteStreamEvent,
-): ExternalRemoteEvent | null {
-  const value = streamEvent.json;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const candidate = value as Record<string, unknown>;
-  if (
-    typeof candidate.turn_id !== "string" ||
-    typeof candidate.seq !== "number" ||
-    typeof candidate.type !== "string"
-  ) {
-    return null;
-  }
-  return candidate as unknown as ExternalRemoteEvent;
-}
-
-function timelineTerminalStatus(
-  event: ExternalAgentTimelineEvent,
-): ExternalAgentRunStatus | null {
-  const rawType = String(event.payload.rawType ?? "").toLowerCase();
-  if (
-    event.type === "error" &&
-    rawType !== "runner_output" &&
-    (rawType === "error" ||
-      rawType === "failed" ||
-      rawType.endsWith(".error") ||
-      rawType.endsWith("/error") ||
-      rawType.endsWith(".failed") ||
-      rawType.endsWith("/failed"))
-  ) {
-    return "failed";
-  }
-  if (
-    event.type !== "status" ||
-    ![
-      "completion",
-      "completed",
-      "done",
-      "status",
-      "turn.completed",
-      "turn/completed",
-    ].includes(rawType)
-  ) {
-    return null;
-  }
-  for (const candidate of [event.payload.status, event.payload.state]) {
-    if (typeof candidate !== "string") continue;
-    const mapped = mapExternalAgentStatus(candidate, "queued");
-    if (isTerminal(mapped)) return mapped;
-  }
-  return null;
-}
-
 export interface ExternalAgentControllerOptions {
   readonly persistence: ExternalAgentPersistence;
   readonly credentials: ExternalAgentCredentialVault;
@@ -560,15 +142,14 @@ export class ExternalAgentController {
   readonly #credentials: ExternalAgentCredentialVault;
   readonly #createClient: ExternalAgentClientFactory;
   readonly #getWorkspaceScope: () => string | null | undefined;
-  readonly #listeners = new Set<(event: ExternalAgentStoreEvent) => void>();
-  readonly #sessions = new Map<string, ExternalAgentSession>();
-  readonly #streamControllers = new Map<string, AbortController>();
-  readonly #sessionRefreshVersions = new Map<string, number>();
-  #hostController: AbortController | null = null;
+  readonly #publisher: ExternalAgentSnapshotPublisher;
+  readonly #hostRegistry = new ExternalAgentHostRegistry();
+  readonly #sessions = new ExternalAgentSessionRepository();
+  readonly #events = new ExternalAgentEventStore();
+  readonly #connections = new ExternalAgentConnectionSupervisor();
+  readonly #commands = new ExternalAgentTurnCommandService();
+  readonly #persistenceAdapter = new ExternalAgentPersistenceAdapter();
   #client: ExternalAgentClient | null = null;
-  #hosts: ExternalAgentHost[] = [];
-  #sessionRefs: ExternalAgentSessionRef[] = [];
-  #activeHostId: string | null = null;
   #connectionState: ExternalAgentStoreSnapshot["connectionState"] =
     "disconnected";
   #connectionError: string | null = null;
@@ -579,17 +160,40 @@ export class ExternalAgentController {
   #runners: ExternalAgentStoreSnapshot["runners"] = [];
   #workspaceLease: ExternalAgentWorkspaceLease | null = null;
   #workspaceEpoch = 0;
+  #cloudHostReconcileGeneration = 0;
   #disposed = false;
-  #persistTail: Promise<void> = Promise.resolve();
 
   constructor(options: ExternalAgentControllerOptions) {
     this.#persistence = options.persistence;
     this.#credentials = options.credentials;
     this.#createClient = options.createClient;
     this.#getWorkspaceScope = options.getWorkspaceScope;
+    this.#publisher = new ExternalAgentSnapshotPublisher(() =>
+      this.#createSnapshot(),
+    );
   }
 
   get snapshot(): ExternalAgentStoreSnapshot {
+    return this.#publisher.snapshot;
+  }
+
+  get #hosts(): readonly ExternalAgentHost[] {
+    return this.#hostRegistry.hosts;
+  }
+
+  set #hosts(hosts: ExternalAgentHost[]) {
+    this.#hostRegistry.replace(hosts);
+  }
+
+  get #activeHostId(): string | null {
+    return this.#hostRegistry.activeHostId;
+  }
+
+  set #activeHostId(hostId: string | null) {
+    this.#hostRegistry.setActive(hostId);
+  }
+
+  #createSnapshot(): ExternalAgentStoreSnapshot {
     return Object.freeze({
       hosts: Object.freeze([...this.#hosts]),
       activeHostId: this.#activeHostId,
@@ -600,9 +204,10 @@ export class ExternalAgentController {
       readiness: this.#readiness,
       capabilities: this.#capabilities,
       runners: Object.freeze([...this.#runners]),
-      sessionRefs: Object.freeze([...this.#sessionRefs]),
+      sessionRefs: Object.freeze([...this.#sessions.refs]),
       sessions: Object.freeze(
-        [...this.#sessions.values()]
+        this.#sessions
+          .values()
           .sort(
             (left, right) =>
               Date.parse(right.updatedAt) - Date.parse(left.updatedAt),
@@ -698,28 +303,11 @@ export class ExternalAgentController {
   }
 
   subscribe(listener: (event: ExternalAgentStoreEvent) => void): () => void {
-    this.#listeners.add(listener);
-    listener({ type: "snapshot", snapshot: this.snapshot });
-    return () => this.#listeners.delete(listener);
+    return this.#publisher.subscribe(listener);
   }
 
   #emit(event?: Exclude<ExternalAgentStoreEvent, { type: "snapshot" }>) {
-    for (const listener of [...this.#listeners]) {
-      try {
-        listener(event ?? { type: "snapshot", snapshot: this.snapshot });
-      } catch {
-        // UI observers are isolated from canonical session state.
-      }
-    }
-    if (event) {
-      for (const listener of [...this.#listeners]) {
-        try {
-          listener({ type: "snapshot", snapshot: this.snapshot });
-        } catch {
-          // Observer failure is isolated.
-        }
-      }
-    }
+    this.#publisher.publish(event);
   }
 
   async initialize(workspaceId?: string): Promise<void> {
@@ -732,6 +320,7 @@ export class ExternalAgentController {
 
   async #loadWorkspace(workspaceId: string): Promise<void> {
     if (this.#disposed) return;
+    this.#cloudHostReconcileGeneration += 1;
     const replacingWorkspace = this.#workspaceLease !== null;
     this.#abortActiveWork();
     if (replacingWorkspace) this.#generation += 1;
@@ -742,10 +331,8 @@ export class ExternalAgentController {
     };
     this.#workspaceLease = lease;
     this.#client = null;
-    this.#sessions.clear();
-    this.#sessionRefreshVersions.clear();
+    this.#sessions.reset();
     this.#hosts = [];
-    this.#sessionRefs = [];
     this.#activeHostId = null;
     this.#connectionState = "disconnected";
     this.#connectionError = null;
@@ -759,7 +346,7 @@ export class ExternalAgentController {
     if (!this.#isWorkspaceLeaseCurrent(lease)) return;
     this.#hosts = [...snapshot.hosts];
     this.#activeHostId = snapshot.activeHostId;
-    this.#sessionRefs = [...snapshot.sessionRefs];
+    this.#sessions.reset(snapshot.sessionRefs);
     this.#emit();
     if (!this.#activeHostId) return;
     const host = this.#hosts.find(
@@ -783,15 +370,16 @@ export class ExternalAgentController {
     readonly baseUrl: string;
     readonly token: string;
     readonly persistencePin?: string;
+    readonly activate?: boolean;
   }): Promise<ExternalAgentHost> {
     const lease = this.#requireWorkspaceLease();
-    const baseUrl = normalizeBaseUrl(input.baseUrl);
+    const baseUrl = normalizeExternalAgentBaseUrl(input.baseUrl);
     const token = input.token.trim();
     if (!token) throw new Error("An access token is required");
     const credentialRef = randomId("intern-credential");
     const temporary: ExternalAgentHost = {
-      id: fallbackHostId(baseUrl),
-      name: input.name.trim() || fallbackHostId(baseUrl),
+      id: fallbackExternalAgentHostId(baseUrl),
+      name: input.name.trim() || fallbackExternalAgentHostId(baseUrl),
       baseUrl,
       credentialRef,
       trustedAt: nowIso(),
@@ -839,11 +427,211 @@ export class ExternalAgentController {
       await this.#credentials.remove(previous.credentialRef);
       this.#assertWorkspaceLease(lease);
     }
-    this.#activeHostId = id;
+    if (input.activate !== false || !this.#activeHostId) {
+      this.#activeHostId = id;
+    }
     await this.#persist(lease);
     this.#assertWorkspaceLease(lease);
-    await this.connect(id, lease);
+    if (this.#activeHostId === id) {
+      await this.connect(id, lease);
+    } else {
+      this.#emit();
+    }
     return host;
+  }
+
+  /**
+   * Restores an account-bound OR3 Cloud computer without making availability
+   * a prerequisite for appearing in history. The cloud control plane has
+   * already authenticated and authorized this host; health is reflected by
+   * the normal connection state after it is selected.
+   */
+  async restoreCloudHost(input: {
+    readonly environmentId: string;
+    readonly name: string;
+    readonly baseUrl: string;
+    readonly token: string;
+    readonly activate?: boolean;
+  }): Promise<ExternalAgentHost> {
+    const lease = this.#requireWorkspaceLease();
+    const environmentId = input.environmentId.trim();
+    const token = input.token.trim();
+    if (!environmentId || !token) {
+      throw new Error("Cloud computer details are incomplete.");
+    }
+    const baseUrl = normalizeExternalAgentBaseUrl(input.baseUrl);
+    const id = `or3-connect:${environmentId}`;
+    const previous =
+      this.#hostRegistry.find(id) ??
+      this.#hostRegistry.findByEndpoint(baseUrl);
+    const previousWasActive = previous?.id === this.#activeHostId;
+    const credentialRef =
+      previous?.credentialRef ?? `or3-connect-credential:${environmentId}`;
+    await this.#credentials.put(credentialRef, token);
+    this.#assertWorkspaceLease(lease);
+    const host: ExternalAgentHost = {
+      id,
+      name: input.name.trim() || previous?.name || environmentId,
+      baseUrl,
+      credentialRef,
+      trustedAt: previous?.trustedAt ?? nowIso(),
+      lastConnectedAt: previous?.lastConnectedAt,
+    };
+    this.#hosts = [
+      ...this.#hosts.filter(
+        (candidate) =>
+          candidate.id !== id &&
+          !sameExternalAgentEndpoint(candidate.baseUrl, baseUrl),
+      ),
+      host,
+    ];
+    if (
+      previous &&
+      previous.credentialRef !== credentialRef
+    ) {
+      await this.#credentials.remove(previous.credentialRef);
+      this.#assertWorkspaceLease(lease);
+    }
+    if (input.activate === true || !this.#activeHostId) {
+      this.#activeHostId = id;
+    } else if (previousWasActive) {
+      this.#activeHostId = id;
+    }
+    await this.#persist(lease);
+    this.#assertWorkspaceLease(lease);
+    if (this.#activeHostId === id) {
+      await this.connect(id, lease);
+    } else {
+      this.#emit();
+    }
+    return host;
+  }
+
+  async reconcileCloudHosts(
+    expectedWorkspaceId: string,
+    environments: readonly {
+      readonly environmentId: string;
+      readonly name: string;
+      readonly baseUrl: string;
+      readonly token: string;
+    }[],
+  ): Promise<void> {
+    const lease = this.#requireWorkspaceLease();
+    const workspaceId = expectedWorkspaceId.trim() || "local";
+    if (lease.workspaceId !== workspaceId) {
+      throw this.#staleWorkspaceError();
+    }
+    const reconcileGeneration = ++this.#cloudHostReconcileGeneration;
+    const assertCurrent = () => {
+      this.#assertWorkspaceLease(lease);
+      if (reconcileGeneration !== this.#cloudHostReconcileGeneration) {
+        throw this.#staleWorkspaceError();
+      }
+    };
+    const normalized = environments.map((environment) => {
+      const environmentId = environment.environmentId.trim();
+      const token = environment.token.trim();
+      if (!environmentId || !token) {
+        throw new Error("Cloud computer details are incomplete.");
+      }
+      return {
+        environmentId,
+        name: environment.name.trim() || environmentId,
+        baseUrl: normalizeExternalAgentBaseUrl(environment.baseUrl),
+        token,
+      };
+    });
+    if (
+      new Set(normalized.map((environment) => environment.environmentId))
+        .size !== normalized.length
+    ) {
+      throw new Error("Cloud computer inventory contains duplicate IDs.");
+    }
+
+    const previousCloudHosts = this.#hosts.filter((host) =>
+      host.id.startsWith("or3-connect:"),
+    );
+    const previousById = new Map(
+      previousCloudHosts.map((host) => [host.id, host] as const),
+    );
+    const nextCloudHosts: ExternalAgentHost[] = [];
+    for (const environment of normalized) {
+      const id = `or3-connect:${environment.environmentId}`;
+      const previous = previousById.get(id);
+      const credentialRef =
+        previous?.credentialRef ??
+        `or3-connect-credential:${environment.environmentId}`;
+      await this.#credentials.put(credentialRef, environment.token);
+      assertCurrent();
+      nextCloudHosts.push({
+        id,
+        name: environment.name,
+        baseUrl: environment.baseUrl,
+        credentialRef,
+        trustedAt: previous?.trustedAt ?? nowIso(),
+        lastConnectedAt: previous?.lastConnectedAt,
+      });
+    }
+    assertCurrent();
+
+    const nextCloudIds = new Set(nextCloudHosts.map((host) => host.id));
+    const missingCloudHosts = previousCloudHosts.filter(
+      (host) => !nextCloudIds.has(host.id),
+    );
+    const directHosts = this.#hosts.filter(
+      (host) => !host.id.startsWith("or3-connect:"),
+    );
+    const previousActiveHost = this.#hosts.find(
+      (host) => host.id === this.#activeHostId,
+    );
+    let nextActiveHostId = this.#activeHostId;
+    if (
+      nextActiveHostId?.startsWith("or3-connect:") &&
+      !nextCloudIds.has(nextActiveHostId)
+    ) {
+      nextActiveHostId = nextCloudHosts[0]?.id ?? null;
+    } else if (!nextActiveHostId) {
+      nextActiveHostId = nextCloudHosts[0]?.id ?? null;
+    }
+    const nextActiveHost = [...directHosts, ...nextCloudHosts].find(
+      (host) => host.id === nextActiveHostId,
+    );
+    const activeHostChanged = nextActiveHostId !== this.#activeHostId;
+    const activeEndpointChanged =
+      Boolean(previousActiveHost && nextActiveHost) &&
+      previousActiveHost!.baseUrl !== nextActiveHost!.baseUrl;
+    if (activeHostChanged || activeEndpointChanged) {
+      this.#abortActiveWork();
+      this.#generation += 1;
+      this.#client = null;
+      this.#connectionState = "disconnected";
+      this.#connectionError = null;
+      this.#health = null;
+      this.#readiness = null;
+      this.#capabilities = null;
+      this.#runners = [];
+    }
+    this.#hosts = [...directHosts, ...nextCloudHosts];
+    this.#activeHostId = nextActiveHostId;
+    await this.#persist(lease);
+    assertCurrent();
+
+    for (const host of missingCloudHosts) {
+      await this.#credentials.remove(host.credentialRef);
+      assertCurrent();
+    }
+
+    const shouldReconnectCloudHost =
+      nextActiveHost?.id.startsWith("or3-connect:") &&
+      (activeHostChanged ||
+        activeEndpointChanged ||
+        this.#connectionState === "disconnected" ||
+        this.#connectionState === "offline");
+    if (shouldReconnectCloudHost && nextActiveHost) {
+      await this.connect(nextActiveHost.id, lease);
+      return;
+    }
+    this.#emit();
   }
 
   async reconnect(token?: string, persistencePin?: string): Promise<boolean> {
@@ -925,10 +713,10 @@ export class ExternalAgentController {
     this.#abortActiveWork();
     this.#generation += 1;
     this.#workspaceEpoch += 1;
+    this.#cloudHostReconcileGeneration += 1;
     this.#workspaceLease = null;
     this.#client = null;
-    this.#sessionRefreshVersions.clear();
-    this.#listeners.clear();
+    this.#publisher.dispose();
   }
 
   async forgetHost(hostId: string): Promise<void> {
@@ -940,12 +728,7 @@ export class ExternalAgentController {
     await this.#credentials.remove(host.credentialRef);
     this.#assertWorkspaceLease(lease);
     this.#hosts = this.#hosts.filter((candidate) => candidate.id !== hostId);
-    this.#sessionRefs = this.#sessionRefs.filter(
-      (ref) => ref.hostId !== hostId,
-    );
-    for (const [key, session] of this.#sessions) {
-      if (session.hostId === hostId) this.#sessions.delete(key);
-    }
+    this.#sessions.deleteHost(hostId);
     if (this.#activeHostId === hostId) this.#activeHostId = null;
     await this.#persist(lease);
     this.#assertWorkspaceLease(lease);
@@ -986,8 +769,7 @@ export class ExternalAgentController {
       host,
       resolveCredential: () => this.#credentials.resolve(host.credentialRef),
     });
-    const controller = new AbortController();
-    this.#hostController = controller;
+    const controller = this.#connections.beginHostRequest();
     this.#client = client;
     // Readiness is an operator/deployment probe and legitimately returns 503
     // when optional hardening is unavailable. Normal users only need liveness,
@@ -1023,8 +805,7 @@ export class ExternalAgentController {
       capabilities.status === "fulfilled" ? capabilities.value : null;
     this.#runners = runners.status === "fulfilled" ? runners.value.runners : [];
     const hasUsableRunner = this.#runners.some(
-      (runner) =>
-        runner.status === "available" && runner.auth_status === "ready",
+      (runner) => runnerUsability(runner).usable,
     );
     const partialFailure =
       capabilities.status === "rejected" ||
@@ -1061,7 +842,7 @@ export class ExternalAgentController {
     ) {
       return;
     }
-    const refs = this.#sessionRefs.filter((ref) => ref.hostId === hostId);
+    const refs = this.#sessions.refsForHost(hostId);
     const targets = new Map<
       string,
       {
@@ -1078,9 +859,9 @@ export class ExternalAgentController {
         const discovered = await client.listSessions(
           {
             appSessionKeyPrefix: prefix,
-            limit: MAX_SESSION_REFS,
+            limit: MAX_EXTERNAL_AGENT_SESSION_REFS,
           },
-          { signal: this.#hostController?.signal },
+          { signal: this.#connections.hostSignal },
         );
         this.#assertGeneration(hostId, generation);
         for (const remote of discovered.sessions) {
@@ -1099,7 +880,7 @@ export class ExternalAgentController {
           generation !== this.#generation ||
           hostId !== this.#activeHostId ||
           !this.#isWorkspaceLeaseCurrent(expectedLease) ||
-          this.#hostController?.signal.aborted
+          this.#connections.hostSignal?.aborted
         ) {
           return;
         }
@@ -1131,7 +912,7 @@ export class ExternalAgentController {
           const remote =
             target.remote ??
             (await client.getSession(target.ref!.remoteSessionId, {
-              signal: this.#hostController?.signal,
+              signal: this.#connections.hostSignal,
             }));
           if (
             generation !== this.#generation ||
@@ -1146,7 +927,7 @@ export class ExternalAgentController {
             remote,
             target.ref,
           );
-          this.#sessions.set(this.#sessionKey(hostId, remote.id), session);
+          this.#sessions.set(session);
           await this.#refreshSession(
             session,
             client,
@@ -1220,11 +1001,7 @@ export class ExternalAgentController {
     const runner = this.#runners.find(
       (candidate) => candidate.id === session.runnerId,
     );
-    if (
-      !runner ||
-      runner.status !== "available" ||
-      runner.auth_status !== "ready"
-    ) {
+    if (!runner || !runnerUsability(runner).usable) {
       return false;
     }
     const supports = record(runner.supports);
@@ -1250,29 +1027,33 @@ export class ExternalAgentController {
     const lease = this.#requireWorkspaceLease();
     const validation = validateExternalAgentLaunch(this.#runners, input);
     if (!validation.ok) throw new Error(validation.message);
+    const effectiveInput = validation.input;
     const client = this.#requireClient();
     const hostId = this.#activeHostId!;
     const generation = this.#generation;
-    const instruction = input.instruction.trim();
-    const attachments = input.attachments?.length
-      ? await client.stageFiles(input.attachments, {
-          signal: this.#hostController?.signal,
-        })
+    const instruction = effectiveInput.instruction.trim();
+    const attachments = effectiveInput.attachments?.length
+      ? await this.#commands.stageFiles(
+          client,
+          effectiveInput.attachments,
+          this.#connections.hostSignal,
+        )
       : [];
     this.#assertGeneration(hostId, generation);
     this.#assertWorkspaceLease(lease);
     const appSessionKey = `${this.#workspaceSessionPrefix(true, lease)}${randomId("session")}`;
-    const remote = await client.createSession(
+    const remote = await this.#commands.createSession(
+      client,
       {
         app_session_key: appSessionKey,
-        runner_id: input.runnerId,
-        continuation_mode: input.continuationMode ?? "replay",
-        model: input.model?.trim() || undefined,
-        mode: input.mode,
-        isolation: input.isolation,
-        cwd: input.cwd?.trim() || undefined,
+        runner_id: effectiveInput.runnerId,
+        continuation_mode: effectiveInput.continuationMode ?? "replay",
+        model: effectiveInput.model?.trim() || undefined,
+        mode: effectiveInput.mode,
+        isolation: effectiveInput.isolation,
+        cwd: effectiveInput.cwd?.trim() || undefined,
       },
-      { signal: this.#hostController?.signal },
+      this.#connections.hostSignal,
     );
     this.#assertGeneration(hostId, generation);
     this.#assertWorkspaceLease(lease);
@@ -1280,27 +1061,33 @@ export class ExternalAgentController {
       hostId,
       remoteSessionId: remote.id,
       title: instruction.slice(0, 80),
-      runnerId: input.runnerId,
+      runnerId: effectiveInput.runnerId,
     });
-    this.#sessions.set(this.#sessionKey(hostId, remote.id), session);
+    session.model = effectiveInput.model?.trim() || remote.model;
+    session.thinkingLevel =
+      effectiveInput.thinkingLevel?.toLowerCase().trim() || undefined;
+    this.#sessions.set(session);
     this.#rememberSession(session);
     await this.#persist(lease);
     this.#assertWorkspaceLease(lease);
     this.#emit({ type: "session", session });
 
     try {
-      const started = await client.startTurn(
+      const started = await this.#commands.startTurn(
+        client,
         remote.id,
         {
           user_message: instruction,
           ...(attachments.length ? { attachments } : {}),
-          continuation_mode: input.continuationMode ?? "replay",
-          model: input.model?.trim() || undefined,
-          mode: input.mode,
-          isolation: input.isolation,
-          cwd: input.cwd?.trim() || undefined,
+          continuation_mode: effectiveInput.continuationMode ?? "replay",
+          model: effectiveInput.model?.trim() || undefined,
+          thinking_level:
+            effectiveInput.thinkingLevel?.toLowerCase().trim() || undefined,
+          mode: effectiveInput.mode,
+          isolation: effectiveInput.isolation,
+          cwd: effectiveInput.cwd?.trim() || undefined,
         },
-        { signal: this.#hostController?.signal },
+        this.#connections.hostSignal,
       );
       this.#assertGeneration(hostId, generation);
       session.activeTurnId = started.turn_id;
@@ -1352,6 +1139,8 @@ export class ExternalAgentController {
             mode: input.mode,
             isolation: input.isolation,
             model: input.model?.trim() || undefined,
+            thinkingLevel:
+              input.thinkingLevel?.toLowerCase().trim() || undefined,
             confirmDangerous: input.confirmDangerous,
             attachments: input.attachments,
           };
@@ -1363,14 +1152,20 @@ export class ExternalAgentController {
           ...settings,
         });
         if (!validation.ok) throw new Error(validation.message);
+        settings.model = validation.input.model?.trim() || undefined;
+        settings.thinkingLevel =
+          validation.input.thinkingLevel?.toLowerCase().trim() || undefined;
       }
       const attachments = settings?.attachments?.length
-        ? await client.stageFiles(settings.attachments, {
-            signal: this.#hostController?.signal,
-          })
+        ? await this.#commands.stageFiles(
+            client,
+            settings.attachments,
+            this.#connections.hostSignal,
+          )
         : [];
       this.#assertSessionGeneration(session);
-      const started = await client.startTurn(
+      const started = await this.#commands.startTurn(
+        client,
         session.remoteSessionId,
         {
           user_message: text,
@@ -1379,17 +1174,19 @@ export class ExternalAgentController {
           ...(settings
             ? {
                 model: settings.model,
+                thinking_level: settings.thinkingLevel,
                 mode: settings.mode,
                 isolation: settings.isolation,
                 cwd: settings.cwd,
               }
             : {}),
         },
-        { signal: this.#hostController?.signal },
+        this.#connections.hostSignal,
       );
       this.#assertSessionGeneration(session);
       if (settings) {
         session.model = settings.model;
+        session.thinkingLevel = settings.thinkingLevel;
         session.mode = settings.mode;
         session.isolation = settings.isolation;
         session.cwd = settings.cwd;
@@ -1423,9 +1220,12 @@ export class ExternalAgentController {
     }
     const previousStatus = session.status;
     try {
-      await client.abortTurn(session.remoteSessionId, session.activeTurnId, {
-        signal: this.#hostController?.signal,
-      });
+      await this.#commands.cancel(
+        client,
+        session.remoteSessionId,
+        session.activeTurnId,
+        this.#connections.hostSignal,
+      );
       this.#assertSessionGeneration(session);
       session.actionError = undefined;
       await this.#refreshTurn(session, session.activeTurnId, client, lease);
@@ -1467,12 +1267,13 @@ export class ExternalAgentController {
     if (!turnId) throw new Error("No pending approval is available");
     const previous = session.approvals.map((item) => ({ ...item }));
     try {
-      await client.decideTurn(
+      await this.#commands.decide(
+        client,
         session.remoteSessionId,
         turnId,
         decision === "approve" ? "approve" : "reject",
         { note },
-        { signal: this.#hostController?.signal },
+        this.#connections.hostSignal,
       );
       this.#assertSessionGeneration(session);
       session.actionError = undefined;
@@ -1509,13 +1310,11 @@ export class ExternalAgentController {
       throw new Error("This artifact is not available from the selected host");
     }
     try {
-      const remote = await client.readArtifact(
+      const remote = await this.#commands.readArtifact(
+        client,
         artifact.artifactId,
-        {
-          sessionKey: session.appSessionKey,
-          maxBytes: 256 * 1024,
-        },
-        { signal: this.#hostController?.signal },
+        session.appSessionKey,
+        this.#connections.hostSignal,
       );
       this.#assertSessionGeneration(session);
       this.#assertWorkspaceLease(lease);
@@ -1541,9 +1340,9 @@ export class ExternalAgentController {
     hostId = this.#activeHostId ?? undefined,
   ): ExternalAgentSession | undefined {
     if (hostId) {
-      return this.#sessions.get(this.#sessionKey(hostId, remoteSessionId));
+      return this.#sessions.get(hostId, remoteSessionId);
     }
-    return [...this.#sessions.values()].find(
+    return this.#sessions.values().find(
       (session) => session.remoteSessionId === remoteSessionId,
     );
   }
@@ -1572,24 +1371,20 @@ export class ExternalAgentController {
     const client = this.#requireClient();
     const generation = this.#generation;
     const remote = await client.getSession(remoteSessionId, {
-      signal: this.#hostController?.signal,
+      signal: this.#connections.hostSignal,
     });
     this.#assertGeneration(hostId, generation);
     this.#assertWorkspaceLease(lease);
-    const ref = this.#sessionRefs.find(
+    const ref = this.#sessions.refs.find(
       (candidate) =>
         (candidate.hostId === hostId || candidate.hostId === requestedHostId) &&
         candidate.remoteSessionId === remoteSessionId,
     );
     const session = sessionFromRemote(hostId, generation, remote, ref);
-    this.#sessions.set(this.#sessionKey(hostId, remoteSessionId), session);
+    this.#sessions.set(session);
     await this.#refreshSession(session, client, generation, lease);
     if (requestedHostId !== hostId) {
-      this.#sessionRefs = this.#sessionRefs.filter(
-        (candidate) =>
-          candidate.hostId !== requestedHostId ||
-          candidate.remoteSessionId !== remoteSessionId,
-      );
+      this.#sessions.removeRef(requestedHostId, remoteSessionId);
     }
     this.#rememberSession(session);
     await this.#persist(lease);
@@ -1729,7 +1524,7 @@ export class ExternalAgentController {
     const refreshVersion = this.#nextSessionRefreshVersion(session);
     const response = await client.listTurns(session.remoteSessionId, {
       limit: MAX_REHYDRATED_TURNS,
-      signal: this.#hostController?.signal,
+      signal: this.#connections.hostSignal,
     });
     this.#assertSessionRefresh(session, generation, lease, refreshVersion);
     const turns = new Map(
@@ -1752,11 +1547,11 @@ export class ExternalAgentController {
     this.#applyLatestTurn(session, latest);
     const eventTurns = session.turns.slice(-MAX_EVENT_TURNS);
     for (const turn of eventTurns) {
-      const events = await this.#listCanonicalTurnEvents(
+      const events = await this.#events.listCanonicalTurnEvents(
         client,
         session.remoteSessionId,
         turn.id,
-        this.#hostController?.signal,
+        this.#connections.hostSignal,
       );
       this.#assertSessionRefresh(session, generation, lease, refreshVersion);
       for (const event of events) {
@@ -1781,21 +1576,19 @@ export class ExternalAgentController {
     const generation = session.hostGeneration;
     const refreshVersion = this.#nextSessionRefreshVersion(session);
     const turn = await client.getTurn(session.remoteSessionId, turnId, {
-      signal: this.#hostController?.signal,
+      signal: this.#connections.hostSignal,
     });
     const terminal = isTerminal(
       mapExternalAgentStatus(turn.status, session.status),
     );
     const afterSeq = terminal
       ? 0
-      : session.events
-          .filter((event) => event.turnId === turnId)
-          .reduce((highest, event) => Math.max(highest, event.sequence), 0);
-    const events = await this.#listCanonicalTurnEvents(
+      : this.#events.highestSequence(session, turnId);
+    const events = await this.#events.listCanonicalTurnEvents(
       client,
       session.remoteSessionId,
       turnId,
-      this.#hostController?.signal,
+      this.#connections.hostSignal,
       afterSeq,
     );
     this.#assertSessionRefresh(session, generation, lease, refreshVersion);
@@ -1859,34 +1652,6 @@ export class ExternalAgentController {
     return incoming;
   }
 
-  async #listCanonicalTurnEvents(
-    client: ExternalAgentClient,
-    sessionId: string,
-    turnId: string,
-    signal?: AbortSignal,
-    initialAfterSeq = 0,
-  ): Promise<ExternalRemoteEvent[]> {
-    const events: ExternalRemoteEvent[] = [];
-    let afterSeq = initialAfterSeq;
-    while (events.length < MAX_TIMELINE_EVENTS_PER_TURN) {
-      const limit = Math.min(
-        EVENT_PAGE_SIZE,
-        MAX_TIMELINE_EVENTS_PER_TURN - events.length,
-      );
-      const page = await client.listTurnEvents(sessionId, turnId, {
-        afterSeq,
-        limit,
-        signal,
-      });
-      if (!page.events.length) break;
-      events.push(...page.events);
-      const nextSeq = Math.max(...page.events.map((event) => event.seq));
-      if (page.events.length < limit || nextSeq <= afterSeq) break;
-      afterSeq = nextSeq;
-    }
-    return events.slice(0, MAX_TIMELINE_EVENTS_PER_TURN);
-  }
-
   #applyLatestTurn(
     session: ExternalAgentSession,
     latest: ExternalRemoteTurn,
@@ -1899,6 +1664,9 @@ export class ExternalAgentController {
     session.activeTurnId = latest.id;
     if (!preserveTerminal) session.status = nextStatus;
     if (latest.model !== undefined) session.model = latest.model;
+    if (latest.thinking_level !== undefined) {
+      session.thinkingLevel = latest.thinking_level;
+    }
     if (latest.mode !== undefined) session.mode = latest.mode;
     if (latest.isolation !== undefined) session.isolation = latest.isolation;
     if (latest.cwd !== undefined) session.cwd = latest.cwd;
@@ -1916,10 +1684,7 @@ export class ExternalAgentController {
   }
 
   #nextSessionRefreshVersion(session: ExternalAgentSession): number {
-    const key = this.#sessionKey(session.hostId, session.remoteSessionId);
-    const next = (this.#sessionRefreshVersions.get(key) ?? 0) + 1;
-    this.#sessionRefreshVersions.set(key, next);
-    return next;
+    return this.#sessions.nextRefreshVersion(session);
   }
 
   #assertSessionRefresh(
@@ -1930,11 +1695,7 @@ export class ExternalAgentController {
   ): void {
     this.#assertGeneration(session.hostId, generation);
     this.#assertWorkspaceLease(lease);
-    const key = this.#sessionKey(session.hostId, session.remoteSessionId);
-    if (
-      this.#sessions.get(key) !== session ||
-      this.#sessionRefreshVersions.get(key) !== refreshVersion
-    ) {
+    if (!this.#sessions.isRefreshCurrent(session, refreshVersion)) {
       throw Object.assign(new Error("Ignored stale session response"), {
         code: "stale_session",
       });
@@ -1945,136 +1706,15 @@ export class ExternalAgentController {
     session: ExternalAgentSession,
     remote: ExternalRemoteEvent,
   ): void {
-    if (
-      session.hostGeneration !== this.#generation ||
-      session.hostId !== this.#activeHostId ||
-      this.#sessions.get(
-        this.#sessionKey(session.hostId, session.remoteSessionId),
-      ) !== session
-    ) {
-      return;
-    }
-    const normalized = normalizeTimelineEvent(
-      session.hostId,
-      session.hostGeneration,
-      session.remoteSessionId,
+    this.#events.ingest({
+      session,
       remote,
-    );
-    if (session.events.some((event) => event.id === normalized.id)) return;
-    const retainedTurns = session.turns.slice(-MAX_EVENT_TURNS);
-    const retainedTurnIds = new Set(retainedTurns.map((turn) => turn.id));
-    const turnOrder = new Map(
-      retainedTurns.map((turn, index) => [turn.id, index] as const),
-    );
-    const nextEvents = [...session.events, normalized].filter((event) =>
-      retainedTurnIds.has(event.turnId),
-    );
-    const boundedByTurn = new Map<string, ExternalAgentTimelineEvent[]>();
-    for (const event of nextEvents) {
-      const events = boundedByTurn.get(event.turnId) ?? [];
-      events.push(event);
-      boundedByTurn.set(event.turnId, events);
-    }
-    session.events = [...boundedByTurn.entries()]
-      .flatMap(([turnId, events]) =>
-        events
-          .sort(
-            (left, right) =>
-              left.sequence - right.sequence || left.id.localeCompare(right.id),
-          )
-          .slice(-MAX_TIMELINE_EVENTS_PER_TURN)
-          .map((event) => ({ turnId, event })),
-      )
-      .sort(
-        (left, right) =>
-          (turnOrder.get(left.turnId) ?? Number.MAX_SAFE_INTEGER) -
-            (turnOrder.get(right.turnId) ?? Number.MAX_SAFE_INTEGER) ||
-          left.event.sequence - right.event.sequence ||
-          left.event.id.localeCompare(right.event.id),
-      )
-      .map(({ event }) => event);
-    const approval = approvalFromEvent(normalized);
-    if (approval) {
-      let index = session.approvals.findIndex(
-        (item) => item.id === approval.id,
-      );
-      if (index < 0) {
-        index = session.approvals.findLastIndex(
-          (item) =>
-            item.turnId === approval.turnId &&
-            item.status === "pending" &&
-            approval.status === "pending" &&
-            (isFallbackApprovalId(item) ||
-              isFallbackApprovalId(approval) ||
-              item.id === "0" ||
-              approval.id === "0" ||
-              isGenericApproval(item) ||
-              isGenericApproval(approval)),
-        );
-      }
-      if (index >= 0) {
-        session.approvals[index] = mergeApproval(
-          session.approvals[index]!,
-          approval,
-        );
-      } else session.approvals.push(approval);
-      session.approvals = session.approvals.slice(-MAX_SESSION_APPROVALS);
-      if (approval.status === "pending" && !isTerminal(session.status)) {
-        session.status = "waiting_approval";
-      }
-    }
-    for (const artifact of artifactsFromEvent(normalized)) {
-      const index = session.artifacts.findIndex(
-        (item) =>
-          item.id === artifact.id ||
-          (item.turnId === artifact.turnId &&
-            item.kind === artifact.kind &&
-            item.artifactId === artifact.artifactId &&
-            item.label === artifact.label &&
-            item.content === artifact.content),
-      );
-      if (index >= 0) session.artifacts[index] = artifact;
-      else session.artifacts.push(artifact);
-    }
-    session.artifacts = session.artifacts.slice(-MAX_SESSION_ARTIFACTS);
-    if (normalized.type === "error") {
-      session.error = presentExternalAgentError(normalized.text).message;
-    }
-    const terminalStatus = timelineTerminalStatus(normalized);
-    if (terminalStatus) {
-      const turnIndex = session.turns.findIndex(
-        (turn) => turn.id === normalized.turnId,
-      );
-      const existingTurn = turnIndex >= 0 ? session.turns[turnIndex] : null;
-      const existingStatus = existingTurn
-        ? mapExternalAgentStatus(existingTurn.status, "queued")
-        : null;
-      const preserveFailure =
-        existingStatus === "failed" && terminalStatus !== "failed";
-      if (existingTurn && !preserveFailure) {
-        session.turns[turnIndex] = {
-          ...existingTurn,
-          status: terminalStatus,
-          completed_at:
-            existingTurn.completed_at ?? Date.parse(normalized.occurredAt),
-          error:
-            terminalStatus === "failed"
-              ? (normalized.text ?? existingTurn.error)
-              : existingTurn.error,
-        };
-      }
-      if (
-        session.activeTurnId === normalized.turnId &&
-        !(session.status === "failed" && terminalStatus !== "failed")
-      ) {
-        session.status = terminalStatus;
-        session.completedAt ??= normalized.occurredAt;
-      }
-    }
-    if (Date.parse(normalized.occurredAt) >= Date.parse(session.updatedAt)) {
-      session.updatedAt = normalized.occurredAt;
-    }
-    this.#emit({ type: "timeline", session, event: normalized });
+      isCurrent: () =>
+        session.hostGeneration === this.#generation &&
+        session.hostId === this.#activeHostId &&
+        this.#sessions.isCurrent(session),
+      emit: (event) => this.#emit(event),
+    });
   }
 
   #startStream(session: ExternalAgentSession, turnId: string): void {
@@ -2086,221 +1726,58 @@ export class ExternalAgentController {
       return;
     }
     const lease = this.#requireWorkspaceLease();
-    const key = this.#sessionKey(session.hostId, session.remoteSessionId);
-    this.#streamControllers.get(key)?.abort();
-    const controller = new AbortController();
-    this.#streamControllers.set(key, controller);
-    const finishStream = () => {
-      controller.abort();
-      if (this.#streamControllers.get(key) === controller) {
-        this.#streamControllers.delete(key);
-      }
-    };
     const generation = session.hostGeneration;
-    const afterSeq = session.events
-      .filter((event) => event.turnId === turnId)
-      .reduce((max, event) => Math.max(max, event.sequence), 0);
-    session.streamState = "connecting";
-    this.#emit({ type: "session", session });
-
-    void (async () => {
-      while (
-        await waitForAbortableDelay(
-          STREAM_RECONCILE_INTERVAL_MS,
-          controller.signal,
-        )
-      ) {
-        if (
-          generation !== this.#generation ||
-          session.hostId !== this.#activeHostId ||
-          !this.#isWorkspaceLeaseCurrent(lease) ||
-          this.#sessions.get(key) !== session
-        ) {
-          finishStream();
-          return;
-        }
-        try {
-          await this.#refreshTurn(session, turnId, client, lease, {
-            persist: false,
-          });
-        } catch (error) {
-          if (controller.signal.aborted || this.#isStaleResponseError(error)) {
-            return;
-          }
-          // The live stream remains authoritative when a best-effort
-          // reconciliation poll is temporarily unavailable.
-          continue;
-        }
-        if (shouldPauseStream(session.status)) {
-          session.streamState = "idle";
-          this.#emit({ type: "session", session });
-          void this.#persist(lease).catch(() => undefined);
-          finishStream();
-          return;
-        }
-      }
-    })();
-
-    void (async () => {
-      try {
-        for await (const streamEvent of client.streamTurn(
-          session.remoteSessionId,
-          turnId,
-          { afterSeq, signal: controller.signal },
-        )) {
-          if (
-            controller.signal.aborted ||
-            generation !== this.#generation ||
-            session.hostId !== this.#activeHostId ||
-            !this.#isWorkspaceLeaseCurrent(lease) ||
-            this.#sessions.get(key) !== session
-          ) {
-            return;
-          }
-          session.streamState = "connected";
-          const remote = streamPayload(streamEvent);
-          if (remote) this.#ingestRemoteEvent(session, remote);
-          if (shouldPauseStream(session.status)) break;
-          if (streamEvent.event === "done") {
-            await this.#refreshTurn(session, turnId, client, lease);
-          }
-        }
-        if (!controller.signal.aborted) {
-          await this.#refreshTurn(session, turnId, client, lease);
-          session.streamState = shouldPauseStream(session.status)
-            ? "idle"
-            : "disconnected";
-          this.#emit({ type: "session", session });
-        }
-      } catch (error) {
-        if (
-          controller.signal.aborted ||
-          generation !== this.#generation ||
-          !this.#isWorkspaceLeaseCurrent(lease) ||
-          this.#sessions.get(key) !== session ||
-          this.#isStaleResponseError(error)
-        ) {
-          return;
-        }
-        session.streamState = "disconnected";
-        session.actionError = redactErrorMessage(
+    this.#connections.startTurnStream({
+      client,
+      session,
+      turnId,
+      afterSeq: this.#events.highestSequence(session, turnId),
+      isCurrent: () =>
+        generation === this.#generation &&
+        session.hostId === this.#activeHostId &&
+        this.#isWorkspaceLeaseCurrent(lease) &&
+        this.#sessions.isCurrent(session),
+      refresh: () =>
+        this.#refreshTurn(session, turnId, client, lease, { persist: false }),
+      ingest: (remote) => this.#ingestRemoteEvent(session, remote),
+      publishSession: () => this.#emit({ type: "session", session }),
+      persist: () => this.#persist(lease),
+      isStaleError: (error) => this.#isStaleResponseError(error),
+      presentError: (error) =>
+        redactErrorMessage(
           error,
           "Live updates disconnected. Reconnect to resume.",
-        );
-        this.#emit({ type: "session", session });
-      } finally {
-        if (controller.signal.aborted || shouldPauseStream(session.status)) {
-          finishStream();
-        }
-      }
-    })();
+        ),
+    });
   }
 
   #abortActiveWork(): void {
-    this.#hostController?.abort();
-    this.#hostController = null;
-    for (const controller of this.#streamControllers.values()) {
-      controller.abort();
-    }
-    this.#streamControllers.clear();
-  }
-
-  #sessionKey(hostId: string, remoteSessionId: string): string {
-    return `${hostId}:${remoteSessionId}`;
+    this.#connections.abortAll();
   }
 
   #resolveHistoricalHostId(
     requestedHostId: string,
     remoteSessionId: string,
   ): string {
-    if (requestedHostId === this.#activeHostId) return requestedHostId;
-    const activeHost = this.#hosts.find(
-      (candidate) => candidate.id === this.#activeHostId,
-    );
-    const requestedHost = this.#hosts.find(
-      (candidate) => candidate.id === requestedHostId,
-    );
-    if (
-      activeHost &&
-      requestedHost &&
-      sameHostEndpoint(activeHost.baseUrl, requestedHost.baseUrl)
-    ) {
-      return activeHost.id;
-    }
-    if (!requestedHost) {
-      const candidates = new Set(
-        this.#sessionRefs
-          .filter(
-            (candidate) =>
-              candidate.remoteSessionId === remoteSessionId &&
-              this.#hosts.some((host) => host.id === candidate.hostId),
-          )
-          .map((candidate) => candidate.hostId),
-      );
-      if (candidates.size === 1) return [...candidates][0]!;
-    }
-    return requestedHostId;
+    return this.#sessions.resolveHistoricalHostId({
+      requestedHostId,
+      remoteSessionId,
+      activeHostId: this.#activeHostId,
+      hosts: this.#hosts,
+      sameEndpoint: sameExternalAgentEndpoint,
+    });
   }
 
   #rebindEquivalentSessionRefs(hostId: string): void {
-    const host = this.#hosts.find((candidate) => candidate.id === hostId);
-    if (!host) return;
-    const equivalentHostIds = new Set(
-      this.#hosts
-        .filter((candidate) =>
-          sameHostEndpoint(candidate.baseUrl, host.baseUrl),
-        )
-        .map((candidate) => candidate.id),
+    this.#sessions.rebindEquivalentRefs(
+      hostId,
+      this.#hosts,
+      sameExternalAgentEndpoint,
     );
-    if (equivalentHostIds.size < 2) return;
-
-    const rebound = new Map<string, ExternalAgentSessionRef>();
-    for (const ref of this.#sessionRefs) {
-      const next =
-        equivalentHostIds.has(ref.hostId) && ref.hostId !== hostId
-          ? { ...ref, hostId }
-          : ref;
-      const key = this.#sessionKey(next.hostId, next.remoteSessionId);
-      const previous = rebound.get(key);
-      if (
-        !previous ||
-        Date.parse(next.updatedAt ?? "") > Date.parse(previous.updatedAt ?? "")
-      ) {
-        rebound.set(key, next);
-      }
-    }
-    this.#sessionRefs = [...rebound.values()];
   }
 
   #rememberSession(session: ExternalAgentSession): void {
-    const ref: ExternalAgentSessionRef = {
-      hostId: session.hostId,
-      remoteSessionId: session.remoteSessionId,
-      title: session.title,
-      runnerId: session.runnerId,
-      updatedAt: session.updatedAt,
-      status: session.status,
-      pendingApprovalCount: session.approvals.filter(
-        (approval) => approval.status === "pending",
-      ).length,
-      preview: (session.output ?? session.turns.at(-1)?.user_message)?.slice(
-        0,
-        240,
-      ),
-    };
-    this.#sessionRefs = [
-      ref,
-      ...this.#sessionRefs.filter(
-        (candidate) =>
-          candidate.hostId !== ref.hostId ||
-          candidate.remoteSessionId !== ref.remoteSessionId,
-      ),
-    ]
-      .sort(
-        (left, right) =>
-          Date.parse(right.updatedAt ?? "") - Date.parse(left.updatedAt ?? ""),
-      )
-      .slice(0, MAX_SESSION_REFS);
+    this.#sessions.remember(session);
   }
 
   async #persist(lease: ExternalAgentWorkspaceLease): Promise<void> {
@@ -2308,14 +1785,9 @@ export class ExternalAgentController {
     const snapshot: ExternalAgentPersistenceSnapshot = {
       hosts: [...this.#hosts],
       activeHostId: this.#activeHostId,
-      sessionRefs: [...this.#sessionRefs],
+      sessionRefs: [...this.#sessions.refs],
     };
-    const save = this.#persistTail.then(
-      () => lease.persistence.save(snapshot),
-      () => lease.persistence.save(snapshot),
-    );
-    this.#persistTail = save.catch(() => undefined);
-    await save;
+    await this.#persistenceAdapter.save(lease.persistence, snapshot);
     this.#assertWorkspaceLease(lease);
   }
 }

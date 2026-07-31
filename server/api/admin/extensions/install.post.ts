@@ -195,7 +195,8 @@ export default defineEventHandler(async (event) => {
         return {
             ok: true,
             manifest,
-            restartRequired: manifest.kind === 'theme',
+            // Every extension kind has build-time client discovery today.
+            restartRequired: true,
         };
     } catch (error) {
         if (error instanceof ExtensionAlreadyInstalledError) {

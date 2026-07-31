@@ -57,6 +57,11 @@ export interface ExternalAgentRunner {
   readonly [key: string]: unknown;
 }
 
+export interface ExternalAgentModelReasoning {
+  readonly values: readonly string[];
+  readonly defaultValue?: string;
+}
+
 export interface ExternalRemoteSession {
   readonly id: string;
   readonly app_session_key: string;
@@ -88,6 +93,7 @@ export interface ExternalRemoteTurn {
   readonly mode?: string;
   readonly isolation?: string;
   readonly cwd?: string;
+  readonly thinking_level?: string;
   readonly [key: string]: unknown;
 }
 
@@ -176,6 +182,7 @@ export interface ExternalAgentSession {
   mode?: string;
   isolation?: string;
   cwd?: string;
+  thinkingLevel?: string;
   output?: string;
   error?: string;
   actionError?: string;
@@ -195,6 +202,8 @@ export interface ExternalAgentSessionRef {
   readonly status?: ExternalAgentRunStatus;
   readonly pendingApprovalCount?: number;
   readonly preview?: string;
+  readonly model?: string;
+  readonly thinkingLevel?: string;
 }
 
 export interface ExternalAgentPersistenceSnapshot {
@@ -393,6 +402,7 @@ export interface ExternalAgentLaunchInput {
   readonly mode: string;
   readonly isolation: string;
   readonly model?: string;
+  readonly thinkingLevel?: string;
   readonly continuationMode?: string;
   readonly confirmDangerous?: boolean;
   readonly attachments?: readonly ExternalAgentUploadAttachment[];
@@ -404,6 +414,7 @@ export interface ExternalAgentFollowUpInput {
   readonly mode: string;
   readonly isolation: string;
   readonly model?: string;
+  readonly thinkingLevel?: string;
   readonly confirmDangerous?: boolean;
   readonly attachments?: readonly ExternalAgentUploadAttachment[];
 }

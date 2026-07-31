@@ -3,6 +3,8 @@ import type { Editor } from '@tiptap/vue-3';
 import { createRegistry } from '../_registry';
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
 import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 
 /**
  * @module app/composables/editor/useEditorToolbar
@@ -40,6 +42,10 @@ import { getContributionSurfaceKernel } from '~/composables/plugins/contribution
 export interface EditorToolbarButton {
     /** Unique id (stable across reloads). */
     id: string;
+    /** Owning plugin used for enabled-state and server access checks. */
+    pluginId?: string;
+    /** Optional per-contribution access requirements. */
+    access?: PluginGatePolicy;
     /** Icon name (passed to UButton icon prop). */
     icon: string;
     /** Tooltip text. */
@@ -138,6 +144,9 @@ export function useEditorToolbarButtons(editorRef: Ref<Editor | null>) {
         if (!editor) return [];
 
         return allButtons.value.filter((btn) => {
+            if (!getPluginGateDecision(btn.pluginId, btn.access).allowed) {
+                return false;
+            }
             if (!btn.visible) return true;
             try {
                 return btn.visible(editor);

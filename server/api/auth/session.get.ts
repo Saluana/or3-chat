@@ -11,6 +11,7 @@
  */
 import { defineEventHandler, createError, setResponseHeader } from 'h3';
 import { resolveSessionContext } from '../../auth/session';
+import { resolveEntitlements } from '../../auth/entitlements/registry';
 import { can } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { 
@@ -70,6 +71,15 @@ export default defineEventHandler(async (event) => {
     }
 
     const session = await resolveSessionContext(event);
+    const entitlements = session.authenticated
+        ? await resolveEntitlements(event, session).catch(() => [])
+        : [];
+    const clientSession = session.authenticated
+        ? {
+              ...session,
+              entitlements,
+          }
+        : null;
 
     // Session responses must never be cached.
     // Caching here causes stale workspace selection after switching workspaces.
@@ -79,7 +89,7 @@ export default defineEventHandler(async (event) => {
     recordSyncRequest(clientIP, 'auth:session');
 
     return {
-        session: session.authenticated ? session : null,
+        session: clientSession,
         appAccessAllowed: session.authenticated
             ? can(session, 'workspace.read', {
                   kind: 'workspace',

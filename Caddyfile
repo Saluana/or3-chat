@@ -1,0 +1,4 @@
+{$OR3_PUBLIC_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy or3:3000
+}

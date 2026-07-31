@@ -689,7 +689,7 @@
                     "name": "or3-cloud-wizard.md",
                     "path": "/cloud/or3-cloud-wizard",
                     "category": "Guide",
-                    "summary": "Guide for the OR3 Cloud install wizard CLI. Covers session flow, provider presets, validation, safe env writes, dry-run mode, deploy commands, and Convex backend env setup."
+                    "summary": "Guide for the shared OR3 installation wizard used by the CLI and browser UI. Covers true local-only setup, self-hosted provider presets (including email-only and zero-question fast defaults), OR3 Connect remote access, validation, secret-safe env writes, dry-run mode, deploy commands, and Convex backend env setup."
                 },
                 {
                     "name": "providers.md",
@@ -756,6 +756,12 @@
                     "path": "/cloud/deployment-operations",
                     "category": "Operations",
                     "summary": "Deployment and operations runbook for OR3 Cloud SSR environments. Covers env groups, health checks, logging, scaling, rolling restarts, bounded multi-instance soak checks, and provider failure/recovery evidence."
+                },
+                {
+                    "name": "or3-connect.md",
+                    "path": "/cloud/or3-connect",
+                    "category": "Guide",
+                    "summary": "One-command remote computer setup for OR3 Cloud. Covers browser device authorization, verified bootstrap binaries, persistent macOS/Linux services, Cloudflare named tunnels, Convex environment persistence, security controls, revocation, and production configuration."
                 },
                 {
                     "name": "release-checklist.md",
@@ -876,6 +882,12 @@
                     "path": "/plugins/manifest-v2",
                     "category": "Reference",
                     "summary": "Manifest V2 contract: engines, runtime entrypoints, grants, trust, settings/stateCompatibility, and canonical package digests via plugin-runtime CLI inspect/pack."
+                },
+                {
+                    "name": "admin-plugins.md",
+                    "path": "/plugins/admin-plugins",
+                    "category": "Reference",
+                    "summary": "Admin plugin V1 package layout, page and widget registration APIs, install and rebuild requirements, safe mode behavior, and current lifecycle limitations."
                 },
                 {
                     "name": "command-palette.md",

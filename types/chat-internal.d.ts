@@ -96,6 +96,15 @@ export interface ChatInstance {
     clearConversation?: (options?: { persistence?: 'preserve' }) => void;
     dispose?: () => void;
     ensureHistorySynced?: () => Promise<void>;
+    switchThread?: (
+        nextThreadId: string | undefined,
+        options?: {
+            seedMessages?: ChatMessage[];
+            pendingPromptId?: string | null;
+            historyAlreadyLoaded?: boolean;
+        }
+    ) => Promise<void>;
+    setPendingPrompt?: (promptId: string | null | undefined) => void;
     applyLocalEdit?: (messageId: string, content: string) => void;
     replaceCanonicalHistory?: (messages: ChatMessage[]) => void;
     [key: string]: unknown;

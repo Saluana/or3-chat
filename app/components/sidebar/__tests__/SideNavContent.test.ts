@@ -1,11 +1,75 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi } from 'vitest';
 import SideNavContent from '../SideNavContent.vue';
-import {
-    createMockSidebarEnvironment,
-    mockSidebarComposables,
-    setupSidebarTestEnvironment,
-} from '../../../../tests/utils/sidebar-test-helpers';
+import { setupSidebarTestEnvironment } from '../../../../tests/utils/sidebar-test-helpers';
+
+vi.mock('~/composables/sidebar/useSidebarSearch', async () => {
+    const { ref } = await import('vue');
+    return {
+        useSidebarSearch: () => ({
+            query: ref(''),
+            threadResults: ref([]),
+            projectResults: ref([]),
+            documentResults: ref([]),
+        }),
+    };
+});
+
+vi.mock('~/composables/sidebar/useActiveSidebarPage', async () => {
+    const { ref, shallowRef } = await import('vue');
+    return {
+        useActiveSidebarPage: () => ({
+            activePageId: ref('sidebar-home'),
+            activePageDef: shallowRef({
+                id: 'sidebar-home',
+                usesDefaultHeader: true,
+                component: {
+                    name: 'SidebarHomePage',
+                    template:
+                        '<div data-testid="sidebar-home-page">Home Page Content</div>',
+                },
+            }),
+            setActivePage: vi.fn().mockResolvedValue(true),
+            resetToDefault: vi.fn().mockResolvedValue(true),
+        }),
+    };
+});
+
+vi.mock('~/db', () => ({
+    db: {
+        threads: {
+            orderBy: () => ({
+                reverse: () => ({
+                    filter: () => ({ toArray: async () => [] }),
+                }),
+            }),
+        },
+        projects: {
+            orderBy: () => ({
+                reverse: () => ({
+                    filter: () => ({ toArray: async () => [] }),
+                }),
+            }),
+        },
+        posts: {
+            where: () => ({
+                equals: () => ({
+                    and: () => ({ toArray: async () => [] }),
+                }),
+            }),
+        },
+    },
+    upsert: vi.fn(),
+    del: vi.fn(),
+    create: vi.fn(),
+}));
+
+vi.mock('dexie', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('dexie')>()),
+    liveQuery: () => ({
+        subscribe: () => ({ unsubscribe() {} }),
+    }),
+}));
 
 vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => ({
@@ -20,10 +84,6 @@ vi.mock('~/core/hooks/useHooks', () => ({
 
 // Setup test environment
 setupSidebarTestEnvironment();
-mockSidebarComposables();
-
-// Mock the environment (used by mocked composables)
-createMockSidebarEnvironment();
 
 // Minimal stubs for child components (focus is resize logic wiring)
 vi.mock('~/components/sidebar/SidebarVirtualList.vue', () => ({
@@ -174,46 +234,5 @@ describe('SideNavContent', () => {
             ).toBe(true);
         });
 
-        it.skip('renders suspense fallback during loading', () => {
-            const wrapper = mount(SideNavContent, {
-                props: {
-                    activeThread: undefined,
-                    items: [],
-                    projects: [],
-                    expandedProjects: [],
-                    docs: [],
-                    listHeight: 400,
-                    activeSections: { projects: true, chats: true, docs: true },
-                    displayThreads: [],
-                    displayProjects: [],
-                    displayDocuments: [],
-                    sidebarQuery: '',
-                    activeDocumentIds: [],
-                    activeThreadIds: [],
-                    sidebarFooterActions: [],
-                    resolvedSidebarSections: { top: [], main: [], bottom: [] },
-                },
-                global: {
-                    stubs: {
-                        ClientOnly: { template: '<div><slot /></div>' },
-                        UIcon: true,
-                        UButton: true,
-                        UTooltip: true,
-                        SidebarHomePage: {
-                            template: '<div>Home Page</div>',
-                            async setup() {
-                                // Simulate async loading
-                                await new Promise((resolve) =>
-                                    setTimeout(resolve, 100)
-                                );
-                            },
-                        },
-                    },
-                },
-            });
-
-            // Should show loading fallback initially
-            expect(wrapper.text()).toContain('Loading page...');
-        });
     });
 });

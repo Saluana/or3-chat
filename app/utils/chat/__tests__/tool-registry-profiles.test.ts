@@ -109,6 +109,19 @@ describe('V1 client tool registry profile', () => {
         );
         expect(registered.enabled.value).toBe(true);
     });
+
+    it('honors the documented nested ui.defaultEnabled value', () => {
+        const name = 'profile_nested_default_enabled';
+        const registered = registry.registerTool(
+            {
+                ...definition(name),
+                ui: { defaultEnabled: false },
+            },
+            () => 'ok'
+        );
+
+        expect(registered.enabled.value).toBe(false);
+    });
 });
 
 describe('V1 server tool registry profile', () => {

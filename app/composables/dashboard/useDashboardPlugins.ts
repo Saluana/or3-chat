@@ -70,6 +70,8 @@ export interface DashboardPlugin {
     capabilities?: string[];
     /** Optional access gate policy for this plugin. */
     access?: PluginGatePolicy;
+    /** Owning installable plugin id used for workspace policy lookup. */
+    pluginId?: string;
 }
 
 export interface DashboardPluginPage {
@@ -316,13 +318,16 @@ function getDashboardPluginAccessPolicy(
 }
 
 function isDashboardPluginAllowed(plugin: DashboardPlugin): boolean {
-    return getPluginGateDecision(plugin.id, plugin.access).allowed;
+    return getPluginGateDecision(plugin.pluginId ?? plugin.id, plugin.access)
+        .allowed;
 }
 
 function isDashboardPageAllowed(pluginId: string, page: DashboardPluginPage): boolean {
     const pluginPolicy = getDashboardPluginAccessPolicy(pluginId);
     const policy = mergePluginGatePolicy(pluginPolicy ?? {}, page.access ?? {});
-    return getPluginGateDecision(pluginId, policy).allowed;
+    const ownerPluginId =
+        getRegisteredDashboardPlugin(pluginId)?.pluginId ?? pluginId;
+    return getPluginGateDecision(ownerPluginId, policy).allowed;
 }
 
 /**

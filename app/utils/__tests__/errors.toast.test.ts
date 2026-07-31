@@ -9,6 +9,7 @@ vi.unmock('~/utils/errors');
 
 vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => ({ doAction: mocks.doAction }),
+    tryGetHooks: () => ({ doAction: mocks.doAction }),
 }));
 
 import {

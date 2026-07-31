@@ -27,6 +27,7 @@
         <div
             v-if="canTestConnection"
             class="rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-surface)] p-4"
+            :aria-busy="isTestingConnection"
         >
             <div class="flex flex-wrap items-center gap-3">
                 <UButton
@@ -39,6 +40,9 @@
                 <span
                     v-if="connectionResult"
                     class="text-sm"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
                     :class="
                         connectionResult.success
                             ? 'text-[var(--md-primary)]'

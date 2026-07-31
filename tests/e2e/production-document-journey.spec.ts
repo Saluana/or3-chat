@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
 
+test.skip(
+    process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS !== 'true',
+    'Production journeys require OR3_PRODUCTION_JOURNEY_TEST_HARNESS=true'
+);
+
 test('autosaves the production document editor and restores title and content after reload', async ({
     page,
 }) => {

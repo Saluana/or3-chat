@@ -2,6 +2,8 @@ import { computed } from 'vue';
 import { createRegistry, type RegistryItem } from '#imports';
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
 import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 
 // Local interfaces describing the tree rows printed in the console.
 // These mirror the shape produced by SidebarProjectTree.vue for root and child items.
@@ -40,6 +42,10 @@ export interface ProjectTreeHandlerCtx {
 export interface ProjectTreeAction extends RegistryItem {
     /** Unique id (stable across reloads). */
     id: string;
+    /** Owning plugin used for enabled-state and server access checks. */
+    pluginId?: string;
+    /** Optional per-contribution access requirements. */
+    access?: PluginGatePolicy;
     /** Icon name (passed to UButton icon prop). */
     icon: string;
     /** Label text. */
@@ -80,9 +86,13 @@ export function unregisterProjectTreeAction(id: string) {
 
 /** Accessor for actions applicable to a specific message. */
 export function useProjectTreeActions() {
-    return useV2Surface()
-        ? computed(() => v2Kernel.items.value)
-        : registry.useItems();
+    const items = useV2Surface() ? v2Kernel.items : registry.useItems();
+    return computed(() =>
+        items.value.filter(
+            (action) =>
+                getPluginGateDecision(action.pluginId, action.access).allowed
+        )
+    );
 }
 
 /** Convenience for plugin authors to check existing action ids. */

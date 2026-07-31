@@ -1,6 +1,6 @@
 # OR3 Cloud Install Wizard
 
-The OR3 Cloud install wizard provides a single guided command for configuring SSR auth, sync, and storage.
+The OR3 Cloud install wizard provides a single guided command for configuring local-only use, SSR auth, sync, storage, and OR3 Connect.
 
 ## Quick Start
 
@@ -20,25 +20,35 @@ When published, the same CLI is packaged with a bin entry (`or3-cloud`) so it ca
 
 1. Creates a wizard session with defaults (recommended stack: `basic-auth + sqlite + fs`).
 2. Uses template mode to decide provider flow depth:
-   - `preset-local`: auto-applies Basic Auth + SQLite + Filesystem and skips manual provider selection.
+   - `personal-local`: browser-only use with no account, remote access, sync, or server storage.
+   - `preset-local`: the recommended self-hosted stack with Basic Auth + SQLite + Filesystem (email-only when Customize is off).
+   - `preset-local-fast`: same stack with zero guided questions (auto credentials; review and deploy).
    - `preset-clerk-convex`: auto-applies Clerk + Convex + Convex and skips manual provider selection.
    - `custom`: keeps manual provider selection.
 3. Collects provider-specific answers only for selected providers.
 4. Supports per-section advanced toggles with a global expert mode switch.
 5. Prompts only visible fields (conditional prompts respect prior answers).
+   - Auto-generated secrets (JWT, bootstrap password, FS token, admin password) stay behind advanced options
+   - Safe path defaults (`./.data/...` and `<instance>/.data/or3-storage`) stay behind advanced options
    - `themesToInstall` only when `themeInstallMode=install-selected`
    - limits detail fields only when `limitsEnabled=true`
    - `forwardedForHeader` only when `trustProxy=true`
 6. Validates using:
    - field-level checks (paths, secrets, URLs, cross-field rules)
    - authoritative config builders (`buildOr3ConfigFromEnv`, `buildOr3CloudConfigFromEnv`)
-6. Shows a redacted review screen with effective defaults for hidden advanced fields.
-7. Applies config by:
+7. Optionally configures account-bound remote agent computers:
+   - persistence inherits the selected sync provider unless explicitly overridden
+   - Cloudflare account and zone IDs are discovered from the hostname when omitted
+   - encryption credentials and API tokens are kept out of persisted wizard sessions and reviews
+8. Shows a redacted review screen with effective defaults for hidden advanced fields.
+9. Applies config by:
    - updating target env file (`.env` by default) with non-destructive merge
    - creating timestamped backup files before write (unless disabled)
    - generating `or3.providers.generated.ts` from selected providers only
-8. Optionally sets Convex backend env vars for Clerk + Convex stacks.
-9. Optionally runs deploy commands (`bun install`, `bun run dev:ssr` or `bun run build`).
+10. Optionally sets Convex backend env vars for Clerk + Convex stacks.
+11. Optionally runs deploy commands (`bun install`, `bun run dev:ssr` or `bun run build`).
+
+`bun start` → cloud opens the wizard with `--mode self-hosted` (recommended path, personal-local hidden). Use the **Use recommended defaults — skip questions** template (or `or3-cloud init --fast`) for zero guided inputs.
 
 ## Commands
 
@@ -48,7 +58,7 @@ Interactive wizard flow.
 
 Common flags:
 
-- `--preset recommended|legacy-clerk-convex`
+- `--preset personal-local|recommended|legacy-clerk-convex`
 - `--instance-dir <path>`
 - `--env-file .env|.env.local`
 - `--dry-run`
@@ -102,6 +112,7 @@ The wizard writes canonical runtime env keys that OR3 already consumes:
 - `OR3_STORAGE_ENABLED`
 - `NUXT_PUBLIC_STORAGE_PROVIDER`
 - provider-specific keys (basic-auth / sqlite / fs / clerk / convex)
+- `OR3_CONNECT_*` keys when remote agent computers are enabled
 
 Compatibility aliases are also written for forward naming cleanup support:
 
@@ -113,13 +124,20 @@ For the authoritative config reference, see:
 
 - [Configuration Reference](./config-reference)
 
-## Recommended and Legacy Presets
+## Installation Modes
+
+Local-only:
+
+- Accounts: disabled
+- Remote access: disabled
+- Server sync/storage: disabled
 
 Recommended default:
 
 - Auth: `basic-auth`
 - Sync: `sqlite`
 - Storage: `fs`
+- Remote access: optional and disabled until selected
 
 Legacy selectable preset:
 
@@ -136,6 +154,7 @@ When advanced prompts are skipped for a section, the wizard applies these defaul
 - Sync: `sqlitePragmaJournalMode=WAL`, `sqlitePragmaSynchronous=NORMAL`, `sqliteAllowInMemory=false`, `sqliteStrict=false`, Convex self-hosted extras unset
 - Storage: `fsUrlTtlSeconds=900`, `s3ForcePathStyle=false`, `s3UrlTtlSeconds=900`, `s3RequireChecksum=false`, optional S3 extras unset
 - AI/Limits/Security: `openrouterAllowUserOverride=true`, `openrouterRequireUserKey=false`, `requestsPerMinute=20`, `maxConversations=0`, `maxMessagesPerDay=0`, `forwardedForHeader=x-forwarded-for`, `strictConfig=false`
+- OR3 Connect: persistence inherits sync, relay is `cloudflare`, maximum computers is `3`, and Cloudflare account/zone IDs are discovered when omitted
 
 ## Convex Backend Env Separation
 
@@ -151,3 +170,4 @@ When Clerk + Convex is selected, the wizard keeps Convex backend env separate fr
 - [Configuration Reference](./config-reference)
 - [Cloud Providers](./providers)
 - [OR3 Cloud Config](./or3-cloud-config)
+- [OR3 Connect](./or3-connect)

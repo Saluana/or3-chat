@@ -68,6 +68,7 @@ import {
 } from '../history/createHistoryActionRegistry';
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
 import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 
 /** Definition for an extendable chat message action button. */
 export interface DocumentHistoryAction
@@ -164,9 +165,12 @@ export function unregisterDocumentHistoryAction(id: string) {
  * ```
  */
 export function useDocumentHistoryActions() {
-    return useV2Surface()
-        ? computed(() => v2Kernel.items.value)
-        : registry.useItems();
+    const items = useV2Surface() ? v2Kernel.items : registry.useItems();
+    return computed(() =>
+        items.value.filter(
+            (action) => getPluginGateDecision(action.pluginId, action.access).allowed
+        )
+    );
 }
 
 /**

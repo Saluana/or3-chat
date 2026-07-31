@@ -41,17 +41,27 @@ import {
     applySkippedAdvancedDefaults,
     applyWizardModeDefaults,
     createDefaultAnswers,
+    defaultFsRoot,
     inferWizardModeFromPresetName,
+    isRecommendedSelfHostMode,
     legacyPreset,
     normalizeWizardMode,
     normalizeAdvancedToggles,
+    personalLocalPreset,
     recommendedPreset,
     SECRET_ANSWER_KEYS,
 } from './catalog';
 import { readEnvFile } from '../../../server/admin/config/env-file';
+import { CloudflareTunnelProvisioner } from '../../../server/connect/cloudflare';
 import { applyAnswers } from './apply';
 import { deployAnswers } from './deploy';
 import { getWizardSteps } from './steps';
+import {
+    cloudflareValidationConfigHash,
+    issueCloudflareValidationAttestation,
+    validateCloudflareValidationAttestation,
+    type CloudflareValidationConfig,
+} from './cloudflare-attestation';
 import {
     deleteSession,
     deleteStoredPreset,
@@ -68,13 +78,21 @@ import {
     validateAnswers,
 } from './validation';
 import type {
+    WizardDeploymentTarget,
+    WizardDockerExposure,
     WizardAnswers,
     WizardApi,
     WizardPreset,
     WizardSession,
 } from './types';
+import type { PackageManager } from './package-manager';
+import { generateAdminPassword } from './admin-dashboard';
 
-const BUILTIN_PRESETS: WizardPreset[] = [recommendedPreset, legacyPreset];
+const BUILTIN_PRESETS: WizardPreset[] = [
+    personalLocalPreset,
+    recommendedPreset,
+    legacyPreset,
+];
 const WIZARD_SECRET_STORE_KEY = Symbol.for('or3.cloud.wizard.transientSessionSecrets');
 /**
  * Process-global in-memory store for secret answer values.
@@ -197,42 +215,6 @@ async function testClerkConnection(
     }
 }
 
-async function probeConvexEndpoint(
-    url: string,
-    adminKey: string
-): Promise<{ ok: boolean; status: number | null; reason?: string }> {
-    try {
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                Accept: 'application/json',
-                ...(adminKey
-                    ? {
-                          Authorization: `Bearer ${adminKey}`,
-                          'Convex-Admin-Auth': adminKey,
-                      }
-                    : {}),
-            },
-            signal: createTimeoutSignal(DEFAULT_CONNECTION_TIMEOUT_MS),
-        });
-
-        if (response.ok) {
-            return { ok: true, status: response.status };
-        }
-        return {
-            ok: false,
-            status: response.status,
-            reason: `HTTP ${response.status}`,
-        };
-    } catch (error) {
-        return {
-            ok: false,
-            status: null,
-            reason: normalizeErrorMessage(error),
-        };
-    }
-}
-
 async function testConvexConnection(
     credentials: Record<string, string>
 ): Promise<{ success: boolean; message: string; details?: Record<string, unknown> }> {
@@ -249,44 +231,54 @@ async function testConvexConnection(
             message: 'Convex URL must be a valid http/https URL.',
         };
     }
-
-    const probePaths = ['/api/version', '/version', '/'];
-    const probeResults: Array<{ path: string; status: number | null; reason?: string }> = [];
-
-    for (const path of probePaths) {
-        const targetUrl = `${normalizedUrl}${path}`;
-        const probe = await probeConvexEndpoint(targetUrl, adminKey);
-        probeResults.push({
-            path,
-            status: probe.status,
-            reason: probe.reason,
-        });
-
-        if (probe.ok) {
-            return {
-                success: true,
-                message: 'Convex endpoint is reachable.',
-                details: { url: targetUrl, status: probe.status },
-            };
-        }
-
-        if (
-            adminKey &&
-            (probe.status === 401 || probe.status === 403)
-        ) {
-            return {
-                success: false,
-                message: 'Convex admin key was rejected.',
-                details: { url: targetUrl, status: probe.status },
-            };
-        }
+    if (!adminKey) {
+        return {
+            success: false,
+            message: 'A Convex server deployment key is required.',
+        };
     }
 
-    return {
-        success: false,
-        message: 'Convex endpoint check failed.',
-        details: { probes: probeResults },
-    };
+    try {
+        const authProbe = await fetch(`${normalizedUrl}/api/query`, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                Authorization: `Convex ${adminKey}`,
+            },
+            body: JSON.stringify({
+                path: '__or3_wizard_probe__:missing',
+                format: 'convex_encoded_json',
+                args: {},
+            }),
+            signal: createTimeoutSignal(DEFAULT_CONNECTION_TIMEOUT_MS),
+        });
+        if (authProbe.status === 401 || authProbe.status === 403) {
+            return {
+                success: false,
+                message: 'Convex rejected the server deployment key.',
+                details: { status: authProbe.status },
+            };
+        }
+        if (authProbe.ok || authProbe.status === 560) {
+            return {
+                success: true,
+                message: 'Convex endpoint and server deployment key are ready.',
+                details: { url: normalizedUrl, status: authProbe.status },
+            };
+        }
+        return {
+            success: false,
+            message: `Convex credential check failed (${authProbe.status}).`,
+            details: { url: normalizedUrl, status: authProbe.status },
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: `Convex credential check failed: ${normalizeErrorMessage(error)}`,
+        };
+    }
+
 }
 
 function normalizeS3Endpoint(
@@ -372,6 +364,92 @@ async function testS3Connection(
     }
 }
 
+async function testCloudflareConnection(
+    credentials: Record<string, string>
+): Promise<{ success: boolean; message: string; details?: Record<string, unknown> }> {
+    const apiToken = credentials.apiToken?.trim() ?? '';
+    const hostname = (credentials.hostnameSuffix?.trim() ?? '')
+        .toLowerCase()
+        .replace(/\.$/, '');
+    const configuredAccountId = credentials.accountId?.trim() ?? '';
+    const configuredZoneId = credentials.zoneId?.trim() ?? '';
+    if (!apiToken) {
+        return { success: false, message: 'Missing Cloudflare API token.' };
+    }
+    if (!hostname) {
+        return { success: false, message: 'Missing remote computer domain.' };
+    }
+
+    try {
+        const tokenResponse = await fetch(
+            'https://api.cloudflare.com/client/v4/user/tokens/verify',
+            {
+                headers: {
+                    Authorization: `Bearer ${apiToken}`,
+                    Accept: 'application/json',
+                },
+                signal: createTimeoutSignal(DEFAULT_CONNECTION_TIMEOUT_MS),
+            }
+        );
+        if (!tokenResponse.ok) {
+            return {
+                success: false,
+                message: 'Cloudflare rejected the API token.',
+                details: { status: tokenResponse.status },
+            };
+        }
+
+        const checkedFetch = (input: string | URL | Request, init?: RequestInit) =>
+            fetch(input, {
+                ...init,
+                signal: createTimeoutSignal(DEFAULT_CONNECTION_TIMEOUT_MS),
+            });
+        const provisioner = new CloudflareTunnelProvisioner(
+            {
+                accountId: configuredAccountId || undefined,
+                zoneId: configuredZoneId || undefined,
+                apiToken,
+                hostnameSuffix: hostname,
+            },
+            checkedFetch as typeof fetch
+        );
+        const canary = await provisioner.provision({
+            environmentId:
+                `wizard-check-${generateSecureSecret(8).toLowerCase()}`,
+            tunnelSecret: randomBytes(32).toString('base64'),
+        });
+        try {
+            await provisioner.revoke(canary);
+        } catch (error) {
+            return {
+                success: false,
+                message:
+                    'Cloudflare permissions worked, but the temporary validation tunnel could not be fully removed.',
+                details: { cleanupError: normalizeErrorMessage(error) },
+            };
+        }
+        return {
+            success: true,
+            message: `Cloudflare tunnel and DNS permissions are ready for ${hostname}.`,
+            details: {
+                hostname,
+                validationAttestation:
+                    issueCloudflareValidationAttestation({
+                        accountId: configuredAccountId,
+                        zoneId: configuredZoneId,
+                        apiToken,
+                        hostnameSuffix: hostname,
+                    }),
+            },
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: `Cloudflare check failed: ${normalizeErrorMessage(error)}`,
+        };
+    }
+}
+
 /**
  * Generates a cryptographically secure random string of exactly `length` chars.
  */
@@ -411,6 +489,40 @@ function completeAnswers(partial: Partial<WizardAnswers>): WizardAnswers {
         envFile: partial.envFile ?? defaultAnswers.envFile,
     });
     return applySkippedAdvancedDefaults(normalized);
+}
+
+function ensurePresetLocalSecrets(answers: WizardAnswers): WizardAnswers {
+    if (!isRecommendedSelfHostMode(answers.wizardMode)) return answers;
+
+    const bootstrapPassword =
+        answers.basicAuthBootstrapPassword?.trim() ||
+        answers.adminPassword?.trim() ||
+        generateAdminPassword(24);
+    const bootstrapEmail =
+        answers.basicAuthBootstrapEmail?.trim() ||
+        (answers.wizardMode === 'preset-local-fast'
+            ? 'admin@example.com'
+            : undefined);
+
+    return {
+        ...answers,
+        basicAuthJwtSecret:
+            answers.basicAuthJwtSecret?.trim() || generateSecureSecret(48),
+        basicAuthRefreshSecret:
+            answers.basicAuthRefreshSecret?.trim() || generateSecureSecret(48),
+        basicAuthBootstrapEmail: bootstrapEmail,
+        basicAuthBootstrapPassword: bootstrapPassword,
+        fsTokenSecret:
+            answers.fsTokenSecret?.trim() || generateSecureSecret(48),
+        fsRoot: answers.fsRoot?.trim() || defaultFsRoot(answers.instanceDir),
+        sqliteDbPath:
+            answers.sqliteDbPath?.trim() || './.data/or3-sync.sqlite',
+        adminUsername:
+            answers.adminUsername?.trim() ||
+            bootstrapEmail ||
+            answers.adminUsername,
+        adminPassword: answers.adminPassword?.trim() || bootstrapPassword,
+    };
 }
 
 function getFullAnswersForSession(session: WizardSession): WizardAnswers {
@@ -490,6 +602,8 @@ async function resolvePreset(name?: string): Promise<WizardPreset | null> {
  * ```
  */
 export class Or3CloudWizardApi implements WizardApi {
+    readonly #cloudflareAttestations = new Map<string, string>();
+
     async createSession(
         input: {
             presetName?: string;
@@ -498,6 +612,12 @@ export class Or3CloudWizardApi implements WizardApi {
             includeSecrets?: boolean;
             prefillFromEnv?: boolean;
             existingEnvMap?: Record<string, string>;
+            packageManager?: PackageManager;
+            deploymentTarget?: WizardDeploymentTarget;
+            dockerExposure?: WizardDockerExposure;
+            publicDomain?: string;
+            wizardMode?: WizardAnswers['wizardMode'];
+            cloudSetupEntry?: boolean;
         } = {}
     ): Promise<WizardSession> {
         const preset = await resolvePreset(input.presetName);
@@ -531,7 +651,28 @@ export class Or3CloudWizardApi implements WizardApi {
         if (preset) {
             answers = applyPresetAnswers(answers, preset);
         }
-        answers = completeAnswers(answers);
+        if (input.wizardMode) {
+            answers = applyWizardModeDefaults(answers, input.wizardMode);
+        }
+        answers = {
+            ...answers,
+            ...(input.cloudSetupEntry !== undefined
+                ? { cloudSetupEntry: input.cloudSetupEntry }
+                : {}),
+            ...(input.packageManager
+                ? { packageManager: input.packageManager }
+                : {}),
+            ...(input.deploymentTarget
+                ? { deploymentTarget: input.deploymentTarget }
+                : {}),
+            ...(input.dockerExposure
+                ? { dockerExposure: input.dockerExposure }
+                : {}),
+            ...(input.publicDomain !== undefined
+                ? { publicDomain: input.publicDomain }
+                : {}),
+        };
+        answers = ensurePresetLocalSecrets(completeAnswers(answers));
 
         const session: WizardSession = {
             id: randomUUID(),
@@ -544,7 +685,9 @@ export class Or3CloudWizardApi implements WizardApi {
             },
         };
         await persistSession(session);
-        return session;
+        return this.getSession(session.id, {
+            includeSecrets: input.includeSecrets ?? false,
+        });
     }
 
     async getSession(
@@ -578,21 +721,35 @@ export class Or3CloudWizardApi implements WizardApi {
         options: { existingEnvMap?: Record<string, string> } = {}
     ): Promise<WizardSession> {
         const session = await readSession(id);
-        const envPrefill = options.existingEnvMap
+        let existingEnvMap = options.existingEnvMap;
+        if (existingEnvMap === undefined) {
+            try {
+                const { map } = await readEnvFile({
+                    instanceDir: session.answers.instanceDir ?? process.cwd(),
+                    envFile: session.answers.envFile ?? '.env',
+                });
+                existingEnvMap = map;
+            } catch {
+                existingEnvMap = undefined;
+            }
+        }
+        const envPrefill = existingEnvMap
             ? pickSecretAnswers(
                   createDefaultAnswers({
                       instanceDir: session.answers.instanceDir ?? process.cwd(),
                       envFile: session.answers.envFile,
-                      existingEnv: options.existingEnvMap,
+                      existingEnv: existingEnvMap,
                   })
               )
             : {};
         const livingSecrets = transientSessionSecrets.get(id) ?? {};
-        const answers = completeAnswers({
-            ...session.answers,
-            ...envPrefill,
-            ...livingSecrets,
-        });
+        const answers = ensurePresetLocalSecrets(
+            completeAnswers({
+                ...session.answers,
+                ...envPrefill,
+                ...livingSecrets,
+            })
+        );
         await persistSession({
             ...session,
             answers,
@@ -641,6 +798,24 @@ export class Or3CloudWizardApi implements WizardApi {
             ...nextAnswers,
             ...patch,
         });
+        if (nextAnswers.wizardMode === 'preset-local' || nextAnswers.wizardMode === 'preset-local-fast') {
+            nextAnswers = completeAnswers({
+                ...nextAnswers,
+                ...(patch.basicAuthBootstrapEmail !== undefined
+                    ? {
+                          adminUsername:
+                              patch.basicAuthBootstrapEmail.trim(),
+                      }
+                    : {}),
+                ...(patch.basicAuthBootstrapPassword !== undefined
+                    ? {
+                          adminPassword:
+                              patch.basicAuthBootstrapPassword,
+                      }
+                    : {}),
+            });
+        }
+        nextAnswers = ensurePresetLocalSecrets(nextAnswers);
 
         const nextSession: WizardSession = {
             ...session,
@@ -675,7 +850,17 @@ export class Or3CloudWizardApi implements WizardApi {
         } = {}
     ) {
         const session = await readSession(id);
-        return applyAnswers(getFullAnswersForSession(session), options);
+        const answers = getFullAnswersForSession(session);
+        const validation = validateAnswers(answers);
+        if (!validation.ok) {
+            throw new Error(validation.errors.join('\n'));
+        }
+        const preparedAnswers =
+            await this.#withCurrentCloudflareAttestation(
+                answers,
+                options.dryRun ?? answers.dryRun
+            );
+        return applyAnswers(preparedAnswers, options);
     }
 
     async deploy(id: string) {
@@ -699,9 +884,107 @@ export class Or3CloudWizardApi implements WizardApi {
             return testS3Connection(credentials);
         }
 
+        if (providerId === 'cloudflare-connect') {
+            const result = await testCloudflareConnection(credentials);
+            const attestation = result.details?.validationAttestation;
+            if (result.success && typeof attestation === 'string') {
+                this.#cloudflareAttestations.set(
+                    cloudflareValidationConfigHash(
+                        this.#cloudflareConfigFromCredentials(credentials)
+                    ),
+                    attestation
+                );
+            }
+            return result;
+        }
+
         return {
             success: false,
             message: `Unknown provider "${providerId}" for connection test.`,
+        };
+    }
+
+    #cloudflareConfigFromCredentials(
+        credentials: Record<string, string>
+    ): CloudflareValidationConfig {
+        return {
+            accountId: credentials.accountId,
+            zoneId: credentials.zoneId,
+            apiToken: credentials.apiToken ?? '',
+            hostnameSuffix: credentials.hostnameSuffix ?? '',
+        };
+    }
+
+    #cloudflareConfigFromAnswers(
+        answers: WizardAnswers
+    ): CloudflareValidationConfig {
+        return {
+            accountId: answers.connectCloudflareAccountId,
+            zoneId: answers.connectCloudflareZoneId,
+            apiToken: answers.connectCloudflareApiToken ?? '',
+            hostnameSuffix: answers.connectHostnameSuffix ?? '',
+        };
+    }
+
+    async #withCurrentCloudflareAttestation(
+        answers: WizardAnswers,
+        dryRun: boolean
+    ): Promise<WizardAnswers> {
+        if (
+            !answers.ssrAuthEnabled ||
+            !answers.connectEnabled ||
+            answers.connectRelayProvider !== 'cloudflare'
+        ) {
+            return {
+                ...answers,
+                connectCloudflareValidationAttestation: undefined,
+            };
+        }
+
+        const config = this.#cloudflareConfigFromAnswers(answers);
+        const existing = validateCloudflareValidationAttestation({
+            attestation: answers.connectCloudflareValidationAttestation,
+            config,
+        });
+        if (existing.valid) return answers;
+
+        const cacheKey = cloudflareValidationConfigHash(config);
+        const cachedAttestation = this.#cloudflareAttestations.get(cacheKey);
+        const cached = validateCloudflareValidationAttestation({
+            attestation: cachedAttestation,
+            config,
+        });
+        if (cached.valid) {
+            return {
+                ...answers,
+                connectCloudflareValidationAttestation: cachedAttestation,
+            };
+        }
+        if (dryRun) {
+            return {
+                ...answers,
+                connectCloudflareValidationAttestation: undefined,
+            };
+        }
+
+        const result = await this.testProviderConnection(
+            'cloudflare-connect',
+            {
+                accountId: config.accountId ?? '',
+                zoneId: config.zoneId ?? '',
+                apiToken: config.apiToken,
+                hostnameSuffix: config.hostnameSuffix,
+            }
+        );
+        const attestation = result.details?.validationAttestation;
+        if (!result.success || typeof attestation !== 'string') {
+            throw new Error(
+                `Cloudflare permissions could not be verified before applying settings: ${result.message}`
+            );
+        }
+        return {
+            ...answers,
+            connectCloudflareValidationAttestation: attestation,
         };
     }
 

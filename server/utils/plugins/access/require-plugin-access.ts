@@ -20,6 +20,14 @@ import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 export interface PluginAccessContext {
     pluginId: string;
     action?: string;
+    /**
+     * Host-resolved extension metadata for package runtimes that do not live in
+     * the legacy extension inventory. Supplying this opts into the same
+     * workspace enabled-list and manifest-default checks as V1 extensions.
+     */
+    extension?: {
+        access?: PluginGatePolicy | null;
+    };
 }
 
 export interface PluginAccessCheckResult {
@@ -70,7 +78,12 @@ export async function checkPluginAccess(
 ): Promise<PluginAccessCheckResult> {
     const session = await resolveSessionContext(event);
     const workspaceId = session.workspace?.id;
-    const manifestAccess = await getPluginManifestAccess(event, context.pluginId);
+    const manifestAccess = context.extension
+        ? {
+              exists: true,
+              defaults: context.extension.access ?? null,
+          }
+        : await getPluginManifestAccess(event, context.pluginId);
 
     let pluginEnabled = true;
     let adminPolicy: PluginGatePolicy | null = null;

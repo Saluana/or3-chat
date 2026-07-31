@@ -21,7 +21,7 @@ vi.mock('~/composables/auth/useClientSessionRecovery', () => ({
     recoverClientSession: recoverClientSessionMock,
 }));
 
-vi.mock('#imports', () => ({
+vi.mock('nuxt/app', () => ({
     useRuntimeConfig: () => ({ public: { ssrAuthEnabled: true } }),
     useState: () => sessionState,
     useFetch: vi.fn(),

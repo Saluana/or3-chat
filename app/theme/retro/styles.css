@@ -240,10 +240,11 @@
 		width: 40px;
 }
 
-.chat-input-main {
+.chat-input-main.chat-composer-shell[data-composer-size] {
 	@apply transition-all! ease-in-out! duration-200!;
+		border: var(--md-border-width) solid var(--md-border-color);
 		/* Use Tailwind shadow vars so we can layer with ring utilities */
-		--tw-shadow: 3px 3px 0 color-mix(in srgb, var(--md-surface-variant) 80%, transparent);
+		--tw-shadow: 3px 3px 0 var(--md-border-color);
 		--tw-shadow-colored: 3px 3px 0 var(--tw-shadow-color);
 		box-shadow:
 			var(--tw-ring-offset-shadow, 0 0 #0000),
@@ -252,16 +253,18 @@
 		transition: box-shadow 150ms ease;
 	}
 
-	.chat-input-main:hover {
-		--tw-shadow: 3px 3px 0 color-mix(in srgb, var(--md-primary) 10%, transparent);
+	.chat-input-main.chat-composer-shell[data-composer-size]:hover {
+		border-color: var(--md-primary-border);
+		--tw-shadow: 3px 3px 0 var(--md-primary-border);
 		box-shadow:
 			var(--tw-ring-offset-shadow, 0 0 #0000),
 			var(--tw-ring-shadow, 0 0 #0000),
 			var(--tw-shadow);
 	}
 
-	.chat-input-main:focus-within {
-		--tw-shadow: 3px 3px 0 var(--md-border-color);
+	.chat-input-main.chat-composer-shell[data-composer-size]:focus-within {
+		border-color: var(--md-primary);
+		--tw-shadow: 3px 3px 0 var(--md-primary);
 		box-shadow:
 			var(--tw-ring-offset-shadow, 0 0 #0000),
 			var(--tw-ring-shadow, 0 0 #0000),

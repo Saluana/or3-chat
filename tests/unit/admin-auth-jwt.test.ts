@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { signAdminJwt, verifyAdminJwt } from '../../server/admin/auth/jwt';
 import type { H3Event } from 'h3';
 
@@ -54,10 +57,25 @@ function createMockEvent(runtimeConfig: any = {}): H3Event {
 }
 
 describe('Admin Auth - JWT', () => {
+    const previousDataDir = process.env.OR3_ADMIN_DATA_DIR;
+    const temporaryDirs: string[] = [];
     let mockEvent: H3Event;
 
     beforeEach(() => {
         mockEvent = createMockEvent();
+    });
+
+    afterEach(async () => {
+        if (previousDataDir === undefined) {
+            delete process.env.OR3_ADMIN_DATA_DIR;
+        } else {
+            process.env.OR3_ADMIN_DATA_DIR = previousDataDir;
+        }
+        await Promise.all(
+            temporaryDirs.splice(0).map((path) =>
+                rm(path, { recursive: true, force: true })
+            )
+        );
     });
 
     describe('signAdminJwt', () => {
@@ -85,6 +103,29 @@ describe('Admin Auth - JWT', () => {
             expect(claims).not.toBeNull();
             expect(claims?.username).toBe(username);
             expect(claims?.kind).toBe('super_admin');
+        });
+
+        it('persists a generated development secret in OR3_ADMIN_DATA_DIR', async () => {
+            const dataDir = await mkdtemp(resolve(tmpdir(), 'or3-admin-jwt-'));
+            temporaryDirs.push(dataDir);
+            process.env.OR3_ADMIN_DATA_DIR = dataDir;
+            const event = createMockEvent({
+                admin: {
+                    auth: {
+                        jwtSecret: '',
+                        jwtExpiry: '24h',
+                    },
+                },
+            });
+
+            const token = await signAdminJwt(event, 'isolated-admin');
+
+            expect(await readFile(resolve(dataDir, 'admin-jwt-secret'), 'utf8'))
+                .toMatch(/^[a-f0-9]{64}$/);
+            await expect(verifyAdminJwt(event, token)).resolves.toMatchObject({
+                kind: 'super_admin',
+                username: 'isolated-admin',
+            });
         });
     });
 

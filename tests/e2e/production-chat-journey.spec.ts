@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
+test.skip(
+    process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS !== 'true',
+    'Production journeys require OR3_PRODUCTION_JOURNEY_TEST_HARNESS=true'
+);
+
 const chatPage = '/__or3-chat-journey-test';
 
 async function openChat(page: Page): Promise<void> {

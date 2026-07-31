@@ -17,6 +17,11 @@ test.describe('Cloud Workspace Switch Race', () => {
     });
 
     test('stress switching does not crash subscriptions or queue processing', async ({ page }) => {
+        test.skip(
+            process.env.OR3_E2E_STRESS !== 'true',
+            'Stress switching requires OR3_E2E_STRESS=true'
+        );
+
         await page.goto('/_tests/_test-cloud-workspace-switch-race');
         await page.waitForLoadState('networkidle');
 

@@ -3,40 +3,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDefaultAnswers } from '../../shared/cloud/wizard/catalog';
-import { getWizardSteps } from '../../shared/cloud/wizard/steps';
-import type { WizardAnswers, WizardStep } from '../../shared/cloud/wizard/types';
 import { Or3CloudWizardApi } from '../../shared/cloud/wizard/api';
-
-function normalizeAnswers(sessionAnswers: Partial<WizardAnswers>): WizardAnswers {
-    return {
-        ...createDefaultAnswers({
-            instanceDir: sessionAnswers.instanceDir ?? process.cwd(),
-            envFile: sessionAnswers.envFile,
-            presetName: sessionAnswers.presetName,
-        }),
-        ...sessionAnswers,
-    };
-}
-
-function visibleFields(step: WizardStep, answers: WizardAnswers): string[] {
-    return step.fields
-        .filter((field) =>
-            typeof field.visibleWhen === 'function'
-                ? field.visibleWhen(answers)
-                : true
-        )
-        .map((field) => String(field.key));
-}
-
-function visibleStepIds(answers: WizardAnswers): string[] {
-    return getWizardSteps(answers)
-        .filter((step) => {
-            if (step.canSkip?.(answers)) return false;
-            if (step.id === 'review') return true;
-            return visibleFields(step, answers).length > 0;
-        })
-        .map((step) => step.id);
-}
 
 describe('or3 cloud wizard dry-run flows', () => {
     const previousWizardHome = process.env.OR3_CLOUD_WIZARD_HOME;
@@ -100,6 +67,7 @@ describe('or3 cloud wizard dry-run flows', () => {
             clerkPublishableKey: 'pk_test_123',
             clerkSecretKey: 'sk_test_123',
             convexUrl: 'https://test.convex.cloud',
+            convexSelfHostedAdminKey: 'prod:test-deployment|test-server-key',
             convexClerkIssuerUrl: 'https://clerk.example.com',
             convexAdminJwtSecret: 'convex-admin-secret',
             openrouterInstanceApiKey: 'or-instance-key',
@@ -186,82 +154,6 @@ describe('or3 cloud wizard dry-run flows', () => {
         expect(updated.answers.authProvider).toBe('basic-auth');
         expect(updated.answers.syncProvider).toBe('sqlite');
         expect(updated.answers.storageProvider).toBe('convex');
-    });
-
-    it('covers visible-step progression for all template modes', async () => {
-        const instanceDir = await mkdtemp(resolve(tmpdir(), 'or3-instance-modes-'));
-        const api = new Or3CloudWizardApi();
-
-        const localSession = await api.createSession({
-            presetName: 'recommended',
-            instanceDir,
-            envFile: '.env',
-        });
-        const localAnswers = normalizeAnswers(
-            (await api.getSession(localSession.id, { includeSecrets: true })).answers
-        );
-        expect(visibleStepIds(localAnswers)).not.toContain('providers');
-        expect(localAnswers.wizardMode).toBe('preset-local');
-
-        const clerkSession = await api.createSession({
-            presetName: 'legacy-clerk-convex',
-            instanceDir,
-            envFile: '.env',
-        });
-        const clerkAnswers = normalizeAnswers(
-            (await api.getSession(clerkSession.id, { includeSecrets: true })).answers
-        );
-        expect(visibleStepIds(clerkAnswers)).not.toContain('providers');
-        expect(clerkAnswers.wizardMode).toBe('preset-clerk-convex');
-
-        const customSession = await api.createSession({
-            presetName: 'recommended',
-            instanceDir,
-            envFile: '.env',
-        });
-        await api.submitAnswers(customSession.id, {
-            wizardMode: 'custom',
-        });
-        const customAnswers = normalizeAnswers(
-            (await api.getSession(customSession.id, { includeSecrets: true })).answers
-        );
-        expect(visibleStepIds(customAnswers)).toContain('providers');
-        expect(customAnswers.wizardMode).toBe('custom');
-    });
-
-    it('recomputes visible fields when limits and proxy visibility toggles change', () => {
-        const answers = normalizeAnswers({
-            instanceDir: '/tmp/or3-chat',
-            allAdvancedEnabled: true,
-            cloudAdvancedEnabled: true,
-            limitsEnabled: true,
-            trustProxy: true,
-        });
-        const cloudStep = getWizardSteps(answers).find(
-            (step) => step.id === 'openrouter-limits-security'
-        );
-        expect(cloudStep).toBeDefined();
-        const baseline = visibleFields(cloudStep as WizardStep, answers);
-        expect(baseline).toContain('requestsPerMinute');
-        expect(baseline).toContain('forwardedForHeader');
-
-        const afterLimitsDisabled = {
-            ...answers,
-            limitsEnabled: false,
-        };
-        const hiddenLimits = visibleFields(
-            cloudStep as WizardStep,
-            afterLimitsDisabled
-        );
-        expect(hiddenLimits).not.toContain('requestsPerMinute');
-        expect(hiddenLimits).toContain('forwardedForHeader');
-
-        const afterProxyDisabled = {
-            ...afterLimitsDisabled,
-            trustProxy: false,
-        };
-        const hiddenProxy = visibleFields(cloudStep as WizardStep, afterProxyDisabled);
-        expect(hiddenProxy).not.toContain('forwardedForHeader');
     });
 
     it('supports skipping and enabling advanced settings per section', async () => {

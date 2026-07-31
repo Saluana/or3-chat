@@ -12,6 +12,7 @@ import {
     ImmutablePluginPackageStore,
 } from '../../../../../admin/plugins/package-store';
 import { PluginPackagePointerStore } from '../../../../../admin/plugins/package-pointer-store';
+import { PluginPackageRouteCatalog } from '../../../../../admin/plugins/package-route-catalog';
 import {
     PluginPackageAssetError,
     PluginPackageAssetReader,
@@ -48,6 +49,10 @@ export default defineEventHandler(async (event) => {
     const packages = new ImmutablePluginPackageStore();
     const pointers = new PluginPackagePointerStore(undefined, packages);
     const reader = new PluginPackageAssetReader(packages, pointers);
+    const selectedPackage = await new PluginPackageRouteCatalog(
+        packages,
+        pointers
+    ).readSelected(pluginId);
 
     try {
         const asset = await serveAuthorizedPluginPackageAsset(
@@ -56,6 +61,12 @@ export default defineEventHandler(async (event) => {
                 const { session } = await requirePluginAccess(event, {
                     pluginId,
                     action: `package-asset:${digest}`,
+                    extension: {
+                        access:
+                            selectedPackage.status === 'ready'
+                                ? (selectedPackage.manifest.access ?? null)
+                                : null,
+                    },
                 });
                 const workspaceId = session.workspace?.id;
                 if (!workspaceId) {

@@ -20,6 +20,13 @@ Example mapping:
 - `sync.provider = "sqlite"` -> `or3-provider-sqlite/nuxt`
 - `storage.provider = "convex"` -> `or3-provider-convex/nuxt`
 - `storage.provider = "fs"` -> `or3-provider-fs/nuxt`
+- `connect.provider = "sqlite"` -> `or3-provider-sqlite/nuxt`
+- `connect.provider = "convex"` -> `or3-provider-convex/nuxt`
+
+OR3 Connect defaults to the sync provider through
+`OR3_CONNECT_PROVIDER`, so the standard SQLite deployment does not need a
+separate cloud database. Relay selection is independent and configured with
+`OR3_CONNECT_RELAY_PROVIDER`.
 
 ## Install Providers
 
@@ -98,6 +105,16 @@ OR3_SQLITE_DB_PATH=.data/or3-sync.sqlite
 OR3_STORAGE_FS_ROOT=.data/storage
 OR3_STORAGE_FS_TOKEN_SECRET=replace-with-random-secret
 ```
+
+The same stack can enable account-bound remote computers with:
+
+```bash
+OR3_CONNECT_ENABLED=true
+OR3_CONNECT_PROVIDER=sqlite
+OR3_CONNECT_RELAY_PROVIDER=cloudflare
+```
+
+See [OR3 Connect](./or3-connect) for the remaining relay and encryption values.
 
 ## Clerk to Convex Bridge
 

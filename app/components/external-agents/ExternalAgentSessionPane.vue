@@ -97,12 +97,57 @@
       v-else-if="loadError"
       class="grid min-h-0 flex-1 place-items-center p-6"
     >
-      <UAlert
-        color="error"
-        variant="soft"
-        title="Conversation unavailable"
-        :description="loadError"
-      />
+      <div
+        class="w-full max-w-md rounded-[var(--md-border-radius)] border border-[var(--md-error)]/40 bg-[var(--md-error-container)] p-5 text-[var(--md-on-error-container)]"
+        role="alert"
+        data-testid="conversation-load-recovery"
+      >
+        <span
+          class="grid size-10 place-items-center rounded-full bg-[var(--md-surface-container-lowest)] text-[var(--md-error)]"
+        >
+          <UIcon :name="loadRecovery.icon" class="size-5" />
+        </span>
+        <h1 class="mt-4 text-lg font-semibold">
+          {{ loadRecovery.title }}
+        </h1>
+        <p class="mt-1 text-sm leading-relaxed">
+          {{ loadError }}
+        </p>
+        <p class="mt-2 text-xs opacity-80">
+          {{ loadRecovery.guidance }}
+        </p>
+        <div class="mt-5 flex flex-wrap gap-2">
+          <UButton
+            icon="i-lucide-refresh-cw"
+            :loading="loading"
+            @click="retryConversationLoad"
+          >
+            Retry
+          </UButton>
+          <UButton
+            v-if="loadErrorCategory === 'offline'"
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-plug-zap"
+            :loading="recoveryPending"
+            @click="reconnectConversation"
+          >
+            Reconnect host
+          </UButton>
+          <UButton
+            v-if="
+              loadErrorCategory === 'credential' ||
+              loadErrorCategory === 'stale_host'
+            "
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-settings-2"
+            @click="openConnectionSettings"
+          >
+            Open connection settings
+          </UButton>
+        </div>
+      </div>
     </div>
 
     <template v-else-if="session && projection">
@@ -115,7 +160,7 @@
             <span
               class="hidden truncate text-xs text-[var(--md-on-surface-variant)] sm:inline"
             >
-              {{ runnerLabel }}
+              {{ sessionConfigurationLabel }}
             </span>
           </div>
           <p
@@ -402,6 +447,7 @@
                 v-model:isolation="followUpIsolation"
                 v-model:cwd="followUpCwd"
                 v-model:model="followUpModel"
+                v-model:thinking-level="followUpThinkingLevel"
                 v-model:confirm-dangerous="followUpConfirmDangerous"
                 :runners="snapshot?.runners ?? []"
                 runner-locked
@@ -439,15 +485,22 @@ import {
   buildExternalAgentRunnerOptions,
   isValidExternalAgentPolicyCombination,
 } from "~/core/external-agents/launcher";
+import {
+  classifyExternalAgentConversationLoadError,
+  type ExternalAgentConversationRecoveryCategory,
+} from "~/core/external-agents/recovery";
 import { projectExternalAgentConversation } from "~/core/external-agents/presentation";
 import { presentExternalAgentError } from "~/core/external-agents/presentation";
 import {
   decodeExternalAgentSessionRef,
   encodeExternalAgentSessionRef,
   EXTERNAL_AGENT_LAUNCHER_REF,
+  EXTERNAL_AGENT_OPEN_CONNECTIONS_EVENT,
   EXTERNAL_AGENT_PANE_APP_ID,
+  EXTERNAL_AGENTS_SIDEBAR_PAGE_ID,
 } from "~/core/external-agents/refs";
 import { useExternalAgentRuntime } from "~/core/external-agents/runtime";
+import { useActiveSidebarPage } from "~/composables/sidebar/useActiveSidebarPage";
 import { getGlobalMultiPaneApi } from "~/utils/multiPaneApi";
 
 const props = defineProps<{
@@ -456,10 +509,14 @@ const props = defineProps<{
 }>();
 
 const runtime = useExternalAgentRuntime();
+const { setActivePage } = useActiveSidebarPage();
 const snapshot = runtime.snapshot;
 const loading = ref(false);
 const loadInFlight = ref(false);
 const loadError = ref<string | null>(null);
+const loadErrorCategory =
+  ref<ExternalAgentConversationRecoveryCategory>("transient");
+const recoveryPending = ref(false);
 const unlockPin = ref("");
 const unlockPending = ref(false);
 const unlockError = ref<string | null>(null);
@@ -467,7 +524,9 @@ const followUpText = ref("");
 const pendingAction = ref<string | null>(null);
 const composer = ref<{
   focus: () => void;
-  clearAttachments: () => void;
+  clearAttachments: (
+    expected?: readonly ExternalAgentUploadAttachment[],
+  ) => boolean;
 } | null>(null);
 const transcriptScroller = ref<{
   refreshMeasurements: () => void;
@@ -477,6 +536,7 @@ const followUpMode = ref("");
 const followUpIsolation = ref("");
 const followUpCwd = ref("");
 const followUpModel = ref<string | null>(null);
+const followUpThinkingLevel = ref<string | null>(null);
 const followUpConfirmDangerous = ref(false);
 const initializedSettingsSession = ref("");
 const componentInstance = getCurrentInstance();
@@ -618,6 +678,65 @@ const followUpModelLabel = computed(() => {
     ? candidate.display_name.trim()
     : followUpModel.value;
 });
+const followUpReasoningLabel = computed(() => {
+  if (!followUpThinkingLevel.value) return "";
+  const value = followUpThinkingLevel.value.toLowerCase();
+  return value === "xhigh" || value === "extra-high"
+    ? "Extra high reasoning"
+    : `${value.charAt(0).toUpperCase()}${value.slice(1)} reasoning`;
+});
+const sessionConfigurationLabel = computed(() => {
+  const latest = session.value?.turns.at(-1);
+  const modelId = latest?.model ?? session.value?.model;
+  const runner = followUpRunnerOption.value?.runner;
+  const model = runner?.models?.find((candidate) => candidate.id === modelId);
+  const modelLabel =
+    typeof model?.display_name === "string" && model.display_name.trim()
+      ? model.display_name.trim()
+      : modelId;
+  const thinking =
+    latest?.thinking_level ?? session.value?.thinkingLevel ?? undefined;
+  const reasoningLabel = thinking
+    ? thinking.toLowerCase() === "xhigh"
+      ? "Extra high reasoning"
+      : `${thinking.charAt(0).toUpperCase()}${thinking.slice(1)} reasoning`
+    : undefined;
+  return [runnerLabel.value, modelLabel, reasoningLabel]
+    .filter(Boolean)
+    .join(" · ");
+});
+const loadRecovery = computed(() => {
+  switch (loadErrorCategory.value) {
+    case "offline":
+      return {
+        icon: "i-lucide-server-off",
+        title: "Conversation temporarily offline",
+        guidance:
+          "Reconnect the host here, then retry. This conversation link will stay open.",
+      };
+    case "credential":
+      return {
+        icon: "i-lucide-key-round",
+        title: "This host needs its access token",
+        guidance:
+          "Update the selected trusted host in Connection settings, then retry here.",
+      };
+    case "stale_host":
+      return {
+        icon: "i-lucide-link-2-off",
+        title: "The saved host changed",
+        guidance:
+          "Choose or repair the trusted host in Connection settings. The conversation reference is preserved.",
+      };
+    default:
+      return {
+        icon: "i-lucide-refresh-cw",
+        title: "Conversation unavailable",
+        guidance:
+          "This may be temporary. Retry without leaving or losing the conversation link.",
+      };
+  }
+});
 const connectionWarning = computed(() => {
   if (
     session.value?.streamState === "disconnected" &&
@@ -636,9 +755,13 @@ const composerHint = computed(() => {
     return "Resolve the approval above to continue";
   if (projection.value?.isRunning) return "Working — stop to interrupt";
   if (!canFollowUp.value) return "This agent can't continue this conversation";
-  return followUpModelLabel.value
-    ? `${runnerLabel.value} · ${followUpModelLabel.value}`
-    : runnerLabel.value;
+  return [
+    runnerLabel.value,
+    followUpModelLabel.value,
+    followUpReasoningLabel.value,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 });
 
 async function load(ignoreCredentialLock = false) {
@@ -674,13 +797,65 @@ async function load(ignoreCredentialLock = false) {
       await replaceWithSession(loaded);
     }
   } catch (cause) {
-    loadError.value = presentExternalAgentError(
+    const presented = presentExternalAgentError(
       cause,
       "This conversation could not be loaded.",
     ).message;
+    loadError.value = presented;
+    loadErrorCategory.value = classifyExternalAgentConversationLoadError({
+      cause,
+      message: presented,
+      connectionState: snapshot.value?.connectionState,
+    });
   } finally {
     loadInFlight.value = false;
     loading.value = false;
+  }
+}
+
+async function retryConversationLoad() {
+  await load(true);
+}
+
+async function reconnectConversation() {
+  const controller = runtime.controller;
+  const refValue = sessionRef.value;
+  if (!controller || !refValue) return;
+  recoveryPending.value = true;
+  try {
+    await runtime.refreshCloudHosts?.();
+    if (
+      targetHost.value &&
+      snapshot.value?.activeHostId !== targetHost.value.id
+    ) {
+      await controller.switchHost(targetHost.value.id);
+    } else {
+      await controller.reconnect();
+    }
+    await load(true);
+  } catch (cause) {
+    const presented = presentExternalAgentError(
+      cause,
+      "The host could not reconnect.",
+    ).message;
+    loadError.value = presented;
+    loadErrorCategory.value = classifyExternalAgentConversationLoadError({
+      cause,
+      message: presented,
+      connectionState: snapshot.value?.connectionState,
+    });
+  } finally {
+    recoveryPending.value = false;
+  }
+}
+
+async function openConnectionSettings() {
+  await setActivePage(EXTERNAL_AGENTS_SIDEBAR_PAGE_ID);
+  await nextTick();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(EXTERNAL_AGENT_OPEN_CONNECTIONS_EVENT),
+    );
   }
 }
 
@@ -766,20 +941,31 @@ async function followUp(
     (!followUpText.value.trim() && !attachments.length)
   )
     return;
+  const submittedText = followUpText.value;
+  const submittedAttachments = [...attachments];
   pendingAction.value = "follow-up";
   try {
     await runtime.controller.followUp(session.value.remoteSessionId, {
       instruction:
-        followUpText.value.trim() || attachmentOnlyFollowUp(attachments),
+        submittedText.trim() ||
+        attachmentOnlyFollowUp(submittedAttachments),
       cwd: followUpCwd.value || undefined,
       mode: followUpMode.value,
       isolation: followUpIsolation.value,
       model: followUpModel.value ?? undefined,
+      thinkingLevel: followUpThinkingLevel.value ?? undefined,
       confirmDangerous: followUpConfirmDangerous.value,
-      ...(attachments.length ? { attachments } : {}),
+      ...(submittedAttachments.length
+        ? { attachments: submittedAttachments }
+        : {}),
     });
-    followUpText.value = "";
-    composer.value?.clearAttachments();
+    if (
+      followUpText.value === submittedText &&
+      (composer.value?.clearAttachments(submittedAttachments) ??
+        submittedAttachments.length === 0)
+    ) {
+      followUpText.value = "";
+    }
     await nextTick();
     composer.value?.focus();
   } finally {
@@ -847,6 +1033,8 @@ watch(
       option.roots[0] ??
       "";
     followUpModel.value = latest?.model ?? currentSession.model ?? null;
+    followUpThinkingLevel.value =
+      latest?.thinking_level ?? currentSession.thinkingLevel ?? null;
     followUpConfirmDangerous.value = false;
     initializedSettingsSession.value = sessionKey;
   },

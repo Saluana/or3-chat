@@ -108,6 +108,88 @@ describe('GatewaySyncProvider', () => {
         (globalThis as unknown as { fetch?: unknown }).fetch = originalFetch;
     });
 
+    it.each([
+        [{ message: 'Readable sync failure' }, 'Readable sync failure'],
+        [{ error: 'Fallback sync failure' }, 'Fallback sync failure'],
+        [{ error: { message: 'Nested sync failure' } }, 'Nested sync failure'],
+    ])('extracts user-facing JSON errors from failed requests', async (body, expected) => {
+        (globalThis as unknown as { fetch: unknown }).fetch = vi.fn(async () =>
+            makeErrorResponse(500, body)
+        );
+
+        await expect(
+            createGatewaySyncProvider().pull({
+                scope: { workspaceId: 'ws-1' },
+                cursor: 0,
+                limit: 10,
+            })
+        ).rejects.toThrow(expected);
+    });
+
+    it('removes stack and source-location lines from failed requests', async () => {
+        (globalThis as unknown as { fetch: unknown }).fetch = vi.fn(async () =>
+            makeErrorResponse(
+                500,
+                'Sync failed\n    at pull (/app/sync.ts:42:7)\n/app/provider.js:9:2\nRetry later'
+            )
+        );
+
+        await expect(
+            createGatewaySyncProvider().pull({
+                scope: { workspaceId: 'ws-1' },
+                cursor: 0,
+                limit: 10,
+            })
+        ).rejects.toThrow(
+            '[gateway-sync] /api/sync/pull failed (500): Sync failed Retry later'
+        );
+    });
+
+    it('redacts credentials before exposing failed request text', async () => {
+        const secrets = [
+            'Bearer header.payload.signature',
+            'sk-or-v1-abcdefghijklmno',
+            'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature',
+            'password=hunter2',
+            'apiKey:super-secret-key',
+            'Authorization: Basic dXNlcjpwYXNz',
+        ];
+        (globalThis as unknown as { fetch: unknown }).fetch = vi.fn(async () =>
+            makeErrorResponse(500, { message: secrets.join(' ') })
+        );
+
+        const request = createGatewaySyncProvider().pull({
+            scope: { workspaceId: 'ws-1' },
+            cursor: 0,
+            limit: 10,
+        });
+        const error = await request.catch((reason: unknown) => reason);
+        const message = error instanceof Error ? error.message : String(error);
+
+        expect(message).toContain('[REDACTED]');
+        for (const secret of secrets) {
+            expect(message).not.toContain(secret);
+        }
+        expect(message).not.toContain('dXNlcjpwYXNz');
+    });
+
+    it('truncates sanitized failed request text to 200 characters', async () => {
+        const longMessage = 'x'.repeat(250);
+        (globalThis as unknown as { fetch: unknown }).fetch = vi.fn(async () =>
+            makeErrorResponse(500, { message: longMessage })
+        );
+
+        await expect(
+            createGatewaySyncProvider().pull({
+                scope: { workspaceId: 'ws-1' },
+                cursor: 0,
+                limit: 10,
+            })
+        ).rejects.toThrow(
+            `[gateway-sync] /api/sync/pull failed (500): ${'x'.repeat(200)}`
+        );
+    });
+
     it('subscribe resolves immediately (does not await initial poll)', async () => {
         // Never resolves; if subscribe awaited the initial poll, this test would hang.
         (globalThis as unknown as { fetch: unknown }).fetch = vi.fn(

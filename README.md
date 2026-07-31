@@ -87,47 +87,68 @@ You start with static. When you need more, the built-in install wizard sets up c
 
 ## 🚀 Quick Start
 
-### Choose your path
-
-| You want to… | Run this |
-|---|---|
-| Just chat locally **right now** | `bun start` |
-| Set up accounts, sync & file storage | `bun run or3-cloud:init --fast` |
-| Same, but step-by-step in your browser | `bun run or3-cloud:init` |
-| Same, but step-by-step in the terminal | `bun run or3-cloud:init --cli` |
-
-### Prerequisites
-
-- [Bun](https://bun.sh) (v1.1+)
-- [Git](https://git-scm.com)
-
-### Local mode — one command
+Create an editable, version-matched OR3 Chat project with npm or Bun:
 
 ```bash
-git clone https://github.com/Saluana/or3-chat.git
-cd or3-chat
-bun start
+npm create or3-chat@latest
 ```
-
-`bun start` is the single entry point — it installs dependencies, asks one question (local vs cloud) on a fresh clone, saves that choice, and starts the dev server. Open **http://localhost:3000**, connect your OpenRouter account, and start chatting.
-
-> **Tip:** OR3 uses Bun for everything — package management, scripts, builds, and runtime. No need for Node.js or npm.
-
-### Cloud mode — accounts, sync & storage
-
-The fastest path to a self-hosted cloud instance with **zero external services** — no accounts to create, no sign-ups:
 
 ```bash
-bun run or3-cloud:init --fast
+bun create or3-chat@latest
 ```
 
-This zero-question command creates a complete self-hosted setup (Basic Auth + SQLite + Filesystem) and starts your server. Credentials are printed once — save them.
+The initializer asks no more than three questions: where to create the project,
+whether it is personal-local or self-hosted, and whether to use the browser or
+terminal wizard. Press Enter through the defaults for a running local instance.
 
-For a guided setup with provider choices, open the browser wizard:
+Node.js 24 or newer is required. Bun is optional. Docker is only required for
+the self-hosted path.
+
+### Self-host with Docker
+
+Choose **Self-host with Docker** in the initializer. The recommended stack uses
+Basic Auth, SQLite, and filesystem storage, so it needs no external database,
+authentication, or storage account.
 
 ```bash
-bun run or3-cloud:init
+npm run docker:logs
+npm run docker:down
 ```
+
+Private mode exposes OR3 only at `http://127.0.0.1:3000`. To serve a public
+domain, pass it during creation or choose public mode in the wizard:
+
+```bash
+npm create or3-chat@latest my-chat -- --mode self-hosted --domain chat.example.com
+```
+
+The public path adds Caddy on ports 80 and 443. Point the domain's DNS at the
+server before deploying; Caddy handles HTTPS automatically.
+
+### SSH and headless servers
+
+The terminal wizard is selected automatically under SSH. To explicitly use the
+browser wizard, run `npm run setup -- --ui`; OR3 prints the exact loopback URL
+and an SSH tunnel command. No setup service is exposed publicly.
+
+### Backups and recovery
+
+Docker data lives in a project-scoped named volume (usually
+`<project-folder>_or3-data`). Back it up before an upgrade. Setup is resumable:
+if an install or deployment stops, keep the generated directory and run
+`npm run setup` or `bun run setup`.
+
+For port conflicts, missing Docker, invalid domains, provider checks, and other
+diagnostics, run:
+
+```bash
+npm run doctor
+```
+
+See [Installation and operations](docs/installation.md) for local, Docker,
+public-server, SSH, backup, and troubleshooting details. Maintainers can follow
+[Publish and deploy to a VPS](docs/publish-and-vps.md) for the first npm release
+and a production server walkthrough.
 
 ---
 
@@ -164,7 +185,7 @@ Static mode is the simplest way to use OR3. It generates a plain HTML/JS/CSS bun
 ### Build for Production
 
 ```bash
-bun run generate:static
+npm run generate:static
 ```
 
 This outputs a fully static site to `.output/public/`. Upload that folder to any static host.
@@ -172,7 +193,7 @@ This outputs a fully static site to `.output/public/`. Upload that folder to any
 ### Preview the Static Build Locally
 
 ```bash
-bun run preview:static
+npm run preview:static
 ```
 
 Opens a local server at **http://localhost:4173**.
@@ -196,7 +217,7 @@ Cloud mode adds a server layer on top of OR3. It enables user accounts, database
 ### Run the Wizard
 
 ```bash
-bun run or3-cloud:init
+npm run setup
 ```
 
 By default, the wizard opens in your browser with a step-by-step UI.
@@ -205,7 +226,7 @@ Use `--cli` to force the terminal-based flow.
 **Fast path** — zero questions, instantly ready:
 
 ```bash
-bun run or3-cloud:init --fast
+npm run setup -- --fast --mode self-hosted --target dev
 ```
 
 The wizard will ask you to pick providers for each layer:
@@ -229,13 +250,13 @@ The wizard will ask you to pick providers for each layer:
 Start the dev server:
 
 ```bash
-bun run dev
+npm run dev
 ```
 
 Or build for production:
 
 ```bash
-bun run build
+npm run build
 ```
 
 ### Health Check
@@ -243,7 +264,7 @@ bun run build
 To verify everything is working correctly:
 
 ```bash
-bun run or3-cloud:doctor
+npm run doctor
 ```
 
 Checks that provider packages are installed, database paths are writable, the port is free, and the config is valid. Runs in seconds with ✅/⚠️/❌ output per check.

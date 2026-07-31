@@ -49,6 +49,7 @@ const FIELD_ERROR_RULES: Array<{
     patterns: string[];
 }> = [
     { key: 'instanceDir', patterns: ['INSTANCEDIR', 'PROJECT FOLDER'] },
+    { key: 'publicDomain', patterns: ['PUBLIC DOMAIN', 'OR3_PUBLIC_DOMAIN'] },
     { key: 'or3SiteName', patterns: ['OR3_SITE_NAME'] },
     { key: 'or3DefaultTheme', patterns: ['OR3_DEFAULT_THEME'] },
     { key: 'basicAuthJwtSecret', patterns: ['OR3_BASIC_AUTH_JWT_SECRET'] },
@@ -64,6 +65,23 @@ const FIELD_ERROR_RULES: Array<{
     { key: 'clerkSecretKey', patterns: ['NUXT_CLERK_SECRET_KEY'] },
     { key: 'sqliteDbPath', patterns: ['OR3_SQLITE_DB_PATH'] },
     { key: 'convexUrl', patterns: ['VITE_CONVEX_URL'] },
+    { key: 'connectPublicUrl', patterns: ['OR3_CONNECT_PUBLIC_URL'] },
+    {
+        key: 'connectEncryptionKey',
+        patterns: ['OR3_CONNECT_ENCRYPTION_KEY'],
+    },
+    {
+        key: 'connectMaxComputers',
+        patterns: ['OR3_CONNECT_MAX_COMPUTERS'],
+    },
+    {
+        key: 'connectCloudflareApiToken',
+        patterns: ['OR3_CONNECT_CLOUDFLARE_API_TOKEN'],
+    },
+    {
+        key: 'connectHostnameSuffix',
+        patterns: ['OR3_CONNECT_HOSTNAME_SUFFIX'],
+    },
     { key: 'fsRoot', patterns: ['OR3_STORAGE_FS_ROOT'] },
     { key: 'fsTokenSecret', patterns: ['OR3_STORAGE_FS_TOKEN_SECRET'] },
     { key: 's3Endpoint', patterns: ['OR3_STORAGE_S3_ENDPOINT'] },
@@ -124,6 +142,10 @@ const STEP_ERROR_RULES: Array<{
     {
         stepId: 'provider-storage',
         patterns: ['OR3_STORAGE_FS_', 'OR3_STORAGE_S3_'],
+    },
+    {
+        stepId: 'connect',
+        patterns: ['OR3_CONNECT_'],
     },
     {
         stepId: 'openrouter-limits-security',
@@ -240,6 +262,27 @@ function getWizardInstanceDirFromLocation(): string | null {
     return trimmed.length > 0 ? trimmed : null;
 }
 
+function getWizardBootstrapQuery(): Record<string, string> | undefined {
+    if (!import.meta.client) return undefined;
+    const search = new URL(globalThis.location.href).searchParams;
+    const allowedKeys = [
+        'instanceDir',
+        'presetName',
+        'packageManager',
+        'deploymentTarget',
+        'dockerExposure',
+        'publicDomain',
+        'wizardMode',
+        'cloudSetupEntry',
+    ] as const;
+    const query: Record<string, string> = {};
+    for (const key of allowedKeys) {
+        const value = search.get(key)?.trim();
+        if (value) query[key] = value;
+    }
+    return Object.keys(query).length > 0 ? query : undefined;
+}
+
 function getScopedSessionStorageKey(key: string): string {
     if (!import.meta.client) return key;
     const token = getWizardTokenFromLocation();
@@ -313,7 +356,7 @@ function wizardFetchHeaders(): Record<string, string> {
 
 async function waitForAccessUrlReady(accessUrl: string, timeoutMs = 45000): Promise<boolean> {
     const deadline = Date.now() + timeoutMs;
-    const healthUrl = `${accessUrl.replace(/\/$/, '')}/api/healthz`;
+    const healthUrl = `${accessUrl.replace(/\/$/, '')}/api/health`;
 
     while (Date.now() < deadline) {
         try {
@@ -459,7 +502,8 @@ export function useWizardSession() {
 
     function generateSecureKey(key: keyof WizardAnswers, length = 48): void {
         const nextValue =
-            key === 'adminPassword'
+            key === 'adminPassword' ||
+            key === 'basicAuthBootstrapPassword'
                 ? generateAdminPassword(length)
                 : randomSecret(length);
         updateAnswer(key, nextValue as WizardAnswers[keyof WizardAnswers]);
@@ -473,16 +517,27 @@ export function useWizardSession() {
         steps: WizardStep[]
     ): Partial<WizardAnswers> {
         const patch: Partial<WizardAnswers> = {};
-        for (const step of steps) {
-            for (const field of getVisibleFields(step, answers.value)) {
-                if (!field.secret || !field.required) continue;
+        // Include skipped/advanced fields so auto-generated secrets still fill
+        // when the core path hides them.
+        const secretSteps =
+            steps.length > 0 ? getWizardSteps(answers.value) : steps;
+        for (const step of secretSteps) {
+            for (const field of step.fields) {
+                if (
+                    !field.secret ||
+                    !field.required ||
+                    field.autoGenerate === false
+                ) {
+                    continue;
+                }
                 const current = answers.value[field.key];
                 if (typeof current === 'string' && current.trim().length > 0) {
                     continue;
                 }
                 if (current != null && typeof current !== 'string') continue;
                 const nextValue =
-                    field.key === 'adminPassword'
+                    field.key === 'adminPassword' ||
+                    field.key === 'basicAuthBootstrapPassword'
                         ? generateAdminPassword(24)
                         : randomSecret(48);
                 updateAnswer(
@@ -644,6 +699,22 @@ export function useWizardSession() {
             };
         }
 
+        if (
+            step.id === 'connect' &&
+            values.connectEnabled &&
+            values.connectRelayProvider === 'cloudflare'
+        ) {
+            return {
+                providerId: 'cloudflare-connect',
+                credentials: {
+                    apiToken: values.connectCloudflareApiToken ?? '',
+                    hostnameSuffix: values.connectHostnameSuffix ?? '',
+                    accountId: values.connectCloudflareAccountId ?? '',
+                    zoneId: values.connectCloudflareZoneId ?? '',
+                },
+            };
+        }
+
         return null;
     }
 
@@ -772,8 +843,13 @@ export function useWizardSession() {
                 statusMessage.value =
                     response.deployResult?.instructions || 'Deployment completed.';
             }
-            if (!input.skipDeploy) {
+            if (
+                !input.skipDeploy &&
+                answers.value.deploymentTarget === 'local-dev'
+            ) {
                 void redirectToAccessUrl(response.deployResult?.accessUrl);
+            } else if (!input.dryRun && !input.skipDeploy) {
+                await shutdownWizardUiBestEffort();
             }
             return response;
         } catch (error) {
@@ -820,6 +896,7 @@ export function useWizardSession() {
 
         const bootstrapToken = getWizardTokenFromLocation();
         const requestedInstanceDir = getWizardInstanceDirFromLocation();
+        const bootstrapQuery = getWizardBootstrapQuery();
         if (bootstrapToken) {
             setSessionStorageItem(WIZARD_TOKEN_KEY, bootstrapToken);
         }
@@ -830,9 +907,7 @@ export function useWizardSession() {
             if (!sessionId) {
                 return $fetch<SessionResponse>('/api/wizard/session', {
                     headers: wizardFetchHeaders(),
-                    query: requestedInstanceDir
-                        ? { instanceDir: requestedInstanceDir }
-                        : undefined,
+                    query: bootstrapQuery,
                 });
             }
             return $fetch<SessionResponse>('/api/wizard/session', {

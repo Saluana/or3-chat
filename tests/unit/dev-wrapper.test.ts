@@ -10,29 +10,27 @@ describe('dev wrapper script wiring', () => {
     };
 
     it('routes `dev` through the port-preflight wrapper', () => {
-        expect(pkg.scripts.dev).toBe('bun run scripts/cli/dev.ts');
+        expect(pkg.scripts.dev).toBe('tsx scripts/cli/dev.ts');
     });
 
-    it('routes `dev:ssr` through `bun run dev` (wrapper + SSR env)', () => {
+    it('routes `dev:ssr` through the cross-platform wrapper', () => {
         const script = pkg.scripts['dev:ssr'];
-        expect(script).toContain('SSR_AUTH_ENABLED=true');
-        expect(script).toContain('bun run dev');
+        expect(script).toContain('tsx scripts/cli/dev.ts');
+        expect(script).toContain('--or3-ssr');
         expect(script).toContain('--host 127.0.0.1');
         expect(script).toContain('--port 3000');
-        // Must not bypass the wrapper by calling nuxt directly.
         expect(script).not.toMatch(/\bnuxt\s+dev\b/);
+        expect(script).not.toContain('bun');
     });
 
-    it('routes `dev:offline` through `bun run dev` with cloud features off', () => {
+    it('routes `dev:offline` through the cross-platform wrapper', () => {
         const script = pkg.scripts['dev:offline'];
-        expect(script).toContain('SSR_AUTH_ENABLED=false');
-        expect(script).toContain('OR3_SYNC_ENABLED=false');
-        expect(script).toContain('OR3_STORAGE_ENABLED=false');
-        expect(script).toContain('bun run dev');
+        expect(script).toBe('tsx scripts/cli/dev.ts --or3-offline');
         expect(script).not.toMatch(/\bnuxt\s+dev\b/);
+        expect(script).not.toContain('bun');
     });
 
     it('keeps `start` as the one-command entry', () => {
-        expect(pkg.scripts.start).toBe('bun run scripts/cli/start.ts');
+        expect(pkg.scripts.start).toBe('tsx scripts/cli/start.ts');
     });
 });

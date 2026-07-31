@@ -29,6 +29,7 @@
  * @see deriveProviderModules for module ID resolution rules
  */
 import { LOCAL_PROVIDER_IDS, WIZARD_OWNED_ENV_KEYS } from './catalog';
+import { resolveEffectiveConnectProvider } from './connect-provider';
 import type { WizardAnswers } from './types';
 
 function boolToEnv(value: boolean | undefined): string | undefined {
@@ -88,6 +89,9 @@ export function deriveProviderModules(answers: WizardAnswers): string[] {
     if (answers.ssrAuthEnabled && answers.storageEnabled) {
         providerIds.add(answers.storageProvider);
     }
+    if (answers.ssrAuthEnabled && answers.connectEnabled) {
+        providerIds.add(resolveEffectiveConnectProvider(answers));
+    }
 
     return Array.from(providerIds)
         .map((providerId) => providerId.trim())
@@ -128,6 +132,62 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
     setEnv(env, 'OR3_CLOUD_SYNC_ENABLED', boolToEnv(answers.syncEnabled));
     setEnv(env, 'OR3_SYNC_PROVIDER', answers.syncProvider);
 
+    setEnv(
+        env,
+        'OR3_CONNECT_ENABLED',
+        boolToEnv(answers.ssrAuthEnabled && answers.connectEnabled)
+    );
+    if (answers.ssrAuthEnabled && answers.connectEnabled) {
+        setEnv(
+            env,
+            'OR3_CONNECT_PROVIDER',
+            resolveEffectiveConnectProvider(answers)
+        );
+        setEnv(
+            env,
+            'OR3_CONNECT_RELAY_PROVIDER',
+            answers.connectRelayProvider
+        );
+        setEnv(env, 'OR3_CONNECT_PUBLIC_URL', answers.connectPublicUrl);
+        setEnv(
+            env,
+            'OR3_CONNECT_ENCRYPTION_KEY',
+            answers.connectEncryptionKey
+        );
+        setEnv(
+            env,
+            'OR3_CONNECT_MAX_COMPUTERS',
+            numberToEnv(answers.connectMaxComputers)
+        );
+        if (answers.connectRelayProvider === 'cloudflare') {
+            setEnv(
+                env,
+                'OR3_CONNECT_CLOUDFLARE_ACCOUNT_ID',
+                answers.connectCloudflareAccountId
+            );
+            setEnv(
+                env,
+                'OR3_CONNECT_CLOUDFLARE_ZONE_ID',
+                answers.connectCloudflareZoneId
+            );
+            setEnv(
+                env,
+                'OR3_CONNECT_CLOUDFLARE_API_TOKEN',
+                answers.connectCloudflareApiToken
+            );
+            setEnv(
+                env,
+                'OR3_CONNECT_CLOUDFLARE_VALIDATION_ATTESTATION',
+                answers.connectCloudflareValidationAttestation
+            );
+            setEnv(
+                env,
+                'OR3_CONNECT_HOSTNAME_SUFFIX',
+                answers.connectHostnameSuffix
+            );
+        }
+    }
+
     setEnv(env, 'OR3_STORAGE_ENABLED', boolToEnv(answers.storageEnabled));
     setEnv(env, 'OR3_CLOUD_STORAGE_ENABLED', boolToEnv(answers.storageEnabled));
     setEnv(env, 'NUXT_PUBLIC_STORAGE_PROVIDER', answers.storageProvider);
@@ -161,14 +221,38 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
     setEnv(env, 'OR3_MAX_MESSAGES_PER_DAY', numberToEnv(answers.maxMessagesPerDay));
     setEnv(env, 'OR3_LIMITS_STORAGE_PROVIDER', answers.limitsStorageProvider);
 
-    setEnv(env, 'OR3_ALLOWED_ORIGINS', csv(answers.allowedOrigins));
-    setEnv(env, 'OR3_FORCE_HTTPS', boolToEnv(answers.forceHttps));
+    const publicDockerDomain =
+        answers.deploymentTarget === 'docker' &&
+        answers.dockerExposure === 'public'
+            ? answers.publicDomain?.trim()
+            : undefined;
+    setEnv(env, 'OR3_PUBLIC_DOMAIN', publicDockerDomain);
+    setEnv(
+        env,
+        'OR3_ALLOWED_ORIGINS',
+        publicDockerDomain
+            ? `https://${publicDockerDomain}`
+            : csv(answers.allowedOrigins)
+    );
+    setEnv(
+        env,
+        'OR3_FORCE_HTTPS',
+        boolToEnv(publicDockerDomain ? true : answers.forceHttps)
+    );
     setEnv(
         env,
         'OR3_STRICT_CONFIG',
-        boolToEnv(answers.strictConfig || answers.deploymentTarget === 'prod-build')
+        boolToEnv(
+            answers.strictConfig ||
+                answers.deploymentTarget === 'prod-build' ||
+                Boolean(publicDockerDomain)
+        )
     );
-    setEnv(env, 'OR3_TRUST_PROXY', boolToEnv(answers.trustProxy));
+    setEnv(
+        env,
+        'OR3_TRUST_PROXY',
+        boolToEnv(publicDockerDomain ? true : answers.trustProxy)
+    );
     setEnv(env, 'OR3_FORWARDED_FOR_HEADER', answers.forwardedForHeader);
 
     // Admin dashboard credentials
@@ -236,7 +320,12 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
         setEnv(env, 'OR3_SQLITE_STRICT', boolToEnv(answers.sqliteStrict));
     }
 
-    if (answers.syncProvider === 'convex' || answers.storageProvider === 'convex') {
+    const usesConvex =
+        (answers.syncEnabled && answers.syncProvider === 'convex') ||
+        (answers.storageEnabled && answers.storageProvider === 'convex') ||
+        (answers.connectEnabled &&
+            resolveEffectiveConnectProvider(answers) === 'convex');
+    if (usesConvex) {
         setEnv(env, 'VITE_CONVEX_URL', answers.convexUrl);
         if (usesInsecureHttp(answers.convexUrl)) {
             setEnv(env, 'OR3_CONVEX_ALLOW_INSECURE_HTTP', 'true');
@@ -293,7 +382,7 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
 
     if (
         answers.authProvider === 'clerk' &&
-        (answers.syncProvider === 'convex' || answers.storageProvider === 'convex')
+        usesConvex
     ) {
         setEnv(convexEnv, 'CLERK_ISSUER_URL', answers.convexClerkIssuerUrl);
         setEnv(convexEnv, 'OR3_ADMIN_JWT_SECRET', answers.convexAdminJwtSecret);
@@ -315,7 +404,9 @@ export function deriveLocalDevConvexEnvLocalUpdates(
 ): Record<string, string | null> {
     const usesConvex =
         (answers.syncEnabled && answers.syncProvider === 'convex') ||
-        (answers.storageEnabled && answers.storageProvider === 'convex');
+        (answers.storageEnabled && answers.storageProvider === 'convex') ||
+        (answers.connectEnabled &&
+            resolveEffectiveConnectProvider(answers) === 'convex');
     const isSelfHosted =
         (answers.convexSelfHostedAdminKey?.trim() ?? '').length > 0 &&
         (answers.convexUrl?.trim() ?? '').length > 0;

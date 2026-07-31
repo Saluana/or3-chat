@@ -279,6 +279,7 @@ export function useToolRegistry() {
             opts.enabled ??
             persistedStates[name] ??
             definition.defaultEnabled ??
+            definition.ui?.defaultEnabled ??
             true;
 
         const runtime = opts.runtime ?? definition.runtime ?? 'hybrid';

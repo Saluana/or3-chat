@@ -37,6 +37,7 @@
 export * from './types';
 export * from './catalog';
 export * from './derive';
+export * from './connect-provider';
 export * from './steps';
 export * from './validation';
 export * from './apply';

@@ -176,6 +176,8 @@ export interface SessionContext {
     expiresAt?: string;
     authorizationRevision?: number;
     deploymentAdmin?: boolean;
+    /** Host-resolved entitlement ids used by immediate client-side plugin gating. */
+    entitlements?: string[];
 }
 
 export interface SyncScopePayload {

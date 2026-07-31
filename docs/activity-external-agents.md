@@ -165,6 +165,13 @@ that help people browse the searchable, virtualized model list. A model appears
 only when that runner currently advertises it; OR3 does not merge one
 provider's catalog into another.
 
+Models may also advertise ordered `reasoning` values and a
+`reasoning_default`. The settings UI shows a reasoning selector only for those
+models, preserves an explicit Model default choice, and sends an override as
+`thinking_level` on the next turn. The host remains authoritative: Codex maps
+the value to app-server effort and OpenCode maps it to the model variant only
+when the selected model advertises that value.
+
 Connection management and execution controls are secondary:
 
 - a new run normally needs only an instruction;

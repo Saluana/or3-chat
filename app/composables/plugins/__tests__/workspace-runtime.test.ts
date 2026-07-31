@@ -128,6 +128,38 @@ describe('workspace plugin runtime registry', () => {
         expect(disposeTool).toHaveBeenCalledTimes(1);
     });
 
+    it('injects the owning plugin id into access-aware contributions', async () => {
+        const mod = await import('../workspace-runtime');
+        const { api } = mod.createWorkspacePluginApi('plugin.owner');
+
+        api.registerDashboardPlugin({
+            id: 'plugin.owner:dashboard',
+            icon: 'test',
+            label: 'Dashboard',
+        });
+
+        expect(registerDashboardPlugin).toHaveBeenCalledWith(
+            expect.objectContaining({
+                id: 'plugin.owner:dashboard',
+                pluginId: 'plugin.owner',
+            })
+        );
+    });
+
+    it('preserves contribution identity when no owner id is supplied', async () => {
+        const mod = await import('../workspace-runtime');
+        const { api } = mod.createWorkspacePluginApi();
+        const plugin = {
+            id: 'legacy-dashboard',
+            icon: 'test',
+            label: 'Legacy dashboard',
+        };
+
+        api.registerDashboardPlugin(plugin);
+
+        expect(registerDashboardPlugin).toHaveBeenCalledWith(plugin);
+    });
+
     it('runs registered cleanup callbacks when plugin instance is unregistered', async () => {
         const mod = await import('../workspace-runtime');
         const { api, dispose } = mod.createWorkspacePluginApi();

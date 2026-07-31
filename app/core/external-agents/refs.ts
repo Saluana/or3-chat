@@ -4,6 +4,8 @@ export const EXTERNAL_AGENT_PANE_APP_ID = "or3-external-agent";
 export const EXTERNAL_AGENTS_SIDEBAR_PAGE_ID = "or3-external-agents";
 export const EXTERNAL_AGENT_ACTIVITY_SOURCE_ID = "external-agents";
 export const EXTERNAL_AGENT_LAUNCHER_REF = "new";
+export const EXTERNAL_AGENT_OPEN_CONNECTIONS_EVENT =
+  "or3:external-agents:open-connections";
 
 export function encodeExternalAgentSessionRef(
   ref: Pick<ExternalAgentSessionRef, "hostId" | "remoteSessionId">,

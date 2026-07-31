@@ -165,7 +165,7 @@ export default defineNuxtPlugin(() => {
                     throw new Error('Invalid plugin module export or plugin id mismatch');
                 }
 
-                const runtime = createWorkspacePluginApi();
+                const runtime = createWorkspacePluginApi(pluginId);
                 dispose = runtime.dispose;
                 await plugin.register(runtime.api);
                 if (token !== syncToken) {

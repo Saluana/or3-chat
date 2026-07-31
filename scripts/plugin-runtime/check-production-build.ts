@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
     inspectProductionHostEsmFacade,
     recordProductionHostEsmFacadeReport,
@@ -7,7 +8,7 @@ import {
 
 type Mode = 'ssr' | 'static';
 
-const repoRoot = resolve(import.meta.dir, '../..');
+const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
 const outputRoot = resolve(repoRoot, '.output');
 const publicRoot = resolve(outputRoot, 'public');
 const serverRoot = resolve(outputRoot, 'server');
@@ -44,6 +45,17 @@ if (modeArg !== 'ssr' && modeArg !== 'static') fail('pass --mode ssr or --mode s
 if (!existsSync(publicRoot)) fail('missing .output/public');
 if (modeArg === 'ssr' && !existsSync(resolve(serverRoot, 'index.mjs'))) {
     fail('SSR build is missing .output/server/index.mjs');
+}
+if (
+    modeArg === 'ssr' &&
+    !existsSync(
+        resolve(
+            serverRoot,
+            'node_modules/better-sqlite3/build/Release/better_sqlite3.node'
+        )
+    )
+) {
+    fail('SSR build is missing the packaged better-sqlite3 native binding');
 }
 if (modeArg === 'static' && !existsSync(resolve(publicRoot, 'index.html'))) {
     fail('static generation is missing .output/public/index.html');

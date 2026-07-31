@@ -105,6 +105,22 @@
       />
     </label>
 
+    <label v-if="reasoningItems.length" class="block space-y-1.5">
+      <span class="text-xs font-semibold">Reasoning</span>
+      <USelectMenu
+        :model-value="selectedReasoningValue"
+        :items="reasoningItems"
+        value-key="value"
+        label-key="label"
+        class="w-full"
+        aria-label="External agent reasoning level"
+        @update:model-value="setThinkingLevel"
+      />
+      <span class="block text-[11px] text-[var(--md-on-surface-variant)]">
+        Higher levels spend more time reasoning before responding.
+      </span>
+    </label>
+
     <UCheckbox
       v-if="dangerousSelection"
       :model-value="confirmDangerous"
@@ -117,14 +133,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import {
   buildExternalAgentRunnerOptions,
   isValidExternalAgentPolicyCombination,
+  resolveEffectiveExternalAgentModel,
+  resolveExternalAgentModelReasoning,
 } from "~/core/external-agents/launcher";
 import type { ExternalAgentRunner } from "~/core/external-agents/types";
 
 const HOST_DEFAULT_MODEL_VALUE = "host_default";
+const MODEL_DEFAULT_REASONING_VALUE = "model_default";
 
 const props = withDefaults(
   defineProps<{
@@ -134,10 +153,11 @@ const props = withDefaults(
     isolation: string;
     cwd: string;
     model: string | null;
+    thinkingLevel?: string | null;
     confirmDangerous: boolean;
     runnerLocked?: boolean;
   }>(),
-  { runnerLocked: false },
+  { runnerLocked: false, thinkingLevel: null },
 );
 
 const emit = defineEmits<{
@@ -146,6 +166,7 @@ const emit = defineEmits<{
   "update:isolation": [value: string];
   "update:cwd": [value: string];
   "update:model": [value: string | null];
+  "update:thinkingLevel": [value: string | null];
   "update:confirmDangerous": [value: boolean];
 }>();
 
@@ -225,6 +246,33 @@ const modelItems = computed(() => {
 const selectedModelValue = computed(
   () => props.model ?? HOST_DEFAULT_MODEL_VALUE,
 );
+const selectedReasoning = computed(() =>
+  resolveExternalAgentModelReasoning(
+    selectedOption.value?.runner,
+    props.model,
+  ),
+);
+const reasoningItems = computed(() => {
+  const reasoning = selectedReasoning.value;
+  if (!reasoning?.values.length) return [];
+  const defaultLabel = reasoning.defaultValue
+    ? `Model default (${reasoningLevelLabel(reasoning.defaultValue)})`
+    : "Model default";
+  return [
+    { value: MODEL_DEFAULT_REASONING_VALUE, label: defaultLabel },
+    ...reasoning.values.map((value) => ({
+      value,
+      label: reasoningLevelLabel(value),
+    })),
+  ];
+});
+const selectedReasoningValue = computed(
+  () =>
+    props.thinkingLevel &&
+    selectedReasoning.value?.values.includes(props.thinkingLevel)
+      ? props.thinkingLevel
+      : MODEL_DEFAULT_REASONING_VALUE,
+);
 const dangerousSelection = computed(() => {
   const option = selectedOption.value;
   return Boolean(
@@ -233,10 +281,47 @@ const dangerousSelection = computed(() => {
   );
 });
 
+watch(
+  [selectedReasoning, () => props.thinkingLevel],
+  ([reasoning, thinkingLevel]) => {
+    if (thinkingLevel && !reasoning?.values.includes(thinkingLevel)) {
+      emit("update:thinkingLevel", null);
+    }
+  },
+  { immediate: true },
+);
+
 function setModel(value: string) {
   emit(
     "update:model",
     !value || value === HOST_DEFAULT_MODEL_VALUE ? null : value,
+  );
+  emit("update:thinkingLevel", null);
+}
+
+function reasoningLevelLabel(value: string): string {
+  const normalized = value.toLowerCase().trim();
+  if (normalized === "xhigh" || normalized === "extra-high") {
+    return "Extra high";
+  }
+  if (normalized === "max" || normalized === "maximum") return "Maximum";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function setThinkingLevel(value: string) {
+  const thinkingLevel =
+    !value || value === MODEL_DEFAULT_REASONING_VALUE ? null : value;
+  if (thinkingLevel && !props.model) {
+    const effectiveModel = resolveEffectiveExternalAgentModel(
+      selectedOption.value?.runner,
+      null,
+      thinkingLevel,
+    );
+    if (effectiveModel) emit("update:model", effectiveModel);
+  }
+  emit(
+    "update:thinkingLevel",
+    thinkingLevel,
   );
 }
 </script>

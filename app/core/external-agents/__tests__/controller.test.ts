@@ -264,6 +264,170 @@ describe("ExternalAgentController", () => {
     expect(client.readiness).not.toHaveBeenCalled();
   });
 
+  it("restores cloud computers without replacing the user's active host", async () => {
+    const saved = persistence({
+      hosts: [host],
+      activeHostId: host.id,
+      sessionRefs: [],
+    });
+    const secrets = vault({ "cred-1": "local-token" });
+    const createClient = vi.fn(() => fakeClient());
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: secrets,
+      createClient,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await controller.restoreCloudHost({
+      environmentId: "env-studio",
+      name: "Studio Mac",
+      baseUrl: "https://env-studio.connect.or3.test",
+      token: "cloud-token",
+      activate: false,
+    });
+
+    expect(controller.snapshot.activeHostId).toBe(host.id);
+    expect(saved.state.hosts).toContainEqual(
+      expect.objectContaining({
+        id: "or3-connect:env-studio",
+        name: "Studio Mac",
+        credentialRef: "or3-connect-credential:env-studio",
+      }),
+    );
+    expect(JSON.stringify(saved.state)).not.toContain("cloud-token");
+    expect(createClient).toHaveBeenCalledTimes(1);
+  });
+
+  it("authoritatively reconciles cloud computers while preserving direct hosts and revoked-host history", async () => {
+    const cloudA: ExternalAgentHost = {
+      id: "or3-connect:env-a",
+      name: "Cloud A",
+      baseUrl: "https://env-a.connect.or3.test",
+      credentialRef: "cloud-a-credential",
+      trustedAt: "2026-07-27T00:00:00.000Z",
+    };
+    const cloudB: ExternalAgentHost = {
+      id: "or3-connect:env-b",
+      name: "Cloud B",
+      baseUrl: "https://env-b.connect.or3.test",
+      credentialRef: "cloud-b-credential",
+      trustedAt: "2026-07-27T00:00:00.000Z",
+    };
+    const saved = persistence({
+      hosts: [host, cloudA, cloudB],
+      activeHostId: cloudA.id,
+      sessionRefs: [
+        {
+          hostId: cloudA.id,
+          remoteSessionId: "revoked-history",
+          title: "Keep this history",
+        },
+      ],
+    });
+    const secrets = vault({
+      "cred-1": "direct-token",
+      "cloud-a-credential": "old-a-token",
+      "cloud-b-credential": "old-b-token",
+    });
+    const createClient = vi.fn(() => fakeClient());
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: secrets,
+      createClient,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await controller.reconcileCloudHosts("workspace-a", [
+      {
+        environmentId: "env-b",
+        name: "Cloud B renamed",
+        baseUrl: "https://env-b-new.connect.or3.test",
+        token: "new-b-token",
+      },
+      {
+        environmentId: "env-c",
+        name: "Cloud C",
+        baseUrl: host.baseUrl,
+        token: "new-c-token",
+      },
+    ]);
+
+    expect(controller.snapshot.hosts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: host.id,
+          credentialRef: host.credentialRef,
+        }),
+        expect.objectContaining({
+          id: cloudB.id,
+          name: "Cloud B renamed",
+          baseUrl: "https://env-b-new.connect.or3.test",
+        }),
+        expect.objectContaining({
+          id: "or3-connect:env-c",
+          baseUrl: host.baseUrl,
+        }),
+      ]),
+    );
+    expect(controller.snapshot.hosts).not.toContainEqual(
+      expect.objectContaining({ id: cloudA.id }),
+    );
+    expect(controller.snapshot.activeHostId).toBe(cloudB.id);
+    expect(controller.snapshot.connectionState).toBe("online");
+    expect(controller.snapshot.sessionRefs).toContainEqual(
+      expect.objectContaining({
+        hostId: cloudA.id,
+        remoteSessionId: "revoked-history",
+      }),
+    );
+    expect(await secrets.resolve("cloud-a-credential")).toBeNull();
+    expect(await secrets.resolve("cloud-b-credential")).toBe("new-b-token");
+    expect(await secrets.resolve("cred-1")).toBe("direct-token");
+    expect(createClient).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a cloud inventory that completes after its workspace lease changes", async () => {
+    const putStarted = deferred<void>();
+    const releasePut = deferred<void>();
+    const baseVault = vault();
+    const secrets: ExternalAgentCredentialVault = {
+      ...baseVault,
+      put: vi.fn(async (reference, secret) => {
+        putStarted.resolve();
+        await releasePut.promise;
+        await baseVault.put(reference, secret);
+      }),
+    };
+    const saved = persistence();
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: secrets,
+      createClient: () => fakeClient(),
+      getWorkspaceScope: () => "workspace-b",
+    });
+    await controller.initialize("workspace-a");
+
+    const reconciling = controller.reconcileCloudHosts("workspace-a", [
+      {
+        environmentId: "env-a",
+        name: "Cloud A",
+        baseUrl: "https://env-a.connect.or3.test",
+        token: "cloud-token",
+      },
+    ]);
+    const rejected = expect(reconciling).rejects.toThrow("stale workspace");
+    await putStarted.promise;
+    await controller.reloadWorkspace("workspace-b");
+    releasePut.resolve();
+    await rejected;
+
+    expect(controller.snapshot.hosts).toEqual([]);
+    expect(saved.stateFor("workspace-b").hosts).toEqual([]);
+  });
+
   it("uses PIN-protected persistence only when explicitly requested", async () => {
     const saved = persistence();
     const secrets = pinVault();
@@ -680,6 +844,58 @@ describe("ExternalAgentController", () => {
     });
   });
 
+  it("indexes event bursts incrementally and shares one batched snapshot across listeners", async () => {
+    const events = Array.from({ length: 100 }, (_, index) => ({
+      ...textEvent,
+      id: index + 1,
+      seq: index + 1,
+      text: `event ${index + 1}`,
+    }));
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => fakeClient({ events }),
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    const firstSnapshots: object[] = [];
+    const secondSnapshots: object[] = [];
+    let timelineEvents = 0;
+    const unsubscribeFirst = controller.subscribe((event) => {
+      if (event.type === "timeline") timelineEvents += 1;
+      if (event.type === "snapshot") firstSnapshots.push(event.snapshot);
+    });
+    const unsubscribeSecond = controller.subscribe((event) => {
+      if (event.type === "snapshot") secondSnapshots.push(event.snapshot);
+    });
+
+    const launched = await controller.launch({
+      runnerId: "codex",
+      instruction: "Process a large event burst",
+      mode: "review",
+      isolation: "host_readonly",
+    });
+    await Promise.resolve();
+    controller.dispose();
+    unsubscribeFirst();
+    unsubscribeSecond();
+
+    expect(timelineEvents).toBe(100);
+    expect(launched.events.map((event) => event.sequence)).toEqual(
+      events.map((event) => event.seq),
+    );
+    expect(firstSnapshots.length).toBe(secondSnapshots.length);
+    expect(firstSnapshots.length).toBeLessThan(10);
+    for (let index = 0; index < firstSnapshots.length; index += 1) {
+      expect(firstSnapshots[index]).toBe(secondSnapshots[index]);
+    }
+  });
+
   it("keeps completed item events as tool lifecycle updates", async () => {
     const toolEvents: ExternalRemoteEvent[] = [
       {
@@ -897,6 +1113,29 @@ describe("ExternalAgentController", () => {
 
   it("applies model and safety overrides to follow-up turns without changing runners", async () => {
     const client = fakeClient();
+    client.listRunners = vi.fn(async () => ({
+      runners: [
+        {
+          id: "codex",
+          display_name: "Codex",
+          status: "available",
+          auth_status: "ready",
+          supports: {
+            chat: {
+              chatSelectable: true,
+              chatReplay: true,
+            },
+          },
+          models: [
+            {
+              id: "gpt-5.6-sol",
+              reasoning: ["low", "medium", "high"],
+              reasoning_default: "medium",
+            },
+          ],
+        },
+      ],
+    }));
     const controller = new ExternalAgentController({
       persistence: persistence({
         hosts: [host],
@@ -923,6 +1162,7 @@ describe("ExternalAgentController", () => {
       mode: "safe_edit",
       isolation: "host_workspace_write",
       model: "gpt-5.6-sol",
+      thinkingLevel: "high",
       confirmDangerous: false,
     });
 
@@ -932,6 +1172,7 @@ describe("ExternalAgentController", () => {
         user_message: "Now use the stronger model",
         continuation_mode: "replay",
         model: "gpt-5.6-sol",
+        thinking_level: "high",
         mode: "safe_edit",
         isolation: "host_workspace_write",
         cwd: undefined,
@@ -941,9 +1182,75 @@ describe("ExternalAgentController", () => {
     expect(launched).toMatchObject({
       runnerId: "codex",
       model: "gpt-5.6-sol",
+      thinkingLevel: "high",
       mode: "safe_edit",
       isolation: "host_workspace_write",
     });
+  });
+
+  it("sends an advertised reasoning level with the first turn", async () => {
+    const client = fakeClient();
+    client.createSession = vi.fn(async () => ({
+      ...remoteSession,
+      runner_id: "opencode",
+    }));
+    client.listRunners = vi.fn(async () => ({
+      runners: [
+        {
+          id: "opencode",
+          display_name: "OpenCode",
+          status: "available",
+          auth_status: "ready",
+          supports: {
+            chat: {
+              chatSelectable: true,
+              chatReplay: true,
+            },
+          },
+          models: [
+            {
+              id: "kimi-k2.5",
+              default: true,
+              reasoning: ["low", "high"],
+              reasoning_default: "low",
+            },
+          ],
+        },
+      ],
+    }));
+    const saved = persistence({
+      hosts: [host],
+      activeHostId: host.id,
+      sessionRefs: [],
+    });
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    const launched = await controller.launch({
+      runnerId: "opencode",
+      instruction: "Review the change",
+      mode: "review",
+      isolation: "host_readonly",
+      thinkingLevel: "high",
+    });
+
+    expect(client.startTurn).toHaveBeenCalledWith(
+      remoteSession.id,
+      expect.objectContaining({
+        model: "kimi-k2.5",
+        thinking_level: "high",
+      }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(launched.thinkingLevel).toBe("high");
+    expect(launched.model).toBe("kimi-k2.5");
+    expect(saved.state.sessionRefs[0]?.model).toBe("kimi-k2.5");
+    expect(saved.state.sessionRefs[0]?.thinkingLevel).toBe("high");
   });
 
   it("stages local files on the trusted host and sends workspace references with a turn", async () => {
@@ -1110,6 +1417,47 @@ describe("ExternalAgentController", () => {
     expect(session.error).toBeUndefined();
   });
 
+  it("does not periodically reconcile while the provider stream stays healthy", async () => {
+    vi.useFakeTimers();
+    const client = fakeClient({
+      stream: [{ event: "heartbeat", data: "" }],
+      streamNeverEnds: true,
+    });
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    try {
+      await controller.initialize();
+
+      const session = await controller.launch({
+        runnerId: "codex",
+        instruction: "Stay connected",
+        mode: "review",
+        isolation: "host_readonly",
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(session.streamState).toBe("connected");
+      expect(client.getTurn).toHaveBeenCalledTimes(1);
+      expect(client.listTurnEvents).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(client.getTurn).toHaveBeenCalledTimes(1);
+      expect(client.listTurnEvents).toHaveBeenCalledTimes(1);
+    } finally {
+      controller.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps reconciling when the provider stream closes before the turn", async () => {
     const terminalTurn = {
       ...remoteTurn,
@@ -1149,6 +1497,7 @@ describe("ExternalAgentController", () => {
       },
       { timeout: 3_000 },
     );
+    expect(client.getTurn).toHaveBeenCalledTimes(3);
   });
 
   it("persists a failed session when its first turn cannot start", async () => {

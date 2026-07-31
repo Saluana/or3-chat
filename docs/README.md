@@ -31,7 +31,12 @@ Welcome to the OR3 Chat system documentation. This guide covers plugin developme
 
 ## Testing
 
--   **[Custom Pane Apps Testing](testing/custom-pane-apps.md)** - Testing strategies for pane applications
+-   **[Test strategy and custom pane apps](testing/custom-pane-apps.md)** - Fast, integration, compatibility, release, live, and browser test lanes
+
+## Releases and Operations
+
+-   **[Package upgrades and releases](releasing.md)** - Versioning, trusted publishing, registry verification, and creator release order
+-   **[Publish and deploy to a VPS](publish-and-vps.md)** - First publication and single-server Docker deployment
 
 ## Architecture
 

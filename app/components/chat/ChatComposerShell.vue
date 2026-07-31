@@ -41,7 +41,7 @@ defineExpose({ rootElement });
 .chat-composer-shell {
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--md-outline) 18%, transparent);
-  border-radius: 28px;
+  border-radius: var(--chat-composer-border-radius, var(--md-border-radius));
   background: color-mix(in srgb, var(--md-surface) 92%, white 8%);
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--md-outline) 6%, transparent),
@@ -72,12 +72,12 @@ defineExpose({ rootElement });
 }
 
 .chat-composer-shell--sm {
-  --chat-composer-editor-min-height: 2rem;
+  --chat-composer-editor-min-height: 3rem;
 }
 
 .chat-composer-shell--sm :deep(.chat-input-inner-container) {
-  gap: 0.25rem;
-  margin: 0.45rem 0.75rem;
+  gap: 0.625rem;
+  margin: 0.625rem 0.875rem;
 }
 
 .chat-composer-shell--sm :deep(.chat-input-editor-container),
@@ -87,7 +87,7 @@ defineExpose({ rootElement });
 }
 
 .chat-composer-shell--lg {
-  --chat-composer-editor-min-height: 6rem;
+  --chat-composer-editor-min-height: 4rem;
 }
 
 .chat-composer-shell--lg :deep(.chat-input-editor-container),

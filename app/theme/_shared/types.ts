@@ -484,6 +484,9 @@ export interface ThemeCompilationResult {
     /** Theme name */
     name: string;
 
+    /** Source directory name used by Vite module discovery. */
+    dirName?: string;
+
     /** Compiled theme config */
     theme: CompiledTheme;
 

@@ -314,24 +314,19 @@ watch(
         if (newId && currentId && newId === currentId) {
             return;
         }
-        // Free previous thread messages & abort any active stream before switching
+        // Rebind in place — never call useChat() outside setup (inject warning).
         try {
-            chat.value?.dispose?.();
+            await chat.value?.switchThread?.(newId, {
+                pendingPromptId: pendingPromptId.value || undefined,
+            });
         } catch (e) {
             if (import.meta.dev) {
                 console.warn(
-                    '[ChatContainer] clear failed during thread switch',
+                    '[ChatContainer] switchThread failed during thread switch',
                     e
                 );
             }
         }
-        // Don't seed with stale snapshot; let ensureHistorySynced pull fresh data
-        chat.value = useChat(
-            [],
-            newId,
-            pendingPromptId.value || undefined
-        ) as ChatInstance;
-        await chat.value?.ensureHistorySynced?.();
     }
 );
 
@@ -632,24 +627,22 @@ const distanceFromBottom = ref(0);
 const isScrollable = ref(false);
 const iconScrollToBottom = useIcon('chat.scrollToBottom');
 
-const scrollToBottomButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'chat',
-        identifier: 'chat.scroll-to-bottom',
-        isNuxtUI: true,
-    });
-
-    return {
-        icon: iconScrollToBottom.value || 'heroicons:arrow-down-20-solid',
-        size: 'sm' as const,
-        color: 'primary' as const,
-        variant: 'solid' as const,
-        ui: { base: 'rounded-full' },
-        class: 'shadow-lg',
-        ...overrides.value,
-    };
+const scrollToBottomOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'chat',
+    identifier: 'chat.scroll-to-bottom',
+    isNuxtUI: true,
 });
+
+const scrollToBottomButtonProps = computed(() => ({
+    icon: iconScrollToBottom.value || 'heroicons:arrow-down-20-solid',
+    size: 'sm' as const,
+    color: 'primary' as const,
+    variant: 'solid' as const,
+    ui: { base: 'rounded-full' },
+    class: 'shadow-lg',
+    ...scrollToBottomOverrides.value,
+}));
 
 const scrollToBottomOpacity = computed(() => {
     // Transition into view as we scroll up
@@ -908,15 +901,8 @@ function onPendingPromptSelected(promptId: string | null) {
     if (props.paneId) {
         setPanePendingPrompt(props.paneId, promptId);
     }
-    // Reinitialize chat with the pending prompt
-    chat.value?.dispose?.();
-    chat.value = useChat(
-        props.messageHistory,
-        props.threadId,
-        pendingPromptId.value || undefined,
-        { historyAlreadyLoaded: true }
-    );
-    void chat.value?.ensureHistorySynced?.();
+    // Update in place — never call useChat() outside setup (inject warning).
+    chat.value?.setPendingPrompt?.(promptId);
 }
 
 if (panePendingPrompt) {

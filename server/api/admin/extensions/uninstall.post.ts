@@ -51,5 +51,8 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    return { ok: true, restartRequired: body.data.kind === 'theme' };
+    return {
+        ok: true,
+        restartRequired: body.data.kind === 'theme' || body.data.kind === 'admin_plugin',
+    };
 });

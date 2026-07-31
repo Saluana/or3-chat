@@ -20,7 +20,7 @@
  * - Deep data redaction or structured error serialization
  */
 
-import { useHooks } from '~/core/hooks/useHooks';
+import { tryGetHooks, useHooks } from '~/core/hooks/useHooks';
 
 export type ErrorSeverity = 'info' | 'warn' | 'error' | 'fatal';
 
@@ -273,12 +273,26 @@ export function reportError(
                 tags: e.tags,
             });
         }
-        const hooks = useHooks();
-        void hooks.doAction('error:raised', e);
-        const domain = e.tags?.domain as string | undefined;
-        if (domain) void hooks.doAction('error:' + domain, e);
-        if (domain === 'chat')
-            void hooks.doAction('ai.chat.error:action', { error: e });
+        // Prefer inject-free cache; fall back to useHooks only on SSR where
+        // request context is available and the client cache is intentionally unset.
+        const hooks =
+            tryGetHooks() ??
+            (import.meta.server
+                ? (() => {
+                      try {
+                          return useHooks();
+                      } catch {
+                          return null;
+                      }
+                  })()
+                : null);
+        if (hooks) {
+            void hooks.doAction('error:raised', e);
+            const domain = e.tags?.domain as string | undefined;
+            if (domain) void hooks.doAction('error:' + domain, e);
+            if (domain === 'chat')
+                void hooks.doAction('ai.chat.error:action', { error: e });
+        }
         const shouldToast = opts.toast ?? e.severity !== 'info';
         if (
             !opts.silent &&

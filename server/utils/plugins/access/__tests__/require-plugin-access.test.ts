@@ -114,4 +114,41 @@ describe('checkPluginAccess', () => {
         expect(result.decision.allowed).toBe(true);
         expect(result.decision.reasons).toEqual([]);
     });
+
+    it('applies package-runtime manifest defaults and enabled-list gating', async () => {
+        const { checkPluginAccess } = await import('../require-plugin-access');
+        getEnabledPluginsMock.mockResolvedValue(['plugin.v2']);
+        resolveEntitlementsMock.mockResolvedValue(['paid']);
+
+        const result = await checkPluginAccess(makeEvent(), {
+            pluginId: 'plugin.v2',
+            action: 'view',
+            extension: {
+                access: {
+                    authRequired: true,
+                    requiredEntitlements: ['paid'],
+                },
+            },
+        });
+
+        expect(result.decision.allowed).toBe(true);
+        expect(getEnabledPluginsMock).toHaveBeenCalledWith(
+            expect.anything(),
+            'ws-1'
+        );
+        expect(listInstalledExtensionsMock).not.toHaveBeenCalled();
+    });
+
+    it('denies package-runtime extensions that are disabled for the workspace', async () => {
+        const { checkPluginAccess } = await import('../require-plugin-access');
+
+        const result = await checkPluginAccess(makeEvent(), {
+            pluginId: 'plugin.v2',
+            action: 'view',
+            extension: { access: null },
+        });
+
+        expect(result.decision.allowed).toBe(false);
+        expect(result.decision.reasons).toContain('plugin-disabled');
+    });
 });

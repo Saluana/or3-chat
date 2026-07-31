@@ -13,8 +13,20 @@
  * @see planning/or3-cloud-launch-wizard/design.md for design context
  */
 
-/** Determines whether the wizard prepares a dev server or a production build. */
-export type WizardDeploymentTarget = 'local-dev' | 'prod-build';
+import type { PackageManager } from './package-manager';
+
+/**
+ * Determines what the wizard does after applying configuration.
+ *
+ * `prod-build` remains readable for sessions created before Docker support.
+ */
+export type WizardDeploymentTarget =
+    | 'local-dev'
+    | 'docker'
+    | 'configure-only'
+    | 'prod-build';
+
+export type WizardDockerExposure = 'private' | 'public';
 
 /** Target env file. `.env` is recommended; `.env.local` has known caveats with admin tooling. */
 export type WizardEnvFile = '.env' | '.env.local';
@@ -25,7 +37,13 @@ export type WizardEnvFile = '.env' | '.env.local';
  */
 export type WizardPresetName = 'recommended' | 'legacy-clerk-convex' | string;
 /** Controls whether template selection uses preset fast paths or manual provider selection. */
-export type WizardMode = 'preset-local' | 'preset-clerk-convex' | 'custom';
+export type WizardMode =
+    | 'personal-local'
+    | 'preset-local'
+    /** Recommended stack with zero guided questions (auto credentials). */
+    | 'preset-local-fast'
+    | 'preset-clerk-convex'
+    | 'custom';
 
 /**
  * Controls theme installation behavior.
@@ -49,6 +67,12 @@ export type WizardSyncProvider = 'sqlite' | 'convex' | 'firebase' | 'custom';
 
 /** Storage provider selection. Maps to `NUXT_PUBLIC_STORAGE_PROVIDER` env var. */
 export type WizardStorageProvider = 'fs' | 'convex' | 's3' | 'custom';
+
+/** Persistence provider used by OR3 Connect. Normally inherited from sync. */
+export type WizardConnectProvider = 'sqlite' | 'convex' | 'custom';
+
+/** Relay used to make agent computers reachable without opening inbound ports. */
+export type WizardConnectRelayProvider = 'cloudflare' | 'custom';
 
 /**
  * `WizardAnswers`
@@ -78,6 +102,11 @@ export type WizardStorageProvider = 'fs' | 'convex' | 's3' | 'custom';
  */
 export interface WizardAnswers {
     // ── Target ──
+    /**
+     * When true, the wizard was opened from `bun start` → cloud (or
+     * `--mode self-hosted`). Hides the personal-local template option.
+     */
+    cloudSetupEntry: boolean;
     /** When true, reveals install location/env file/deploy target/dry-run fields. */
     targetAdvancedEnabled: boolean;
     /** Absolute path to the OR3 instance project directory. */
@@ -86,6 +115,12 @@ export interface WizardAnswers {
     envFile: WizardEnvFile;
     /** Whether to prepare a dev server or a production build. */
     deploymentTarget: WizardDeploymentTarget;
+    /** Package manager used for installs and local scripts. */
+    packageManager: PackageManager;
+    /** Whether Docker binds to loopback or uses the public Caddy overlay. */
+    dockerExposure: WizardDockerExposure;
+    /** Public hostname used by the optional Caddy overlay. */
+    publicDomain?: string;
     /** When true, validation and derivation run but no files are written. */
     dryRun: boolean;
     /** When true, skips creating a timestamped backup of the env file. */
@@ -108,6 +143,8 @@ export interface WizardAnswers {
     storageAdvancedEnabled: boolean;
     /** Enables advanced AI/limits/security fields. */
     cloudAdvancedEnabled: boolean;
+    /** Enables provider IDs, relay selection, and device-limit controls. */
+    connectAdvancedEnabled: boolean;
 
     // ── Branding ──
     /** Maps to `OR3_SITE_NAME`. */
@@ -177,10 +214,34 @@ export interface WizardAnswers {
     sqliteStrict: boolean;
     /** Maps to `VITE_CONVEX_URL`. Required when any Convex provider is selected. */
     convexUrl?: string;
-    /** Maps to `CONVEX_SELF_HOSTED_ADMIN_KEY`. Optional; for self-hosted Convex admin access. */
+    /** Maps to `CONVEX_SELF_HOSTED_ADMIN_KEY`. Required server deployment/admin credential for Convex adapters. */
     convexSelfHostedAdminKey?: string;
     /** Maps to `VITE_CONVEX_SITE_URL`. Optional; primarily used by self-hosted Convex setups. */
     convexSelfHostedSiteUrl?: string;
+
+    // ── OR3 Connect ──
+    /** Maps to `OR3_CONNECT_ENABLED`. Requires SSR auth. */
+    connectEnabled: boolean;
+    /** Maps to `OR3_CONNECT_PROVIDER`; normally inherited from `syncProvider`. */
+    connectProvider: WizardConnectProvider;
+    /** Maps to `OR3_CONNECT_RELAY_PROVIDER`. */
+    connectRelayProvider: WizardConnectRelayProvider;
+    /** Maps to `OR3_CONNECT_PUBLIC_URL`. Public browser URL for this OR3 deployment. */
+    connectPublicUrl?: string;
+    /** Maps to `OR3_CONNECT_ENCRYPTION_KEY`. Generated automatically when Connect is enabled. */
+    connectEncryptionKey?: string;
+    /** Maps to `OR3_CONNECT_MAX_COMPUTERS`. */
+    connectMaxComputers: number;
+    /** Optional Cloudflare account override. Normally discovered from the hostname. */
+    connectCloudflareAccountId?: string;
+    /** Optional Cloudflare zone override. Normally discovered from the hostname. */
+    connectCloudflareZoneId?: string;
+    /** Maps to `OR3_CONNECT_CLOUDFLARE_API_TOKEN`. Server-only. */
+    connectCloudflareApiToken?: string;
+    /** Wizard-issued proof that the current Cloudflare settings passed the mutating canary. */
+    connectCloudflareValidationAttestation?: string;
+    /** Maps to `OR3_CONNECT_HOSTNAME_SUFFIX`. Example: `connect.example.com`. */
+    connectHostnameSuffix?: string;
 
     // ── Storage provider ──
     /** Maps to `OR3_CLOUD_STORAGE_ENABLED`. */
@@ -308,6 +369,8 @@ export interface WizardField<TValue = unknown> {
     required?: boolean;
     /** When true, the value is redacted in summaries and excluded from presets. */
     secret?: boolean;
+    /** Whether an empty required secret may be generated by the wizard. Defaults to true. */
+    autoGenerate?: boolean;
     /** Controls whether this field is considered core or advanced UX. */
     tier?: 'core' | 'advanced';
     /** Optional predicate that controls whether this field is visible for current answers. */
@@ -557,6 +620,13 @@ export interface WizardApi {
         prefillFromEnv?: boolean;
         /** Optional env map override used by CLI when it already parsed the env file. */
         existingEnvMap?: Record<string, string>;
+        packageManager?: PackageManager;
+        deploymentTarget?: WizardDeploymentTarget;
+        dockerExposure?: WizardDockerExposure;
+        publicDomain?: string;
+        wizardMode?: WizardMode;
+        /** Hide personal-local when launched from `bun start` → cloud. */
+        cloudSetupEntry?: boolean;
     }): Promise<WizardSession>;
     /** Retrieve an existing session by ID. */
     getSession(

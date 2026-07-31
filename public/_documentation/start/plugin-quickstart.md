@@ -1,12 +1,20 @@
 # Plugin Quick Start Guide
 
-This guide shows you how to create plugins for OR3 to extend the dashboard, chat messages, and sidebar. OR3's plugin system is built on Nuxt's plugin architecture with reactive registries that survive hot module replacement.
+This guide shows you how to extend the dashboard, chat messages, and sidebar
+through either source-level Nuxt plugins or installable V1 workspace packages.
+Both use the same reactive registries, but their module exports are different.
 
-> **Plugin Runtime V2:** Digest-addressed SDK packages (`@or3/plugin-sdk`, Manifest V2) are documented under [Runtime V2 overview](/plugins/runtime-v2-overview). V1 APIs in this guide remain supported through the V2 line; production V2 flags stay off by default.
+> **Plugin Runtime V2:** Digest-addressed SDK packages (`@or3/plugin-sdk`,
+> Manifest V2) are documented under [Runtime V2 overview](/plugins/runtime-v2-overview).
+> V1 APIs in this guide remain supported through the V2 line. The promoted
+> generation-safe manager still activates bundled V1 descriptors; digest module
+> loading and isolation remain off by default.
 
-## Plugin Basics
+## Source-level Nuxt Plugin Basics
 
-All OR3 plugins are Nuxt client plugins placed in the `app/plugins/` folder with a `.client.ts` extension. They register actions, components, or pages into global registries that the UI reads reactively.
+Plugins committed directly to an OR3 source tree are Nuxt client plugins placed
+in `app/plugins/` with a `.client.ts` extension. The examples in the numbered
+sections below use this source-level format.
 
 **File naming convention**: `your-plugin-name.client.ts`
 
@@ -46,16 +54,44 @@ Notes:
 - `runtime.client.entry` is optional; legacy `plugin.client.ts` fallback is supported.
 - `runtime.server.routes` are optional and only valid under the host dispatcher namespace.
 - Keep manifest JSON as the canonical runtime contract (non-executable, deterministic).
+- The client entry is a workspace-plugin module, not a Nuxt plugin. It must
+  export an object with `id` and `register(api)`, and its `id` must match the
+  manifest:
+
+```ts
+// plugin.client.ts
+export default {
+    id: 'or3-example',
+    register(api) {
+        api.registerDashboardPlugin({
+            id: 'or3-example:hello',
+            icon: 'pixelarticons:star',
+            label: 'Hello World',
+        });
+    },
+};
+```
+
+The host injects `or3-example` as the owning `pluginId` for access-aware
+dashboard, sidebar-page, pane-app, and message-action contributions. Their
+individual contribution IDs may remain namespaced (`or3-example:hello`).
 
 ### Installing plugins
 
-Once your plugin is packaged as a ZIP with `or3.manifest.json` at the root, there are three ways to install it:
+Once your plugin is packaged as a ZIP with one `or3.manifest.json` (at the ZIP
+root or inside one enclosing archive directory), there are three ways to
+install it:
 
 1. **Admin panel — Upload .zip**: Go to **Admin → Plugins**, click **Install .zip**, and select your file.
 2. **Admin panel — Import from URL**: Click **Import from URL** and paste an HTTPS link to a `.zip` archive (e.g. a GitHub archive URL like `https://github.com/user/repo/archive/refs/heads/main.zip`).
-3. **API**: `POST /api/admin/extensions/install` with multipart file upload, JSON `{ "url": "..." }`, or JSON `{ "zipBase64": "..." }`.
+3. **API**: `POST /api/admin/extensions/install` with `expectedKind: "plugin"` plus a multipart file, JSON `{ "url": "...", "expectedKind": "plugin" }`, or JSON `{ "zipBase64": "...", "expectedKind": "plugin" }`.
 
 See the [custom theme tutorial](/themes/custom-theme-tutorial) for detailed curl examples — the same endpoint and methods apply to plugins.
+
+Client entries are captured by Vite at build time. Restart the dev server after
+installation; production installations require a rebuild and restart before the
+new client entry can load. A successful API response reports
+`restartRequired: true`.
 
 ## 1. Dashboard Plugins
 
@@ -437,14 +473,14 @@ export default defineNuxtPlugin(() => {
         async ({ operation, a, b }) => {
             switch (operation) {
                 case 'add':
-                    return a + b;
+                    return String(a + b);
                 case 'subtract':
-                    return a - b;
+                    return String(a - b);
                 case 'multiply':
-                    return a * b;
+                    return String(a * b);
                 case 'divide':
                     if (b === 0) throw new Error('Cannot divide by zero');
-                    return a / b;
+                    return String(a / b);
                 default:
                     throw new Error(`Unknown operation: ${operation}`);
             }
@@ -792,7 +828,7 @@ export default defineNuxtPlugin(() => {
 
     registry.registerTool(myTool, async ({ query }) => {
         // Search implementation
-        return { results: [], query };
+        return JSON.stringify({ results: [], query });
     });
     cleanups.push(() => registry.unregisterTool(myTool.function.name));
 

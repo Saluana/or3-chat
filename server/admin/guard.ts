@@ -18,45 +18,16 @@
  * Constraints:
  * - Host validation supports proxy trust levels (X-Forwarded-Host).
  */
-import { createError, getRequestHeader } from 'h3';
+import { createError } from 'h3';
 import type { H3Event } from 'h3';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
 import { normalizeHost } from '../utils/normalize-host';
 import { useRuntimeConfig } from '#imports';
+import { requireSameOriginMutation } from '../utils/security/mutation-guard';
 import {
     getProxyRequestHost,
-    getProxyRequestProtocol,
     normalizeProxyTrustConfig,
 } from '../utils/net/request-identity';
-
-/**
- * Checks if the request method implies a state change.
- */
-function isMutationMethod(method?: string): boolean {
-    const normalized = (method || 'GET').toUpperCase();
-    return !['GET', 'HEAD', 'OPTIONS'].includes(normalized);
-}
-
-function parseHttpRequestSource(
-    value: string | undefined,
-    requireSerializedOrigin: boolean
-): URL | null {
-    if (!value) return null;
-    try {
-        const parsed = new URL(value);
-        if (
-            (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
-            parsed.username ||
-            parsed.password ||
-            (requireSerializedOrigin && parsed.origin !== value)
-        ) {
-            return null;
-        }
-        return parsed;
-    } catch {
-        return null;
-    }
-}
 
 /**
  * Purpose:
@@ -111,40 +82,8 @@ export function requireAdminRequest(event: H3Event): void {
  * @throws 403 if CSRF or intent checks fail.
  */
 export function requireAdminMutation(event: H3Event): void {
-    if (!isMutationMethod(event.method)) return;
-
-    // Explicit intent check
-    const intent = getRequestHeader(event, 'x-or3-admin-intent');
-    if (intent !== 'admin') {
-        throw createError({ statusCode: 403, statusMessage: 'Forbidden: Missing admin intent' });
-    }
-
-    // Origin/Referer matching (Same-Origin-ish)
-    const originHeader = getRequestHeader(event, 'origin');
-    const requestSource = parseHttpRequestSource(
-        originHeader || getRequestHeader(event, 'referer'),
-        Boolean(originHeader)
-    );
-    if (!requestSource) {
-        throw createError({ statusCode: 403, statusMessage: 'Forbidden: Origin validation failed' });
-    }
-
-    const proxyConfig = normalizeProxyTrustConfig(useRuntimeConfig(event).security.proxy);
-    const requestHost = getProxyRequestHost(event, proxyConfig);
-    const requestProtocol = getProxyRequestProtocol(event, proxyConfig);
-
-    if (!requestHost || !requestProtocol) {
-        throw createError({ statusCode: 403, statusMessage: 'Forbidden: Host resolution failed' });
-    }
-
-    let requestOrigin: string;
-    try {
-        requestOrigin = new URL(`${requestProtocol}://${requestHost}`).origin;
-    } catch {
-        throw createError({ statusCode: 403, statusMessage: 'Forbidden: Host resolution failed' });
-    }
-
-    if (requestOrigin !== requestSource.origin) {
-        throw createError({ statusCode: 403, statusMessage: 'Forbidden: Origin mismatch' });
-    }
+    requireSameOriginMutation(event, {
+        intentHeader: 'x-or3-admin-intent',
+        intentValue: 'admin',
+    });
 }

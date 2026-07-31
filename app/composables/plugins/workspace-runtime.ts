@@ -77,6 +77,16 @@ function toDisposer(
     };
 }
 
+function attachOwnerPluginId<T extends { pluginId?: string }>(
+    definition: T,
+    ownerPluginId?: string
+): T {
+    if (!ownerPluginId || definition.pluginId !== undefined) {
+        return definition;
+    }
+    return { ...definition, pluginId: ownerPluginId };
+}
+
 export interface ManagedWorkspacePluginRuntime {
     api: Or3WorkspacePluginApi;
     dispose: (reason?: unknown) => Promise<LegacyCleanupReport>;
@@ -86,7 +96,8 @@ export interface ManagedWorkspacePluginRuntime {
 export function createManagedWorkspacePluginRuntime(options?: {
     pluginId?: string;
 }): ManagedWorkspacePluginRuntime {
-    const pluginId = options?.pluginId ?? 'workspace-plugin';
+    const ownerPluginId = options?.pluginId;
+    const palettePluginId = ownerPluginId ?? 'workspace-plugin';
     const scope = new LegacyPluginScope({
         onCleanupError({ error }) {
             if (import.meta.dev) {
@@ -99,27 +110,36 @@ export function createManagedWorkspacePluginRuntime(options?: {
 
     const api: Or3WorkspacePluginApi = {
         registerDashboardPlugin(plugin) {
-            const handle = registerDashboardPlugin(plugin);
+            const handle = registerDashboardPlugin(
+                attachOwnerPluginId(plugin, ownerPluginId)
+            );
             const cleanup = toDisposer(handle);
             scope.onCleanup(cleanup);
             return handle;
         },
         registerSidebarPage(def) {
-            const cleanup = registerSidebarPage(def, {
-                clientOnly: true,
-                hmrCleanup: false,
-            });
+            const cleanup = registerSidebarPage(
+                attachOwnerPluginId(def, ownerPluginId),
+                {
+                    clientOnly: true,
+                    hmrCleanup: false,
+                }
+            );
             scope.onCleanup(cleanup);
             return cleanup;
         },
         registerPaneApp(def) {
-            const handle = registerPaneApp(def);
+            const handle = registerPaneApp(
+                attachOwnerPluginId(def, ownerPluginId)
+            );
             const cleanup = toDisposer(handle);
             scope.onCleanup(cleanup);
             return handle;
         },
         registerMessageAction(action) {
-            const handle = registerMessageAction(action);
+            const handle = registerMessageAction(
+                attachOwnerPluginId(action, ownerPluginId)
+            );
             const cleanup = toDisposer(handle);
             scope.onCleanup(cleanup);
             return handle;
@@ -148,7 +168,7 @@ export function createManagedWorkspacePluginRuntime(options?: {
         registerCommandPalettePostSource(definition) {
             const handle = registerPluginPostSource({
                 definition,
-                pluginId,
+                pluginId: palettePluginId,
             });
             scope.onCleanup(() => {
                 handle.dispose();
@@ -157,7 +177,7 @@ export function createManagedWorkspacePluginRuntime(options?: {
         },
         registerCommandPaletteCommand(definition, handler) {
             const handle = registerPaletteCommand(definition, handler, {
-                pluginId,
+                pluginId: palettePluginId,
             });
             scope.onCleanup(() => {
                 handle.dispose();
@@ -175,11 +195,11 @@ export function createManagedWorkspacePluginRuntime(options?: {
     };
 }
 
-export function createWorkspacePluginApi(): {
+export function createWorkspacePluginApi(pluginId?: string): {
     api: Or3WorkspacePluginApi;
     dispose: () => void;
 } {
-    const runtime = createManagedWorkspacePluginRuntime();
+    const runtime = createManagedWorkspacePluginRuntime({ pluginId });
     return {
         api: runtime.api,
         dispose() {

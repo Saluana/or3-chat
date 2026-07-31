@@ -53,25 +53,18 @@
         </div>
 
         <Transition name="table-toolbar">
-            <div v-if="tableActive" v-theme="'document.table-menu'" class="table-toolbar" role="toolbar" aria-label="Table controls">
-                <span class="table-toolbar-label"><UIcon :name="icons.table" /> Table</span>
-                <span class="toolbar-separator" />
-                <UButton color="neutral" variant="ghost" size="xs" label="Row above" @click="addRowBefore" />
-                <UButton color="neutral" variant="ghost" size="xs" label="Row below" @click="addRowAfter" />
-                <UButton color="neutral" variant="ghost" size="xs" label="Delete row" @click="deleteRow" />
-                <span class="toolbar-separator" />
-                <UButton color="neutral" variant="ghost" size="xs" label="Column left" @click="addColumnBefore" />
-                <UButton color="neutral" variant="ghost" size="xs" label="Column right" @click="addColumnAfter" />
-                <UButton color="neutral" variant="ghost" size="xs" label="Delete column" @click="deleteColumn" />
-                <span class="toolbar-spacer" />
-                <UButton color="error" variant="soft" size="xs" label="Delete table" @click="deleteTable" />
-            </div>
+            <DocumentTableToolbar
+                v-if="tableActive && editor"
+                :editor="editor"
+                :table-icon="icons.table"
+                @deleted="editorStateVersion += 1"
+            />
         </Transition>
 
         <div class="editor-layout">
             <main class="editor-scroll" @mousedown="focusCanvas">
                 <article v-theme="'document.canvas'" class="document-canvas">
-                    <UTextarea :model-value="titleDraft" class="document-title-field" :rows="1" :maxrows="3" autoresize variant="none" maxlength="300" placeholder="Untitled" aria-label="Document title" @update:model-value="onTitleInput" />
+                    <UTextarea id="document-title" :model-value="titleDraft" name="document-title" class="document-title-field" :rows="1" :maxrows="3" autoresize variant="none" maxlength="300" placeholder="Untitled" aria-label="Document title" @update:model-value="onTitleInput" />
                     <p class="document-byline">
                         <span>{{ stats.words.toLocaleString() }} words</span>
                         <span>{{ stats.readingMinutes }} min read</span>
@@ -189,6 +182,7 @@ import { TableKit } from '@tiptap/extension-table';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import ToolbarButton from './ToolbarButton.vue';
 import DocumentInspector from './DocumentInspector.vue';
+import DocumentTableToolbar from './DocumentTableToolbar.vue';
 import { useIcon } from '~/composables/useIcon';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import AutocompleteState from '~/plugins/EditorAutocomplete/state';
@@ -202,14 +196,20 @@ import {
     type DocumentAiEstimateRequest,
     type DocumentAiSubmission,
 } from '~/composables/documents/useDocumentAiAgent';
-import { useDocumentAiActions, useEditorInspectorPanels, useEditorToolbarButtons } from '~/composables';
+import {
+    useDocumentAiActions,
+    type DocumentAiScope,
+} from '~/composables/editor/useDocumentAiActions';
+import { useEditorInspectorPanels } from '~/composables/editor/useEditorInspectorPanels';
+import {
+    useEditorToolbarButtons,
+    type EditorToolbarButton,
+} from '~/composables/editor/useEditorToolbar';
 import { loadEditorExtensions } from '~/composables/editor/useEditorExtensionLoader';
 import { listEditorExtensions, listEditorMarks, listEditorNodes } from '~/composables/editor/useEditorNodes';
 import { useHooks } from '~/core/hooks/useHooks';
 import { createOrRefFile } from '~/db/files';
 import { createDocumentRevision, type CompleteDocumentRevision } from '~/db/document-revisions';
-import type { DocumentAiScope } from '~/composables/editor/useDocumentAiActions';
-import type { EditorToolbarButton } from '~/composables/editor/useEditorToolbar';
 import type { TipTapDocument } from '~/types/database';
 import { isAllowedDocumentHref } from '~/utils/documents/document-href';
 import {
@@ -773,29 +773,6 @@ function insertTable() {
     tableColumns.value = cols;
     editor.value?.chain().focus().insertTable({ rows, cols, withHeaderRow: tableHeaderRow.value }).run();
     tableDialogOpen.value = false;
-    editorStateVersion.value += 1;
-}
-
-function addRowBefore() {
-    editor.value?.chain().focus().addRowBefore().run();
-}
-function addRowAfter() {
-    editor.value?.chain().focus().addRowAfter().run();
-}
-function deleteRow() {
-    editor.value?.chain().focus().deleteRow().run();
-}
-function addColumnBefore() {
-    editor.value?.chain().focus().addColumnBefore().run();
-}
-function addColumnAfter() {
-    editor.value?.chain().focus().addColumnAfter().run();
-}
-function deleteColumn() {
-    editor.value?.chain().focus().deleteColumn().run();
-}
-function deleteTable() {
-    editor.value?.chain().focus().deleteTable().run();
     editorStateVersion.value += 1;
 }
 

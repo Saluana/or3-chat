@@ -54,6 +54,7 @@ function buildScopeKey(): string {
         session?.user?.id ?? '',
         session?.workspace?.id ?? '',
         session?.role ?? '',
+        [...(session?.entitlements ?? [])].sort().join(','),
     ].join('|');
 }
 
@@ -90,7 +91,7 @@ function getLocalDecision(policy?: PluginGatePolicy | null): PluginGateDecision 
             authenticated: Boolean(session?.authenticated),
             role: session?.role,
         },
-        entitlements: ((session as { entitlements?: string[] } | null)?.entitlements ?? []),
+        entitlements: session?.entitlements ?? [],
         pluginEnabled: true,
     });
 }

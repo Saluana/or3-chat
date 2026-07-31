@@ -200,6 +200,9 @@ export default defineEventHandler(async (event) => {
     const { session } = await requirePluginAccess(event, {
         pluginId,
         action: `${method.toLowerCase()}:${normalizeRoutePath(requestPath) || '/'}`,
+        extension: {
+            access: packageCatalog.manifest.access ?? null,
+        },
     });
 
     const workspacePermission = resolvePluginRoutePermission(method, route.permission);
@@ -209,7 +212,7 @@ export default defineEventHandler(async (event) => {
     });
 
     // Request context is host-created and never captured by the module cache.
-    serverModuleResolver.createAuthorizedContext({
+    const authorizedContext = serverModuleResolver.createAuthorizedContext({
         pluginId,
         packageDigest: packageDigest as `sha256-${string}`,
         workspaceId: session.workspace?.id ?? '',
@@ -217,6 +220,7 @@ export default defineEventHandler(async (event) => {
         method,
         routePath: normalizeRoutePath(requestPath) || '/',
     });
+    event.context.or3PluginRequest = authorizedContext;
 
     try {
         const resolved = await serverModuleResolver.resolveHandler({

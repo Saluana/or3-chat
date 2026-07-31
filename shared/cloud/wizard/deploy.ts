@@ -3,12 +3,12 @@
  *
  * Purpose:
  * Executes deploy commands after configuration has been applied.
- * Supports local-dev (SSR dev server) and prod-build targets.
+ * Supports local-dev, Docker, configure-only, and legacy prod-build targets.
  *
  * Responsibilities:
  * - Convex preflight checks (CLI availability, project detection)
- * - Convex backend env variable setting via `bunx convex env set`
- * - Deploy plan generation (`bun install` + dev/build)
+ * - Convex backend env variable setting through the selected package manager
+ * - Package-manager-neutral deploy plan generation
  * - Sequential command execution with error reporting
  *
  * Non-responsibilities:
@@ -29,8 +29,16 @@
  */
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { spawn } from 'node:child_process';
+import crossSpawn from 'cross-spawn';
 import { deriveEnvFromAnswers } from './derive';
+import { resolveEffectiveConnectProvider } from './connect-provider';
+import {
+    execPackageCommand,
+    formatCommand,
+    installCommand,
+    runScriptCommand,
+    type PackageManager,
+} from './package-manager';
 import type { WizardAnswers, WizardDeployResult } from './types';
 
 type CommandSpec = {
@@ -44,12 +52,21 @@ type CommandSpec = {
 function usesConvexProvider(
     answers: Pick<
         WizardAnswers,
-        'syncEnabled' | 'syncProvider' | 'storageEnabled' | 'storageProvider'
+        | 'syncEnabled'
+        | 'syncProvider'
+        | 'storageEnabled'
+        | 'storageProvider'
+        | 'connectEnabled'
+        | 'connectProvider'
+        | 'allAdvancedEnabled'
+        | 'connectAdvancedEnabled'
     >
 ): boolean {
     return (
         (answers.syncEnabled && answers.syncProvider === 'convex') ||
-        (answers.storageEnabled && answers.storageProvider === 'convex')
+        (answers.storageEnabled && answers.storageProvider === 'convex') ||
+        (answers.connectEnabled &&
+            resolveEffectiveConnectProvider(answers) === 'convex')
     );
 }
 
@@ -82,7 +99,7 @@ function buildConvexCliEnv(answers: WizardAnswers): NodeJS.ProcessEnv {
 
 function runCommand(spec: CommandSpec, cwd: string): Promise<void> {
     return new Promise((resolvePromise, rejectPromise) => {
-        const child = spawn(spec.command, spec.args, {
+        const child = crossSpawn(spec.command, spec.args, {
             cwd,
             stdio: 'inherit',
             shell: false,
@@ -119,7 +136,7 @@ function runCommandCapture(
     cwd: string
 ): Promise<{ code: number; stdout: string; stderr: string }> {
     return new Promise((resolvePromise) => {
-        const child = spawn(command, args, {
+        const child = crossSpawn(command, args, {
             cwd,
             stdio: ['ignore', 'pipe', 'pipe'],
             env: process.env,
@@ -128,10 +145,10 @@ function runCommandCapture(
 
         let stdout = '';
         let stderr = '';
-        child.stdout.on('data', (chunk) => {
+        child.stdout!.on('data', (chunk) => {
             stdout += String(chunk);
         });
-        child.stderr.on('data', (chunk) => {
+        child.stderr!.on('data', (chunk) => {
             stderr += String(chunk);
         });
 
@@ -160,19 +177,34 @@ function hasConvexProject(instanceDir: string): boolean {
  * exists in the instance directory. Returns warnings for any issues found.
  * Does not throw; all problems are reported as warning strings.
  */
-export async function preflightConvex(instanceDir: string): Promise<string[]> {
+export async function preflightConvex(
+    instanceDir: string,
+    packageManager: PackageManager = 'npm'
+): Promise<string[]> {
     const warnings: string[] = [];
+    const convexCommand = execPackageCommand(packageManager, [
+        'convex',
+        '--version',
+    ]);
 
-    const convexVersion = await runCommandCapture('bunx', ['convex', '--version'], instanceDir);
+    const convexVersion = await runCommandCapture(
+        convexCommand.command,
+        convexCommand.args,
+        instanceDir
+    );
     if (convexVersion.code !== 0) {
         warnings.push(
-            'Convex CLI is not accessible via `bunx convex`. Install it or run Convex setup manually.'
+            `Convex CLI is not accessible via \`${formatCommand(convexCommand)}\`. Install it or run Convex setup manually.`
         );
     }
 
     if (!hasConvexProject(instanceDir)) {
+        const initCommand = execPackageCommand(packageManager, [
+            'or3-provider-convex',
+            'init',
+        ]);
         warnings.push(
-            'No Convex project detected in instance directory (missing `convex/` or `convex.json`). Run `bunx or3-provider-convex init` to scaffold it.'
+            `No Convex project detected in instance directory (missing \`convex/\` or \`convex.json\`). Run \`${formatCommand(initCommand)}\` to scaffold it.`
         );
     }
 
@@ -180,16 +212,16 @@ export async function preflightConvex(instanceDir: string): Promise<string[]> {
 }
 
 /**
- * Sets Convex backend environment variables via `bunx convex env set`.
+ * Sets Convex backend environment variables through the selected package manager.
  * Only relevant for Clerk + Convex flows (sets `CLERK_ISSUER_URL` and
  * `OR3_ADMIN_JWT_SECRET`).
  *
  * Behavior:
  * - Runs preflight checks first and collects warnings.
  * - In dry-run mode, returns the commands that would be executed.
- * - In live mode, executes each `bunx convex env set` sequentially.
+ * - In live mode, executes each `convex env set` command sequentially.
  *
- * @throws Error when a `bunx convex env set` command fails.
+ * @throws Error when a `convex env set` command fails.
  */
 export async function applyConvexEnv(
     answers: WizardAnswers,
@@ -200,18 +232,24 @@ export async function applyConvexEnv(
     const { convexEnv } = deriveEnvFromAnswers(answers);
     const commands: string[] = [];
     const dryRun = options.dryRun ?? answers.dryRun;
-    const initialWarnings = await preflightConvex(answers.instanceDir);
+    const initialWarnings = await preflightConvex(
+        answers.instanceDir,
+        answers.packageManager
+    );
     const convexCliEnv = buildConvexCliEnv(answers);
 
     if (!hasConvexProject(answers.instanceDir)) {
         const initArgs = ['or3-provider-convex', 'init'];
-        commands.push(`bunx ${initArgs.join(' ')}`);
+        const initCommand = execPackageCommand(
+            answers.packageManager,
+            initArgs
+        );
+        commands.push(formatCommand(initCommand));
         if (!dryRun) {
             await runCommand(
                 {
                     step: 'Initialize Convex scaffold',
-                    command: 'bunx',
-                    args: initArgs,
+                    ...initCommand,
                     env: convexCliEnv,
                 },
                 answers.instanceDir
@@ -222,14 +260,17 @@ export async function applyConvexEnv(
     for (const [key, value] of Object.entries(convexEnv)) {
         if (!value) continue;
         const args = ['convex', 'env', 'set', `${key}=${value}`];
-        const printable = `bunx ${args.join(' ')}`;
+        const convexCommand = execPackageCommand(
+            answers.packageManager,
+            args
+        );
+        const printable = formatCommand(convexCommand);
         commands.push(printable);
         if (!dryRun) {
             await runCommand(
                 {
                     step: `Set Convex env ${key}`,
-                    command: 'bunx',
-                    args,
+                    ...convexCommand,
                     env: convexCliEnv,
                 },
                 answers.instanceDir
@@ -237,48 +278,83 @@ export async function applyConvexEnv(
         }
     }
 
-    const warnings = dryRun ? initialWarnings : await preflightConvex(answers.instanceDir);
+    const warnings = dryRun
+        ? initialWarnings
+        : await preflightConvex(answers.instanceDir, answers.packageManager);
     return { commands, warnings };
 }
 
 /**
  * Generates the ordered list of shell commands for the deploy step.
  *
- * - `local-dev`: `bun install` then `bun run dev:ssr`
- * - `prod-build`: `bun install` then `bun run build`
+ * - `local-dev`: install, optional Convex preparation, then start dev:ssr
+ * - `docker`: Docker Compose build/start
+ * - `configure-only`: no commands
+ * - `prod-build`: install then build (legacy sessions)
  */
 export function buildDeployPlan(answers: WizardAnswers): CommandSpec[] {
-    const commands: CommandSpec[] = [{ step: 'Install dependencies', command: 'bun', args: ['install'] }];
+    if (answers.deploymentTarget === 'configure-only') {
+        return [];
+    }
+
+    if (answers.deploymentTarget === 'docker') {
+        const args = ['compose', '-f', 'compose.yaml'];
+        if (answers.dockerExposure === 'public') {
+            args.push('-f', 'compose.public.yaml');
+        }
+        args.push('up', '--build', '-d');
+        return [
+            {
+                step: 'Build and start OR3 with Docker Compose',
+                command: 'docker',
+                args,
+            },
+        ];
+    }
+
+    const install = installCommand(answers.packageManager);
+    const commands: CommandSpec[] = [
+        { step: 'Install dependencies', ...install },
+    ];
     const convexEnabled = usesConvexProvider(answers);
     const selfHostedConvex = isSelfHostedConvex(answers);
 
     if (convexEnabled) {
+        const initCommand = execPackageCommand(answers.packageManager, [
+            'or3-provider-convex',
+            'init',
+        ]);
         commands.push({
             step: 'Initialize Convex scaffold',
-            command: 'bunx',
-            args: ['or3-provider-convex', 'init'],
+            ...initCommand,
         });
     }
 
     if (answers.deploymentTarget === 'local-dev') {
         if (convexEnabled && !selfHostedConvex) {
+            const convexDevCommand = execPackageCommand(
+                answers.packageManager,
+                ['convex', 'dev', '--once']
+            );
             commands.push({
                 step: 'Sync Convex backend',
-                command: 'bunx',
-                args: ['convex', 'dev', '--once'],
+                ...convexDevCommand,
                 optional: true,
             });
         }
+        const startCommand = runScriptCommand(
+            answers.packageManager,
+            'dev:ssr'
+        );
         commands.push({
             step: 'Start Nuxt SSR',
-            command: 'bun',
-            args: ['run', 'dev:ssr'],
+            ...startCommand,
         });
     } else {
+        const buildCommand = runScriptCommand(answers.packageManager, 'build');
         commands.push({
             step: 'Build Nuxt app',
-            command: 'bun',
-            args: ['run', 'build'],
+            ...buildCommand,
         });
     }
 
@@ -319,36 +395,143 @@ export async function deployAnswers(
         }
     }
 
-    if (answers.deploymentTarget === 'prod-build') {
+    if (answers.deploymentTarget === 'configure-only') {
         return {
-            started: true,
-            commands: printableCommands,
-            instructions:
-                'Build complete. Start the production preview with: bun run preview',
-            accessUrl: 'http://localhost:3000',
+            started: false,
+            commands: [],
+            instructions: 'Configuration complete. No services were started.',
             nextSteps: [
-                'Run `bun run preview` to start the production preview server.',
-                'Open http://localhost:3000 in your browser.',
-                'Sign in with your bootstrap/admin account.',
-                'Open the admin panel and verify providers are healthy.',
+                `Start locally with: ${formatCommand(runScriptCommand(answers.packageManager, 'dev'))}`,
+                'Re-run setup at any time to choose a deployment target.',
             ],
         };
     }
 
+    if (answers.deploymentTarget === 'docker') {
+        const accessUrl =
+            answers.dockerExposure === 'public' && answers.publicDomain
+                ? `https://${answers.publicDomain}`
+                : 'http://127.0.0.1:3000';
+        let healthy = false;
+        const composeArgs = ['compose', '-f', 'compose.yaml'];
+        if (answers.dockerExposure === 'public') {
+            composeArgs.push('-f', 'compose.public.yaml');
+        }
+        const healthProbeArgs = [
+            ...composeArgs,
+            'exec',
+            '-T',
+            'or3',
+            'node',
+            '-e',
+            "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async r=>{const body=await r.json();if(!r.ok||body.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))",
+        ];
+        const deadline = Date.now() + 60_000;
+        while (Date.now() < deadline) {
+            const probe = await runCommandCapture(
+                'docker',
+                healthProbeArgs,
+                answers.instanceDir
+            );
+            healthy = probe.code === 0;
+            if (healthy) break;
+            await new Promise((resolvePromise) =>
+                setTimeout(resolvePromise, 1_000)
+            );
+        }
+
+        const composeFiles =
+            answers.dockerExposure === 'public'
+                ? '-f compose.yaml -f compose.public.yaml'
+                : '-f compose.yaml';
+        return {
+            started: true,
+            commands: printableCommands,
+            instructions: healthy
+                ? 'OR3 is running and all configured providers are healthy.'
+                : 'Docker started, but its local deep-health endpoint did not report healthy within 60 seconds. Check container logs.',
+            accessUrl,
+            nextSteps: [
+                `Open ${accessUrl} in your browser.`,
+                `Open the admin dashboard at ${accessUrl}/admin.`,
+                `View logs: docker compose ${composeFiles} logs -f`,
+                `Stop OR3: docker compose ${composeFiles} down`,
+                'List this project’s volumes with `docker compose ' +
+                    `${composeFiles} config --volumes` +
+                    '` and back up the `or3-data` volume before upgrades.',
+                ...(answers.dockerExposure === 'public'
+                    ? [
+                          `Confirm ${answers.publicDomain} resolves to this server before opening the public URL.`,
+                      ]
+                    : []),
+            ],
+        };
+    }
+
+    if (answers.deploymentTarget === 'prod-build') {
+        const previewCommand = runScriptCommand(
+            answers.packageManager,
+            'preview'
+        );
+        const nextSteps = [
+            `Run \`${formatCommand(previewCommand)}\` to start the production preview server.`,
+            'Open http://localhost:3000 in your browser.',
+        ];
+        if (answers.ssrAuthEnabled) {
+            nextSteps.push('Sign in with your bootstrap/admin account.');
+            nextSteps.push('Open the admin panel and verify providers are healthy.');
+        }
+        if (answers.connectEnabled) {
+            nextSteps.push(
+                'After the public URL is live, connect a computer with `npx @or3/connect`.'
+            );
+        }
+        return {
+            started: true,
+            commands: printableCommands,
+            instructions:
+                `Build complete. Start the production preview with: ${formatCommand(previewCommand)}`,
+            accessUrl: 'http://localhost:3000',
+            nextSteps,
+        };
+    }
+
+    const nextSteps = ['Open http://localhost:3000 in your browser.'];
+    if (answers.ssrAuthEnabled) {
+        nextSteps.push('Sign in with your bootstrap/admin account.');
+        nextSteps.push('Open the admin panel and verify auth/sync/storage status.');
+    }
+    if (answers.connectEnabled) {
+        nextSteps.push(
+            'Connect requires a public HTTPS URL; once it is reachable, run `npx @or3/connect`.'
+        );
+    }
+    if (usesConvexProvider(answers)) {
+        const convexCommand = execPackageCommand(answers.packageManager, [
+            'convex',
+            'dev',
+            '--once',
+        ]);
+        nextSteps.push(
+            `Keep an eye on \`${formatCommand(convexCommand)}\` output while using Convex.`
+        );
+    }
+    const convexRetryCommand = formatCommand(
+        execPackageCommand(answers.packageManager, [
+            'convex',
+            'dev',
+            '--once',
+        ])
+    );
     return {
         started: true,
         commands: printableCommands,
         instructions: optionalStepFailures.length
-            ? 'Local dev is running. Convex backend sync failed; run `bunx convex dev --once` manually after fixing Convex deployment access.'
+            ? `Local dev is running. Convex backend sync failed; run \`${convexRetryCommand}\` manually after fixing Convex deployment access.`
             : usesConvexProvider(answers) && !isSelfHostedConvex(answers)
-                ? 'Local dev is running. Re-run `bunx convex dev --once` after editing Convex functions.'
+                ? `Local dev is running. Re-run \`${convexRetryCommand}\` after editing Convex functions.`
                 : 'Local dev is running.',
         accessUrl: 'http://localhost:3000',
-        nextSteps: [
-            'Open http://localhost:3000 in your browser.',
-            'Sign in with your bootstrap/admin account.',
-            'Open the admin panel and verify auth/sync/storage status.',
-            'If using Convex, keep an eye on `bunx convex dev --once` output.',
-        ],
+        nextSteps,
     };
 }

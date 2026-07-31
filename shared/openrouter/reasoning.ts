@@ -41,6 +41,7 @@ function supportsReasoningByParams(params: readonly string[] | undefined) {
             parameter === 'reasoning' ||
             parameter.startsWith('reasoning.') ||
             parameter === 'reasoning_effort' ||
+            parameter === 'include_reasoning' ||
             parameter === 'thinking'
     );
 }
