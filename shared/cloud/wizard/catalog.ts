@@ -27,6 +27,7 @@
  * @see types.ts for WizardProviderDescriptor shape
  * @see planning/or3-cloud-launch-wizard/design.md for catalog design rationale
  */
+import { resolve as resolvePath } from 'node:path';
 import type {
     WizardAnswers,
     WizardMode,
@@ -34,6 +35,16 @@ import type {
     WizardProviderDescriptor,
 } from './types';
 import { detectPackageManager } from './package-manager';
+
+/** Recommended self-hosted modes (guided email-only or zero-question fast). */
+export function isRecommendedSelfHostMode(mode: WizardMode): boolean {
+    return mode === 'preset-local' || mode === 'preset-local-fast';
+}
+
+/** Absolute default for filesystem storage under the instance directory. */
+export function defaultFsRoot(instanceDir: string): string {
+    return resolvePath(instanceDir, '.data', 'or3-storage');
+}
 
 /** Available built-in theme identifiers for the theme selection step. */
 export const BUILTIN_THEMES = ['blank', 'retro'] as const;
@@ -205,10 +216,11 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 key: 'basicAuthJwtSecret',
                 type: 'password',
                 label: 'Security key for login sessions',
-                help: 'A long random string (32+ characters) used to sign login tokens. Keep this secret!',
+                help: 'Leave blank to auto-generate. A long random string (32+ characters) used to sign login tokens.',
                 required: true,
                 secret: true,
-                tier: 'core',
+                autoGenerate: true,
+                tier: 'advanced',
             },
             {
                 key: 'basicAuthBootstrapEmail',
@@ -221,11 +233,12 @@ export const providerCatalog: WizardProviderDescriptor[] = [
             {
                 key: 'basicAuthBootstrapPassword',
                 type: 'password',
-                label: 'Your admin password',
-                help: 'Choose a strong password for your admin account.',
+                label: 'Your admin password (leave blank to auto-generate)',
+                help: 'Leave blank and OR3 generates a strong password. You\'ll see it on the review screen after setup.',
                 required: true,
                 secret: true,
-                tier: 'core',
+                autoGenerate: true,
+                tier: 'advanced',
                 validate: (value) => {
                     const password = String(value ?? '').trim();
                     if (!password) return null;
@@ -349,9 +362,10 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 key: 'sqliteDbPath',
                 type: 'text',
                 label: 'Where to store synced data',
-                help: 'File path for the sync database. Example: ./.data/or3-sync.sqlite',
+                help: 'File path for the sync database. Default: ./.data/or3-sync.sqlite',
                 required: true,
-                tier: 'core',
+                defaultValue: './.data/or3-sync.sqlite',
+                tier: 'advanced',
             },
             {
                 key: 'sqlitePragmaJournalMode',
@@ -465,18 +479,19 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 key: 'fsRoot',
                 type: 'text',
                 label: 'Upload folder (absolute path)',
-                help: 'Where uploaded files are saved on disk. Must be an absolute path. Example: /var/data/or3-files',
+                help: 'Where uploaded files are saved on disk. Defaults to <project>/.data/or3-storage.',
                 required: true,
-                tier: 'core',
+                tier: 'advanced',
             },
             {
                 key: 'fsTokenSecret',
                 type: 'password',
-                label: 'File access key',
-                help: 'A random string used to generate secure download links. Keep this secret!',
+                label: 'File access key (leave blank to auto-generate)',
+                help: 'A random string used to generate secure download links. Leave blank to auto-generate.',
                 required: true,
                 secret: true,
-                tier: 'core',
+                autoGenerate: true,
+                tier: 'advanced',
             },
             {
                 key: 'fsUrlTtlSeconds',
@@ -657,6 +672,7 @@ export function isWizardMode(value: unknown): value is WizardMode {
     return (
         value === 'personal-local' ||
         value === 'preset-local' ||
+        value === 'preset-local-fast' ||
         value === 'preset-clerk-convex' ||
         value === 'custom'
     );
@@ -670,6 +686,31 @@ export function normalizeWizardMode(
         return wizardMode;
     }
     return inferWizardModeFromPresetName(presetName);
+}
+
+function applyRecommendedSelfHostDefaults(
+    answers: WizardAnswers,
+    wizardMode: 'preset-local' | 'preset-local-fast'
+): WizardAnswers {
+    return {
+        ...answers,
+        wizardMode,
+        presetName: 'recommended',
+        ssrAuthEnabled: true,
+        authProvider: 'basic-auth',
+        syncEnabled: true,
+        syncProvider: 'sqlite',
+        storageEnabled: true,
+        storageProvider: 'fs',
+        connectProvider: 'sqlite',
+        ...(wizardMode === 'preset-local-fast'
+            ? {
+                  basicAuthBootstrapEmail:
+                      answers.basicAuthBootstrapEmail?.trim() ||
+                      'admin@example.com',
+              }
+            : {}),
+    };
 }
 
 export function applyWizardModeDefaults(
@@ -688,18 +729,12 @@ export function applyWizardModeDefaults(
                 connectEnabled: false,
             };
         case 'preset-local':
-            return {
-                ...answers,
-                wizardMode: 'preset-local',
-                presetName: 'recommended',
-                ssrAuthEnabled: true,
-                authProvider: 'basic-auth',
-                syncEnabled: true,
-                syncProvider: 'sqlite',
-                storageEnabled: true,
-                storageProvider: 'fs',
-                connectProvider: 'sqlite',
-            };
+            return applyRecommendedSelfHostDefaults(answers, 'preset-local');
+        case 'preset-local-fast':
+            return applyRecommendedSelfHostDefaults(
+                answers,
+                'preset-local-fast'
+            );
         case 'preset-clerk-convex':
             return {
                 ...answers,
@@ -714,11 +749,14 @@ export function applyWizardModeDefaults(
                 connectProvider: 'convex',
             };
         case 'custom':
-        default:
             return {
                 ...answers,
                 wizardMode: 'custom',
             };
+        default: {
+            const _exhaustive: never = wizardMode;
+            return _exhaustive;
+        }
     }
 }
 
@@ -758,6 +796,7 @@ const ADVANCED_SECTION_KEYS = {
         'basicAuthDbPath',
     ],
     sync: [
+        'sqliteDbPath',
         'sqlitePragmaJournalMode',
         'sqlitePragmaSynchronous',
         'sqliteAllowInMemory',
@@ -765,6 +804,7 @@ const ADVANCED_SECTION_KEYS = {
         'convexSelfHostedSiteUrl',
     ],
     storage: [
+        'fsRoot',
         'fsUrlTtlSeconds',
         's3Endpoint',
         's3SessionToken',
@@ -941,7 +981,7 @@ function inferWizardModeFromProviderSelection(
 
 function presetNameFromWizardMode(wizardMode: WizardMode): string | undefined {
     if (wizardMode === 'personal-local') return 'personal-local';
-    if (wizardMode === 'preset-local') return 'recommended';
+    if (isRecommendedSelfHostMode(wizardMode)) return 'recommended';
     if (wizardMode === 'preset-clerk-convex') return 'legacy-clerk-convex';
     return undefined;
 }
@@ -1133,6 +1173,7 @@ export function createDefaultAnswers(
     const presetName = input.presetName ?? 'recommended';
     const wizardMode = inferWizardModeFromPresetName(presetName);
     const base: WizardAnswers = {
+        cloudSetupEntry: false,
         targetAdvancedEnabled: false,
         instanceDir: input.instanceDir,
         envFile: input.envFile ?? '.env',
@@ -1183,7 +1224,7 @@ export function createDefaultAnswers(
         connectCloudflareValidationAttestation: '',
         storageEnabled: true,
         storageProvider: 'fs',
-        fsRoot: '/tmp/or3-storage',
+        fsRoot: defaultFsRoot(input.instanceDir),
         fsUrlTtlSeconds: 900,
         s3Endpoint: '',
         s3Region: 'us-east-1',

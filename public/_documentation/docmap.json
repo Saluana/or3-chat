@@ -689,7 +689,7 @@
                     "name": "or3-cloud-wizard.md",
                     "path": "/cloud/or3-cloud-wizard",
                     "category": "Guide",
-                    "summary": "Guide for the shared OR3 installation wizard used by the CLI and browser UI. Covers true local-only setup, self-hosted provider presets, OR3 Connect remote access, validation, secret-safe env writes, dry-run mode, deploy commands, and Convex backend env setup."
+                    "summary": "Guide for the shared OR3 installation wizard used by the CLI and browser UI. Covers true local-only setup, self-hosted provider presets (including email-only and zero-question fast defaults), OR3 Connect remote access, validation, secret-safe env writes, dry-run mode, deploy commands, and Convex backend env setup."
                 },
                 {
                     "name": "providers.md",

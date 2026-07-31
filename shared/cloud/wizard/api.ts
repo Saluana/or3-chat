@@ -41,7 +41,9 @@ import {
     applySkippedAdvancedDefaults,
     applyWizardModeDefaults,
     createDefaultAnswers,
+    defaultFsRoot,
     inferWizardModeFromPresetName,
+    isRecommendedSelfHostMode,
     legacyPreset,
     normalizeWizardMode,
     normalizeAdvancedToggles,
@@ -490,13 +492,17 @@ function completeAnswers(partial: Partial<WizardAnswers>): WizardAnswers {
 }
 
 function ensurePresetLocalSecrets(answers: WizardAnswers): WizardAnswers {
-    if (answers.wizardMode !== 'preset-local') return answers;
+    if (!isRecommendedSelfHostMode(answers.wizardMode)) return answers;
 
     const bootstrapPassword =
         answers.basicAuthBootstrapPassword?.trim() ||
         answers.adminPassword?.trim() ||
         generateAdminPassword(24);
-    const bootstrapEmail = answers.basicAuthBootstrapEmail?.trim();
+    const bootstrapEmail =
+        answers.basicAuthBootstrapEmail?.trim() ||
+        (answers.wizardMode === 'preset-local-fast'
+            ? 'admin@example.com'
+            : undefined);
 
     return {
         ...answers,
@@ -504,11 +510,17 @@ function ensurePresetLocalSecrets(answers: WizardAnswers): WizardAnswers {
             answers.basicAuthJwtSecret?.trim() || generateSecureSecret(48),
         basicAuthRefreshSecret:
             answers.basicAuthRefreshSecret?.trim() || generateSecureSecret(48),
+        basicAuthBootstrapEmail: bootstrapEmail,
         basicAuthBootstrapPassword: bootstrapPassword,
         fsTokenSecret:
             answers.fsTokenSecret?.trim() || generateSecureSecret(48),
+        fsRoot: answers.fsRoot?.trim() || defaultFsRoot(answers.instanceDir),
+        sqliteDbPath:
+            answers.sqliteDbPath?.trim() || './.data/or3-sync.sqlite',
         adminUsername:
-            answers.adminUsername?.trim() || bootstrapEmail || answers.adminUsername,
+            answers.adminUsername?.trim() ||
+            bootstrapEmail ||
+            answers.adminUsername,
         adminPassword: answers.adminPassword?.trim() || bootstrapPassword,
     };
 }
@@ -605,6 +617,7 @@ export class Or3CloudWizardApi implements WizardApi {
             dockerExposure?: WizardDockerExposure;
             publicDomain?: string;
             wizardMode?: WizardAnswers['wizardMode'];
+            cloudSetupEntry?: boolean;
         } = {}
     ): Promise<WizardSession> {
         const preset = await resolvePreset(input.presetName);
@@ -643,6 +656,9 @@ export class Or3CloudWizardApi implements WizardApi {
         }
         answers = {
             ...answers,
+            ...(input.cloudSetupEntry !== undefined
+                ? { cloudSetupEntry: input.cloudSetupEntry }
+                : {}),
             ...(input.packageManager
                 ? { packageManager: input.packageManager }
                 : {}),
@@ -782,7 +798,7 @@ export class Or3CloudWizardApi implements WizardApi {
             ...nextAnswers,
             ...patch,
         });
-        if (nextAnswers.wizardMode === 'preset-local') {
+        if (nextAnswers.wizardMode === 'preset-local' || nextAnswers.wizardMode === 'preset-local-fast') {
             nextAnswers = completeAnswers({
                 ...nextAnswers,
                 ...(patch.basicAuthBootstrapEmail !== undefined

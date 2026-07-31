@@ -222,7 +222,8 @@ defineEmits<{
 const showBootstrapCredentials = computed(
     () =>
         Boolean(props.deployResponse?.deployResult) &&
-        props.answers.wizardMode === 'preset-local' &&
+        (props.answers.wizardMode === 'preset-local' ||
+            props.answers.wizardMode === 'preset-local-fast') &&
         Boolean(props.answers.basicAuthBootstrapEmail) &&
         Boolean(props.answers.basicAuthBootstrapPassword)
 );

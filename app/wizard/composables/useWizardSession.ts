@@ -273,6 +273,7 @@ function getWizardBootstrapQuery(): Record<string, string> | undefined {
         'dockerExposure',
         'publicDomain',
         'wizardMode',
+        'cloudSetupEntry',
     ] as const;
     const query: Record<string, string> = {};
     for (const key of allowedKeys) {
@@ -516,8 +517,12 @@ export function useWizardSession() {
         steps: WizardStep[]
     ): Partial<WizardAnswers> {
         const patch: Partial<WizardAnswers> = {};
-        for (const step of steps) {
-            for (const field of getVisibleFields(step, answers.value)) {
+        // Include skipped/advanced fields so auto-generated secrets still fill
+        // when the core path hides them.
+        const secretSteps =
+            steps.length > 0 ? getWizardSteps(answers.value) : steps;
+        for (const step of secretSteps) {
+            for (const field of step.fields) {
                 if (
                     !field.secret ||
                     !field.required ||

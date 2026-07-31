@@ -67,6 +67,7 @@ describe('or3 cloud wizard validation', () => {
     it('fails when fs root is not absolute', () => {
         const result = validateAnswers({
             ...validRecommendedAnswers(),
+            storageAdvancedEnabled: true,
             fsRoot: './relative-path',
         });
         expect(result.ok).toBe(false);
@@ -234,6 +235,9 @@ describe('or3 cloud wizard validation', () => {
             'Self-hosted OR3 — accounts, SQLite, and filesystem storage'
         );
         expect(presetLabels).toContain(
+            'Use recommended defaults — skip questions'
+        );
+        expect(presetLabels).toContain(
             'Clerk + Convex — managed authentication and data'
         );
         expect(presetLabels).toContain(
@@ -261,7 +265,72 @@ describe('or3 cloud wizard validation', () => {
         expect(providersStep.canSkip?.(validRecommendedAnswers())).toBe(true);
     });
 
-    it('reduces the recommended Docker wizard to setup, login, and review', () => {
+    it('reduces recommended self-host (local-dev) to setup, template, email, and review', () => {
+        const answers = {
+            ...validRecommendedAnswers(),
+            wizardMode: 'preset-local' as const,
+            deploymentTarget: 'local-dev' as const,
+            targetAdvancedEnabled: false,
+        };
+        const visibleSteps = getWizardSteps(answers).filter(
+            (step) => !step.canSkip?.(answers)
+        );
+        expect(visibleSteps.map((step) => step.id)).toEqual([
+            'target',
+            'preset',
+            'provider-auth',
+            'review',
+        ]);
+        expect(
+            visibleFieldKeys(
+                getStepById(visibleSteps, 'provider-auth'),
+                answers
+            )
+        ).toEqual(['basicAuthBootstrapEmail']);
+    });
+
+    it('hides personal-local when cloudSetupEntry is set', () => {
+        const answers = {
+            ...validRecommendedAnswers(),
+            cloudSetupEntry: true,
+        };
+        const presetStep = getStepById(getWizardSteps(answers), 'preset');
+        const labels = (presetStep.fields[0]?.options ?? []).map(
+            (option) => option.label
+        );
+        expect(labels).not.toContain(
+            'This device only — private, offline, and no account'
+        );
+        expect(labels).toContain(
+            'Self-hosted OR3 — accounts, SQLite, and filesystem storage'
+        );
+    });
+
+    it('skips login for recommended fast defaults', () => {
+        const answers = {
+            ...validRecommendedAnswers(),
+            wizardMode: 'preset-local-fast' as const,
+            targetAdvancedEnabled: false,
+        };
+        const visibleSteps = getWizardSteps(answers).filter(
+            (step) => !step.canSkip?.(answers)
+        );
+        expect(visibleSteps.map((step) => step.id)).toEqual([
+            'target',
+            'preset',
+            'review',
+        ]);
+    });
+
+    it('defaults fs storage under the instance .data directory', () => {
+        const answers = createDefaultAnswers({
+            instanceDir: '/opt/or3-chat',
+        });
+        expect(answers.fsRoot).toBe('/opt/or3-chat/.data/or3-storage');
+        expect(answers.fsRoot).not.toContain('/tmp/');
+    });
+
+    it('reduces the recommended Docker wizard to setup, template, email, and review', () => {
         const answers = {
             ...validRecommendedAnswers(),
             wizardMode: 'preset-local' as const,
@@ -274,6 +343,7 @@ describe('or3 cloud wizard validation', () => {
         );
         expect(visibleSteps.map((step) => step.id)).toEqual([
             'target',
+            'preset',
             'provider-auth',
             'review',
         ]);
@@ -282,10 +352,7 @@ describe('or3 cloud wizard validation', () => {
                 getStepById(visibleSteps, 'provider-auth'),
                 answers
             )
-        ).toEqual([
-            'basicAuthBootstrapEmail',
-            'basicAuthBootstrapPassword',
-        ]);
+        ).toEqual(['basicAuthBootstrapEmail']);
     });
 
     it('skips manual providers step for preset-clerk-convex mode', () => {
@@ -373,6 +440,7 @@ describe('or3 cloud wizard validation', () => {
     it('hides provider detail fields when provider features are disabled', () => {
         const answers = {
             ...validRecommendedAnswers(),
+            targetAdvancedEnabled: true,
             syncEnabled: false,
         };
         const syncStep = getStepById(getWizardSteps(answers), 'provider-sync');
@@ -426,20 +494,25 @@ describe('or3 cloud wizard validation', () => {
     it('uses per-section advanced toggles inside provider steps', () => {
         const answers = {
             ...validRecommendedAnswers(),
+            targetAdvancedEnabled: true,
             authAdvancedEnabled: false,
         };
         const providerAuthStep = getStepById(getWizardSteps(answers), 'provider-auth');
         const hiddenAdvanced = visibleFieldKeys(providerAuthStep, answers);
         expect(hiddenAdvanced).toContain('authAdvancedEnabled');
+        expect(hiddenAdvanced).toContain('basicAuthBootstrapEmail');
+        expect(hiddenAdvanced).not.toContain('basicAuthJwtSecret');
+        expect(hiddenAdvanced).not.toContain('basicAuthBootstrapPassword');
         expect(hiddenAdvanced).not.toContain('basicAuthAccessTtlSeconds');
 
         const enabledAdvanced = {
             ...answers,
             authAdvancedEnabled: true,
         };
-        expect(visibleFieldKeys(providerAuthStep, enabledAdvanced)).toContain(
-            'basicAuthAccessTtlSeconds'
-        );
+        const shownAdvanced = visibleFieldKeys(providerAuthStep, enabledAdvanced);
+        expect(shownAdvanced).toContain('basicAuthJwtSecret');
+        expect(shownAdvanced).toContain('basicAuthBootstrapPassword');
+        expect(shownAdvanced).toContain('basicAuthAccessTtlSeconds');
 
         const stepIds = getWizardSteps(enabledAdvanced).map((step) => step.id);
         expect(stepIds).not.toContain('advanced-gates');
@@ -594,10 +667,10 @@ describe('or3 cloud wizard apply', () => {
             instanceDir,
         });
         expect(plan.commands.npm).toContain(
-            'or3-provider-basic-auth@0.0.3'
+            'or3-provider-basic-auth@0.0.4'
         );
-        expect(plan.commands.npm).toContain('or3-provider-fs@0.0.3');
-        expect(plan.commands.npm).toContain('or3-provider-sqlite@0.0.3');
+        expect(plan.commands.npm).toContain('or3-provider-fs@0.0.4');
+        expect(plan.commands.npm).toContain('or3-provider-sqlite@0.0.4');
     });
 
     it('uses local provider package specs when sibling workspaces exist', async () => {

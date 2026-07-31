@@ -106,12 +106,26 @@ function parseWizardMode(
     if (
         mode === 'personal-local' ||
         mode === 'preset-local' ||
+        mode === 'preset-local-fast' ||
         mode === 'preset-clerk-convex' ||
         mode === 'custom'
     ) {
         return mode;
     }
     throw new Error(`Invalid wizard mode "${mode}".`);
+}
+
+function parseCloudSetupEntry(value: unknown): boolean | undefined {
+    const raw = toStringOrUndefined(value);
+    if (!raw) return undefined;
+    const normalized = raw.toLowerCase();
+    if (normalized === '1' || normalized === 'true' || normalized === 'yes') {
+        return true;
+    }
+    if (normalized === '0' || normalized === 'false' || normalized === 'no') {
+        return false;
+    }
+    throw new Error(`Invalid cloudSetupEntry "${raw}".`);
 }
 
 function normalizeErrorMessage(error: unknown): string {
@@ -346,6 +360,7 @@ export async function getOrCreateWizardSession(event: H3Event): Promise<WizardSe
         const dockerExposure = parseDockerExposure(query.dockerExposure);
         const publicDomain = toStringOrUndefined(query.publicDomain);
         const wizardMode = parseWizardMode(query.wizardMode);
+        const cloudSetupEntry = parseCloudSetupEntry(query.cloudSetupEntry);
 
         return await api.createSession({
             presetName,
@@ -356,6 +371,7 @@ export async function getOrCreateWizardSession(event: H3Event): Promise<WizardSe
             dockerExposure,
             publicDomain,
             wizardMode,
+            cloudSetupEntry,
             includeSecrets: false,
             prefillFromEnv: true,
         });

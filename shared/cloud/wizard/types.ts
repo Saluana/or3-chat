@@ -40,6 +40,8 @@ export type WizardPresetName = 'recommended' | 'legacy-clerk-convex' | string;
 export type WizardMode =
     | 'personal-local'
     | 'preset-local'
+    /** Recommended stack with zero guided questions (auto credentials). */
+    | 'preset-local-fast'
     | 'preset-clerk-convex'
     | 'custom';
 
@@ -100,6 +102,11 @@ export type WizardConnectRelayProvider = 'cloudflare' | 'custom';
  */
 export interface WizardAnswers {
     // ── Target ──
+    /**
+     * When true, the wizard was opened from `bun start` → cloud (or
+     * `--mode self-hosted`). Hides the personal-local template option.
+     */
+    cloudSetupEntry: boolean;
     /** When true, reveals install location/env file/deploy target/dry-run fields. */
     targetAdvancedEnabled: boolean;
     /** Absolute path to the OR3 instance project directory. */
@@ -618,6 +625,8 @@ export interface WizardApi {
         dockerExposure?: WizardDockerExposure;
         publicDomain?: string;
         wizardMode?: WizardMode;
+        /** Hide personal-local when launched from `bun start` → cloud. */
+        cloudSetupEntry?: boolean;
     }): Promise<WizardSession>;
     /** Retrieve an existing session by ID. */
     getSession(

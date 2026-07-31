@@ -21,12 +21,15 @@ When published, the same CLI is packaged with a bin entry (`or3-cloud`) so it ca
 1. Creates a wizard session with defaults (recommended stack: `basic-auth + sqlite + fs`).
 2. Uses template mode to decide provider flow depth:
    - `personal-local`: browser-only use with no account, remote access, sync, or server storage.
-   - `preset-local`: the recommended self-hosted stack with Basic Auth + SQLite + Filesystem.
+   - `preset-local`: the recommended self-hosted stack with Basic Auth + SQLite + Filesystem (email-only when Customize is off).
+   - `preset-local-fast`: same stack with zero guided questions (auto credentials; review and deploy).
    - `preset-clerk-convex`: auto-applies Clerk + Convex + Convex and skips manual provider selection.
    - `custom`: keeps manual provider selection.
 3. Collects provider-specific answers only for selected providers.
 4. Supports per-section advanced toggles with a global expert mode switch.
 5. Prompts only visible fields (conditional prompts respect prior answers).
+   - Auto-generated secrets (JWT, bootstrap password, FS token, admin password) stay behind advanced options
+   - Safe path defaults (`./.data/...` and `<instance>/.data/or3-storage`) stay behind advanced options
    - `themesToInstall` only when `themeInstallMode=install-selected`
    - limits detail fields only when `limitsEnabled=true`
    - `forwardedForHeader` only when `trustProxy=true`
@@ -44,6 +47,8 @@ When published, the same CLI is packaged with a bin entry (`or3-cloud`) so it ca
    - generating `or3.providers.generated.ts` from selected providers only
 10. Optionally sets Convex backend env vars for Clerk + Convex stacks.
 11. Optionally runs deploy commands (`bun install`, `bun run dev:ssr` or `bun run build`).
+
+`bun start` → cloud opens the wizard with `--mode self-hosted` (recommended path, personal-local hidden). Use the **Use recommended defaults — skip questions** template (or `or3-cloud init --fast`) for zero guided inputs.
 
 ## Commands
 

@@ -31,6 +31,12 @@ export const LOCAL_MODE_ENV_CONTENTS = `# OR3 personal local mode
 SSR_AUTH_ENABLED=false
 `;
 
+/**
+ * Args passed to `setup` when the user picks cloud from `bun start`.
+ * Locks the wizard onto the recommended self-hosted path (no personal-local).
+ */
+export const CLOUD_SETUP_ARGS = ['--mode', 'self-hosted'] as const;
+
 export function shouldAskModeChoice(cwd: string): boolean {
     return !existsSync(resolve(cwd, '.env')) && !existsSync(resolve(cwd, '.env.local'));
 }
@@ -113,7 +119,10 @@ async function main(): Promise<void> {
     }
 
     if (answer === '2') {
-        const setup = runScriptCommand(packageManager, 'setup');
+        // Skip personal-local re-prompt: start already chose cloud features.
+        const setup = runScriptCommand(packageManager, 'setup', [
+            ...CLOUD_SETUP_ARGS,
+        ]);
         process.exit(await run(setup.command, setup.args));
         return;
     }
