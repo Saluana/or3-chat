@@ -1002,7 +1002,21 @@ async function runUiInit(flags: CliFlags): Promise<void> {
         toStringFlag(flags, 'docker-exposure') ??
         (publicDomain ? 'public' : undefined);
     if (presetName) wizardParams.set('presetName', presetName);
-    if (requestedMode === 'custom') wizardParams.set('wizardMode', 'custom');
+    if (requestedMode === 'custom') {
+        wizardParams.set('wizardMode', 'custom');
+    } else if (requestedMode === 'self-hosted') {
+        wizardParams.set('wizardMode', 'preset-local');
+        wizardParams.set('cloudSetupEntry', '1');
+    } else if (requestedMode === 'personal' || presetName === 'personal-local') {
+        wizardParams.set('wizardMode', 'personal-local');
+    } else if (presetName === 'recommended') {
+        wizardParams.set('wizardMode', 'preset-local');
+    } else if (
+        presetName === 'legacy-clerk-convex' ||
+        presetName === 'clerk-convex'
+    ) {
+        wizardParams.set('wizardMode', 'preset-clerk-convex');
+    }
     if (deploymentTarget) wizardParams.set('deploymentTarget', deploymentTarget);
     if (dockerExposure) wizardParams.set('dockerExposure', dockerExposure);
     if (publicDomain) wizardParams.set('publicDomain', publicDomain);

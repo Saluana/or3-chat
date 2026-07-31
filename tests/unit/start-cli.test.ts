@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import {
+    CLOUD_SETUP_ARGS,
     LOCAL_MODE_ENV_CONTENTS,
     shouldAskModeChoice,
     writeLocalModeMarker,
@@ -42,5 +43,9 @@ describe('bun start mode choice', () => {
         expect(contents).toBe(LOCAL_MODE_ENV_CONTENTS);
         expect(contents).toContain('SSR_AUTH_ENABLED=false');
         expect(shouldAskModeChoice(cwd)).toBe(false);
+    });
+
+    it('hands cloud setup the self-hosted mode flag', () => {
+        expect([...CLOUD_SETUP_ARGS]).toEqual(['--mode', 'self-hosted']);
     });
 });

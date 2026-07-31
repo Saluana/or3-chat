@@ -27,7 +27,11 @@
  * @see getWizardSteps for the entry point
  * @see providerCatalog for provider field definitions
  */
-import { getProviderDescriptor, listImplementedProviders } from './catalog';
+import {
+    getProviderDescriptor,
+    isRecommendedSelfHostMode,
+    listImplementedProviders,
+} from './catalog';
 import {
     ADMIN_USERNAME_MIN_LENGTH,
     formatAdminPasswordPolicyFailure,
@@ -71,10 +75,21 @@ function isConnectAdvancedEnabled(answers: WizardAnswers): boolean {
     return answers.allAdvancedEnabled || answers.connectAdvancedEnabled;
 }
 
-function isSimplifiedSelfHosted(answers: WizardAnswers): boolean {
+/**
+ * Short recommended path: Customize off + recommended self-host mode.
+ * Skips branding/themes/features/providers/sync/storage/connect/admin/AI.
+ * Guided (`preset-local`) keeps the email field; fast skips that too.
+ */
+function isSimplifiedRecommendedSetup(answers: WizardAnswers): boolean {
     return (
-        answers.wizardMode === 'preset-local' &&
-        answers.deploymentTarget === 'docker' &&
+        isRecommendedSelfHostMode(answers.wizardMode) &&
+        !answers.targetAdvancedEnabled
+    );
+}
+
+function isFastRecommendedSetup(answers: WizardAnswers): boolean {
+    return (
+        answers.wizardMode === 'preset-local-fast' &&
         !answers.targetAdvancedEnabled
     );
 }
@@ -103,7 +118,7 @@ function providerFieldsStep(
     kind: 'auth' | 'sync' | 'storage'
 ): WizardStep | null {
     if (
-        isSimplifiedSelfHosted(answers) &&
+        isSimplifiedRecommendedSetup(answers) &&
         (kind === 'sync' || kind === 'storage')
     ) {
         return null;
@@ -150,15 +165,6 @@ function providerFieldsStep(
 
     const coreFields = descriptor.fields
         .filter((field) => field.tier !== 'advanced')
-        .filter(
-            (field) =>
-                !(
-                    isSimplifiedSelfHosted(answers) &&
-                    kind === 'auth' &&
-                    providerId === 'basic-auth' &&
-                    field.key === 'basicAuthJwtSecret'
-                )
-        )
         .map((field) => withVisibleWhen(field, visibleForSelectedProvider));
     const advancedFields = descriptor.fields
         .filter((field) => field.tier === 'advanced')
@@ -171,7 +177,7 @@ function providerFieldsStep(
 
     const fields: WizardField[] = [
         ...coreFields,
-        ...(advancedFields.length > 0 && !isSimplifiedSelfHosted(answers)
+        ...(advancedFields.length > 0 && !isSimplifiedRecommendedSetup(answers)
             ? [
                   {
                       key: advancedToggleKey,
@@ -196,6 +202,7 @@ function providerFieldsStep(
             if (!current.ssrAuthEnabled) return true;
             if (kind === 'sync') return !current.syncEnabled;
             if (kind === 'storage') return !current.storageEnabled;
+            if (kind === 'auth') return isFastRecommendedSetup(current);
             return false;
         },
     };
@@ -353,17 +360,27 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     label: 'Which starting point do you want?',
                     help: 'Choose a preset for a fast path, or custom to manually pick providers.',
                     options: [
-                        {
-                            label: 'This device only — private, offline, and no account',
-                            value: 'personal-local',
-                            description:
-                                'Everything stays in this browser. No remote access or server account is configured.',
-                        },
+                        ...(answers.cloudSetupEntry
+                            ? []
+                            : [
+                                  {
+                                      label: 'This device only — private, offline, and no account',
+                                      value: 'personal-local',
+                                      description:
+                                          'Everything stays in this browser. No remote access or server account is configured.',
+                                  },
+                              ]),
                         {
                             label: 'Self-hosted OR3 — accounts, SQLite, and filesystem storage',
                             value: 'preset-local',
                             description:
-                                'The recommended server setup. You can optionally connect remote agent computers.',
+                                'Recommended. Only asks for your admin email; secrets and paths are filled automatically.',
+                        },
+                        {
+                            label: 'Use recommended defaults — skip questions',
+                            value: 'preset-local-fast',
+                            description:
+                                'Same stack as self-hosted, with auto-generated credentials (admin@example.com). Jump straight to review.',
                         },
                         {
                             label: 'Clerk + Convex — managed authentication and data',
@@ -380,9 +397,9 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     ],
                 },
             ],
-            canSkip: (current) =>
-                current.wizardMode === 'preset-local' &&
-                current.deploymentTarget === 'docker',
+            // Keep template selection visible so users can pick fast/Clerk/custom.
+            // Docker no longer auto-skips this — the short path still only needs email.
+            canSkip: () => false,
         },
         {
             id: 'branding',
@@ -422,7 +439,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     visibleWhen: isBaseAdvancedEnabled,
                 },
             ],
-            canSkip: isSimplifiedSelfHosted,
+            canSkip: isSimplifiedRecommendedSetup,
         },
         {
             id: 'themes',
@@ -463,7 +480,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                         current.themeInstallMode === 'install-selected',
                 },
             ],
-            canSkip: isSimplifiedSelfHosted,
+            canSkip: isSimplifiedRecommendedSetup,
         },
         {
             id: 'features',
@@ -483,7 +500,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 { key: 'mentionsEnabled', type: 'boolean', label: 'Mentions (@-mention documents and chats)', visibleWhen: (current) => current.featuresAdvancedEnabled },
                 { key: 'dashboardEnabled', type: 'boolean', label: 'Dashboard', visibleWhen: (current) => current.featuresAdvancedEnabled },
             ],
-            canSkip: isSimplifiedSelfHosted,
+            canSkip: isSimplifiedRecommendedSetup,
         },
         {
             id: 'providers',
@@ -703,7 +720,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
             },
         ],
         canSkip: (current) =>
-            !current.ssrAuthEnabled || isSimplifiedSelfHosted(current),
+            !current.ssrAuthEnabled || isSimplifiedRecommendedSetup(current),
     });
 
     steps.push({
@@ -830,7 +847,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 visibleWhen: isCloudAdvancedEnabled,
             },
         ],
-        canSkip: isSimplifiedSelfHosted,
+        canSkip: isSimplifiedRecommendedSetup,
     });
 
     steps.push({
@@ -868,7 +885,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
         description:
             'Set up a super admin account for the admin dashboard.\n' +
             'This is separate from user login — it\'s how you manage your instance.\n' +
-            'Leave the password blank to auto-generate a strong one (CLI: press Enter; browser: leave empty and continue).',
+            'The password is auto-generated unless you enable advanced options.',
         fields: [
             {
                 key: 'adminUsername',
@@ -900,10 +917,13 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 key: 'adminPassword',
                 type: 'password',
                 label: 'Admin password (leave blank to auto-generate)',
-                help: 'Choose a strong password, or leave blank and we\'ll generate a secure one for you.',
+                help: 'Leave blank and we\'ll generate a secure password for you.',
                 required: true,
                 secret: true,
-                tier: 'core',
+                autoGenerate: true,
+                tier: 'advanced',
+                visibleWhen: (current) =>
+                    current.targetAdvancedEnabled || current.allAdvancedEnabled,
                 validate: (value, answers) => {
                     const password = String(value ?? '').trim();
                     if (!password) return null;
@@ -928,7 +948,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
             },
         ],
         canSkip: (current) =>
-            !current.ssrAuthEnabled || isSimplifiedSelfHosted(current),
+            !current.ssrAuthEnabled || isSimplifiedRecommendedSetup(current),
     });
 
     const openRouterStepIndex = steps.findIndex(
