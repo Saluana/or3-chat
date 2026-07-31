@@ -1,0 +1,40 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "style": "markdown",
+    "filePath": "or3-sync-layer-audit.md",
+    "removeComments": false,
+    "showLineNumbers": true,
+    "topFilesLength": 20,
+    "headerText": "OR3 DB Sync Layer — Security / Integrity Audit Pack\n\nScope: Client sync engine (outbox, HLC, LWW, GC, snapshots), gateway sync provider, SSR sync API (push/pull/snapshot/cursor/GC), shared wire schemas/sanitize, rate limiting, related docs/tests.\n\nPrimary surfaces:\n1. app/core/sync/* — outbox coalescing, conflict resolver, cursor/GC, hook-bridge capture\n2. server/api/sync/* — push/pull/snapshot/cursor/GC endpoints (can()-gated)\n3. server/utils/sync/rate-limiter — request-based 429 / Retry-After behavior\n4. shared/sync/* — schemas, sanitize, revision, table metadata, history GC policy\n5. server/sync/gateway — adapter registry boundary\n6. app/plugins/convex-sync.client.ts — client sync bootstrap\n\nInvariants auditors should verify: op_id idempotency, contiguous server_version, LWW clock+hlc, remote-apply suppression, tombstone GC vs min device cursor, workspace scoping.\n\nExcluded: Auth engine (separate pack), blob storage transfers (separate pack), provider package dist/ (Convex/SQLite implementations live in or3-provider-*), plugins/themes/webhooks."
+  },
+  "include": [
+    "app/core/sync/**",
+    "server/api/sync/**",
+    "server/utils/sync/**",
+    "server/sync/**",
+    "shared/sync/**",
+    "shared/testing/contracts/sync.ts",
+    "app/plugins/convex-sync.client.ts",
+    "app/plugins/__tests__/convex-sync-auth.test.ts",
+    "app/db/schema.ts",
+    "app/db/client.ts",
+    "app/db/util.ts",
+    "app/db/__tests__/clock-increments.test.ts",
+    "planning/complete/db-sync-layer/**",
+    "public/_documentation/cloud/sync-layer.md",
+    "public/_documentation/cloud/release-notes-production-readiness.md"
+  ],
+  "ignore": {
+    "customPatterns": [
+      "**/node_modules/**",
+      "**/.nuxt/**",
+      "**/.output/**",
+      "**/webhooks/**",
+      "**/*webhook*",
+      "or3-*-audit.md",
+      "or3-repo.md",
+      "or3-intern-full-codebase.md"
+    ]
+  }
+}

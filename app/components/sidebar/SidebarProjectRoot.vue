@@ -1,6 +1,7 @@
 <template>
     <div
         class="project-root-container cursor-pointer group/project-root h-10 mx-1 mb-0.5"
+        :data-project-id="project.id"
     >
         <div
             role="button"
@@ -86,10 +87,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import { useSidebarProjectActionButtonProps } from '~/composables/sidebar/useSidebarProjectActionButtonProps';
 
 const iconExpand = useIcon('shell.expand');
 const iconCollapse = useIcon('shell.collapse');
@@ -118,34 +118,13 @@ const emit = defineEmits<{
     (e: 'delete'): void;
 }>();
 
-// Theme overrides for project action buttons
-const renameOverrides = useThemeOverrides({
-    component: 'button',
-    context: 'sidebar',
+const renameButtonProps = useSidebarProjectActionButtonProps({
     identifier: 'sidebar.project-rename',
-    isNuxtUI: true,
-});
-
-const renameButtonProps = computed(() => ({
-    color: 'neutral' as const,
-    variant: 'popover' as const,
-    size: 'sm' as const,
     icon: iconEdit.value,
-    ...(renameOverrides.value as any),
-}));
-
-const deleteOverrides = useThemeOverrides({
-    component: 'button',
-    context: 'sidebar',
-    identifier: 'sidebar.project-delete',
-    isNuxtUI: true,
 });
 
-const deleteButtonProps = computed(() => ({
-    color: 'neutral' as const,
-    variant: 'popover' as const,
-    size: 'sm' as const,
+const deleteButtonProps = useSidebarProjectActionButtonProps({
+    identifier: 'sidebar.project-delete',
     icon: iconTrash.value,
-    ...(deleteOverrides.value as any),
-}));
+});
 </script>

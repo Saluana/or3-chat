@@ -5,12 +5,12 @@
         class="plugin-capabilities"
     >
         <div class="capabilities-header">
-            <UIcon :name="useIcon('ui.shield').value" class="w-4 h-4" />
+            <UIcon :name="iconShield" class="w-4 h-4" />
             <span class="font-semibold">Capabilities</span>
         </div>
         <ul class="capabilities-list">
             <li v-for="cap in capabilities" :key="cap" class="capability-item">
-                <UIcon :name="useIcon('ui.check').value" class="w-3 h-3" />
+                <UIcon :name="iconCheck" class="w-3 h-3" />
                 <span>{{ formatCapability(cap) }}</span>
             </li>
         </ul>
@@ -19,11 +19,14 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useIcon } from '~/composables/useIcon';
 
 const props = defineProps<{
     capabilities?: string[];
 }>();
 
+const iconShield = useIcon('ui.shield');
+const iconCheck = useIcon('ui.check');
 const capabilities = computed(() => props.capabilities || []);
 
 // Format capability string to be more human-readable

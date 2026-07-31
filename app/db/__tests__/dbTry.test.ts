@@ -55,4 +55,26 @@ describe('dbTry', () => {
         expect(errorObj.tags.rw).toBe('write');
         expect(opts.toast).toBe(true);
     });
+
+    it('does not retain a sticky failure after quota pressure clears', async () => {
+        let quotaAvailable = false;
+        const write = () =>
+            dbTry(
+                () => {
+                    if (!quotaAvailable) {
+                        throw new DOMException(
+                            'The quota has been exceeded.',
+                            'QuotaExceededError'
+                        );
+                    }
+                    return 'recovered';
+                },
+                { op: 'write', entity: 'file_blobs' }
+            );
+
+        await expect(write()).resolves.toBeUndefined();
+        quotaAvailable = true;
+        await expect(write()).resolves.toBe('recovered');
+        expect(mockedReportError).toHaveBeenCalledTimes(1);
+    });
 });

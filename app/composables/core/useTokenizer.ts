@@ -1,10 +1,10 @@
 /**
  * Composable for GPT tokenization.
- * Attempts to use a dedicated Web Worker on the client and dynamically imports
- * the encoder as a fallback (SSR-safe).
+ * Uses a dedicated Web Worker on the client and a lightweight approximation
+ * when workers are unavailable.
  */
 
-import { onMounted, ref } from 'vue';
+import { getCurrentInstance, onMounted, ref } from 'vue';
 
 type EncodeFn = (text: string) => number[];
 
@@ -19,16 +19,13 @@ let workerPromise: Promise<Worker | null> | null = null;
 let nextMessageId = 1;
 const pendingRequests = new Map<number, PendingRequest>();
 
-// Cached encoder used for fallback when worker is unavailable
-let fallbackEncoder: EncodeFn | null = null;
+// Keep the main thread fallback tiny. Exact tokenization lives in the worker;
+// if workers are unavailable, a conservative character heuristic avoids
+// downloading a second ~2 MB tokenizer bundle onto the UI thread.
+const fallbackEncode: EncodeFn = (text) =>
+    new Array(Math.ceil(text.length / 4)).fill(0);
 
-const loadFallbackEncoder = async (): Promise<EncodeFn> => {
-    if (!fallbackEncoder) {
-        const { encode } = await import('gpt-tokenizer');
-        fallbackEncoder = encode;
-    }
-    return fallbackEncoder;
-};
+const loadFallbackEncoder = async (): Promise<EncodeFn> => fallbackEncode;
 
 const disposeWorker = () => {
     if (workerInstance) {
@@ -85,23 +82,26 @@ const setupWorker = (worker: Worker) => {
 const ensureWorker = async (): Promise<Worker | null> => {
     if (!import.meta.client) return null;
     if (workerInstance) return workerInstance;
-    if (workerPromise) return workerPromise;
-
-    workerPromise = new Promise<Worker | null>((resolve) => {
-        try {
-            const worker = new Worker(
-                new URL('../../workers/tokenizer.worker.ts', import.meta.url),
-                { type: 'module' }
-            );
-            setupWorker(worker);
-            workerInstance = worker;
-            resolve(workerInstance);
-        } catch (error) {
-            console.warn('[useTokenizer] Failed to initialize worker:', error);
-            disposeWorker();
-            resolve(null);
-        }
-    });
+    
+    // Use atomic promise initialization to prevent race conditions
+    if (!workerPromise) {
+        workerPromise = (async () => {
+            try {
+                const worker = new Worker(
+                    new URL('../../workers/tokenizer.worker.ts', import.meta.url),
+                    { type: 'module' }
+                );
+                setupWorker(worker);
+                workerInstance = worker;
+                return workerInstance;
+            } catch (error) {
+                console.warn('[useTokenizer] Failed to initialize worker:', error);
+                workerInstance = null;
+                workerPromise = null;
+                return null;
+            }
+        })();
+    }
 
     return workerPromise;
 };
@@ -159,15 +159,43 @@ const runWorkerRequest = async <T>(
 };
 
 /**
- * Main composable for token counting.
+ * `useTokenizer`
+ *
+ * Purpose:
+ * Counts tokens using a shared worker with a fallback encoder.
+ *
+ * Behavior:
+ * Uses a Web Worker on the client when available and falls back to a
+ * character-based approximation when worker setup fails.
+ *
+ * Constraints:
+ * - Worker is client-only and skipped during SSR
+ * - Token counts are approximate to the underlying tokenizer
+ *
+ * Non-Goals:
+ * - Does not cache token results by input
+ * - Does not expose tokenization details beyond counts
+ *
+ * @example
+ * ```ts
+ * const { countTokens } = useTokenizer();
+ * const tokens = await countTokens('Hello world');
+ * ```
  */
 export function useTokenizer() {
     const isReady = ref(!process.client);
 
-    onMounted(async () => {
-        await ensureWorker();
-        isReady.value = true;
-    });
+    const hasComponentInstance = Boolean(getCurrentInstance());
+    if (hasComponentInstance) {
+        onMounted(async () => {
+            await ensureWorker();
+            isReady.value = true;
+        });
+    } else if (import.meta.client) {
+        void ensureWorker().finally(() => {
+            isReady.value = true;
+        });
+    }
 
     const countTokens = async (text: string): Promise<number> => {
         if (!text) return 0;

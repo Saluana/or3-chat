@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "jsx": "preserve",
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["./app/*"],
+      "@/*": ["./app/*"],
+      "~~/*": ["./*"]
+    },
+    "types": ["node"]
+  },
+  "include": [
+    "extensions/**/*.ts"
+  ],
+  "exclude": [
+    ".nuxt/**",
+    ".output/**",
+    "node_modules/**",
+    "dist/**",
+    "public/**",
+    "tests/**",
+    "types/**",
+    "utils/**",
+    "scripts/**",
+    "app/plugins/**",
+    "plugins/**",
+    "convex/_generated/**"
+  ]
+}

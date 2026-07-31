@@ -19,12 +19,13 @@ export default {
                 overlay:
                     'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
                 content:
-                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none retro-shadow',
+                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none ',
                 body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)]  p-4',
-                header: 'relative border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-[var(--md-on-primary)]!',
-                title: 'text-[var(--md-on-primary)] font-semibold text-lg!',
+                header: 'relative border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center gap-2 text-[var(--md-on-primary)]!',
+                // Press Start wraps poorly at modal widths; keep the readable retro face and clip overflow.
+                title: 'text-[var(--md-on-primary)] font-vt323 font-semibold text-base! leading-tight min-w-0 flex-1 truncate',
                 description: 'hidden',
-                close: 'relative! top-auto! end-auto! flex items-center justify-center',
+                close: 'relative! top-auto! end-auto! flex items-center justify-center shrink-0',
             },
         },
         button: {
@@ -48,7 +49,7 @@ export default {
                     basic: 'border-[var(--md-border-width)] shadow-none! drop-shadow-none!  hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-[color:var(--md-border-color)] text-[var(--md-on-surface)]',
                     popover:
                         'flex items-center! hover:bg-[var(--md-primary)]/5 active:bg-[var(--md-primary)]/10 justify-start!',
-                    ghost: 'font-base border-none shadow-none',
+                    ghost: 'font-base border-none shadow-none! [--tw-shadow:none] items-center justify-center',
                     outline:
                         'border-[color:var(--md-border-color)] border-[length:var(--md-border-width)] ring-0! hover:shadow hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
                 },
@@ -59,10 +60,12 @@ export default {
                         'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
                     'on-surface':
                         'bg-[var(--md-surface)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
+                    error: 'text-[var(--md-on-error)] hover:bg-[var(--md-error-hover)] active:bg-[var(--md-error-active)]',
+                    neutral: 'bg-[var(--md-surface-container-lowest)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
                 },
                 // Override size variant so padding wins over defaults
                 size: {
-                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
+                    xs: { base: 'h-[24px] px-[8px]! text-[12px]' },
                     sm: {
                         base: 'h-[32px] px-[12px]! text-[15px]',
                         leadingIcon: 'shrink-0 h-5 w-5',
@@ -80,33 +83,105 @@ export default {
                         trailingIcon: 'shrink-0 h-6 w-6',
                         leadingIcon: 'shrink-0 h-6 w-6',
                     },
-                    square: {
-                        true: 'px-0! aspect-square!',
-                        false: '',
-                    },
                 },
-                buttonGroup: {
+                square: {
+                    true: 'px-0! aspect-square! justify-center text-center',
+                    false: '',
+                },
+                fieldGroup: {
                     horizontal:
                         'first:rounded-l-[var(--md-border-radius)]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[var(--md-border-radius)]!',
                     vertical:
                         'first:rounded-t-[var(--md-border-radius)]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[var(--md-border-radius)]!',
                 },
             },
+            compoundVariants: [
+                // Override neutral + soft variant to use theme colors instead of accented
+                {
+                    color: 'neutral',
+                    variant: 'soft',
+                    class: 'bg-[var(--md-surface-container-lowest)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
+                },
+            ],
         },
         // Global input overrides
         input: {
             slots: {
-                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)]',
+                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus-visible:ring-0! focus-visible:outline-none! max-lg:text-[16px]!',
             },
             variants: {
                 variant: {
                     outline:
-                        'text-highlighted bg-default ring-0 focus-visible:ring-1 focus-visible:ring-[color:var(--md-primary)] retro-shadow',
+                        'text-highlighted bg-default ring-0 retro-shadow',
                 },
+                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
+                leading: { true: 'ps-10!' },
+                trailing: { true: 'pe-10!' },
                 size: {
                     sm: { base: 'h-[32px] text-[12px]!' },
                     md: { base: 'h-[40px] text-[14px]!' },
                     lg: { base: 'h-[48px] text-[16px]!' },
+                },
+            },
+        },
+        select: {
+            slots: {
+                base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! retro-shadow max-lg:text-[16px]!',
+                content: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! theme-shadow',
+                item: 'rounded-[var(--md-border-radius)] data-highlighted:before:bg-[var(--md-surface-hover)]',
+            },
+        },
+        tabs: {
+            slots: {
+                trigger: 'text-[var(--md-on-surface-variant)] data-[state=active]:text-[var(--md-on-surface)]',
+            },
+            variants: {
+                variant: {
+                    pill: {
+                        list: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface-container-low)]',
+                        indicator: 'rounded-[var(--md-border-radius)] theme-shadow',
+                        trigger: 'rounded-[var(--md-border-radius)]',
+                    },
+                    link: {
+                        list: 'rounded-none bg-transparent',
+                        indicator: 'rounded-none shadow-none',
+                        trigger: 'rounded-none border-0! shadow-none!',
+                    },
+                },
+            },
+        },
+        card: {
+            slots: {
+                root: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface-container-low)] ring-0! theme-shadow',
+            },
+        },
+        checkbox: {
+            slots: {
+                root: 'relative flex items-center',
+                base: 'rounded-[var(--md-border-radius)] ring-0! border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
+            },
+            variants: {
+                size: {
+                    xs: {
+                        base: 'size-[20px]',
+                        container: 'h-[22px]',
+                    },
+                    sm: {
+                        base: 'size-[24px]',
+                        container: 'h-[26px]',
+                    },
+                    md: {
+                        base: 'size-[28px]',
+                        container: 'h-[30px]',
+                    },
+                    lg: {
+                        base: 'size-[32px]',
+                        container: 'h-[34px]',
+                    },
+                    xl: {
+                        base: 'size-[36px]',
+                        container: 'h-[38px]',
+                    },
                 },
             },
         },
@@ -117,7 +192,7 @@ export default {
                 help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
             },
         },
-        buttonGroup: {
+        fieldGroup: {
             base: 'relative border-none',
             variants: {
                 orientation: {
@@ -188,15 +263,15 @@ export default {
         },
         textarea: {
             slots: {
-                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)]',
+                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus-visible:ring-0! focus-visible:outline-none! max-lg:text-[16px]!',
             },
         },
         selectMenu: {
             slots: {
-                base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
+                base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] max-lg:text-[16px]!',
                 content:
                     'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)]',
-                input: 'border-0 rounded-none! retro-shadow-none',
+                input: 'border-0 rounded-none! retro-shadow-none max-lg:text-[16px]!',
                 arrow: 'h-[18px] w-[18px]',
                 itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
             },

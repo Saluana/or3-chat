@@ -1,79 +1,188 @@
-import { db } from './client';
+/**
+ * @module app/db/message-files
+ *
+ * Purpose:
+ * Utilities for associating file hashes with messages.
+ *
+ * Responsibilities:
+ * - Resolve file metadata for message attachments
+ * - Add or remove file references and update ref counts
+ *
+ * Non-responsibilities:
+ * - Uploading or downloading file blobs
+ * - Rendering attachment previews
+ */
+import Dexie from 'dexie';
+import { getDb } from './client';
 import type { FileMeta } from './schema';
 import { parseFileHashes, serializeFileHashes } from './files-util';
-import { createOrRefFile, derefFile, getFileMeta } from './files';
+import {
+    changeRefCount,
+    createOrRefFile,
+    derefFile,
+    getFileMeta,
+} from './files';
 import { useHooks } from '../core/hooks/useHooks';
-import { nowSec } from './util';
+import { nowSec, nextClock, getWriteTxTableNames } from './util';
 
 /** Discriminated union for adding files to messages */
+/**
+ * Purpose:
+ * Payload type for adding files to messages.
+ *
+ * Behavior:
+ * Supports either a raw Blob or a previously stored hash reference.
+ *
+ * Constraints:
+ * - Blob entries must include valid Blob instances.
+ *
+ * Non-Goals:
+ * - Does not carry metadata beyond name or hash.
+ */
 export type AddableFile =
     | { type: 'blob'; blob: Blob; name?: string }
     | { type: 'hash'; hash: string };
 
-/** Resolve file metadata list for a message id */
+/**
+ * Purpose:
+ * Resolve file metadata entries for a given message.
+ *
+ * Behavior:
+ * Parses stored hashes from the message and loads metadata rows.
+ *
+ * Constraints:
+ * - Returns an empty array when the message is missing or has no hashes.
+ *
+ * Non-Goals:
+ * - Does not ensure blobs are available locally.
+ */
 export async function filesForMessage(messageId: string): Promise<FileMeta[]> {
-    const msg = await db.messages.get(messageId);
+    const msg = await getDb().messages.get(messageId);
     if (!msg) return [];
     const hashes = parseFileHashes(msg.file_hashes);
     if (!hashes.length) return [];
-    return db.file_meta.where('hash').anyOf(hashes).toArray();
+    return getDb().file_meta.where('hash').anyOf(hashes).toArray();
 }
 
-/** Add files (blobs or existing hashes) to a message, updating ref counts */
+/**
+ * Purpose:
+ * Attach files to a message by blob or hash.
+ *
+ * Behavior:
+ * Creates or references file metadata, updates message file hashes, and
+ * applies validation hooks.
+ *
+ * Constraints:
+ * - Runs inside a transaction to keep message and file state aligned.
+ *
+ * Non-Goals:
+ * - Does not enforce UI selection limits.
+ */
 export async function addFilesToMessage(
     messageId: string,
     files: AddableFile[]
 ): Promise<void> {
     if (!files.length) return;
     const hooks = useHooks();
+    const db = getDb();
     await db.transaction(
         'rw',
-        db.messages,
-        db.file_meta,
-        db.file_blobs,
+        getWriteTxTableNames(db, 'messages', {
+            include: ['file_meta', 'file_blobs'],
+        }),
         async () => {
             const msg = await db.messages.get(messageId);
             if (!msg) throw new Error('message not found');
             const existing = parseFileHashes(msg.file_hashes);
             const newHashes: string[] = [];
+            const provisionalRefIncrements = new Map<string, number>();
             for (const f of files) {
                 // Handle blob variant
                 if ('blob' in f && f.blob instanceof Blob) {
-                    const meta = await createOrRefFile(
-                        f.blob,
-                        f.name || 'file'
+                    const meta = await Dexie.waitFor(
+                        createOrRefFile(f.blob, f.name || 'file')
                     );
                     newHashes.push(meta.hash);
+                    provisionalRefIncrements.set(
+                        meta.hash,
+                        (provisionalRefIncrements.get(meta.hash) ?? 0) + 1
+                    );
                 }
                 // Handle hash variant
                 else if ('hash' in f && typeof f.hash === 'string') {
                     // Validate meta exists
-                    const meta = await getFileMeta(f.hash);
+                    const meta = await Dexie.waitFor(getFileMeta(f.hash));
                     if (meta) newHashes.push(meta.hash);
                 }
             }
             const combined = existing.concat(newHashes);
             // Provide hook for validation & pruning
-            const filtered = await hooks.applyFilters(
-                'db.messages.files.validate:filter:hashes',
-                combined
+            const filtered = await Dexie.waitFor(
+                hooks.applyFilters(
+                    'db.messages.files.validate:filter:hashes',
+                    combined
+                )
             );
-            const serialized = serializeFileHashes(filtered);
+            const candidates = new Set(combined);
+            const accepted = Array.isArray(filtered)
+                ? filtered.filter((hash) => candidates.has(hash))
+                : [];
+            const serialized = serializeFileHashes(accepted);
+            const finalHashes = parseFileHashes(serialized);
+            const existingSet = new Set(existing);
+            const finalSet = new Set(finalHashes);
+            const affectedHashes = new Set([
+                ...existingSet,
+                ...finalSet,
+                ...provisionalRefIncrements.keys(),
+            ]);
+
+            // createOrRefFile provisionally increments every Blob attempt.
+            // Reconcile that work against the actual unique edge transition
+            // after validation, deduplication, and per-message limits.
+            for (const hash of affectedHashes) {
+                const desiredDelta =
+                    Number(finalSet.has(hash)) - Number(existingSet.has(hash));
+                const provisionalDelta =
+                    provisionalRefIncrements.get(hash) ?? 0;
+                const adjustment = desiredDelta - provisionalDelta;
+                if (adjustment !== 0) {
+                    await changeRefCount(hash, adjustment);
+                }
+            }
+
             await db.messages.put({
                 ...msg,
                 file_hashes: serialized,
                 updated_at: nowSec(),
+                clock: nextClock(msg.clock),
             });
         }
     );
 }
 
-/** Remove a single file hash from a message, adjusting ref count */
+/**
+ * Purpose:
+ * Remove a file reference from a message.
+ *
+ * Behavior:
+ * Updates the message hash list and decrements file ref counts.
+ *
+ * Constraints:
+ * - No-op if the message does not exist or the hash is absent.
+ *
+ * Non-Goals:
+ * - Does not delete file metadata or blobs.
+ */
 export async function removeFileFromMessage(
     messageId: string,
     hash: string
 ): Promise<void> {
-    await db.transaction('rw', db.messages, db.file_meta, async () => {
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'messages', { include: ['file_meta'] }),
+        async () => {
         const msg = await db.messages.get(messageId);
         if (!msg) return;
         const hashes = parseFileHashes(msg.file_hashes);
@@ -83,6 +192,7 @@ export async function removeFileFromMessage(
             ...msg,
             file_hashes: serializeFileHashes(next),
             updated_at: nowSec(),
+            clock: nextClock(msg.clock),
         });
         await derefFile(hash);
     });

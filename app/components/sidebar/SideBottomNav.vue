@@ -7,26 +7,68 @@
         "
         class="bottomnav-root absolute bottom-0 w-[63.5px] border-t-[var(--md-border-width)] border-[color:var(--md-border-color)] bg-transparent px-1 flex flex-col items-center justify-between"
     >
-        <!-- MY INFO -->
+        <!-- DASHBOARD -->
+        <UTooltip
+            v-if="dashboardEnabled"
+            id="tooltip-dashboard"
+            :delay-duration="0"
+            :content="{
+                side: 'right',
+            }"
+            text="Dashboard"
+        >
+            <UButton
+                v-bind="dashboardButtonProps"
+                @click="emit('toggleDashboard')"
+                type="button"
+                aria-label="Dashboard"
+            >
+                <template #default>
+                    <span class="flex flex-col items-center gap-1 w-full">
+                        <UIcon
+                            class="w-[24px] h-[24px]"
+                            :name="iconDashboard"
+                        />
+                    </span>
+                </template>
+            </UButton>
+        </UTooltip>
+
+        <!-- Visual separator between app tools and personal section -->
+        <div
+            class="w-[40px] h-[var(--md-border-width)] bg-[var(--md-border-color)]/50 my-1 sb-bottom-border"
+        />
+
+        <!-- Auth Button (Clerk SSR or OpenRouter) - placed above user info -->
+        <component :is="sidebarAuthButtonComponent" />
+
+        <!-- MY INFO (OpenRouter only - hidden in SSR auth mode) -->
         <UPopover
+            v-if="!isSsrAuthEnabled"
             :content="{
                 side: 'right',
             }"
         >
-            <UButton
-                v-bind="infoButtonProps"
-                type="button"
-                aria-label="My Info"
+            <UTooltip
+                id="tooltip-account-info"
+                :delay-duration="0"
+                :content="{
+                    side: 'right',
+                }"
+                text="My Info"
             >
-                <template #default>
-                    <span class="flex flex-col items-center gap-1 w-full">
-                        <UIcon :name="iconUser" class="h-[18px] w-[18px]" />
-                        <span class="text-[7px] uppercase tracking-wider"
-                            >INFO</span
-                        >
-                    </span>
-                </template>
-            </UButton>
+                <UButton
+                    v-bind="infoButtonProps"
+                    type="button"
+                    aria-label="My Info"
+                >
+                    <template #default>
+                        <span class="flex flex-col items-center gap-1 w-full">
+                            <UIcon :name="iconUser" class="h-[24px] w-[24px]" />
+                        </span>
+                    </template>
+                </UButton>
+            </UTooltip>
             <template #content>
                 <div class="flex flex-col items-start w-[140px]">
                     <UButton
@@ -47,108 +89,81 @@
             </template>
         </UPopover>
 
-        <!-- Connect -->
-        <UButton
-            v-bind="connectButtonProps"
-            type="button"
-            @click="onConnectButtonClick"
-            :data-connection-state="connectionState"
-            :aria-label="
-                hydrated
-                    ? orIsConnected
-                        ? 'Disconnect from OpenRouter'
-                        : 'Connect to OpenRouter'
-                    : 'Connect to OpenRouter'
-            "
+        <!-- Mode badge: shows Local / Cloud so users always know what they're running -->
+        <UTooltip
+            :delay-duration="0"
+            :content="{
+                side: 'right',
+            }"
+            :text="modeTooltip"
         >
-            <template #default>
-                <span class="flex flex-col items-center gap-1 w-full">
-                    <svg
-                        class="w-[18px] h-[18px]"
-                        viewBox="0 0 512 512"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="currentColor"
-                        stroke="currentColor"
-                    >
-                        <g>
-                            <path
-                                d="M3 248.945C18 248.945 76 236 106 219C136 202 136 202 198 158C276.497 102.293 332 120.945 423 120.945"
-                                stroke-width="90"
-                            />
-                            <path
-                                d="M511 121.5L357.25 210.268L357.25 32.7324L511 121.5Z"
-                            />
-                            <path
-                                d="M0 249C15 249 73 261.945 103 278.945C133 295.945 133 295.945 195 339.945C273.497 395.652 329 377 420 377"
-                                stroke-width="90"
-                            />
-                            <path
-                                d="M508 376.445L354.25 287.678L354.25 465.213L508 376.445Z"
-                            />
-                        </g>
-                    </svg>
-                    <span class="text-[7px] uppercase tracking-wider">
-                        <template v-if="hydrated">
-                            {{ orIsConnected ? 'Disconnect' : 'Connect' }}
-                        </template>
-                        <template v-else>Connect</template>
-                    </span>
-                    <span
-                        class="w-[54%] h-[3px] opacity-50"
-                        :class="
-                            orIsConnected
-                                ? 'bg-[var(--md-success)] opacity-100'
-                                : 'bg-[var(--md-error)]'
-                        "
-                        aria-hidden="true"
-                    ></span>
-                </span>
-            </template>
-        </UButton>
-
-        <!-- DASHBOARD -->
-        <UButton
-            v-bind="dashboardButtonProps"
-            @click="emit('toggleDashboard')"
-            type="button"
-            aria-label="Dashboard"
-        >
-            <template #default>
-                <span class="flex flex-col items-center gap-1 w-full">
-                    <UIcon class="w-[18px] h-[18px]" :name="iconDashboard" />
-                    <span class="text-[7px] uppercase tracking-wider"
-                        >Dashboard</span
-                    >
-                </span>
-            </template>
-        </UButton>
+            <component
+                :is="modeLinkComponent"
+                v-bind="modeLinkProps"
+                :aria-label="modeLabel"
+                class="sidebar-mode-badge mt-auto mb-1 block rounded-[var(--md-border-radius)] border px-1.5 py-0.5 text-[9px] uppercase tracking-wider whitespace-nowrap"
+                :class="
+                    isSsrAuthEnabled
+                        ? 'border-[var(--md-primary)]/40 text-[var(--md-primary)]'
+                        : 'border-[var(--md-border-color)] text-[var(--md-secondary)]'
+                "
+            >
+                {{ modeLabel }}
+            </component>
+        </UTooltip>
     </div>
-    <lazy-modal-model-catalog
-        hydrate-on-visible
+    <component
+        :is="modelCatalogModalComponent"
         v-model:showModal="showSettingsModal"
     />
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref, useAttrs } from 'vue';
-import { state } from '~/state/global';
+import { computed, defineAsyncComponent, ref, useAttrs } from 'vue';
+import { useNuxtApp, useRuntimeConfig } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import { useOr3Config } from '~/composables/useOr3Config';
+import SidebarAuthButton from '~/components/sidebar/SidebarAuthButton.vue';
 
 const iconUser = useIcon('sidebar.user');
 const iconActivity = useIcon('sidebar.activity');
 const iconCredits = useIcon('sidebar.credits');
 const iconDashboard = useIcon('dashboard.home');
+const or3Config = useOr3Config();
+const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
+const themePlugin = useNuxtApp().$theme;
+const modelCatalogModalDefault = defineAsyncComponent(
+    () => import('~/components/modal/ModelCatalog.vue')
+);
+const sidebarAuthButtonComponent = computed(
+    () =>
+        themePlugin?.activeComponents?.value?.['sidebar-auth-button'] ??
+        SidebarAuthButton
+);
+const modelCatalogModalComponent = computed(
+    () =>
+        themePlugin?.activeComponents?.value?.['model-catalog-modal'] ??
+        modelCatalogModalDefault
+);
+
+// Check if SSR auth is enabled via runtime config
+const config = useRuntimeConfig();
+const isSsrAuthEnabled = computed(() => config.public?.ssrAuthEnabled === true);
+
+// Mode badge: shows the active runtime mode so users aren't guessing.
+const modeLabel = computed(() => (isSsrAuthEnabled.value ? 'Cloud' : 'Local'));
+const modeTooltip = computed(() =>
+    isSsrAuthEnabled.value
+        ? 'Cloud mode — user accounts, sync & file storage enabled. Click to open admin dashboard.'
+        : 'Local mode — your data stays in this browser. Run `bun run or3-cloud:init` to enable accounts & sync.'
+);
+const modeLinkComponent = computed(() => (isSsrAuthEnabled.value ? 'NuxtLink' : 'div'));
+const modeLinkProps = computed(() =>
+    isSsrAuthEnabled.value ? { to: '/admin', external: false } : {}
+);
 
 defineOptions({ inheritAttrs: false });
-
-const openrouter = useOpenRouterAuth();
-const orIsConnected = computed(() => state.value.openrouterKey);
-// Hydration mismatch fix: only show dynamic connection state after client mounted
-const hydrated = ref(false);
-onMounted(() => {
-    hydrated.value = true;
-});
 const showSettingsModal = ref(false);
 const attrs = useAttrs();
 const rootAttrs = computed(() => {
@@ -171,34 +186,7 @@ const infoButtonProps = computed(() => {
         variant: 'soft' as const,
         color: 'neutral' as const,
         block: true,
-        ...(overrides.value as any),
-    };
-});
-
-const connectionState = computed(() =>
-    hydrated.value
-        ? orIsConnected.value
-            ? 'connected'
-            : 'disconnected'
-        : 'loading'
-);
-
-const connectOverrideParams = computed(() => ({
-    component: 'button',
-    context: 'sidebar',
-    identifier: 'sidebar.bottom-nav.connect',
-    state: connectionState.value,
-    isNuxtUI: true,
-}));
-
-const connectOverrides = useThemeOverrides(connectOverrideParams);
-
-const connectButtonProps = computed(() => {
-    return {
-        variant: 'soft' as const,
-        color: 'neutral' as const,
-        block: true,
-        ...(connectOverrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -213,7 +201,7 @@ const dashboardButtonProps = computed(() => {
         variant: 'soft' as const,
         color: 'neutral' as const,
         block: true,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -229,7 +217,7 @@ const activityButtonProps = computed(() => {
         variant: 'ghost' as const,
         color: 'neutral' as const,
         block: true,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
 
@@ -244,20 +232,9 @@ const creditsButtonProps = computed(() => {
         variant: 'ghost' as const,
         color: 'neutral' as const,
         block: true,
-        ...(overrides.value as any),
+        ...overrides.value,
     };
 });
-
-function onConnectButtonClick() {
-    if (orIsConnected.value) {
-        // Logic to disconnect
-        state.value.openrouterKey = null;
-        openrouter.logoutOpenRouter();
-    } else {
-        // Logic to connect
-        openrouter.startLogin();
-    }
-}
 
 function navigateToActivity() {
     window.open('https://openrouter.ai/activity', '_blank');

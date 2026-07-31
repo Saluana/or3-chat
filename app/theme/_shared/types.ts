@@ -1,14 +1,45 @@
+import type { Component, Ref, ShallowRef } from 'vue';
+import type { RuntimeResolver } from './runtime-resolver';
+import type { WorkspaceProfileV1 } from '../../core/workspace-profiles/schema';
+
 /**
- * Refined Theme System - Core Type Definitions
+ * @module app/theme/_shared/types
  *
- * This file contains all the core TypeScript interfaces for the refined theme system.
- * It defines the structure of theme definitions, overrides, and compiled theme configs.
+ * Purpose:
+ * Core TypeScript interfaces for the refined theme system.
+ *
+ * Behavior:
+ * - Defines author facing and runtime theme structures
+ *
+ * Constraints:
+ * - These are structural types only
  */
 
 /**
  * Material Design 3 Color Palette
  * Defines all the color tokens used in a theme.
  */
+export const APP_THEME_COMPONENT_KEYS = [
+    'sidebar',
+    'sidebar-collapsed',
+    'chat-page',
+    'chat-message',
+    'chat-input',
+    'document-editor',
+    'dashboard-modal',
+    'model-selector',
+    'system-prompts-modal',
+    'model-catalog-modal',
+    'sidebar-auth-button',
+    'documentation-shell',
+    'workflow-status',
+] as const;
+
+export type AppThemeComponent = (typeof APP_THEME_COMPONENT_KEYS)[number];
+export const THEME_COMPONENT_CONTRACT_VERSION = 1 as const;
+export type ThemeComponentContractVersion =
+    typeof THEME_COMPONENT_CONTRACT_VERSION;
+
 type CustomColorTokens = Record<string, string | undefined>;
 
 interface BaseColorPalette {
@@ -57,6 +88,15 @@ interface BaseColorPalette {
     info?: string;
 }
 
+/**
+ * `ColorPalette`
+ *
+ * Purpose:
+ * Defines the theme color palette with optional dark overrides.
+ *
+ * Constraints:
+ * - Custom token keys map to CSS variables
+ */
 export interface ColorPalette extends BaseColorPalette {
     // Dark mode overrides (optional)
     dark?: Partial<BaseColorPalette> & CustomColorTokens;
@@ -89,9 +129,9 @@ export interface ThemeBackgroundLayer {
 }
 
 /**
- * Named background slots exposed through the theme DSL
+ * Shared background slots for a single color mode.
  */
-export interface ThemeBackgrounds {
+export interface ThemeBackgroundSlots {
     content?: {
         base?: ThemeBackgroundLayer;
         overlay?: ThemeBackgroundLayer;
@@ -99,6 +139,17 @@ export interface ThemeBackgrounds {
     sidebar?: ThemeBackgroundLayer;
     headerGradient?: ThemeBackgroundLayer;
     bottomNavGradient?: ThemeBackgroundLayer;
+}
+
+/**
+ * Named background slots exposed through the theme DSL
+ */
+export interface ThemeBackgrounds extends ThemeBackgroundSlots {
+    /**
+     * Optional dark-mode overrides for background layers.
+     * Only specify fields you want to differ from light/default.
+     */
+    dark?: ThemeBackgroundSlots;
 }
 
 /**
@@ -125,8 +176,8 @@ export interface AttributeMatcher {
 /**
  * Override props that can be applied to components
  *
- * For Nuxt UI components: Props like variant, color, size are passed directly
- * For custom components: These props are mapped to CSS classes via prop-class-maps
+ * `useThemeOverrides()` exposes these values for `v-bind` on Nuxt UI components.
+ * Non-Nuxt UI resolution can map variant, color, and size through prop maps.
  */
 export interface OverrideProps {
     /** Component variant (e.g., 'solid', 'outline', 'ghost', 'soft', 'link') */
@@ -178,6 +229,15 @@ export interface CSSelectorConfig {
  *
  * This is the interface that theme authors use to define new themes.
  * It uses a simplified, convention-based structure.
+ */
+/**
+ * `ThemeDefinition`
+ *
+ * Purpose:
+ * Author facing theme definition contract.
+ *
+ * Constraints:
+ * - `name` must be kebab case and unique across themes
  */
 export interface ThemeDefinition {
     /** Unique theme identifier (kebab-case) */
@@ -243,6 +303,21 @@ export interface ThemeDefinition {
 
     /** Icon overrides for this theme */
     icons?: Record<string, string>;
+
+    /** Theme-provided Vue component overrides keyed by supported app surface */
+    customComponents?: Partial<Record<AppThemeComponent, string>>;
+
+    /** Compatibility version for trusted custom component replacements */
+    componentContractVersion?: ThemeComponentContractVersion;
+
+    /**
+     * Optional declarative workspace layouts packaged by the theme.
+     * They are registered as choices only; activating a theme never applies one.
+     */
+    workspaceProfiles?: WorkspaceProfileV1[];
+
+    /** Optional profile surfaced as an explicit recommendation action. */
+    recommendedWorkspaceProfileId?: string;
 }
 
 export interface ThemeFontSet {
@@ -268,6 +343,12 @@ export interface ThemeFonts extends ThemeFontSet {
 /**
  * Parsed selector components
  */
+/**
+ * `ParsedSelector`
+ *
+ * Purpose:
+ * Parsed selector components used by compiler and runtime.
+ */
 export interface ParsedSelector {
     /** Component type (e.g., 'button', 'input') */
     component: string;
@@ -290,6 +371,12 @@ export interface ParsedSelector {
  *
  * This is the optimized format used at runtime for override resolution.
  * The compiler transforms CSS selectors into this format.
+ */
+/**
+ * `CompiledOverride`
+ *
+ * Purpose:
+ * Runtime friendly override structure with specificity.
  */
 export interface CompiledOverride {
     /** Component type */
@@ -315,6 +402,9 @@ export interface CompiledOverride {
 
     /** Pre-calculated specificity score */
     specificity: number;
+
+    /** Declaration order within the theme; later equal-specificity rules win */
+    sourceOrder?: number;
 }
 
 /**
@@ -359,6 +449,18 @@ export interface CompiledTheme {
 
     /** Icon overrides for this theme */
     icons?: Record<string, string>;
+
+    /** Theme-provided Vue component override paths */
+    customComponents?: Partial<Record<AppThemeComponent, string>>;
+
+    /** Compatibility version for trusted custom component replacements */
+    componentContractVersion?: ThemeComponentContractVersion;
+
+    /** Validated declarative profiles bundled with this theme. */
+    workspaceProfiles?: WorkspaceProfileV1[];
+
+    /** Recommendation metadata only; never an automatic selection. */
+    recommendedWorkspaceProfileId?: string;
 }
 
 /**
@@ -381,6 +483,9 @@ export interface ValidationError {
 export interface ThemeCompilationResult {
     /** Theme name */
     name: string;
+
+    /** Source directory name used by Vite module discovery. */
+    dirName?: string;
 
     /** Compiled theme config */
     theme: CompiledTheme;
@@ -428,8 +533,8 @@ export interface ResolveParams {
     /** State (optional) */
     state?: string;
 
-    /** HTML element for attribute matching (optional) */
-    element?: HTMLElement;
+    /** Element-like attribute source for selector matching (optional) */
+    element?: { getAttribute(name: string): string | null };
 
     /** Whether component is a Nuxt UI component */
     isNuxtUI?: boolean;
@@ -440,15 +545,33 @@ export interface ResolveParams {
  */
 export interface ResolvedOverride {
     /** Merged props */
-    props: Record<string, unknown> & {
-        /** Development debugging attributes */
-        'data-theme-target'?: string;
-        'data-theme-matches'?: string;
-        /** Standard component props */
-        class?: string;
-        style?: Record<string, string>;
-        ui?: Record<string, unknown>;
-        /** Allow any additional component-specific props */
-        [key: string]: unknown;
-    };
+    props: ResolvedOverrideProps;
+}
+
+export interface ResolvedOverrideProps extends Record<string, unknown> {
+    'data-theme-target'?: string;
+    'data-theme-matches'?: string;
+    class?: string;
+    style?: Record<string, string>;
+    ui?: Record<string, unknown>;
+}
+
+export interface ThemePlugin {
+    set: (name: string) => void;
+    toggle: () => void;
+    get: () => string;
+    system: () => string;
+    current: Ref<string>;
+    activeTheme: Ref<string>;
+    resolversVersion: Ref<number>;
+    setActiveTheme: (themeName: string) => Promise<void>;
+    getResolver: (themeName: string) => RuntimeResolver | null;
+    loadTheme: (themeName: string) => Promise<CompiledTheme | null>;
+    getTheme: (themeName: string) => CompiledTheme | null;
+    activeComponents: ShallowRef<Record<AppThemeComponent, Component>>;
+    availableThemes?: ReadonlyArray<{
+        name: string;
+        displayName?: string;
+        description?: string;
+    }>;
 }

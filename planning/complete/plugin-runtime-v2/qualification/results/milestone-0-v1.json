@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "qualificationVersion": "milestone-0-v1",
+  "milestone": "Milestone 0 — Freeze and qualify V1",
+  "status": "green",
+  "manifestSha256": "a001ea6324dc08267eb0cc9db56619496db76dedb3a809171fb6bae49e997810",
+  "publishedAt": "2026-07-20T15:15:53.700Z",
+  "durationMs": 86045,
+  "runner": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpuModel": "Apple M4 Pro",
+    "bunVersion": "1.3.6",
+    "nodeVersion": "24.3.0"
+  },
+  "evidence": {
+    "planning/plugin-runtime-v2/benchmarks/budgets.json": "688ae847acc3edfc924400c3da92e209b6ab54d876c7e7d6a4469c7c7774174d",
+    "planning/plugin-runtime-v2/benchmarks/milestone-0-v1.json": "05907ed5a5c34ec4512551a92ce71ccbca03a93aa29b016bbd97389357700819",
+    "planning/plugin-runtime-v2/compatibility-ledger.json": "c7f64c11b025dffb3522bbd8804c0c671cf970e59283dc086a035c29de23a17f",
+    "planning/plugin-runtime-v2/compatibility-ledger.modules.json": "6964af291c26d9a715cdce7cc98483396ccd7f0db8f5768f85cffa5ff1b0fd35",
+    "planning/plugin-runtime-v2/compatibility-profiles.json": "3da04d48d16d44a8adda5742383a733e9797c57cc587d4fd713ca020309239d2",
+    "planning/plugin-runtime-v2/snapshots/nuxt-auto-imports.d.ts": "09f4ea1420d09ce627ef6ed30ebca80b58a53f8303d611d9fe294387adccd30d",
+    "planning/plugin-runtime-v2/snapshots/public-api.d.ts": "88208bb25a401befd4f138ab87a9717ed4547f70bc2baa9a54abbadd23d5104c",
+    "tests/plugin-runtime/build-fixtures/extensions/plugins/runtime-v1-build-fixture/not-a-client-entry.ts": "f402d04ff7af873943e6a2dff4d42563d1e0ffe531ecddd7f3db853dd18110c6",
+    "tests/plugin-runtime/build-fixtures/extensions/plugins/runtime-v1-build-fixture/plugin.client.ts": "5d0827c4e891d53a75db6cfb5769b68f92725fd4374cba3fa6dd8b805f4b04d0",
+    "tests/plugin-runtime/external-v1/fixtures.compile.ts": "d4b255db8be115225639c5247493b305a5d360780caef9ac40beb002fceeda74",
+    "tests/plugin-runtime/external-v1/or3-plugin-tasks/plugin-api.compile.ts": "a1bd978cd5614cd8483d11339c2a9fef2cc135e86decd88276a29f8d7a5ef808",
+    "tests/plugin-runtime/external-v1/or3-plugin-tasks/SOURCE.json": "fab1027df1eee95f25d455e20bfb864d0e24b369000a4d035a80cc140eac05c0",
+    "tests/plugin-runtime/external-v1/tsconfig.json": "b5725ce1176087c2ef706480fb536ec6b0f4f53556eb1915e5ff12bbc9adc43f",
+    "tests/plugin-runtime/v1-examples/examples.compile.ts": "de3c07297eaa1963c0b048206b9e0224ec562128cdfae353a770f156acdc7048",
+    "tests/plugin-runtime/v1-examples/tsconfig.json": "c4c431118066b3cd52e904ac48780182ee14e6f1583b9550bebcf8933624f513"
+  },
+  "gates": [
+    {
+      "id": "declarations",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run plugin-runtime:compatibility:check",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 3960
+        },
+        {
+          "command": "bun x vitest run scripts/__tests__/plugin-runtime-compatibility-snapshots.test.ts",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 804
+        }
+      ]
+    },
+    {
+      "id": "corpus",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run plugin-runtime:examples:check",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 6056
+        },
+        {
+          "command": "bun run plugin-runtime:external-v1:check",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 5381
+        }
+      ]
+    },
+    {
+      "id": "behavior",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun x vitest run server/admin/extensions/__tests__/extension-manager.test.ts server/admin/extensions/__tests__/install.test.ts server/admin/extensions/__tests__/limits.test.ts server/admin/extensions/__tests__/uninstall-security.test.ts server/admin/extensions/__tests__/url-fetch.test.ts shared/plugins/__tests__/registration-handle.test.ts app/composables/plugins/__tests__/workspace-runtime.test.ts server/api/plugins/__tests__/runtime-manifest.get.test.ts server/api/plugins/__tests__/dispatcher.test.ts server/auth/__tests__/hooks.test.ts shared/hooks/__tests__/hook-engine-core.test.ts shared/hooks/__tests__/v1-diagnostics-compat.test.ts app/plugins/__tests__/hookInspector.test.ts app/composables/__tests__/registry-family-profiles.test.ts app/composables/__tests__/sidebar-pane-profiles.test.ts app/composables/__tests__/dashboard-profile.test.ts app/composables/__tests__/editor-admin-profiles.test.ts app/composables/core/__tests__/usePaneApps.test.ts app/composables/dashboard/__tests__/useDashboardPlugins.test.ts app/utils/chat/__tests__/tool-registry-profiles.test.ts app/utils/chat/__tests__/tool-schema-parity.test.ts app/utils/chat/__tests__/tools-public.contract.test.ts server/utils/chat/__tests__/tool-registry.test.ts",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 1807
+        }
+      ]
+    },
+    {
+      "id": "production-builds",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run build",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 38488
+        },
+        {
+          "command": "bun run generate:static",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 23610
+        }
+      ]
+    },
+    {
+      "id": "benchmarks",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run plugin-runtime:benchmarks:check",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 5940
+        }
+      ]
+    }
+  ],
+  "rollback": {
+    "scope": "No V2 runtime flag is enabled at Milestone 0; the qualified runtime remains V1.",
+    "procedure": [
+      "Keep all future V2 startup flags disabled.",
+      "Revert the candidate change that failed this qualification command.",
+      "Re-run this qualification on the selected benchmark runner before promotion."
+    ],
+    "drill": "The production-build gate loads an unchanged V1 workspace fixture through SSR and static builds and proves it remains client-only. A failed gate leaves the existing V1 loader/runtime selection unchanged."
+  }
+}

@@ -1,7 +1,16 @@
 /**
- * Composable for managing header actions in the application header.
- * Provides registration system and reactive access to header toolbar actions.
- * Actions can be conditionally visible and disabled based on route and mobile context.
+ * @module app/composables/sidebar/useHeaderActions
+ *
+ * Purpose:
+ * Provides a registry and composable interface for header actions.
+ *
+ * Responsibilities:
+ * - Registers actions for the application header
+ * - Exposes a context-aware list for rendering
+ *
+ * Non-responsibilities:
+ * - Does not render header UI
+ * - Does not manage routing or navigation
  */
 import { computed } from 'vue';
 import type { ComputedRef } from 'vue';
@@ -9,10 +18,25 @@ import type { RouteLocationNormalizedLoaded } from 'vue-router';
 import type { ChromeActionColor } from './useSidebarSections';
 import { createRegistry } from '../_registry';
 import type { RegistryItem } from '../_registry';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 /**
- * Context object provided to header action handlers and visibility functions.
- * Contains information about the current route and device context.
+ * `HeaderActionContext`
+ *
+ * Purpose:
+ * Supplies header action handlers with route and device context.
+ *
+ * Behavior:
+ * Carries optional route and device metadata for visibility and behavior.
+ *
+ * Constraints:
+ * - Values may be undefined depending on the current app shell
+ *
+ * Non-Goals:
+ * - Does not resolve routing or navigation itself
  */
 export interface HeaderActionContext {
     /** The current Vue Router route object */
@@ -24,8 +48,20 @@ export interface HeaderActionContext {
 }
 
 /**
- * Interface defining a header action that can be registered in the application header.
- * Extends the base RegistryItem with header-specific properties and behavior.
+ * `HeaderAction`
+ *
+ * Purpose:
+ * Describes a header toolbar action and its visibility/disabled rules.
+ *
+ * Behavior:
+ * Provides metadata for rendering and a handler for execution.
+ *
+ * Constraints:
+ * - `id` must be unique in the registry
+ * - `handler` should be safe to call multiple times
+ *
+ * Non-Goals:
+ * - Does not impose specific UI styling or layout
  */
 export interface HeaderAction extends RegistryItem {
     /** Unique identifier for the action */
@@ -46,11 +82,26 @@ export interface HeaderAction extends RegistryItem {
     visible?: (ctx: HeaderActionContext) => boolean;
     /** Optional function to determine if action should be disabled */
     disabled?: (ctx: HeaderActionContext) => boolean;
+    /** Optional plugin id used for workspace policy lookup. */
+    pluginId?: string;
+    /** Optional access policy for this action. */
+    access?: PluginGatePolicy;
 }
 
 /**
- * Interface for header action entries with computed disabled state.
- * Used in the reactive list returned by useHeaderActions.
+ * `HeaderActionEntry`
+ *
+ * Purpose:
+ * Represents a resolved header action with computed disabled state.
+ *
+ * Behavior:
+ * Combines the action definition with a context-derived disabled flag.
+ *
+ * Constraints:
+ * - Disabled state is recalculated on each reactive update
+ *
+ * Non-Goals:
+ * - Does not include visibility logic; that is handled in `useHeaderActions`
  */
 export interface HeaderActionEntry {
     /** The header action definition */
@@ -66,44 +117,86 @@ const DEFAULT_ORDER = 200;
 
 /**
  * Global registry for header actions using the factory pattern.
+ *
  * Ensures actions persist across component instances.
  */
 const registry = createRegistry<HeaderAction>('__or3HeaderActionsRegistry');
+const v2Kernel = getContributionSurfaceKernel<HeaderAction>('header-actions', {
+    getId: (action) => action.id,
+    normalize: (action) => Object.freeze({ ...action }),
+    compare: (left, right) =>
+        (left.order ?? DEFAULT_ORDER) - (right.order ?? DEFAULT_ORDER) ||
+        left.id.localeCompare(right.id),
+});
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('header-actions');
+}
 
 /**
- * Register a new header action.
- * Adds the action to the global registry for reactive access.
- * 
- * @param action - The header action to register
+ * `registerHeaderAction`
+ *
+ * Purpose:
+ * Adds a header action to the global registry.
+ *
+ * Behavior:
+ * Stores the action for later retrieval by `useHeaderActions`.
+ *
+ * Constraints:
+ * - Registry keys must be unique per action ID
+ *
+ * Non-Goals:
+ * - Does not validate action payload beyond the registry behavior
  */
 export function registerHeaderAction(action: HeaderAction) {
-    registry.register(action);
+    return useV2Surface() ? v2Kernel.registry.registerLegacy({ value: action }) : registry.register(action);
 }
 
 /**
- * Unregister a header action by ID.
- * Removes the action from the global registry.
- * 
- * @param id - The ID of the action to unregister
+ * `unregisterHeaderAction`
+ *
+ * Purpose:
+ * Removes a header action from the global registry.
+ *
+ * Behavior:
+ * Deletes the action entry if it exists.
+ *
+ * Constraints:
+ * - No-op when the ID is not present
+ *
+ * Non-Goals:
+ * - Does not run teardown callbacks
  */
 export function unregisterHeaderAction(id: string) {
-    registry.unregister(id);
+    if (useV2Surface()) v2Kernel.registry.unregisterLegacy(id);
+    else registry.unregister(id);
 }
 
 /**
- * Composable for accessing header actions with context-aware filtering.
- * Returns a reactive list of actions filtered by visibility and computed disabled state.
- * 
- * @param context - Function that returns the current header action context
- * @returns ComputedRef containing filtered and sorted header action entries
+ * `useHeaderActions`
+ *
+ * Purpose:
+ * Provides a reactive list of header actions filtered by context.
+ *
+ * Behavior:
+ * Applies visibility filters, sorts by order, and computes disabled state.
+ *
+ * Constraints:
+ * - Must be called during component setup for reactivity
+ *
+ * Non-Goals:
+ * - Does not memoize results across distinct context functions
  */
 export function useHeaderActions(
     context: () => HeaderActionContext = () => ({})
 ): ComputedRef<HeaderActionEntry[]> {
-    const items = registry.useItems();
+    const items = useV2Surface() ? v2Kernel.items : registry.useItems();
     return computed(() => {
         const ctx = context();
         return items.value
+            .filter((action) =>
+                getPluginGateDecision(action.pluginId, action.access).allowed
+            )
             .filter((action) => !action.visible || action.visible(ctx))
             .sort(
                 (a, b) =>
@@ -117,11 +210,20 @@ export function useHeaderActions(
 }
 
 /**
- * Get a list of all registered header action IDs.
- * Useful for debugging and registry inspection.
- * 
- * @returns Array of registered header action IDs
+ * `listRegisteredHeaderActionIds`
+ *
+ * Purpose:
+ * Lists registered header action IDs for inspection.
+ *
+ * Behavior:
+ * Returns action IDs in registry order.
+ *
+ * Constraints:
+ * - Intended for debugging or diagnostics
+ *
+ * Non-Goals:
+ * - Does not reflect visibility or ordering in the UI
  */
 export function listRegisteredHeaderActionIds(): string[] {
-    return registry.listIds();
+    return useV2Surface() ? [...v2Kernel.registry.listLegacyIds()] : registry.listIds();
 }

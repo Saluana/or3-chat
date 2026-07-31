@@ -1,26 +1,32 @@
 /**
- * Shared theme utilities used by both client and server plugins
- * Consolidates duplicated logic to reduce code bloat
+ * @module app/theme/_shared/theme-core
+ *
+ * Purpose:
+ * Shared theme utilities used by client and server plugins.
+ *
+ * Behavior:
+ * - Provides deep clone and merge helpers
+ * - Loads and compiles themes with runtime caches
+ *
+ * Constraints:
+ * - Theme loading depends on the theme manifest
+ * - Runtime operations may differ between client and server
  */
 
-import { RuntimeResolver } from './runtime-resolver';
-import { compileOverridesRuntime } from './runtime-compile';
-import { generateThemeCssVariables } from './generate-css-variables';
-import { iconRegistry } from './icon-registry';
-import {
-    loadThemeStylesheets,
-    updateManifestEntry,
-    loadThemeAppConfig,
-    type ThemeManifestEntry,
-} from './theme-manifest';
-import type { CompiledTheme } from './types';
+import { THEME_NAME_PATTERN } from './constants';
 
 // ============================================================================
 // Deep Clone / Merge Utilities
 // ============================================================================
 
 /**
- * Deep clone a value using structuredClone when available, falling back to JSON
+ * `cloneDeep`
+ *
+ * Purpose:
+ * Deep clones a value using structuredClone with JSON fallback.
+ *
+ * Constraints:
+ * - JSON fallback drops functions and non-serializable values
  */
 export function cloneDeep<T>(value: T): T {
     if (value === undefined || value === null) {
@@ -39,7 +45,13 @@ export function cloneDeep<T>(value: T): T {
 }
 
 /**
- * Deep merge patch into base object (mutates base)
+ * `deepMerge`
+ *
+ * Purpose:
+ * Deep merges a patch into a base object.
+ *
+ * Constraints:
+ * - Mutates the base object
  */
 export function deepMerge(
     base: Record<string, unknown>,
@@ -69,7 +81,10 @@ export function deepMerge(
 }
 
 /**
- * Recursively update target with source values (in-place mutation)
+ * `recursiveUpdate`
+ *
+ * Purpose:
+ * Recursively updates target with source values.
  */
 export function recursiveUpdate(
     target: Record<string, unknown>,
@@ -97,216 +112,74 @@ export function recursiveUpdate(
     }
 }
 
+/** Build a theme's app config from an immutable base snapshot. */
+export function computeEffectiveAppConfig(
+    base: Record<string, unknown>,
+    options: {
+        appPatch?: Record<string, unknown> | null;
+        uiPatch?: Record<string, unknown> | null;
+    } = {}
+): Record<string, unknown> {
+    const effective = deepMerge(cloneDeep(base), options.appPatch ?? undefined);
+    if (options.uiPatch) {
+        const baseUi =
+            effective.ui &&
+            typeof effective.ui === 'object' &&
+            !Array.isArray(effective.ui)
+                ? (effective.ui as Record<string, unknown>)
+                : {};
+        effective.ui = deepMerge(baseUi, options.uiPatch);
+    }
+    return effective;
+}
+
+/** Replace a reactive object while deleting keys absent from the next value. */
+export function replaceReactiveObject(
+    target: Record<string, unknown>,
+    source: Record<string, unknown>
+): void {
+    for (const key of Object.keys(target)) {
+        if (!(key in source)) delete target[key];
+    }
+    for (const [key, value] of Object.entries(source)) {
+        const current = target[key];
+        if (
+            current &&
+            value &&
+            typeof current === 'object' &&
+            typeof value === 'object' &&
+            !Array.isArray(current) &&
+            !Array.isArray(value)
+        ) {
+            replaceReactiveObject(
+                current as Record<string, unknown>,
+                value as Record<string, unknown>
+            );
+        } else {
+            target[key] = cloneDeep(value);
+        }
+    }
+}
+
 // ============================================================================
 // Theme Name Validation
 // ============================================================================
 
 /**
- * Validate and sanitize a theme name
- * Returns null if the theme name is invalid or not available
+ * `sanitizeThemeName`
+ *
+ * Purpose:
+ * Validates a theme name and checks availability.
  */
 export function sanitizeThemeName(
     themeName: string | null,
     availableThemes: Set<string>
 ): string | null {
     if (!themeName) return null;
-    // Only allow alphanumeric and hyphens (security: prevent path traversal)
-    if (!/^[a-z0-9-]+$/i.test(themeName)) return null;
-    if (!availableThemes.has(themeName)) return null;
-    return themeName;
-}
-
-// ============================================================================
-// Theme Loading Infrastructure
-// ============================================================================
-
-export interface ThemeLoaderOptions {
-    /** Callback when a theme is loaded and registered */
-    onThemeRegistered?: (themeName: string, theme: CompiledTheme) => void;
-    /** Whether running in development mode */
-    isDev?: boolean;
-}
-
-export interface ThemeLoaderState {
-    themeRegistry: Map<string, CompiledTheme>;
-    resolverRegistry: Map<string, RuntimeResolver>;
-    appConfigOverrides: Map<string, Record<string, unknown> | null>;
-}
-
-/**
- * Load a theme by name, compiling it if not already cached
- */
-export async function loadTheme(
-    themeName: string,
-    themeManifest: Map<string, ThemeManifestEntry>,
-    state: ThemeLoaderState,
-    options: ThemeLoaderOptions = {}
-): Promise<CompiledTheme | null> {
-    // Return cached if already loaded
-    if (state.themeRegistry.has(themeName)) {
-        return state.themeRegistry.get(themeName)!;
-    }
-
-    try {
-        const manifestEntry = themeManifest.get(themeName);
-
-        if (!manifestEntry) {
-            if (options.isDev) {
-                console.warn(`[theme] Theme "${themeName}" is not registered.`);
-            }
-            return null;
-        }
-
-        const themeModule = await manifestEntry.loader();
-        const definition = themeModule.default;
-
-        // Runtime check for dynamic imports - type says it exists but runtime may differ
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (!definition) {
-            if (options.isDev) {
-                console.warn(`[theme] Theme "${themeName}" has no default export.`);
-            }
-            return null;
-        }
-
-        updateManifestEntry(manifestEntry, definition);
-
-        // Load stylesheets
-        await loadThemeStylesheets(manifestEntry, definition.stylesheets);
-
-        // Load icons if available
-        let themeIcons = definition.icons;
-        if (!themeIcons && manifestEntry.iconsLoader) {
-            try {
-                const iconsModule = await manifestEntry.iconsLoader();
-                // ThemeIconsLoader returns { default: Record<string, string> }
-                themeIcons = iconsModule.default;
-            } catch (e) {
-                if (options.isDev) {
-                    console.warn(
-                        `[theme] Failed to load icons for theme "${themeName}":`,
-                        e
-                    );
-                }
-            }
-        }
-
-        const compiledTheme: CompiledTheme = {
-            name: definition.name,
-            isDefault: manifestEntry.isDefault,
-            stylesheets: manifestEntry.stylesheets,
-            displayName: definition.displayName,
-            description: definition.description,
-            cssVariables: generateThemeCssVariables(definition),
-            overrides: compileOverridesRuntime(definition.overrides || {}),
-            cssSelectors: definition.cssSelectors,
-            hasStyleSelectors: manifestEntry.hasCssSelectorStyles,
-            ui: definition.ui,
-            propMaps: definition.propMaps,
-            backgrounds: definition.backgrounds,
-            icons: themeIcons,
-        };
-
-        // Register in caches
-        state.themeRegistry.set(themeName, compiledTheme);
-
-        if (compiledTheme.icons) {
-            iconRegistry.registerTheme(themeName, compiledTheme.icons);
-        }
-
-        // Load app config overrides
-        const themeSpecificConfig =
-            (await loadThemeAppConfig(manifestEntry)) ?? null;
-        state.appConfigOverrides.set(themeName, themeSpecificConfig);
-
-        // Create and cache resolver
-        const resolver = new RuntimeResolver(compiledTheme);
-        state.resolverRegistry.set(themeName, resolver);
-
-        options.onThemeRegistered?.(themeName, compiledTheme);
-
-        return compiledTheme;
-    } catch (error) {
-        if (options.isDev) {
-            console.warn(`[theme] Failed to load theme "${themeName}":`, error);
-        }
-    }
-
-    return null;
-}
-
-/**
- * Ensure a theme is loaded and has a resolver available
- */
-export async function ensureThemeLoaded(
-    themeName: string,
-    themeManifest: Map<string, ThemeManifestEntry>,
-    state: ThemeLoaderState,
-    options: ThemeLoaderOptions = {}
-): Promise<boolean> {
-    if (state.resolverRegistry.has(themeName)) {
-        return true;
-    }
-
-    if (state.themeRegistry.has(themeName)) {
-        const cached = state.themeRegistry.get(themeName)!;
-        const resolver = new RuntimeResolver(cached);
-        state.resolverRegistry.set(themeName, resolver);
-        return true;
-    }
-
-    const loaded = await loadTheme(themeName, themeManifest, state, options);
-    return Boolean(loaded);
-}
-
-/**
- * Get the resolver for a theme, with optional fallback to default theme
- */
-export function getResolver(
-    themeName: string,
-    defaultTheme: string,
-    state: ThemeLoaderState,
-    options: ThemeLoaderOptions = {}
-): RuntimeResolver | null {
-    // Check resolver cache first
-    if (state.resolverRegistry.has(themeName)) {
-        return state.resolverRegistry.get(themeName)!;
-    }
-
-    // Create resolver from cached theme
-    if (state.themeRegistry.has(themeName)) {
-        const resolver = new RuntimeResolver(state.themeRegistry.get(themeName)!);
-        state.resolverRegistry.set(themeName, resolver);
-        return resolver;
-    }
-
-    // Fallback to default theme
-    if (themeName !== defaultTheme && state.resolverRegistry.has(defaultTheme)) {
-        if (options.isDev) {
-            console.warn(
-                `[theme] No resolver found for theme "${themeName}". Falling back to "${defaultTheme}".`
-            );
-        }
-        return state.resolverRegistry.get(defaultTheme)!;
-    }
-
-    if (options.isDev) {
-        console.warn(
-            `[theme] No resolver found for theme "${themeName}". Theme may not be compiled.`
-        );
-    }
-
-    return null;
-}
-
-/**
- * Get a cached theme by name
- */
-export function getTheme(
-    themeName: string,
-    state: ThemeLoaderState
-): CompiledTheme | null {
-    return state.themeRegistry.get(themeName) || null;
+    const normalized = themeName.toLowerCase();
+    if (!THEME_NAME_PATTERN.test(normalized)) return null;
+    if (!availableThemes.has(normalized)) return null;
+    return normalized;
 }
 
 // ============================================================================

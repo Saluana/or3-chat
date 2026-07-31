@@ -1,3 +1,18 @@
+/**
+ * @module app/composables/sidebar/useSidebarEnvironment
+ *
+ * Purpose:
+ * Defines and exposes the sidebar environment contract for child components.
+ *
+ * Responsibilities:
+ * - Provides injection keys for sidebar state and controls
+ * - Adapts multi-pane APIs for sidebar usage
+ * - Offers convenience composables for common sidebar data
+ *
+ * Non-responsibilities:
+ * - Does not implement sidebar UI or rendering
+ * - Does not fetch or persist data on its own
+ */
 import {
     provide,
     inject,
@@ -18,8 +33,19 @@ import type {
 } from './useSidebarSections';
 
 /**
- * Controls for managing sidebar page state and navigation.
- * Provides methods to switch between different sidebar pages and reset to defaults.
+ * `SidebarPageControls`
+ *
+ * Purpose:
+ * Describes the API for switching and resetting sidebar pages.
+ *
+ * Behavior:
+ * Exposes the active page ID plus activation helpers.
+ *
+ * Constraints:
+ * - Intended to be provided via Vue injection
+ *
+ * Non-Goals:
+ * - Does not define how pages are rendered
  */
 export interface SidebarPageControls {
     /** Current active page ID, or null if no page is active */
@@ -33,23 +59,52 @@ export interface SidebarPageControls {
 }
 
 /**
- * Injection key for SidebarPageControls
+ * `SidebarPageControlsKey`
+ *
+ * Purpose:
+ * Provides an injection key for `SidebarPageControls`.
+ *
+ * Constraints:
+ * - Must match the key used by `provideSidebarPageControls`
  */
 export const SidebarPageControlsKey: InjectionKey<SidebarPageControls> = Symbol(
     'SidebarPageControls'
 );
 
 /**
- * Provide sidebar page controls to child components
- * @param controls - The sidebar page controls instance
+ * `provideSidebarPageControls`
+ *
+ * Purpose:
+ * Makes sidebar page controls available to descendant components.
+ *
+ * Behavior:
+ * Registers controls using the SidebarPageControls injection key.
+ *
+ * Constraints:
+ * - Should be called in a parent setup context
+ *
+ * Non-Goals:
+ * - Does not create controls; it only provides them
  */
 export function provideSidebarPageControls(controls: SidebarPageControls) {
     provide(SidebarPageControlsKey, controls);
 }
 
 /**
- * Multi-pane API adapter for sidebar operations.
- * Provides methods to manage panes, open apps/chats/documents, and control pane state.
+ * `SidebarMultiPaneApi`
+ *
+ * Purpose:
+ * Defines the subset of pane operations needed by the sidebar.
+ *
+ * Behavior:
+ * Provides helper methods for opening apps, chats, and documents and for
+ * manipulating pane state.
+ *
+ * Constraints:
+ * - Wraps the full `UseMultiPaneApi`
+ *
+ * Non-Goals:
+ * - Does not expose every multi-pane capability
  */
 export interface SidebarMultiPaneApi {
     /** Open a new pane for a specific app */
@@ -76,7 +131,7 @@ export interface SidebarMultiPaneApi {
 }
 
 /**
- * Interface defining which sidebar sections are currently active/visible
+ * Interface defining which sidebar sections are currently active/visible.
  */
 interface ActiveSections {
     /** Whether projects section is active */
@@ -88,8 +143,19 @@ interface ActiveSections {
 }
 
 /**
- * Main sidebar environment interface providing access to all sidebar data and operations.
- * Acts as a central hub for sidebar state management and API access.
+ * `SidebarEnvironment`
+ *
+ * Purpose:
+ * Defines the full sidebar environment contract exposed via injection.
+ *
+ * Behavior:
+ * Provides accessors for data, UI state, and registry-driven actions.
+ *
+ * Constraints:
+ * - Consumers are expected to call through the provided accessors
+ *
+ * Non-Goals:
+ * - Does not mandate how data is stored or fetched
  */
 export interface SidebarEnvironment {
     /** Get the multi-pane API for pane management */
@@ -129,17 +195,31 @@ export interface SidebarEnvironment {
 }
 
 /**
- * Injection key for SidebarEnvironment
+ * `SidebarEnvironmentKey`
+ *
+ * Purpose:
+ * Provides an injection key for `SidebarEnvironment`.
+ *
+ * Constraints:
+ * - Must match the key used by `provideSidebarEnvironment`
  */
 export const SidebarEnvironmentKey: InjectionKey<SidebarEnvironment> =
     Symbol('SidebarEnvironment');
 
 /**
- * Creates a simplified SidebarMultiPaneApi adapter from the full UseMultiPaneApi.
- * Trims down the API to only the methods needed for sidebar operations.
+ * `createSidebarMultiPaneApi`
  *
- * @param multiPaneApi - The full multi-pane API from useMultiPane
- * @returns A simplified API adapter for sidebar usage
+ * Purpose:
+ * Adapts the full multi-pane API to a sidebar-focused interface.
+ *
+ * Behavior:
+ * Wraps pane operations and exposes only the methods the sidebar requires.
+ *
+ * Constraints:
+ * - Requires a valid `UseMultiPaneApi` instance
+ *
+ * Non-Goals:
+ * - Does not persist or restore pane state
  */
 export function createSidebarMultiPaneApi(
     multiPaneApi: UseMultiPaneApi
@@ -185,21 +265,40 @@ export function createSidebarMultiPaneApi(
 }
 
 /**
- * Provide sidebar environment to child components.
- * Should be called in a parent component to make the environment available to descendants.
+ * `provideSidebarEnvironment`
  *
- * @param environment - The sidebar environment instance to provide
+ * Purpose:
+ * Makes the sidebar environment available to descendant components.
+ *
+ * Behavior:
+ * Registers the environment under the SidebarEnvironment injection key.
+ *
+ * Constraints:
+ * - Should be called in a parent setup context
+ *
+ * Non-Goals:
+ * - Does not construct the environment object
  */
 export function provideSidebarEnvironment(environment: SidebarEnvironment) {
     provide(SidebarEnvironmentKey, environment);
 }
 
 /**
- * Inject and return the sidebar environment from the current component context.
- * Must be used within a component tree where provideSidebarEnvironment was called.
+ * `useSidebarEnvironment`
  *
- * @returns The SidebarEnvironment instance
- * @throws Error if used outside of a provided environment
+ * Purpose:
+ * Retrieves the sidebar environment from Vue injection.
+ *
+ * Behavior:
+ * Throws an error when no environment has been provided.
+ *
+ * Constraints:
+ * - Must be called inside a component tree that provided the environment
+ *
+ * Non-Goals:
+ * - Does not supply a default environment
+ *
+ * @throws Error when used outside of a provider.
  */
 export function useSidebarEnvironment(): SidebarEnvironment {
     const environment = inject(SidebarEnvironmentKey);
@@ -212,9 +311,19 @@ export function useSidebarEnvironment(): SidebarEnvironment {
 }
 
 /**
- * Composable for accessing the projects list from the sidebar environment.
+ * `useSidebarProjects`
  *
- * @returns Reactive reference to the projects array
+ * Purpose:
+ * Provides access to the reactive projects list.
+ *
+ * Behavior:
+ * Returns the projects reference from the sidebar environment.
+ *
+ * Constraints:
+ * - Requires a provided sidebar environment
+ *
+ * Non-Goals:
+ * - Does not fetch projects on its own
  */
 export function useSidebarProjects() {
     const environment = useSidebarEnvironment();
@@ -222,9 +331,19 @@ export function useSidebarProjects() {
 }
 
 /**
- * Composable for accessing the threads list from the sidebar environment.
+ * `useSidebarThreads`
  *
- * @returns Reactive reference to the threads array
+ * Purpose:
+ * Provides access to the reactive threads list.
+ *
+ * Behavior:
+ * Returns the threads reference from the sidebar environment.
+ *
+ * Constraints:
+ * - Requires a provided sidebar environment
+ *
+ * Non-Goals:
+ * - Does not fetch threads on its own
  */
 export function useSidebarThreads() {
     const environment = useSidebarEnvironment();
@@ -232,9 +351,19 @@ export function useSidebarThreads() {
 }
 
 /**
- * Composable for accessing the documents list from the sidebar environment.
+ * `useSidebarDocuments`
  *
- * @returns Reactive reference to the documents array
+ * Purpose:
+ * Provides access to the reactive documents list.
+ *
+ * Behavior:
+ * Returns the documents reference from the sidebar environment.
+ *
+ * Constraints:
+ * - Requires a provided sidebar environment
+ *
+ * Non-Goals:
+ * - Does not fetch documents on its own
  */
 export function useSidebarDocuments() {
     const environment = useSidebarEnvironment();
@@ -242,9 +371,19 @@ export function useSidebarDocuments() {
 }
 
 /**
- * Composable for accessing and managing the sidebar search query.
+ * `useSidebarQuery`
  *
- * @returns Object containing the reactive query and setter function
+ * Purpose:
+ * Provides access to the sidebar search query state.
+ *
+ * Behavior:
+ * Returns the query ref and a setter that forwards to the environment.
+ *
+ * Constraints:
+ * - Requires a provided sidebar environment
+ *
+ * Non-Goals:
+ * - Does not perform search itself
  */
 export function useSidebarQuery() {
     const environment = useSidebarEnvironment();
@@ -257,10 +396,19 @@ export function useSidebarQuery() {
 }
 
 /**
- * Composable for accessing and managing active sidebar sections.
- * Controls which sections (projects, chats, docs) are currently visible.
+ * `useActiveSections`
  *
- * @returns Object containing the active sections state and setter function
+ * Purpose:
+ * Reads and updates which sidebar sections are active.
+ *
+ * Behavior:
+ * Returns the active sections ref and a setter that updates the environment.
+ *
+ * Constraints:
+ * - Requires a provided sidebar environment
+ *
+ * Non-Goals:
+ * - Does not persist section state
  */
 export function useActiveSections() {
     const environment = useSidebarEnvironment();
@@ -274,10 +422,19 @@ export function useActiveSections() {
 }
 
 /**
- * Composable for accessing and managing expanded project states.
- * Controls which projects show their nested content in the sidebar.
+ * `useExpandedProjects`
  *
- * @returns Object containing the expanded projects array and setter function
+ * Purpose:
+ * Reads and updates which projects are expanded in the sidebar.
+ *
+ * Behavior:
+ * Returns the expanded project IDs ref and a setter that updates the environment.
+ *
+ * Constraints:
+ * - Requires a provided sidebar environment
+ *
+ * Non-Goals:
+ * - Does not persist expansion state
  */
 export function useExpandedProjects() {
     const environment = useSidebarEnvironment();
@@ -291,10 +448,19 @@ export function useExpandedProjects() {
 }
 
 /**
- * Composable for accessing and managing active thread IDs.
- * Controls which threads are marked as active/selected in the sidebar.
+ * `useActiveThreadIds`
  *
- * @returns Object containing the active thread IDs array and setter function
+ * Purpose:
+ * Reads and updates the active thread IDs for sidebar selection state.
+ *
+ * Behavior:
+ * Returns the active thread IDs ref and a setter that updates the environment.
+ *
+ * Constraints:
+ * - Requires a provided sidebar environment
+ *
+ * Non-Goals:
+ * - Does not validate thread existence
  */
 export function useActiveThreadIds() {
     const environment = useSidebarEnvironment();
@@ -308,10 +474,19 @@ export function useActiveThreadIds() {
 }
 
 /**
- * Composable for accessing and managing active document IDs.
- * Controls which documents are marked as active/selected in the sidebar.
+ * `useActiveDocumentIds`
  *
- * @returns Object containing the active document IDs array and setter function
+ * Purpose:
+ * Reads and updates the active document IDs for sidebar selection state.
+ *
+ * Behavior:
+ * Returns the active document IDs ref and a setter that updates the environment.
+ *
+ * Constraints:
+ * - Requires a provided sidebar environment
+ *
+ * Non-Goals:
+ * - Does not validate document existence
  */
 export function useActiveDocumentIds() {
     const environment = useSidebarEnvironment();
@@ -325,10 +500,19 @@ export function useActiveDocumentIds() {
 }
 
 /**
- * Composable for accessing the multi-pane API from the sidebar environment.
- * Provides pane management functionality for sidebar operations.
+ * `useSidebarMultiPane`
  *
- * @returns The SidebarMultiPaneApi instance
+ * Purpose:
+ * Provides access to the sidebar-friendly multi-pane API adapter.
+ *
+ * Behavior:
+ * Returns the adapter from the sidebar environment.
+ *
+ * Constraints:
+ * - Requires a provided sidebar environment
+ *
+ * Non-Goals:
+ * - Does not create a multi-pane API instance
  */
 export function useSidebarMultiPane(): SidebarMultiPaneApi {
     const environment = useSidebarEnvironment();
@@ -336,10 +520,19 @@ export function useSidebarMultiPane(): SidebarMultiPaneApi {
 }
 
 /**
- * Composable for accessing the pane plugin API from the sidebar environment.
- * Provides access to custom pane plugin functionality.
+ * `useSidebarPostsApi`
  *
- * @returns The PanePluginApi instance or null if not available
+ * Purpose:
+ * Provides access to the pane plugin API from the sidebar environment.
+ *
+ * Behavior:
+ * Returns the pane plugin API or null when unavailable.
+ *
+ * Constraints:
+ * - Requires a provided sidebar environment
+ *
+ * Non-Goals:
+ * - Does not initialize plugin APIs
  */
 export function useSidebarPostsApi(): PanePluginApi | null {
     const environment = useSidebarEnvironment();

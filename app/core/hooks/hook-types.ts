@@ -1,10 +1,71 @@
-// Hook & Plugin Type System — Core Types (non-breaking, types-only)
-// This file provides compile-time types and utilities for amazing DX.
-// Runtime behavior is unchanged: wrappers will delegate to the existing HookEngine.
+/**
+ * @module app/core/hooks/hook-types.ts
+ *
+ * Purpose:
+ * Comprehensive type system for the OR3 hook engine. Provides compile-time
+ * type safety for hook names, payloads, callbacks, and return types.
+ * Runtime behavior is unchanged; all definitions here are types-only.
+ *
+ * Responsibilities:
+ * - Define payload interfaces for all core hooks (AI, UI, Pane, Sync, Storage, etc.)
+ * - Define DB entity types used in hook payloads
+ * - Define template-literal hook name types for DB hooks
+ * - Provide `HookPayloadMap` mapping hook names to their parameter tuples
+ * - Provide utility types: `InferHookParams`, `InferHookReturn`, `InferHookCallback`
+ * - Support plugin augmentation via `Or3ActionHooks` / `Or3FilterHooks` global interfaces
+ * - Provide developer-friendly error diagnostics via `ValidateHookName` / `SuggestSimilar`
+ *
+ * Non-responsibilities:
+ * - Runtime hook dispatch (see hooks.ts)
+ * - Component lifecycle (see useHookEffect / useHooks)
+ *
+ * Constraints:
+ * - Keep expansions small and additive to avoid TS performance degradation
+ * - Payload interfaces should use plain data types (no Vue reactivity, no class instances)
+ * - Wire-format fields use snake_case (aligned with Dexie and sync layer)
+ *
+ * @see core/hooks/hooks.ts for the runtime engine
+ * @see core/hooks/hook-keys.ts for the known hook key unions
+ * @see docs/core-hook-map.md for the human-readable hook reference
+ */
 import type { PaneState as MultiPaneState } from '../../composables/core/useMultiPane';
 import type { ChatMessage } from '~/utils/chat/types';
 import type { ORMessage } from '~/core/auth/openrouter-build';
 import type { WorkflowStreamingState } from '~/composables/chat/useWorkflowStreamAccumulator';
+import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
+import type {
+    AccessDecision,
+    AttachmentEntity,
+    DbCreatePayload,
+    DbDeletePayload,
+    DbUpdatePayload,
+    DocumentEntity,
+    FileEntity,
+    KvEntry,
+    MessageCreateEntity,
+    MessageEntity,
+    NotificationAction,
+    NotificationCreatePayload,
+    NotificationEntity,
+    PostCreateEntity,
+    PostEntity,
+    ProjectEntity,
+    PromptEntity,
+    SessionContext,
+    StorageFileDownloadAfterPayload,
+    StorageFileDownloadBeforePayload,
+    StorageFileGcPayload,
+    StorageFileUploadAfterPayload,
+    StorageFileUploadBeforePayload,
+    StorageFileUploadPolicyPayload,
+    StorageFileUrlOptionsPayload,
+    SyncPendingOpPayload,
+    SyncScopePayload,
+    ThreadCreateEntity,
+    ThreadEntity,
+} from './hook-domain-types';
+
+export * from './hook-domain-types';
 
 export interface EditorInstance {
     commands: Record<string, unknown>;
@@ -112,6 +173,30 @@ export interface AiRetryAfterPayload {
     originalAssistantId?: string;
     newUserId?: string;
     newAssistantId?: string;
+}
+
+export interface DocumentAiEditRequestPayload {
+    documentId: string;
+    modelId: string;
+    prompt: string;
+    scope: 'selection' | 'section' | 'document';
+    context: string;
+    references: Array<{
+        id: string;
+        source: 'document' | 'chat';
+        label: string;
+    }>;
+    referenceContext: string;
+    tokenEstimate: number;
+    maxIterations?: number;
+    chunkWordLimit?: number;
+}
+
+export interface DocumentAiEditResultPayload {
+    request: DocumentAiEditRequestPayload;
+    operationCount?: number;
+    accepted?: boolean;
+    error?: unknown;
 }
 
 // Pane Hooks
@@ -250,172 +335,6 @@ export interface KvUpsertByNameInput {
 }
 
 // ============================================================================
-// DB ENTITY TYPES (lightweight — expand incrementally as needed)
-// ============================================================================
-
-/** DB entity: message */
-export interface MessageEntity {
-    id: string;
-    thread_id: string;
-    role: string;
-    pending?: boolean;
-    data?: unknown;
-    index: number;
-    created_at: number;
-    updated_at?: number;
-}
-
-/** DB entity: message create input */
-export interface MessageCreateEntity {
-    id?: string;
-    thread_id: string;
-    role: string;
-    pending?: boolean;
-    data?: unknown;
-    index?: number;
-    created_at?: number;
-    updated_at?: number;
-    file_hashes?: string | string[] | null;
-    error?: string | null;
-    deleted?: boolean;
-    stream_id?: string | null;
-    clock?: number;
-}
-
-/** DB entity: thread */
-export interface ThreadEntity {
-    id: string;
-    title?: string | null;
-    created_at: number;
-    updated_at: number;
-    last_message_at?: number | null;
-    parent_thread_id?: string | null;
-    anchor_message_id?: string | null;
-    anchor_index?: number | null;
-    branch_mode?: 'reference' | 'copy' | null;
-    status: string;
-    deleted: boolean;
-    pinned: boolean;
-    clock: number;
-    forked: boolean;
-    project_id?: string | null;
-    system_prompt_id?: string | null;
-}
-
-/** DB entity: thread create input */
-export interface ThreadCreateEntity {
-    id?: string;
-    title?: string | null;
-    created_at?: number;
-    updated_at?: number;
-    last_message_at?: number | null;
-    parent_thread_id?: string | null;
-    anchor_message_id?: string | null;
-    anchor_index?: number | null;
-    branch_mode?: 'reference' | 'copy' | null;
-    status?: string;
-    deleted?: boolean;
-    pinned?: boolean;
-    clock?: number;
-    forked?: boolean;
-    project_id?: string | null;
-    system_prompt_id?: string | null;
-}
-
-/** DB entity: document */
-export interface DocumentEntity {
-    id: string;
-    title?: string;
-    content?: string;
-    created_at?: number;
-    updated_at?: number;
-}
-
-/** DB entity: file */
-export interface FileEntity {
-    hash: string;
-    name: string;
-    mime: string;
-    size: number;
-    ref_count?: number;
-}
-
-/** DB entity: project */
-export interface ProjectEntity {
-    id: string;
-    name: string;
-    description?: string | null;
-    data: Record<string, unknown>;
-    created_at: number;
-    updated_at: number;
-    deleted: boolean;
-    clock: number;
-}
-
-/** DB entity: post */
-export interface PostEntity {
-    id: string;
-    title?: string;
-    body?: string;
-    created_at?: number;
-    updated_at?: number;
-}
-
-/** DB entity: post create input */
-export interface PostCreateEntity {
-    id?: string;
-    title: string;
-    content?: string;
-    postType?: string;
-    created_at?: number;
-    updated_at?: number;
-    deleted?: boolean;
-    meta?: unknown;
-    file_hashes?: string | null;
-}
-
-/** DB entity: prompt */
-export interface PromptEntity {
-    id: string;
-    name: string;
-    text: string;
-}
-
-/** DB entity: attachment */
-export interface AttachmentEntity {
-    id: string;
-    message_id?: string;
-    file_hash?: string;
-}
-
-/** DB entity: key-value entry */
-export interface KvEntry {
-    id: string;
-    name: string;
-    value?: string | null;
-    created_at: number;
-    updated_at: number;
-    clock: number;
-}
-
-// Generic DB op payloads
-export interface DbCreatePayload<T = unknown> {
-    entity: T;
-    tableName: string;
-}
-export interface DbUpdatePayload<T = unknown> {
-    existing: T;
-    updated: T;
-    patch: Partial<T>;
-    tableName: string;
-}
-export interface DbDeletePayload<T = unknown> {
-    entity: T;
-    id: string;
-    tableName: string;
-}
-
-// ============================================================================
 // HOOK NAME TYPES
 // ============================================================================
 
@@ -536,6 +455,10 @@ export type CoreHookPayloadMap = {
     'ai.chat.stream:action:error': [AiStreamErrorPayload];
     'ai.chat.retry:action:before': [AiRetryBeforePayload];
     'ai.chat.retry:action:after': [AiRetryAfterPayload];
+    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];
+    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];
+    'ai.document.edit:action:after': [DocumentAiEditResultPayload];
+    'ai.document.edit:action:error': [DocumentAiEditResultPayload];
 
     // Pane Actions (now use named payloads)
     'ui.pane.active:action': [UiPaneActivePayload];
@@ -543,6 +466,7 @@ export type CoreHookPayloadMap = {
     'ui.pane.switch:action': [UiPaneSwitchPayload];
     'ui.pane.open:action:after': [UiPaneActivePayload];
     'ui.pane.close:action:before': [UiPaneActivePayload];
+    'ui.pane.close:action:after': [UiPaneActivePayload];
     'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];
     'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];
     'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];
@@ -629,11 +553,96 @@ export type CoreHookPayloadMap = {
 
     // Workflow Actions
     'workflow.execution:action:state_update': [
-        { messageId: string; state: WorkflowStreamingState }
+        { messageId: string; state: WorkflowStreamingState | WorkflowMessageData }
     ];
     'workflow.execution:action:complete': [
         { messageId: string; workflowId: string; finalOutput?: string }
     ];
+
+    // Auth hooks
+    'auth.access:filter:decision': [
+        AccessDecision,
+        { session: SessionContext | null }
+    ];
+    'auth.user:action:created': [{ userId: string; provider: string }];
+    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];
+
+    // Storage hooks
+    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];
+    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];
+    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];
+    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];
+    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];
+    'storage.files.upload:filter:policy': [StorageFileUploadPolicyPayload | false];
+    'storage.files.gc:action:run': [StorageFileGcPayload];
+    'storage:action:error': [{ message?: string } & Record<string, unknown>];
+
+    // Sync hooks
+    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];
+    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];
+    'sync.push:action:after': [
+        { scope: SyncScopePayload; successCount: number; failCount: number }
+    ];
+    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];
+    'sync.bootstrap:action:progress': [
+        {
+            scope: SyncScopePayload;
+            cursor: number;
+            pulledCount: number;
+            hasMore: boolean;
+        }
+    ];
+    'sync.bootstrap:action:complete': [
+        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }
+    ];
+    'sync.pull:action:received': [
+        { scope: SyncScopePayload; changeCount: number }
+    ];
+    'sync.pull:action:applied': [
+        {
+            scope: SyncScopePayload;
+            applied: number;
+            skipped: number;
+            conflicts: number;
+        }
+    ];
+    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];
+    'sync.pull:action:after': [
+        { scope: SyncScopePayload; count: number; cursor: number }
+    ];
+    'sync.subscription:action:statusChange': [
+        {
+            scope: SyncScopePayload;
+            previousStatus: string;
+            status: string;
+        }
+    ];
+    'sync.conflict:action:detected': [
+        {
+            tableName: string;
+            pk: string;
+            local: unknown;
+            remote: unknown;
+            winner: 'local' | 'remote';
+        }
+    ];
+    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];
+    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];
+    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];
+    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];
+    'sync.rescan:action:progress': [{ scope: SyncScopePayload; progress: number }];
+    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];
+    'sync.stats:action': [
+        { pendingCount: number; cursor: number; lastSyncAt: number }
+    ];
+    'sync:action:error': [{ message?: string } & Record<string, unknown>];
+
+    // Notification hooks
+    'notify:action:push': [NotificationCreatePayload];
+    'notify:action:read': [{ id: string; readAt: number }];
+    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];
+    'notify:action:cleared': [{ count: number }];
+    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];
 };
 
 // Derived payloads for DB action hooks

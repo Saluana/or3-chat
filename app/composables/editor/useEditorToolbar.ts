@@ -1,17 +1,63 @@
 import { computed, type Ref } from 'vue';
 import type { Editor } from '@tiptap/vue-3';
 import { createRegistry } from '../_registry';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 
-/** Definition for an extendable editor toolbar button. */
+/**
+ * @module app/composables/editor/useEditorToolbar
+ *
+ * Purpose:
+ * Provide a registry-backed toolbar extension surface for the TipTap editor.
+ *
+ * Responsibilities:
+ * - Define the toolbar button contract
+ * - Register and unregister toolbar button extensions
+ * - Provide a computed list of buttons valid for the active editor
+ *
+ * Non-responsibilities:
+ * - Rendering toolbar UI
+ * - Enforcing button ordering or grouping beyond consumer sorting
+ * - Managing editor lifecycle or availability
+ */
+
+/**
+ * Definition for an extendable editor toolbar button.
+ *
+ * Purpose:
+ * Describe a toolbar button that can be contributed by plugins.
+ *
+ * Behavior:
+ * Buttons can control visibility and active state based on the editor.
+ *
+ * Constraints:
+ * - `id` must be stable across reloads
+ * - `onClick` should be resilient to repeated calls
+ *
+ * Non-Goals:
+ * - Automatic ordering or grouping
+ */
 export interface EditorToolbarButton {
     /** Unique id (stable across reloads). */
     id: string;
+    /** Owning plugin used for enabled-state and server access checks. */
+    pluginId?: string;
+    /** Optional per-contribution access requirements. */
+    access?: PluginGatePolicy;
     /** Icon name (passed to UButton icon prop). */
     icon: string;
     /** Tooltip text. */
     tooltip?: string;
     /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
     order?: number;
+    /** Visual group. Older registrations default to the plugin overflow group. */
+    group?: 'format' | 'insert' | 'history' | 'plugin-overflow' | string;
+    /** Priority within responsive overflow decisions. Higher stays visible longer. */
+    priority?: number;
+    /** Hint for compact layouts. Defaults to overflow for plugin buttons. */
+    responsive?: 'always' | 'compact' | 'overflow';
     /** Check if button should be active/highlighted. */
     isActive?: (editor: Editor) => boolean;
     /** Handler invoked on click. */
@@ -23,25 +69,84 @@ export interface EditorToolbarButton {
 const registry = createRegistry<EditorToolbarButton>(
     '__or3EditorToolbarRegistry'
 );
+const v2Kernel = getContributionSurfaceKernel<EditorToolbarButton>('editor-toolbar', {
+    getId: (button) => button.id,
+    normalize: (button) => Object.freeze({ ...button }),
+    compare: (left, right) =>
+        (left.order ?? 200) - (right.order ?? 200) || left.id.localeCompare(right.id),
+});
 
-/** Register (or replace) an editor toolbar button. */
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('editor-toolbar');
+}
+
+/**
+ * Register or replace an editor toolbar button.
+ *
+ * Purpose:
+ * Allow plugins to contribute toolbar buttons through a shared registry.
+ *
+ * Behavior:
+ * Replaces any existing button with the same id.
+ *
+ * Constraints:
+ * - Intended for client usage where HMR can re-register buttons
+ *
+ * Non-Goals:
+ * - Preventing id collisions across plugins
+ */
 export function registerEditorToolbarButton(button: EditorToolbarButton) {
-    registry.register(button);
+    if (useV2Surface()) v2Kernel.registry.registerLegacy({ value: button });
+    else registry.register(button);
 }
 
-/** Unregister a toolbar button by id (optional utility). */
+/**
+ * Unregister a toolbar button by id.
+ *
+ * Purpose:
+ * Remove a previously registered toolbar button.
+ *
+ * Behavior:
+ * Deletes the button if it exists.
+ *
+ * Constraints:
+ * - No effect if the id is not present
+ *
+ * Non-Goals:
+ * - Cleaning up editor UI that already rendered the button
+ */
 export function unregisterEditorToolbarButton(id: string) {
-    registry.unregister(id);
+    if (useV2Surface()) v2Kernel.registry.unregisterLegacy(id);
+    else registry.unregister(id);
 }
 
-/** Accessor for toolbar buttons applicable to the current editor. */
+/**
+ * Access toolbar buttons applicable to the current editor.
+ *
+ * Purpose:
+ * Provide a reactive, filtered list of toolbar buttons for the active editor.
+ *
+ * Behavior:
+ * Filters out buttons whose `visible` predicate returns false or throws.
+ *
+ * Constraints:
+ * - Must be called during Vue setup to access reactive state
+ * - Returns an empty array when no editor is available
+ *
+ * Non-Goals:
+ * - Sorting buttons by order
+ * - Handling editor initialization timing
+ */
 export function useEditorToolbarButtons(editorRef: Ref<Editor | null>) {
-    const allButtons = registry.useItems();
+    const allButtons = useV2Surface() ? v2Kernel.items : registry.useItems();
     return computed(() => {
         const editor = editorRef.value;
         if (!editor) return [];
 
         return allButtons.value.filter((btn) => {
+            if (!getPluginGateDecision(btn.pluginId, btn.access).allowed) {
+                return false;
+            }
             if (!btn.visible) return true;
             try {
                 return btn.visible(editor);
@@ -58,9 +163,23 @@ export function useEditorToolbarButtons(editorRef: Ref<Editor | null>) {
     });
 }
 
-/** Convenience for plugin authors to check existing button ids. */
+/**
+ * Convenience helper for plugin authors to check existing toolbar button ids.
+ *
+ * Purpose:
+ * Allow plugins to avoid id collisions before registering buttons.
+ *
+ * Behavior:
+ * Returns the current registry keys.
+ *
+ * Constraints:
+ * - Snapshot reflects current state at call time
+ *
+ * Non-Goals:
+ * - Providing reactive updates
+ */
 export function listRegisteredEditorToolbarButtonIds(): string[] {
-    return registry.listIds();
+    return useV2Surface() ? [...v2Kernel.registry.listLegacyIds()] : registry.listIds();
 }
 
 // Note: Core (built-in) toolbar buttons remain hard-coded in DocumentEditor.vue;

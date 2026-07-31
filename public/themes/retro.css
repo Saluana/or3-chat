@@ -14,7 +14,7 @@
 }
 
 [data-theme="retro"] #top-header {
-  background-color: var(--md-surface);
+  background-color: var(--md-top-header-bg);
 }
 
 [data-theme="retro"] #top-header[data-sidebar-state="collapsed"] {
@@ -47,7 +47,10 @@
   border-right: var(--md-border-width) solid var(--md-border-color);
 }
 
-[data-theme="retro"] #nav-top-section, #nav-footer-section, #nav-pages-section, #nav-middle-section {
+[data-theme="retro"] #nav-top-section,
+[data-theme="retro"] #nav-footer-section,
+[data-theme="retro"] #nav-pages-section,
+[data-theme="retro"] #nav-middle-section {
   background-color: transparent;
 }
 
@@ -74,6 +77,18 @@
 
 [data-theme="retro"] .cm-action-group {
   background-color: var(--md-surface-container-high);
+  border: var(--md-border-width) solid var(--md-border-color);
+  box-shadow: 2px 2px 0 var(--md-border-color);
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+[data-theme="retro"] .group:hover .cm-action-group {
+  opacity: 1;
+}
+
+[data-theme="retro"] .group:focus-within .cm-action-group {
+  opacity: 1;
 }
 
 [data-theme="retro"] .chat-container-root:not(:last-child) {
@@ -84,19 +99,86 @@
   border-top: var(--md-border-width) solid var(--md-border-color) !important;
 }
 
-[data-theme="retro"] .cm-assistant {
-  background-color: transparent;
-  box-shadow: 2px 2px 0 var(--md-border-color);
-  border: var(--md-border-width) solid var(--md-border-color);
-}
-
-[data-theme="retro"] .cm-user {
-  box-shadow: 2px 2px 0 var(--md-border-color);
-  border: var(--md-border-width) solid var(--md-border-color);
-}
-
 [data-theme="retro"] .chat-settings-switch {
   height: 32px;
+}
+
+[data-theme="retro"] #btn-collapse-attachments {
+  background-color: transparent !important;
+  color: var(--md-on-primary) !important;
+  cursor: pointer;
+}
+
+[data-theme="retro"] .tool-call-indicator {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  overflow: visible;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+[data-theme="retro"] .tool-call-indicator-details {
+  background: transparent !important;
+  border: none !important;
+}
+
+[data-theme="retro"] .tool-call-indicator-summary {
+  background: transparent !important;
+  padding: 4px 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-theme="retro"] .tool-call-indicator-summary:hover {
+  color: var(--md-on-surface) !important;
+}
+
+[data-theme="retro"] .tool-call-expanded-content {
+  border-top: none;
+  background-color: transparent;
+}
+
+[data-theme="retro"] .retro-tool-call-content {
+  background-color: var(--md-surface-container) !important;
+  border: none !important;
+  border-radius: var(--md-border-radius) !important;
+  font-family: "IBM Plex Mono", monospace !important;
+  font-size: 12px !important;
+  padding: 12px !important;
+  margin: 8px 0 !important;
+  overflow-x: auto;
+  color: var(--md-on-surface);
+}
+
+[data-theme="retro"] .tool-call-header-text {
+  color: var(--md-on-surface);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+[data-theme="retro"] .tool-call-header-text:nth-of-type(2) {
+  font-size: 10px !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: var(--md-surface-container-high);
+  color: var(--md-on-surface) !important;
+  padding: 2px 8px;
+  border-radius: var(--md-border-radius);
+  border: var(--md-border-width) solid var(--md-outline-variant);
+}
+
+[data-theme="retro"] .tool-call-indicator-summary-icon {
+  color: var(--md-primary) !important;
+  display: flex;
+  align-items: center;
+}
+
+[data-theme="retro"] .tool-call-indicator-summary-icon .iconify {
+  color: var(--md-primary) !important;
 }
 
 [data-theme="retro"] .dashboard-plugin-icon-label {
@@ -138,8 +220,143 @@
   padding: 20px 16px;
 }
 
-[data-theme="retro"] .document-editor-toolbar {
+[data-theme="retro"] .document-editor-root {
+  font-family: var(--font-sans);
+}
+
+[data-theme="retro"] .document-editor-root .document-canvas {
+  font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+[data-theme="retro"] .document-editor-root .document-title-field textarea {
+  font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  letter-spacing: -0.02em;
+}
+
+[data-theme="retro"] .document-editor-root .document-content {
+  font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+[data-theme="retro"] .document-editor-root .document-content h1,
+[data-theme="retro"] .document-editor-root .document-content h2,
+[data-theme="retro"] .document-editor-root .document-content h3 {
+  font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  letter-spacing: -0.015em;
+}
+
+[data-theme="retro"] .document-editor-root .document-content pre,
+[data-theme="retro"] .document-editor-root .document-content code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace !important;
+}
+
+[data-theme="retro"] .document-editor-root .editor-topbar {
   border-bottom: var(--md-border-width) solid var(--md-border-color);
+}
+
+[data-theme="retro"] .document-editor-root .document-editor-toolbar {
+  border-bottom: var(--md-border-width) solid var(--md-border-color);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--md-border-color) 24%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .document-inspector {
+  border-left: var(--md-border-width) solid var(--md-border-color);
+  box-shadow: none;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-composer {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--md-border-color) 70%, transparent);
+  backdrop-filter: none;
+}
+
+[data-theme="retro"] .document-editor-root .toolbar-overflow {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--md-border-color) 70%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .selection-menu {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--md-border-color) 70%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .slash-menu {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--md-border-color) 70%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .setting-card {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--md-border-color) 45%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .quick-action-row {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--md-border-color) 35%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .quick-action-fields {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .quick-action-empty {
+  border: var(--md-border-width) dashed var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .attachment-chip {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .selection-context {
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .scope-control [role="tablist"] {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .revision-item {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--md-border-color) 35%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .outline-item {
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .preview-body {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .info-grid > div {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .outline-empty {
+  border: var(--md-border-width) dashed var(--md-border-color);
+  border-radius: var(--md-border-radius);
+}
+
+[data-theme="retro"] .document-editor-root .send-button {
+  border-radius: var(--md-border-radius);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--md-border-color) 55%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .attachment-button {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
 }
 
 [data-theme="retro"] .document-editor-shell:not(:last-child) {
@@ -150,20 +367,273 @@
   border-top: var(--md-border-width) solid var(--md-border-color) !important;
 }
 
+[data-theme="retro"] .document-editor-root .document-ai-change-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0.15rem 0.35rem 0.15rem 0;
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--md-border-color) 55%, transparent);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-change-marker.is-active {
+  border-color: var(--md-primary);
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 0.75rem 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  margin-bottom: 0.4rem;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 auto;
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-body {
+  position: relative;
+  display: grid;
+  gap: 0.35rem;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-body.is-collapsed::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1.75rem;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--md-surface));
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-body.is-expanded {
+  max-height: none;
+  overflow: visible;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.4rem;
+  align-items: start;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 0;
+  border-left: var(--md-border-width) solid transparent;
+  border-radius: 0;
+  background: transparent;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane.is-before {
+  color: var(--md-on-surface);
+  background: color-mix(in srgb, var(--md-surface) 88%, var(--md-error));
+  border-left-color: var(--md-error);
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane.is-after {
+  color: var(--md-on-surface);
+  background: color-mix(in srgb, var(--md-surface) 88%, #2f9d6a);
+  border-left-color: #1f7a4d;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane-mark {
+  margin-top: 0.05rem;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane-stack {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane-label {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane.is-before .document-ai-hunk-pane-label,
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane.is-before .document-ai-hunk-pane-mark {
+  color: var(--md-error);
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane.is-after .document-ai-hunk-pane-label,
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane.is-after .document-ai-hunk-pane-mark {
+  color: #1f7a4d;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane-text {
+  color: var(--md-on-surface);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-pane.is-before .document-ai-hunk-pane-text {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--md-error) 45%, transparent);
+  opacity: 0.9;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  margin-top: 0.4rem;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-decisions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-toggle {
+  border: 0;
+  border-radius: 0;
+  padding: 0.15rem 0;
+  background: transparent;
+  color: var(--md-primary);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-discard {
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius);
+  padding: 0.2rem 0.55rem;
+  background: var(--md-surface);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-accept {
+  border: var(--md-border-width) solid #1f7a4d;
+  border-radius: var(--md-border-radius);
+  padding: 0.2rem 0.65rem;
+  background: #2f9d6a;
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-target.is-replace {
+  background: transparent;
+  outline: none;
+  border-left: var(--md-border-width) solid var(--md-primary);
+  padding-left: 0.55rem;
+  margin-left: 0;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-target.is-replace.is-active {
+  background: color-mix(in srgb, var(--md-primary) 10%, transparent);
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-hunk-target.is-delete {
+  background: color-mix(in srgb, var(--md-error) 8%, transparent);
+  outline: none;
+  border-left: var(--md-border-width) solid var(--md-error);
+  padding-left: 0.55rem;
+  margin-left: 0;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-scope-target.is-block {
+  background: transparent;
+  outline: none;
+}
+
+[data-theme="retro"] .document-editor-root .document-ai-scope-target.is-selection {
+  background: color-mix(in srgb, var(--md-primary) 16%, transparent);
+}
+
+[data-theme="retro"] .or3-palette-chip {
+  border-radius: var(--md-border-radius);
+  border-width: var(--md-border-width);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+[data-theme="retro"] .or3-palette-option-icon {
+  border-width: var(--md-border-width);
+}
+
+[data-theme="retro"] .or3-palette-query {
+  border-bottom: var(--md-border-width) solid var(--md-border-color);
+}
+
 [data-theme="retro"] .theme-btn {
   border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius);
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-[data-theme="retro"] .theme-btn:hover {
-  background-color: var(--md-surface-hover);
-}
-
-[data-theme="retro"] .theme-btn:active {
-  background-color: var(--md-surface-active);
 }
 
 [data-theme="retro"] #top-header .theme-btn {

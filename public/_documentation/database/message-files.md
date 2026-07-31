@@ -34,8 +34,9 @@ Helpers for attaching/detaching files to chat messages while maintaining ref cou
 ## Implementation notes
 
 1. **Transactions** — All mutating functions run inside Dexie transactions touching `messages`, `file_meta`, and `file_blobs` to ensure consistency.
-2. **Hooks** — `db.messages.files.validate:filter:hashes` lets extensions prune or reorder hash lists before persistence.
-3. **Serialization** — Uses `serializeFileHashes` so limits/deduping stay consistent with message creation flows.
+2. **Hooks** — `db.messages.files.validate:filter:hashes` lets extensions prune or reorder known candidate hashes before persistence.
+3. **Reference reconciliation** — Counts are derived from the unique before/after message edge set. Duplicate additions are idempotent, filtered/overflow Blob attempts are dereferenced, and concurrent identical uploads retain one metadata/blob pair with the correct count.
+4. **Serialization** — Uses `serializeFileHashes` so limits/deduping stay consistent with message creation flows.
 
 ---
 

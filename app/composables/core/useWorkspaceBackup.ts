@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue';
-import { db } from '~/db/client';
-import { reportError, err, asAppError, type AppError } from '~/utils/errors';
+import { useRuntimeConfig } from '#imports';
+import { getDb } from '~/db/client';
+import { reportError, err, asAppError, type AppError, type ErrorCode } from '~/utils/errors';
 import { useHooks } from '~/core/hooks/useHooks';
 import { useLazyBoundaries } from '~/composables/core/useLazyBoundaries';
 import {
@@ -112,6 +113,7 @@ interface DexieBackupMeta {
 
 function validateBackupMeta(meta: unknown): ImportMetadata {
     const backupMeta = meta as DexieBackupMeta;
+    const expectedDatabaseName = getDb().name;
     if (backupMeta.formatName !== 'dexie') {
         throw err(
             'ERR_VALIDATION',
@@ -130,12 +132,16 @@ function validateBackupMeta(meta: unknown): ImportMetadata {
             }
         );
     }
-    if (backupMeta.data.databaseName !== 'or3-db') {
-        throw err('ERR_VALIDATION', 'Backup is for a different database.', {
-            tags: { domain: 'db', action: 'validate' },
-        });
+    if (backupMeta.data.databaseName !== expectedDatabaseName) {
+        throw err(
+            'ERR_VALIDATION',
+            `Backup is for a different database. Expected "${expectedDatabaseName}" but got "${backupMeta.data.databaseName}".`,
+            {
+                tags: { domain: 'db', action: 'validate' },
+            }
+        );
     }
-    if (backupMeta.data.databaseVersion > db.verno) {
+    if (backupMeta.data.databaseVersion > getDb().verno) {
         throw err(
             'ERR_VALIDATION',
             'Backup is from a newer app version. Please update.',
@@ -147,8 +153,40 @@ function validateBackupMeta(meta: unknown): ImportMetadata {
     return backupMeta.data;
 }
 
+/**
+ * `useWorkspaceBackup`
+ *
+ * Purpose:
+ * Exposes a browser-only workflow for exporting and importing workspace backups.
+ *
+ * Behavior:
+ * Streams exports to disk, peeks backup metadata, and imports backups using
+ * stream or Dexie formats. Errors are reported via the shared error system.
+ *
+ * Constraints:
+ * - Requires browser APIs for file handling
+ * - Uses the current Dexie schema version for validation
+ *
+ * Non-Goals:
+ * - Does not handle backup encryption
+ * - Does not provide server-side export
+ *
+ * @example
+ * ```ts
+ * const { exportWorkspace, peekBackup, importWorkspace } = useWorkspaceBackup();
+ * await exportWorkspace();
+ * await peekBackup(file);
+ * await importWorkspace(file);
+ * ```
+ */
 export function useWorkspaceBackup(): WorkspaceBackupApi {
     const hooks = useHooks();
+    let appBaseURL = '/';
+    try {
+        appBaseURL = useRuntimeConfig().app.baseURL || '/';
+    } catch {
+        appBaseURL = '/';
+    }
 
     const state: WorkspaceBackupState = {
         isExporting: ref(false),
@@ -245,7 +283,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 });
 
                 await streamWorkspaceExport({
-                    db,
+                    db: getDb(),
                     fileHandle,
                     chunkSize: STREAM_CHUNK_SIZE,
                     onProgress: updateStreamProgress,
@@ -284,7 +322,14 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 const streamSaverApi =
                     streamSaver as typeof import('streamsaver');
 
-                const localMitmUrl = `${window.location.origin}/streamsaver/mitm.html?version=2.0.0`;
+                const normalizedBaseUrl =
+                    appBaseURL.endsWith('/')
+                        ? appBaseURL
+                        : `${appBaseURL}/`;
+                const localMitmUrl = new URL(
+                    `streamsaver/mitm.html?version=2.0.0`,
+                    `${window.location.origin}${normalizedBaseUrl}`
+                ).toString();
                 if (streamSaverApi.mitm !== localMitmUrl) {
                     streamSaverApi.mitm = localMitmUrl;
                 }
@@ -312,7 +357,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 }
 
                 await streamWorkspaceExportToWritable({
-                    db,
+                    db: getDb(),
                     writable: writer,
                     chunkSize: STREAM_CHUNK_SIZE,
                     onProgress: updateStreamProgress,
@@ -479,7 +524,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 
             if (format === 'stream') {
                 await importWorkspaceStream({
-                    db,
+                    db: getDb(),
                     file,
                     clearTables: state.importMode.value === 'replace',
                     overwriteValues:
@@ -521,12 +566,12 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 };
 
                 if (state.importMode.value === 'replace') {
-                    await importInto(db, file, {
+                    await importInto(getDb(), file, {
                         ...baseOptions,
                         clearTablesBeforeImport: true,
                     });
                 } else {
-                    await importInto(db, file, {
+                    await importInto(getDb(), file, {
                         ...baseOptions,
                         clearTablesBeforeImport: false,
                         overwriteValues: state.overwriteValues.value,
@@ -548,10 +593,36 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 
             await hooks.doAction('workspace:reloaded');
         } catch (e) {
-            state.error.value = asAppError(e);
+            const error = asAppError(e);
+            state.error.value = error;
             state.currentStep.value = 'error';
-            reportError(state.error.value, {
-                code: 'ERR_DB_WRITE_FAILED',
+            
+            // Categorize error type for better user feedback
+            let errorCode: ErrorCode = 'ERR_DB_WRITE_FAILED';
+            const errorMessage = error.message.toLowerCase();
+            
+            if (
+                errorMessage.includes('quota') ||
+                errorMessage.includes('storage') ||
+                errorMessage.includes('exceeded')
+            ) {
+                errorCode = 'ERR_DB_QUOTA_EXCEEDED';
+            } else if (
+                errorMessage.includes('validation') ||
+                errorMessage.includes('invalid') ||
+                errorMessage.includes('schema') ||
+                errorMessage.includes('parse')
+            ) {
+                errorCode = 'ERR_VALIDATION';
+            } else if (
+                errorMessage.includes('permission') ||
+                errorMessage.includes('denied')
+            ) {
+                errorCode = 'ERR_AUTH';
+            }
+            
+            reportError(error, {
+                code: errorCode,
                 message: 'Failed to import workspace.',
                 tags: { domain: 'db', action: 'import' },
             });
@@ -575,6 +646,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 }
 
 function validateStreamHeader(header: WorkspaceBackupHeaderLine) {
+    const expectedDatabaseName = getDb().name;
     // These comparisons validate external data against known constants
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (header.format !== WORKSPACE_BACKUP_FORMAT) {
@@ -592,12 +664,16 @@ function validateStreamHeader(header: WorkspaceBackupHeaderLine) {
             }
         );
     }
-    if (header.databaseName !== 'or3-db') {
-        throw err('ERR_VALIDATION', 'Backup is for a different database.', {
-            tags: { domain: 'db', action: 'validate' },
-        });
+    if (header.databaseName !== expectedDatabaseName) {
+        throw err(
+            'ERR_VALIDATION',
+            `Backup is for a different database. Expected "${expectedDatabaseName}" but got "${header.databaseName}".`,
+            {
+                tags: { domain: 'db', action: 'validate' },
+            }
+        );
     }
-    if (header.databaseVersion > db.verno) {
+    if (header.databaseVersion > getDb().verno) {
         throw err(
             'ERR_VALIDATION',
             'Backup is from a newer app version. Please update.',

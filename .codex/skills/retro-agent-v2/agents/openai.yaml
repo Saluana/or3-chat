@@ -1,0 +1,4 @@
+interface:
+  display_name: "Retro Agent v2"
+  short_description: "Retro Nuxt 4 chat app engineer"
+  default_prompt: "Use $retro-agent-v2 to implement retro Nuxt 4 chat features."

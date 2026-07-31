@@ -4,8 +4,10 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ThemeCompiler } from '../theme-compiler';
-import { validThemeFixtures } from '../../tests/utils/theme-test-utils';
 import {
     parseSelector,
     normalizeSelector,
@@ -216,17 +218,12 @@ describe('ThemeCompiler', () => {
             expect(specificity).toBe(31);
         });
 
-        it('should handle complex selectors', () => {
-            const parsed = parseSelector(
-                'button[data-id="chat.send"][data-context="chat"]:hover:focus'
-            );
-            const specificity = calculateSpecificity(
-                'button[data-id="chat.send"][data-context="chat"]:hover:focus',
-                parsed
-            );
-
-            // 1 (element) + 10 (identifier extra) + 10 (attr) + 10 (attr) + 10 (pseudo) + 10 (pseudo) = 51
-            expect(specificity).toBe(51);
+        it('rejects unsupported multiple-state selectors', () => {
+            expect(() =>
+                parseSelector(
+                    'button[data-id="chat.send"][data-context="chat"]:hover:focus'
+                )
+            ).toThrow('Unsupported theme state');
         });
     });
 
@@ -240,7 +237,7 @@ describe('ThemeCompiler', () => {
 
             const css = (compiler as any).generateCSSVariables(colors);
 
-            expect(css).toContain('.light');
+            expect(css).toContain('html[data-theme="compiler-test"]');
             expect(css).toContain('--md-primary: #3f8452');
             expect(css).toContain('--md-secondary: #5a7b62');
             expect(css).toContain('--md-surface: #f5faf5');
@@ -258,7 +255,7 @@ describe('ThemeCompiler', () => {
 
             const css = (compiler as any).generateCSSVariables(colors);
 
-            expect(css).toContain('.dark');
+            expect(css).toContain('html[data-theme="compiler-test"].dark');
             expect(css).toContain('--md-primary: #8dd29a');
             expect(css).toContain('--md-surface: #0c130d');
         });
@@ -394,11 +391,23 @@ describe('ThemeCompiler', () => {
     });
 
     describe('type generation', () => {
-        it('should not throw when generating types with multiple themes', async () => {
+        it('generates theme and identifier unions in an isolated directory', async () => {
+            const outputRoot = await mkdtemp(
+                join(tmpdir(), 'or3-theme-compiler-')
+            );
+            const isolatedCompiler = new ThemeCompiler(outputRoot);
             const results = [
                 {
                     name: 'theme1',
-                    theme: { name: 'theme1', overrides: [] } as any,
+                    theme: {
+                        name: 'theme1',
+                        overrides: [
+                            {
+                                identifier: 'chat.send',
+                                component: 'button',
+                            },
+                        ],
+                    } as any,
                     errors: [],
                     warnings: [],
                     success: true,
@@ -412,22 +421,39 @@ describe('ThemeCompiler', () => {
                 },
             ];
 
-            // Should not throw
-            await expect(
-                (compiler as any).generateTypes(results)
-            ).resolves.not.toThrow();
-        });
+            try {
+                await (isolatedCompiler as any).generateTypes(results);
+                const generated = await readFile(
+                    join(outputRoot, 'types/theme-generated.d.ts'),
+                    'utf8'
+                );
 
-        it('should not throw when generating types with identifiers', async () => {
+                expect(generated).toContain(
+                    "export type ThemeName = 'theme1' | 'theme2'"
+                );
+                expect(generated).toContain(
+                    "export type ThemeIdentifier = 'chat.send'"
+                );
+            } finally {
+                await rm(outputRoot, { recursive: true, force: true });
+            }
+        });
+    });
+
+    describe('metadata generation', () => {
+        it('keeps the source directory separate from the public theme name', async () => {
+            const outputRoot = await mkdtemp(
+                join(tmpdir(), 'or3-theme-metadata-')
+            );
+            const isolatedCompiler = new ThemeCompiler(outputRoot);
             const results = [
                 {
-                    name: 'test',
+                    name: 'public-theme-name',
+                    dirName: 'installed-theme-directory',
                     theme: {
-                        name: 'test',
-                        overrides: [
-                            { identifier: 'chat.send', component: 'button' },
-                            { identifier: 'chat.cancel', component: 'button' },
-                        ],
+                        name: 'public-theme-name',
+                        displayName: 'Public Theme',
+                        overrides: [],
                     } as any,
                     errors: [],
                     warnings: [],
@@ -435,42 +461,23 @@ describe('ThemeCompiler', () => {
                 },
             ];
 
-            // Should not throw
-            await expect(
-                (compiler as any).generateTypes(results)
-            ).resolves.not.toThrow();
-        });
+            try {
+                await (isolatedCompiler as any).generateMetadataManifest(results);
+                const generated = await readFile(
+                    join(
+                        outputRoot,
+                        'app/theme/_shared/theme-manifest.generated.ts'
+                    ),
+                    'utf8'
+                );
 
-        it('should not throw with empty themes', async () => {
-            const results = [
-                {
-                    name: 'test',
-                    theme: { name: 'test', overrides: [] } as any,
-                    errors: [],
-                    warnings: [],
-                    success: true,
-                },
-            ];
-
-            // Should not throw
-            await expect(
-                (compiler as any).generateTypes(results)
-            ).resolves.not.toThrow();
-        });
-    });
-
-    describe('validation', () => {
-        it('should use theme validation', () => {
-            // The compiler uses validateThemeDefinition from validate-theme.ts
-            // This is tested separately, so we just verify it's being called
-            expect(true).toBe(true);
-        });
-    });
-
-    describe('error handling', () => {
-        it('should handle compilation errors gracefully', () => {
-            // Error handling is tested at the integration level
-            expect(true).toBe(true);
+                expect(generated).toContain('"name": "public-theme-name"');
+                expect(generated).toContain(
+                    '"dirName": "installed-theme-directory"'
+                );
+            } finally {
+                await rm(outputRoot, { recursive: true, force: true });
+            }
         });
     });
 });

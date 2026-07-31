@@ -6,9 +6,12 @@
  */
 
 import type { Plugin } from 'vite';
-import type { PluginContext } from 'rollup';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { ThemeCompiler } from '../scripts/theme-compiler';
 import type { CompilationResult } from '../app/theme/_shared/types';
+
+const execFileAsync = promisify(execFile);
 
 export interface ThemePluginOptions {
     /** Whether to fail the build on compilation errors (default: true) */
@@ -16,6 +19,11 @@ export interface ThemePluginOptions {
 
     /** Whether to show warnings (default: true) */
     showWarnings?: boolean;
+}
+
+interface ThemeCompilerContext {
+    error(message: string): never;
+    warn(message: string): void;
 }
 
 /**
@@ -28,17 +36,14 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
     } = options;
 
     let compiler: ThemeCompiler | null = null;
-    let compiled = false;
+    let compilation: Promise<CompilationResult> | null = null;
 
     /**
      * Compile themes
      */
     async function compileThemes(
-        context: (PluginContext & { warn?: (msg: string) => void }) | null
+        context: ThemeCompilerContext | null
     ) {
-        if (compiled) return; // Only compile once per build
-        compiled = true;
-
         if (!compiler) {
             compiler = new ThemeCompiler();
         }
@@ -46,7 +51,8 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
         console.log('\n[theme-compiler] Compiling themes...');
 
         try {
-            const result = await compiler.compileAll();
+            compilation ??= compiler.compileAll();
+            const result = await compilation;
 
             // Log summary
             console.log(
@@ -74,7 +80,7 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
             // Handle warnings
             if (showWarnings && result.totalWarnings > 0) {
                 const warningMessage = formatWarnings(result);
-                if (context && context.warn) {
+                if (context) {
                     context.warn(warningMessage);
                 } else {
                     console.warn(warningMessage);
@@ -113,56 +119,57 @@ export function themeCompilerPlugin(options: ThemePluginOptions = {}): Plugin {
         /**
          * Also compile on config resolution for dev mode
          */
-        async configResolved() {
-            await compileThemes(null);
+        async configResolved(config) {
+            if (config.command === 'serve') {
+                await compileThemes(null);
+            }
         },
 
         /**
          * Handle HMR updates for theme files
          */
         async handleHotUpdate({ file, server }) {
-            // Check if the changed file is a theme file or icon config
-            if (
-                file.includes('/theme/') &&
-                (file.endsWith('theme.ts') || file.endsWith('icons.config.ts'))
-            ) {
-                console.log(
-                    '[theme-compiler] Theme file changed, recompiling...'
-                );
+            const normalized = file.replace(/\\/g, '/');
 
-                // Reset compilation flag to allow recompilation
-                compiled = false;
+            // Only handle .ts files under app/theme/<name>/ (skip _shared)
+            const markerIdx = normalized.indexOf('/app/theme/');
+            if (markerIdx === -1) return;
 
-                try {
-                    if (!compiler) {
-                        compiler = new ThemeCompiler();
-                    }
-                    const result = await compiler.compileAll();
+            const rel = normalized.slice(markerIdx + '/app/theme/'.length);
+            if (rel.startsWith('_')) return;
 
+            const affectsThemeEntry = /\.(?:ts|tsx|vue|css|scss|sass|less)$/.test(file);
+
+            console.log(`[theme-compiler] Theme file changed: ${rel}`);
+
+            try {
+                // For entry files, also recompile theme definitions & types
+                if (affectsThemeEntry) {
+                    compilation = null;
+                    if (!compiler) compiler = new ThemeCompiler();
+                    const result = await (compilation = compiler.compileAll());
                     if (result.totalErrors > 0) {
-                        console.error('[theme-compiler] Recompilation failed');
                         console.error(formatErrors(result));
-                    } else {
-                        console.log(
-                            '[theme-compiler] ✅ Theme recompiled successfully'
-                        );
-
-                        // Trigger full page reload for theme changes
-                        server.ws.send({
-                            type: 'full-reload',
-                            path: '*',
-                        });
                     }
-                } catch (error) {
-                    console.error(
-                        '[theme-compiler] HMR recompilation failed:',
-                        error
-                    );
                 }
 
-                // Return empty array to prevent default HMR
-                return [];
+                // Rebuild CSS via subprocess (fresh process = no ESM cache)
+                const runtime = process.versions.bun ? process.execPath : 'bun';
+                await execFileAsync(runtime, ['run', 'theme:build-css'], {
+                    cwd: process.cwd(),
+                });
+
+                console.log('[theme-compiler] ✅ Theme CSS rebuilt');
+
+                server.ws.send({
+                    type: 'full-reload',
+                    path: '*',
+                });
+            } catch (error) {
+                console.error('[theme-compiler] HMR rebuild failed:', error);
             }
+
+            return [];
         },
     };
 }

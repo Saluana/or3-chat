@@ -1,0 +1,689 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+    buildOr3ConfigFromEnv,
+    buildOr3CloudConfigFromEnv,
+} from '../../server/admin/config/resolve-config';
+
+describe('buildOr3ConfigFromEnv', () => {
+    it('applies defaults when env is empty', () => {
+        const config = buildOr3ConfigFromEnv({});
+        expect(config.site.name).toBe('OR3');
+        expect(config.limits.maxFileSizeBytes).toBe(20 * 1024 * 1024);
+        expect(config.features.workflows.enabled).toBe(true);
+    });
+
+    it('parses numeric env vars correctly', () => {
+        const config = buildOr3ConfigFromEnv({
+            OR3_MAX_FILE_SIZE_BYTES: '52428800',
+            OR3_MAX_FILES_PER_MESSAGE: '15',
+        });
+        expect(config.limits.maxFileSizeBytes).toBe(52428800);
+        expect(config.limits.maxFilesPerMessage).toBe(15);
+    });
+
+    it('ignores malformed numbers and uses defaults', () => {
+        const config = buildOr3ConfigFromEnv({
+            OR3_MAX_FILE_SIZE_BYTES: 'not-a-number',
+        });
+        expect(config.limits.maxFileSizeBytes).toBe(20 * 1024 * 1024);
+    });
+
+    it('handles infinite and NaN as undefined', () => {
+        const config = buildOr3ConfigFromEnv({
+            OR3_MAX_FILE_SIZE_BYTES: 'Infinity',
+            OR3_MAX_FILES_PER_MESSAGE: 'NaN',
+        });
+        expect(config.limits.maxFileSizeBytes).toBe(20 * 1024 * 1024);
+        expect(config.limits.maxFilesPerMessage).toBe(10);
+    });
+
+    it('parses boolean feature toggles', () => {
+        const config = buildOr3ConfigFromEnv({
+            OR3_WORKFLOWS_ENABLED: 'false',
+            OR3_DOCUMENTS_ENABLED: 'true',
+        });
+        expect(config.features.workflows.enabled).toBe(false);
+        expect(config.features.documents.enabled).toBe(true);
+    });
+
+    it('treats non-false strings as true for feature toggles', () => {
+        const config = buildOr3ConfigFromEnv({
+            OR3_WORKFLOWS_ENABLED: 'yes',
+        });
+        expect(config.features.workflows.enabled).toBe(true);
+    });
+
+    it('handles sidebar collapsed as boolean', () => {
+        const config = buildOr3ConfigFromEnv({
+            OR3_SIDEBAR_COLLAPSED: 'true',
+        });
+        expect(config.ui.sidebarCollapsedByDefault).toBe(true);
+    });
+
+    it('allows overriding site branding', () => {
+        const config = buildOr3ConfigFromEnv({
+            OR3_SITE_NAME: 'MyApp',
+            OR3_SITE_DESCRIPTION: 'My description',
+            OR3_LOGO_URL: '/logo.png',
+        });
+        expect(config.site.name).toBe('MyApp');
+        expect(config.site.description).toBe('My description');
+        expect(config.site.logoUrl).toBe('/logo.png');
+    });
+
+    it('allows partial feature toggle overrides', () => {
+        const config = buildOr3ConfigFromEnv({
+            OR3_WORKFLOWS_EDITOR: 'false',
+        });
+        expect(config.features.workflows.enabled).toBe(true);
+        expect(config.features.workflows.editor).toBe(false);
+        expect(config.features.workflows.slashCommands).toBe(true);
+    });
+
+    it('allows setting legal URLs', () => {
+        const config = buildOr3ConfigFromEnv({
+            OR3_TERMS_URL: 'https://example.com/terms',
+            OR3_PRIVACY_URL: 'https://example.com/privacy',
+        });
+        expect(config.legal.termsUrl).toBe('https://example.com/terms');
+        expect(config.legal.privacyUrl).toBe('https://example.com/privacy');
+    });
+
+    it('allows setting UI defaults', () => {
+        const config = buildOr3ConfigFromEnv({
+            OR3_DEFAULT_PANE_COUNT: '2',
+            OR3_MAX_PANES: '6',
+        });
+        expect(config.ui.defaultPaneCount).toBe(2);
+        expect(config.ui.maxPanes).toBe(6);
+    });
+});
+
+describe('buildOr3CloudConfigFromEnv', () => {
+    let originalEnv: NodeJS.ProcessEnv;
+
+    beforeEach(() => {
+        originalEnv = { ...process.env };
+    });
+
+    afterEach(() => {
+        process.env = originalEnv;
+    });
+
+    describe('envBool parsing', () => {
+        it('accepts "true" as truthy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: 'true',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(true);
+        });
+
+        it('accepts "1" as truthy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: '1',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(true);
+        });
+
+        it('accepts "yes" as truthy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: 'yes',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(true);
+        });
+
+        it('accepts "on" as truthy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: 'on',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(true);
+        });
+
+        it('accepts "TRUE" (uppercase) as truthy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: 'TRUE',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(true);
+        });
+
+        it('accepts "Yes" (mixed case) as truthy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: 'Yes',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(true);
+        });
+
+        it('treats "false" as falsy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: 'false',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(false);
+        });
+
+        it('treats "0" as falsy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: '0',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(false);
+        });
+
+        it('treats empty string as falsy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: '',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(false);
+        });
+
+        it('treats random string as falsy', () => {
+            const config = buildOr3CloudConfigFromEnv({
+                OR3_FORCE_HTTPS: 'random',
+                NODE_ENV: 'development',
+            });
+            expect(config.security?.forceHttps).toBe(false);
+        });
+    });
+
+    it('defaults auth/sync/storage to disabled when SSR_AUTH_ENABLED is unset', () => {
+        const config = buildOr3CloudConfigFromEnv({});
+        expect(config.auth.enabled).toBe(false);
+        expect(config.sync.enabled).toBe(false);
+        expect(config.storage.enabled).toBe(false);
+        expect(config.auth.autoProvision).toBe(true);
+        expect(config.auth.lockPage?.enabled).toBe(false);
+        expect(config.webhooks?.enabled).toBe(false);
+    });
+
+    it('maps auth provisioning controls from env', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_GUEST_ACCESS_ENABLED: 'true',
+            OR3_AUTH_AUTO_PROVISION: 'false',
+            OR3_SESSION_PROVISIONING_FAILURE: 'service-unavailable',
+            NODE_ENV: 'development',
+        });
+
+        expect(config.auth.guestAccessEnabled).toBe(true);
+        expect(config.auth.autoProvision).toBe(false);
+        expect(config.auth.sessionProvisioningFailure).toBe(
+            'service-unavailable',
+        );
+    });
+
+    it('maps lock page settings from env', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_AUTH_LOCK_PAGE_ENABLED: 'true',
+            OR3_AUTH_LOCK_PAGE_ADAPTER: 'marketing',
+            NODE_ENV: 'development',
+        });
+
+        expect(config.auth.lockPage?.enabled).toBe(true);
+        expect(config.auth.lockPage?.adapter).toBe('marketing');
+    });
+
+    it('ignores invalid provisioning failure mode values', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_SESSION_PROVISIONING_FAILURE: 'invalid',
+            NODE_ENV: 'development',
+        });
+
+        expect(config.auth.sessionProvisioningFailure).toBeUndefined();
+    });
+
+    it('enables auth when SSR_AUTH_ENABLED=true', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            NODE_ENV: 'development',
+        });
+        expect(config.auth.enabled).toBe(true);
+        expect(config.sync.enabled).toBe(true); // sync follows auth
+        expect(config.storage.enabled).toBe(true); // storage follows auth
+    });
+
+    it('allows explicitly disabling sync when auth is enabled', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_SYNC_ENABLED: 'false',
+            NODE_ENV: 'development',
+        });
+        expect(config.auth.enabled).toBe(true);
+        expect(config.sync.enabled).toBe(false);
+        expect(config.storage.enabled).toBe(true);
+    });
+
+    it('reads CONVEX_SELF_HOSTED_ADMIN_KEY into sync.convex.adminKey', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            CONVEX_SELF_HOSTED_ADMIN_KEY: 'admin-key-value',
+            NODE_ENV: 'development',
+        });
+        expect(config.sync.convex?.adminKey).toBe('admin-key-value');
+    });
+
+    it('parses CORS origins from CSV', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_ALLOWED_ORIGINS: 'https://app.com, https://admin.app.com, ',
+        });
+        expect(config.security?.allowedOrigins).toEqual([
+            'https://app.com',
+            'https://admin.app.com',
+        ]);
+    });
+
+    it('handles empty CORS origins string', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_ALLOWED_ORIGINS: '',
+        });
+        expect(config.security?.allowedOrigins).toEqual([]);
+    });
+
+    it('parses admin allowed hosts from CSV', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_ADMIN_ALLOWED_HOSTS: 'admin.local , admin.prod ',
+        });
+        expect(config.admin?.allowedHosts).toEqual([
+            'admin.local',
+            'admin.prod',
+        ]);
+    });
+
+    it('parses extension allowed extensions from CSV', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_ADMIN_EXTENSION_ALLOWED_EXTENSIONS: '.js,.ts, .vue ',
+        });
+        expect(config.admin?.extensionAllowedExtensions).toEqual([
+            '.js',
+            '.ts',
+            '.vue',
+        ]);
+    });
+
+    it('throws in strict mode when Clerk keys missing', () => {
+        process.env.NODE_ENV = 'production';
+        expect(() =>
+            buildOr3CloudConfigFromEnv({
+                SSR_AUTH_ENABLED: 'true',
+                AUTH_PROVIDER: 'clerk',
+            }),
+        ).toThrow(/publishableKey/i);
+    });
+
+    it('throws with OR3_STRICT_CONFIG=true when Clerk keys missing', () => {
+        process.env.OR3_STRICT_CONFIG = 'true';
+        process.env.NODE_ENV = 'development';
+        expect(() =>
+            buildOr3CloudConfigFromEnv({
+                SSR_AUTH_ENABLED: 'true',
+                AUTH_PROVIDER: 'clerk',
+            }),
+        ).toThrow(/publishableKey/i);
+    });
+
+    it('throws in strict mode when only publishableKey is missing', () => {
+        process.env.NODE_ENV = 'production';
+        expect(() =>
+            buildOr3CloudConfigFromEnv({
+                SSR_AUTH_ENABLED: 'true',
+                AUTH_PROVIDER: 'clerk',
+                NUXT_CLERK_SECRET_KEY: 'sk_test',
+            }),
+        ).toThrow(/publishableKey/i);
+    });
+
+    it('does not throw in non-strict mode when keys missing', () => {
+        process.env.NODE_ENV = 'development';
+        expect(() =>
+            buildOr3CloudConfigFromEnv({
+                SSR_AUTH_ENABLED: 'true',
+                AUTH_PROVIDER: 'clerk',
+            }),
+        ).not.toThrow();
+    });
+
+    it('throws in strict mode when Convex URL missing', () => {
+        process.env.NODE_ENV = 'production';
+        expect(() =>
+            buildOr3CloudConfigFromEnv({
+                SSR_AUTH_ENABLED: 'true',
+                AUTH_PROVIDER: 'clerk',
+                NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test',
+                NUXT_CLERK_SECRET_KEY: 'sk_test',
+                OR3_SYNC_PROVIDER: 'convex',
+            }),
+        ).toThrow(/convex\.url/i);
+    });
+
+    it('parses numeric limits correctly', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_REQUESTS_PER_MINUTE: '100',
+            OR3_MAX_CONVERSATIONS: '500',
+            OR3_MAX_MESSAGES_PER_DAY: '1000',
+        });
+        expect(config.limits?.requestsPerMinute).toBe(100);
+        expect(config.limits?.maxConversations).toBe(500);
+        expect(config.limits?.maxMessagesPerDay).toBe(1000);
+    });
+
+    it('uses default limits when env is malformed', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_REQUESTS_PER_MINUTE: 'bad',
+        });
+        expect(config.limits?.requestsPerMinute).toBe(20);
+    });
+
+    it('uses default for background streaming numeric values', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_BACKGROUND_MAX_JOBS: 'invalid',
+        });
+        expect(config.backgroundStreaming?.maxConcurrentJobs).toBe(20);
+        expect(config.backgroundStreaming?.maxConcurrentJobsPerUser).toBe(5);
+    });
+
+    it('parses background streaming config correctly', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_BACKGROUND_STREAMING_ENABLED: 'true',
+            OR3_BACKGROUND_MAX_JOBS: '50',
+            OR3_BACKGROUND_MAX_JOBS_PER_USER: '7',
+            OR3_BACKGROUND_JOB_TIMEOUT: '600',
+        });
+        expect(config.backgroundStreaming?.enabled).toBe(true);
+        expect(config.backgroundStreaming?.maxConcurrentJobs).toBe(50);
+        expect(config.backgroundStreaming?.maxConcurrentJobsPerUser).toBe(7);
+        expect(config.backgroundStreaming?.jobTimeoutSeconds).toBe(600);
+    });
+
+    it('parses webhook config correctly', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_WEBHOOKS_ENABLED: 'true',
+            OR3_WEBHOOKS_MAX_PER_USER: '12',
+            OR3_WEBHOOKS_ADMIN_MAX: '40',
+            OR3_WEBHOOKS_RATE_LIMIT_PER_MINUTE: '240',
+            OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS: '15000',
+            OR3_WEBHOOKS_BLOCK_PRIVATE_IPS: 'true',
+            OR3_ADMIN_JWT_SECRET: 'fallback-secret',
+            OR3_WEBHOOKS_MAX_RETRY_HOURS: '2',
+            OR3_WEBHOOKS_LOG_RETENTION_HOURS: '96',
+        });
+
+        expect(config.webhooks?.enabled).toBe(true);
+        expect(config.webhooks?.maxPerUser).toBe(12);
+        expect(config.webhooks?.adminMax).toBe(40);
+        expect(config.webhooks?.rateLimitPerMinute).toBe(240);
+        expect(config.webhooks?.deliveryTimeoutMs).toBe(15000);
+        expect(config.webhooks?.blockPrivateIps).toBe(true);
+        expect(config.webhooks?.encryptionKey).toBe('fallback-secret');
+        expect(config.webhooks?.maxRetryHours).toBe(2);
+        expect(config.webhooks?.logRetentionHours).toBe(96);
+    });
+
+    it('prefers OR3_WEBHOOKS_ENCRYPTION_KEY over the admin secret', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_WEBHOOKS_ENCRYPTION_KEY: 'explicit-key',
+            OR3_ADMIN_JWT_SECRET: 'fallback-secret',
+        });
+
+        expect(config.webhooks?.encryptionKey).toBe('explicit-key');
+    });
+
+    it('parses storage policy config correctly', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_STORAGE_ALLOWED_MIME_TYPES:
+                'image/png,application/pdf,text/plain',
+            OR3_STORAGE_WORKSPACE_QUOTA_BYTES: '1048576',
+            OR3_STORAGE_GC_RETENTION_SECONDS: '3600',
+            OR3_STORAGE_GC_COOLDOWN_MS: '15000',
+        });
+        expect(config.storage.allowedMimeTypes).toEqual([
+            'image/png',
+            'application/pdf',
+            'text/plain',
+        ]);
+        expect(config.storage.workspaceQuotaBytes).toBe(1048576);
+        expect(config.storage.gcRetentionSeconds).toBe(3600);
+        expect(config.storage.gcCooldownMs).toBe(15000);
+    });
+
+    it('parses OpenRouter base URL and rate limit overrides', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_OPENROUTER_BASE_URL: 'https://proxy.example.com/api/v1',
+            OR3_RATE_LIMIT_OVERRIDES_JSON: JSON.stringify({
+                'storage:upload': { maxRequests: 7, windowMs: 120000 },
+            }),
+        });
+        expect(config.services.llm?.openRouter?.baseUrl).toBe(
+            'https://proxy.example.com/api/v1',
+        );
+        expect(config.limits?.operationRateLimits?.['storage:upload']).toEqual({
+            maxRequests: 7,
+            windowMs: 120000,
+        });
+    });
+
+    it('ignores malformed rate limit overrides JSON', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_RATE_LIMIT_OVERRIDES_JSON: '{not-json',
+        });
+        expect(config.limits?.operationRateLimits).toEqual({});
+    });
+
+    it('respects forceHttps override', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_FORCE_HTTPS: 'true',
+            NODE_ENV: 'development',
+        });
+        expect(config.security?.forceHttps).toBe(true);
+    });
+
+    it('defaults forceHttps to true in production', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            NODE_ENV: 'production',
+        });
+        expect(config.security?.forceHttps).toBe(true);
+    });
+
+    it('allows admin rebuild and restart flags', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_ADMIN_ALLOW_RESTART: 'true',
+            OR3_ADMIN_ALLOW_REBUILD: 'true',
+            OR3_ADMIN_REBUILD_COMMAND: 'bun run custom:build',
+        });
+        expect(config.admin?.allowRestart).toBe(true);
+        expect(config.admin?.allowRebuild).toBe(true);
+        expect(config.admin?.rebuildCommand).toBe('bun run custom:build');
+    });
+
+    it('parses the boot-time non-core plugin safe-mode flag', () => {
+        expect(
+            buildOr3CloudConfigFromEnv({}).admin?.disableNonCorePlugins,
+        ).toBe(false);
+        expect(
+            buildOr3CloudConfigFromEnv({
+                OR3_DISABLE_NON_CORE_PLUGINS: 'true',
+            }).admin?.disableNonCorePlugins,
+        ).toBe(true);
+    });
+
+    it('parses the startup-only shadow observer rollback flag', () => {
+        expect(
+            buildOr3CloudConfigFromEnv({}).admin?.pluginRuntimeShadowEnabled,
+        ).toBe(true);
+        expect(
+            buildOr3CloudConfigFromEnv({
+                OR3_PLUGIN_RUNTIME_SHADOW_ENABLED: 'false',
+            }).admin?.pluginRuntimeShadowEnabled,
+        ).toBe(false);
+    });
+
+    it('parses startup-only manager and workspace canary flags', () => {
+        const defaults = buildOr3CloudConfigFromEnv({});
+        expect(defaults.admin?.pluginRuntimeV2Enabled).toBe(true);
+        expect(defaults.admin?.pluginRuntimeV2WorkspaceIds).toEqual([]);
+
+        const configured = buildOr3CloudConfigFromEnv({
+            OR3_PLUGIN_RUNTIME_V2_ENABLED: 'true',
+            OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS: 'workspace-a, workspace-b',
+        });
+        expect(configured.admin?.pluginRuntimeV2Enabled).toBe(true);
+        expect(configured.admin?.pluginRuntimeV2WorkspaceIds).toEqual([
+            'workspace-a',
+            'workspace-b',
+        ]);
+        expect(configured.admin?.pluginContributionV2Surfaces).toEqual([]);
+
+        const rolledBack = buildOr3CloudConfigFromEnv({
+            OR3_PLUGIN_RUNTIME_V2_ENABLED: 'false',
+        });
+        expect(rolledBack.admin?.pluginRuntimeV2Enabled).toBe(false);
+    });
+
+    it('parses the startup-only contribution surface allowlist', () => {
+        expect(
+            buildOr3CloudConfigFromEnv({}).admin?.pluginContributionV2Surfaces,
+        ).toEqual([]);
+        expect(
+            buildOr3CloudConfigFromEnv({
+                OR3_PLUGIN_CONTRIBUTION_V2_SURFACES:
+                    'message-actions, pane-apps',
+            }).admin?.pluginContributionV2Surfaces,
+        ).toEqual(['message-actions', 'pane-apps']);
+    });
+
+    it('parses the startup-only Hook Runtime V2 rollback flag', () => {
+        expect(buildOr3CloudConfigFromEnv({}).admin?.hookEngineV2Enabled).toBe(
+            false,
+        );
+        expect(
+            buildOr3CloudConfigFromEnv({
+                OR3_HOOK_ENGINE_V2_ENABLED: 'true',
+            }).admin?.hookEngineV2Enabled,
+        ).toBe(true);
+    });
+
+    it('parses the startup-only plugin isolation flag', () => {
+        expect(
+            buildOr3CloudConfigFromEnv({}).admin?.pluginIsolationEnabled,
+        ).toBe(false);
+        expect(
+            buildOr3CloudConfigFromEnv({
+                OR3_PLUGIN_ISOLATION_ENABLED: 'true',
+            }).admin?.pluginIsolationEnabled,
+        ).toBe(true);
+    });
+
+    it('parses admin extension limits', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_ADMIN_EXTENSION_MAX_ZIP_BYTES: '10485760',
+            OR3_ADMIN_EXTENSION_MAX_FILES: '1000',
+            OR3_ADMIN_EXTENSION_MAX_TOTAL_BYTES: '52428800',
+        });
+        expect(config.admin?.extensionMaxZipBytes).toBe(10485760);
+        expect(config.admin?.extensionMaxFiles).toBe(1000);
+        expect(config.admin?.extensionMaxTotalBytes).toBe(52428800);
+    });
+
+    it('throws when OpenRouter requires user key but disallows override', () => {
+        process.env.NODE_ENV = 'production';
+        expect(() =>
+            buildOr3CloudConfigFromEnv({
+                OR3_OPENROUTER_REQUIRE_USER_KEY: 'true',
+                OR3_OPENROUTER_ALLOW_USER_OVERRIDE: 'false',
+            }),
+        ).toThrow(/allowUserOverride must be true/i);
+    });
+
+    it('throws when OpenRouter disallows override but no instance key', () => {
+        process.env.NODE_ENV = 'production';
+        expect(() =>
+            buildOr3CloudConfigFromEnv({
+                OR3_OPENROUTER_ALLOW_USER_OVERRIDE: 'false',
+            }),
+        ).toThrow(/instanceApiKey is required/i);
+    });
+
+    it('uses correct storage provider for limits based on sync', () => {
+        const configNoSync = buildOr3CloudConfigFromEnv({
+            NODE_ENV: 'development',
+        });
+        expect(configNoSync.limits?.storageProvider).toBe('memory');
+
+        const configWithSync = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            NODE_ENV: 'development',
+        });
+        expect(configWithSync.limits?.storageProvider).toBe('convex');
+    });
+
+    it('allows overriding limits storage provider', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_LIMITS_STORAGE_PROVIDER: 'redis',
+        });
+        expect(config.limits?.storageProvider).toBe('redis');
+    });
+
+    it('uses correct storage provider for background streaming based on sync', () => {
+        const configNoSync = buildOr3CloudConfigFromEnv({
+            NODE_ENV: 'development',
+        });
+        expect(configNoSync.backgroundStreaming?.storageProvider).toBe(
+            'memory',
+        );
+
+        const configWithSync = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            NODE_ENV: 'development',
+        });
+        expect(configWithSync.backgroundStreaming?.storageProvider).toBe(
+            'convex',
+        );
+    });
+
+    it('allows overriding background streaming storage provider', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_BACKGROUND_STREAMING_PROVIDER: 'redis',
+        });
+        expect(config.backgroundStreaming?.storageProvider).toBe('redis');
+    });
+
+    it('respects OR3_STRICT_CONFIG=true', () => {
+        process.env.OR3_STRICT_CONFIG = 'true';
+        process.env.NODE_ENV = 'development';
+        expect(() =>
+            buildOr3CloudConfigFromEnv({
+                SSR_AUTH_ENABLED: 'true',
+                AUTH_PROVIDER: 'clerk',
+            }),
+        ).toThrow(/publishableKey/i);
+    });
+
+    it('supports OR3_AUTH_PROVIDER alias', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_AUTH_PROVIDER: 'basic-auth',
+            OR3_SYNC_ENABLED: 'false',
+            OR3_STORAGE_ENABLED: 'false',
+        });
+        expect(config.auth.provider).toBe('basic-auth');
+    });
+
+    it('supports OR3_CLOUD_SYNC_ENABLED and OR3_CLOUD_STORAGE_ENABLED aliases', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_CLOUD_SYNC_ENABLED: 'false',
+            OR3_CLOUD_STORAGE_ENABLED: 'false',
+        });
+        expect(config.sync.enabled).toBe(false);
+        expect(config.storage.enabled).toBe(false);
+    });
+});

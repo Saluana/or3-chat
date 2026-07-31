@@ -12,6 +12,7 @@
         </slot>
         <Suspense v-else>
             <SearchPanelRoot
+                :key="retryKey"
                 v-bind="$attrs"
                 :docmap="docmap"
                 @search="$emit('search', $event)"

@@ -210,8 +210,12 @@ type ErrorCode =
 5. **Check duplicates** (suppress identical errors within 300ms)
 6. **Log to console** if not suppressed
 7. **Fire hooks**: `error:raised`, `error:{domain}`, `ai.chat.error:action`
-8. **Show toast** unless `silent: true` or error is info-level
+8. **Show toast** unless `silent: true`, `toast: false`, or error is info-level
 9. **Return AppError** to caller
+
+Nuxt UI's toast API is captured once during client plugin setup. This keeps
+`reportError()` safe when it runs later from asynchronous hooks, timers, or
+database callbacks where Vue injection composables cannot be called directly.
 
 ### Duplicate suppression
 

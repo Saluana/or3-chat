@@ -5,6 +5,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { RuntimeResolver } from '../runtime-resolver';
+import { compileOverridesRuntime } from '../runtime-compile';
 import {
     createCompiledTheme,
     createCompiledOverride,
@@ -12,6 +13,24 @@ import {
 import type { CompiledTheme, CompiledOverride } from '../types';
 
 describe('RuntimeResolver', () => {
+    it('lets the later declaration win at equal specificity', () => {
+        const element = document.createElement('button');
+        element.setAttribute('data-a', '1');
+        element.setAttribute('data-b', '1');
+        const compiled = compileOverridesRuntime({
+            'button[data-a="1"]': { variant: 'first' },
+            'button[data-b="1"]': { variant: 'second' },
+        });
+        const resolver = new RuntimeResolver({
+            name: 'source-order',
+            cssVariables: '',
+            overrides: compiled,
+        });
+
+        expect(resolver.resolve({ component: 'button', element }).props.variant).toBe(
+            'second'
+        );
+    });
     describe('constructor', () => {
         it('should initialize with a compiled theme', () => {
             const theme = createCompiledTheme();

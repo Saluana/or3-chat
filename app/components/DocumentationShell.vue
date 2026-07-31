@@ -4,29 +4,28 @@
     >
         <!-- Header -->
         <header
-            class="docs-header flex-shrink-0 flex flex-col gap-3 px-4 py-3 border-b-[var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] z-10 md:flex-row md:items-center md:justify-between md:gap-0"
+            class="docs-header flex-shrink-0 flex flex-col gap-3 px-4 py-2 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] z-10 md:flex-row md:items-center md:justify-between md:gap-0"
         >
-            <div class="flex w-full items-center gap-3 md:w-[250px]">
+            <div class="flex w-full items-center gap-3 md:w-[260px]">
                 <UButton
                     v-bind="sidebarToggleButtonProps"
                     :icon="useIcon('ui.menu').value"
-                    class="sm:hidden!"
+                    class="md:hidden!"
                     :aria-controls="sidebarId"
                     :aria-expanded="sidebarOpen"
-                    :aria-label="
-                        sidebarOpen ? 'Close navigation' : 'Open navigation'
-                    "
+                    :aria-label="sidebarOpen ? 'Close navigation' : 'Open navigation'"
                     @click="toggleSidebar"
                 />
-                <NuxtLink to="/" class="flex items-center gap-2">
-                    <img src="/butthole-logo.webp" alt="Logo" class="h-8 w-8" />
-                    <h1 class="font-ps2 text-lg text-[var(--md-primary)]">
+                <NuxtLink to="/" class="flex items-center gap-2 min-w-0">
+                    <img src="/butthole-logo.webp" alt="Logo" class="h-8 w-8 shrink-0" />
+                    <h1 class="font-ps2 text-base text-[var(--md-primary)] truncate">
                         OR3 Docs
                     </h1>
                 </NuxtLink>
                 <div class="ml-auto md:hidden">
                     <UButton
                         v-bind="headerThemeButtonProps"
+                        :icon="themeToggleIcon"
                         :aria-label="'Toggle theme'"
                         @click="toggleTheme"
                     />
@@ -34,9 +33,7 @@
             </div>
 
             <!-- Search -->
-            <div
-                class="docs-header-search w-full md:mx-4 md:flex-1 md:max-w-md"
-            >
+            <div class="docs-header-search w-full md:mx-6 md:flex-1">
                 <UInput
                     v-bind="searchInputProps"
                     v-model="searchQuery"
@@ -45,10 +42,13 @@
             </div>
 
             <!-- Theme Toggle -->
-            <div
-                class="hidden w-full items-center justify-end md:flex md:w-[250px]"
-            >
-                <UButton v-bind="headerThemeButtonProps" @click="toggleTheme" />
+            <div class="hidden w-full items-center justify-end md:flex md:w-[260px]">
+                <UButton
+                    v-bind="headerThemeButtonProps"
+                    :icon="themeToggleIcon"
+                    :aria-label="'Toggle theme'"
+                    @click="toggleTheme"
+                />
             </div>
         </header>
 
@@ -92,81 +92,52 @@
                                     <div
                                         v-for="category in resolvedNavigation"
                                         :key="category.label"
-                                        class="docs-nav-category space-y-3"
+                                        class="docs-nav-category"
                                     >
-                                        <h3
-                                            class="font-ps2 text-sm text-[var(--md-on-surface-variant)] border-b-4 border-b-primary pb-2 px-2 uppercase tracking-wide"
-                                        >
-                                            {{ category.label }}
-                                        </h3>
-                                        <div class="docs-nav-groups space-y-2">
+                                        <div class="docs-nav-category-label sb-group-header flex items-center gap-2 mb-2 px-1">
+                                            <span class="sb-group-header-label text-[var(--md-on-surface-variant)] uppercase tracking-wider">
+                                                {{ category.label }}
+                                            </span>
+                                            <div class="flex-1 h-px bg-[var(--md-outline-variant)] opacity-40"></div>
+                                        </div>
+                                        <div class="space-y-px">
                                             <div
                                                 v-for="group in category.groups"
                                                 :key="`${category.label}-${group.label}`"
-                                                class="docs-nav-group rounded-md bg-[var(--md-surface)]/40 border border-[color:var(--md-border-color)] border-opacity-40"
                                             >
                                                 <button
+                                                    v-if="group.items.length > 1"
                                                     type="button"
-                                                    class="docs-nav-group-toggle w-full flex items-center justify-between px-3 py-2 text-left font-ps2 text-xs text-[var(--md-on-surface)] uppercase tracking-wide transition-colors hover:bg-[var(--md-primary)]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]"
-                                                    @click="
-                                                        toggleGroup(
-                                                            category.label,
-                                                            group.label
-                                                        )
-                                                    "
-                                                    :aria-expanded="
-                                                        isGroupExpanded(
-                                                            category.label,
-                                                            group.label
-                                                        )
-                                                    "
+                                                    class="docs-nav-group-toggle w-full flex items-center justify-between px-3 h-[40px] rounded-[var(--md-border-radius)] text-left text-[var(--md-on-surface)] transition-colors hover:bg-[var(--md-primary)]/8 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-primary)]"
+                                                    @click="toggleGroup(category.label, group.label)"
+                                                    :aria-expanded="isGroupExpanded(category.label, group.label)"
                                                 >
-                                                    <span>{{
-                                                        group.label
-                                                    }}</span>
+                                                    <span class="font-vt323 text-[18px]">{{ group.label }}</span>
                                                     <UIcon
-                                                        :name="
-                                                            useIcon(
-                                                                'ui.chevron.down'
-                                                            ).value
-                                                        "
-                                                        class="transition-transform duration-200 w-5 h-5"
-                                                        :class="{
-                                                            'rotate-180':
-                                                                isGroupExpanded(
-                                                                    category.label,
-                                                                    group.label
-                                                                ),
-                                                        }"
+                                                        :name="useIcon('ui.chevron.down').value"
+                                                        class="transition-transform duration-200 w-4 h-4 opacity-50 shrink-0"
+                                                        :class="{ 'rotate-180': isGroupExpanded(category.label, group.label) }"
                                                         aria-hidden="true"
                                                     />
                                                 </button>
                                                 <Transition name="collapsible">
-                                                    <ul
-                                                        v-if="
-                                                            isGroupExpanded(
-                                                                category.label,
-                                                                group.label
-                                                            )
-                                                        "
-                                                        class="space-y-1 py-1"
+                                                    <div
+                                                        v-if="group.items.length <= 1 || isGroupExpanded(category.label, group.label)"
+                                                        :class="group.items.length > 1 ? 'docs-nav-children ml-3 pl-3 border-l-2 border-[color:var(--md-outline-variant)] py-1' : ''"
                                                     >
-                                                        <li
-                                                            v-for="item in group.items"
-                                                            :key="item.path"
-                                                        >
-                                                            <NuxtLink
-                                                                :to="item.path"
-                                                                class="docs-nav-link flex h-[40px] items-center px-3 text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
-                                                                active-class=" dark:text-white text-black  bg-primary/20 hover:bg-primary/20"
-                                                                @click="
-                                                                    closeSidebar
-                                                                "
-                                                            >
-                                                                {{ item.label }}
-                                                            </NuxtLink>
-                                                        </li>
-                                                    </ul>
+                                                        <ul class="space-y-px">
+                                                            <li v-for="item in group.items" :key="item.path">
+                                                                <NuxtLink
+                                                                    :to="item.path"
+                                                                    class="docs-nav-link flex h-[36px] items-center px-2 rounded-[var(--md-border-radius)] text-[var(--md-on-surface-variant)] transition-colors font-vt323 text-[17px] hover:text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/8"
+                                                                    active-class="docs-nav-link-active"
+                                                                    @click="closeSidebar"
+                                                                >
+                                                                    {{ item.label }}
+                                                                </NuxtLink>
+                                                            </li>
+                                                        </ul>
+                                                    </div>
                                                 </Transition>
                                             </div>
                                         </div>
@@ -184,83 +155,62 @@
             <!-- Sidebar -->
             <aside
                 :id="sidebarId"
-                class="docs-sidebar flex-shrink-0 w-64 bg-[var(--md-surface)] overflow-y-auto scrollbars hidden md:block"
+                class="docs-sidebar flex-shrink-0 w-[260px] bg-[var(--md-surface)] overflow-y-auto scrollbars hidden md:block"
             >
-                <nav class="docs-sidebar-nav p-4">
-                    <div class="space-y-6">
+                <nav class="docs-sidebar-nav p-3 pt-4">
+                    <div class="space-y-5">
                         <!-- Categories -->
                         <div
                             v-for="category in resolvedNavigation"
                             :key="category.label"
-                            class="docs-nav-category space-y-3"
+                            class="docs-nav-category"
                         >
-                            <h3
-                                class="font-ps2 text-sm text-[var(--md-on-surface-variant)] border-b-4 border-b-primary pb-2 px-2 uppercase tracking-wide"
+                            <div class="docs-nav-category-label sb-group-header flex items-center gap-2 mb-2 px-1">
+                                <span class="sb-group-header-label text-[var(--md-on-surface-variant)] uppercase tracking-wider">
+                                    {{ category.label }}
+                                </span>
+                                <div class="flex-1 h-px bg-[var(--md-outline-variant)] opacity-40"></div>
+                            </div>
+                            <div class="space-y-1">
+                        <div
+                            v-for="group in category.groups"
+                            :key="`${category.label}-${group.label}`"
+                        >
+                            <button
+                                v-if="group.items.length > 1"
+                                type="button"
+                                class="docs-nav-group-toggle w-full flex items-center justify-between px-3 h-[40px] rounded-[var(--md-border-radius)] text-left text-[var(--md-on-surface)] transition-colors hover:bg-[var(--md-surface-hover,color-mix(in_oklab,var(--md-primary),transparent_92%))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-primary)]"
+                                :class="{ 'bg-[var(--md-surface-active,color-mix(in_oklab,var(--md-primary),transparent_85%))] font-medium': isGroupExpanded(category.label, group.label) }"
+                                @click="toggleGroup(category.label, group.label)"
+                                :aria-expanded="isGroupExpanded(category.label, group.label)"
                             >
-                                {{ category.label }}
-                            </h3>
-                            <div class="docs-nav-groups space-y-2">
+                                <span class="font-vt323 text-[18px]">{{ group.label }}</span>
+                                <UIcon
+                                    :name="useIcon('ui.chevron.down').value"
+                                    class="transition-transform duration-200 w-4 h-4 opacity-50 shrink-0"
+                                    :class="{ 'rotate-180': isGroupExpanded(category.label, group.label) }"
+                                    aria-hidden="true"
+                                />
+                            </button>
+                            <Transition name="collapsible">
                                 <div
-                                    v-for="group in category.groups"
-                                    :key="`${category.label}-${group.label}`"
-                                    class="docs-nav-group rounded-md bg-[var(--md-surface)]/40 border border-[color:var(--md-border-color)] border-opacity-40"
+                                    v-if="group.items.length <= 1 || isGroupExpanded(category.label, group.label)"
+                                    :class="group.items.length > 1 ? 'docs-nav-children ml-3 pl-3 border-l-2 border-[color:var(--md-outline-variant)] py-1' : ''"
                                 >
-                                    <button
-                                        type="button"
-                                        class="docs-nav-group-toggle w-full flex items-center justify-between px-3 py-2 text-left font-ps2 text-xs text-[var(--md-on-surface)] uppercase tracking-wide transition-colors hover:bg-[var(--md-primary)]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]"
-                                        @click="
-                                            toggleGroup(
-                                                category.label,
-                                                group.label
-                                            )
-                                        "
-                                        :aria-expanded="
-                                            isGroupExpanded(
-                                                category.label,
-                                                group.label
-                                            )
-                                        "
-                                    >
-                                        <span>{{ group.label }}</span>
-                                        <UIcon
-                                            :name="
-                                                useIcon('ui.chevron.down').value
-                                            "
-                                            class="transition-transform duration-200 w-5 h-5"
-                                            :class="{
-                                                'rotate-180': isGroupExpanded(
-                                                    category.label,
-                                                    group.label
-                                                ),
-                                            }"
-                                            aria-hidden="true"
-                                        />
-                                    </button>
-                                    <Transition name="collapsible">
-                                        <ul
-                                            v-if="
-                                                isGroupExpanded(
-                                                    category.label,
-                                                    group.label
-                                                )
-                                            "
-                                            class="space-y-1 py-1"
-                                        >
-                                            <li
-                                                v-for="item in group.items"
-                                                :key="item.path"
+                                    <ul class="space-y-px">
+                                        <li v-for="item in group.items" :key="item.path">
+                                            <NuxtLink
+                                                :to="item.path"
+                                                class="docs-nav-link flex h-[36px] items-center px-2 rounded-[var(--md-border-radius)] text-[var(--md-on-surface-variant)] transition-colors font-vt323 text-[17px] hover:text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/8"
+                                                active-class="docs-nav-link-active"
                                             >
-                                                <NuxtLink
-                                                    :to="item.path"
-                                                    class="docs-nav-link flex h-[40px] items-center px-3 text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
-                                                    active-class=" dark:text-white text-black  bg-primary/20 hover:bg-primary/20"
-                                                >
-                                                    {{ item.label }}
-                                                </NuxtLink>
-                                            </li>
-                                        </ul>
-                                    </Transition>
+                                                {{ item.label }}
+                                            </NuxtLink>
+                                        </li>
+                                    </ul>
                                 </div>
+                            </Transition>
+                        </div>
                             </div>
                         </div>
                     </div>
@@ -272,12 +222,12 @@
                 class="docs-main flex-1 min-w-0 max-w-[100dvw] overflow-x-hidden overflow-y-auto scrollbars"
             >
                 <div
-                    class="max-w-[100dvw] sm:max-w-[680px] lg:max-w-[720px] mx-auto pt-5 pb-24 px-4 md:p-8"
+                    class="max-w-[100dvw] sm:max-w-[700px] lg:max-w-[740px] mx-auto pt-6 pb-24 px-5 md:px-8 md:pt-8"
                 >
                     <!-- Search Results -->
                     <div v-if="searchQuery && searchTrigger" class="mb-8">
                         <h2
-                            class="font-ps2 text-xl mb-4 text-[var(--md-on-surface)]"
+                            class="font-ps2 text-base mb-4 text-[var(--md-on-surface)]"
                         >
                             Search Results
                         </h2>
@@ -294,10 +244,10 @@
                         <!-- Loading indicator -->
                         <div
                             v-if="isLoadingContent"
-                            class="flex items-center justify-center py-12"
+                            class="flex items-center justify-center py-16"
                         >
                             <div
-                                class="text-[var(--md-on-surface-variant)] font-ps2 text-sm"
+                                class="text-[var(--md-on-surface-variant)] font-vt323 text-xl tracking-widest animate-pulse"
                             >
                                 Loading...
                             </div>
@@ -308,18 +258,18 @@
                             <!-- Mobile TOC (collapsible) -->
                             <div
                                 v-if="computedShowToc && tocList.length > 0"
-                                class="lg:hidden mb-6 border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)]/40"
+                                class="lg:hidden mb-6 border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)]"
                             >
                                 <button
                                     type="button"
-                                    class="w-full flex items-center justify-between px-4 py-3 text-left font-ps2 text-sm text-[var(--md-on-surface)] uppercase tracking-wide transition-colors hover:bg-[var(--md-primary)]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]"
+                                    class="w-full flex items-center justify-between px-4 py-3 text-left font-vt323 text-[18px] text-[var(--md-on-surface)] uppercase tracking-wide transition-colors hover:bg-[var(--md-primary)]/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-primary)]"
                                     @click="mobileTocOpen = !mobileTocOpen"
                                     :aria-expanded="mobileTocOpen"
                                 >
                                     <span>On this page</span>
                                     <UIcon
                                         :name="useIcon('ui.chevron.down').value"
-                                        class="transition-transform duration-200 w-5 h-5"
+                                        class="transition-transform duration-200 w-4 h-4 opacity-60"
                                         :class="{ 'rotate-180': mobileTocOpen }"
                                         aria-hidden="true"
                                     />
@@ -327,7 +277,7 @@
                                 <Transition name="collapsible">
                                     <div
                                         v-if="mobileTocOpen"
-                                        class="px-4 py-3 border-t-[var(--md-border-width)] border-[color:var(--md-border-color)]"
+                                        class="px-4 py-3 border-t-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
                                     >
                                         <TocListView
                                             :toc="tocList"
@@ -361,14 +311,14 @@
             <!-- Table of Contents (Right Sidebar) -->
             <aside
                 v-if="computedShowToc && tocList.length > 0"
-                class="docs-toc flex-shrink-0 w-64 border-l-[var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] overflow-y-auto scrollbars hidden lg:block"
+                class="docs-toc flex-shrink-0 w-[220px] border-l-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] overflow-y-auto scrollbars hidden lg:block"
             >
-                <nav class="p-4 sticky top-0">
-                    <h3
-                        class="font-ps2 text-sm text-[var(--md-on-surface-variant)] mb-4"
-                    >
-                        On this page
-                    </h3>
+                <nav class="p-4 pt-6">
+                    <div class="mb-3 pb-2 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]">
+                        <h3 class="font-vt323 text-[18px] text-[var(--md-on-surface-variant)] uppercase tracking-wider">
+                            On this page
+                        </h3>
+                    </div>
                     <TocListView :toc="tocList" @select="scrollToHeading" />
                 </nav>
             </aside>
@@ -383,25 +333,46 @@ import {
     computed,
     watch,
     onMounted,
-    shallowRef,
     nextTick,
     defineComponent,
     h,
 } from 'vue';
 import type { PropType } from 'vue';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
+import {
+    useNuxtApp,
+    useRoute,
+    useAsyncData,
+    navigateTo,
+} from '#imports';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import { useScrollLock } from '~/composables/core/useScrollLock';
 import LazySearchPanel from '~/components/documents/LazySearchPanel.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
+import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
 import { useMutationObserver, useEventListener } from '@vueuse/core';
+import { useDocumentationNavigation } from '~/composables/documents/useDocumentationNavigation';
+import { useDocumentationContent } from '~/composables/documents/useDocumentationContent';
+import {
+    buildTocFromElement,
+    slugifyHeading,
+} from '~/composables/documents/useDocumentationToc';
 
 const { $theme } = useNuxtApp();
 
+const currentThemeName = computed<string>(() => {
+    return ($theme as any)?.current?.value ?? ($theme as any)?.get?.() ?? 'light';
+});
+
 const currentShikiTheme = computed(() => {
-    const theme =
-        ($theme as any)?.current?.value ?? ($theme as any)?.get?.() ?? 'light';
-    return String(theme).startsWith('dark') ? 'github-dark' : 'github-light';
+    return currentThemeName.value.startsWith('dark') ? 'github-dark' : 'github-light';
+});
+
+const themeToggleIcon = computed(() => {
+    return currentThemeName.value.startsWith('dark')
+        ? useIcon('shell.theme.light').value
+        : useIcon('ui.moon').value;
 });
 
 interface NavItem {
@@ -580,17 +551,18 @@ const searchInputProps = computed(() => {
         identifier: 'docs.search-input',
         isNuxtUI: true,
     });
-    const overridesValue = (overrides.value as Record<string, any>) || {};
-    const {
-        class: overrideClass = '',
-        ui: overrideUi = {},
-        ...rest
-    } = overridesValue;
-    const uiOverrides = (overrideUi as Record<string, any>) || {};
+    const merged = buildThemeOverrideProps(overrides.value, {
+        baseClass: 'docs-search-input',
+    }) as Record<string, any>;
+    const uiOverrides = ((merged.ui as Record<string, any>) || {}) as Record<
+        string,
+        any
+    >;
     const baseUi = ['w-full', uiOverrides.base]
         .filter(Boolean)
         .join(' ')
         .trim();
+    const { ui: _ignoredUi, ...rest } = merged;
     return {
         placeholder: 'Search docs...',
         size: 'md' as const,
@@ -600,56 +572,26 @@ const searchInputProps = computed(() => {
             ...uiOverrides,
             base: baseUi,
         },
-        class: ['docs-search-input', overrideClass].filter(Boolean).join(' '),
     };
 });
 
-// Internal navigation state (shallow to avoid deep watchers)
-const internalNavigation = shallowRef<NavCategory[]>([]);
-// Resolved navigation prefers prop override but stays stable otherwise
-const resolvedNavigation = computed<NavCategory[]>(() =>
-    props.navigation ? props.navigation : internalNavigation.value
+const {
+    resolvedNavigation,
+    isGroupExpanded,
+    toggleGroup,
+    expandGroupsForPath,
+    applyDocmapNavigation,
+} = useDocumentationNavigation(
+    computed(() => route.path),
+    computed(() => props.navigation)
 );
 
-const expandedGroups = ref<Set<string>>(new Set());
+const { pending: isLoadingContent, displayContent } = useDocumentationContent(
+    computed(() => route.path),
+    computed(() => props.content)
+);
+
 const mobileTocOpen = ref(false);
-
-function groupKey(category: string, group: string) {
-    return `${category}::${group}`;
-}
-
-function isGroupExpanded(category: string, group: string): boolean {
-    return expandedGroups.value.has(groupKey(category, group));
-}
-
-function setGroupExpanded(category: string, group: string, expanded: boolean) {
-    const key = groupKey(category, group);
-    const has = expandedGroups.value.has(key);
-    if (expanded === has) return;
-    const next = new Set(expandedGroups.value);
-    if (expanded) {
-        next.add(key);
-    } else {
-        next.delete(key);
-    }
-    expandedGroups.value = next;
-}
-
-function toggleGroup(category: string, group: string) {
-    setGroupExpanded(category, group, !isGroupExpanded(category, group));
-}
-
-function expandGroupsForPath(path: string) {
-    if (!path.startsWith('/documentation')) return;
-    for (const category of resolvedNavigation.value) {
-        for (const group of category.groups) {
-            const matches = group.items.some((item) => item.path === path);
-            if (matches) {
-                setGroupExpanded(category.label, group.label, true);
-            }
-        }
-    }
-}
 
 function toggleSidebar() {
     if (!isMobile.value) return;
@@ -719,17 +661,32 @@ function onSidebarKeydown(event: KeyboardEvent) {
 // Use useAsyncData for docmap to enable SSR and hydration
 const { data: docmapData } = await useAsyncData(
     'docmap',
-    () => $fetch<Docmap>('/_documentation/docmap.json'),
-    { server: false }
+    async () => {
+        try {
+            if (import.meta.server) {
+                const bundled = await import(
+                    '~~/public/_documentation/docmap.json'
+                );
+                return bundled.default as Docmap;
+            }
+            const map = await $fetch<Docmap | null>(
+                '/_documentation/docmap.json'
+            );
+            return map ?? null;
+        } catch (e) {
+            console.error('Failed to fetch docmap.json:', e);
+            return null;
+        }
+    },
+    { server: true, default: () => null }
 );
 
 // Apply docmap immediately if available (server or client)
 if (docmapData.value) {
     docmap.value = docmapData.value;
-    applyDocmapNavigation(docmap.value);
+    applyDocmapNavigation(docmapData.value);
 }
 
-// Watch for updates to docmapData (e.g. client-side navigation re-fetch if configured, though unlikely for static json)
 watch(docmapData, (newData) => {
     if (newData) {
         docmap.value = newData;
@@ -739,8 +696,19 @@ watch(docmapData, (newData) => {
 
 
 
-onMounted(() => {
+onMounted(async () => {
     useShikiHighlighter();
+    
+    if (!docmapData.value) {
+        try {
+            const map = await $fetch<Docmap | null>('/_documentation/docmap.json');
+            if (map) {
+                docmapData.value = map;
+            }
+        } catch (e) {
+            console.error('Client fetch failed:', e);
+        }
+    }
 });
 
 // Use VueUse's useEventListener for window resize (auto-cleanup)
@@ -796,151 +764,11 @@ watch(sidebarOpen, async (open) => {
     }
 });
 
-
-
-// ----------------------------------------------------------------------
-// Content Loading (SSR-safe via useAsyncData)
-// ----------------------------------------------------------------------
-
-const { data: fetchedContent, pending: fetchPending, error: fetchError } = await useAsyncData(
-    () => `docs-${route.path}`,
-    async () => {
-        const path = route.path.replace(/\/$/, '') || '/';
-        
-        // 1. Determine file path
-        let docPath = '';
-        if (path === '/documentation') {
-            docPath = '/_documentation/README.md';
-        } else {
-            const rel = path.replace(/^\/documentation/, '');
-            docPath = `/_documentation${rel}.md`;
-        }
-
-        // 2. Fetch content
-        try {
-            return await $fetch<string>(docPath, { responseType: 'text' });
-        } catch (e) {
-            // Re-throw to let useAsyncData handle the error state
-            throw e; 
-        }
-    },
-    {
-        watch: [() => route.path], // Reactive auto-fetch
-        server: false, // Client-side only to match previous behavior and avoid SSR loopback issues
-    }
-);
-
-// Map to existing component API
-const isLoadingContent = fetchPending;
-
-const currentContent = computed(() => {
-    if (fetchError.value) {
-        return `# Page Not Found\n\nThe documentation page you're looking for doesn't exist.\n\n[← Back to Documentation](/documentation)`;
-    }
-    return fetchedContent.value || '';
-});
-
-// Remove old manual loader watchers - useAsyncData handles route watching
-// watch(() => route.path, ...) is handled by { watch: [...] } option above
-
-
-function applyDocmapNavigation(map: Docmap) {
-    if (props.navigation) return; // respect external navigation overrides
-    if (internalNavigation.value.length) return; // already built
-
-    // Sort sections alphabetically, but always put "Getting Started" first
-    const sortedSections = [...map.sections].sort((a, b) => {
-        const aIsGettingStarted = a.title.toLowerCase() === 'getting started';
-        const bIsGettingStarted = b.title.toLowerCase() === 'getting started';
-
-        if (aIsGettingStarted) return -1;
-        if (bIsGettingStarted) return 1;
-
-        return a.title.localeCompare(b.title);
-    });
-
-    internalNavigation.value = sortedSections.map((section) => {
-        const groupsMap = new Map<string, NavGroup>();
-        const sortedFiles = [...section.files].sort((a, b) =>
-            a.name.replace('.md', '').localeCompare(b.name.replace('.md', ''))
-        );
-
-        sortedFiles.forEach((file) => {
-            const groupLabel = file.category || 'General';
-            if (!groupsMap.has(groupLabel)) {
-                groupsMap.set(groupLabel, {
-                    label: groupLabel,
-                    items: [],
-                });
-            }
-            const group = groupsMap.get(groupLabel)!;
-            group.items.push({
-                label: file.name.replace('.md', '').trim(),
-                path: `/documentation${file.path}`,
-            });
-        });
-
-        const groups = Array.from(groupsMap.values())
-            .map((group) => ({
-                ...group,
-                items: [...group.items].sort((a, b) =>
-                    a.label.localeCompare(b.label)
-                ),
-            }))
-            .sort((a, b) => a.label.localeCompare(b.label));
-
-        return {
-            label: section.title,
-            groups,
-        } satisfies NavCategory;
-    });
-
-    expandGroupsForPath(route.path);
-}
-
-// Use provided content or loaded content
-const displayContent = computed(() => props.content || currentContent.value);
-
-// Build TOC from rendered markdown in the DOM
-function slugify(text: string): string {
-    return text
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '')
-        .trim()
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-');
-}
-
 function buildTocFromDom() {
     if (!import.meta.client) return;
 
-    const headings = contentRoot.value
-        ? Array.from(
-              contentRoot.value.querySelectorAll<HTMLHeadingElement>(
-                  'h2, h3, h4'
-              )
-          )
-        : [];
-
-    const used = new Set<string>();
-    const items: TocItem[] = [];
-
-    for (const el of headings) {
-        const level = Number(el.tagName.substring(1));
-        const text = (el.textContent || '').trim();
-        if (!text) continue;
-
-        let id = el.id || slugify(text);
-        if (used.has(id)) {
-            let n = 2;
-            while (used.has(`${id}-${n}`)) n++;
-            id = `${id}-${n}`;
-        }
-        used.add(id);
-        if (!el.id) el.id = id;
-
-        items.push({ id, text, level });
-    }
+    const root = contentRoot.value;
+    const items = root ? buildTocFromElement(root).toc : [];
 
     // If DOM headings found, use them
     if (items.length > 0) {
@@ -970,7 +798,7 @@ function buildTocFromDom() {
         const level = m[1]!.length; // 2..4
         const text = m[2]!.replace(/[#`*_~<>\[\]\(\)]/g, '').trim();
         if (!text) continue;
-        const id = slugify(text);
+        const id = slugifyHeading(text);
         mdItems.push({ id, text, level });
     }
     localToc.value = mdItems;
@@ -1104,7 +932,35 @@ function onMobileTocSelect(id: string) {
 }
 
 .docs-sidebar {
-    border-right: 2px solid var(--md-inverse-surface);
+    border-right: var(--md-border-width) solid var(--md-border-color);
+}
+
+/* Active nav link */
+.docs-nav-link-active {
+    background-color: color-mix(in oklab, var(--md-primary), transparent 85%);
+    color: var(--md-primary);
+    font-weight: 500;
+}
+
+.docs-nav-link:hover {
+    background-color: color-mix(in oklab, var(--md-primary), transparent 92%);
+}
+
+/* TOC links */
+.docs-toc :deep(a) {
+    display: block;
+    padding: 4px 8px;
+    color: var(--md-on-surface-variant);
+    border-radius: var(--md-border-radius);
+    transition: color 0.15s, background-color 0.15s;
+    font-family: var(--font-sans);
+    font-size: 17px;
+    line-height: 1.4;
+}
+
+.docs-toc :deep(a:hover) {
+    color: var(--md-primary);
+    background-color: color-mix(in oklab, var(--md-primary), transparent 93%);
 }
 
 .collapsible-enter-active,

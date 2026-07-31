@@ -18,6 +18,9 @@ interface DocState {
     lastError?: unknown;
     pendingTitle?: string; // Added this back as it was missing in the diff but used in flush
     pendingContent?: TipTapDocument | null; // TipTap JSON
+    pendingTitleGeneration?: number;
+    pendingContentGeneration?: number;
+    nextGeneration: number;
     flushPromise?: Promise<void>; // Track active flush operation
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     debouncedSave?: any;
@@ -28,7 +31,7 @@ const documentsMap = reactive(new Map<string, DocState>());
 function ensure(id: string): DocState {
     let st = documentsMap.get(id);
     if (!st) {
-        st = { record: null, status: 'loading' } as DocState;
+        st = { record: null, status: 'loading', nextGeneration: 0 } as DocState;
         st.debouncedSave = useDebounceFn(() => flush(id), 750);
         documentsMap.set(id, st);
     }
@@ -41,22 +44,51 @@ function scheduleSave(id: string) {
     st.debouncedSave();
 }
 
+/**
+ * Purpose:
+ * Persist staged title or content updates to storage.
+ *
+ * Behavior:
+ * Coalesces pending changes, updates the record, and emits pane-level
+ * save hooks when appropriate.
+ *
+ * Constraints:
+ * - No-op when there is nothing staged
+ * - Serializes concurrent flush calls per document
+ *
+ * Non-Goals:
+ * - Validation beyond the document schema
+ *
+ * @example
+ * ```ts
+ * await flush(documentId);
+ * ```
+ */
 export async function flush(id: string) {
     const st = documentsMap.get(id);
     if (!st || !st.record) return;
 
-    // If a flush is already in progress, wait for it
+    // Wait for the active generation, then persist anything staged while it ran.
     if (st.flushPromise) {
-        return st.flushPromise;
+        await st.flushPromise;
+        if (st.pendingTitle !== undefined || st.pendingContent !== undefined) {
+            return flush(id);
+        }
+        return;
     }
 
-    if (!st.pendingTitle && !st.pendingContent) return; // nothing to persist
+    if (st.pendingTitle === undefined && st.pendingContent === undefined) {
+        return; // nothing to persist
+    }
 
-    // Cancel any pending debounced save
-    // Cancel any pending debounced save
+    // Cancel any pending debounced save.
     if (st.debouncedSave?.cancel) {
         st.debouncedSave.cancel();
     }
+
+    const capturedTitleGeneration = st.pendingTitleGeneration;
+    const capturedContentGeneration = st.pendingContentGeneration;
+    let saveSucceeded = false;
 
     st.flushPromise = (async () => {
         const patch: Partial<Pick<Document, 'title' | 'content'>> = {};
@@ -68,6 +100,7 @@ export async function flush(id: string) {
             if (updated) {
                 st.record = updated;
                 st.status = 'saved';
+                saveSucceeded = true;
             } else {
                 st.status = 'error';
             }
@@ -76,12 +109,26 @@ export async function flush(id: string) {
             st.lastError = e;
             useToast().add({ color: 'error', title: 'Document: save failed' });
         } finally {
-            st.pendingTitle = undefined;
-            st.pendingContent = undefined;
+            // Clear only the exact generations that were persisted. New edits
+            // made during the write remain staged for the next flush.
+            if (
+                saveSucceeded &&
+                st.pendingTitleGeneration === capturedTitleGeneration
+            ) {
+                st.pendingTitle = undefined;
+                st.pendingTitleGeneration = undefined;
+            }
+            if (
+                saveSucceeded &&
+                st.pendingContentGeneration === capturedContentGeneration
+            ) {
+                st.pendingContent = undefined;
+                st.pendingContentGeneration = undefined;
+            }
             st.flushPromise = undefined;
             // Emit pane-scoped saved hook for any panes displaying this doc.
             try {
-                if (typeof window !== 'undefined') {
+                if (saveSucceeded && typeof window !== 'undefined') {
                     const nuxt = useNuxtApp();
                     interface NuxtWithHooks { $hooks?: { doAction: (name: string, payload: unknown) => void } }
                     const hooks = (nuxt as NuxtWithHooks).$hooks;
@@ -108,9 +155,33 @@ export async function flush(id: string) {
         }
     })();
 
-    return st.flushPromise;
+    await st.flushPromise;
+    if (
+        saveSucceeded &&
+        (st.pendingTitle !== undefined || st.pendingContent !== undefined)
+    ) {
+        return flush(id);
+    }
 }
 
+/**
+ * Purpose:
+ * Hydrate a document into the shared in-memory cache.
+ *
+ * Behavior:
+ * Loads from storage, updates state, and reports missing records.
+ *
+ * Constraints:
+ * - Emits toast notifications on failure
+ *
+ * Non-Goals:
+ * - Retry logic or offline recovery
+ *
+ * @example
+ * ```ts
+ * const doc = await loadDocument(documentId);
+ * ```
+ */
 export async function loadDocument(id: string) {
     const st = ensure(id);
     st.status = 'loading';
@@ -129,6 +200,24 @@ export async function loadDocument(id: string) {
     return st.record;
 }
 
+/**
+ * Purpose:
+ * Create a new document and seed its cached state.
+ *
+ * Behavior:
+ * Creates the record, caches it, and marks the state as idle.
+ *
+ * Constraints:
+ * - Emits toast notifications on failure
+ *
+ * Non-Goals:
+ * - Template selection or content generation
+ *
+ * @example
+ * ```ts
+ * const doc = await newDocument({ title: 'Plan' });
+ * ```
+ */
 export async function newDocument(initial?: {
     title?: string;
     content?: TipTapDocument | null;
@@ -145,32 +234,121 @@ export async function newDocument(initial?: {
     }
 }
 
+/**
+ * Purpose:
+ * Stage a title change and schedule a debounced save.
+ *
+ * Behavior:
+ * Updates pending title state and queues a flush.
+ *
+ * Constraints:
+ * - Requires a loaded document record
+ *
+ * Non-Goals:
+ * - Immediate persistence
+ *
+ * @example
+ * ```ts
+ * setDocumentTitle(documentId, 'New Title');
+ * ```
+ */
 export function setDocumentTitle(id: string, title: string) {
     const st = ensure(id);
     if (st.record) {
         st.pendingTitle = title;
+        st.pendingTitleGeneration = ++st.nextGeneration;
         scheduleSave(id);
     }
 }
 
+/**
+ * Purpose:
+ * Stage content changes and schedule a debounced save.
+ *
+ * Behavior:
+ * Updates pending content state and queues a flush.
+ *
+ * Constraints:
+ * - Requires a loaded document record
+ *
+ * Non-Goals:
+ * - Immediate persistence
+ *
+ * @example
+ * ```ts
+ * setDocumentContent(documentId, tiptapJson);
+ * ```
+ */
 export function setDocumentContent(id: string, content: TipTapDocument | null) {
     const st = ensure(id);
     if (st.record) {
         st.pendingContent = content;
+        st.pendingContentGeneration = ++st.nextGeneration;
         scheduleSave(id);
     }
 }
 
+/**
+ * Purpose:
+ * Access the reactive state container for a document.
+ *
+ * Behavior:
+ * Returns existing state or creates it lazily.
+ *
+ * Constraints:
+ * - Creation sets status to loading
+ *
+ * Non-Goals:
+ * - Fetching the record from storage
+ *
+ * @example
+ * ```ts
+ * const state = useDocumentState(documentId);
+ * ```
+ */
 export function useDocumentState(id: string) {
     return documentsMap.get(id) || ensure(id);
 }
 
+/**
+ * Purpose:
+ * Inspect all cached document states.
+ *
+ * Behavior:
+ * Returns the shared reactive map.
+ *
+ * Constraints:
+ * - Mutating the map directly can break invariants
+ *
+ * Non-Goals:
+ * - Access control or filtering
+ *
+ * @example
+ * ```ts
+ * const stateMap = useAllDocumentsState();
+ * ```
+ */
 export function useAllDocumentsState() {
     return documentsMap;
 }
 
 // ---- Minimal internal peek helpers for multi-pane hook integration ----
 // Whether there are staged (pending) changes that would trigger a save on flush.
+/**
+ * Internal API.
+ *
+ * Purpose:
+ * Detect whether a document has staged changes.
+ *
+ * Behavior:
+ * Returns true when title or content is pending.
+ *
+ * Constraints:
+ * - Requires state to be present
+ *
+ * Non-Goals:
+ * - Triggering a save
+ */
 export function __hasPendingDocumentChanges(id: string): boolean {
     const st = documentsMap.get(id);
     return !!(
@@ -181,6 +359,21 @@ export function __hasPendingDocumentChanges(id: string): boolean {
 }
 
 // Read current status (used to confirm a flush produced a saved state).
+/**
+ * Internal API.
+ *
+ * Purpose:
+ * Read a document status without creating state.
+ *
+ * Behavior:
+ * Returns the status value if the state exists.
+ *
+ * Constraints:
+ * - Returns undefined when not cached
+ *
+ * Non-Goals:
+ * - Loading or initializing state
+ */
 export function __peekDocumentStatus(
     id: string
 ): DocState['status'] | undefined {
@@ -189,6 +382,25 @@ export function __peekDocumentStatus(
 
 // Release a document's in-memory state (after ensuring pending changes flushed).
 // This lets GC reclaim large TipTap JSON payloads when switching away.
+/**
+ * Purpose:
+ * Release cached state for a document to reduce memory usage.
+ *
+ * Behavior:
+ * Optionally flushes pending changes, clears cached content, and
+ * removes the entry from the state map.
+ *
+ * Constraints:
+ * - Flush failures are swallowed during release
+ *
+ * Non-Goals:
+ * - Deleting the document record from storage
+ *
+ * @example
+ * ```ts
+ * await releaseDocument(documentId, { flush: true });
+ * ```
+ */
 export async function releaseDocument(
     id: string,
     opts: { flush?: boolean; deleteEntry?: boolean } = {}
@@ -219,12 +431,13 @@ export async function releaseDocument(
     }
     st.pendingTitle = undefined;
     st.pendingContent = undefined;
+    st.pendingTitleGeneration = undefined;
+    st.pendingContentGeneration = undefined;
     if (deleteEntry) {
         documentsMap.delete(id);
     }
 }
 
-// HMR cleanup: clear all pending timers on module disposal
 // HMR cleanup: clear all pending timers on module disposal
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {

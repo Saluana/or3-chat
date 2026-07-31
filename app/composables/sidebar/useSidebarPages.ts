@@ -1,3 +1,18 @@
+/**
+ * @module app/composables/sidebar/useSidebarPages
+ *
+ * Purpose:
+ * Defines the sidebar page registry and validation layer for sidebar pages.
+ *
+ * Responsibilities:
+ * - Validates page definitions
+ * - Wraps async components for safe loading
+ * - Provides a reactive list of registered pages
+ *
+ * Non-responsibilities:
+ * - Does not manage active page state
+ * - Does not render sidebar UI
+ */
 import {
     computed,
     defineAsyncComponent,
@@ -9,10 +24,25 @@ import {
 import { z } from 'zod';
 import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 /**
- * Definition interface for a sidebar page.
- * Defines the structure and behavior of pages that can be registered in the sidebar.
+ * `SidebarPageDef`
+ *
+ * Purpose:
+ * Defines the public contract for a sidebar page registration.
+ *
+ * Behavior:
+ * Captures metadata, component definitions, and lifecycle hooks for pages.
+ *
+ * Constraints:
+ * - `id` must be lowercase and unique in the registry
+ *
+ * Non-Goals:
+ * - Does not define how pages are rendered or routed
  */
 export interface SidebarPageDef {
     /** Unique identifier for the sidebar page */
@@ -37,10 +67,26 @@ export interface SidebarPageDef {
     onActivate?: (ctx: SidebarActivateContext) => void | Promise<void>;
     /** Optional deactivation hook called when page becomes inactive */
     onDeactivate?: (ctx: SidebarActivateContext) => void | Promise<void>;
+    /** Optional plugin id used for workspace policy lookup. */
+    pluginId?: string;
+    /** Optional access policy for this page. */
+    access?: PluginGatePolicy;
 }
 
 /**
- * Context object provided to sidebar pages during registration and lifecycle events.
+ * `SidebarPageContext`
+ *
+ * Purpose:
+ * Provides a registration-time context for sidebar pages to expose APIs.
+ *
+ * Behavior:
+ * Exposes the page definition and an `expose` helper to publish APIs.
+ *
+ * Constraints:
+ * - Intended to be used during registration
+ *
+ * Non-Goals:
+ * - Does not manage page activation state
  */
 export interface SidebarPageContext {
     /** The page definition for this context */
@@ -50,8 +96,19 @@ export interface SidebarPageContext {
 }
 
 /**
- * Context object provided to sidebar pages during activation and deactivation events.
- * Contains information about the current state and access to system APIs.
+ * `SidebarActivateContext`
+ *
+ * Purpose:
+ * Provides activation-time context for sidebar pages.
+ *
+ * Behavior:
+ * Supplies the active page, previous page, and supporting API access.
+ *
+ * Constraints:
+ * - Provided only during activation/deactivation hooks
+ *
+ * Non-Goals:
+ * - Does not allow registration-time mutations
  */
 export interface SidebarActivateContext {
     /** The page being activated/deactivated */
@@ -67,21 +124,36 @@ export interface SidebarActivateContext {
 }
 
 /**
- * Type alias for registered sidebar pages.
- * RegisteredSidebarPage is exactly SidebarPageDef semantically (component already wrapped).
+ * `RegisteredSidebarPage`
+ *
+ * Purpose:
+ * Represents a normalized, registry-ready sidebar page definition.
+ *
+ * Behavior:
+ * Mirrors `SidebarPageDef` but with the component normalized for rendering.
+ *
+ * Constraints:
+ * - Produced by the registry normalization process
+ *
+ * Non-Goals:
+ * - Does not alter the external page contract
  */
 export type RegisteredSidebarPage = SidebarPageDef;
 
 /**
- * Zod schema for validating sidebar page definitions at registration.
- * Enforces constraints like id format, label length, and required fields.
- * 
- * Validation rules:
- * - id: Lowercase alphanumeric with hyphens, minimum 1 character
- * - label: Required string, maximum 100 characters
- * - icon: Required string
- * - order: Optional integer between 0 and 1000
- * - component: Any (Vue component shape cannot be strictly validated at runtime)
+ * Sidebar page definition schema.
+ *
+ * Purpose:
+ * Validates sidebar page definitions before they enter the registry.
+ *
+ * Behavior:
+ * Enforces required fields and basic constraints (id format, label length).
+ *
+ * Constraints:
+ * - Does not validate Vue component shape at runtime
+ *
+ * Non-Goals:
+ * - Does not enforce business-specific rules beyond schema constraints
  */
 const SidebarPageDefSchema = z.object({
     id: z
@@ -113,9 +185,10 @@ const SidebarPageDefSchema = z.object({
 
 /**
  * Helper to get the global registry instance.
+ *
  * Supports test isolation by creating the registry on-demand.
- * 
- * @returns The global Map registry for sidebar pages
+ *
+ * @returns The global Map registry for sidebar pages.
  */
 function getRegistry(): Map<string, RegisteredSidebarPage> {
     const g = globalThis as {
@@ -138,13 +211,19 @@ const state = reactive({ version: 0 });
  */
 const DEFAULT_ORDER = 200;
 
+function isSidebarPageAllowed(page: SidebarPageDef): boolean {
+    const pluginId = page.pluginId;
+    return getPluginGateDecision(pluginId, page.access).allowed;
+}
+
 /**
  * Type guard to check if a component is an async component loader function.
- * Distinguishes between raw async loaders (e.g., `() => import('./Comp.vue')`) 
+ *
+ * Distinguishes between raw async loaders (e.g., `() => import('./Comp.vue')`)
  * and functions produced by `defineComponent` which expose `setup`/`render`.
- * 
- * @param component - The component to check
- * @returns True if the component is an async loader function
+ *
+ * @param component - The component to check.
+ * @returns True if the component is an async loader function.
  */
 function isAsyncComponentLoader(
     component: SidebarPageDef['component']
@@ -162,10 +241,11 @@ function isAsyncComponentLoader(
 
 /**
  * Normalizes a sidebar page definition by wrapping components and setting defaults.
+ *
  * Converts async component loaders to Vue's defineAsyncComponent with error handling.
- * 
- * @param def - The raw page definition to normalize
- * @returns A normalized RegisteredSidebarPage with wrapped component and defaults
+ *
+ * @param def - The raw page definition to normalize.
+ * @returns A normalized RegisteredSidebarPage with wrapped component and defaults.
  */
 function normalizeSidebarPageDef(def: SidebarPageDef): RegisteredSidebarPage {
     const normalized: RegisteredSidebarPage = {
@@ -190,21 +270,57 @@ function normalizeSidebarPageDef(def: SidebarPageDef): RegisteredSidebarPage {
     return normalized;
 }
 
+const v2Kernel = getContributionSurfaceKernel<RegisteredSidebarPage>(
+    'sidebar-pages',
+    {
+        getId: (page) => page.id,
+        normalize: normalizeSidebarPageDef,
+        // Sidebar pages preserve registration order when order values tie.
+        compare: (left, right) =>
+            (left.order ?? DEFAULT_ORDER) -
+            (right.order ?? DEFAULT_ORDER),
+    }
+);
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('sidebar-pages');
+}
+
 /**
- * Composable to register and manage sidebar pages.
- * Uses a global Map so plugins can register pages that persist across component lifecycles.
- * Provides reactive access to the list of registered pages.
- * 
- * @returns Object containing page management functions and reactive page list
+ * `useSidebarPages`
+ *
+ * Purpose:
+ * Provides registry access for registering and listing sidebar pages.
+ *
+ * Behavior:
+ * Validates page definitions, normalizes components, and exposes a reactive list.
+ *
+ * Constraints:
+ * - Registration is client-only
+ * - Uses a global registry that persists across component lifecycles
+ *
+ * Non-Goals:
+ * - Does not manage the active page selection
  */
 export function useSidebarPages() {
     /**
-     * Register a new sidebar page. If a page with the same id exists, it is replaced.
-     * Validates the definition and wraps components appropriately.
-     * 
-     * @param def - The page definition to register
-     * @returns Unregister function for cleanup
-     * @throws Error if the page definition is invalid
+     * `registerSidebarPage`
+     *
+     * Purpose:
+     * Registers a sidebar page definition in the global registry.
+     *
+     * Behavior:
+     * Validates and normalizes the page definition, then stores it. Returns an
+     * unregister callback for cleanup.
+     *
+     * Constraints:
+     * - No-op on the server
+     * - Throws when the definition fails schema validation
+     *
+     * Non-Goals:
+     * - Does not resolve activation or routing
+     *
+     * @throws Error when validation fails.
      */
     function registerSidebarPage(def: SidebarPageDef): () => void {
         if (!process.client) {
@@ -222,15 +338,28 @@ export function useSidebarPages() {
             );
         }
 
-        const normalized = normalizeSidebarPageDef(def);
-        const registry = getRegistry();
+        const useV2 = useV2Surface();
 
-        if (import.meta.dev && registry.has(def.id)) {
+        if (
+            import.meta.dev &&
+            (useV2
+                ? v2Kernel.registry.get(def.id, undefined) !== undefined
+                : getRegistry().has(def.id))
+        ) {
             console.warn(
                 `[useSidebarPages] Replacing existing page id: ${def.id}`
             );
         }
 
+        if (useV2) {
+            const handle = v2Kernel.registry.registerLegacy({ value: def });
+            return () => {
+                handle.dispose();
+            };
+        }
+
+        const normalized = normalizeSidebarPageDef(def);
+        const registry = getRegistry();
         registry.set(def.id, normalized);
         // Trigger reactivity
         state.version++;
@@ -246,12 +375,25 @@ export function useSidebarPages() {
     }
 
     /**
-     * Unregister a sidebar page by id.
-     * Removes the page from the global registry and triggers reactivity.
-     * 
-     * @param id - The ID of the page to unregister
+     * `unregisterSidebarPage`
+     *
+     * Purpose:
+     * Removes a sidebar page from the registry.
+     *
+     * Behavior:
+     * Deletes the page and updates reactive consumers.
+     *
+     * Constraints:
+     * - No-op when the ID is not registered
+     *
+     * Non-Goals:
+     * - Does not run page-specific teardown
      */
     function unregisterSidebarPage(id: string): void {
+        if (useV2Surface()) {
+            v2Kernel.registry.unregisterLegacy(id);
+            return;
+        }
         const registry = getRegistry();
         if (registry.delete(id)) {
             // Trigger reactivity
@@ -260,32 +402,58 @@ export function useSidebarPages() {
     }
 
     /**
-     * Get a registered sidebar page by id.
-     * 
-     * @param id - The ID of the page to retrieve
-     * @returns The registered page definition, or undefined if not found
+     * `getSidebarPage`
+     *
+     * Purpose:
+     * Retrieves a registered sidebar page by ID.
+     *
+     * Behavior:
+     * Returns the normalized page definition or undefined.
+     *
+     * Constraints:
+     * - Uses the global registry
+     *
+     * Non-Goals:
+     * - Does not validate the page ID format
      */
     function getSidebarPage(id: string): RegisteredSidebarPage | undefined {
-        return getRegistry().get(id);
+        return useV2Surface()
+            ? v2Kernel.registry.get(id, undefined)
+            : getRegistry().get(id);
     }
 
     /**
-     * Reactive computed property listing all registered sidebar pages.
-     * Pages are sorted by order (ascending), with unsorted pages using DEFAULT_ORDER.
-     * Automatically updates when pages are registered or unregistered.
-     * 
-     * @returns ComputedRef containing sorted array of registered pages
+     * `listSidebarPages`
+     *
+     * Purpose:
+     * Provides a reactive list of registered pages sorted by order.
+     *
+     * Behavior:
+     * Updates when pages are registered or unregistered.
+     *
+     * Constraints:
+     * - Uses DEFAULT_ORDER when order is omitted
+     *
+     * Non-Goals:
+     * - Does not filter by visibility or permissions
      */
     const listSidebarPages: ComputedRef<RegisteredSidebarPage[]> = computed(
         () => {
+            if (useV2Surface()) {
+                return [...v2Kernel.items.value].filter((page) =>
+                    isSidebarPageAllowed(page)
+                );
+            }
             // Access state.version to establish dependency
             void state.version;
             const registry = getRegistry();
             const pages = Array.from(registry.values());
-            return pages.sort(
+            return pages
+                .filter((page) => isSidebarPageAllowed(page))
+                .sort(
                 (a, b) =>
                     (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
-            );
+                );
         }
     );
 

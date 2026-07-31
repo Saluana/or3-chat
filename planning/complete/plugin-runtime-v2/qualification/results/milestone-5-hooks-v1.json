@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "qualificationVersion": "milestone-5-hooks-v1",
+  "milestone": "Milestone 5 — Hook Runtime V2",
+  "status": "green",
+  "manifestSha256": "b2034efafbb10a43aa1a6267327d3d9f1dce80e710403c93b6c9e3f0ac381a67",
+  "publishedAt": "2026-07-20T20:45:33.223Z",
+  "durationMs": 96757,
+  "runner": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpuModel": "Apple M4 Pro",
+    "bunVersion": "1.3.6",
+    "nodeVersion": "24.3.0"
+  },
+  "evidence": {
+    "app/core/hooks/__tests__/hook-engine-rollback.test.ts": "eac95aee2d963796f2694fa25c8f74ce4dd43e40162216ca847d2b0aff585e38",
+    "app/core/hooks/hook-inspector-snapshot.ts": "5ecec8e06465e9ae9a63473f456ea283377a585db2f5b25cf5f9e973c0142e48",
+    "app/core/hooks/runtime-kernel.ts": "642b3b66c4df7d576313dbfb4979ab05cf5bca938d3d6164eeec03093b99cd8d",
+    "scripts/plugin-runtime/benchmark-v1.ts": "4a4aeef13b9a6d67eaa2be4e4a036cf2f4b57ff2351bfa726a25b3cc2509e184",
+    "server/admin/config/resolve-config.ts": "e50446f6389a3107044dd60921302e4da6ea548132c87c0a1cbcafb9c79040ed",
+    "server/hooks/runtime-kernel.ts": "9503c545d9e4abac8aab611dad07cf3a3d610fee9635de53e4ecb7ff4a515024",
+    "shared/hooks/hook-diagnostics-compat.ts": "4ab264862168113d6899fa0687d92f56e0f6c787cfb888b2443125c1c48cb77e",
+    "shared/hooks/hook-diagnostics.ts": "e779832ec4bb76d2bc0ba6e92ad28221d18020d0cbd59682cb9ab640ab8cc0d4",
+    "shared/hooks/hook-engine-v2.ts": "94a50500b982e95a7ed3147f225f473dcf6af36bb858385e9eb1000f4f5da7d7",
+    "shared/hooks/hook-record-store.ts": "3b54af3a5921473acdca079bdb3956480eba6369fede843966782c61042dbf62",
+    "shared/hooks/hook-shadow.ts": "09ad664942a35d2b13f0cb311c616b7805efd3f2b1098fdbf92c29423238ce90",
+    "shared/plugins/transactional-plugin-scope.ts": "6d981a253b5a45bbaaced14e4847cbb4ec5aa91345beb435dc8f3b519b93c579",
+    "utils/or3-cloud-config.ts": "f128fb930403bdd22f12d2e5ed3b2bb00fce3f4205b97878d24429ef9932a427"
+  },
+  "gates": [
+    {
+      "id": "hook-v2-conformance-and-rollback",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun x vitest run shared/hooks/__tests__/hook-record-store.test.ts shared/hooks/__tests__/hook-engine-core.test.ts shared/hooks/__tests__/hook-engine-v2-policies.test.ts shared/hooks/__tests__/hook-diagnostics.test.ts shared/hooks/__tests__/v1-diagnostics-compat.test.ts shared/hooks/__tests__/hook-shadow.test.ts shared/plugins/__tests__/transactional-plugin-scope.test.ts app/core/hooks/__tests__/runtime-kernel.test.ts app/core/hooks/__tests__/hook-engine-rollback.test.ts app/core/hooks/__tests__/hook-inspector-snapshot.test.ts server/hooks/__tests__/runtime-kernel.test.ts app/plugins/__tests__/hookInspector.test.ts server/auth/__tests__/hooks.test.ts tests/unit/or3-cloud-config.test.ts tests/unit/resolve-config.test.ts",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 1628
+        }
+      ]
+    },
+    {
+      "id": "hook-v2-performance",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run plugin-runtime:hooks-v2:benchmarks:check",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 4125
+        }
+      ]
+    },
+    {
+      "id": "public-contracts",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run plugin-runtime:compatibility:check",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 3857
+        }
+      ]
+    },
+    {
+      "id": "frozen-v1-qualification",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run plugin-runtime:milestone-0:qualify",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 87147
+        }
+      ]
+    }
+  ],
+  "rollback": {
+    "scope": "Set only OR3_HOOK_ENGINE_V2_ENABLED=false and restart before plugin discovery or hook registration; keep plugin-manager, contribution-surface, package, settings, and data state unchanged.",
+    "procedure": [
+      "Set OR3_HOOK_ENGINE_V2_ENABLED=false outside the plugin admin UI.",
+      "Restart the OR3 process before plugin discovery or any hook registration so every lifetime selects the V1 engine.",
+      "Verify Runtime Inspector reports V1 and exercise hook conformance plus the frozen Milestone 0 corpus.",
+      "Keep Hook Runtime V2 disabled if rollback, conformance, compatibility, or performance qualification is not green."
+    ],
+    "drill": "The startup selection test proves an existing client lifetime cannot change engines live, a fresh flag-off lifetime restores V1, and callbacks execute exactly once in either selection."
+  }
+}

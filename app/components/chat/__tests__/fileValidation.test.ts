@@ -18,8 +18,7 @@ vi.mock('~/db/files', () => ({
 }));
 
 import { createOrRefFile } from '~/db/files';
-import { useHooks } from '~/core/hooks/useHooks';
-vi.mock('~/composables/useHooks', () => ({
+vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => ({
         applyFilters: (_: any, v: any) => v,
         doAction: vi.fn(),
@@ -46,8 +45,9 @@ vi.mock('~/composables/useOpenRouterAuth', () => ({
 }));
 
 function makeFile(name: string, type: string, size = 1000): File {
-    const blob = new Blob(['a'.repeat(size)], { type });
-    return new File([blob], name, { type });
+    const file = new File(['a'], name, { type });
+    Object.defineProperty(file, 'size', { value: size });
+    return file;
 }
 
 describe('file validation & persistence', () => {
@@ -64,7 +64,7 @@ describe('file validation & persistence', () => {
     });
 
     it('rejects oversize file', async () => {
-        const big = makeFile('big.png', 'image/png', 25 * 1024 * 1024); // 25MB
+        const big = makeFile('big.png', 'image/png', 25 * 1024 * 1024);
         const v = validateFile(big);
         expect(v.ok).toBe(false);
         expect((v as any).message).toMatch(/too large/i);

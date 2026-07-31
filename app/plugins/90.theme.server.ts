@@ -1,36 +1,64 @@
-import { ref, type Ref } from 'vue';
+import { ref, shallowRef, type Ref } from 'vue';
 import type { NuxtApp } from '#app';
-import { useAppConfig, useHead } from '#imports';
+import { useAppConfig, useHead, useRuntimeConfig } from '#imports';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
-import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
-import type { CompiledTheme } from '~/theme/_shared/types';
-import type { ThemePlugin } from './90.theme.client';
-import { generateThemeCssVariables } from '~/theme/_shared/generate-css-variables';
-import { iconRegistry } from '~/theme/_shared/icon-registry';
+import type { CompiledTheme, ThemePlugin } from '~/theme/_shared/types';
+import { IconRegistry } from '~/theme/_shared/icon-registry';
+import { prepareThemeEntry } from '~/theme/_shared/prepare-theme';
+import {
+    buildThemeHead,
+    type ResolvedThemeStylesheet,
+} from '~/theme/_shared/theme-head';
 import {
     loadThemeManifest,
-    loadThemeStylesheets,
-    updateManifestEntry,
-    loadThemeAppConfig,
     resolveThemeStylesheetHref,
     type ThemeManifestEntry,
 } from '~/theme/_shared/theme-manifest';
+import { pickDefaultTheme } from '~/theme/_shared/default-theme';
+import { FALLBACK_THEME_NAME } from '~/theme/_shared/constants';
 import {
     cloneDeep,
-    deepMerge,
-    recursiveUpdate,
+    computeEffectiveAppConfig,
+    replaceReactiveObject,
     sanitizeThemeName,
     readCookie,
 } from '~/theme/_shared/theme-core';
+import {
+    ensureThemeLoaded as ensureThemeLoadedShared,
+    setActiveThemeSafe,
+    type ThemeLoadState,
+} from '~/theme/_shared/theme-loader';
+import {
+    CORE_APP_COMPONENT_DEFAULTS,
+    createThemeComponentMap,
+} from '~/theme/_shared/theme-components-registry';
+
+type NuxtUseHeadInput = Parameters<typeof useHead>[0];
+type NuxtReactiveHead = Exclude<
+    Extract<NuxtUseHeadInput, { readonly value: unknown }>['value'],
+    false | null | undefined
+>;
 
 export default defineNuxtPlugin(async (nuxtApp) => {
     const ACTIVE_THEME_COOKIE = 'or3_active_theme';
+    const iconRegistry = new IconRegistry();
 
-    const manifestEntries = await loadThemeManifest();
+    // Register one request-scoped head entry while the plugin's Vue/Nuxt
+    // injection context is synchronously available. Async theme activation only
+    // updates this ref; it must never invoke useHead itself.
+    const themeHead = shallowRef<NuxtReactiveHead | null>(null);
+    useHead(themeHead);
+
+    const manifestResult = await loadThemeManifest();
+    const manifestEntries = manifestResult.entries;
     const themeManifest = new Map<string, ThemeManifestEntry>();
     for (const entry of manifestEntries) {
         themeManifest.set(entry.name, entry);
     }
+    const runtimeConfig = useRuntimeConfig();
+    const activeComponents = shallowRef({
+        ...CORE_APP_COMPONENT_DEFAULTS,
+    });
 
     const appConfig = useAppConfig() as any;
     const baseAppConfig = cloneDeep(appConfig);
@@ -48,30 +76,24 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         payload.data.__or3ThemeAppConfigPatch = cloneDeep(patch);
     };
 
-    const applyThemeAppConfigPatch = (patch?: Record<string, any> | null) => {
-        const merged = deepMerge(cloneDeep(baseAppConfig), patch || undefined);
-        recursiveUpdate(appConfig, merged);
-    };
-
-    const applyThemeUiConfig = (theme?: CompiledTheme | null) => {
-        const startingUi = cloneDeep(appConfig.ui || {});
-        const mergedUi = deepMerge(
-            startingUi,
-            (theme?.ui as Record<string, any> | undefined) || undefined
+    const applyEffectiveAppConfig = (
+        theme?: CompiledTheme | null,
+        patch?: Record<string, unknown> | null
+    ) => {
+        replaceReactiveObject(
+            appConfig,
+            computeEffectiveAppConfig(baseAppConfig, {
+                appPatch: patch,
+                uiPatch: theme?.ui,
+            })
         );
-        appConfig.ui = mergedUi;
     };
 
     if (manifestEntries.length === 0 && import.meta.dev) {
         console.warn(
-            '[theme] No theme definitions discovered. Falling back to "retro".'
+            `[theme] No theme definitions discovered. Falling back to "${FALLBACK_THEME_NAME}".`
         );
     }
-
-    const DEFAULT_THEME =
-        manifestEntries.find((entry) => entry.isDefault)?.name ??
-        manifestEntries[0]?.name ??
-        'retro';
 
     // Read previous default from cookie to detect default changes across deploys
     const PREVIOUS_DEFAULT_COOKIE = 'or3_previous_default_theme';
@@ -81,6 +103,47 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     );
 
     const availableThemes = new Set(themeManifest.keys());
+    const configuredDefaultTheme =
+        runtimeConfig.public?.branding?.defaultTheme;
+    const normalizedConfiguredDefault =
+        typeof configuredDefaultTheme === 'string' &&
+        configuredDefaultTheme !== 'system'
+            ? configuredDefaultTheme
+            : null;
+    const defaultDecision = pickDefaultTheme({
+        manifestNames: manifestEntries.map((entry) => entry.name),
+        manifestDefaultName:
+            manifestEntries.find((entry) => entry.isDefault)?.name ?? null,
+        configuredDefaultName: normalizedConfiguredDefault,
+        fallbackThemeName: FALLBACK_THEME_NAME,
+    });
+    const DEFAULT_THEME = defaultDecision.defaultTheme;
+    const branding = (runtimeConfig.public as Record<string, unknown>).branding as
+        | Record<string, unknown>
+        | undefined;
+    const disabledThemes = new Set(
+        Array.isArray(branding?.disabledThemes)
+            ? (branding.disabledThemes as string[]).filter(Boolean)
+            : []
+    );
+
+    if (
+        import.meta.dev &&
+        normalizedConfiguredDefault &&
+        !availableThemes.has(normalizedConfiguredDefault.toLowerCase())
+    ) {
+        console.warn(
+            `[theme] Default theme "${normalizedConfiguredDefault}" not found. Falling back to "${DEFAULT_THEME}".`
+        );
+    }
+    if (import.meta.dev) {
+        for (const warning of defaultDecision.warnings) {
+            console.warn(warning);
+        }
+        if (manifestResult.errors.length > 0) {
+            console.warn('[theme] Manifest contained load errors.', manifestResult.errors);
+        }
+    }
 
     // SSR-safe light/dark tracking (defaults to light)
     const current = ref<'light' | 'dark'>(
@@ -97,108 +160,56 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     const themeRegistry = new Map<string, CompiledTheme>();
     const resolverRegistry = new Map<string, RuntimeResolver>();
+    const loadState: ThemeLoadState = {
+        loadedThemes: new Set<string>(),
+        loadingThemes: new Map<string, Promise<boolean>>(),
+    };
 
     // Use imported sanitizeThemeName with availableThemes
     const sanitize = (name: string | null) => sanitizeThemeName(name, availableThemes);
 
-    const loadTheme = async (
-        themeName: string
-    ): Promise<CompiledTheme | null> => {
-        try {
-            const manifestEntry = themeManifest.get(themeName);
-
-            if (!manifestEntry) {
-                if (import.meta.dev) {
-                    console.warn(
-                        `[theme] Theme "${themeName}" is not registered.`
-                    );
-                }
-                return null;
-            }
-
-            const themeModule = await manifestEntry.loader();
-
-            if (themeModule?.default) {
-                const definition = themeModule.default;
-                updateManifestEntry(manifestEntry, definition);
-
-                await loadThemeStylesheets(
-                    manifestEntry,
-                    definition.stylesheets
-                );
-
-                // Load icons if defined directly in the theme or via a companion module
-                let themeIcons = definition.icons;
-                if (!themeIcons && manifestEntry.iconsLoader) {
-                    try {
-                        const iconsModule = await manifestEntry.iconsLoader();
-                        themeIcons = iconsModule?.default || iconsModule;
-                    } catch (e) {
-                        if (import.meta.dev) {
-                            console.warn(
-                                `[theme] Failed to load icons for theme "${themeName}" during SSR:`,
-                                e
-                            );
-                        }
-                    }
-                }
-
-                const compiledTheme: CompiledTheme = {
-                    name: definition.name,
-                    isDefault: manifestEntry.isDefault,
-                    stylesheets: manifestEntry.stylesheets,
-                    displayName: definition.displayName,
-                    description: definition.description,
-                    cssVariables: generateThemeCssVariables(definition),
-                    overrides: compileOverridesRuntime(
-                        definition.overrides || {}
-                    ),
-                    cssSelectors: definition.cssSelectors,
-                    ui: definition.ui,
-                    propMaps: definition.propMaps,
-                    backgrounds: definition.backgrounds,
-                    icons: themeIcons,
-                };
-
-                themeRegistry.set(themeName, compiledTheme);
-                if (compiledTheme.icons) {
-                    iconRegistry.registerTheme(themeName, compiledTheme.icons);
-                }
-                const themeSpecificConfig =
-                    (await loadThemeAppConfig(manifestEntry)) ?? null;
-                themeAppConfigOverrides.set(themeName, themeSpecificConfig);
-
-                const resolver = new RuntimeResolver(compiledTheme);
-                resolverRegistry.set(themeName, resolver);
-
-                return compiledTheme;
-            }
-        } catch (error) {
-            if (import.meta.dev) {
-                console.warn(
-                    `[theme] Failed to load theme "${themeName}":`,
-                    error
+    const registerThemeFromEntry = async (manifestEntry: ThemeManifestEntry) => {
+        const themeName = manifestEntry.name;
+        if (themeRegistry.has(themeName)) {
+            if (!resolverRegistry.has(themeName)) {
+                resolverRegistry.set(
+                    themeName,
+                    new RuntimeResolver(themeRegistry.get(themeName)!)
                 );
             }
+            return;
         }
 
-        return null;
+        const { compiledTheme, appConfig: themeSpecificConfig } =
+            await prepareThemeEntry(manifestEntry);
+
+        themeRegistry.set(themeName, compiledTheme);
+        if (compiledTheme.icons) {
+            iconRegistry.registerTheme(themeName, compiledTheme.icons);
+        }
+        themeAppConfigOverrides.set(themeName, themeSpecificConfig);
+        resolverRegistry.set(themeName, new RuntimeResolver(compiledTheme));
+    };
+
+    const loadTheme = async (themeName: string): Promise<CompiledTheme | null> => {
+        const loaded = await ensureThemeLoadedShared(themeName, {
+            manifestByName: themeManifest,
+            state: loadState,
+            registerTheme: registerThemeFromEntry,
+        });
+        return loaded ? themeRegistry.get(themeName) ?? null : null;
     };
 
     const ensureThemeLoaded = async (themeName: string): Promise<boolean> => {
-        if (resolverRegistry.has(themeName)) {
-            return true;
+        const loaded = await ensureThemeLoadedShared(themeName, {
+            manifestByName: themeManifest,
+            state: loadState,
+            registerTheme: registerThemeFromEntry,
+        });
+        if (loaded && !resolverRegistry.has(themeName) && themeRegistry.has(themeName)) {
+            resolverRegistry.set(themeName, new RuntimeResolver(themeRegistry.get(themeName)!));
         }
-
-        if (themeRegistry.has(themeName)) {
-            const cached = themeRegistry.get(themeName)!;
-            const resolver = new RuntimeResolver(cached);
-            resolverRegistry.set(themeName, resolver);
-            return true;
-        }
-
-        const loaded = await loadTheme(themeName);
-        return Boolean(loaded);
+        return loaded;
     };
 
     const getResolver = (themeName: string): RuntimeResolver | null => {
@@ -233,10 +244,42 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         return null;
     };
 
+    const cleanupInactiveThemes = (activeThemeName: string) => {
+        const themesToKeep = new Set([activeThemeName, DEFAULT_THEME]);
+        const themesToDelete: string[] = [];
+
+        for (const [themeName] of themeRegistry) {
+            if (!themesToKeep.has(themeName)) {
+                themesToDelete.push(themeName);
+            }
+        }
+
+        for (const themeName of themesToDelete) {
+            themeRegistry.delete(themeName);
+            resolverRegistry.delete(themeName);
+            themeAppConfigOverrides.delete(themeName);
+            iconRegistry.unregisterTheme(themeName);
+            loadState.loadedThemes.delete(themeName);
+            loadState.loadingThemes.delete(themeName);
+        }
+    };
+
     const activeTheme = ref<string>(DEFAULT_THEME);
     const resolversVersion = ref(0);
     const bumpResolversVersion = () => {
         resolversVersion.value += 1;
+    };
+    const syncActiveComponents = () => {
+        const compiledTheme = themeRegistry.get(activeTheme.value);
+        const manifestEntry = themeManifest.get(activeTheme.value);
+
+        activeComponents.value =
+            compiledTheme && manifestEntry
+                ? createThemeComponentMap(
+                      manifestEntry.dirName,
+                      compiledTheme.customComponents
+                  )
+                : { ...CORE_APP_COMPONENT_DEFAULTS };
     };
 
     // Ensure the default theme is available for initial SSR render
@@ -294,85 +337,55 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     } catch {}
 
     const setActiveTheme = async (themeName: string) => {
-        let target = sanitize(themeName);
+        let target = sanitize(themeName) ?? DEFAULT_THEME;
 
-        if (!target) {
-            if (themeManifest.has(DEFAULT_THEME)) {
-                target = DEFAULT_THEME;
-            } else if (manifestEntries[0]) {
-                target = manifestEntries[0].name;
-            } else {
-                if (import.meta.dev) {
-                    console.warn(
-                        '[theme] No available themes to activate during SSR.'
-                    );
-                }
-                return;
-            }
+        if (disabledThemes.has(target) && target !== DEFAULT_THEME) {
+            target = DEFAULT_THEME;
+        }
+        if (!themeManifest.has(target) && manifestEntries[0]) {
+            target = manifestEntries[0].name;
         }
 
-        const available = await ensureThemeLoaded(target);
-
-        if (!available) {
+        if (!themeManifest.has(target)) {
             if (import.meta.dev) {
                 console.warn(
-                    `[theme] Failed to load theme "${target}" during SSR. Falling back to "${DEFAULT_THEME}".`
+                    '[theme] No available themes to activate during SSR.'
                 );
             }
-
-            const fallback = themeManifest.has(DEFAULT_THEME)
-                ? DEFAULT_THEME
-                : manifestEntries.find((entry) => entry.name !== target)?.name;
-
-            if (!fallback) {
-                return;
-            }
-
-            activeTheme.value = fallback;
-            iconRegistry.setActiveTheme(fallback);
-            bumpResolversVersion();
             return;
         }
 
+        const activation = await setActiveThemeSafe(target, {
+            availableThemes,
+            defaultTheme: DEFAULT_THEME,
+            previousTheme: activeTheme.value,
+            ensureLoaded: ensureThemeLoaded,
+        });
+
+        if (!activation.ok) {
+            if (import.meta.dev) {
+                console.warn(
+                    `[theme] Failed to activate theme "${target}" during SSR (reason: ${activation.reason}).`
+                );
+            }
+            return;
+        }
+
+        target = activation.activeTheme;
+
         activeTheme.value = target;
         iconRegistry.setActiveTheme(target);
+        cleanupInactiveThemes(target);
         const patch = themeAppConfigOverrides.get(target) ?? null;
-        applyThemeAppConfigPatch(patch);
-        recordInitialAppConfigPatch(patch);
         const compiledTheme = themeRegistry.get(target);
-        applyThemeUiConfig(compiledTheme || null);
+        applyEffectiveAppConfig(compiledTheme ?? null, patch);
+        recordInitialAppConfigPatch(patch);
+        syncActiveComponents();
 
-        // Inject CSS variables and stylesheets into the head for SSR/Static builds
+        // Resolve the complete SSR head contribution, then patch the single head
+        // entry registered synchronously at plugin startup.
         if (compiledTheme) {
-            const headConfig: any = {
-                htmlAttrs: {
-                    'data-theme': target,
-                },
-                style: [],
-                link: [],
-            };
-
-            if (compiledTheme.cssVariables) {
-                headConfig.style.push({
-                    id: `or3-theme-vars-${target}`,
-                    innerHTML: compiledTheme.cssVariables,
-                    tagPriority: 'critical',
-                    'data-theme-style': target,
-                });
-            }
-
-            // Inject generated CSS file if present
-            if (compiledTheme.hasStyleSelectors) {
-                headConfig.link.push({
-                    key: `or3-theme-css-${target}`,
-                    rel: 'stylesheet',
-                    href: `/themes/${target}.css`,
-                    tagPriority: 'critical',
-                    'data-theme-css': target,
-                });
-            }
-
-            // Inject theme stylesheets
+            const resolvedStylesheets: ResolvedThemeStylesheet[] = [];
             if (
                 compiledTheme.stylesheets &&
                 compiledTheme.stylesheets.length > 0
@@ -385,18 +398,22 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                             manifestEntry
                         );
                         if (href) {
-                            headConfig.link.push({
-                                key: `or3-theme-extra-${target}-${stylesheet}`,
-                                rel: 'stylesheet',
-                                href: href,
-                                'data-theme-stylesheet': target,
+                            resolvedStylesheets.push({
+                                source: stylesheet,
+                                href,
                             });
                         }
                     }
                 }
             }
 
-            useHead(headConfig);
+            // Keep the shared builder independent from the installed Unhead
+            // version; Nuxt owns the concrete reactive-head type at this boundary.
+            themeHead.value = buildThemeHead(
+                target,
+                compiledTheme,
+                resolvedStylesheets
+            ) as unknown as NuxtReactiveHead;
         }
 
         bumpResolversVersion();
@@ -416,9 +433,17 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         getResolver,
         loadTheme,
         getTheme: (themeName: string) => themeRegistry.get(themeName) || null,
+        activeComponents,
+        availableThemes: manifestEntries.map((entry) => ({
+            name: entry.name,
+            displayName: entry.displayName,
+            description: entry.description,
+        })),
     };
 
     nuxtApp.provide('theme', themeApi);
+    nuxtApp.payload.iconRegistry = iconRegistry.state;
+    nuxtApp.provide('iconRegistry', iconRegistry);
 });
 
 function detectServerScheme(

@@ -13,8 +13,8 @@ The tool registry provides:
 - **Centralized tool management** — Single source of truth for all available tools
 - **Reactive state** — Vue-powered reactivity for UI toggles and enabled states
 - **Persistent preferences** — User choices saved to localStorage
-- **Type safety** — Full TypeScript support with schema validation
-- **Lifecycle management** — Automatic cleanup on HMR and unmount
+- **Type safety** — Full TypeScript support with shared JSON Schema draft-07 validation
+- **Lifecycle management** — Ownership-bound disposers plus explicit HMR/unmount cleanup
 - **Error handling** — Built-in timeout and error tracking per tool
 
 ---
@@ -95,7 +95,7 @@ registry.registerTool(definition, handler, options?);
 - `options` — Optional configuration:
   - `override?: boolean` — Allow replacing existing tools (default: false)
   - `enabled?: boolean` — Initial enabled state (default: from UI metadata or true)
-  - `timeout?: number` — Execution timeout in ms (default: 10000)
+  - `runtime?: 'client' | 'server' | 'hybrid'` — Runtime hint merged with `definition.runtime` (default: `'hybrid'`)
 
 ### 3. Use in a plugin
 
@@ -145,10 +145,10 @@ function registerTool(
     definition: ExtendedToolDefinition,
     handler: ToolHandler,
     options?: RegisterOptions
-): void
+): RegisteredTool
 ```
 
-**Throws:** Error if tool name already exists and `options.override` is false.
+**Throws:** Error if the tool definition or parameter JSON Schema is malformed, or if the tool name already exists and `options.override` is false.
 
 ### `unregisterTool(name)`
 
@@ -168,12 +168,12 @@ function getTool(name: string): RegisteredTool | undefined
 
 Returns undefined if tool doesn't exist.
 
-### `listTools()`
+### `listTools`
 
 Get all registered tools as a computed array.
 
 ```ts
-function listTools(): ComputedRef<RegisteredTool[]>
+const listTools: ComputedRef<RegisteredTool[]>
 ```
 
 Reactive — automatically updates when tools are added/removed.
@@ -195,11 +195,24 @@ Execute a tool by name with JSON-stringified arguments.
 ```ts
 function executeTool(
     name: string,
-    argsJson: string
-): Promise<{ result?: string; error?: string; timedOut?: boolean }>
+    argsJson: string,
+    context?: ToolExecutionContext,
+    admission?: ToolExecutionAdmission
+): Promise<{
+    result: string | null;
+    toolName: string;
+    error?: string;
+    timedOut: boolean;
+}>
 ```
 
-Handles parsing, validation, timeout, and error tracking automatically.
+Handles parsing, full JSON Schema validation, timeout, and error tracking automatically. The same validator is used by the browser and server registries, including nested requirements, types, enums, numeric/string bounds, and `additionalProperties`.
+
+Provider-visible chat calls pass an admission snapshot so disabled,
+server-only, or definition-changed tools cannot execute. The legacy direct
+`executeTool(name, argsJson)` overload remains compatible and does not enforce
+runtime placement on its own; callers handling untrusted model output must use
+the admitted execution path.
 
 ### `setEnabled(name, enabled)`
 
@@ -210,16 +223,6 @@ function setEnabled(name: string, enabled: boolean): void
 ```
 
 Changes are automatically persisted to localStorage.
-
-### `clearStorage()`
-
-Remove all persisted tool preferences.
-
-```ts
-function clearStorage(): void
-```
-
----
 
 ## Type Definitions
 
@@ -263,6 +266,7 @@ interface RegisteredTool {
     handler: ToolHandler;           // The actual function
     enabled: Ref<boolean>;          // Reactive toggle state
     lastError: Ref<string | null>;  // Most recent error
+    runtime: 'client' | 'server' | 'hybrid';
 }
 ```
 
@@ -329,12 +333,12 @@ registry.registerTool(
 );
 ```
 
-### Tool with category grouping
+### Tool with runtime control
 
 ```ts
 registry.registerTool(definition, handler, {
-    category: 'Web Search',
-    defaultEnabled: false
+    runtime: 'client',
+    enabled: false
 });
 ```
 
@@ -351,7 +355,7 @@ if (tool) {
 ### Listing enabled tools
 
 ```ts
-const enabled = registry.listTools().value
+const enabled = registry.listTools.value
     .filter(t => t.enabled.value)
     .map(t => t.definition.function.name);
 ```
@@ -365,9 +369,10 @@ const enabled = registry.listTools().value
 All handlers are automatically wrapped with a timeout (default 10 seconds):
 
 ```ts
-registry.registerTool(definition, handler, {
-    timeout: 5000  // 5 second timeout
-});
+const result = await registry.executeTool('my_tool', JSON.stringify({ input: 'hello' }));
+if (result.timedOut) {
+    console.warn(`Tool ${result.toolName} timed out`);
+}
 ```
 
 If timeout occurs:
@@ -460,8 +465,8 @@ async ({ url }) => {
 
 ## Limitations
 
-- Tools execute client-side only (no server API)
-- 10 second default timeout (configurable per tool)
+- This registry executes handlers client-side; SSR background execution uses the separate server registry
+- 10 second execution timeout is fixed in the current client registry
 - String return type only (serialize complex data as JSON)
 - No streaming within tool execution
 - Single handler per tool name
@@ -491,9 +496,9 @@ You're trying to register a tool that already exists. Either:
 
 ### Timeout errors
 
-- Increase timeout: `registerTool(def, handler, { timeout: 20000 })`
 - Make handler faster (cache, optimize queries)
-- Split into multiple smaller tools
+- Split work into multiple smaller tools
+- Move long-running work to server-side/background execution
 
 ---
 
@@ -502,6 +507,8 @@ You're trying to register a tool that already exists. Either:
 - `openRouterStream` — Streaming parser that emits tool_call events
 - `useChat` — Chat composable that executes tools during streaming
 - `ChatInputDropper` — UI component with tool toggle controls
+- `tool-runtime.md` — Runtime semantics across foreground/background paths
+- `server-tool-registry.md` — SSR registry used for background tool execution
 
 ---
 
@@ -515,24 +522,30 @@ function useToolRegistry(): {
         definition: ExtendedToolDefinition,
         handler: ToolHandler,
         options?: RegisterOptions
-    ) => void;
+    ) => RegisteredTool;
     unregisterTool: (name: string) => void;
     getTool: (name: string) => RegisteredTool | undefined;
-    listTools: () => ComputedRef<RegisteredTool[]>;
+    listTools: ComputedRef<RegisteredTool[]>;
+    hydrate: (states: Record<string, boolean>) => void;
     getEnabledDefinitions: () => ToolDefinition[];
     executeTool: (
         name: string,
         argsJson: string
     ) => Promise<{
-        result?: string;
+        result: string | null;
+        toolName: string;
         error?: string;
-        timedOut?: boolean;
+        timedOut: boolean;
     }>;
     setEnabled: (name: string, enabled: boolean) => void;
-    clearStorage: () => void;
 };
 ```
 
 ---
 
 Document generated from `app/utils/chat/tool-registry.ts` implementation.
+
+
+### Task tools example
+
+The built-in tasks pane plugin registers conversational tools from `app/plugins/tasks/tooling/taskToolDefs.ts` using `registerTaskTools.ts`. Example names: `or3_tasks_add_item`, `or3_tasks_update_item`, and `or3_tasks_sort_by_difficulty`.

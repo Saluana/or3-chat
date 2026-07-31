@@ -1,6 +1,22 @@
+/**
+ * @module app/db/branching
+ *
+ * Purpose:
+ * Branching utilities for threads, including fork and retry flows and
+ * context assembly across parent and child threads.
+ *
+ * Responsibilities:
+ * - Create forked threads using hook-aware workflows
+ * - Resolve branch context for AI prompt building
+ * - Normalize branch mode semantics for callers
+ *
+ * Non-responsibilities:
+ * - Rendering or formatting context for providers
+ * - Server-side branching operations
+ */
 import Dexie from 'dexie';
-import { db } from './client';
-import { newId, nowSec } from './util';
+import { getDb } from './client';
+import { newId, nowSec, nextClock, getWriteTxTableNames } from './util';
 import type { Thread, Message } from './schema';
 import { useHooks } from '../core/hooks/useHooks';
 import type {
@@ -12,6 +28,19 @@ import type {
     RetryBranchParams,
 } from '../core/hooks/hook-types';
 
+/**
+ * Purpose:
+ * Public alias for branch mode selection in callers.
+ *
+ * Behavior:
+ * Mirrors `BranchMode` from the hook type map.
+ *
+ * Constraints:
+ * - Only supports `reference` and `copy`.
+ *
+ * Non-Goals:
+ * - Does not introduce new branch modes.
+ */
 export type ForkMode = BranchMode;
 
 interface ForkThreadParams {
@@ -100,6 +129,21 @@ function toThreadEntity(thread: Thread): ThreadEntity {
  * - reference mode: no ancestor messages copied; context builder will stitch.
  * - copy mode: ancestor slice (<= anchor.index) copied into new thread with normalized indexes.
  */
+/**
+ * Purpose:
+ * Fork a thread at a specific anchor message, producing a new branch.
+ *
+ * Behavior:
+ * Creates a new thread, optionally copies ancestor messages, and emits hooks
+ * around the fork lifecycle.
+ *
+ * Constraints:
+ * - Anchor message must belong to the source thread.
+ * - `copy` mode duplicates messages up to the anchor index.
+ *
+ * Non-Goals:
+ * - Does not merge threads or resolve conflicts.
+ */
 export async function forkThread({
     sourceThreadId,
     anchorMessageId,
@@ -120,7 +164,12 @@ export async function forkThread({
     anchorMessageId = filteredOptions.anchorMessageId;
     const branchMode = normalizeBranchMode(filteredOptions.mode ?? mode);
     titleOverride = filteredOptions.titleOverride;
-    return db.transaction('rw', db.threads, db.messages, async () => {
+    const db = getDb();
+
+    return db.transaction(
+        'rw',
+        getWriteTxTableNames(db, ['threads', 'messages']),
+        async () => {
         const src = await db.threads.get(sourceThreadId);
         if (!src) throw new Error('Source thread not found');
 
@@ -145,6 +194,7 @@ export async function forkThread({
             last_message_at: null,
             // Preserve some flags; ensure forked boolean set
             forked: true,
+            clock: nextClock(),
         } as Thread;
 
         const beforePayload: BranchForkBeforePayload = {
@@ -169,19 +219,19 @@ export async function forkThread({
                 )
                 .sortBy('index');
 
-            let i = 0;
-            for (const m of ancestors) {
-                await db.messages.put({
-                    ...m,
-                    id: newId(),
-                    thread_id: forkId,
-                    index: i++, // normalize sequential indexes starting at 0
-                });
-            }
+            const messagesToCopy = ancestors.map((m, i) => ({
+                ...m,
+                id: newId(),
+                thread_id: forkId,
+                index: i, // normalize sequential indexes starting at 0
+                clock: nextClock(),
+            }));
+            await db.messages.bulkPut(messagesToCopy);
             await db.threads.put({
                 ...fork,
                 last_message_at: anchor.created_at,
                 updated_at: nowSec(),
+                clock: nextClock(fork.clock),
             });
         }
 
@@ -192,6 +242,20 @@ export async function forkThread({
 
 /**
  * Given an assistant message, locate the preceding user message and fork the thread there.
+ */
+/**
+ * Purpose:
+ * Fork a thread by locating the prior user message of an assistant reply.
+ *
+ * Behavior:
+ * Finds the preceding user message and delegates to `forkThread`, while
+ * emitting retry-specific hooks.
+ *
+ * Constraints:
+ * - Requires the provided message to be an assistant message.
+ *
+ * Non-Goals:
+ * - Does not generate new assistant responses.
  */
 export async function retryBranch({
     assistantMessageId,
@@ -207,11 +271,11 @@ export async function retryBranch({
     assistantMessageId = filtered.assistantMessageId;
     mode = filtered.mode ?? mode;
     titleOverride = filtered.titleOverride;
-    const assistant = await db.messages.get(assistantMessageId);
+    const assistant = await getDb().messages.get(assistantMessageId);
     if (!assistant || assistant.role !== 'assistant')
         throw new Error('Assistant message not found');
     // Retry semantics: branch at preceding user (to produce alternate assistant response)
-    const prevUser = await db.messages
+    const prevUser = await getDb().messages
         .where('[thread_id+index]')
         .between(
             [assistant.thread_id, Dexie.minKey],
@@ -251,17 +315,31 @@ interface BuildContextParams {
  * - Root or copy branches: just local messages.
  * - Reference branches: ancestor slice (<= anchor_index) from parent + local messages.
  */
+/**
+ * Purpose:
+ * Build the ordered message context for a thread with branching awareness.
+ *
+ * Behavior:
+ * Merges ancestor and local messages, applies hook filters, and returns the
+ * resulting message list.
+ *
+ * Constraints:
+ * - Reference branches include ancestor messages up to the anchor index.
+ *
+ * Non-Goals:
+ * - Does not format messages for provider-specific payloads.
+ */
 export async function buildContext({ threadId }: BuildContextParams) {
     const hooks = useHooks();
-    const t = await db.threads.get(threadId);
+    const t = await getDb().threads.get(threadId);
     if (!t) return [] as Message[];
 
     if (!t.parent_thread_id || t.branch_mode === 'copy') {
-        return db.messages.where('thread_id').equals(threadId).sortBy('index');
+        return getDb().messages.where('thread_id').equals(threadId).sortBy('index');
     }
 
     const [ancestors, locals] = await Promise.all([
-        db.messages
+        getDb().messages
             .where('[thread_id+index]')
             // include anchor message by setting includeUpper=true
             .between(
@@ -271,7 +349,7 @@ export async function buildContext({ threadId }: BuildContextParams) {
                 true
             )
             .sortBy('index'),
-        db.messages.where('thread_id').equals(threadId).sortBy('index'),
+        getDb().messages.where('thread_id').equals(threadId).sortBy('index'),
     ]);
 
     const combinedMessages = [...ancestors, ...locals];

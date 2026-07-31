@@ -142,6 +142,64 @@ describe('useDocumentsStore - memory leaks', () => {
         // Should only update once because timer is cleared on first flush
         expect(documentsDb.updateDocument).toHaveBeenCalledTimes(1);
     });
+
+    it('does not clear edits staged while a save is in flight', async () => {
+        const mockDoc = {
+            id: 'doc-generation-race',
+            title: 'Original',
+            content: { type: 'doc' as const, content: [] },
+            created_at: Date.now(),
+            updated_at: Date.now(),
+            deleted: false,
+        };
+        let finishFirst!: (value: typeof mockDoc) => void;
+        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.updateDocument)
+            .mockImplementationOnce(() => new Promise((resolve) => { finishFirst = resolve as typeof finishFirst; }))
+            .mockResolvedValue(mockDoc as any);
+
+        await loadDocument(mockDoc.id);
+        setDocumentTitle(mockDoc.id, 'First');
+        const firstFlush = flush(mockDoc.id);
+        await vi.waitFor(() => expect(documentsDb.updateDocument).toHaveBeenCalledTimes(1));
+        setDocumentTitle(mockDoc.id, 'Second');
+        finishFirst(mockDoc);
+        await firstFlush;
+
+        expect(documentsDb.updateDocument).toHaveBeenCalledTimes(2);
+        expect(documentsDb.updateDocument).toHaveBeenNthCalledWith(
+            2,
+            mockDoc.id,
+            expect.objectContaining({ title: 'Second' })
+        );
+        expect(useDocumentState(mockDoc.id).pendingTitle).toBeUndefined();
+    });
+
+    it('retains a failed generation so a later flush can recover it', async () => {
+        const mockDoc = {
+            id: 'doc-failed-save',
+            title: 'Original',
+            content: { type: 'doc' as const, content: [] },
+            created_at: Date.now(),
+            updated_at: Date.now(),
+            deleted: false,
+        };
+        vi.mocked(documentsDb.getDocument).mockResolvedValue(mockDoc as any);
+        vi.mocked(documentsDb.updateDocument)
+            .mockRejectedValueOnce(new Error('disk unavailable'))
+            .mockResolvedValue(mockDoc as any);
+
+        await loadDocument(mockDoc.id);
+        setDocumentTitle(mockDoc.id, 'Recovered title');
+        await flush(mockDoc.id);
+        expect(useDocumentState(mockDoc.id).pendingTitle).toBe('Recovered title');
+        expect(useDocumentState(mockDoc.id).status).toBe('error');
+
+        await flush(mockDoc.id);
+        expect(documentsDb.updateDocument).toHaveBeenCalledTimes(2);
+        expect(useDocumentState(mockDoc.id).pendingTitle).toBeUndefined();
+        expect(useDocumentState(mockDoc.id).status).toBe('saved');
+    });
 });
 
 describe('useDocumentsStore - type safety', () => {

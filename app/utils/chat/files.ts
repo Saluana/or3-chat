@@ -1,5 +1,15 @@
-// Small helpers around file/mime handling used by useChat
-
+/**
+ * @module app/utils/chat/files
+ *
+ * Purpose:
+ * Small helpers for file and MIME handling used by chat features.
+ */
+/**
+ * `dataUrlToBlob`
+ *
+ * Purpose:
+ * Converts a base64 data URL into a Blob.
+ */
 export function dataUrlToBlob(dataUrl: string): Blob | null {
     try {
         const m: RegExpExecArray | null = /^data:([^;]+);base64,(.*)$/i.exec(
@@ -17,7 +27,12 @@ export function dataUrlToBlob(dataUrl: string): Blob | null {
     }
 }
 
-// Infer MIME from URL or provided type (favor provided)
+/**
+ * `inferMimeFromUrl`
+ *
+ * Purpose:
+ * Infers an image MIME type from a URL or provided value.
+ */
 export function inferMimeFromUrl(u: string, provided?: string) {
     if (provided && provided.startsWith('image/')) return provided;
     const m = /^data:([^;]+);/i.exec(u);
@@ -40,4 +55,21 @@ export function inferMimeFromUrl(u: string, provided?: string) {
         ico: 'image/x-icon',
     };
     return map[ext] || 'image/png';
+}
+
+/**
+ * `fetchImageBlob`
+ *
+ * Purpose:
+ * Fetches an image URL and returns it as a Blob. Swallows network errors and
+ * returns null so callers can fall back gracefully.
+ */
+export async function fetchImageBlob(url: string): Promise<Blob | null> {
+    try {
+        const resp = await fetch(url);
+        if (!resp.ok) return null;
+        return await resp.blob();
+    } catch {
+        return null;
+    }
 }

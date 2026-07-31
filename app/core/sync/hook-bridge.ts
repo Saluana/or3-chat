@@ -1,0 +1,501 @@
+/**
+ * HookBridge - Captures Dexie writes for sync
+ *
+ * This bridge intercepts all writes to synced tables and automatically
+ * enqueues them in the pending_ops table for pushing to the server.
+ *
+ * Key features:
+ * - Atomic when transaction scope includes sync tables (`pending_ops`, `tombstones`)
+ * - Suppression: Can disable capture when applying remote changes
+ * - Auto order_key: Generates HLC-based order_key for messages
+ */
+import { type Transaction } from 'dexie';
+import { generateHLC, getDeviceId, hlcToOrderKey } from './hlc';
+import type { PendingOp, ChangeStamp, Tombstone } from '~~/shared/sync/types';
+import type { Or3DB } from '~/db/client';
+import { useHooks } from '~/core/hooks/useHooks';
+import { nowSec } from '~/db/util';
+import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
+import { getPkField } from '~~/shared/sync/table-metadata';
+import { markRecentOpId } from './recent-op-cache';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
+
+/** Tables that should be captured for sync */
+const SYNCED_TABLES = [
+    'threads',
+    'messages',
+    'projects',
+    'posts',
+    'kv',
+    'file_meta',
+    'notifications',
+] as const;
+
+
+/**
+ * KV keys that should NOT be synced.
+ * - Large caches that can be refetched
+ * - Security-sensitive data (API keys)
+ * - Device-local state
+ */
+const KV_SYNC_BLOCKLIST = [
+    'MODELS_CATALOG',           // Large cache (~500KB), refetchable from OpenRouter
+    'openrouter_api_key',       // Security: API keys should not sync to server
+    'workspace.manager.cache',  // Device-local UI cache
+] as const;
+
+/**
+ * Deep clone an object for safe modification
+ */
+function deepClone<T>(obj: T): T {
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(deepClone) as T;
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+        result[key] = deepClone(value);
+    }
+    return result as T;
+}
+
+/**
+ * Set a nested value using dot-notation key (e.g., 'data.content')
+ */
+function setNestedValue(obj: unknown, path: string, value: unknown): void {
+    const parts = path.split('.');
+    let current = obj as Record<string, unknown>;
+    for (let i = 0; i < parts.length - 1; i++) {
+        const key = parts[i]!;
+        if (current[key] === undefined || typeof current[key] !== 'object') {
+            current[key] = {};
+        }
+        current = current[key] as Record<string, unknown>;
+    }
+    current[parts[parts.length - 1]!] = value;
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== 'object') return {};
+    return value as Record<string, unknown>;
+}
+
+/**
+ * Purpose:
+ * Bridge between local Dexie writes and the sync outbox (`pending_ops`).
+ *
+ * Behavior:
+ * - Installs Dexie hooks on synced tables to capture puts/deletes
+ * - Writes outbox entries within the same transaction when possible
+ * - Supports suppression to avoid re-enqueueing remote-applied writes
+ * - Derives message `order_key` from HLC when missing
+ *
+ * Constraints:
+ * - Must be started via `start()` to install hooks
+ * - Suppression must be enabled during remote apply transactions
+ */
+export class HookBridge {
+    private db: Or3DB;
+    private deviceId: string;
+    private syncTransactionTokens = new WeakSet<object>();
+    private captureEnabled = true;
+    private hooksInstalled = false;
+
+    constructor(db: Or3DB) {
+        this.db = db;
+        this.deviceId = getDeviceId();
+    }
+
+    /**
+     * Start capturing writes to synced tables
+     */
+    start(): void {
+        if (this.hooksInstalled) {
+            this.captureEnabled = true;
+            return;
+        }
+
+        const existingTables = new Set(this.db.tables.map((t) => t.name));
+
+        const tableNames = SYNCED_TABLES as unknown as string[];
+        for (const tableName of tableNames) {
+            if (!existingTables.has(tableName)) {
+                if (import.meta.dev) {
+                    console.warn(
+                        '[HookBridge] Skipping hook install for missing table:',
+                        tableName
+                    );
+                }
+                continue;
+            }
+
+            const table = this.db.table(tableName);
+
+
+            // Hook: Creating (insert)
+            table.hook('creating', (primKey, obj, transaction) => {
+                if (!this.captureEnabled || this.isSyncTransaction(transaction)) return;
+                this.captureWrite(transaction, tableName, 'put', primKey, obj);
+            });
+
+            // Hook: Updating (modify)
+            table.hook('updating', (modifications, primKey, obj, transaction) => {
+                if (!this.captureEnabled || this.isSyncTransaction(transaction)) return;
+
+                // Guard: obj should be the existing record. If undefined, skip capture.
+                // This can happen in rare race conditions or if the record doesn't exist.
+                if (!obj || typeof obj !== 'object') {
+                    if (import.meta.dev) {
+                        console.warn('[HookBridge] Skipping update capture for missing obj:', {
+                            tableName,
+                            primKey,
+                            modifications,
+                        });
+                    }
+                    return;
+                }
+
+                // Dexie passes modifications with dot-notation keys like 'data.content'
+                // We need to properly merge these into the existing object
+                const merged = deepClone(toRecord(obj));
+                const safeModifications = toRecord(modifications);
+                const modificationEntries = Object.entries(safeModifications);
+                for (const [key, value] of modificationEntries) {
+                    if (key.includes('.')) {
+                        // Handle dot-notation key like 'data.content'
+                        setNestedValue(merged, key, value);
+                    } else {
+                        // Simple top-level key
+                        (merged as Record<string, unknown>)[key] = value;
+                    }
+                }
+
+                const isSoftDelete =
+                    toRecord(obj).deleted !== true && merged.deleted === true;
+                return this.captureWrite(
+                    transaction,
+                    tableName,
+                    isSoftDelete ? 'delete' : 'put',
+                    primKey,
+                    merged,
+                    isSoftDelete
+                );
+            });
+
+            // Hook: Deleting
+            table.hook('deleting', (primKey, obj, transaction) => {
+                if (!this.captureEnabled || this.isSyncTransaction(transaction)) return;
+                this.captureWrite(transaction, tableName, 'delete', primKey, obj);
+            });
+        }
+        this.hooksInstalled = true;
+        this.captureEnabled = true;
+    }
+
+    /**
+     * Stop capturing writes
+     */
+    stop(): void {
+        this.captureEnabled = false;
+    }
+
+    /**
+     * Mark a transaction as initiated by sync (suppresses capture)
+     */
+    markSyncTransaction(tx: Transaction): void {
+        this.markSyncToken(tx);
+        this.markSyncToken(this.getNativeTransactionToken(tx));
+    }
+
+    private isSyncTransaction(tx: Transaction | undefined): boolean {
+        if (!tx) return false;
+        if (this.syncTransactionTokens.has(tx as object)) {
+            return true;
+        }
+        const nativeToken = this.getNativeTransactionToken(tx);
+        return nativeToken ? this.syncTransactionTokens.has(nativeToken) : false;
+    }
+
+    private getNativeTransactionToken(tx: Transaction): object | null {
+        const candidate = (tx as unknown as { idbtrans?: unknown }).idbtrans;
+        return candidate && typeof candidate === 'object'
+            ? (candidate as object)
+            : null;
+    }
+
+    private markSyncToken(token: unknown): void {
+        if (token && typeof token === 'object') {
+            this.syncTransactionTokens.add(token as object);
+        }
+    }
+
+    /**
+     * Capture a write operation
+     */
+    private captureWrite(
+        transaction: Transaction,
+        tableName: string,
+        operation: 'put' | 'delete',
+        primKey: unknown,
+        payload: unknown,
+        softDelete = false
+    ): Record<string, unknown> | void {
+        // Safe record access pattern - payload can be undefined for delete operations
+        const safePayload = (payload && typeof payload === 'object') 
+            ? payload as Record<string, unknown> 
+            : {};
+        
+        const pkField = getPkField(tableName);
+        const pk = String(primKey ?? safePayload[pkField] ?? '');
+
+        // Strict PK check: don't capture if PK is empty (garbage)
+        if (!pk) {
+             if (import.meta.dev) {
+                 console.warn('[HookBridge] Skipping capture for empty PK:', tableName, payload);
+             }
+             return;
+        }
+
+        // Filter out blocked KV keys (large caches, secrets, device-local data)
+        if (tableName === 'kv') {
+            const kvName = (safePayload.name as string | undefined) ?? pk.replace('kv:', '');
+
+            // Allow plugins to extend the blocklist (untyped hook, use raw engine)
+            const blocklist = useHooks()._engine.applyFiltersSync(
+                'sync.kv:blocklist',
+                [...KV_SYNC_BLOCKLIST]
+            ) as string[];
+
+            if (blocklist.includes(kvName)) {
+                return; // Skip this key, don't capture for sync
+            }
+        }
+
+        // Skip messages that are still streaming (pending: true)
+        // This avoids race conditions and reduces bandwidth - only sync finalized messages
+        if (tableName === 'messages' && operation === 'put') {
+            if (safePayload.pending === true) {
+                return; // Skip intermediate streaming updates, wait for finalization
+            }
+
+            // Validate that required message fields are present
+            // If any are missing, the payload is corrupt and cannot be synced
+            const requiredFields = ['thread_id', 'role', 'index'];
+            const missingFields = requiredFields.filter(
+                (f) => safePayload[f] === undefined || safePayload[f] === null
+            );
+            if (missingFields.length > 0) {
+                if (import.meta.dev) {
+                    console.error('[HookBridge] Skipping corrupt message payload (missing fields):', {
+                        pk,
+                        missingFields,
+                        payload: safePayload,
+                    });
+                }
+                return; // Skip corrupt payloads - they will fail server validation anyway
+            }
+        }
+
+        const hlc = generateHLC();
+        const baseClock = (typeof safePayload.clock === 'number') ? safePayload.clock : 0;
+        const stamp: ChangeStamp = {
+            deviceId: this.deviceId,
+            opId: createRuntimeUuid(),
+            hlc,
+            // Soft-delete helpers already increment the materialized row clock.
+            // A physical delete has no new row revision, so advance it here.
+            clock: operation === 'delete' && !softDelete ? baseClock + 1 : baseClock,
+        };
+
+        // Persist the same tuple that is queued in the outbox. Creating hooks
+        // mutate this object before IndexedDB sees it; updating hooks return
+        // the tuple below as additional modifications.
+        if (operation === 'put' || softDelete) {
+            safePayload.clock = stamp.clock;
+            safePayload.hlc = stamp.hlc;
+            safePayload.op_id = stamp.opId;
+            if (softDelete) {
+                safePayload.deleted = true;
+                safePayload.deleted_at =
+                    typeof safePayload.deleted_at === 'number'
+                        ? safePayload.deleted_at
+                        : nowSec();
+            }
+        }
+
+        // Mark opId immediately to suppress echo before push completes
+        markRecentOpId(stamp.opId);
+
+        // Auto-generate order_key for messages if missing
+        if (tableName === 'messages' && operation === 'put' && payload) {
+            const msg = payload as { order_key?: string };
+            if (!msg.order_key) {
+                msg.order_key = hlcToOrderKey(hlc);
+            }
+        }
+
+        // Use shared sanitization logic
+        const payloadForSync = sanitizePayloadForSync(tableName, payload, operation);
+
+
+        const pendingOp: PendingOp = {
+            id: createRuntimeUuid(),
+            tableName,
+            operation,
+            pk,
+            // For delete, include deleted_at in payload (sanitized) to sync deletion time
+            payload: operation === 'put'
+                ? payloadForSync 
+                : sanitizePayloadForSync(
+                    tableName,
+                    softDelete
+                        ? safePayload
+                        : {
+                            [pkField]: pk,
+                            deleted_at: nowSec(),
+                            deleted: true,
+                        },
+                    'delete'
+                ),
+            stamp,
+            createdAt: Date.now(),
+            attempts: 0,
+            status: 'pending',
+        };
+
+        const tableNames = transaction.storeNames;
+        const hasPendingOps = tableNames.includes('pending_ops');
+        const hasTombstones = tableNames.includes('tombstones');
+        const hasPendingOpsTable = this.db.tables.some(
+            (table) => table.name === 'pending_ops'
+        );
+        const hasTombstonesTable = this.db.tables.some(
+            (table) => table.name === 'tombstones'
+        );
+
+        if (!hasPendingOpsTable) {
+            console.warn('[HookBridge] pending_ops table missing; skipping sync capture');
+            return;
+        }
+
+        if (hasPendingOps) {
+            const request = transaction.table('pending_ops').add(pendingOp);
+            void Promise.resolve(request).catch((error: unknown) => {
+                console.error('[HookBridge] Atomic outbox write failed; aborting transaction', error);
+                transaction.abort();
+            });
+        } else {
+            const message =
+                '[HookBridge] Non-atomic sync capture: pending_ops missing from transaction scope';
+            console.error(message, { tableName, pk, storeNames: [...tableNames] });
+            void useHooks().doAction('sync.capture:action:nonAtomic', {
+                tableName,
+                pk,
+                storeNames: [...tableNames],
+            });
+            throw new Error(message);
+        }
+
+        if (operation === 'delete') {
+            const tombstone: Tombstone = {
+                id: `${tableName}:${pk}`,
+                tableName,
+                pk,
+                deletedAt: nowSec(),
+                clock: stamp.clock,
+                hlc: stamp.hlc,
+                opId: stamp.opId,
+            };
+            if (!hasTombstonesTable) {
+                return;
+            }
+            if (hasTombstones) {
+                const request = transaction.table('tombstones').put(tombstone);
+                void Promise.resolve(request).catch((error: unknown) => {
+                    console.error('[HookBridge] Atomic tombstone write failed; aborting transaction', error);
+                    transaction.abort();
+                });
+            } else {
+                const message =
+                    '[HookBridge] Non-atomic tombstone capture: tombstones missing from transaction scope';
+                console.error(message, { tableName, pk, storeNames: [...tableNames] });
+                void useHooks().doAction('sync.capture:action:nonAtomic', {
+                    tableName,
+                    pk,
+                    storeNames: [...tableNames],
+                    kind: 'tombstone',
+                });
+                throw new Error(message);
+            }
+        }
+
+        useHooks()
+            .doAction('sync.op:action:captured', { op: pendingOp })
+            .catch((error) => {
+                console.error('[HookBridge] Failed to emit capture hook', error);
+            });
+
+        if (operation === 'put' || softDelete) {
+            return {
+                clock: stamp.clock,
+                hlc: stamp.hlc,
+                op_id: stamp.opId,
+                ...(softDelete
+                    ? {
+                        deleted: true,
+                        deleted_at: safePayload.deleted_at,
+                    }
+                    : {}),
+            };
+        }
+    }
+
+    /**
+     * Get the device ID
+     */
+    getDeviceId(): string {
+        return this.deviceId;
+    }
+}
+
+// Singleton instance holder (per DB)
+const hookBridgeInstances = new Map<string, HookBridge>();
+
+/**
+ * Purpose:
+ * Get or create the HookBridge singleton for a given workspace DB.
+ *
+ * Constraints:
+ * - Singleton is held in module state; use cleanup/reset in tests and HMR
+ */
+export function getHookBridge(db: Or3DB): HookBridge {
+    const key = db.name;
+    const existing = hookBridgeInstances.get(key);
+    if (existing) return existing;
+    const created = new HookBridge(db);
+    hookBridgeInstances.set(key, created);
+    return created;
+}
+
+/**
+ * Internal API.
+ *
+ * Purpose:
+ * Stop and clear all HookBridge instances. Intended for tests.
+ */
+export function _resetHookBridge(): void {
+    for (const bridge of hookBridgeInstances.values()) {
+        bridge.stop();
+    }
+    hookBridgeInstances.clear();
+}
+
+/**
+ * Purpose:
+ * Stop and remove the HookBridge instance for a specific DB name.
+ */
+export function cleanupHookBridge(dbName: string): void {
+    const bridge = hookBridgeInstances.get(dbName);
+    if (bridge) {
+        bridge.stop();
+    }
+    hookBridgeInstances.delete(dbName);
+}

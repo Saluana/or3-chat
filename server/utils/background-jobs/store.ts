@@ -1,0 +1,122 @@
+/**
+ * @module server/utils/background-jobs/store
+ *
+ * Purpose:
+ * Provider factory and configuration access for background streaming jobs.
+ * The store selects a provider based on runtime config and caches it to
+ * avoid repeated initialization.
+ *
+ * Responsibilities:
+ * - Resolve and cache the active provider.
+ * - Expose background streaming enabled status.
+ * - Resolve background job configuration with defaults.
+ *
+ * Non-Goals:
+ * - Implementing provider logic or persistence.
+ * - Enforcing authorization rules for job access.
+ */
+
+import type { BackgroundJobProvider, BackgroundJobConfig } from './types';
+import { DEFAULT_CONFIG } from './types';
+import { memoryJobProvider } from './providers/memory';
+import { getBackgroundJobProviderById } from './registry';
+import { BACKGROUND_PROVIDER_IDS } from '~~/shared/cloud/provider-ids';
+
+let cachedProvider: BackgroundJobProvider | null = null;
+
+/**
+ * Purpose:
+ * Resolve the active background job provider.
+ *
+ * Behavior:
+ * - Reads runtime config for provider selection.
+ * - Uses provider registry when configured.
+ * - Caches the resolved provider for subsequent calls.
+ *
+ * Constraints:
+ * - Falls back to the in-memory provider when configuration is missing.
+ */
+export async function getJobProvider(): Promise<BackgroundJobProvider> {
+    if (cachedProvider) {
+        return cachedProvider;
+    }
+
+    const config = useRuntimeConfig();
+    const bgConfig = config.backgroundJobs as { storageProvider?: string } | undefined;
+    const storageProvider = bgConfig?.storageProvider ?? BACKGROUND_PROVIDER_IDS.memory;
+
+    switch (storageProvider) {
+        case BACKGROUND_PROVIDER_IDS.convex: {
+            const syncConfig = config.sync as { convexUrl?: string } | undefined;
+            const publicSyncConfig = (config.public as { sync?: { convexUrl?: string } } | undefined)?.sync;
+            const convexUrl = syncConfig?.convexUrl ?? publicSyncConfig?.convexUrl;
+            if (!convexUrl) {
+                console.warn('[background-jobs] Convex URL not configured, using memory');
+                cachedProvider = memoryJobProvider;
+                break;
+            }
+
+            const registered = getBackgroundJobProviderById(storageProvider);
+            if (registered) {
+                cachedProvider = registered;
+            } else {
+                console.warn('[background-jobs] Provider not registered, using memory:', storageProvider);
+                cachedProvider = memoryJobProvider;
+            }
+            break;
+        }
+
+        case BACKGROUND_PROVIDER_IDS.redis:
+            // Future: Redis provider
+            console.warn('[background-jobs] Redis provider not yet implemented, using memory');
+            cachedProvider = memoryJobProvider;
+            break;
+
+        case BACKGROUND_PROVIDER_IDS.memory:
+        default:
+            cachedProvider = memoryJobProvider;
+            break;
+    }
+
+    return cachedProvider;
+}
+
+/**
+ * Purpose:
+ * Determine whether background streaming is enabled in config.
+ */
+export function isBackgroundStreamingEnabled(): boolean {
+    const config = useRuntimeConfig();
+    const bgConfig = config.backgroundJobs as { enabled?: boolean } | undefined;
+    return bgConfig?.enabled === true;
+}
+
+/**
+ * Purpose:
+ * Resolve background job configuration with defaults.
+ *
+ * Behavior:
+ * - Uses `DEFAULT_CONFIG` for any missing fields.
+ */
+export function getJobConfig(): BackgroundJobConfig {
+    const config = useRuntimeConfig();
+    const bgConfig = config.backgroundJobs as Partial<BackgroundJobConfig> | undefined;
+
+    return {
+        maxConcurrentJobs: bgConfig?.maxConcurrentJobs ?? DEFAULT_CONFIG.maxConcurrentJobs,
+        maxConcurrentJobsPerUser:
+            bgConfig?.maxConcurrentJobsPerUser ??
+            DEFAULT_CONFIG.maxConcurrentJobsPerUser,
+        jobTimeoutMs: bgConfig?.jobTimeoutMs ?? DEFAULT_CONFIG.jobTimeoutMs,
+        completedJobRetentionMs:
+            bgConfig?.completedJobRetentionMs ?? DEFAULT_CONFIG.completedJobRetentionMs,
+    };
+}
+
+/**
+ * Purpose:
+ * Clear the cached provider, typically for tests or config changes.
+ */
+export function resetJobProvider(): void {
+    cachedProvider = null;
+}

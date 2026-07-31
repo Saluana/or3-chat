@@ -1,7 +1,21 @@
-import { db } from './client';
+/**
+ * @module app/db/posts
+ *
+ * Purpose:
+ * CRUD helpers for posts stored in the local database.
+ *
+ * Responsibilities:
+ * - Validate and persist post rows
+ * - Emit hook events for post lifecycle operations
+ *
+ * Non-responsibilities:
+ * - Rendering or formatting post content
+ * - Handling document or prompt specific logic
+ */
+import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { nowSec, parseOrThrow } from './util';
+import { nowSec, parseOrThrow, nextClock, getWriteTxTableNames } from './util';
 import {
     PostSchema,
     PostCreateSchema,
@@ -9,6 +23,15 @@ import {
     type PostCreate,
 } from './schema';
 import type { PostEntity } from '../core/hooks/hook-types';
+
+export const INTERNAL_POST_TYPES = new Set([
+    'or3:document-revision',
+    'or3:document-revision-chunk',
+]);
+
+function isPublicPost(post: Post): boolean {
+    return !INTERNAL_POST_TYPES.has(post.postType);
+}
 
 // Convert Post schema type to PostEntity for hooks (where applicable)
 function toPostEntity(post: Post): PostEntity {
@@ -47,6 +70,19 @@ function normalizeMeta(meta: unknown): string | null | undefined {
     }
 }
 
+/**
+ * Purpose:
+ * Create a post row in the local database.
+ *
+ * Behavior:
+ * Applies filters, normalizes input, validates schemas, and writes to Dexie.
+ *
+ * Constraints:
+ * - Throws on validation errors.
+ *
+ * Non-Goals:
+ * - Does not attach files or metadata beyond the post schema.
+ */
 export async function createPost(input: PostCreate): Promise<Post> {
     const hooks = useHooks();
     const filtered: unknown = await hooks.applyFilters(
@@ -63,22 +99,39 @@ export async function createPost(input: PostCreate): Promise<Post> {
     }
     const prepared = parseOrThrow(PostCreateSchema, filtered);
     const value = parseOrThrow(PostSchema, prepared);
+    const next = { ...value, clock: nextClock(value.clock) };
     await hooks.doAction('db.posts.create:action:before', {
-        entity: toPostEntity(value),
+        entity: toPostEntity(next),
         tableName: 'posts',
     });
-    await dbTry(
-        () => db.posts.put(value),
-        { op: 'write', entity: 'posts', action: 'create' },
-        { rethrow: true }
-    );
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
+        await dbTry(
+            () => db.posts.put(next),
+            { op: 'write', entity: 'posts', action: 'create' },
+            { rethrow: true }
+        );
+    });
     await hooks.doAction('db.posts.create:action:after', {
-        entity: toPostEntity(value),
+        entity: toPostEntity(next),
         tableName: 'posts',
     });
-    return value;
+    return next;
 }
 
+/**
+ * Purpose:
+ * Upsert a post row with updated clocks.
+ *
+ * Behavior:
+ * Validates the post, updates clock values, and writes to Dexie.
+ *
+ * Constraints:
+ * - Requires a fully shaped `Post` value.
+ *
+ * Non-Goals:
+ * - Does not merge partial updates.
+ */
 export async function upsertPost(value: Post): Promise<void> {
     const hooks = useHooks();
     const filtered: unknown = await hooks.applyFilters(
@@ -92,25 +145,50 @@ export async function upsertPost(value: Post): Promise<void> {
     if (mutable.meta !== undefined) {
         mutable.meta = normalizeMeta(mutable.meta);
     }
-    const validated = parseOrThrow(PostSchema, filtered);
-    await hooks.doAction('db.posts.upsert:action:before', {
-        entity: toPostEntity(validated),
-        tableName: 'posts',
-    });
-    await dbTry(
-        () => db.posts.put(validated),
-        { op: 'write', entity: 'posts', action: 'upsert' },
-        { rethrow: true }
-    );
-    await hooks.doAction('db.posts.upsert:action:after', {
-        entity: toPostEntity(validated),
-        tableName: 'posts',
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
+        const validated = parseOrThrow(PostSchema, filtered);
+        const existing = await dbTry(() => db.posts.get(validated.id), {
+            op: 'read',
+            entity: 'posts',
+            action: 'get',
+        });
+        const next = {
+            ...validated,
+            clock: nextClock(existing?.clock ?? validated.clock),
+        };
+        await hooks.doAction('db.posts.upsert:action:before', {
+            entity: toPostEntity(next),
+            tableName: 'posts',
+        });
+        await dbTry(
+            () => db.posts.put(next),
+            { op: 'write', entity: 'posts', action: 'upsert' },
+            { rethrow: true }
+        );
+        await hooks.doAction('db.posts.upsert:action:after', {
+            entity: toPostEntity(next),
+            tableName: 'posts',
+        });
     });
 }
 
+/**
+ * Purpose:
+ * Fetch a post by id with hook filtering.
+ *
+ * Behavior:
+ * Reads the row and applies output filters.
+ *
+ * Constraints:
+ * - Returns undefined when missing or filtered out.
+ *
+ * Non-Goals:
+ * - Does not parse content beyond stored string.
+ */
 export function getPost(id: string) {
     const hooks = useHooks();
-    return dbTry(() => db.posts.get(id), {
+    return dbTry(() => getDb().posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'get',
@@ -119,9 +197,22 @@ export function getPost(id: string) {
     );
 }
 
+/**
+ * Purpose:
+ * List all posts.
+ *
+ * Behavior:
+ * Reads the full posts table and applies output filters.
+ *
+ * Constraints:
+ * - Intended for small data sets.
+ *
+ * Non-Goals:
+ * - Does not support pagination.
+ */
 export function allPosts() {
     const hooks = useHooks();
-    return dbTry(() => db.posts.toArray(), {
+    return dbTry(() => getDb().posts.filter(isPublicPost).toArray(), {
         op: 'read',
         entity: 'posts',
         action: 'all',
@@ -130,57 +221,121 @@ export function allPosts() {
     );
 }
 
+/**
+ * Purpose:
+ * Search posts by title substring.
+ *
+ * Behavior:
+ * Performs a case-insensitive substring match and applies output filters.
+ *
+ * Constraints:
+ * - Uses in-memory filtering.
+ *
+ * Non-Goals:
+ * - Does not provide full-text search.
+ */
 export function searchPosts(term: string) {
     const q = term.toLowerCase();
     const hooks = useHooks();
     return dbTry(
         () =>
-            db.posts.filter((p) => p.title.toLowerCase().includes(q)).toArray(),
+            getDb().posts
+                .filter(
+                    (p) =>
+                        isPublicPost(p) && p.title.toLowerCase().includes(q)
+                )
+                .toArray(),
         { op: 'read', entity: 'posts', action: 'search' }
     ).then((res) =>
         res ? hooks.applyFilters('db.posts.search:filter:output', res) : []
     );
 }
 
+/**
+ * Purpose:
+ * Soft delete a post by marking it deleted.
+ *
+ * Behavior:
+ * Updates the deleted flag and timestamps with hook emission.
+ *
+ * Constraints:
+ * - No-op if the post does not exist.
+ *
+ * Non-Goals:
+ * - Does not remove the row permanently.
+ */
 export async function softDeletePost(id: string): Promise<void> {
     const hooks = useHooks();
-    await db.transaction('rw', db.posts, async () => {
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
+        async () => {
         const p = await dbTry(() => db.posts.get(id), {
             op: 'read',
             entity: 'posts',
             action: 'get',
         });
         if (!p) return;
+        if (p.deleted) return;
         await hooks.doAction('db.posts.delete:action:soft:before', {
             entity: toPostEntity(p),
             id: p.id,
             tableName: 'posts',
         });
-        await db.posts.put({ ...p, deleted: true, updated_at: nowSec() });
+        await db.posts.put({
+            ...p,
+            deleted: true,
+            updated_at: nowSec(),
+            clock: nextClock(p.clock),
+        });
         await hooks.doAction('db.posts.delete:action:soft:after', {
             entity: toPostEntity(p),
             id: p.id,
             tableName: 'posts',
         });
-    });
+        }
+    );
 }
 
+/**
+ * Purpose:
+ * Hard delete a post row by id.
+ *
+ * Behavior:
+ * Deletes the row and emits delete hooks.
+ *
+ * Constraints:
+ * - No-op if the post does not exist.
+ *
+ * Non-Goals:
+ * - Does not clean up related data.
+ */
 export async function hardDeletePost(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => db.posts.get(id), {
-        op: 'read',
-        entity: 'posts',
-        action: 'get',
-    });
-    await hooks.doAction('db.posts.delete:action:hard:before', {
-        entity: toPostEntity(existing!),
-        id,
-        tableName: 'posts',
-    });
-    await db.posts.delete(id);
-    await hooks.doAction('db.posts.delete:action:hard:after', {
-        entity: toPostEntity(existing!),
-        id,
-        tableName: 'posts',
-    });
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
+        async () => {
+        const existing = await dbTry(() => db.posts.get(id), {
+            op: 'read',
+            entity: 'posts',
+            action: 'get',
+        });
+        if (!existing) return;
+
+        await hooks.doAction('db.posts.delete:action:hard:before', {
+            entity: toPostEntity(existing),
+            id,
+            tableName: 'posts',
+        });
+        await db.posts.delete(id);
+        await hooks.doAction('db.posts.delete:action:hard:after', {
+            entity: toPostEntity(existing),
+            id,
+            tableName: 'posts',
+        });
+        }
+    );
 }

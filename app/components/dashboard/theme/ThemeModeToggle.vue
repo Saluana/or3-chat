@@ -47,6 +47,7 @@
         <UModal
             v-model:open="showResetModal"
             title="Reset Theme"
+            description="Confirm resetting the current theme mode to defaults."
             :ui="{ content: 'z-[20]' }"
         >
             <template #body>
@@ -108,10 +109,3 @@ function confirmReset() {
     showResetModal.value = false;
 }
 </script>
-
-<style scoped>
-.group-heading {
-    margin-top: -0.25rem;
-    letter-spacing: 0.08em;
-}
-</style>

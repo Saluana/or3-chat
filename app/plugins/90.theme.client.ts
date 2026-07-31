@@ -1,47 +1,46 @@
-import { ref, type Ref } from 'vue';
-import { defineNuxtPlugin, useAppConfig } from '#imports';
-import { defu } from 'defu';
+import { ref, shallowRef } from 'vue';
+import { defineNuxtPlugin, useAppConfig, useRuntimeConfig } from '#imports';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
-import type { CompiledTheme } from '~/theme/_shared/types';
-import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
+import type { CompiledTheme, ThemePlugin } from '~/theme/_shared/types';
 import {
     applyThemeClasses,
     removeThemeClasses,
     loadThemeCSS,
     unloadThemeCSS,
 } from '~/theme/_shared/css-selector-runtime';
-import {
-    applyThemeBackgrounds,
-    createThemeBackgroundTokenResolver,
-    revokeBackgroundBlobs,
-} from '~/core/theme/backgrounds';
+import { revokeBackgroundBlobs } from '~/core/theme/backgrounds';
 import {
     loadThemeManifest,
     loadThemeStylesheets,
     unloadThemeStylesheets,
-    updateManifestEntry,
-    loadThemeAppConfig,
     type ThemeManifestEntry,
 } from '~/theme/_shared/theme-manifest';
-import { generateThemeCssVariables } from '~/theme/_shared/generate-css-variables';
+import { prepareThemeEntry } from '~/theme/_shared/prepare-theme';
 import { iconRegistry } from '~/theme/_shared/icon-registry';
+import { useThemeSelection } from '~/composables/useThemeSelection';
+import { pickDefaultTheme } from '~/theme/_shared/default-theme';
+import { FALLBACK_THEME_NAME } from '~/theme/_shared/constants';
+import { readCookie, sanitizeThemeName } from '~/theme/_shared/theme-core';
+import {
+    cloneDeep,
+    computeEffectiveAppConfig,
+    replaceReactiveObject,
+} from '~/theme/_shared/theme-core';
+import {
+    ensureThemeLoaded as ensureThemeLoadedShared,
+    setActiveThemeSafe,
+    type ThemeLoadState,
+} from '~/theme/_shared/theme-loader';
+import {
+    CORE_APP_COMPONENT_DEFAULTS,
+    createThemeComponentMap,
+} from '~/theme/_shared/theme-components-registry';
+import {
+    shouldReleasePreviousThemeResources,
+    ThemeActivationCoordinator,
+} from '~/theme/_shared/activation-transaction';
 
-// Module-level variable for page:finish debouncing
-let pageFinishTimeout: ReturnType<typeof setTimeout> | null = null;
-
-export interface ThemePlugin {
-    set: (name: string) => void;
-    toggle: () => void;
-    get: () => string;
-    system: () => string;
-    current: Ref<string>;
-    activeTheme: Ref<string>;
-    resolversVersion: Ref<number>;
-    setActiveTheme: (themeName: string) => Promise<void>;
-    getResolver: (themeName: string) => RuntimeResolver | null;
-    loadTheme: (themeName: string) => Promise<CompiledTheme | null>;
-    getTheme: (themeName: string) => CompiledTheme | null;
-}
+export type { ThemePlugin } from '~/theme/_shared/types';
 
 export default defineNuxtPlugin(async (nuxtApp) => {
     const THEME_CLASSES = [
@@ -53,7 +52,8 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         'dark-medium-contrast',
     ];
 
-    const manifestEntries = await loadThemeManifest();
+    const manifestResult = await loadThemeManifest();
+    const manifestEntries = manifestResult.entries;
     const themeManifest = new Map<string, ThemeManifestEntry>();
     for (const entry of manifestEntries) {
         themeManifest.set(entry.name, entry);
@@ -78,52 +78,88 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     if (manifestEntries.length === 0 && import.meta.dev) {
         console.warn(
-            '[theme] No theme definitions discovered. Falling back to "retro".'
+            `[theme] No theme definitions discovered. Falling back to "${FALLBACK_THEME_NAME}".`
         );
     }
 
     const appConfig = useAppConfig() as any;
     // Create a JSON snapshot of the original appConfig for restoration
     // This saves significant memory compared to deep cloning
-    const baseAppConfigSnapshot = JSON.stringify(appConfig);
+    const baseAppConfig = cloneDeep(appConfig) as Record<string, unknown>;
 
     const initialPatch = (nuxtApp.payload as any)?.data
         ?.__or3ThemeAppConfigPatch;
     if (initialPatch && typeof initialPatch === 'object') {
-        Object.assign(appConfig, defu(initialPatch, appConfig));
+        replaceReactiveObject(
+            appConfig,
+            computeEffectiveAppConfig(baseAppConfig, { appPatch: initialPatch })
+        );
     }
 
     registerCleanup(() => {
         // Restore from snapshot only on cleanup
-        const restored = JSON.parse(baseAppConfigSnapshot);
-        Object.assign(appConfig, restored);
+        replaceReactiveObject(appConfig, baseAppConfig);
     });
     const themeAppConfigOverrides = new Map<
         string,
         Record<string, any> | null
     >();
 
-    const applyThemeUiConfig = (theme?: CompiledTheme | null) => {
-        // Directly merge into appConfig.ui without extra cloning
-        if (!appConfig.ui) {
-            appConfig.ui = {};
-        }
-        if (theme?.ui) {
-            appConfig.ui = defu(theme.ui, appConfig.ui);
-        }
+    const applyEffectiveAppConfig = (
+        theme?: CompiledTheme | null,
+        patch?: Record<string, unknown> | null
+    ) => {
+        replaceReactiveObject(
+            appConfig,
+            computeEffectiveAppConfig(baseAppConfig, {
+                appPatch: patch,
+                uiPatch: theme?.ui,
+            })
+        );
     };
 
-    const applyThemeAppConfigPatch = (patch?: Record<string, any> | null) => {
-        if (patch) {
-            Object.assign(appConfig, defu(patch, appConfig));
-        }
-    };
-
+    const runtimeConfig = useRuntimeConfig();
     // Determine current default theme from manifest
-    const DEFAULT_THEME =
-        manifestEntries.find((entry) => entry.isDefault)?.name ??
-        manifestEntries[0]?.name ??
-        'retro';
+    const configuredDefaultTheme = runtimeConfig.public?.branding?.defaultTheme;
+    const normalizedConfiguredDefault =
+        typeof configuredDefaultTheme === 'string' && configuredDefaultTheme !== 'system'
+            ? configuredDefaultTheme
+            : null;
+    const availableThemes = new Set(themeManifest.keys());
+    const manifestDefaultTheme = manifestEntries.find((entry) => entry.isDefault)?.name ?? null;
+    const defaultDecision = pickDefaultTheme({
+        manifestNames: manifestEntries.map((entry) => entry.name),
+        manifestDefaultName: manifestDefaultTheme,
+        configuredDefaultName: normalizedConfiguredDefault,
+        fallbackThemeName: FALLBACK_THEME_NAME,
+    });
+
+    // Build disabled themes set from runtime config
+    const rawDisabledThemes = (runtimeConfig.public as Record<string, unknown>).branding as Record<string, unknown> | undefined;
+    const disabledThemesArray = rawDisabledThemes?.disabledThemes;
+    const disabledThemes = new Set(
+        Array.isArray(disabledThemesArray) ? (disabledThemesArray as string[]).filter(Boolean) : []
+    );
+
+    const DEFAULT_THEME = defaultDecision.defaultTheme;
+
+    if (
+        import.meta.dev &&
+        normalizedConfiguredDefault &&
+        !availableThemes.has(normalizedConfiguredDefault.toLowerCase())
+    ) {
+        console.warn(
+            `[theme] Default theme "${normalizedConfiguredDefault}" not found. Falling back to "${DEFAULT_THEME}".`
+        );
+    }
+    if (import.meta.dev) {
+        for (const warning of defaultDecision.warnings) {
+            console.warn(warning);
+        }
+        if (manifestResult.errors.length > 0) {
+            console.warn('[theme] Manifest contained load errors.', manifestResult.errors);
+        }
+    }
 
     // Previous default theme persistence keys
     const previousDefaultStorageKey = 'previousDefaultTheme';
@@ -133,10 +169,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const activeThemeCookieKey = 'or3_active_theme';
 
     const readPreviousDefaultCookie = () => {
-        const match = document.cookie.match(
-            new RegExp(`(?:^|; )${previousDefaultCookieKey}=([^;]*)`)
-        );
-        return match && match[1] ? decodeURIComponent(match[1]) : null;
+        return readCookie(document.cookie, previousDefaultCookieKey);
     };
 
     const writePreviousDefaultCookie = (themeName: string) => {
@@ -183,11 +216,10 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         // Ignore storage errors silently
     }
 
-    const availableThemes = new Set(themeManifest.keys());
-
     const storageKey = 'theme';
     const root = document.documentElement;
-    const themeBackgroundTokenResolver = createThemeBackgroundTokenResolver();
+    const selectionRepository = useThemeSelection();
+    await selectionRepository.ensureLoaded();
 
     const getSystemPref = () =>
         window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -203,10 +235,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const readActiveTheme = () =>
         localStorage.getItem(activeThemeStorageKey);
     const readActiveThemeCookie = () => {
-        const match = document.cookie.match(
-            new RegExp(`(?:^|; )${activeThemeCookieKey}=([^;]*)`)
-        );
-        return match && match[1] ? decodeURIComponent(match[1]) : null;
+        return readCookie(document.cookie, activeThemeCookieKey);
     };
 
     const writeActiveThemeCookie = (themeName: string) => {
@@ -252,7 +281,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         if (typeof document === 'undefined') return;
         themeRegistry.forEach((theme, name) => {
             if (theme.cssSelectors) {
-                removeThemeClasses(theme.cssSelectors);
+                removeThemeClasses(name);
             }
             if (theme.hasStyleSelectors) {
                 unloadThemeCSS(name);
@@ -277,21 +306,40 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         resolversVersion.value = 0;
     });
 
-    const sanitizeThemeName = (themeName: string | null) => {
-        if (!themeName) return null;
-        if (!/^[a-z0-9-]+$/i.test(themeName)) return null;
-        if (!availableThemes.has(themeName)) return null;
-        return themeName;
-    };
+    const sanitizeTheme = (themeName: string | null) =>
+        sanitizeThemeName(themeName, availableThemes);
 
-    const rawStoredTheme = readActiveTheme() || readActiveThemeCookie();
-    const storedTheme = sanitizeThemeName(rawStoredTheme);
+    const rawStoredTheme =
+        selectionRepository.selectedTheme.value ||
+        readActiveThemeCookie() ||
+        readActiveTheme();
+    const storedTheme = sanitizeTheme(rawStoredTheme);
 
     // Active theme name (for refined theme system)
     const activeTheme = ref<string>(DEFAULT_THEME);
+    const activeComponents = shallowRef({
+        ...CORE_APP_COMPONENT_DEFAULTS,
+    });
     const resolversVersion = ref(0);
     const bumpResolversVersion = () => {
         resolversVersion.value += 1;
+    };
+    const loadState: ThemeLoadState = {
+        loadedThemes: new Set<string>(),
+        loadingThemes: new Map<string, Promise<boolean>>(),
+    };
+    const activationCoordinator = new ThemeActivationCoordinator();
+    const syncActiveComponents = () => {
+        const theme = themeRegistry.get(activeTheme.value);
+        const manifest = themeManifest.get(activeTheme.value);
+
+        activeComponents.value =
+            theme && manifest
+                ? createThemeComponentMap(
+                      manifest.dirName,
+                      theme.customComponents
+                  )
+                : { ...CORE_APP_COMPONENT_DEFAULTS };
     };
 
     /**
@@ -302,123 +350,48 @@ export default defineNuxtPlugin(async (nuxtApp) => {
      *
      * Security: themeName is validated against available themes to prevent path traversal
      */
-    const loadTheme = async (
-        themeName: string
-    ): Promise<CompiledTheme | null> => {
-        // Check if already loaded in memory
+    const registerThemeFromEntry = async (manifestEntry: ThemeManifestEntry) => {
+        const themeName = manifestEntry.name;
         if (themeRegistry.has(themeName)) {
-            return themeRegistry.get(themeName)!;
+            if (!resolverRegistry.has(themeName)) {
+                resolverRegistry.set(
+                    themeName,
+                    new RuntimeResolver(themeRegistry.get(themeName)!)
+                );
+            }
+            return;
         }
 
-        try {
-            const manifestEntry = themeManifest.get(themeName);
+        const { compiledTheme, appConfig: themeSpecificConfig } =
+            await prepareThemeEntry(manifestEntry);
 
-            if (!manifestEntry) {
-                if (import.meta.dev) {
-                    console.warn(
-                        `[theme] Theme "${themeName}" is not registered.`
-                    );
-                }
-                return null;
-            }
-
-            const themeModule = await manifestEntry.loader();
-
-            if (themeModule?.default) {
-                const definition = themeModule.default;
-                updateManifestEntry(manifestEntry, definition);
-
-                // Parallelize asset loading
-                const stylesheetPromise = loadThemeStylesheets(
-                    manifestEntry,
-                    definition.stylesheets
-                );
-
-                let iconsPromise: Promise<any> = Promise.resolve(
-                    definition.icons
-                );
-                if (!definition.icons && manifestEntry.iconsLoader) {
-                    iconsPromise = manifestEntry
-                        .iconsLoader()
-                        .then((m) => m?.default || m)
-                        .catch((e) => {
-                            if (import.meta.dev) {
-                                console.warn(
-                                    `[theme] Failed to load icons for theme "${themeName}":`,
-                                    e
-                                );
-                            }
-                            return null;
-                        });
-                }
-
-                const [_, themeIcons] = await Promise.all([
-                    stylesheetPromise,
-                    iconsPromise,
-                ]);
-
-                const hasStyleSelectors = manifestEntry.hasCssSelectorStyles;
-
-                const compiledTheme: CompiledTheme = {
-                    name: definition.name,
-                    isDefault: manifestEntry.isDefault,
-                    stylesheets: manifestEntry.stylesheets,
-                    displayName: definition.displayName,
-                    description: definition.description,
-                    cssVariables: generateThemeCssVariables(definition),
-                    overrides: compileOverridesRuntime(
-                        definition.overrides || {}
-                    ),
-                    cssSelectors: definition.cssSelectors,
-                    hasStyleSelectors,
-                    ui: definition.ui,
-                    propMaps: definition.propMaps,
-                    backgrounds: definition.backgrounds,
-                    icons: themeIcons,
-                };
-
-                themeRegistry.set(themeName, compiledTheme);
-
-                // Register icons with the registry
-                if (compiledTheme.icons) {
-                    iconRegistry.registerTheme(themeName, compiledTheme.icons);
-                }
-
-                const themeSpecificConfig =
-                    (await loadThemeAppConfig(manifestEntry)) ?? null;
-                themeAppConfigOverrides.set(themeName, themeSpecificConfig);
-
-                const resolver = new RuntimeResolver(compiledTheme);
-                resolverRegistry.set(themeName, resolver);
-
-                return compiledTheme;
-            }
-        } catch (error) {
-            if (import.meta.dev) {
-                console.warn(
-                    `[theme] Failed to load theme "${themeName}":`,
-                    error
-                );
-            }
+        themeRegistry.set(themeName, compiledTheme);
+        if (compiledTheme.icons) {
+            iconRegistry.registerTheme(themeName, compiledTheme.icons);
         }
+        themeAppConfigOverrides.set(themeName, themeSpecificConfig);
+        resolverRegistry.set(themeName, new RuntimeResolver(compiledTheme));
+    };
 
-        return null;
+    const loadTheme = async (themeName: string): Promise<CompiledTheme | null> => {
+        const loaded = await ensureThemeLoadedShared(themeName, {
+            manifestByName: themeManifest,
+            state: loadState,
+            registerTheme: registerThemeFromEntry,
+        });
+        return loaded ? themeRegistry.get(themeName) ?? null : null;
     };
 
     const ensureThemeLoaded = async (themeName: string): Promise<boolean> => {
-        if (resolverRegistry.has(themeName)) {
-            return true;
+        const loaded = await ensureThemeLoadedShared(themeName, {
+            manifestByName: themeManifest,
+            state: loadState,
+            registerTheme: registerThemeFromEntry,
+        });
+        if (loaded && !resolverRegistry.has(themeName) && themeRegistry.has(themeName)) {
+            resolverRegistry.set(themeName, new RuntimeResolver(themeRegistry.get(themeName)!));
         }
-
-        if (themeRegistry.has(themeName)) {
-            const cached = themeRegistry.get(themeName)!;
-            const resolver = new RuntimeResolver(cached);
-            resolverRegistry.set(themeName, resolver);
-            return true;
-        }
-
-        const loaded = await loadTheme(themeName);
-        return Boolean(loaded);
+        return loaded;
     };
 
     /**
@@ -463,117 +436,98 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     };
 
     /**
-     * Cleanup theme resources when switching away from it
-     * Keeps only the active theme and default theme loaded to save memory
-     */
-    const cleanupInactiveThemes = (activeThemeName: string) => {
-        const themesToKeep = new Set([activeThemeName, DEFAULT_THEME]);
-        
-        // Collect themes to delete first, then delete them
-        const themesToDelete: string[] = [];
-        for (const [themeName] of themeRegistry) {
-            if (!themesToKeep.has(themeName)) {
-                themesToDelete.push(themeName);
-            }
-        }
-        
-        // Delete collected themes
-        for (const themeName of themesToDelete) {
-            themeRegistry.delete(themeName);
-            resolverRegistry.delete(themeName);
-            iconRegistry.unregisterTheme(themeName);
-            themeAppConfigOverrides.delete(themeName);
-        }
-    };
-
-    /**
      * Set active theme (for refined theme system)
      *
      * This switches the active theme and persists the selection.
      */
     const setActiveTheme = async (themeName: string) => {
-        let target = sanitizeThemeName(themeName);
+        const transaction = activationCoordinator.begin();
+        const previousThemeName = activeTheme.value;
+        let target = sanitizeTheme(themeName) ?? DEFAULT_THEME;
 
-        if (!target) {
-            if (themeManifest.has(DEFAULT_THEME)) {
-                target = DEFAULT_THEME;
-            } else if (manifestEntries[0]) {
-                target = manifestEntries[0].name;
-            } else {
-                if (import.meta.dev) {
-                    console.warn('[theme] No available themes to activate.');
-                }
-                return;
-            }
+        if (!themeManifest.has(target) && manifestEntries[0]) {
+            target = manifestEntries[0].name;
         }
 
-        const available = await ensureThemeLoaded(target);
-
-        if (!available) {
+        if (!themeManifest.has(target)) {
             if (import.meta.dev) {
-                console.warn(
-                    `[theme] Failed to load theme "${target}". Falling back to "${DEFAULT_THEME}".`
-                );
+                console.warn('[theme] No available themes to activate.');
             }
-
-            const fallback = themeManifest.has(DEFAULT_THEME)
-                ? DEFAULT_THEME
-                : manifestEntries.find((entry) => entry.name !== target)?.name;
-
-            if (!fallback) {
-                return;
-            }
-
-            activeTheme.value = fallback;
-            localStorage.setItem(activeThemeStorageKey, fallback);
-            writeActiveThemeCookie(fallback);
-            await ensureThemeLoaded(fallback);
-            iconRegistry.setActiveTheme(fallback);
-            const fallbackPatch = themeAppConfigOverrides.get(fallback) ?? null;
-            applyThemeAppConfigPatch(fallbackPatch);
-            applyThemeUiConfig(themeRegistry.get(fallback) || null);
-            bumpResolversVersion();
             return;
         }
 
-        // Remove classes and stylesheets from previous theme
-        const previousTheme = themeRegistry.get(activeTheme.value);
-        if (previousTheme?.cssSelectors) {
-            removeThemeClasses(previousTheme.cssSelectors);
+        // Block switching to a disabled theme (unless it's the default — admin wouldn't disable the default)
+        if (disabledThemes.has(target) && target !== DEFAULT_THEME) {
+            if (import.meta.dev) {
+                console.warn(`[theme] Theme "${target}" is disabled. Falling back to "${DEFAULT_THEME}".`);
+            }
+            target = DEFAULT_THEME;
         }
 
-        if (previousTheme?.hasStyleSelectors) {
-            unloadThemeCSS(previousTheme.name);
+        const activation = await setActiveThemeSafe(target, {
+            availableThemes,
+            defaultTheme: DEFAULT_THEME,
+            previousTheme: activeTheme.value,
+            ensureLoaded: ensureThemeLoaded,
+        });
+
+        if (!transaction.isCurrent()) return;
+
+        if (!activation.ok) {
+            if (import.meta.dev) {
+                console.warn(
+                    `[theme] Failed to activate theme "${target}" (reason: ${activation.reason}).`
+                );
+            }
+            return;
         }
-        // Unload theme-specific stylesheets
-        const previousManifest = themeManifest.get(activeTheme.value);
-        if (previousManifest) {
-            unloadThemeStylesheets(previousManifest.name);
+
+        target = activation.activeTheme;
+
+        const theme = themeRegistry.get(target);
+        const manifest = themeManifest.get(target);
+        if (theme && manifest) {
+            await Promise.all([
+                loadThemeStylesheets(manifest),
+                theme.hasStyleSelectors
+                    ? loadThemeCSS(target)
+                    : Promise.resolve(),
+            ]);
+        }
+        if (!transaction.isCurrent()) return;
+
+        // A hydration re-apply may target the already-active theme. In that
+        // case the links above are the active resources, not stale resources.
+        if (
+            shouldReleasePreviousThemeResources(previousThemeName, target)
+        ) {
+            const previousTheme = themeRegistry.get(previousThemeName);
+            if (previousTheme?.cssSelectors) {
+                removeThemeClasses(previousTheme.name);
+            }
+
+            if (previousTheme?.hasStyleSelectors) {
+                unloadThemeCSS(previousTheme.name);
+            }
+
+            const previousManifest = themeManifest.get(previousThemeName);
+            if (previousManifest) {
+                unloadThemeStylesheets(previousManifest.name);
+            }
         }
 
         activeTheme.value = target;
         localStorage.setItem(activeThemeStorageKey, target);
+        void selectionRepository.setSelectedTheme(target);
         writeActiveThemeCookie(target);
         iconRegistry.setActiveTheme(target);
 
-        // Clean up inactive themes to save memory
-        cleanupInactiveThemes(target);
-
-        // Load CSS file and apply classes for new theme
-        const theme = themeRegistry.get(target);
-        const manifest = themeManifest.get(target);
+        // Loaded compiled themes remain cached; visual resources are managed separately.
         const themePatch = themeAppConfigOverrides.get(target) ?? null;
-        applyThemeAppConfigPatch(themePatch);
-        applyThemeUiConfig(theme ?? null);
+        applyEffectiveAppConfig(theme ?? null, themePatch);
 
         if (theme && manifest) {
-            // Load theme-specific stylesheets (from stylesheets array)
-            await loadThemeStylesheets(manifest);
-
-            // Load CSS file (build-time generated styles from cssSelectors)
-            if (theme.hasStyleSelectors) {
-                await loadThemeCSS(target);
-            } else {
+            if (!theme.hasStyleSelectors) {
                 unloadThemeCSS(target);
             }
 
@@ -590,10 +544,12 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 injectThemeVariables(target, theme.cssVariables);
             }
 
-            await applyThemeBackgrounds(theme.backgrounds, {
-                resolveToken: themeBackgroundTokenResolver,
-            });
         }
+
+        if (!transaction.isCurrent()) return;
+
+        syncActiveComponents();
+
         bumpResolversVersion();
     };
 
@@ -606,7 +562,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         }
     }
 
-    const sanitizedStoredTheme = sanitizeThemeName(storedTheme);
+    const sanitizedStoredTheme = sanitizeTheme(storedTheme);
 
     // If we migrated default, treat sanitizedStoredTheme as null so we adopt new default automatically
     const effectiveStoredTheme = shouldMigrateDefault
@@ -666,6 +622,12 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         getResolver, // Function to get resolver for a theme
         loadTheme, // Function to dynamically load a theme
         getTheme: (themeName: string) => themeRegistry.get(themeName) || null, // Get cached theme
+        activeComponents,
+        availableThemes: manifestEntries.map((entry) => ({
+            name: entry.name,
+            displayName: entry.displayName,
+            description: entry.description,
+        })),
     };
 
     nuxtApp.provide('theme', themeApi);
@@ -685,57 +647,22 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         }
     }
 
-    // Auto-apply theme classes on page navigation (for lazy-loaded components)
-    // Use a global flag to ensure hook is only registered once (prevents memory leak on HMR)
-    const HOOK_REGISTERED_KEY = '__or3_theme_page_finish_registered';
-    if (!(globalThis as any)[HOOK_REGISTERED_KEY]) {
-        (globalThis as any)[HOOK_REGISTERED_KEY] = true;
-
-        // Debounce the page:finish handler to avoid excessive class applications
-        nuxtApp.hook('page:finish', () => {
-            if (import.meta.client) {
-                // Clear any pending timeout
-                if (pageFinishTimeout) {
-                    clearTimeout(pageFinishTimeout);
-                }
-                
-                // Debounce by 100ms to batch multiple rapid navigations
-                pageFinishTimeout = setTimeout(() => {
-                    pageFinishTimeout = null;
-                    const nuxtApp = (globalThis as any).useNuxtApp?.();
-                    const themePlugin = nuxtApp?.$theme as ThemePlugin | undefined;
-                    if (!themePlugin) return;
-
-                    const theme = themePlugin.getTheme?.(
-                        themePlugin.activeTheme.value
-                    );
-                    if (theme?.cssSelectors) {
-                        applyThemeClasses(
-                            themePlugin.activeTheme.value,
-                            theme.cssSelectors
-                        );
-                    }
-                }, 100);
-            }
-        });
-    }
-    registerCleanup(() => {
-        delete (globalThis as any)[HOOK_REGISTERED_KEY];
-    });
 });
 
 // Maintain one <style> element per theme for CSS vars
 const THEME_STYLE_ID_PREFIX = 'or3-theme-vars-';
 function injectThemeVariables(themeName: string, css: string) {
-    const id = THEME_STYLE_ID_PREFIX + themeName;
+    if (typeof document === 'undefined' || !document.head) {
+        return;
+    }
+    const safeThemeName = themeName.replace(/[^a-z0-9-]/gi, '-').toLowerCase();
+    const id = THEME_STYLE_ID_PREFIX + safeThemeName;
     let style = document.getElementById(id) as HTMLStyleElement | null;
     if (!style) {
         style = document.createElement('style');
-        style.id = id;
-        style.setAttribute('data-theme-style', themeName);
+        style.id = THEME_STYLE_ID_PREFIX + safeThemeName;
+        style.setAttribute('data-theme-style', safeThemeName);
         document.head.appendChild(style);
     }
-    style.textContent = css;
+    style.textContent = css.replace(/<\/style>/gi, '<\\/style>');
 }
-
-

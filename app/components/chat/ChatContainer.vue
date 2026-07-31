@@ -18,6 +18,9 @@
                 :item-key="(m) => m.id || m.stream_id || ''"
                 :estimate-height="80"
                 :overscan="5500"
+                :prefetch-overscan="5500"
+                :content-key="props.threadId ?? 'new-thread'"
+                mutation-mode="append-prepend"
                 :maintain-bottom="!anyEditing"
                 :bottom-threshold="5"
                 :padding-bottom="bottomPad"
@@ -25,17 +28,19 @@
                 class="chat-message-list"
                 :style="scrollParentStyle"
                 @scroll="onScroll"
+                @prefetchRange="onPrefetchRange"
                 @reachTop="emit('reached-top')"
                 @reachBottom="emit('reached-bottom')"
             >
                 <template #default="{ item, index }">
                     <div
                         :key="item.id || item.stream_id || index"
-                        class="messages-container mx-auto sm:max-w-[768px] px-1.5 pb-6 not-first:group relative w-full min-w-0 break-words"
+                        :class="CHAT_MESSAGE_ROW_CLASS"
                         :data-msg-id="item.id"
                         :data-stream-id="item.stream_id"
                     >
-                        <LazyChatMessage
+                        <component
+                            :is="$theme.activeComponents.value['chat-message']"
                             :message="item"
                             :thread-id="props.threadId"
                             @retry="onRetry"
@@ -50,6 +55,17 @@
                 </template>
             </Or3Scroll>
         </ClientOnly>
+
+        <!-- First-run welcome: true modal layer above mobile input (z-40) -->
+        <Teleport to="body">
+            <div
+                v-if="showWelcomeCard"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-[color:color-mix(in_oklab,var(--md-scrim,#000)_45%,transparent)] p-4"
+                data-welcome-backdrop
+            >
+                <ChatWelcomeCard @dismiss="onWelcomeDismiss" />
+            </div>
+        </Teleport>
 
         <!-- Input area overlay -->
         <div
@@ -81,8 +97,9 @@
                         class="pointer-events-auto"
                     />
                 </div>
-                <lazy-chat-input-dropper
-                    :loading="loading"
+                <component
+                    :is="$theme.activeComponents.value['chat-input']"
+                    :loading="inputLoading"
                     :streaming="streamingActive"
                     :container-width="containerWidth"
                     :thread-id="currentThreadId"
@@ -112,6 +129,7 @@ import {
     type Ref,
     type CSSProperties,
     onBeforeUnmount,
+    onMounted,
     nextTick,
 } from 'vue';
 
@@ -119,8 +137,15 @@ import {
     getPanePendingPrompt,
     clearPanePendingPrompt,
     setPanePendingPrompt,
+    setupPanePromptCleanup,
+    usePanePendingPrompt,
 } from '~/composables/core/usePanePrompt';
-import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
+import type {
+    ChatMessage as ChatMessageType,
+    ChatRequestState,
+    RegisterSendResult,
+    SendResult,
+} from '~/utils/chat/types';
 import { Or3Scroll } from 'or3-scroll';
 import 'or3-scroll/style.css';
 import { useElementSize } from '@vueuse/core';
@@ -128,8 +153,18 @@ import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
-import { useToast, useHooks } from '#imports';
-import { MAX_MESSAGE_FILE_HASHES } from '~/db/files-util';
+import { useToast, useHooks, useChat, useRuntimeConfig } from '#imports';
+import { getMaxMessageFileHashes } from '~/db/files-util';
+import { kv } from '~/db';
+import {
+    hydrateUserApiKeyFromKv,
+    useUserApiKey,
+} from '~/core/auth/useUserApiKey';
+import { resolveOpenRouterKeyAvailability } from '~/core/auth/openRouterKeyAvailability';
+import ChatWelcomeCard from '~/components/chat/ChatWelcomeCard.vue';
+import { CHAT_MESSAGE_ROW_CLASS } from '~/components/chat/message-layout';
+import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';
+import { createMessageMediaPrefetchController } from '~/composables/chat/useMessageMediaPrefetch';
 import type {
     ChatInstance,
     ImageAttachment,
@@ -170,24 +205,19 @@ const scrollParentStyle = computed<CSSProperties>(() => ({
 }));
 
 // Mobile fixed wrapper classes/styles
-// Use fixed positioning on both mobile & desktop so top bars / multi-pane layout shifts don't push input off viewport.
-// CLS fix: Reserve stable height to prevent layout shift when lazy input hydrates
-const inputWrapperClass = computed(() =>
-    isMobile.value
-        ? 'pointer-events-none fixed inset-x-0 bottom-0 z-40'
-        : // Desktop: keep input scoped to its pane container
-          'pointer-events-none absolute inset-x-0 bottom-0 z-10'
-);
+// Use CSS breakpoints (not JS isMobile) so SSR HTML matches the first client
+// render. ChatContainer is async-hydrated after useResponsiveState may already
+// have flipped global isMobile, which previously caused hydration class mismatches.
+// Breakpoint matches useResponsiveState: (max-width: 768px).
+const inputWrapperClass =
+    'pointer-events-none absolute inset-x-0 bottom-0 z-10 max-[768px]:fixed max-[768px]:z-40';
 const inputWrapperStyle = computed<CSSProperties>(() => ({
     minHeight: `${DEFAULT_INPUT_HEIGHT}px`, // Reserve space to prevent CLS
     // Prevent child content from changing wrapper height during hydration
     contain: 'layout' as const,
 }));
-const innerInputContainerClass = computed(() =>
-    isMobile.value
-        ? 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-[calc(env(safe-area-inset-bottom)+6px)]'
-        : 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-2'
-);
+const innerInputContainerClass =
+    'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-2 max-[768px]:pb-[calc(env(safe-area-inset-bottom)+6px)]';
 function onInputResize(e: { height: number }) {
     emittedInputHeight.value = e?.height || null;
 }
@@ -209,6 +239,52 @@ const emit = defineEmits<{
     (e: 'reached-bottom'): void;
 }>();
 
+// ── First-run welcome card ──────────────────────────────────────────────
+// Shown only when the chat is empty AND the user has no usable OpenRouter
+// key. Disappears automatically once a key exists; dismissal is persisted.
+const WELCOME_DISMISS_KV_KEY = 'or3_welcome_card_dismissed';
+const runtimeConfig = useRuntimeConfig();
+const { apiKey } = useUserApiKey();
+const keyStateReady = ref(false);
+const welcomeDismissed = ref(true); // default hidden until hydrated
+const openRouterAvailability = computed(() =>
+    resolveOpenRouterKeyAvailability(runtimeConfig.public?.openRouter)
+);
+
+const showWelcomeCard = computed(
+    () =>
+        keyStateReady.value &&
+        !welcomeDismissed.value &&
+        openRouterAvailability.value.canAcceptUserKey &&
+        !openRouterAvailability.value.hasUsableKey(apiKey.value) &&
+        allMessages.value.length === 0
+);
+
+function onWelcomeDismiss(): void {
+    welcomeDismissed.value = true;
+    kv.set(WELCOME_DISMISS_KV_KEY, 'true').catch(() => {
+        // Persistence failure is non-critical; card just reappears next load.
+    });
+}
+
+onMounted(async () => {
+    try {
+        await hydrateUserApiKeyFromKv();
+    } catch {
+        // Key hydration failure is non-critical.
+    }
+    try {
+        const record = await kv.get(WELCOME_DISMISS_KV_KEY);
+        welcomeDismissed.value = record?.value === 'true';
+    } catch {
+        welcomeDismissed.value = false;
+    }
+    keyStateReady.value = true;
+});
+
+// Register pane-close cleanup after Nuxt app context is available.
+setupPanePromptCleanup();
+
 // Initialize chat composable and make it refresh when threadId changes
 // Initialized defensively (HMR can briefly leave it null in re-eval window)
 // If pane has a pending prompt selection (chosen before thread exists) seed it
@@ -216,38 +292,41 @@ if (props.paneId) {
     const pre = getPanePendingPrompt(props.paneId);
     if (pre) pendingPromptId.value = pre;
 }
+const panePendingPrompt = props.paneId
+    ? usePanePendingPrompt(props.paneId)
+    : null;
 const chat = shallowRef<ChatInstance>(
     useChat(
         props.messageHistory,
         props.threadId,
-        pendingPromptId.value || undefined
+        pendingPromptId.value || undefined,
+        { historyAlreadyLoaded: true }
     ) as ChatInstance
 );
+// Ensure history + background job reattachment on initial load
+void chat.value?.ensureHistorySynced?.();
 
 watch(
     () => props.threadId,
-    (newId) => {
+    async (newId) => {
         const currentId = chat.value?.threadId?.value;
         // Avoid re-initializing if the composable already set the same id (first-send case)
         if (newId && currentId && newId === currentId) {
             return;
         }
-        // Free previous thread messages & abort any active stream before switching
+        // Rebind in place — never call useChat() outside setup (inject warning).
         try {
-            chat.value?.clear?.();
+            await chat.value?.switchThread?.(newId, {
+                pendingPromptId: pendingPromptId.value || undefined,
+            });
         } catch (e) {
             if (import.meta.dev) {
                 console.warn(
-                    '[ChatContainer] clear failed during thread switch',
+                    '[ChatContainer] switchThread failed during thread switch',
                     e
                 );
             }
         }
-        chat.value = useChat(
-            props.messageHistory,
-            newId,
-            pendingPromptId.value || undefined
-        ) as ChatInstance;
     }
 );
 
@@ -260,11 +339,21 @@ watch(
         if (chat.value.loading.value) {
             return;
         }
-        // Prefer to update the internal messages array directly to avoid remount flicker
-        // Filter out tool messages before updating
-        chat.value!.messages.value = (mh || [])
-            .filter((m) => m.role !== 'tool')
-            .map((m) => ensureUiMessage(m));
+        const backgroundMode = backgroundJobMode.value;
+        const backgroundJobIdValue = backgroundJobId.value;
+        const hasPendingBackground = chat.value.messages.value.some(
+            (m) => m.role === 'assistant' && m.pending
+        );
+        if (backgroundJobIdValue && hasPendingBackground) {
+            return;
+        }
+        if (backgroundMode && backgroundMode !== 'none' && hasPendingBackground) {
+            return;
+        }
+        if (hasPendingBackground) {
+            return;
+        }
+        chat.value.replaceCanonicalHistory?.(mh || []);
     }
 );
 
@@ -289,13 +378,29 @@ const messages = computed<UiChatMessage[]>(
 );
 
 const loading = computed(() => chat.value?.loading?.value || false);
+const backgroundJobId = computed(() =>
+    unwrapRef(chat.value?.backgroundJobId ?? null)
+);
+const backgroundJobMode = computed(() =>
+    unwrapRef(chat.value?.backgroundJobMode ?? 'none')
+);
+const backgroundStreaming = computed(
+    () => Boolean(backgroundJobId.value) && backgroundJobMode.value !== 'none'
+);
 const workflowRunning = computed(() => {
-    for (const wf of workflowStates.values()) {
-        if (wf && wf.executionState === 'running') return true;
+    for (const msg of messages.value) {
+        if (!msg.id) continue;
+        const wf = workflowStates.get(msg.id);
+        if (wf?.executionState === 'running') return true;
     }
     return false;
 });
-const streamingActive = computed(() => loading.value || workflowRunning.value);
+const streamingActive = computed(
+    () => loading.value || workflowRunning.value || backgroundStreaming.value
+);
+const inputLoading = computed(
+    () => loading.value || backgroundStreaming.value
+);
 
 // Tail streaming now provided directly by useChat composable
 // `useChat` returns many refs; unwrap common ones so computed values expose plain objects/primitives
@@ -304,9 +409,14 @@ function unwrapRef<T>(refOrValue: T | Ref<T>): T {
 }
 
 const streamId = computed(() => unwrapRef(chat.value?.streamId));
-const streamState = computed<StreamState | null>(
-    () => chat.value?.streamState ?? null
-);
+const streamState = computed<StreamState | null>(() => {
+    const state = chat.value?.streamState as
+        | Ref<StreamState | null>
+        | StreamState
+        | null
+        | undefined;
+    return unwrapRef<StreamState | null>(state ?? null);
+});
 // Stream text + reasoning (from unified stream accumulator)
 // Tail assistant from composable (kept out of history until next user send)
 const tailAssistant = computed<UiChatMessage | null>(() => {
@@ -368,7 +478,9 @@ watch(
     () => messages.value,
     (list) => {
         if (!Array.isArray(list)) return;
+        const visibleIds = new Set<string>();
         for (const msg of list) {
+            if (msg.id) visibleIds.add(msg.id);
             const wf = msg.workflowState;
             if (!isUiWorkflowState(wf)) continue;
             const existing = workflowStates.get(msg.id);
@@ -378,8 +490,20 @@ watch(
                 workflowStates.set(msg.id, wf);
             }
         }
+        for (const id of Array.from(workflowStates.keys())) {
+            if (!visibleIds.has(id)) {
+                workflowStates.delete(id);
+            }
+        }
     },
     { immediate: true }
+);
+
+watch(
+    () => props.threadId,
+    () => {
+        workflowStates.clear();
+    }
 );
 
 function deriveWorkflowText(wf: UiWorkflowState): string {
@@ -406,17 +530,70 @@ function mergeWorkflowState(msg: UiChatMessage) {
     };
 }
 
-const allMessages = computed(() => {
-    if (!chat.value) return [];
-    const list = stableMessages.value.map(mergeWorkflowState);
-    if (streamingMessage.value) {
-        list.push(mergeWorkflowState(streamingMessage.value));
+// Stable history and workflow projection only recompute when history or workflow
+// state changes. Streaming token updates patch the single tail slot in place.
+const stableMessagesWithWorkflow = computed(() =>
+    stableMessages.value.map(mergeWorkflowState)
+);
+const stableMessageIdentities = computed(() => {
+    const identities = new Set<string>();
+    for (const message of stableMessages.value) {
+        if (message.id) identities.add(`id:${message.id}`);
+        if (message.stream_id) identities.add(`stream:${message.stream_id}`);
     }
-    return list;
+    return identities;
 });
+const allMessages = shallowRef<UiChatMessage[]>([]);
+let renderedStableSnapshot: UiChatMessage[] | null = null;
 
-// Detect images in assistant messages to boost overscan (Req: User Request)
-// Removed dynamic overscan in favor of static high overscan (6500px) for performance stability.
+watch(
+    [stableMessagesWithWorkflow, stableMessageIdentities, streamingMessage],
+    ([stable, identities, tail]) => {
+        const tailAlreadyStable =
+            Boolean(tail?.id && identities.has(`id:${tail.id}`)) ||
+            Boolean(
+                tail?.stream_id &&
+                    identities.has(`stream:${tail.stream_id}`)
+            );
+
+        if (!tail || tailAlreadyStable) {
+            allMessages.value = stable;
+            renderedStableSnapshot = stable;
+            return;
+        }
+
+        const mergedTail = mergeWorkflowState(tail);
+        if (
+            renderedStableSnapshot === stable &&
+            allMessages.value.length === stable.length + 1
+        ) {
+            // Or3Scroll memoizes rows from the items array identity. Replacing
+            // only the tail slot (even with triggerRef) leaves its rendered row
+            // stale while tokens are streaming.
+            allMessages.value = [...stable, mergedTail];
+            return;
+        }
+
+        allMessages.value = [...stable, mergedTail];
+        renderedStableSnapshot = stable;
+    },
+    { immediate: true }
+);
+
+// Media prefetch is intentionally separate from row mounting. Keep the proven
+// 5500px render overscan until the browser canary passes at 1200/5500.
+const mediaPrefetch = createMessageMediaPrefetchController({ concurrency: 4 });
+
+function onPrefetchRange(range: { startIndex: number; endIndex: number }) {
+    mediaPrefetch.updateRange(allMessages.value, range);
+}
+
+watch(
+    () => props.threadId,
+    () => mediaPrefetch.reset()
+);
+
+onBeforeUnmount(() => mediaPrefetch.dispose());
 
 // Scroll handling centralized in VirtualMessageList
 // Ref is now the VirtualMessageList component instance, not a raw element
@@ -450,24 +627,22 @@ const distanceFromBottom = ref(0);
 const isScrollable = ref(false);
 const iconScrollToBottom = useIcon('chat.scrollToBottom');
 
-const scrollToBottomButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'chat',
-        identifier: 'chat.scroll-to-bottom',
-        isNuxtUI: true,
-    });
-
-    return {
-        icon: iconScrollToBottom.value || 'heroicons:arrow-down-20-solid',
-        size: 'sm' as const,
-        color: 'primary' as const,
-        variant: 'solid' as const,
-        ui: { base: 'rounded-full' },
-        class: 'shadow-lg',
-        ...overrides.value,
-    };
+const scrollToBottomOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'chat',
+    identifier: 'chat.scroll-to-bottom',
+    isNuxtUI: true,
 });
+
+const scrollToBottomButtonProps = computed(() => ({
+    icon: iconScrollToBottom.value || 'heroicons:arrow-down-20-solid',
+    size: 'sm' as const,
+    color: 'primary' as const,
+    variant: 'solid' as const,
+    ui: { base: 'rounded-full' },
+    class: 'shadow-lg',
+    ...scrollToBottomOverrides.value,
+}));
 
 const scrollToBottomOpacity = computed(() => {
     // Transition into view as we scroll up
@@ -509,7 +684,7 @@ function onScroll(payload: {
 // Chat send abstraction (Req 3.5)
 const toast = useToast();
 
-function collectRecentHashes(limit = MAX_MESSAGE_FILE_HASHES): string[] {
+function collectRecentHashes(limit = getMaxMessageFileHashes()): string[] {
     const msgs = chat.value?.messages?.value || [];
     const out: string[] = [];
     const seen = new Set<string>();
@@ -549,7 +724,63 @@ type ChatInputSendPayload = {
         size: '1024x1024' | '1024x1536' | '1536x1024';
     };
     webSearchEnabled: boolean;
+    thinkingEnabled: boolean;
+    reasoningEffort?: string | null;
+    registerResult: RegisterSendResult;
 };
+
+function waitForDurableSendAcceptance(
+    activeChat: ChatInstance,
+    terminal: Promise<SendResult>
+): Promise<SendResult> {
+    const stateRef = activeChat.requestState;
+    if (!isRef(stateRef)) return terminal;
+
+    const initial = stateRef.value as ChatRequestState;
+    if (initial.status === 'idle' || initial.status === 'terminal') {
+        return terminal;
+    }
+    const requestId = initial.requestId;
+
+    return new Promise<SendResult>((resolve, reject) => {
+        let settled = false;
+        let stopWatcher: (() => void) | null = null;
+        const finish = (result: SendResult) => {
+            if (settled) return;
+            settled = true;
+            stopWatcher?.();
+            resolve(result);
+        };
+        const inspect = (state: ChatRequestState) => {
+            if (state.status === 'idle' || state.requestId !== requestId) return;
+            if (state.status === 'persisted') {
+                finish({
+                    status: 'accepted',
+                    requestId,
+                    userMessageId: state.userMessageId,
+                });
+            } else if (state.status === 'streaming') {
+                finish({
+                    status: 'accepted',
+                    requestId,
+                    userMessageId: state.userMessageId,
+                    assistantMessageId: state.assistantMessageId,
+                });
+            } else if (state.status === 'terminal') {
+                finish(state.result);
+            }
+        };
+
+        stopWatcher = watch(stateRef, inspect, { immediate: true });
+        if (settled) stopWatcher();
+        void terminal.then(finish, (error) => {
+            if (settled) return;
+            settled = true;
+            stopWatcher?.();
+            reject(error);
+        });
+    });
+}
 
 function onSend(payload: ChatInputSendPayload) {
     if (loading.value) return;
@@ -568,14 +799,13 @@ function onSend(payload: ChatInputSendPayload) {
                 Boolean(img) && img.status === 'pending'
         ).length ?? 0;
 
-    if (pendingCount > 0) {
-        // Defer sending until attachments finish hashing to avoid losing them
-        toast?.add?.({
-            title: 'Files are still uploading',
+    if (
+        pendingCount > 0 &&
+        !guardPendingAttachmentSend(attachments, toast, {
             description: 'Please wait for attachments to finish.',
-            color: 'primary',
             duration: 2400,
-        });
+        })
+    ) {
         return;
     }
     const carryHashes = readyImages.length === 0 ? collectRecentHashes() : [];
@@ -608,21 +838,29 @@ function onSend(payload: ChatInputSendPayload) {
             .filter(Boolean) ?? [];
 
     // Send message via useChat composable
-    chat.value
-        ?.send({
-            content: payload.text,
-            model: payload.model || model.value,
-            files,
-            file_hashes,
-            extraTextParts,
-            online: !!payload.webSearchEnabled,
-            context_hashes,
-        })
-        ?.then(() => {
+    const activeChat = chat.value;
+    if (!activeChat) return;
+    const result = activeChat.send({
+        content: payload.text,
+        model: payload.model || model.value,
+        files,
+        file_hashes,
+        extraTextParts,
+        online: !!payload.webSearchEnabled,
+        thinking: !!payload.thinkingEnabled,
+        reasoningEffort: payload.reasoningEffort ?? null,
+        context_hashes,
+    });
+    payload.registerResult(
+        result,
+        waitForDurableSendAcceptance(activeChat, result)
+    );
+    void result
+        .then(() => {
             // Ensure layout is stable after sending (input shrink + new message)
             nextTick(() => scroller.value?.refreshMeasurements?.());
         })
-        ?.catch(() => {});
+        .catch(() => {});
 }
 
 function onRetry(messageId: string) {
@@ -657,17 +895,20 @@ function onEdited(payload: { id: string; content: string }) {
 }
 
 function onPendingPromptSelected(promptId: string | null) {
+    if (pendingPromptId.value === promptId) return;
     pendingPromptId.value = promptId;
     // Store pane-level until thread creation
     if (props.paneId) {
         setPanePendingPrompt(props.paneId, promptId);
     }
-    // Reinitialize chat with the pending prompt
-    chat.value = useChat(
-        props.messageHistory,
-        props.threadId,
-        pendingPromptId.value || undefined
-    );
+    // Update in place — never call useChat() outside setup (inject warning).
+    chat.value?.setPendingPrompt?.(promptId);
+}
+
+if (panePendingPrompt) {
+    watch(panePendingPrompt, (promptId) => {
+        onPendingPromptSelected(promptId ?? null);
+    });
 }
 
 function onStopStream() {
@@ -730,6 +971,12 @@ const cleanupWorkflowHook = hooks.on(
     'workflow.execution:action:state_update',
     (payload: { messageId: string; state: unknown }) => {
         if (!isUiWorkflowState(payload.state)) return;
+        const activeIds = new Set(
+            messages.value
+                .map((m) => m.id)
+                .filter((id): id is string => typeof id === 'string' && id.length > 0)
+        );
+        if (!activeIds.has(payload.messageId)) return;
         // Only set if not already the same reference (avoid unnecessary reactivity triggers)
         const existing = workflowStates.get(payload.messageId);
         if (existing !== payload.state) {
@@ -742,7 +989,7 @@ const cleanupWorkflowHook = hooks.on(
 onBeforeUnmount(() => {
     cleanupWorkflowHook();
     try {
-        chat.value?.clear?.();
+        chat.value?.dispose?.();
     } catch {}
 });
 </script>

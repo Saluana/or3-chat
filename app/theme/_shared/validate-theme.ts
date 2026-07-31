@@ -1,9 +1,18 @@
 /**
- * Refined Theme System - Theme Definition Validation
+ * @module app/theme/_shared/validate-theme
  *
- * This module provides runtime validation for theme definitions.
- * It checks for required fields, validates color formats, and ensures
- * selector syntax is correct.
+ * Purpose:
+ * Runtime validation for theme definitions.
+ *
+ * Behavior:
+ * - Reports errors for missing required fields
+ * - Reports warnings for suspicious values and selector patterns
+ *
+ * Constraints:
+ * - Validation is best effort and does not guarantee semantic correctness
+ *
+ * Non-Goals:
+ * - Automatic repair of invalid definitions
  */
 
 import type {
@@ -11,9 +20,14 @@ import type {
     ThemeBackgroundLayer,
     ValidationError,
 } from './types';
+import { THEME_COMPONENT_CONTRACT_VERSION } from './types';
+import { WorkspaceProfileV1Schema } from '../../core/workspace-profiles/schema';
 
 /**
- * Validation result
+ * `ValidationResult`
+ *
+ * Purpose:
+ * Result structure for theme validation.
  */
 export interface ValidationResult {
     valid: boolean;
@@ -22,10 +36,10 @@ export interface ValidationResult {
 }
 
 /**
- * Validate a theme definition
+ * `validateThemeDefinition`
  *
- * @param config - Theme definition to validate
- * @returns Validation result with any errors or warnings
+ * Purpose:
+ * Validates a theme definition and returns errors and warnings.
  */
 export function validateThemeDefinition(
     config: ThemeDefinition
@@ -86,8 +100,8 @@ export function validateThemeDefinition(
             if (key === 'dark') continue; // Skip dark mode object
 
             if (typeof value === 'string' && !isValidColor(value)) {
-                warnings.push({
-                    severity: 'warning',
+                errors.push({
+                    severity: 'error',
                     code: 'THEME_005',
                     message: `Color "${key}" has invalid format: "${value}"`,
                     file: 'theme.ts',
@@ -101,8 +115,8 @@ export function validateThemeDefinition(
         if (config.colors.dark) {
             for (const [key, value] of Object.entries(config.colors.dark)) {
                 if (typeof value === 'string' && !isValidColor(value)) {
-                    warnings.push({
-                        severity: 'warning',
+                    errors.push({
+                        severity: 'error',
                         code: 'THEME_006',
                         message: `Dark mode color "${key}" has invalid format: "${value}"`,
                         file: 'theme.ts',
@@ -140,6 +154,41 @@ export function validateThemeDefinition(
                     suggestion: 'Use standard CSS selectors instead',
                 });
             }
+            if (props.style) {
+                validateStyleMap(props.style, `overrides["${selector}"].style`, errors);
+            }
+            for (const [propName, propValue] of Object.entries(props)) {
+                if (/^on[A-Z]/.test(propName) || typeof propValue === 'function') {
+                    errors.push({
+                        severity: 'error',
+                        code: 'THEME_022',
+                        message: `Theme overrides cannot provide event handlers (${selector}.${propName})`,
+                        file: 'theme.ts',
+                    });
+                }
+            }
+        }
+    }
+
+    if (config.cssSelectors) {
+        for (const [selector, value] of Object.entries(config.cssSelectors)) {
+            if (value.style) {
+                validateStyleMap(value.style, `cssSelectors["${selector}"].style`, errors);
+            }
+        }
+    }
+
+    for (const [field, value] of [
+        ['borderWidth', config.borderWidth],
+        ['borderRadius', config.borderRadius],
+    ] as const) {
+        if (value !== undefined && !/^(?:0|\d*\.?\d+(?:px|rem|em|%))$/.test(value.trim())) {
+            errors.push({
+                severity: 'error',
+                code: 'THEME_018',
+                message: `${field} must be a safe CSS length`,
+                file: 'theme.ts',
+            });
         }
     }
 
@@ -205,6 +254,27 @@ export function validateThemeDefinition(
             config.backgrounds.bottomNavGradient,
             'backgrounds.bottomNavGradient'
         );
+
+        validateLayer(
+            config.backgrounds.dark?.content?.base,
+            'backgrounds.dark.content.base'
+        );
+        validateLayer(
+            config.backgrounds.dark?.content?.overlay,
+            'backgrounds.dark.content.overlay'
+        );
+        validateLayer(
+            config.backgrounds.dark?.sidebar,
+            'backgrounds.dark.sidebar'
+        );
+        validateLayer(
+            config.backgrounds.dark?.headerGradient,
+            'backgrounds.dark.headerGradient'
+        );
+        validateLayer(
+            config.backgrounds.dark?.bottomNavGradient,
+            'backgrounds.dark.bottomNavGradient'
+        );
     }
 
     // Validate propMaps if present
@@ -244,6 +314,17 @@ export function validateThemeDefinition(
                         suggestion:
                             'Remove empty entries or provide a valid path string',
                     });
+                } else if (
+                    /^(?:[a-z]+:)?\/\//i.test(sheet.trim()) ||
+                    /^(?:data|blob):/i.test(sheet.trim())
+                ) {
+                    errors.push({
+                        severity: 'error',
+                        code: 'THEME_017',
+                        message: `External stylesheet URLs are not allowed: "${sheet}"`,
+                        file: 'theme.ts',
+                        suggestion: 'Package CSS as a local theme asset.',
+                    });
                 }
             }
         }
@@ -262,11 +343,97 @@ export function validateThemeDefinition(
         });
     }
 
+    const bundledProfileIds = new Set<string>();
+    if (config.workspaceProfiles !== undefined) {
+        if (!Array.isArray(config.workspaceProfiles)) {
+            errors.push({
+                severity: 'error',
+                code: 'THEME_023',
+                message: 'workspaceProfiles must be an array',
+                file: 'theme.ts',
+            });
+        } else {
+            for (const [index, profile] of config.workspaceProfiles.entries()) {
+                const parsed = WorkspaceProfileV1Schema.safeParse(profile);
+                if (!parsed.success) {
+                    errors.push({
+                        severity: 'error',
+                        code: 'THEME_023',
+                        message: `Invalid workspace profile at index ${index}: ${parsed.error.issues[0]?.message ?? 'invalid profile'}`,
+                        file: 'theme.ts',
+                    });
+                    continue;
+                }
+                if (bundledProfileIds.has(parsed.data.id)) {
+                    errors.push({
+                        severity: 'error',
+                        code: 'THEME_023',
+                        message: `Duplicate bundled workspace profile id "${parsed.data.id}"`,
+                        file: 'theme.ts',
+                    });
+                }
+                bundledProfileIds.add(parsed.data.id);
+            }
+        }
+    }
+    if (
+        config.recommendedWorkspaceProfileId !== undefined &&
+        !bundledProfileIds.has(config.recommendedWorkspaceProfileId)
+    ) {
+        errors.push({
+            severity: 'error',
+            code: 'THEME_024',
+            message:
+                'recommendedWorkspaceProfileId must reference a bundled workspace profile',
+            file: 'theme.ts',
+        });
+    }
+
+    if (config.customComponents && Object.keys(config.customComponents).length > 0) {
+        if (config.componentContractVersion === undefined) {
+            warnings.push({
+                severity: 'warning',
+                code: 'THEME_020',
+                message: 'Trusted custom components should declare componentContractVersion',
+                file: 'theme.ts',
+                suggestion: `Set componentContractVersion: ${THEME_COMPONENT_CONTRACT_VERSION} after running the component conformance tests.`,
+            });
+        } else if (config.componentContractVersion !== THEME_COMPONENT_CONTRACT_VERSION) {
+            errors.push({
+                severity: 'error',
+                code: 'THEME_021',
+                message: `Unsupported component contract version ${config.componentContractVersion}; runtime requires ${THEME_COMPONENT_CONTRACT_VERSION}`,
+                file: 'theme.ts',
+            });
+        }
+    }
+
     return {
         valid: errors.length === 0,
         errors,
         warnings,
     };
+}
+
+function validateStyleMap(
+    style: Record<string, string>,
+    location: string,
+    errors: ValidationError[]
+): void {
+    for (const [property, value] of Object.entries(style)) {
+        if (
+            !/^(?:--[a-z0-9-]+|[a-z][a-zA-Z0-9-]*)$/.test(property) ||
+            /[;{}]|@import|expression\s*\(|javascript:|url\s*\(\s*['"]?(?:https?:|\/\/|data:|blob:)/i.test(value)
+        ) {
+            errors.push({
+                severity: 'error',
+                code: 'THEME_019',
+                message: `Unsafe CSS declaration at ${location}.${property}`,
+                file: 'theme.ts',
+                suggestion: 'Use a single local, declaration-only CSS value.',
+            });
+        }
+    }
 }
 
 /**
@@ -276,6 +443,16 @@ export function validateThemeDefinition(
  */
 function isValidColor(color: string): boolean {
     const trimmed = color.trim();
+    const css = (globalThis as {
+        CSS?: { supports?: (property: string, value: string) => boolean };
+    }).CSS;
+
+    if (
+        typeof css?.supports === 'function' &&
+        css.supports('color', trimmed)
+    ) {
+        return true;
+    }
 
     // Hex colors: #rgb, #rrggbb, #rrggbbaa, #rgba
     if (

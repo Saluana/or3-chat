@@ -1,0 +1,202 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createGatewayStorageProvider } from '../gateway-storage-provider';
+
+function okJson(body: unknown) {
+    return {
+        ok: true,
+        status: 200,
+        json: vi.fn(async () => body),
+    } as unknown as Response;
+}
+
+describe('createGatewayStorageProvider', () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it('joins base URL and maps upload/download/commit payloads', async () => {
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(okJson({
+                url: 'u1',
+                expiresAt: 1,
+                method: 'PUT',
+                headers: { 'x-upload': '1' },
+                storageId: 'sid-1',
+                intentId: 'intent-1',
+            }))
+            .mockResolvedValueOnce(okJson({
+                url: 'u2',
+                expiresAt: 2,
+                method: 'GET',
+                headers: { 'x-download': '1' },
+                storageId: 'sid-2',
+            }))
+            .mockResolvedValueOnce(okJson({ ok: true }))
+            .mockResolvedValueOnce(okJson({ ok: true }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const provider = createGatewayStorageProvider({
+            baseUrl: 'https://gateway.example',
+            id: 'custom-gateway',
+            displayName: 'Custom Gateway',
+        });
+
+        expect(provider.id).toBe('custom-gateway');
+        expect(provider.displayName).toBe('Custom Gateway');
+
+        const uploadResult = await provider.getPresignedUploadUrl({
+            workspaceId: 'ws-1',
+            hash: 'sha256:abc',
+            mimeType: 'image/png',
+            sizeBytes: 100,
+            expiresInMs: 123,
+            disposition: 'inline',
+        });
+        const downloadResult = await provider.getPresignedDownloadUrl({
+            workspaceId: 'ws-1',
+            hash: 'sha256:abc',
+            storageId: 's1',
+            expiresInMs: 321,
+            disposition: 'attachment',
+        });
+        await provider.commitUpload!({
+            workspaceId: 'ws-1',
+            hash: 'sha256:abc',
+            storageId: 's1',
+            intentId: 'intent-1',
+            meta: {
+                name: 'a.png',
+                mimeType: 'image/png',
+                sizeBytes: 100,
+                kind: 'image',
+            },
+        });
+        await provider.deleteObject!({
+            workspaceId: 'ws-1',
+            hash: 'sha256:abc',
+            storageId: 's1',
+        });
+
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            1,
+            'https://gateway.example/api/storage/presign-upload',
+            expect.objectContaining({
+                method: 'POST',
+                credentials: 'include',
+            })
+        );
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            2,
+            'https://gateway.example/api/storage/presign-download',
+            expect.objectContaining({
+                method: 'POST',
+                credentials: 'include',
+            })
+        );
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            3,
+            'https://gateway.example/api/storage/commit',
+            expect.objectContaining({
+                method: 'POST',
+                credentials: 'include',
+            })
+        );
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            4,
+            'https://gateway.example/api/storage/delete',
+            expect.objectContaining({
+                method: 'POST',
+                credentials: 'include',
+            })
+        );
+
+        const commitBody = JSON.parse((fetchMock.mock.calls[2]?.[1] as RequestInit).body as string);
+        expect(commitBody.storage_provider_id).toBe('custom-gateway');
+        expect(commitBody.intent_id).toBe('intent-1');
+        const deleteBody = JSON.parse((fetchMock.mock.calls[3]?.[1] as RequestInit).body as string);
+        expect(deleteBody).toEqual({
+            workspace_id: 'ws-1',
+            hash: 'sha256:abc',
+            storage_id: 's1',
+        });
+        expect(uploadResult).toEqual({
+            url: 'u1',
+            expiresAt: 1,
+            method: 'PUT',
+            headers: { 'x-upload': '1' },
+            storageId: 'sid-1',
+            intentId: 'intent-1',
+        });
+        expect(downloadResult).toEqual({
+            url: 'u2',
+            expiresAt: 2,
+            method: 'GET',
+            headers: { 'x-download': '1' },
+            storageId: 'sid-2',
+        });
+    });
+
+    it('includes endpoint and status text in error message', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => ({
+                ok: false,
+                status: 500,
+                text: vi.fn(async () => 'Boom'),
+            }))
+        );
+
+        const provider = createGatewayStorageProvider({ baseUrl: '' });
+
+        await expect(
+            provider.getPresignedUploadUrl({
+                workspaceId: 'ws-1',
+                hash: 'sha256:abc',
+                mimeType: 'image/png',
+                sizeBytes: 100,
+            })
+        ).rejects.toThrow('[gateway-storage] /api/storage/presign-upload failed: 500 Boom');
+    });
+
+    it('isolates a transient S3/R2 gateway outage to one request', async () => {
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce({
+                ok: false,
+                status: 503,
+                text: vi.fn(async () => 'object storage unavailable'),
+            } as unknown as Response)
+            .mockResolvedValueOnce(okJson({
+                url: 'https://storage.test/download',
+                expiresAt: 42,
+                method: 'GET',
+                storageId: 'storage-1',
+            }));
+        vi.stubGlobal('fetch', fetchMock);
+        const provider = createGatewayStorageProvider({
+            id: 's3-compatible',
+        });
+
+        await expect(
+            provider.getPresignedUploadUrl({
+                workspaceId: 'ws-1',
+                hash: 'sha256:abc',
+                mimeType: 'image/png',
+                sizeBytes: 3,
+            })
+        ).rejects.toThrow('503 object storage unavailable');
+
+        await expect(
+            provider.getPresignedDownloadUrl({
+                workspaceId: 'ws-1',
+                hash: 'sha256:abc',
+                storageId: 'storage-1',
+            })
+        ).resolves.toMatchObject({
+            url: 'https://storage.test/download',
+            storageId: 'storage-1',
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+});

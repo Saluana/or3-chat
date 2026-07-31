@@ -3,250 +3,740 @@
         v-bind="systemPromptsModalProps"
         v-model:open="open"
         title="System Prompts"
-        description="Manage and select system prompts to customize AI behavior."
+        description="Browse, organize, edit, and apply system prompts."
     >
-        <template #body>
-            <div class="flex flex-col h-full" @keydown="handleKeydown">
-                <div
-                    v-show="!editingPrompt"
-                    class="flex sm:flex-row flex-col-reverse items-center justify-center py-4 px-6"
-                >
-                    <div
-                        class="flex flex-row-reverse sm:flex-row w-full sm:justify-start items-center gap-2 pt-3 sm:pt-0 sm:pb-0"
+        <template #header>
+            <div
+                class="flex w-full items-center justify-between gap-3 px-1"
+                data-test="system-prompts-header"
+            >
+                <div class="min-w-0">
+                    <!-- VT323 keeps modal titles readable; Press Start at text-lg overflows the header. -->
+                    <h2
+                        class="m-0 truncate font-vt323 text-base font-semibold leading-tight text-[var(--md-on-primary)]"
                     >
-                        <UButton
-                            v-bind="newPromptButtonProps"
-                            @click="createNewPrompt"
-                        >
-                            New Prompt
-                        </UButton>
-                        <UButton
-                            v-if="currentActivePromptId"
-                            v-bind="clearActiveButtonProps"
-                            @click="clearActivePrompt"
-                        >
-                            Clear Active
-                        </UButton>
-                    </div>
-                    <UInput
-                        v-model="searchQuery"
-                        placeholder="Search prompts..."
-                        :icon="useIcon('ui.search').value"
-                        v-bind="searchInputProps"
+                        System Prompts
+                    </h2>
+                    <p
+                        class="m-0 hidden text-xs leading-snug text-[var(--md-on-primary)]/80 sm:block"
+                    >
+                        Browse, organize, edit, and apply system prompts.
+                    </p>
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                    <UButton
+                        v-bind="headerActionButtonProps"
+                        class="sm:hidden"
+                        data-test="system-prompts-new"
+                        :icon="plusIcon"
+                        square
+                        aria-label="New Prompt"
+                        @click="createNewPrompt"
+                    />
+                    <UButton
+                        v-bind="headerActionButtonProps"
+                        class="hidden sm:inline-flex"
+                        data-test="system-prompts-new-desktop"
+                        :icon="plusIcon"
+                        @click="createNewPrompt"
+                    >
+                        New Prompt
+                    </UButton>
+                    <UButton
+                        v-bind="headerActionButtonProps"
+                        :icon="closeIcon"
+                        square
+                        aria-label="Close system prompts"
+                        @click="open = false"
                     />
                 </div>
-                <div class="flex-1 overflow-hidden">
-                    <!-- List View -->
+            </div>
+        </template>
+
+        <template #body>
+            <div
+                class="system-prompts-shell relative flex h-full min-h-0 flex-col bg-[var(--md-surface)] text-[var(--md-on-surface)]"
+                data-test="system-prompts-modal"
+                @keydown="handleKeydown"
+            >
+                <div
+                    v-if="deleteConfirmPrompt"
+                    class="absolute inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="delete-prompt-title"
+                >
                     <div
-                        v-if="!editingPrompt"
-                        class="max-h-full overflow-y-auto"
+                        class="w-full max-w-md rounded-[var(--md-border-radius)] border border-[var(--md-border-color)] bg-[var(--md-surface)] p-5 shadow-xl"
                     >
-                        <div
-                            v-if="filteredPrompts.length === 0"
-                            class="flex flex-col items-center justify-center h-full text-center p-8"
+                        <h3
+                            id="delete-prompt-title"
+                            class="m-0 text-base font-semibold"
                         >
-                            <UIcon
-                                :name="useIcon('chat.system_prompt').value"
-                                class="w-16 h-16 text-gray-400 mb-4"
-                            />
-                            <h3
-                                class="text-lg font-medium text-gray-900 dark:text-white mb-2"
+                            Delete system prompt?
+                        </h3>
+                        <p
+                            class="mb-5 mt-2 text-sm text-[var(--md-on-surface-variant)]"
+                        >
+                            “{{ deleteConfirmPrompt.title || 'Untitled Prompt' }}”
+                            will be removed from your prompt library.
+                        </p>
+                        <div class="flex justify-end gap-2">
+                            <UButton
+                                color="neutral"
+                                variant="outline"
+                                @click="deleteConfirmId = null"
                             >
-                                No system prompts yet
-                            </h3>
-                            <p class="text-gray-500 dark:text-gray-400 mb-4">
-                                Create your first system prompt to customize AI
-                                behavior.
-                            </p>
-                            <UButton @click="createNewPrompt" color="primary">
-                                Create Your First Prompt
+                                Cancel
+                            </UButton>
+                            <UButton
+                                color="error"
+                                data-test="system-prompts-confirm-delete"
+                                @click="confirmDeletePrompt"
+                            >
+                                Delete prompt
                             </UButton>
                         </div>
+                    </div>
+                </div>
 
-                        <div v-else class="p-4 space-y-3">
+                <div
+                    v-if="errorMessage"
+                    class="shrink-0 border-b border-[var(--md-border-color)] bg-error/10 px-4 py-2 text-sm text-error"
+                    role="alert"
+                >
+                    {{ errorMessage }}
+                </div>
+
+                <div
+                    v-if="view === 'edit' && editingPromptId"
+                    class="flex min-h-0 flex-1 flex-col"
+                    data-test="system-prompts-editor"
+                >
+                    <LazyPromptsPromptEditor
+                        :prompt-id="editingPromptId"
+                        @back="stopEditing"
+                        @saved="handleEditorSaved"
+                    />
+                </div>
+
+                <div
+                    v-else
+                    class="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_340px] xl:grid-cols-[240px_minmax(0,1fr)_370px]"
+                >
+                    <aside
+                        class="hidden min-h-0 flex-col overflow-y-auto border-r border-[var(--md-border-color)] p-4 lg:flex"
+                        aria-label="Prompt library filters"
+                    >
+                        <div
+                            class="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--md-on-surface-variant)]"
+                        >
+                            Library
+                        </div>
+                        <button
+                            type="button"
+                            :class="filterButtonClass(scope === 'all' && !selectedTag)"
+                            @click="setScope('all')"
+                        >
+                            <UIcon :name="allIcon" class="h-4 w-4" />
+                            <span>All prompts</span>
+                            <span class="ml-auto tabular-nums">{{
+                                prompts.length
+                            }}</span>
+                        </button>
+                        <button
+                            type="button"
+                            :class="filterButtonClass(scope === 'favorites')"
+                            @click="setScope('favorites')"
+                        >
+                            <UIcon :name="starIcon" class="h-4 w-4" />
+                            <span>Favorites</span>
+                            <span class="ml-auto tabular-nums">{{
+                                favoriteCount
+                            }}</span>
+                        </button>
+
+                        <div
+                            class="my-4 border-t border-[var(--md-border-color)]"
+                        />
+                        <div
+                            class="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--md-on-surface-variant)]"
+                        >
+                            Tags
+                        </div>
+                        <button
+                            v-for="entry in tagCounts"
+                            :key="entry.key"
+                            type="button"
+                            :class="filterButtonClass(selectedTagKey === entry.key)"
+                            @click="selectTag(entry.label)"
+                        >
+                            <span class="truncate">{{ entry.label }}</span>
+                            <span class="ml-auto tabular-nums">{{
+                                entry.count
+                            }}</span>
+                        </button>
+                        <p
+                            v-if="!tagCounts.length"
+                            class="px-2 text-xs text-[var(--md-on-surface-variant)]"
+                        >
+                            Add tags from a prompt’s detail or editor view.
+                        </p>
+                    </aside>
+
+                    <section
+                        class="min-h-0 min-w-0 flex-col"
+                        :class="view === 'detail' ? 'hidden lg:flex' : 'flex'"
+                        data-test="system-prompts-library"
+                    >
+                        <div
+                            class="shrink-0 border-b border-[var(--md-border-color)] px-3 py-3 sm:px-4"
+                        >
+                            <div class="flex items-center gap-2">
+                                <UInput
+                                    ref="searchInputRef"
+                                    v-model="searchQuery"
+                                    v-bind="searchInputProps"
+                                    class="min-w-0 flex-1"
+                                    data-test="system-prompts-search"
+                                    autofocus
+                                />
+                                <UPopover>
+                                    <UButton
+                                        v-bind="iconButtonProps"
+                                        class="lg:hidden"
+                                        :icon="filterIcon"
+                                        aria-label="Filter prompts"
+                                    />
+                                    <template #content>
+                                        <div
+                                            class="flex w-64 flex-col gap-1 p-2"
+                                            aria-label="Prompt filters"
+                                        >
+                                            <button
+                                                type="button"
+                                                :class="
+                                                    filterButtonClass(
+                                                        scope === 'all' &&
+                                                            !selectedTag
+                                                    )
+                                                "
+                                                @click="setScope('all')"
+                                            >
+                                                All prompts
+                                                <span class="ml-auto">{{
+                                                    prompts.length
+                                                }}</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                :class="
+                                                    filterButtonClass(
+                                                        scope === 'favorites'
+                                                    )
+                                                "
+                                                @click="setScope('favorites')"
+                                            >
+                                                Favorites
+                                                <span class="ml-auto">{{
+                                                    favoriteCount
+                                                }}</span>
+                                            </button>
+                                            <div
+                                                v-if="tagCounts.length"
+                                                class="my-1 border-t border-[var(--md-border-color)]"
+                                            />
+                                            <button
+                                                v-for="entry in tagCounts"
+                                                :key="`mobile-${entry.key}`"
+                                                type="button"
+                                                :class="
+                                                    filterButtonClass(
+                                                        selectedTagKey ===
+                                                            entry.key
+                                                    )
+                                                "
+                                                @click="selectTag(entry.label)"
+                                            >
+                                                {{ entry.label }}
+                                                <span class="ml-auto">{{
+                                                    entry.count
+                                                }}</span>
+                                            </button>
+                                        </div>
+                                    </template>
+                                </UPopover>
+                            </div>
+
                             <div
-                                v-for="prompt in filteredPrompts"
-                                :key="prompt.id"
-                                class="group system-prompt-item flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 not-odd:bg-[var(--md-surface-hover)] rounded-[var(--md-border-radius)]"
-                                :data-active="
-                                    prompt.id === currentActivePromptId
-                                        ? 'true'
-                                        : 'false'
-                                "
+                                class="mt-3 flex items-center justify-between gap-2"
                             >
-                                <!-- Left / Main meta -->
-                                <div class="flex-1 min-w-0">
-                                    <div
-                                        class="flex flex-wrap items-center gap-2 mb-1"
-                                    >
-                                        <a
-                                            @click.prevent="
-                                                startEditing(prompt.id)
-                                            "
-                                            tabindex="0"
-                                            class="prompt-header-btn font-medium text-sm py-0.5 leading-tight text-gray-900 dark:text-white truncate max-w-full cursor-pointer"
-                                            :class="{
-                                                'italic opacity-60':
-                                                    !prompt.title,
-                                            }"
+                                <span
+                                    class="text-xs text-[var(--md-on-surface-variant)]"
+                                    aria-live="polite"
+                                >
+                                    {{ visiblePrompts.length }}
+                                    {{
+                                        visiblePrompts.length === 1
+                                            ? 'prompt'
+                                            : 'prompts'
+                                    }}
+                                </span>
+                                <USelectMenu
+                                    v-model="sort"
+                                    :items="sortItems"
+                                    value-key="value"
+                                    size="sm"
+                                    class="w-[168px]"
+                                    aria-label="Sort prompts"
+                                />
+                            </div>
+                        </div>
+
+                        <div class="min-h-0 flex-1 overflow-y-auto p-2 sm:p-3">
+                            <div
+                                v-if="loading"
+                                class="flex h-full items-center justify-center text-sm text-[var(--md-on-surface-variant)]"
+                            >
+                                Loading prompts…
+                            </div>
+                            <div
+                                v-else-if="!visiblePrompts.length"
+                                class="flex h-full min-h-64 flex-col items-center justify-center p-8 text-center"
+                            >
+                                <UIcon
+                                    :name="promptIcon"
+                                    class="mb-3 h-10 w-10 opacity-40"
+                                />
+                                <h3 class="m-0 text-base font-semibold">
+                                    {{
+                                        prompts.length
+                                            ? 'No matching prompts'
+                                            : 'No system prompts yet'
+                                    }}
+                                </h3>
+                                <p
+                                    class="mb-4 mt-1 max-w-sm text-sm text-[var(--md-on-surface-variant)]"
+                                >
+                                    {{
+                                        prompts.length
+                                            ? 'Try a different search or filter.'
+                                            : 'Create your first prompt to customize AI behavior.'
+                                    }}
+                                </p>
+                                <UButton
+                                    v-if="!prompts.length"
+                                    v-bind="newPromptButtonProps"
+                                    @click="createNewPrompt"
+                                >
+                                    Create prompt
+                                </UButton>
+                            </div>
+
+                            <div v-else class="flex flex-col gap-2">
+                                <article
+                                    v-for="prompt in visiblePrompts"
+                                    :key="prompt.id"
+                                    class="group cursor-pointer rounded-[var(--md-border-radius)] border bg-[var(--md-surface)] p-3 transition-colors hover:bg-[var(--md-surface-hover)] sm:p-3.5"
+                                    :class="
+                                        prompt.id === selectedPromptId
+                                            ? 'border-[var(--md-primary)] ring-1 ring-[var(--md-primary)]/20'
+                                            : 'border-[var(--md-border-color)]'
+                                    "
+                                    :data-test="`system-prompt-row-${prompt.id}`"
+                                    tabindex="0"
+                                    @click="selectPromptForDetail(prompt.id)"
+                                    @keydown.enter="
+                                        selectPromptForDetail(prompt.id)
+                                    "
+                                >
+                                    <div class="flex items-start gap-3">
+                                        <div class="min-w-0 flex-1">
+                                            <div
+                                                class="flex flex-wrap items-center gap-2"
+                                            >
+                                                <h3
+                                                    class="m-0 truncate font-vt323 text-sm font-semibold leading-tight"
+                                                >
+                                                    {{
+                                                        prompt.title ||
+                                                        'Untitled Prompt'
+                                                    }}
+                                                </h3>
+                                                <span
+                                                    v-if="
+                                                        prompt.id ===
+                                                        defaultPromptId
+                                                    "
+                                                    class="rounded bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
+                                                >
+                                                    Default
+                                                </span>
+                                                <span
+                                                    v-if="
+                                                        prompt.id ===
+                                                            currentActivePromptId &&
+                                                        prompt.id !==
+                                                            defaultPromptId
+                                                    "
+                                                    class="rounded bg-[var(--md-surface-variant)] px-2 py-0.5 text-[10px]"
+                                                >
+                                                    Active
+                                                </span>
+                                            </div>
+                                            <p
+                                                class="mb-0 mt-1 line-clamp-2 text-xs text-[var(--md-on-surface-variant)]"
+                                            >
+                                                {{
+                                                    promptExcerpt(prompt) ||
+                                                    'No prompt content yet.'
+                                                }}
+                                            </p>
+                                            <div
+                                                class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--md-on-surface-variant)]"
+                                            >
+                                                <span
+                                                    >Updated
+                                                    {{
+                                                        formatDate(
+                                                            prompt.updated_at
+                                                        )
+                                                    }}</span
+                                                >
+                                                <span aria-hidden="true">•</span>
+                                                <span
+                                                    >{{
+                                                        tokenCounts[prompt.id] ||
+                                                        0
+                                                    }}
+                                                    tokens</span
+                                                >
+                                                <template
+                                                    v-if="prompt.tags.length"
+                                                >
+                                                    <span aria-hidden="true"
+                                                        >•</span
+                                                    >
+                                                    <span class="truncate">{{
+                                                        prompt.tags.join(', ')
+                                                    }}</span>
+                                                </template>
+                                            </div>
+                                        </div>
+                                        <div
+                                            class="flex shrink-0 items-center gap-1"
+                                        >
+                                            <UButton
+                                                v-bind="iconButtonProps"
+                                                :icon="
+                                                    prompt.favorite
+                                                        ? starFilledIcon
+                                                        : starIcon
+                                                "
+                                                :aria-label="
+                                                    prompt.favorite
+                                                        ? 'Remove from favorites'
+                                                        : 'Add to favorites'
+                                                "
+                                                :aria-pressed="prompt.favorite"
+                                                @click.stop="
+                                                    toggleFavorite(prompt)
+                                                "
+                                            />
+                                            <UPopover>
+                                                <UButton
+                                                    v-bind="iconButtonProps"
+                                                    :icon="moreIcon"
+                                                    aria-label="Prompt actions"
+                                                    @click.stop
+                                                />
+                                                <template #content>
+                                                    <div
+                                                        class="flex w-40 flex-col p-1"
+                                                    >
+                                                        <UButton
+                                                            variant="ghost"
+                                                            color="neutral"
+                                                            class="justify-start"
+                                                            :icon="editIcon"
+                                                            @click="
+                                                                startEditing(
+                                                                    prompt.id
+                                                                )
+                                                            "
+                                                        >
+                                                            Edit
+                                                        </UButton>
+                                                        <UButton
+                                                            variant="ghost"
+                                                            color="neutral"
+                                                            class="justify-start"
+                                                            :icon="
+                                                                prompt.id ===
+                                                                defaultPromptId
+                                                                    ? clearIcon
+                                                                    : defaultIcon
+                                                            "
+                                                            @click="
+                                                                toggleDefault(
+                                                                    prompt.id
+                                                                )
+                                                            "
+                                                        >
+                                                            {{
+                                                                prompt.id ===
+                                                                defaultPromptId
+                                                                    ? 'Clear default'
+                                                                    : 'Set default'
+                                                            }}
+                                                        </UButton>
+                                                        <UButton
+                                                            variant="ghost"
+                                                            color="error"
+                                                            class="justify-start"
+                                                            :icon="trashIcon"
+                                                            @click="
+                                                                requestDeletePrompt(
+                                                                    prompt.id
+                                                                )
+                                                            "
+                                                        >
+                                                            Delete
+                                                        </UButton>
+                                                    </div>
+                                                </template>
+                                            </UPopover>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+                    </section>
+
+                    <aside
+                        class="min-h-0 flex-col border-l border-[var(--md-border-color)]"
+                        :class="view === 'detail' ? 'flex' : 'hidden lg:flex'"
+                        data-test="system-prompts-detail"
+                    >
+                        <template v-if="selectedPrompt">
+                            <div
+                                class="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 sm:p-5"
+                            >
+                                <button
+                                    type="button"
+                                    class="mb-3 inline-flex w-fit items-center gap-1 text-sm text-[var(--md-on-surface-variant)] lg:hidden"
+                                    @click="view = 'library'"
+                                >
+                                    <UIcon
+                                        :name="backIcon"
+                                        class="h-4 w-4"
+                                    />
+                                    Back to prompts
+                                </button>
+
+                                <div class="flex items-start gap-2">
+                                    <div class="min-w-0 flex-1">
+                                        <h3
+                                            class="m-0 font-vt323 text-base font-semibold leading-tight"
                                         >
                                             {{
-                                                prompt.title ||
+                                                selectedPrompt.title ||
                                                 'Untitled Prompt'
                                             }}
-                                        </a>
-                                        <span
-                                            v-if="prompt.id === defaultPromptId"
-                                            class="text-[10px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
-                                            >Default</span
+                                        </h3>
+                                        <p
+                                            class="mb-0 mt-2 text-sm text-[var(--md-on-surface-variant)]"
                                         >
-                                        <span
-                                            v-if="
-                                                prompt.id ===
-                                                    currentActivePromptId &&
-                                                prompt.id !== defaultPromptId
-                                            "
-                                            class="text-[10px] px-1 py-0.5 rounded border border-black/60 dark:border-white/30 bg-neutral-100 dark:bg-neutral-800 text-gray-800 dark:text-gray-200 uppercase tracking-wide"
-                                            >Active</span
-                                        >
+                                            {{
+                                                promptExcerpt(selectedPrompt) ||
+                                                'No prompt content yet.'
+                                            }}
+                                        </p>
                                     </div>
-                                    <div
-                                        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-gray-600 dark:text-gray-400"
-                                    >
-                                        <span class="flex items-center gap-1">
-                                            <UIcon
-                                                :name="
-                                                    useIcon('ui.clock').value
-                                                "
-                                                class="w-3.5 h-3.5 opacity-70"
-                                            />
-                                            Updated
-                                            {{ formatDate(prompt.updated_at) }}
-                                        </span>
-                                        <span
-                                            class="hidden sm:inline opacity-40"
-                                            >|</span
-                                        >
-                                        <span class="flex items-center gap-1">
-                                            <UIcon
-                                                :name="
-                                                    useIcon('ui.chart').value
-                                                "
-                                                class="w-3.5 h-3.5 opacity-70"
-                                            />
-                                            {{ tokenCounts[prompt.id] || 0 }}
-                                            tokens
-                                        </span>
-                                    </div>
+                                    <UButton
+                                        v-bind="iconButtonProps"
+                                        :icon="
+                                            selectedPrompt.favorite
+                                                ? starFilledIcon
+                                                : starIcon
+                                        "
+                                        :aria-label="
+                                            selectedPrompt.favorite
+                                                ? 'Remove from favorites'
+                                                : 'Add to favorites'
+                                        "
+                                        :aria-pressed="selectedPrompt.favorite"
+                                        @click="toggleFavorite(selectedPrompt)"
+                                    />
                                 </div>
 
-                                <!-- Actions -->
                                 <div
-                                    class="mt-3 sm:mt-0 sm:ml-4 flex w-full sm:w-auto flex-wrap items-center gap-2 justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-black/20 dark:border-white/10"
+                                    class="mt-5 text-[11px] font-semibold uppercase tracking-wider text-[var(--md-on-surface-variant)]"
                                 >
-                                    <UTooltip
-                                        :delay-duration="0"
-                                        :text="
-                                            prompt.id === defaultPromptId
-                                                ? 'Remove default prompt'
-                                                : 'Set as default prompt'
+                                    Prompt preview
+                                </div>
+                                <div
+                                    class="mt-2 max-h-56 overflow-y-auto whitespace-pre-wrap rounded-[var(--md-border-radius)] border border-[var(--md-border-color)] p-3 text-sm leading-relaxed"
+                                >
+                                    {{
+                                        promptText(selectedPrompt) ||
+                                        'This prompt is empty.'
+                                    }}
+                                </div>
+
+                                <dl
+                                    class="mt-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-sm"
+                                >
+                                    <dt
+                                        class="text-[var(--md-on-surface-variant)]"
+                                    >
+                                        Updated
+                                    </dt>
+                                    <dd class="m-0 text-right">
+                                        {{
+                                            formatDate(
+                                                selectedPrompt.updated_at
+                                            )
+                                        }}
+                                    </dd>
+                                    <dt
+                                        class="text-[var(--md-on-surface-variant)]"
+                                    >
+                                        Tokens
+                                    </dt>
+                                    <dd class="m-0 text-right">
+                                        {{
+                                            tokenCounts[selectedPrompt.id] || 0
+                                        }}
+                                    </dd>
+                                    <dt
+                                        class="text-[var(--md-on-surface-variant)]"
+                                    >
+                                        Default
+                                    </dt>
+                                    <dd class="m-0 text-right">
+                                        {{
+                                            selectedPrompt.id ===
+                                            defaultPromptId
+                                                ? 'Yes'
+                                                : 'No'
+                                        }}
+                                    </dd>
+                                </dl>
+
+                                <div
+                                    class="mt-5 text-[11px] font-semibold uppercase tracking-wider text-[var(--md-on-surface-variant)]"
+                                >
+                                    Tags
+                                </div>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <button
+                                        v-for="tag in selectedPrompt.tags"
+                                        :key="tag"
+                                        type="button"
+                                        class="inline-flex items-center gap-1 rounded-full border border-[var(--md-border-color)] px-2.5 py-1 text-xs hover:bg-[var(--md-surface-hover)]"
+                                        :aria-label="`Remove ${tag} tag`"
+                                        @click="removeTag(selectedPrompt, tag)"
+                                    >
+                                        {{ tag }}
+                                        <UIcon
+                                            :name="closeIcon"
+                                            class="h-3 w-3"
+                                        />
+                                    </button>
+                                    <span
+                                        v-if="!selectedPrompt.tags.length"
+                                        class="text-xs text-[var(--md-on-surface-variant)]"
+                                    >
+                                        No tags
+                                    </span>
+                                </div>
+                                <div class="mt-2 flex items-center gap-2">
+                                    <UInput
+                                        v-model="tagDraft"
+                                        size="sm"
+                                        class="min-w-0 flex-1"
+                                        placeholder="Add a tag"
+                                        aria-label="Add prompt tag"
+                                        @keydown.enter.prevent="
+                                            addTag(selectedPrompt)
+                                        "
+                                    />
+                                    <UButton
+                                        size="sm"
+                                        color="neutral"
+                                        variant="outline"
+                                        :disabled="!tagDraft.trim()"
+                                        @click="addTag(selectedPrompt)"
+                                    >
+                                        Add
+                                    </UButton>
+                                </div>
+
+                                <div class="mt-5 flex flex-wrap gap-2">
+                                    <UButton
+                                        size="sm"
+                                        color="neutral"
+                                        variant="outline"
+                                        :icon="editIcon"
+                                        @click="
+                                            startEditing(selectedPrompt.id)
                                         "
                                     >
-                                        <UButton
-                                            v-bind="toggleDefaultButtonProps"
-                                            size="sm"
-                                            :variant="
-                                                prompt.id === defaultPromptId
-                                                    ? 'solid'
-                                                    : 'outline'
-                                            "
-                                            :color="
-                                                prompt.id === defaultPromptId
-                                                    ? 'primary'
-                                                    : 'neutral'
-                                            "
-                                            aria-label="Toggle default prompt"
-                                            @click.stop="
-                                                toggleDefault(prompt.id)
-                                            "
-                                            >{{
-                                                prompt.id === defaultPromptId
-                                                    ? 'default'
-                                                    : 'set default'
-                                            }}</UButton
-                                        >
-                                    </UTooltip>
+                                        Edit
+                                    </UButton>
                                     <UButton
-                                        v-bind="selectButtonProps"
-                                        @click="selectPrompt(prompt.id)"
-                                        :color="
-                                            prompt.id === currentActivePromptId
-                                                ? 'primary'
-                                                : 'neutral'
-                                        "
-                                        :variant="
-                                            prompt.id === currentActivePromptId
-                                                ? 'solid'
-                                                : 'outline'
-                                        "
-                                        :aria-pressed="
-                                            prompt.id === currentActivePromptId
+                                        size="sm"
+                                        color="neutral"
+                                        variant="outline"
+                                        :icon="defaultIcon"
+                                        @click="
+                                            toggleDefault(selectedPrompt.id)
                                         "
                                     >
                                         {{
-                                            prompt.id === currentActivePromptId
-                                                ? 'Selected'
-                                                : 'Select'
+                                            selectedPrompt.id ===
+                                            defaultPromptId
+                                                ? 'Clear default'
+                                                : 'Set default'
                                         }}
                                     </UButton>
-                                    <UPopover
-                                        :popper="{ placement: 'bottom-end' }"
-                                    >
-                                        <UButton
-                                            v-bind="moreActionsButtonProps"
-                                            aria-label="More actions"
-                                        />
-                                        <template #content>
-                                            <div
-                                                class="flex flex-col w-36 text-sm"
-                                            >
-                                                <UButton
-                                                    v-bind="
-                                                        editPromptButtonProps
-                                                    "
-                                                    @click="
-                                                        startEditing(prompt.id)
-                                                    "
-                                                >
-                                                    <span>Edit</span>
-                                                </UButton>
-                                                <UButton
-                                                    v-bind="
-                                                        deletePromptButtonProps
-                                                    "
-                                                    @click="
-                                                        deletePrompt(prompt.id)
-                                                    "
-                                                >
-                                                    <span>Delete</span>
-                                                </UButton>
-                                            </div>
-                                        </template>
-                                    </UPopover>
                                 </div>
                             </div>
-                        </div>
-                    </div>
 
-                    <!-- Editor View -->
-                    <div v-else class="h-full overflow-hidden flex flex-col">
-                        <div class="flex-1 p-4 overflow-hidden">
-                            <LazyPromptsPromptEditor
-                                :prompt-id="editingPrompt.id"
-                                @back="stopEditing"
-                            />
+                            <div
+                                class="shrink-0 border-t border-[var(--md-border-color)] p-4"
+                            >
+                                <UButton
+                                    block
+                                    size="md"
+                                    color="primary"
+                                    :disabled="!canUseInChat"
+                                    :title="
+                                        canUseInChat
+                                            ? 'Apply this prompt to the active chat'
+                                            : 'Open prompts from a chat to apply one'
+                                    "
+                                    data-test="system-prompts-use"
+                                    @click="useSelectedPrompt"
+                                >
+                                    {{
+                                        selectedPrompt.id ===
+                                        currentActivePromptId
+                                            ? 'Selected for chat'
+                                            : 'Use in chat'
+                                    }}
+                                </UButton>
+                            </div>
+                        </template>
+
+                        <div
+                            v-else
+                            class="flex h-full items-center justify-center p-8 text-center text-sm text-[var(--md-on-surface-variant)]"
+                        >
+                            Select a prompt to see its details.
                         </div>
-                    </div>
+                    </aside>
                 </div>
             </div>
         </template>
@@ -254,59 +744,354 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import {
-    listPrompts,
     createPrompt,
+    listPrompts,
     softDeletePrompt,
+    updatePrompt,
     type PromptRecord,
 } from '~/db/prompts';
-
-import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
-
-import { isMobile } from '~/state/global';
+import {
+    getThreadSystemPrompt,
+    updateThreadSystemPrompt,
+} from '~/db/threads';
+import {
+    clearPanePendingPrompt,
+    getPanePendingPrompt,
+    setPanePendingPrompt,
+} from '~/composables/core/usePanePrompt';
+import { useActivePrompt } from '~/composables/chat/useActivePrompt';
+import { useDefaultPrompt } from '~/composables/chat/useDefaultPrompt';
+import { useTokenizer } from '~/composables/core/useTokenizer';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
+import type { SystemPromptsModalMode } from '~/composables/chat/useSystemPromptsModal';
 
-// Props & modal open bridging (like SettingsModal pattern)
-const props = defineProps<{
-    showModal: boolean;
-    threadId?: string;
-    paneId?: string; // isolate pending selection per pane (before thread exists)
+const props = withDefaults(
+    defineProps<{
+        showModal: boolean;
+        mode?: SystemPromptsModalMode;
+        promptId?: string;
+        threadId?: string;
+        paneId?: string;
+    }>(),
+    { mode: 'home' }
+);
+
+const emit = defineEmits<{
+    (event: 'update:showModal', value: boolean): void;
+    (event: 'selected', id: string): void;
+    (event: 'closed'): void;
 }>();
-const emit = defineEmits({
-    'update:showModal': (value: boolean) => typeof value === 'boolean',
-    selected: (id: string) => typeof id === 'string',
-    closed: () => true,
-    threadCreated: (threadId: string, promptId: string | null) => true,
-});
 
 const open = computed({
     get: () => props.showModal,
     set: (value: boolean) => emit('update:showModal', value),
 });
 
-watch(
-    () => props.showModal,
-    (v, ov) => {
-        if (!v && ov) emit('closed');
-    }
-);
-
-const {
-    activePromptId,
-    setActivePrompt,
-    clearActivePrompt: clearGlobalActivePrompt,
-} = useActivePrompt();
+type LibraryScope = 'all' | 'favorites';
+type ModalView = 'library' | 'detail' | 'edit';
+type PromptSort = 'updated' | 'title';
 
 const prompts = ref<PromptRecord[]>([]);
-const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
-    useDefaultPrompt();
-const editingPrompt = ref<PromptRecord | null>(null);
-const showDeleteConfirm = ref<string | null>(null);
-
+const loading = ref(false);
+const errorMessage = ref('');
+const searchQuery = ref('');
+const scope = ref<LibraryScope>('all');
+const selectedTag = ref<string | null>(null);
+const sort = ref<PromptSort>('updated');
+const selectedPromptId = ref<string | null>(null);
+const editingPromptId = ref<string | null>(null);
+const view = ref<ModalView>('library');
+const tagDraft = ref('');
+const deleteConfirmId = ref<string | null>(null);
+const threadPromptId = ref<string | null>(null);
+const pendingPromptId = ref<string | null>(null);
+const searchInputRef = ref<{ inputRef?: HTMLInputElement } | null>(null);
+let openGeneration = 0;
 let promptEditorLoadPromise: Promise<unknown> | null = null;
 
-const ensurePromptEditorLoaded = async () => {
+const { activePromptId, clearActivePrompt } = useActivePrompt();
+const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
+    useDefaultPrompt();
+const { countTokensBatch } = useTokenizer();
+const tokenCounts = ref<Record<string, number>>({});
+let tokenCountGeneration = 0;
+
+const closeIcon = useIcon('ui.close');
+const allIcon = useIcon('catalog.all');
+const starIcon = useIcon('catalog.star');
+const starFilledIcon = useIcon('catalog.star.filled');
+const filterIcon = useIcon('ui.filter');
+const promptIcon = useIcon('chat.system_prompt');
+const moreIcon = useIcon('ui.more');
+const editIcon = useIcon('ui.edit');
+const trashIcon = useIcon('ui.trash');
+const backIcon = useIcon('shell.back');
+const defaultIcon = useIcon('catalog.star');
+const clearIcon = useIcon('ui.close');
+const plusIcon = useIcon('ui.plus');
+
+const currentActivePromptId = computed(() => {
+    if (props.threadId) return threadPromptId.value;
+    if (props.paneId) return pendingPromptId.value ?? activePromptId.value;
+    return activePromptId.value;
+});
+
+const canUseInChat = computed(
+    () => Boolean(props.threadId || props.paneId)
+);
+const selectedPrompt = computed(
+    () =>
+        prompts.value.find(
+            (prompt) => prompt.id === selectedPromptId.value
+        ) ?? null
+);
+const deleteConfirmPrompt = computed(
+    () =>
+        prompts.value.find(
+            (prompt) => prompt.id === deleteConfirmId.value
+        ) ?? null
+);
+const favoriteCount = computed(
+    () => prompts.value.filter((prompt) => prompt.favorite).length
+);
+const selectedTagKey = computed(
+    () => selectedTag.value?.toLocaleLowerCase() ?? null
+);
+const tagCounts = computed(() => {
+    const counts = new Map<string, { label: string; count: number }>();
+    for (const prompt of prompts.value) {
+        for (const tag of prompt.tags) {
+            const key = tag.toLocaleLowerCase();
+            const entry = counts.get(key);
+            if (entry) entry.count += 1;
+            else counts.set(key, { label: tag, count: 1 });
+        }
+    }
+    return [...counts.entries()]
+        .map(([key, entry]) => ({ key, ...entry }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+});
+
+const visiblePrompts = computed(() => {
+    const query = searchQuery.value.trim().toLocaleLowerCase();
+    const tagKey = selectedTagKey.value;
+    const filtered = prompts.value.filter((prompt) => {
+        if (scope.value === 'favorites' && !prompt.favorite) return false;
+        if (
+            tagKey &&
+            !prompt.tags.some(
+                (tag) => tag.toLocaleLowerCase() === tagKey
+            )
+        ) {
+            return false;
+        }
+        if (!query) return true;
+        return [
+            prompt.title,
+            promptText(prompt),
+            prompt.tags.join(' '),
+            prompt.favorite ? 'favorite' : '',
+        ]
+            .join(' ')
+            .toLocaleLowerCase()
+            .includes(query);
+    });
+    return filtered.sort((a, b) =>
+        sort.value === 'title'
+            ? a.title.localeCompare(b.title)
+            : b.updated_at - a.updated_at
+    );
+});
+
+const sortItems = [
+    { label: 'Recently updated', value: 'updated' },
+    { label: 'Title A–Z', value: 'title' },
+];
+
+const systemPromptsModalOverrides = useThemeOverrides({
+    component: 'modal',
+    context: 'modal',
+    identifier: 'modal.system-prompts',
+    isNuxtUI: true,
+});
+
+const systemPromptsModalProps = computed(() => {
+    const overrideValue =
+        (systemPromptsModalOverrides.value as Record<string, unknown>) || {};
+    const overrideUi =
+        (overrideValue.ui as Record<string, unknown> | undefined) || {};
+    const overrideClass =
+        typeof overrideValue.class === 'string' ? overrideValue.class : '';
+    const rest = Object.fromEntries(
+        Object.entries(overrideValue).filter(
+            ([key]) => key !== 'class' && key !== 'ui'
+        )
+    );
+    return {
+        ...rest,
+        class: [
+            'sp-modal w-[96dvw] max-w-[1450px] h-[92dvh] max-h-[900px] overflow-hidden',
+            overrideClass,
+        ]
+            .filter(Boolean)
+            .join(' '),
+        ui: {
+            body: 'p-0! min-h-0 flex-1 overflow-hidden',
+            header: 'border-b border-[var(--md-border-color)]',
+            content: 'flex flex-col min-h-0',
+            ...overrideUi,
+        },
+    };
+});
+
+const newPromptButtonProps = computed(() => ({
+    size: 'sm' as const,
+    color: 'primary' as const,
+}));
+
+/** Surface/solid actions read on the primary modal header (avoids primary-on-primary). */
+const headerActionButtonProps = computed(() => ({
+    size: 'sm' as const,
+    color: 'on-surface' as const,
+    variant: 'solid' as const,
+}));
+
+const iconButtonProps = computed(() => ({
+    size: 'sm' as const,
+    color: 'neutral' as const,
+    variant: 'ghost' as const,
+    square: true,
+}));
+
+const searchInputProps = computed(() => ({
+    size: 'sm' as const,
+    placeholder: 'Search prompts…',
+    icon: useIcon('ui.search').value,
+}));
+
+function filterButtonClass(active: boolean) {
+    return [
+        'flex w-full items-center gap-2 rounded-[var(--md-border-radius)] px-2.5 py-2 text-left text-sm transition-colors',
+        active
+            ? 'bg-primary/10 font-medium text-primary'
+            : 'hover:bg-[var(--md-surface-hover)]',
+    ];
+}
+
+function extractText(node: unknown): string {
+    if (!node) return '';
+    if (typeof node === 'string') return node;
+    if (Array.isArray(node)) return node.map(extractText).join('');
+    if (typeof node !== 'object') return '';
+    const record = node as {
+        type?: unknown;
+        text?: unknown;
+        content?: unknown;
+    };
+    let text =
+        record.type === 'text' && typeof record.text === 'string'
+            ? record.text
+            : '';
+    if (Array.isArray(record.content)) {
+        text += record.content.map(extractText).join('');
+    }
+    if (
+        typeof record.type === 'string' &&
+        ['paragraph', 'heading', 'listItem'].includes(record.type)
+    ) {
+        text += '\n';
+    }
+    return text;
+}
+
+function promptText(prompt: PromptRecord): string {
+    return extractText(prompt.content).replace(/\n{2,}/g, '\n').trim();
+}
+
+function promptExcerpt(prompt: PromptRecord): string {
+    const text = promptText(prompt);
+    return text.length > 180 ? `${text.slice(0, 177).trimEnd()}…` : text;
+}
+
+function formatDate(timestamp: number): string {
+    return new Date(timestamp * 1000).toLocaleDateString();
+}
+
+async function loadPrompts(): Promise<void> {
+    loading.value = true;
+    errorMessage.value = '';
+    try {
+        prompts.value = await listPrompts();
+        if (
+            defaultPromptId.value &&
+            !prompts.value.some(
+                (prompt) => prompt.id === defaultPromptId.value
+            )
+        ) {
+            await clearDefaultPrompt();
+        }
+        if (
+            selectedPromptId.value &&
+            !prompts.value.some(
+                (prompt) => prompt.id === selectedPromptId.value
+            )
+        ) {
+            selectedPromptId.value = null;
+        }
+        selectedPromptId.value ??= prompts.value[0]?.id ?? null;
+    } catch (error) {
+        errorMessage.value =
+            error instanceof Error ? error.message : 'Failed to load prompts.';
+    } finally {
+        loading.value = false;
+    }
+}
+
+async function loadSelectionContext(): Promise<void> {
+    if (props.threadId) {
+        threadPromptId.value =
+            (await getThreadSystemPrompt(props.threadId)) ?? null;
+    } else {
+        threadPromptId.value = null;
+    }
+    pendingPromptId.value = props.paneId
+        ? getPanePendingPrompt(props.paneId) ?? null
+        : null;
+}
+
+async function initializeForOpen(): Promise<void> {
+    const generation = ++openGeneration;
+    view.value = 'library';
+    editingPromptId.value = null;
+    tagDraft.value = '';
+    await Promise.all([loadPrompts(), loadSelectionContext()]);
+    if (generation !== openGeneration || !props.showModal) return;
+
+    if (props.mode === 'new') {
+        await createNewPrompt();
+        return;
+    }
+    if (props.mode === 'edit' && props.promptId) {
+        if (prompts.value.some((prompt) => prompt.id === props.promptId)) {
+            await startEditing(props.promptId);
+        } else {
+            errorMessage.value = 'That prompt no longer exists.';
+        }
+        return;
+    }
+    selectedPromptId.value =
+        currentActivePromptId.value ??
+        selectedPromptId.value ??
+        prompts.value[0]?.id ??
+        null;
+    await nextTick();
+    searchInputRef.value?.inputRef?.focus();
+}
+
+async function ensurePromptEditorLoaded(): Promise<void> {
     if (!import.meta.client) return;
     if (!promptEditorLoadPromise) {
         promptEditorLoadPromise = import(
@@ -317,506 +1102,222 @@ const ensurePromptEditorLoaded = async () => {
         });
     }
     await promptEditorLoadPromise;
-};
-
-const searchQuery = ref('');
-const filteredPrompts = computed(() => {
-    if (!searchQuery.value) return prompts.value;
-    return prompts.value.filter((p) =>
-        (p.title || '').toLowerCase().includes(searchQuery.value.toLowerCase())
-    );
-});
-
-// Thread-specific system prompt handling
-const threadSystemPromptId = ref<string | null>(null);
-const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet (pane scoped)
-
-// Computed for current active prompt (thread-specific or global)
-const currentActivePromptId = computed(() => {
-    if (props.threadId) return threadSystemPromptId.value;
-    // If no thread yet use pane-scoped pending first, else fall back to global active
-    return pendingPromptId.value || activePromptId.value;
-});
-
-const systemPromptsModalOverrides = useThemeOverrides({
-    component: 'modal',
-    context: 'modal',
-    identifier: 'modal.system-prompts',
-    isNuxtUI: true,
-});
-
-const systemPromptsModalProps = computed(() => {
-    const baseClass =
-        'sp-modal modal-container w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden';
-    const baseUi = {
-        footer: 'justify-end border-none',
-        body: 'p-0! border-b-0! overflow-hidden',
-    } as Record<string, unknown>;
-
-    const overrideValue =
-        (systemPromptsModalOverrides.value as Record<string, unknown>) || {};
-    const overrideClass =
-        typeof overrideValue.class === 'string'
-            ? (overrideValue.class as string)
-            : '';
-    const overrideUi =
-        (overrideValue.ui as Record<string, unknown> | undefined) || {};
-    const mergedUiEntries = { ...baseUi, ...overrideUi };
-    const rest = Object.fromEntries(
-        Object.entries(overrideValue).filter(
-            ([key]) => key !== 'class' && key !== 'ui'
-        )
-    ) as Record<string, unknown>;
-
-    const result: Record<string, unknown> = {
-        ...rest,
-        ui: mergedUiEntries,
-    };
-
-    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
-    if (mergedClass) {
-        result.class = mergedClass;
-    }
-
-    return result;
-});
-
-// Theme overrides for modal buttons
-const newPromptButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'modal',
-        identifier: 'modal.new-prompt',
-        isNuxtUI: true,
-    });
-
-    return {
-        size: 'sm' as const,
-        color: 'primary' as const,
-        ...overrides.value,
-    };
-});
-
-const clearActiveButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'modal',
-        identifier: 'modal.clear-active',
-        isNuxtUI: true,
-    });
-
-    return {
-        size: 'sm' as const,
-        color: 'neutral' as const,
-        variant: 'outline' as const,
-        ...overrides.value,
-    };
-});
-
-const selectButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'modal',
-        identifier: 'modal.select-prompt',
-        isNuxtUI: true,
-    });
-
-    return {
-        size: 'sm' as const,
-        ...overrides.value,
-    };
-});
-
-const toggleDefaultButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'modal',
-        identifier: 'modal.toggle-default',
-        isNuxtUI: true,
-    });
-    return (overrides.value as Record<string, unknown>) || {};
-});
-
-const searchInputProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'input',
-        context: 'modal',
-        identifier: 'modal.prompt-search',
-        isNuxtUI: true,
-    });
-    const overrideValue = (overrides.value as Record<string, unknown>) || {};
-    const baseClass = 'w-full';
-    const overrideClass =
-        typeof overrideValue.class === 'string' ? overrideValue.class : '';
-    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
-
-    return {
-        size: 'sm' as const,
-        ...overrideValue,
-        class: mergedClass,
-    };
-});
-
-const moreActionsButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'modal',
-        identifier: 'modal.prompt-more-actions',
-        isNuxtUI: true,
-    });
-    const overrideValue = (overrides.value as Record<string, unknown>) || {};
-    const baseClass = 'flex items-center justify-center';
-    const overrideClass =
-        typeof overrideValue.class === 'string' ? overrideValue.class : '';
-    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
-    return {
-        size: 'sm' as const,
-        variant: 'outline' as const,
-        color: 'neutral' as const,
-        square: true as const,
-        icon: useIcon('ui.more').value,
-        ...overrideValue,
-        class: mergedClass,
-    };
-});
-
-const editPromptButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'modal',
-        identifier: 'modal.prompt-action-edit',
-        isNuxtUI: true,
-    });
-    const overrideValue = (overrides.value as Record<string, unknown>) || {};
-    const baseClass =
-        'text-left w-full justify-start px-3 py-1.5 hover:bg-primary/10 gap-2 text-[var(--md-on-surface)]';
-    const overrideClass =
-        typeof overrideValue.class === 'string' ? overrideValue.class : '';
-    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
-    return {
-        variant: 'ghost' as const,
-        size: 'sm' as const,
-        block: true,
-        leading: true as const,
-        leadingIcon: useIcon('ui.edit').value,
-        ...overrideValue,
-        class: mergedClass,
-    };
-});
-
-const deletePromptButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'modal',
-        identifier: 'modal.prompt-action-delete',
-        isNuxtUI: true,
-    });
-    const overrideValue = (overrides.value as Record<string, unknown>) || {};
-    const baseClass =
-        'text-left w-full justify-start px-3 py-1.5 hover:bg-error/10 text-error gap-2';
-    const overrideClass =
-        typeof overrideValue.class === 'string' ? overrideValue.class : '';
-    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
-    return {
-        variant: 'ghost' as const,
-        size: 'sm' as const,
-        block: true,
-        color: 'error' as const,
-        leading: true as const,
-        leadingIcon: useIcon('ui.trash').value,
-        ...overrideValue,
-        class: mergedClass,
-    };
-});
-
-// Extract plain text from TipTap JSON recursively
-type TipTapJsonNode = {
-    type?: unknown;
-    text?: unknown;
-    content?: unknown;
-} & Record<string, unknown>;
-
-function isTipTapJsonNode(v: unknown): v is TipTapJsonNode {
-    return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
-function extractText(node: unknown): string {
-    if (!node) return '';
-    if (typeof node === 'string') return node;
-    if (Array.isArray(node)) return node.map(extractText).join('');
-    if (!isTipTapJsonNode(node)) return '';
-    const type = typeof node.type === 'string' ? node.type : '';
-    let acc = '';
-    if (type === 'text') {
-        acc += typeof node.text === 'string' ? node.text : '';
+async function createNewPrompt(): Promise<void> {
+    try {
+        const prompt = await createPrompt();
+        prompts.value.unshift(prompt);
+        selectedPromptId.value = prompt.id;
+        await startEditing(prompt.id);
+    } catch (error) {
+        errorMessage.value =
+            error instanceof Error ? error.message : 'Failed to create prompt.';
     }
-    if (Array.isArray(node.content)) {
-        const inner = node.content.map(extractText).join('');
-        acc += inner;
-    }
-    // Block separators to avoid word merging
-    if (
-        [
-            'paragraph',
-            'heading',
-            'bulletList',
-            'orderedList',
-            'listItem',
-        ].includes(type)
-    ) {
-        acc += '\n';
-    }
-    return acc;
 }
 
-function contentToText(content: unknown): string {
-    if (!content) return '';
-    if (typeof content === 'string') return content;
-    if (!isTipTapJsonNode(content)) return '';
-    // TipTap root usually { type: 'doc', content: [...] }
-    const type = typeof content.type === 'string' ? content.type : '';
-    if (type === 'doc' && Array.isArray(content.content)) {
-        return extractText(content)
-            .replace(/\n{2,}/g, '\n')
-            .trim();
-    }
-    if (Array.isArray(content.content)) return extractText(content).trim();
-    return '';
-}
-
-// Worker-based tokenizer
-const { countTokensBatch } = useTokenizer();
-
-// Token counts per prompt id (updated asynchronously via worker)
-const tokenCounts = ref<Record<string, number>>({});
-let tokenCountRequestId = 0;
-
-// Update token counts when prompts change
-watch(
-    prompts,
-    async (newPrompts) => {
-        const currentRequest = ++tokenCountRequestId;
-
-        if (!newPrompts.length) {
-            if (currentRequest === tokenCountRequestId) {
-                tokenCounts.value = {};
-            }
-            return;
-        }
-
-        try {
-            const items = newPrompts.map((p) => ({
-                key: p.id,
-                text: contentToText(p.content),
-            }));
-
-            const counts = await countTokensBatch(items);
-            if (currentRequest === tokenCountRequestId) {
-                tokenCounts.value = counts;
-            }
-        } catch (e) {
-            console.warn('[SystemPromptsModal] token counting failed', e);
-            // Fallback to empty counts
-            if (currentRequest === tokenCountRequestId) {
-                tokenCounts.value = {};
-            }
-        }
-    },
-    { immediate: false, deep: false }
-);
-
-// Totals derived from cached counts
-const totalTokens = computed(() =>
-    Object.values(tokenCounts.value).reduce((a, b) => a + b, 0)
-);
-const filteredTokens = computed(() =>
-    filteredPrompts.value.reduce(
-        (sum, p) => sum + (tokenCounts.value[p.id] || 0),
-        0
-    )
-);
-
-// (Events moved above with prop bridging)
-
-const loadPrompts = async () => {
-    try {
-        prompts.value = await listPrompts();
-        if (
-            defaultPromptId.value &&
-            !prompts.value.find((p) => p.id === defaultPromptId.value)
-        ) {
-            await clearDefaultPrompt();
-        }
-    } catch (error) {
-        console.error('Failed to load prompts:', error);
-    }
-};
-
-const loadThreadSystemPrompt = async () => {
-    if (props.threadId) {
-        try {
-            threadSystemPromptId.value = await getThreadSystemPrompt(
-                props.threadId
-            );
-        } catch (error) {
-            console.error('Failed to load thread system prompt:', error);
-            threadSystemPromptId.value = null;
-        }
-    } else {
-        threadSystemPromptId.value = null;
-    }
-};
-
-const createNewPrompt = async () => {
-    try {
-        const newPrompt = await createPrompt();
-        prompts.value.unshift(newPrompt);
-        await startEditing(newPrompt.id);
-    } catch (error) {
-        console.error('Failed to create prompt:', error);
-    }
-};
-
-const selectPrompt = async (id: string) => {
-    try {
-        if (props.threadId) {
-            // Update thread-specific system prompt
-            await updateThreadSystemPrompt(props.threadId, id);
-            threadSystemPromptId.value = id;
-        } else {
-            // Store as pending for when thread is created
-            pendingPromptId.value = id;
-            // Also update global for immediate feedback
-            // Do NOT override global active prompt; keep pane scoped selection only
-        }
-        emit('selected', id);
-    } catch (error) {
-        console.error('Failed to select prompt:', error);
-    }
-};
-
-const clearActivePrompt = async () => {
-    try {
-        if (props.threadId) {
-            // Clear thread-specific system prompt
-            await updateThreadSystemPrompt(props.threadId, null);
-            threadSystemPromptId.value = null;
-        } else {
-            // Clear pending and global active prompt
-            pendingPromptId.value = null;
-            // Don't clear global active prompt automatically (leave global state untouched)
-        }
-    } catch (error) {
-        console.error('Failed to clear active prompt:', error);
-    }
-};
-
-const startEditing = async (id: string) => {
+async function startEditing(id: string): Promise<void> {
     try {
         await ensurePromptEditorLoaded();
+        editingPromptId.value = id;
+        selectedPromptId.value = id;
+        view.value = 'edit';
     } catch (error) {
-        console.error('Failed to preload prompt editor:', error);
-        return;
-    }
-    const prompt = prompts.value.find((p) => p.id === id);
-    if (prompt) {
-        editingPrompt.value = prompt;
-    }
-};
-
-const stopEditing = () => {
-    editingPrompt.value = null;
-    loadPrompts(); // Refresh list in case of changes
-};
-
-const applyPendingPromptToThread = async (threadId: string) => {
-    if (pendingPromptId.value) {
-        try {
-            await updateThreadSystemPrompt(threadId, pendingPromptId.value);
-            emit('threadCreated', threadId, pendingPromptId.value);
-            pendingPromptId.value = null;
-        } catch (error) {
-            console.error('Failed to apply pending prompt to thread:', error);
-        }
-    }
-};
-
-const deletePrompt = async (id: string) => {
-    if (confirm('Are you sure you want to delete this prompt?')) {
-        try {
-            await softDeletePrompt(id);
-            if (activePromptId.value === id) {
-                clearActivePrompt();
-            }
-            if (defaultPromptId.value === id) {
-                await clearDefaultPrompt();
-            }
-            loadPrompts();
-        } catch (error) {
-            console.error('Failed to delete prompt:', error);
-        }
-    }
-};
-
-const formatDate = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleDateString();
-};
-
-const handleKeydown = (event: KeyboardEvent) => {
-    if (editingPrompt.value) return;
-    const key = event.key;
-    if (key >= '1' && key <= '9') {
-        const index = parseInt(key) - 1;
-        if (index < filteredPrompts.value.length) {
-            const prompt = filteredPrompts.value[index];
-            if (prompt) {
-                selectPrompt(prompt.id);
-                event.preventDefault();
-            }
-        }
-    }
-};
-
-onMounted(() => {
-    loadPrompts();
-    loadThreadSystemPrompt();
-});
-
-// Watch for threadId changes to reload thread-specific prompt
-watch(
-    () => props.threadId,
-    () => {
-        loadThreadSystemPrompt();
-    }
-);
-
-function toggleDefault(id: string) {
-    if (defaultPromptId.value === id) {
-        clearDefaultPrompt();
-    } else {
-        setDefaultPrompt(id);
+        errorMessage.value =
+            error instanceof Error ? error.message : 'Failed to open editor.';
     }
 }
+
+async function stopEditing(): Promise<void> {
+    await loadPrompts();
+    editingPromptId.value = null;
+    view.value = 'detail';
+}
+
+function handleEditorSaved(prompt: PromptRecord): void {
+    replacePrompt(prompt);
+}
+
+function selectPromptForDetail(id: string): void {
+    selectedPromptId.value = id;
+    tagDraft.value = '';
+    view.value = 'detail';
+}
+
+function setScope(nextScope: LibraryScope): void {
+    scope.value = nextScope;
+    selectedTag.value = null;
+}
+
+function selectTag(tag: string): void {
+    selectedTag.value =
+        selectedTagKey.value === tag.toLocaleLowerCase() ? null : tag;
+    scope.value = 'all';
+}
+
+function replacePrompt(prompt: PromptRecord): void {
+    const index = prompts.value.findIndex((entry) => entry.id === prompt.id);
+    if (index === -1) prompts.value.unshift(prompt);
+    else prompts.value.splice(index, 1, prompt);
+}
+
+async function toggleFavorite(prompt: PromptRecord): Promise<void> {
+    const updated = await updatePrompt(prompt.id, {
+        favorite: !prompt.favorite,
+    });
+    if (updated) replacePrompt(updated);
+}
+
+async function addTag(prompt: PromptRecord): Promise<void> {
+    const tag = tagDraft.value.trim();
+    if (!tag) return;
+    const updated = await updatePrompt(prompt.id, {
+        tags: [...prompt.tags, tag],
+    });
+    if (updated) replacePrompt(updated);
+    tagDraft.value = '';
+}
+
+async function removeTag(
+    prompt: PromptRecord,
+    tagToRemove: string
+): Promise<void> {
+    const key = tagToRemove.toLocaleLowerCase();
+    const updated = await updatePrompt(prompt.id, {
+        tags: prompt.tags.filter(
+            (tag) => tag.toLocaleLowerCase() !== key
+        ),
+    });
+    if (updated) replacePrompt(updated);
+}
+
+async function toggleDefault(id: string): Promise<void> {
+    if (defaultPromptId.value === id) await clearDefaultPrompt();
+    else await setDefaultPrompt(id);
+}
+
+async function useSelectedPrompt(): Promise<void> {
+    const prompt = selectedPrompt.value;
+    if (!prompt || !canUseInChat.value) return;
+    try {
+        if (props.threadId) {
+            await updateThreadSystemPrompt(props.threadId, prompt.id);
+            threadPromptId.value = prompt.id;
+        } else if (props.paneId) {
+            setPanePendingPrompt(props.paneId, prompt.id);
+            pendingPromptId.value = prompt.id;
+        }
+        emit('selected', prompt.id);
+    } catch (error) {
+        errorMessage.value =
+            error instanceof Error
+                ? error.message
+                : 'Failed to apply prompt to chat.';
+    }
+}
+
+function requestDeletePrompt(id: string): void {
+    deleteConfirmId.value = id;
+}
+
+async function confirmDeletePrompt(): Promise<void> {
+    const id = deleteConfirmId.value;
+    if (!id) return;
+    try {
+        await softDeletePrompt(id);
+        if (defaultPromptId.value === id) await clearDefaultPrompt();
+        if (activePromptId.value === id) clearActivePrompt();
+        if (threadPromptId.value === id && props.threadId) {
+            await updateThreadSystemPrompt(props.threadId, null);
+            threadPromptId.value = null;
+        }
+        if (pendingPromptId.value === id && props.paneId) {
+            clearPanePendingPrompt(props.paneId);
+            pendingPromptId.value = null;
+        }
+        prompts.value = prompts.value.filter((prompt) => prompt.id !== id);
+        selectedPromptId.value = prompts.value[0]?.id ?? null;
+        deleteConfirmId.value = null;
+        view.value = 'library';
+    } catch (error) {
+        errorMessage.value =
+            error instanceof Error ? error.message : 'Failed to delete prompt.';
+    }
+}
+
+function handleKeydown(event: KeyboardEvent): void {
+    if (event.key === '/' && view.value === 'library') {
+        const target = event.target as HTMLElement | null;
+        if (
+            target?.tagName !== 'INPUT' &&
+            target?.tagName !== 'TEXTAREA' &&
+            !target?.isContentEditable
+        ) {
+            event.preventDefault();
+            searchInputRef.value?.inputRef?.focus();
+        }
+        return;
+    }
+    if (event.key === 'Escape' && view.value !== 'library') {
+        event.stopPropagation();
+        if (view.value === 'edit') void stopEditing();
+        else view.value = 'library';
+    }
+}
+
+watch(
+    () => props.showModal,
+    (value, previous) => {
+        if (value) void initializeForOpen();
+        else if (previous) {
+            openGeneration += 1;
+            emit('closed');
+        }
+    },
+    { immediate: true }
+);
+
+watch(
+    prompts,
+    async (nextPrompts) => {
+        const generation = ++tokenCountGeneration;
+        if (!nextPrompts.length) {
+            tokenCounts.value = {};
+            return;
+        }
+        try {
+            const counts = await countTokensBatch(
+                nextPrompts.map((prompt) => ({
+                    key: prompt.id,
+                    text: promptText(prompt),
+                }))
+            );
+            if (generation === tokenCountGeneration) {
+                tokenCounts.value = counts;
+            }
+        } catch {
+            if (generation === tokenCountGeneration) tokenCounts.value = {};
+        }
+    },
+    { deep: false }
+);
+
+onBeforeUnmount(() => {
+    openGeneration += 1;
+    tokenCountGeneration += 1;
+});
 </script>
 
 <style scoped>
-/* Mobile full-screen adjustments */
 @media (max-width: 640px) {
     .sp-modal {
-        width: 100vw !important;
-        max-width: 100vw !important;
+        width: 100dvw !important;
+        max-width: 100dvw !important;
         height: 100dvh !important;
         max-height: 100dvh !important;
         margin: 0 !important;
         border-radius: 0 !important;
         border-width: 0 !important;
     }
-}
-
-/* Smooth scrolling area */
-.sp-modal :deep(.n-modal-body),
-.sp-modal :deep(.n-card__content) {
-    /* ensure body grows */
-    height: 100%;
 }
 </style>

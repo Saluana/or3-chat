@@ -15,7 +15,7 @@ import {
 import type { Ref } from 'vue';
 import type { PaneState } from '~/composables/core/useMultiPane';
 import { createPost, upsertPost, getPost, softDeletePost } from '~/db/posts';
-import { db } from '~/db/client';
+import { getDb } from '~/db/client';
 import type { Post, PostCreate } from '~/db/schema';
 import type { TipTapDocument } from '~/types/database';
 
@@ -30,6 +30,7 @@ export type PaneApiErrorCode =
     | 'no_thread'
     | 'no_thread_bind'
     | 'append_failed'
+    | 'send_rejected'
     | 'no_document'
     | 'no_active_pane'
     | 'no_panes'
@@ -316,8 +317,11 @@ function makeApi(): PanePluginApi {
                 // Simplest non-duplicating behavior: if role is user & stream requested, use ChatInput bridge instead of manual append.
                 if (role === 'user' && stream) {
                     if (hasPane(p.id)) {
-                        const okBridge = programmaticSend(p.id, text);
-                        if (okBridge) {
+                        const sendResult = await programmaticSend(p.id, text);
+                        if (
+                            'userMessageId' in sendResult &&
+                            sendResult.userMessageId
+                        ) {
                             log('sendMessage-bridge', {
                                 source,
                                 paneId,
@@ -325,10 +329,20 @@ function makeApi(): PanePluginApi {
                             });
                             return {
                                 ok: true,
-                                messageId: 'bridge',
+                                messageId: sendResult.userMessageId,
                                 threadId,
                             };
                         }
+                        return err(
+                            'send_rejected',
+                            'error' in sendResult && sendResult.error
+                                ? sendResult.error
+                                : `chat send ${sendResult.status}${
+                                      'reason' in sendResult
+                                          ? `: ${sendResult.reason}`
+                                          : ''
+                                  }`
+                        );
                     }
                 }
                 // Fallback: direct append (no streaming)
@@ -536,7 +550,7 @@ function makeApi(): PanePluginApi {
                     if (!existing)
                         return err('post_not_found', 'post not found');
 
-                    // getPost returns Post through db.posts.get
+                    // getPost returns Post through getDb().posts.get
                     const existingPost = existing as unknown as Post;
 
                     const updated: Post = {
@@ -587,7 +601,7 @@ function makeApi(): PanePluginApi {
                     return err('invalid_post_type', 'postType required');
 
                 try {
-                    const results = await db.posts
+                    const results = await getDb().posts
                         .where('postType')
                         .equals(postType)
                         .and((p) => !p.deleted)

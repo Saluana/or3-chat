@@ -3,9 +3,9 @@
         ref="el"
         role="button"
         tabindex="0"
-        class="w-full group flex items-center gap-2 px-3 py-2.5 group relative transition-colors duration-200 rounded-[var(--md-border-radius)] cursor-pointer animate-sidebar-item-enter"
+        class="w-full group flex items-center gap-2 px-3 py-2.5 group relative transition-colors duration-200 rounded-[var(--md-border-radius)] cursor-pointer animate-sidebar-item-enter unified-sb-item theme-btn retro-press"
         :class="{
-            'bg-[color:var(--md-primary)]/12 text-[color:var(--md-primary)]':
+            'bg-[color:var(--md-primary)]/12 dark:bg-[color:var(--md-primary)]/20 text-[color:var(--md-primary)] unified-sb-item-active':
                 active,
             'text-[color:var(--md-on-surface)] hover:bg-[var(--md-surface-hover)]':
                 !active,
@@ -17,10 +17,10 @@
     >
         <!-- Icon -->
         <UIcon
-            :name="item.type === 'thread' ? iconChat : iconNote"
-            class="w-[18px] h-[18px] shrink-0 transition-colors"
+            :name="item.icon ?? (item.type === 'thread' ? iconChat : iconNote)"
+            class="w-[18px] h-[18px] shrink-0 transition-colors sb-btn-icon"
             :class="{
-                'text-[color:var(--md-primary)]': active,
+                'text-[color:var(--md-primary)] sb-btn-icon-active': active,
                 'text-[color:var(--md-on-surface-variant)]/70 group-hover:text-[color:var(--md-on-surface)]/80':
                     !active,
             }"
@@ -28,10 +28,10 @@
 
         <!-- Title -->
         <span
-            class="flex-1 truncate text-sm font-normal leading-tight"
+            class="flex-1 truncate text-sm font-normal leading-tight sb-btn-title"
             :class="
                 active
-                    ? 'text-[color:var(--md-primary)]'
+                    ? 'text-[color:var(--md-primary)] sb-btn-title-active'
                     : 'text-[color:var(--md-on-surface)]'
             "
         >
@@ -40,10 +40,10 @@
 
         <!-- Time Label (desktop only - hide on hover, show action button instead) -->
         <span
-            class="hidden sm:inline-block shrink-0 text-[10px] opacity-40 font-medium transition-opacity group-hover:opacity-0"
+            class="hidden sm:inline-block shrink-0 text-[10px] opacity-40 font-medium transition-opacity group-hover:opacity-0! sb-item-time"
             :class="
                 active
-                    ? 'text-[color:var(--md-primary)]/70'
+                    ? 'text-[color:var(--md-primary)] opacity-80! sb-item-time-active'
                     : 'text-[color:var(--md-on-surface-variant)]'
             "
         >
@@ -114,7 +114,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
-import { db } from '~/db';
+import { getDb } from '~/db/client';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
@@ -227,6 +227,7 @@ const extraActions = computed<readonly ExtraAction[]>(() =>
 
 async function runExtraAction(action: ExtraAction) {
     try {
+        const db = getDb();
         if (props.item.type === 'thread') {
             const thread = await db.threads.get(props.item.id);
             if (!thread) return;

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import ChatInputDropper from '../ChatInputDropper.vue';
 import { ref } from 'vue';
+import type { SendResult } from '~/utils/chat/types';
 
 // Mock VueUse core
 const mockOpen = vi.fn();
@@ -42,10 +43,17 @@ vi.mock('@vueuse/core', async () => {
 // Mock other dependencies
 vi.mock('#imports', () => ({
     useToast: () => ({ add: vi.fn() }),
+    useRuntimeConfig: () => ({
+        public: {
+            openRouter: {},
+            limits: {},
+        },
+    }),
     useUserApiKey: () => ({ apiKey: ref('test-key') }),
     useOpenRouterAuth: () => ({ startLogin: vi.fn() }),
     useComposerActions: () => [],
     useModelStore: () => ({ 
+        catalog: ref([]),
         favoriteModels: ref([]),
         getFavoriteModels: vi.fn().mockResolvedValue([])
     }),
@@ -72,10 +80,47 @@ vi.mock('~/utils/errors', () => ({
     err: vi.fn()
 }));
 
+vi.mock('~/core/hooks/useHooks', () => ({
+    useHooks: () => ({
+        doAction: vi.fn().mockResolvedValue(undefined),
+        applyFilters: vi.fn(async (_name: string, value: unknown) => value),
+    }),
+}));
+
 vi.mock('../file-upload-utils', () => ({
     validateFile: () => ({ ok: true, kind: 'image' }),
     persistAttachment: vi.fn().mockResolvedValue({ hash: 'test-hash' })
 }));
+
+const ThemedModelCatalogModal = {
+    template: '<div class="themed-model-catalog-modal" />',
+};
+const ThemedSystemPromptsModal = {
+    template: '<div class="themed-system-prompts-modal" />',
+};
+const ThemedModelSelect = {
+    template: '<div class="themed-model-select" />',
+};
+
+const createThemeMock = () => ({
+    activeComponents: {
+        value: {
+            'model-catalog-modal': ThemedModelCatalogModal,
+            'system-prompts-modal': ThemedSystemPromptsModal,
+            'model-selector': ThemedModelSelect,
+        },
+    },
+});
+
+function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+    });
+    return { promise, resolve, reject };
+}
 
 describe('ChatInputDropper', () => {
     beforeEach(() => {
@@ -91,6 +136,9 @@ describe('ChatInputDropper', () => {
                 threadId: 'test-thread',
             },
             global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
                 stubs: {
                     EditorContent: true,
                     UIcon: true,
@@ -122,7 +170,12 @@ describe('ChatInputDropper', () => {
 
     it('processes files when file dialog selection changes', async () => {
         const wrapper = mount(ChatInputDropper, {
-            props: { loading: false }
+            props: { loading: false },
+            global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
+            },
         });
 
         const file = new File(['test'], 'test.png', { type: 'image/png' });
@@ -151,7 +204,12 @@ describe('ChatInputDropper', () => {
 
     it('handles drop events via useDropZone', async () => {
         const wrapper = mount(ChatInputDropper, {
-            props: { loading: false }
+            props: { loading: false },
+            global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
+            },
         });
 
         const file = new File(['drop'], 'drop.png', { type: 'image/png' });
@@ -170,7 +228,12 @@ describe('ChatInputDropper', () => {
 
     it('updates isDragging state on enter/leave', async () => {
         const wrapper = mount(ChatInputDropper, {
-            props: { loading: false }
+            props: { loading: false },
+            global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
+            },
         });
 
         mockIsOverDropZone.value = true;
@@ -188,5 +251,72 @@ describe('ChatInputDropper', () => {
         mockIsOverDropZone.value = false;
         await wrapper.vm.$nextTick();
         expect(root.classes()).not.toContain('border-blue-500');
+    });
+
+    it('clears the draft after durable acceptance without waiting for the stream', async () => {
+        const terminal = deferred<SendResult>();
+        const accepted = deferred<SendResult>();
+        let sentText = '';
+        const wrapper = mount(ChatInputDropper, {
+            props: {
+                loading: false,
+                threadId: 'test-thread',
+            },
+            attrs: {
+                onSend: (payload: {
+                    text: string;
+                    registerResult: (
+                        terminalResult: Promise<SendResult>,
+                        durableAcceptance: Promise<SendResult>
+                    ) => void;
+                }) => {
+                    sentText = payload.text;
+                    payload.registerResult(terminal.promise, accepted.promise);
+                },
+            },
+            global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
+            },
+        });
+        const vm = wrapper.vm as unknown as {
+            setText: (text: string) => void;
+            triggerSend: () => Promise<SendResult>;
+        };
+        vm.setText('Bro');
+
+        let terminalSettled = false;
+        const send = vm.triggerSend().then((result) => {
+            terminalSettled = true;
+            return result;
+        });
+        await vi.waitFor(() => {
+            expect(wrapper.emitted('send')).toHaveLength(1);
+        });
+        expect(sentText).toBe('Bro');
+
+        accepted.resolve({
+            status: 'accepted',
+            requestId: 'request-1',
+            userMessageId: 'user-1',
+        });
+        await Promise.resolve();
+        await wrapper.vm.$nextTick();
+        await expect(vm.triggerSend()).resolves.toMatchObject({
+            status: 'rejected',
+            reason: 'filtered',
+        });
+        expect(wrapper.emitted('send')).toHaveLength(1);
+        expect(terminalSettled).toBe(false);
+
+        terminal.resolve({
+            status: 'complete',
+            requestId: 'request-1',
+            userMessageId: 'user-1',
+            assistantMessageId: 'assistant-1',
+        });
+        await expect(send).resolves.toMatchObject({ status: 'complete' });
+        wrapper.unmount();
     });
 });

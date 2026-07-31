@@ -5,17 +5,43 @@
  * This allows zero-runtime-overhead styling for third-party components.
  */
 
-import { writeFile, mkdir, access, readdir } from 'fs/promises';
+import { writeFile, mkdir, readdir, rm } from 'fs/promises';
 import { join } from 'path';
-import { constants as fsConstants } from 'fs';
-import { pathToFileURL } from 'url';
 import type { ThemeDefinition } from '~/theme/_shared/types';
+import {
+    discoverThemeSourceFiles,
+    importThemeSourceModule,
+} from './theme-discovery';
 
 /**
  * Convert camelCase to kebab-case for CSS properties
  */
 function toKebabCase(str: string): string {
     return str.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+}
+
+function splitSelectorList(selector: string): string[] {
+    const parts: string[] = [];
+    let depth = 0;
+    let quote = '';
+    let start = 0;
+    for (let index = 0; index < selector.length; index++) {
+        const char = selector[index]!;
+        if (quote) {
+            if (char === quote && selector[index - 1] !== '\\') quote = '';
+        } else if (char === '"' || char === "'") {
+            quote = char;
+        } else if (char === '(' || char === '[') {
+            depth++;
+        } else if (char === ')' || char === ']') {
+            depth--;
+        } else if (char === ',' && depth === 0) {
+            parts.push(selector.slice(start, index).trim());
+            start = index + 1;
+        }
+    }
+    parts.push(selector.slice(start).trim());
+    return parts.filter(Boolean);
 }
 
 /**
@@ -35,9 +61,10 @@ export function buildThemeCSS(theme: ThemeDefinition): string {
                 .map(([prop, value]) => `  ${toKebabCase(prop)}: ${value};`)
                 .join('\n');
 
-            blocks.push(
-                `[data-theme="${theme.name}"] ${selector} {\n${declarations}\n}`
-            );
+            const scopedSelector = splitSelectorList(selector)
+                .map((branch) => `[data-theme="${theme.name}"] ${branch}`)
+                .join(',\n');
+            blocks.push(`${scopedSelector} {\n${declarations}\n}`);
         }
     }
 
@@ -53,6 +80,21 @@ export async function buildThemeCSSFiles(
 ) {
     // Ensure output directory exists
     await mkdir(outputDir, { recursive: true });
+
+    const expectedFiles = new Set(
+        themes
+            .filter((theme) => buildThemeCSS(theme).length > 0)
+            .map((theme) => `${theme.name}.css`)
+    );
+    for (const entry of await readdir(outputDir, { withFileTypes: true })) {
+        if (
+            entry.isFile() &&
+            entry.name.endsWith('.css') &&
+            !expectedFiles.has(entry.name)
+        ) {
+            await rm(join(outputDir, entry.name));
+        }
+    }
 
     const results: { theme: string; file: string; size: number }[] = [];
 
@@ -80,32 +122,25 @@ export async function buildThemeCSSFiles(
     return results;
 }
 
-async function discoverThemes(): Promise<ThemeDefinition[]> {
-    const themesDir = join(process.cwd(), 'app', 'theme');
-    const entries = await readdir(themesDir, { withFileTypes: true });
+export async function discoverThemes(
+    themesDir = join(process.cwd(), 'app', 'theme')
+): Promise<ThemeDefinition[]> {
     const themes: ThemeDefinition[] = [];
 
-    for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        if (entry.name.startsWith('_')) continue;
-
-        const themePath = join(themesDir, entry.name, 'theme.ts');
-
+    for (const themePath of await discoverThemeSourceFiles(themesDir)) {
         try {
-            await access(themePath, fsConstants.F_OK);
-        } catch {
-            continue;
-        }
-
-        try {
-            const module = await import(pathToFileURL(themePath).href);
+            const module = await importThemeSourceModule<{
+                default?: ThemeDefinition;
+            }>(themePath);
             if (module?.default) {
                 themes.push(module.default as ThemeDefinition);
+            } else {
+                throw new Error('Theme module has no default export');
             }
         } catch (error) {
-            console.warn(
-                `⚠️  Failed to load theme definition at ${themePath}`,
-                error
+            throw new Error(
+                `Failed to load theme definition at ${themePath}`,
+                { cause: error }
             );
         }
     }

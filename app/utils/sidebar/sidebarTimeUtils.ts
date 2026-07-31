@@ -1,11 +1,25 @@
 /**
- * Utility functions for sidebar time-based grouping and display.
+ * @module app/utils/sidebar/sidebarTimeUtils
+ *
+ * Purpose:
+ * Utilities for time-based grouping and display in the sidebar.
+ *
+ * Constraints:
+ * - Timestamps are in seconds since epoch.
  */
 
-export type TimeGroup = 'today' | 'yesterday' | 'earlierThisWeek' | 'thisMonth' | 'older';
+export type TimeGroup =
+    | 'today'
+    | 'yesterday'
+    | 'earlierThisWeek'
+    | 'thisMonth'
+    | 'older';
 
 /**
- * Get the start of the day for a given timestamp (in seconds)
+ * `getStartOfDay`
+ *
+ * Purpose:
+ * Returns the start of day timestamp for the given input.
  */
 export function getStartOfDay(timestamp: number): number {
     const date = new Date(timestamp * 1000);
@@ -14,8 +28,10 @@ export function getStartOfDay(timestamp: number): number {
 }
 
 /**
- * Get the start of the week for a given timestamp (in seconds)
- * Assumes week starts on Sunday
+ * `getStartOfWeek`
+ *
+ * Purpose:
+ * Returns the start of week timestamp (Sunday-based).
  */
 export function getStartOfWeek(timestamp: number): number {
     const date = new Date(timestamp * 1000);
@@ -27,7 +43,10 @@ export function getStartOfWeek(timestamp: number): number {
 }
 
 /**
- * Get the start of the month for a given timestamp (in seconds)
+ * `getStartOfMonth`
+ *
+ * Purpose:
+ * Returns the start of month timestamp for the given input.
  */
 export function getStartOfMonth(timestamp: number): number {
     const date = new Date(timestamp * 1000);
@@ -37,7 +56,10 @@ export function getStartOfMonth(timestamp: number): number {
 }
 
 /**
- * Compute the time group for a given timestamp (in seconds)
+ * `computeTimeGroup`
+ *
+ * Purpose:
+ * Classifies a timestamp into a sidebar grouping bucket.
  */
 export function computeTimeGroup(timestamp: number): TimeGroup {
     const now = Date.now() / 1000;
@@ -54,32 +76,49 @@ export function computeTimeGroup(timestamp: number): TimeGroup {
 }
 
 /**
- * Get the label for a time group
+ * `getTimeGroupLabel`
+ *
+ * Purpose:
+ * Returns a human-readable label for a time group.
  */
 export function getTimeGroupLabel(group: TimeGroup): string {
     switch (group) {
-        case 'today': return 'Today';
-        case 'yesterday': return 'Yesterday';
-        case 'earlierThisWeek': return 'Earlier this week';
-        case 'thisMonth': return 'This month';
-        case 'older': return 'Older';
+        case 'today':
+            return 'Today';
+        case 'yesterday':
+            return 'Yesterday';
+        case 'earlierThisWeek':
+            return 'This week';
+        case 'thisMonth':
+            return 'This month';
+        case 'older':
+            return 'Older';
     }
 }
 
 /**
- * Format a timestamp for display based on its time group
+ * `formatTimeDisplay`
+ *
+ * Purpose:
+ * Formats a timestamp for display based on its group.
  */
 export function formatTimeDisplay(timestamp: number, group: TimeGroup): string {
     const date = new Date(timestamp * 1000);
-    
+
     switch (group) {
         case 'today':
         case 'yesterday':
-            return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            return date.toLocaleTimeString([], {
+                hour: 'numeric',
+                minute: '2-digit',
+            });
         case 'earlierThisWeek':
             return date.toLocaleDateString([], { weekday: 'long' });
         case 'thisMonth':
         case 'older':
-            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            return date.toLocaleDateString([], {
+                month: 'short',
+                day: 'numeric',
+            });
     }
 }

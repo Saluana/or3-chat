@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Frozen observable V1 registry-family behavior used by Plugin Runtime V2 differential adapters.",
+  "profiles": [
+    {
+      "id": "registry.message-actions",
+      "family": "message actions",
+      "sources": ["app/composables/chat/useMessageActions.ts"],
+      "globalKeys": ["__or3MessageActionsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.header-actions",
+      "family": "header actions",
+      "sources": ["app/composables/sidebar/useHeaderActions.ts"],
+      "globalKeys": ["__or3HeaderActionsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy-with-access-visible-disabled", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.composer-actions",
+      "family": "composer actions",
+      "sources": ["app/composables/sidebar/useComposerActions.ts"],
+      "globalKeys": ["__or3ComposerActionsRegistry", "__or3ComposerActionsOwnedRegistry"],
+      "implementation": "legacy-equivalent",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "map-insertion", "idSnapshotOrder": "map-insertion", "projection": "computed-reactive-list-with-access-visible-disabled", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.sidebar-footer-actions",
+      "family": "sidebar footer actions",
+      "sources": ["app/composables/sidebar/useSidebarSections.ts"],
+      "globalKeys": ["__or3SidebarFooterActionsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy-with-access-visible-disabled", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.sidebar-sections",
+      "family": "sidebar sections",
+      "sources": ["app/composables/sidebar/useSidebarSections.ts"],
+      "globalKeys": ["__or3SidebarSectionsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "componentIdentity": "preserved", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "defaultPlacement": "main", "projection": "computed-access-filtered-placement-groups", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "void", "disposal": "id-only-public-api" }
+    },
+    {
+      "id": "registry.history-actions",
+      "family": "document and thread history actions",
+      "sources": ["app/composables/history/createHistoryActionRegistry.ts", "app/composables/documents/useDocumentHistoryActions.ts", "app/composables/threads/useThreadHistoryActions.ts"],
+      "globalKeys": ["__or3DocumentHistoryActionsRegistry", "__or3ThreadHistoryActionsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "void", "disposal": "id-only-public-api" }
+    },
+    {
+      "id": "registry.project-tree-actions",
+      "family": "project tree actions",
+      "sources": ["app/composables/projects/useProjectTreeActions.ts"],
+      "globalKeys": ["__or3ProjectTreeActionsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "void", "disposal": "id-only-public-api" }
+    },
+    {
+      "id": "registry.editor-toolbar",
+      "family": "editor toolbar buttons",
+      "sources": ["app/composables/editor/useEditorToolbar.ts"],
+      "globalKeys": ["__or3EditorToolbarRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy-with-editor-visible-filter", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "void", "disposal": "id-only-public-api" }
+    },
+    {
+      "id": "registry.editor-inspector-panels",
+      "family": "editor inspector panels",
+      "sources": ["app/composables/editor/useEditorInspectorPanels.ts"],
+      "globalKeys": ["__or3EditorInspectorPanelsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "componentIdentity": "preserved", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy-with-access-filter", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.document-ai-actions",
+      "family": "document AI actions",
+      "sources": ["app/composables/editor/useDocumentAiActions.ts"],
+      "globalKeys": ["__or3DocumentAiActionsRegistry"],
+      "implementation": "shared-createRegistry",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "projection": "computed-copy-with-access-filter", "reactiveMutationNotifications": 1, "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.sidebar-pages",
+      "family": "sidebar pages",
+      "sources": ["app/composables/sidebar/useSidebarPages.ts", "app/composables/sidebar/registerSidebarPage.ts"],
+      "globalKeys": ["__or3SidebarPagesRegistry"],
+      "implementation": "legacy-equivalent",
+      "behavior": { "duplicate": "replace-by-id", "validation": "zod-first-issue-message", "serverRegistration": "no-op-disposer", "defaultOrder": 200, "defaultHeader": "sidebar-home-only", "equalOrderTie": "map-insertion", "component": "markRaw-static-or-defineAsyncComponent", "asyncTimeoutMs": 15000, "asyncRetryCount": 2, "asyncSuspensible": false, "projection": "computed-access-filtered", "globalPersistence": "globalThis-map", "registerReturn": "disposer-function", "disposal": "exact-normalized-value" }
+    },
+    {
+      "id": "registry.pane-apps",
+      "family": "pane apps",
+      "sources": ["app/composables/core/usePaneApps.ts"],
+      "globalKeys": ["__or3PaneAppsRegistry", "__or3PaneAppsOwnedRegistry"],
+      "implementation": "legacy-equivalent",
+      "behavior": { "duplicate": "replace-by-id", "validation": "zod-first-issue-message", "serverRegistration": "supported", "defaultOrder": 200, "equalOrderTie": "map-insertion", "component": "markRaw-without-async-wrapper", "projection": "computed-unfiltered", "globalPersistence": "globalThis-map", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.dashboard",
+      "family": "dashboard plugins and pages",
+      "sources": ["app/composables/dashboard/useDashboardPlugins.ts"],
+      "globalKeys": ["__or3DashboardPluginsRegistry", "__or3DashboardPluginsOwnedRegistry", "__or3DashboardPluginPagesRegistry", "__or3DashboardNavigationRuntime"],
+      "implementation": "legacy-equivalent",
+      "behavior": { "pluginDuplicate": "replace-by-id", "pluginStoredValue": "shallow-frozen-copy-with-pages-array-copy", "inlinePages": "replace-all-when-present", "pageDuplicate": "replace-by-plugin-and-page-id", "pageStoredValue": "shallow-frozen-copy", "defaultOrder": 200, "equalOrderTie": "map-insertion", "access": "page-fields-override-plugin-fields", "componentResolution": "sync-or-zero-arity-async", "componentCache": "plugin-and-page-id", "failedResolutionCache": "not-cached", "cacheInvalidation": ["page-replace", "page-remove", "plugin-inline-page-replace", "plugin-remove"], "navigation": "hmr-global-state-explicit-reset", "activeRemoval": "state-retained-until-next-navigation", "registerReturn": "RegistrationHandle", "disposal": "exact-owner" }
+    },
+    {
+      "id": "registry.editor-extensions",
+      "family": "editor nodes, marks, and generic extensions",
+      "sources": ["app/composables/editor/useEditorNodes.ts", "app/composables/editor/useEditorExtensionLoader.ts"],
+      "globalKeys": ["__or3EditorNodesRegistry", "__or3EditorMarksRegistry", "__or3EditorExtensionsRegistry"],
+      "implementation": "legacy-equivalent",
+      "behavior": { "duplicate": "replace-by-id", "storedValue": "caller-object-identity", "publicListValue": "deep-reactive-proxy-of-caller-value", "defaultOrder": 200, "equalOrderTie": "id-ascending", "idSnapshotOrder": "map-insertion", "loadOrder": "sequential-by-family-node-mark-extension", "loadFailure": "warn-skip-continue", "eagerPrecedence": "extension-before-factory", "registerReturn": "void", "disposal": "id-only-public-api" }
+    },
+    {
+      "id": "registry.admin-extensions",
+      "family": "admin pages and widgets",
+      "sources": ["app/composables/admin/useAdminPlugins.ts"],
+      "globalKeys": [],
+      "implementation": "legacy-equivalent",
+      "behavior": { "duplicate": "replace-in-place-by-id", "storedValue": "normalized-caller-value", "pageDefaultPath": "id", "defaultOrder": 0, "equalOrderTie": "array-position", "pluginDiscovery": "loaded-once-per-module-instance", "loadFailure": "dev-error-skip-continue", "componentCacheKey": "shared-page-or-widget-id", "componentCacheMax": 50, "componentCacheEviction": "fifo-insertion", "replacementCacheInvalidation": "none", "registerReturn": "void", "disposal": "none" }
+    },
+    {
+      "id": "registry.client-tools",
+      "family": "client AI tools",
+      "sources": ["app/utils/chat/tool-registry.ts"],
+      "globalKeys": ["__or3ToolRegistry"],
+      "implementation": "legacy-equivalent",
+      "behavior": { "duplicate": "reject-unless-override", "storedValue": "RegisteredTool-object-identity", "definition": "copied-with-normalized-runtime", "runtimePrecedence": "options-definition-hybrid", "state": ["enabled-ref", "lastError-ref"], "replacement": "stop-old-watcher-before-set", "persistenceKey": "or3.tools.enabled", "persistenceDebounceMs": 300, "initialEnabledPrecedence": "options-storage-definition-default-true", "registerReturn": "RegisteredTool", "disposal": "exact-owner-boolean", "timeoutMs": 10000, "schema": "shared-tool-schema", "limits": "shared-tool-limits" }
+    },
+    {
+      "id": "registry.server-tools",
+      "family": "server AI tools",
+      "sources": ["server/utils/chat/tool-registry.ts"],
+      "globalKeys": [],
+      "implementation": "legacy-equivalent",
+      "behavior": { "duplicate": "reject-unless-override", "storedValue": "RegisteredServerTool", "definition": "copied-with-normalized-runtime", "runtimePrecedence": "options-definition-hybrid", "runtimeHints": "client-hint-skips-server-match", "requestDefinition": "exact-shared-policy-parity", "registerReturn": "exact-owner-disposer-function", "timeoutDefaultMs": 10000, "timeoutOverride": true, "schema": "shared-tool-schema", "limits": "shared-tool-limits" }
+    }
+  ]
+}

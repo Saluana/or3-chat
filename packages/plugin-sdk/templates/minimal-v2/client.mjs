@@ -1,0 +1,42 @@
+import { defineOr3Plugin } from '@or3/plugin-sdk';
+
+export const exampleManifest = Object.freeze({
+    manifestVersion: 2,
+    kind: 'plugin',
+    id: 'or3.example-plugin',
+    name: 'Example Plugin',
+    version: '0.1.0',
+    description: 'Minimal Plugin Runtime V2 package scaffolded by the OR3 CLI.',
+    engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
+    runtime: {
+        client: {
+            entry: 'client.mjs',
+            format: 'esm',
+            isolation: 'host',
+        },
+    },
+    requestedGrants: ['hooks.register'],
+    features: { required: [], optional: [] },
+    dependencies: { required: [], optional: [] },
+    trust: 'trusted-host',
+    settings: { version: 1 },
+    stateCompatibility: {
+        version: 1,
+        reads: { minimum: 1, maximum: 1 },
+        rollback: 'safe',
+    },
+});
+
+export default defineOr3Plugin({
+    manifest: exampleManifest,
+    async setup(context) {
+        context.hooks.onAction('ui:ready', () => {
+            context.logger.info('example plugin ready', {
+                generation: context.generation,
+            });
+        });
+        context.onCleanup(() => {
+            context.logger.info('example plugin cleanup');
+        });
+    },
+});

@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "qualificationVersion": "milestone-1-shadow-v1",
+  "milestone": "Milestone 1 — Descriptor contracts and shadow ownership",
+  "status": "green",
+  "manifestSha256": "992d9f6518922d73371469d7970a87ce16b514a81f6b8a71a21e249a9766cbbb",
+  "publishedAt": "2026-07-20T16:12:07.942Z",
+  "durationMs": 87354,
+  "runner": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpuModel": "Apple M4 Pro",
+    "bunVersion": "1.3.6",
+    "nodeVersion": "24.3.0"
+  },
+  "evidence": {
+    "app/composables/plugins/shadow-plugin-manager.ts": "f2751954700851249bce4de07fe65da04f22aa21ea06cbe619f9d3246f7ad9ee",
+    "app/composables/plugins/workspace-plugin-shadow-observer.ts": "b2cbcf00e7210e5acf0ff6ef0530179d0036849d698c4a00d7e7433fa49f58e7",
+    "app/plugins/workspace-plugins.client.ts": "01364a2d5aa28375191e73c345d2bddeccfeeb3a5ae60b0c86874df8381be25f",
+    "planning/plugin-runtime-v2/qualification/shadow-rollback.md": "2bbe0f049785797c6ece70fcfaf58be5f257cc1ccc5ec311cad756e58bbe00ac",
+    "shared/plugins/bundled-plugin-catalog.ts": "46624f85db6f94a15245d78cc8aef84e35253311f30a667d02b307dc09ce8ed6",
+    "shared/plugins/descriptor-resolver.ts": "f7b6eaec298465b60dc099b2ea8f7369141dfc58a2e56104f94a81d5d8aef23e",
+    "shared/plugins/runtime-descriptor.ts": "0a7238cb470d90ee9acd3438ff7dba6e55cdbebd4d55129ee8024b8b9b8e584e",
+    "shared/plugins/runtime-state.ts": "c2f54f70d8bf4ec7a64fb1b0a3b4fee52948a85fb1a9e13d725fed94f7d38701",
+    "shared/plugins/safe-mode.ts": "0fbcce29ea6d40d39de36157b77e96f41efd2bff2516a7a3bad7cb595bc76aa7"
+  },
+  "gates": [
+    {
+      "id": "contracts-and-shadow",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run plugin-runtime:contracts:check",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 285
+        },
+        {
+          "command": "bun x vitest run shared/plugins/__tests__/runtime-state.test.ts shared/plugins/__tests__/descriptor-resolver.test.ts app/composables/plugins/__tests__/shadow-plugin-manager.test.ts shared/plugins/__tests__/safe-mode.test.ts",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 644
+        }
+      ]
+    },
+    {
+      "id": "observer-rollback-drill",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun x vitest run app/composables/plugins/__tests__/shadow-rollback.test.ts app/composables/plugins/__tests__/workspace-runtime.test.ts",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 591
+        }
+      ]
+    },
+    {
+      "id": "frozen-v1-qualification",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run plugin-runtime:milestone-0:qualify",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 85835
+        }
+      ]
+    }
+  ],
+  "rollback": {
+    "scope": "Disable only the read-only Milestone 1 observer; keep the authoritative V1 loader and all installed plugin data unchanged.",
+    "procedure": [
+      "Set OR3_PLUGIN_RUNTIME_SHADOW_ENABLED=false outside the plugin admin UI.",
+      "Restart the OR3 process before any non-core plugin executes.",
+      "Verify the Runtime Inspector reports V1 only and run the maintained V1 corpus.",
+      "Keep the observer disabled if the complete Milestone 0 qualification is not green."
+    ],
+    "drill": "The observer-rollback-drill gate proves the V1 import/register trace remains exact and observer dependencies are never constructed; the frozen-v1-qualification gate then re-runs all Milestone 0 exit gates."
+  }
+}

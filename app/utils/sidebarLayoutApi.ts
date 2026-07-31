@@ -1,11 +1,20 @@
 /**
- * Global Sidebar Layout API
+ * @module app/utils/sidebarLayoutApi
  *
- * Provides access to sidebar layout controls from any component.
- * This is set by PageShell.vue on mount and can be used by plugins
- * to control sidebar state (e.g., closing on mobile after selection).
+ * Purpose:
+ * Exposes a global sidebar layout API for components and plugins.
+ *
+ * Behavior:
+ * - The API is set by PageShell.vue on mount
+ * - Consumers can safely call helpers even before mount
  */
 
+/**
+ * `SidebarLayoutApi`
+ *
+ * Purpose:
+ * Contract for sidebar layout controls provided by PageShell.
+ */
 export interface SidebarLayoutApi {
     /** Close the sidebar (useful for mobile after selection) */
     close: () => void;
@@ -26,16 +35,20 @@ type GlobalSidebarLayout = typeof globalThis & {
 };
 
 /**
- * Get the global sidebar layout API if available.
- * Returns undefined if PageShell hasn't mounted yet.
+ * `getGlobalSidebarLayoutApi`
+ *
+ * Purpose:
+ * Returns the sidebar layout API if PageShell is mounted.
  */
 export function getGlobalSidebarLayoutApi(): SidebarLayoutApi | undefined {
     return (globalThis as GlobalSidebarLayout).__or3SidebarLayoutApi;
 }
 
 /**
- * Set the global sidebar layout API.
- * Called by PageShell.vue on mount.
+ * `setGlobalSidebarLayoutApi`
+ *
+ * Purpose:
+ * Registers the sidebar layout API on `globalThis`.
  */
 export function setGlobalSidebarLayoutApi(
     api: SidebarLayoutApi | undefined
@@ -44,8 +57,10 @@ export function setGlobalSidebarLayoutApi(
 }
 
 /**
- * Convenience function to close the sidebar if on mobile.
- * Safe to call even if the API isn't available yet.
+ * `closeSidebarIfMobile`
+ *
+ * Purpose:
+ * Convenience helper that closes the sidebar only on mobile.
  */
 export function closeSidebarIfMobile(): void {
     const api = getGlobalSidebarLayoutApi();

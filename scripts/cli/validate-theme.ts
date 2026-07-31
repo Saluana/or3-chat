@@ -41,6 +41,9 @@ async function validateTheme(options: ValidationOptions = {}) {
     for (const themeResult of themesToCheck) {
       const hasErrors = themeResult.errors.length > 0;
       const hasWarnings = themeResult.warnings.length > 0;
+      if (!hasErrors) successCount++;
+      totalErrors += themeResult.errors.length;
+      totalWarnings += themeResult.warnings.length;
       
       if (hasErrors) {
         console.log(`❌ ${themeResult.name}`);
@@ -48,7 +51,6 @@ async function validateTheme(options: ValidationOptions = {}) {
         console.log(`⚠️  ${themeResult.name}`);
       } else {
         console.log(`✅ ${themeResult.name}`);
-        successCount++;
       }
       
       // Show errors
@@ -64,7 +66,6 @@ async function validateTheme(options: ValidationOptions = {}) {
           }
         }
         console.log('');
-        totalErrors += themeResult.errors.length;
       }
       
       // Show warnings
@@ -77,7 +78,6 @@ async function validateTheme(options: ValidationOptions = {}) {
           }
         }
         console.log('');
-        totalWarnings += themeResult.warnings.length;
       }
     }
     

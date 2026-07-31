@@ -1,0 +1,15 @@
+{
+  "extends": "../../../.nuxt/tsconfig.app.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "../../../.nuxt/nuxt.d.ts",
+    "../../../.nuxt/imports.d.ts",
+    "../../../.nuxt/types/**/*.d.ts",
+    "../../../types/**/*.d.ts",
+    "../../../app/plugins/examples/**/*.vue",
+    "./examples.compile.ts"
+  ]
+}

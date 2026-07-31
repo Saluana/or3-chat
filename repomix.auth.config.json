@@ -1,0 +1,57 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "style": "markdown",
+    "filePath": "or3-auth-can-audit.md",
+    "removeComments": false,
+    "showLineNumbers": true,
+    "topFilesLength": 20,
+    "headerText": "OR3 SSR Auth + can() Authorization — Security Audit Pack\n\nScope: Session resolution, can()/capability gates, token broker, admin auth hardening, workspace membership APIs, lock-page gating, client session recovery, related docs/tests.\n\nPrimary surfaces:\n1. server/auth/can.ts + capability-gate — sole authorization gate for SSR endpoints\n2. server/auth/session.ts + /api/auth/session — session resolution / identity split (internal user id vs providerUserId)\n3. server/auth/token-broker — direct-provider JWT templates\n4. server/admin/auth + guard — admin login, rate limits, trusted client identity\n5. server/api/workspaces — membership / active workspace switching\n6. app/composables/auth + session refresh plugins — client trust boundary\n7. app/core/lock-page — pre-auth lock surface\n\nExcluded: OpenRouter LLM proxy/background jobs (separate pack), sync/storage engines (separate packs), plugin runtime, themes, webhooks, Convex provider package internals."
+  },
+  "include": [
+    "server/auth/**",
+    "server/api/auth/**",
+    "server/utils/auth/**",
+    "server/api/admin/auth/**",
+    "server/admin/auth/**",
+    "server/admin/guard.ts",
+    "server/admin/__tests__/guard.test.ts",
+    "server/admin/context.ts",
+    "server/admin/api.ts",
+    "server/api/workspaces/**",
+    "server/utils/normalize-host.ts",
+    "server/utils/headers.ts",
+    "server/utils/rate-limit.ts",
+    "server/utils/rate-limit/**",
+    "app/composables/auth/**",
+    "app/core/lock-page/**",
+    "app/composables/workspace/**",
+    "app/plugins/10.auth-ui-registry.client.ts",
+    "app/plugins/10b.lock-page-registry.client.ts",
+    "app/plugins/11.auth-session-refresh.client.ts",
+    "app/plugins/__tests__/auth-session-workspace-revision.test.ts",
+    "app/plugins/__tests__/workspace-db-logout.test.ts",
+    "app/plugins/00-workspace-db.client.ts",
+    "shared/testing/contracts/authorization.ts",
+    "planning/complete/ssr-auth-system/**",
+    "planning/complete/admin-auth-hardening/**",
+    "planning/complete/auth-registration-controls/**",
+    "planning/complete/or3-cloud-lock-page/**",
+    "public/_documentation/cloud/auth-system.md",
+    "public/_documentation/cloud/admin-access-bridge.md",
+    "public/_documentation/cloud/provider-basic-auth.md",
+    "public/_documentation/cloud/provider-clerk.md"
+  ],
+  "ignore": {
+    "customPatterns": [
+      "**/node_modules/**",
+      "**/.nuxt/**",
+      "**/.output/**",
+      "**/webhooks/**",
+      "**/*webhook*",
+      "or3-*-audit.md",
+      "or3-repo.md",
+      "or3-intern-full-codebase.md"
+    ]
+  }
+}

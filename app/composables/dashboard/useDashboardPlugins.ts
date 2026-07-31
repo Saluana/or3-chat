@@ -9,6 +9,37 @@ import {
     type Component,
     type ShallowRef,
 } from 'vue';
+import {
+    mergePluginGatePolicy,
+    type PluginGatePolicy,
+} from '~~/shared/plugins/access-policy';
+import {
+    createRegistrationHandle,
+    type RegistrationHandle,
+} from '~~/shared/plugins/registration-handle';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
+import type {
+    DashboardNavigationError,
+    DashboardNavigationResult,
+    DashboardNavigationState,
+    UseDashboardNavigationOptions,
+} from '~/core/dashboard/dashboard-navigation-types';
+
+export type {
+    DashboardNavigationError,
+    DashboardNavigationErrorCode,
+    DashboardNavigationResult,
+    DashboardNavigationState,
+    UseDashboardNavigationOptions,
+} from '~/core/dashboard/dashboard-navigation-types';
+export {
+    getPluginCapabilities,
+    hasAllCapabilities,
+    hasAnyCapability,
+    hasCapability,
+} from '~/core/dashboard/plugin-capabilities';
 
 export interface DashboardPlugin {
     /** Unique id across all dashboard plugins */
@@ -37,6 +68,10 @@ export interface DashboardPlugin {
      * - 'canAccessSettings': Read or modify app settings
      */
     capabilities?: string[];
+    /** Optional access gate policy for this plugin. */
+    access?: PluginGatePolicy;
+    /** Owning installable plugin id used for workspace policy lookup. */
+    pluginId?: string;
 }
 
 export interface DashboardPluginPage {
@@ -52,6 +87,8 @@ export interface DashboardPluginPage {
     description?: string;
     /** Component or async factory returning component (lazy loaded). */
     component: Component | (() => Promise<{ default?: Component } | Component>);
+    /** Optional access gate policy for this page. */
+    access?: PluginGatePolicy;
 }
 
 type DashboardGlobals = typeof globalThis & {
@@ -61,10 +98,25 @@ type DashboardGlobals = typeof globalThis & {
         Map<string, DashboardPluginPage>
     >;
     __or3DashboardNavigationRuntime?: DashboardNavigationRuntime;
+    __or3DashboardNavigationRuntimeV2?: DashboardNavigationRuntime;
+    __or3DashboardV2PageBuckets?: Set<string>;
+    __or3DashboardRegistryListeners?: Set<() => void>;
+    __or3DashboardRegistryKernelUnsubscribes?: Array<() => void>;
+};
+
+type OwnedDashboardPlugin = {
+    plugin: DashboardPlugin;
+    owner: symbol;
 };
 
 // Global singleton (survives HMR)
-const g = globalThis as DashboardGlobals;
+const g = globalThis as DashboardGlobals & {
+    __or3DashboardPluginsOwnedRegistry?: Map<string, OwnedDashboardPlugin>;
+};
+const ownedRegistry: Map<string, OwnedDashboardPlugin> =
+    g.__or3DashboardPluginsOwnedRegistry ??
+    (g.__or3DashboardPluginsOwnedRegistry = new Map<string, OwnedDashboardPlugin>());
+// Back-compat alias used by existing helpers that still expect a plugin map.
 const registry: Map<string, DashboardPlugin> =
     g.__or3DashboardPluginsRegistry ??
     (g.__or3DashboardPluginsRegistry = new Map<string, DashboardPlugin>());
@@ -80,62 +132,134 @@ const pageRegistry: Map<string, Map<string, DashboardPluginPage>> =
 const reactivePages = reactive<{ [pluginId: string]: DashboardPluginPage[] }>(
     {}
 );
+const dashboardRegistryListeners =
+    g.__or3DashboardRegistryListeners ??
+    (g.__or3DashboardRegistryListeners = new Set<() => void>());
+
+function notifyDashboardRegistryChange(): void {
+    for (const listener of [...dashboardRegistryListeners]) {
+        try {
+            listener();
+        } catch {
+            // Dashboard observers are isolated from registry mutations.
+        }
+    }
+}
+
+export function subscribeDashboardRegistry(listener: () => void): () => void {
+    dashboardRegistryListeners.add(listener);
+    return () => dashboardRegistryListeners.delete(listener);
+}
 
 // Order constant (avoid magic number repetition)
 const DEFAULT_ORDER = 200;
 
+interface DashboardPageContribution {
+    readonly pluginId: string;
+    readonly page: DashboardPluginPage;
+}
+
+function normalizeDashboardPlugin(plugin: DashboardPlugin): DashboardPlugin {
+    return Object.freeze({
+        ...plugin,
+        pages: plugin.pages ? [...plugin.pages] : undefined,
+    }) as DashboardPlugin;
+}
+
+function normalizeDashboardPage(
+    page: DashboardPluginPage
+): DashboardPluginPage {
+    let component = page.component;
+    if (isReactive(component)) component = toRaw(component);
+    if (typeof component === 'object') {
+        component = markRaw(component) as typeof component;
+    }
+    return Object.freeze({ ...page, component });
+}
+
+function dashboardPageContributionId(pluginId: string, pageId: string): string {
+    return JSON.stringify([pluginId, pageId]);
+}
+
+const pluginV2Kernel = getContributionSurfaceKernel<DashboardPlugin>(
+    'dashboard',
+    {
+        getId: (plugin) => plugin.id,
+        normalize: normalizeDashboardPlugin,
+        compare: (left, right) =>
+            (left.order ?? DEFAULT_ORDER) -
+            (right.order ?? DEFAULT_ORDER),
+    },
+    'plugins'
+);
+const pageV2Kernel = getContributionSurfaceKernel<DashboardPageContribution>(
+    'dashboard',
+    {
+        getId: (entry) =>
+            dashboardPageContributionId(entry.pluginId, entry.page.id),
+        normalize: (entry) =>
+            Object.freeze({
+                pluginId: entry.pluginId,
+                page: normalizeDashboardPage(entry.page),
+            }),
+        compare: (left, right) =>
+            left.pluginId.localeCompare(right.pluginId) ||
+            (left.page.order ?? DEFAULT_ORDER) -
+                (right.page.order ?? DEFAULT_ORDER),
+    },
+    'pages'
+);
+const v2PageBuckets =
+    g.__or3DashboardV2PageBuckets ??
+    (g.__or3DashboardV2PageBuckets = new Set<string>());
+for (const unsubscribe of g.__or3DashboardRegistryKernelUnsubscribes ?? []) {
+    unsubscribe();
+}
+g.__or3DashboardRegistryKernelUnsubscribes = [
+    pluginV2Kernel.registry.subscribe(notifyDashboardRegistryChange),
+    pageV2Kernel.registry.subscribe(notifyDashboardRegistryChange),
+];
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('dashboard');
+}
+
+function useNavigationV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected(
+        'dashboard-navigation'
+    );
+}
+
 // Component resolution cache
-const pageComponentCache = new Map<string, Component>();
+const legacyPageComponentCache = new Map<string, Component>();
+const v2PageComponentCache = new Map<string, Component>();
 
-export type DashboardNavigationErrorCode =
-    | 'missing-plugin'
-    | 'missing-page'
-    | 'handler-error'
-    | 'resolve-error';
-
-export interface DashboardNavigationError {
-    code: DashboardNavigationErrorCode;
-    message: string;
-    pluginId?: string;
-    pageId?: string;
-    cause?: unknown;
-}
-
-export interface DashboardNavigationState {
-    view: 'dashboard' | 'page';
-    activePluginId: string | null;
-    activePageId: string | null;
-    loadingPage: boolean;
-    error: DashboardNavigationError | null;
-}
-
-export type DashboardNavigationResult =
-    | { ok: true }
-    | { ok: false; error: DashboardNavigationError };
-
-export interface UseDashboardNavigationOptions {
-    baseItems?: DashboardPlugin[];
+function getPageComponentCache(): Map<string, Component> {
+    return useNavigationV2Surface()
+        ? v2PageComponentCache
+        : legacyPageComponentCache;
 }
 
 interface DashboardNavigationRuntime {
     state: DashboardNavigationState;
     resolvedComponent: ShallowRef<Component | null>;
     baseItems: ShallowRef<DashboardPlugin[]>;
+    generation: number;
 }
 
 function deletePageCache(pluginId: string, pageId: string) {
-    pageComponentCache.delete(`${pluginId}:${pageId}`);
+    getPageComponentCache().delete(`${pluginId}:${pageId}`);
 }
 
 function deleteAllPluginPageCache(pluginId: string) {
-    for (const key of pageComponentCache.keys()) {
-        if (key.startsWith(pluginId + ':')) pageComponentCache.delete(key);
+    const cache = getPageComponentCache();
+    for (const key of cache.keys()) {
+        if (key.startsWith(pluginId + ':')) cache.delete(key);
     }
 }
 
-const navigationRuntime: DashboardNavigationRuntime =
-    g.__or3DashboardNavigationRuntime ||
-    (g.__or3DashboardNavigationRuntime = {
+function createDashboardNavigationRuntime(): DashboardNavigationRuntime {
+    return {
         state: reactive<DashboardNavigationState>({
             view: 'dashboard',
             activePluginId: null,
@@ -145,92 +269,339 @@ const navigationRuntime: DashboardNavigationRuntime =
         }),
         resolvedComponent: shallowRef<Component | null>(null),
         baseItems: shallowRef<DashboardPlugin[]>([]),
-    });
+        generation: 0,
+    };
+}
+
+const legacyNavigationRuntime: DashboardNavigationRuntime =
+    g.__or3DashboardNavigationRuntime ||
+    (g.__or3DashboardNavigationRuntime = createDashboardNavigationRuntime());
+const v2NavigationRuntime: DashboardNavigationRuntime =
+    g.__or3DashboardNavigationRuntimeV2 ??
+    (g.__or3DashboardNavigationRuntimeV2 =
+        createDashboardNavigationRuntime());
+
+function getDashboardNavigationRuntime(): DashboardNavigationRuntime {
+    return useNavigationV2Surface()
+        ? v2NavigationRuntime
+        : legacyNavigationRuntime;
+}
 
 function syncPages(pluginId: string) {
     const m = pageRegistry.get(pluginId);
     reactivePages[pluginId] = m ? Array.from(m.values()) : [];
+    notifyDashboardRegistryChange();
 }
 
 function sync() {
     // Expose a shallow copy array so that consumer sorts don't mutate source
     reactiveList.items = Array.from(registry.values());
+    notifyDashboardRegistryChange();
 }
 
-export function registerDashboardPlugin(plugin: DashboardPlugin) {
-    if ((import.meta.dev || (process as any).dev) && registry.has(plugin.id)) {
-         
+/** @internal Shared with focused dashboard policy helpers. */
+export function getRegisteredDashboardPlugin(
+    pluginId: string
+): DashboardPlugin | undefined {
+    return useV2Surface()
+        ? pluginV2Kernel.registry.get(pluginId, undefined)
+        : registry.get(pluginId);
+}
+
+function getDashboardPluginAccessPolicy(
+    pluginId: string
+): PluginGatePolicy | undefined {
+    const fromRegistry = getRegisteredDashboardPlugin(pluginId)?.access;
+    if (fromRegistry) return fromRegistry;
+    return getDashboardNavigationRuntime().baseItems.value.find((item) => item.id === pluginId)
+        ?.access;
+}
+
+function isDashboardPluginAllowed(plugin: DashboardPlugin): boolean {
+    return getPluginGateDecision(plugin.pluginId ?? plugin.id, plugin.access)
+        .allowed;
+}
+
+function isDashboardPageAllowed(pluginId: string, page: DashboardPluginPage): boolean {
+    const pluginPolicy = getDashboardPluginAccessPolicy(pluginId);
+    const policy = mergePluginGatePolicy(pluginPolicy ?? {}, page.access ?? {});
+    const ownerPluginId =
+        getRegisteredDashboardPlugin(pluginId)?.pluginId ?? pluginId;
+    return getPluginGateDecision(ownerPluginId, policy).allowed;
+}
+
+/**
+ * Purpose:
+ * Register a dashboard plugin for discovery and navigation.
+ *
+ * Behavior:
+ * Adds or replaces the plugin entry and normalizes inline pages into the
+ * page registry.
+ *
+ * Constraints:
+ * - Plugin IDs must be unique
+ * - Inline pages overwrite existing pages for the plugin
+ *
+ * Non-Goals:
+ * - Rendering the plugin UI
+ *
+ * @example
+ * ```ts
+ * registerDashboardPlugin({
+ *   id: 'my-plugin',
+ *   icon: 'i-carbon-apps',
+ *   label: 'My Plugin',
+ *   pages: [
+ *     {
+ *       id: 'settings',
+ *       title: 'Settings',
+ *       component: () => import('~/components/MyPluginSettings.vue'),
+ *     },
+ *   ],
+ * });
+ * ```
+ */
+export function registerDashboardPlugin(plugin: DashboardPlugin): RegistrationHandle {
+    const isDev =
+        import.meta.dev ||
+        (typeof process !== 'undefined' &&
+            (process as { dev?: boolean }).dev === true);
+    if (
+        isDev &&
+        (useV2Surface()
+            ? pluginV2Kernel.registry.get(plugin.id, undefined) !== undefined
+            : registry.has(plugin.id))
+    ) {
         console.warn(
             `[dashboard] Overwriting existing plugin id "${plugin.id}"`
         );
     }
+    if (useV2Surface()) {
+        const handle = pluginV2Kernel.registry.registerLegacy({ value: plugin });
+        if (plugin.pages) {
+            unregisterDashboardPluginPage(plugin.id);
+            for (const page of plugin.pages) {
+                registerDashboardPluginPage(plugin.id, page);
+            }
+        }
+        return {
+            id: plugin.id,
+            owner: handle.owner,
+            get disposed() {
+                return handle.disposed;
+            },
+            dispose() {
+                if (!handle.dispose()) return false;
+                unregisterDashboardPluginPage(plugin.id);
+                deleteAllPluginPageCache(plugin.id);
+                return true;
+            },
+        };
+    }
+
     // Freeze to prevent external mutation; copy pages array so later mutations by caller don't leak in.
-    const frozen = Object.freeze({
-        ...plugin,
-        pages: plugin.pages ? [...plugin.pages] : undefined,
-    });
-    registry.set(plugin.id, frozen as DashboardPlugin);
+    const frozen = normalizeDashboardPlugin(plugin);
+    const owner = Symbol(`dashboard:${plugin.id}`);
+    ownedRegistry.set(plugin.id, { plugin: frozen, owner });
+    registry.set(plugin.id, frozen);
     sync();
     // If inline pages provided, replace existing pages for that plugin in a single pass (avoid redundant sync cycles)
     if (plugin.pages) {
         unregisterDashboardPluginPage(plugin.id); // clear existing pages + cache
         for (const p of plugin.pages) registerDashboardPluginPage(plugin.id, p);
     }
+    return createRegistrationHandle({
+        id: plugin.id,
+        owner,
+        isCurrent: () => ownedRegistry.get(plugin.id)?.owner === owner,
+        remove: () => {
+            if (ownedRegistry.get(plugin.id)?.owner !== owner) return;
+            ownedRegistry.delete(plugin.id);
+            unregisterDashboardPlugin(plugin.id);
+        },
+    });
 }
 
+/**
+ * Purpose:
+ * Remove a dashboard plugin and its pages from the registry.
+ *
+ * Behavior:
+ * Deletes the plugin entry and clears associated pages and caches.
+ *
+ * Constraints:
+ * - No-op if the plugin ID is not registered
+ *
+ * Non-Goals:
+ * - Unmounting active UI components
+ *
+ * @example
+ * ```ts
+ * unregisterDashboardPlugin('my-plugin');
+ * ```
+ */
 export function unregisterDashboardPlugin(id: string) {
-    if (registry.delete(id)) sync();
+    if (useV2Surface()) pluginV2Kernel.registry.unregisterLegacy(id);
+    else {
+        ownedRegistry.delete(id);
+        if (registry.delete(id)) sync();
+    }
     unregisterDashboardPluginPage(id); // also clears pages + cache + reactivePages entry
     deleteAllPluginPageCache(id);
     // Using computed property access to safely delete from reactive object
     delete reactivePages[id];
 }
 
+/**
+ * Purpose:
+ * Access the reactive list of registered dashboard plugins.
+ *
+ * Behavior:
+ * Returns a computed list sorted by the order field.
+ *
+ * Constraints:
+ * - Sorting uses the default order constant when missing
+ *
+ * Non-Goals:
+ * - Filtering by capability or visibility
+ *
+ * @example
+ * ```ts
+ * const plugins = useDashboardPlugins();
+ * ```
+ */
 export function useDashboardPlugins() {
-    return computed(() =>
-        [...reactiveList.items].sort(
+    return computed(() => {
+        const items: typeof reactiveList.items = useV2Surface()
+            ? (pluginV2Kernel.items.value as typeof reactiveList.items)
+            : reactiveList.items;
+        return items
+            .filter((plugin) => isDashboardPluginAllowed(plugin))
+            .sort(
             (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
-        )
-    );
+            );
+    });
 }
 
+/**
+ * Purpose:
+ * Inspect registered dashboard plugin IDs.
+ *
+ * Behavior:
+ * Returns IDs in registration order.
+ *
+ * Constraints:
+ * - Intended for debugging or diagnostics
+ *
+ * Non-Goals:
+ * - Sorting by plugin order
+ *
+ * @example
+ * ```ts
+ * const ids = listRegisteredDashboardPluginIds();
+ * ```
+ */
 export function listRegisteredDashboardPluginIds(): string[] {
-    return Array.from(registry.keys());
+    return useV2Surface()
+        ? [...pluginV2Kernel.registry.listLegacyIds()]
+        : Array.from(registry.keys());
 }
 
 // ----- Pages API -----
 
+/**
+ * Purpose:
+ * Register a page for a dashboard plugin.
+ *
+ * Behavior:
+ * Adds or replaces the page entry and updates the reactive pages list.
+ *
+ * Constraints:
+ * - Page IDs must be unique per plugin
+ * - Component instances are marked as raw to avoid reactivity costs
+ *
+ * Non-Goals:
+ * - Loading or mounting the page component
+ *
+ * @example
+ * ```ts
+ * registerDashboardPluginPage('my-plugin', {
+ *   id: 'overview',
+ *   title: 'Overview',
+ *   component: () => import('~/components/MyPluginOverview.vue'),
+ * });
+ * ```
+ */
 export function registerDashboardPluginPage(
     pluginId: string,
     page: DashboardPluginPage
 ) {
+    deletePageCache(pluginId, page.id);
+    if (useV2Surface()) {
+        v2PageBuckets.add(pluginId);
+        pageV2Kernel.registry.registerLegacy({
+            value: { pluginId, page },
+        });
+        return;
+    }
     let m = pageRegistry.get(pluginId);
     if (!m) {
         m = new Map();
         pageRegistry.set(pluginId, m);
     }
-    // Invalidate any cached component for this page id prior to replacement
-    deletePageCache(pluginId, page.id);
-    let component = page.component;
-    if (isReactive(component)) {
-        component = toRaw(component);
-    }
-    if (typeof component === 'object') {
-        component = markRaw(component) as typeof component;
-    }
-
-    const frozen = Object.freeze({
-        ...page,
-        component,
-    });
+    const frozen = normalizeDashboardPage(page);
     m.set(page.id, frozen);
     syncPages(pluginId);
 }
 
+/**
+ * Purpose:
+ * Remove a page entry or all pages for a plugin.
+ *
+ * Behavior:
+ * Deletes the page entry and clears cached component instances.
+ *
+ * Constraints:
+ * - No-op if the plugin or page is missing
+ *
+ * Non-Goals:
+ * - Unmounting active page components
+ *
+ * @example
+ * ```ts
+ * unregisterDashboardPluginPage('my-plugin', 'overview');
+ * ```
+ */
 export function unregisterDashboardPluginPage(
     pluginId: string,
     pageId?: string
 ) {
+    if (useV2Surface()) {
+        if (pageId) {
+            if (!v2PageBuckets.has(pluginId)) return;
+            const removed = pageV2Kernel.registry.unregisterLegacy(
+                dashboardPageContributionId(pluginId, pageId)
+            );
+            if (!removed) pageV2Kernel.registry.publishLegacyProjection();
+            deletePageCache(pluginId, pageId);
+        } else {
+            if (!v2PageBuckets.delete(pluginId)) return;
+            const ids: string[] = [];
+            for (const entry of pageV2Kernel.items.value) {
+                if (entry.pluginId !== pluginId) continue;
+                ids.push(
+                    dashboardPageContributionId(pluginId, entry.page.id)
+                );
+                deletePageCache(pluginId, entry.page.id);
+            }
+            const removed = pageV2Kernel.registry.unregisterLegacyBatch(ids);
+            // V1 deletes and then reinitializes its reactive plugin-page bucket.
+            pageV2Kernel.registry.publishLegacyProjection();
+            if (!removed) pageV2Kernel.registry.publishLegacyProjection();
+            deleteAllPluginPageCache(pluginId);
+        }
+        return;
+    }
     const m = pageRegistry.get(pluginId);
     if (!m) return;
     if (pageId) {
@@ -248,31 +619,100 @@ export function unregisterDashboardPluginPage(
     syncPages(pluginId);
 }
 
+/**
+ * Purpose:
+ * Access the reactive list of pages for a selected plugin.
+ *
+ * Behavior:
+ * Returns a computed, sorted array for the current plugin ID.
+ *
+ * Constraints:
+ * - Returns an empty list when the plugin ID is missing
+ *
+ * Non-Goals:
+ * - Page access control
+ *
+ * @example
+ * ```ts
+ * const pages = useDashboardPluginPages(() => activePluginId.value);
+ * ```
+ */
 export function useDashboardPluginPages(pluginId: () => string | undefined) {
     return computed(() => {
         const id = pluginId();
         if (!id) return [] as DashboardPluginPage[];
-        const list = reactivePages[id] || [];
-        return [...list].sort(
-            (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
-        );
+        const list = useV2Surface()
+            ? pageV2Kernel.items.value
+                  .filter((entry) => entry.pluginId === id)
+                  .map((entry) => entry.page)
+            : reactivePages[id] || [];
+        return [...list]
+            .filter((page) => isDashboardPageAllowed(id, page))
+            .sort((a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER));
     });
 }
 
+/**
+ * Purpose:
+ * Retrieve a sorted list of pages for a plugin.
+ *
+ * Behavior:
+ * Returns a new array sorted by the order field.
+ *
+ * Constraints:
+ * - Only includes pages currently registered
+ *
+ * Non-Goals:
+ * - Resolving page components
+ *
+ * @example
+ * ```ts
+ * const pages = listDashboardPluginPages('my-plugin');
+ * ```
+ */
 export function listDashboardPluginPages(
     pluginId: string
 ): DashboardPluginPage[] {
-    const list = reactivePages[pluginId] || [];
-    return [...list].sort(
-        (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
-    );
+    const list = useV2Surface()
+        ? pageV2Kernel.items.value
+              .filter((entry) => entry.pluginId === pluginId)
+              .map((entry) => entry.page)
+        : reactivePages[pluginId] || [];
+    return [...list]
+        .filter((page) => isDashboardPageAllowed(pluginId, page))
+        .sort((a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER));
 }
 
+/**
+ * Purpose:
+ * Find a page definition for a specific plugin.
+ *
+ * Behavior:
+ * Returns the page entry if it exists in the registry.
+ *
+ * Constraints:
+ * - Returns undefined when missing
+ *
+ * Non-Goals:
+ * - Component resolution
+ *
+ * @example
+ * ```ts
+ * const page = getDashboardPluginPage('my-plugin', 'overview');
+ * ```
+ */
 export function getDashboardPluginPage(
     pluginId: string,
     pageId: string
 ): DashboardPluginPage | undefined {
-    return pageRegistry.get(pluginId)?.get(pageId);
+    const page = useV2Surface()
+        ? pageV2Kernel.registry.get(
+              dashboardPageContributionId(pluginId, pageId),
+              undefined
+          )?.page
+        : pageRegistry.get(pluginId)?.get(pageId);
+    if (!page) return undefined;
+    return isDashboardPageAllowed(pluginId, page) ? page : undefined;
 }
 
 type AsyncComponentLoader = () => Promise<{ default?: Component } | Component>;
@@ -285,11 +725,34 @@ function isAsyncLoader(comp: unknown): comp is AsyncComponentLoader {
     return fn.length === 0 && !fn.__vccOpts && !fn.render && !fn.setup;
 }
 
+/**
+ * Purpose:
+ * Resolve and cache the Vue component for a dashboard page.
+ *
+ * Behavior:
+ * Loads async factories, normalizes results, and caches by plugin and page ID.
+ *
+ * Constraints:
+ * - Returns undefined when the page is missing
+ * - Async loaders must return a Vue component or default export
+ *
+ * Non-Goals:
+ * - Rendering or mounting the component
+ *
+ * @example
+ * ```ts
+ * const component = await resolveDashboardPluginPageComponent(
+ *   'my-plugin',
+ *   'overview',
+ * );
+ * ```
+ */
 export async function resolveDashboardPluginPageComponent(
     pluginId: string,
     pageId: string
 ): Promise<Component | undefined> {
     const key = `${pluginId}:${pageId}`;
+    const pageComponentCache = getPageComponentCache();
     if (pageComponentCache.has(key)) return pageComponentCache.get(key);
     const page = getDashboardPluginPage(pluginId, pageId);
     if (!page) return;
@@ -301,7 +764,11 @@ export async function resolveDashboardPluginPageComponent(
         const loaded = await comp();
         // Handle both { default: Component } and direct Component returns
         comp = (typeof loaded === 'object' && 'default' in loaded ? loaded.default : loaded) as Component;
-        if ((import.meta.dev || (process as any).dev) && typeof comp !== 'object') {
+        const isDev =
+            import.meta.dev ||
+            (typeof process !== 'undefined' &&
+                (process as { dev?: boolean }).dev === true);
+        if (isDev && typeof comp !== 'object') {
              
             console.warn(
                 `[dashboard] Async page loader for ${pluginId}:${pageId} returned non-component`,
@@ -319,12 +786,11 @@ export async function resolveDashboardPluginPageComponent(
     return comp;
 }
 
-// Minimal built‑in examples can be registered in a plugin file separately; keeping
-// this composable focused only on registry mechanics (mirrors other ui-extension patterns).
-
+/** Manage dashboard landing/page navigation and async component ownership. */
 export function useDashboardNavigation(
     options: UseDashboardNavigationOptions = {}
 ) {
+    const navigationRuntime = getDashboardNavigationRuntime();
     if (options.baseItems !== undefined) {
         navigationRuntime.baseItems.value = [...options.baseItems];
     }
@@ -337,6 +803,7 @@ export function useDashboardNavigation(
     const dashboardItems = computed(() => {
         const map = new Map<string, DashboardPlugin>();
         for (const item of navigationRuntime.baseItems.value) {
+            if (!isDashboardPluginAllowed(item)) continue;
             map.set(item.id, item);
         }
         for (const plugin of registered.value) {
@@ -386,6 +853,7 @@ export function useDashboardNavigation(
     const openPlugin = async (
         pluginId: string
     ): Promise<DashboardNavigationResult> => {
+        const generation = ++navigationRuntime.generation;
         clearError();
         const plugin = ensurePlugin(pluginId);
         if (!plugin) {
@@ -410,9 +878,15 @@ export function useDashboardNavigation(
         if (!pages.length) {
             try {
                 await plugin.handler?.({ id: pluginId });
+                if (generation !== navigationRuntime.generation) {
+                    return { ok: true };
+                }
                 state.view = 'dashboard';
                 return { ok: true };
             } catch (cause) {
+                if (generation !== navigationRuntime.generation) {
+                    return { ok: true };
+                }
                 state.view = 'dashboard';
                 state.activePluginId = null;
                 return setError({
@@ -436,6 +910,7 @@ export function useDashboardNavigation(
         pluginId: string,
         pageId: string
     ): Promise<DashboardNavigationResult> => {
+        const generation = ++navigationRuntime.generation;
         clearError();
         const plugin = ensurePlugin(pluginId);
         if (!plugin) {
@@ -475,6 +950,9 @@ export function useDashboardNavigation(
                 pluginId,
                 pageId
             );
+            if (generation !== navigationRuntime.generation) {
+                return { ok: true };
+            }
             state.loadingPage = false;
             if (!component) {
                 state.activePageId = null;
@@ -488,6 +966,9 @@ export function useDashboardNavigation(
             resolved.value = component;
             return { ok: true };
         } catch (cause) {
+            if (generation !== navigationRuntime.generation) {
+                return { ok: true };
+            }
             state.loadingPage = false;
             state.activePageId = null;
             return setError({
@@ -501,6 +982,7 @@ export function useDashboardNavigation(
     };
 
     const goBack = () => {
+        navigationRuntime.generation++;
         clearError();
         if (state.view === 'dashboard') return;
         const pluginId = state.activePluginId;
@@ -524,6 +1006,7 @@ export function useDashboardNavigation(
     };
 
     function reset() {
+        navigationRuntime.generation++;
         state.view = 'dashboard';
         state.activePluginId = null;
         state.activePageId = null;
@@ -544,60 +1027,4 @@ export function useDashboardNavigation(
         goBack,
         reset,
     };
-}
-
-/**
- * Check if a dashboard plugin declares a specific capability.
- * @param pluginId - The unique ID of the plugin
- * @param capability - The capability string to check (e.g., 'canReadMessages')
- * @returns true if the plugin declares the capability, false otherwise
- */
-export function hasCapability(pluginId: string, capability: string): boolean {
-    const plugin = registry.get(pluginId);
-    if (!plugin) return false;
-    if (!plugin.capabilities || !Array.isArray(plugin.capabilities)) {
-        return false;
-    }
-    return plugin.capabilities.includes(capability);
-}
-
-/**
- * Get all capabilities declared by a plugin.
- * @param pluginId - The unique ID of the plugin
- * @returns Array of capability strings, or empty array if none declared
- */
-export function getPluginCapabilities(pluginId: string): string[] {
-    const plugin = registry.get(pluginId);
-    if (!plugin || !plugin.capabilities) return [];
-    return [...plugin.capabilities];
-}
-
-/**
- * Check if a plugin has ALL of the specified capabilities.
- * @param pluginId - The unique ID of the plugin
- * @param capabilities - Array of capability strings to check
- * @returns true if plugin has all capabilities, false otherwise
- */
-export function hasAllCapabilities(
-    pluginId: string,
-    capabilities: string[]
-): boolean {
-    const plugin = registry.get(pluginId);
-    if (!plugin || !plugin.capabilities) return false;
-    return capabilities.every((cap) => plugin.capabilities!.includes(cap));
-}
-
-/**
- * Check if a plugin has ANY of the specified capabilities.
- * @param pluginId - The unique ID of the plugin
- * @param capabilities - Array of capability strings to check
- * @returns true if plugin has at least one capability, false otherwise
- */
-export function hasAnyCapability(
-    pluginId: string,
-    capabilities: string[]
-): boolean {
-    const plugin = registry.get(pluginId);
-    if (!plugin || !plugin.capabilities) return false;
-    return capabilities.some((cap) => plugin.capabilities!.includes(cap));
 }

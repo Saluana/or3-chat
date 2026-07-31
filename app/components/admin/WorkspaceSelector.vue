@@ -1,0 +1,155 @@
+<template>
+    <UModal
+        v-model:open="isOpen"
+        prevent-close
+        :close="{
+            size: 'sm',
+            class: 'theme-btn'
+        }"
+        title="Select a Workspace"
+        description="Choose the workspace whose plugins you want to manage"
+    >
+        <template #body>
+            <div class="space-y-3">
+                <div v-if="pending" class="space-y-3">
+                    <div
+                        v-for="i in 3"
+                        :key="i"
+                        class="h-20 bg-[var(--md-surface-container-highest)] rounded-lg animate-pulse"
+                    />
+                </div>
+
+                <div v-else-if="error" class="space-y-3">
+                    <UAlert
+                        color="error"
+                        :icon="warningIcon"
+                        title="Failed to load workspaces"
+                        :description="error.message"
+                    />
+                    <UButton
+                        block
+                        color="neutral"
+                        variant="soft"
+                        :loading="pending"
+                        @click="refreshWorkspaces"
+                    >
+                        Retry
+                    </UButton>
+                </div>
+
+                <template v-else>
+                    <button
+                        v-for="workspace in workspaces"
+                        :key="workspace.id"
+                        type="button"
+                        class="group flex w-full items-center gap-3 p-4 text-left rounded-lg border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] hover:bg-[var(--md-surface-container)] transition-all focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]"
+                        @click="selectAndClose(workspace)"
+                    >
+                        <div
+                            class="w-12 h-12 rounded-lg bg-[var(--md-surface-container-high)] flex items-center justify-center flex-shrink-0"
+                        >
+                            <UIcon
+                                :name="workspaceIcon"
+                                class="w-6 h-6 text-[var(--md-primary)]"
+                            />
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-medium text-[var(--md-on-surface)]">
+                                {{ workspace.name }}
+                            </div>
+                            <div class="text-sm text-[var(--md-on-surface-variant)]">
+                                {{ workspace.memberCount }} member{{ workspace.memberCount === 1 ? '' : 's' }}
+                                <span v-if="workspace.ownerEmail" class="truncate">
+                                    · {{ workspace.ownerEmail }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <span class="rounded bg-[var(--md-primary)] px-3 py-2 text-sm font-medium text-[var(--md-on-primary)]">
+                            Select
+                        </span>
+                    </button>
+
+                    <div
+                        v-if="workspaces.length === 0"
+                        class="text-center py-12"
+                    >
+                        <UIcon
+                            :name="workspaceIcon"
+                            class="w-12 h-12 mx-auto text-[var(--md-outline)] mb-3"
+                        />
+                        <p class="text-[var(--md-on-surface-variant)]">
+                            No workspaces found
+                        </p>
+                    </div>
+                </template>
+            </div>
+        </template>
+    </UModal>
+</template>
+
+<script setup lang="ts">
+interface Workspace {
+    id: string;
+    name: string;
+    memberCount: number;
+    ownerEmail?: string;
+}
+
+const emit = defineEmits<{
+    close: [];
+    select: [workspace: Workspace];
+}>();
+
+const isOpen = defineModel<boolean>({ default: false });
+const { getMessage } = useApiError();
+const workspaceIcon = useIcon('admin.workspace');
+const warningIcon = useIcon('ui.warning');
+
+const workspaces = ref<Workspace[]>([]);
+const pending = ref(false);
+const error = ref<Error | null>(null);
+const hasLoaded = ref(false);
+
+async function refreshWorkspaces() {
+    pending.value = true;
+    error.value = null;
+    try {
+        const response = await $fetch<{ items: Workspace[] }>('/api/admin/workspaces', {
+            credentials: 'include',
+            query: { perPage: '100' },
+        });
+        workspaces.value = response.items ?? [];
+    } catch (err: unknown) {
+        workspaces.value = [];
+        error.value =
+            err instanceof Error
+                ? err
+                : new Error(getMessage(err, 'Unable to load workspaces'));
+    } finally {
+        hasLoaded.value = true;
+        pending.value = false;
+    }
+}
+
+watch(
+    isOpen,
+    (open) => {
+        if (
+            !open ||
+            pending.value ||
+            (hasLoaded.value && !error.value)
+        ) {
+            return;
+        }
+        void refreshWorkspaces();
+    },
+    { immediate: true }
+);
+
+function selectAndClose(workspace: Workspace) {
+    emit("select", workspace);
+    isOpen.value = false;
+    emit("close");
+}
+</script>

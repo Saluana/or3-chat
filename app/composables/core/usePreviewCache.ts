@@ -19,8 +19,38 @@ interface CacheEntry {
 }
 
 type LoaderResult = { url: string; bytes?: number };
-type Loader = () => Promise<LoaderResult>;
+type Loader = () => Promise<unknown>;
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === 'object';
+}
 
+/**
+ * `usePreviewCache`
+ *
+ * Purpose:
+ * Manages preview object URLs with LRU eviction and pinning.
+ *
+ * Behavior:
+ * Tracks hit and miss metrics, evicts unpinned entries by LRU, and revokes
+ * object URLs when entries are removed.
+ *
+ * Constraints:
+ * - Callers must release URLs via `drop` or `flushAll` when finished
+ * - Loader results must include a non-empty `url`
+ *
+ * Non-Goals:
+ * - Does not persist cache across reloads
+ * - Does not handle cache partitioning by workspace
+ *
+ * @example
+ * ```ts
+ * const cache = usePreviewCache();
+ * const url = await cache.ensure('thumb:abc', async () => {
+ *   const blob = await fetch('/api/thumbs/abc').then((res) => res.blob());
+ *   return { url: URL.createObjectURL(blob), bytes: blob.size };
+ * });
+ * ```
+ */
 export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
     const options: PreviewCacheOptions = resolvePreviewCacheOptions(opts);
 
@@ -70,17 +100,48 @@ export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
         }
 
         misses++;
-        const { url, bytes } = await loader();
-        const normalizedBytes = Number.isFinite(bytes) ? Number(bytes) : 0;
-        map.set(key, {
-            url,
-            bytes: normalizedBytes,
-            lastAccess: ++accessCounter,
-            pin,
-        });
-        totalBytes += normalizedBytes;
-        evictIfNeeded();
-        return map.get(key)?.url;
+        
+        try {
+            const result = await loader();
+            
+            // Validate loader result
+            if (!isRecord(result)) {
+                throw new Error('Loader returned invalid result: expected object');
+            }
+            if (typeof result.url !== 'string' || !result.url) {
+                throw new Error(
+                    'Loader returned invalid url: expected non-empty string'
+                );
+            }
+            
+            const url = result.url;
+            const normalizedBytes = Number.isFinite(result.bytes)
+                ? Number(result.bytes)
+                : 0;
+            
+            // Only mutate state after successful validation
+            const entry: CacheEntry = {
+                url,
+                bytes: normalizedBytes,
+                lastAccess: ++accessCounter,
+                pin,
+            };
+            
+            map.set(key, entry);
+            totalBytes += normalizedBytes;
+            evictIfNeeded();
+            
+            return entry.url;
+        } catch (error) {
+            // Decrement misses since this didn't result in a cache entry
+            misses--;
+            
+            if (import.meta.dev) {
+                console.error('[preview-cache] Loader failed for key:', key, error);
+            }
+            
+            throw error;
+        }
     }
 
     function promote(key: string, pin = 1) {
@@ -182,6 +243,27 @@ type PreviewCacheInstance = ReturnType<typeof usePreviewCache>;
 let sharedCache: PreviewCacheInstance | null = null;
 let sharedOptions: PreviewCacheOptions | null = null;
 
+/**
+ * `useSharedPreviewCache`
+ *
+ * Purpose:
+ * Provides a shared preview cache instance for the app.
+ *
+ * Behavior:
+ * Initializes once and reuses the same cache. In dev mode, logs when callers
+ * attempt to change cache sizing after initialization.
+ *
+ * Constraints:
+ * - Configuration is locked after the first call
+ *
+ * Non-Goals:
+ * - Does not merge or reconcile options across callers
+ *
+ * @example
+ * ```ts
+ * const cache = useSharedPreviewCache({ maxUrls: 200 });
+ * ```
+ */
 export function useSharedPreviewCache(
     overrides?: Partial<PreviewCacheOptions>
 ) {
@@ -211,6 +293,26 @@ export function useSharedPreviewCache(
     return sharedCache;
 }
 
+/**
+ * `resetSharedPreviewCache`
+ *
+ * Purpose:
+ * Clears the shared preview cache instance.
+ *
+ * Behavior:
+ * Flushes entries and resets shared options.
+ *
+ * Constraints:
+ * - Intended for tests or hot reload cleanup
+ *
+ * Non-Goals:
+ * - Does not preserve any cached entries
+ *
+ * @example
+ * ```ts
+ * resetSharedPreviewCache();
+ * ```
+ */
 export function resetSharedPreviewCache() {
     if (!sharedCache) return;
     sharedCache.flushAll();

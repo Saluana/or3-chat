@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "qualificationVersion": "milestone-4-contributions-v1",
+  "milestone": "Milestone 4 — Atomic V2 publication and registry adapters",
+  "status": "green",
+  "manifestSha256": "97fff5760de3fd2c63a3969b97c5d5a6d68a81be68acbf0c78fe6f9c0eb4ef8b",
+  "publishedAt": "2026-07-20T20:02:04.606Z",
+  "durationMs": 91355,
+  "runner": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpuModel": "Apple M4 Pro",
+    "bunVersion": "1.3.6",
+    "nodeVersion": "24.3.0"
+  },
+  "evidence": {
+    "app/composables/plugins/__tests__/contribution-surface-selection.test.ts": "bd28dab67cf6785c8a5bb9e52fb0437c5bbedeaa7a2365c39bce39b1f91b3280",
+    "app/composables/plugins/contribution-surface-kernel.ts": "20b3ab65267f3f454e087fa157f17c9b7618510dc92909bce2d07089a2c3e1ac",
+    "app/composables/plugins/contribution-surface-selection.ts": "61e41771064def0790d5934ed76f6f655816602f7f0dfd6d1e35832edb214c6f",
+    "app/utils/chat/__tests__/client-tool-surface-adapter.test.ts": "26472c2e0ddaa95aca2aadd8392843d7e17ff2a935a049d5186f46dc730bd49b",
+    "server/utils/chat/__tests__/server-tool-ownership-adapter.test.ts": "9d30f0e7b7a3c3aa521b458c4df860d669999d050ec7a1bc4497de61ac22b8b9",
+    "server/utils/chat/tool-ownership.ts": "714a5c4604444bcfde1c9d04888942e14399223c8299e63d829f4b053b1ffce2",
+    "shared/plugins/__tests__/milestone-4-leak.test.ts": "85477d4ec03b1677f62019548b7241d09c789017d438dba28ede3ce0a2673b01",
+    "shared/plugins/activation-table.ts": "290f8089157525d1d0529a063f62e15d08376ea84ea7827e56c74a6e9158c8ab",
+    "shared/plugins/contribution-registry.ts": "d44d4c62efed9ad9a8c26e2fa7885dd58e029b4b9c0fb9ae89f49bb14ebbcaef",
+    "shared/plugins/contribution-surfaces.ts": "4f5b55a48aef3245d36cb624d81c4a572522e458d992d55fdd6ff29941ca8aac",
+    "shared/plugins/transactional-plugin-scope.ts": "627fc18491f30cace36cd85f2b6b54d8ea14ce447d77409b21285712bd1666c8"
+  },
+  "gates": [
+    {
+      "id": "atomic-publication-adapters-and-leaks",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun x vitest run shared/plugins/__tests__/activation-table.test.ts shared/plugins/__tests__/contribution-registry.test.ts shared/plugins/__tests__/transactional-plugin-scope.test.ts shared/plugins/__tests__/milestone-4-leak.test.ts app/composables/plugins/__tests__/contribution-surface-selection.test.ts app/composables/__tests__/differential-surface-harness.test.ts app/composables/__tests__/action-surface-adapters.test.ts app/composables/__tests__/history-footer-surface-adapters.test.ts app/composables/__tests__/project-editor-surface-adapters.test.ts app/composables/__tests__/sidebar-sections-surface-adapter.test.ts app/composables/__tests__/pane-apps-surface-adapter.test.ts app/composables/__tests__/sidebar-pages-surface-adapter.test.ts app/composables/__tests__/dashboard-records-surface-adapter.test.ts app/composables/__tests__/dashboard-navigation-surface-adapter.test.ts app/composables/__tests__/editor-extensions-surface-adapter.test.ts app/composables/__tests__/admin-extensions-surface-adapter.test.ts app/utils/chat/__tests__/client-tool-surface-adapter.test.ts server/utils/chat/__tests__/server-tool-ownership-adapter.test.ts app/composables/__tests__/registry-family-profiles.test.ts app/composables/__tests__/sidebar-pane-profiles.test.ts app/composables/__tests__/dashboard-profile.test.ts app/composables/__tests__/editor-admin-profiles.test.ts app/utils/chat/__tests__/tool-registry-profiles.test.ts app/utils/chat/__tests__/tool-schema-parity.test.ts app/utils/chat/__tests__/tools-public.contract.test.ts server/utils/chat/__tests__/tool-registry.test.ts",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 2441
+        }
+      ]
+    },
+    {
+      "id": "surface-rollback-and-public-contracts",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run plugin-runtime:compatibility:check",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 3814
+        }
+      ]
+    },
+    {
+      "id": "frozen-v1-qualification",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run plugin-runtime:milestone-0:qualify",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 85100
+        }
+      ]
+    }
+  ],
+  "rollback": {
+    "scope": "Remove only the affected contribution surface from the startup allowlist; keep the V1 public registry, installed plugins, settings, and all unrelated V2 surfaces unchanged.",
+    "procedure": [
+      "Remove the affected surface from OR3_PLUGIN_CONTRIBUTION_V2_SURFACES outside the plugin admin UI.",
+      "Restart the OR3 process before plugin discovery so the startup selector returns the V1 kernel for that surface.",
+      "Verify Runtime Inspector selection and exercise the surface's differential fixture plus the maintained V1 corpus.",
+      "Keep that surface on V1 if its differential, leak, compatibility, or frozen Milestone 0 gate is not green."
+    ],
+    "drill": "The surface selection matrix proves every contribution surface independently selects V2 and reverts to V1; 1,000-cycle tests prove managed records, subscriptions, tool watchers, and ownership inspection are empty after disposal."
+  }
+}

@@ -42,15 +42,16 @@
         <pre
             :id="`reasoning-${id}`"
             :class="[
-                'reasoning-box text-black dark:text-white font-[inherit] text-wrap overflow-x-hidden flex flex-col items-start gap-1 bg-(--md-surface-container-low) text-start p-1 border-(--md-inverse-surface) rounded-sm',
-                'transition-all duration-200 ease-in-out',
+                'reasoning-box text-black dark:text-white font-[inherit] text-wrap overflow-x-hidden flex flex-col items-start gap-1 bg-(--md-surface-container-low) text-start border-(--md-inverse-surface) rounded-sm',
+                'grid transition-[grid-template-rows] duration-200 ease-in-out',
                 expanded
-                    ? 'opacity-100 max-h-72 mt-2 overflow-y-auto px-3'
-                    : 'opacity-0 max-h-0 p-0 mt-0 overflow-hidden pointer-events-none',
+                    ? 'grid-rows-[1fr] mt-2 px-3 py-1 opacity-100'
+                    : 'grid-rows-[0fr] mt-0 p-0 opacity-0 pointer-events-none',
             ]"
             tabindex="0"
-            v-text="content"
-        ></pre>
+        >
+            <div class="overflow-hidden min-h-0" v-text="content"></div>
+        </pre>
         <slot name="footer" />
     </div>
 </template>

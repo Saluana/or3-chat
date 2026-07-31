@@ -1,12 +1,12 @@
 <template>
-    <div id="sidebar" class="flex flex-row w-full h-full">
+    <div class="flex flex-row w-full h-full" data-testid="sidebar-inner">
         <SidebarSideNavContentCollapsed
             id="sidebar-content-collapsed"
             :active-thread="props.activeThread"
             @new-chat="onNewChat"
             @new-document="openCreateDocumentModal"
             @new-project="openCreateProject"
-            @focus-search="focusSearchInput"
+            @focus-search="openCommandPalette"
             @toggle-dashboard="emit('toggleDashboard')"
             @expand-sidebar="() => {}"
         />
@@ -59,333 +59,95 @@
         />
     </div>
 
-    <!-- Rename modal -->
-    <UModal
-        v-bind="renameModalProps"
-        v-model:open="showRenameModal"
-        :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
-    >
-        <template #body>
-            <div class="space-y-4">
-                <UInput
-                    v-model="renameTitle"
-                    class="w-full"
-                    :placeholder="
-                        isRenamingDoc ? 'Document title' : 'Thread title'
-                    "
-                    :icon="iconEdit"
-                    @keyup.enter="saveRename"
-                />
-            </div>
-        </template>
-        <template #footer>
-            <UButton variant="ghost" @click="showRenameModal = false"
-                >Cancel</UButton
-            >
-            <UButton color="primary" @click="saveRename">Save</UButton>
-        </template>
-    </UModal>
+    <SidebarEntityModals
+        :rename-modal-props="renameModalProps"
+        :show-rename-modal="showRenameModal"
+        :rename-title="renameTitle"
+        :is-renaming-doc="isRenamingDoc"
+        :icon-edit="iconEdit"
+        :rename-project-modal-props="renameProjectModalProps"
+        :show-rename-project-modal="showRenameProjectModal"
+        :rename-project-name="renameProjectName"
+        :icon-folder="iconFolder"
+        :delete-thread-modal-props="deleteThreadModalProps"
+        :show-delete-modal="showDeleteModal"
+        :delete-document-modal-props="deleteDocumentModalProps"
+        :show-delete-document-modal="showDeleteDocumentModal"
+        :delete-project-modal-props="deleteProjectModalProps"
+        :show-delete-project-modal="showDeleteProjectModal"
+        @update:show-rename-modal="showRenameModal = $event"
+        @update:rename-title="renameTitle = $event"
+        @save-rename="saveRename"
+        @update:show-rename-project-modal="showRenameProjectModal = $event"
+        @update:rename-project-name="renameProjectName = $event"
+        @save-rename-project="saveRenameProject"
+        @update:show-delete-modal="showDeleteModal = $event"
+        @delete-thread="deleteThread"
+        @update:show-delete-document-modal="showDeleteDocumentModal = $event"
+        @delete-document="deleteDocument"
+        @update:show-delete-project-modal="showDeleteProjectModal = $event"
+        @delete-project="deleteProject"
+    />
 
-    <!-- Rename Project Modal -->
-    <UModal
-        v-bind="renameProjectModalProps"
-        v-model:open="showRenameProjectModal"
-        title="Rename project"
-    >
-        <template #header><h3>Rename project?</h3></template>
-        <template #body>
-            <div class="space-y-4">
-                <UInput
-                    v-model="renameProjectName"
-                    placeholder="Project name"
-                    :icon="iconFolder"
-                    @keyup.enter="saveRenameProject"
-                />
-            </div>
-        </template>
-        <template #footer>
-            <UButton variant="ghost" @click="showRenameProjectModal = false"
-                >Cancel</UButton
-            >
-            <UButton
-                color="primary"
-                :disabled="!renameProjectName.trim()"
-                @click="saveRenameProject"
-                >Save</UButton
-            >
-        </template>
-    </UModal>
-
-    <!-- Delete confirm modal -->
-    <UModal
-        v-bind="deleteThreadModalProps"
-        v-model:open="showDeleteModal"
-        title="Delete thread"
-    >
-        <template #body>
-            <p class="text-sm opacity-70">
-                This will permanently remove the thread and its messages.
-            </p>
-        </template>
-        <template #footer>
-            <UButton variant="ghost" @click="showDeleteModal = false"
-                >Cancel</UButton
-            >
-            <UButton color="error" @click="deleteThread">Delete</UButton>
-        </template>
-    </UModal>
-
-    <!-- Delete document confirm modal -->
-    <UModal
-        v-bind="deleteDocumentModalProps"
-        v-model:open="showDeleteDocumentModal"
-        title="Delete document"
-    >
-        <template #body>
-            <p class="text-sm opacity-70">
-                This will permanently remove the document.
-            </p>
-        </template>
-        <template #footer>
-            <UButton variant="ghost" @click="showDeleteDocumentModal = false"
-                >Cancel</UButton
-            >
-            <UButton color="error" @click="deleteDocument">Delete</UButton>
-        </template>
-    </UModal>
-
-    <!-- Delete project confirm modal -->
-    <UModal
-        v-bind="deleteProjectModalProps"
-        v-model:open="showDeleteProjectModal"
-        title="Delete project"
-    >
-        <template #body>
-            <p class="text-sm opacity-70">
-                This will remove the project from the sidebar. Project data will
-                be soft-deleted and can be recovered.
-            </p>
-        </template>
-        <template #footer>
-            <UButton variant="ghost" @click="showDeleteProjectModal = false"
-                >Cancel</UButton
-            >
-            <UButton color="error" @click="deleteProject">Delete</UButton>
-        </template>
-    </UModal>
-
-    <!-- Create Project Modal -->
-    <UModal
-        v-bind="createProjectModalProps"
-        v-model:open="showCreateProjectModal"
+    <SidebarCreateProjectModal
+        :modal-props="createProjectModalProps"
+        :open="showCreateProjectModal"
         title="New Project"
-    >
-        <template #body>
-            <div class="space-y-4">
-                <UForm
-                    :state="createProjectState"
-                    @submit.prevent="submitCreateProject"
-                >
-                    <div class="flex flex-col space-y-3">
-                        <UFormField
-                            v-bind="sidebarFormFieldProps"
-                            label="Title"
-                            name="name"
-                            :error="createProjectErrors.name"
-                        >
-                            <UInput
-                                v-model="createProjectState.name"
-                                required
-                                placeholder="Project title"
-                                :icon="iconFolder"
-                                class="w-full"
-                                @keyup.enter="submitCreateProject"
-                            />
-                        </UFormField>
-                        <UFormField
-                            v-bind="sidebarFormFieldProps"
-                            label="Description"
-                            name="description"
-                        >
-                            <UTextarea
-                                class="w-full border-[var(--md-border-width)] rounded-[6px]"
-                                v-model="createProjectState.description"
-                                :rows="3"
-                                placeholder="Optional description"
-                            />
-                        </UFormField>
-                    </div>
-                </UForm>
-            </div>
-        </template>
-        <template #footer>
-            <UButton variant="ghost" @click="closeCreateProject"
-                >Cancel</UButton
-            >
-            <UButton
-                :disabled="!createProjectState.name.trim() || creatingProject"
-                color="primary"
-                @click="submitCreateProject"
-            >
-                <span v-if="!creatingProject">Create</span>
-                <span v-else class="inline-flex items-center gap-1">
-                    <UIcon name="i-lucide-loader" class="animate-spin" />
-                    Creating
-                </span>
-            </UButton>
-        </template>
-    </UModal>
+        :name="createProjectState.name"
+        :description="createProjectState.description"
+        :name-error="createProjectErrors.name"
+        :icon-folder="iconFolder"
+        :loading-icon="iconLoading"
+        :loading="creatingProject"
+        :form-field-props="sidebarFormFieldProps"
+        @update:open="showCreateProjectModal = $event"
+        @update:name="createProjectState.name = $event"
+        @update:description="createProjectState.description = $event"
+        @close="closeCreateProject"
+        @submit="submitCreateProject"
+    />
 
-    <!-- Add To Project Modal -->
-    <UModal
-        v-bind="addToProjectModalProps"
-        v-model:open="showAddToProjectModal"
+    <SidebarAddToProjectModal
+        :modal-props="addToProjectModalProps"
+        :open="showAddToProjectModal"
         title="Add to project"
-    >
-        <template #body>
-            <div class="space-y-4">
-                <div class="flex gap-2 text-xs font-mono">
-                    <button
-                        class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
-                        :class="
-                            addMode === 'select'
-                                ? 'bg-primary/30'
-                                : 'opacity-70'
-                        "
-                        @click="addMode = 'select'"
-                    >
-                        Select Existing
-                    </button>
-                    <button
-                        class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
-                        :class="
-                            addMode === 'create'
-                                ? 'bg-primary/30'
-                                : 'opacity-70'
-                        "
-                        @click="addMode = 'create'"
-                    >
-                        Create New
-                    </button>
-                </div>
-                <div v-if="addMode === 'select'" class="space-y-3">
-                    <UFormField
-                        v-bind="sidebarFormFieldProps"
-                        label="Project"
-                        name="project"
-                    >
-                        <USelectMenu
-                            v-model="selectedProjectId"
-                            :items="projectSelectOptions"
-                            :value-key="'value'"
-                            placeholder="Select project"
-                            v-bind="sidebarProjectSelectProps"
-                        />
-                    </UFormField>
-                    <p v-if="addToProjectError" class="text-error text-xs">
-                        {{ addToProjectError }}
-                    </p>
-                </div>
-                <div v-else class="space-y-3">
-                    <UFormField
-                        v-bind="sidebarFormFieldProps"
-                        label="Project Title"
-                        name="newProjectName"
-                    >
-                        <UInput
-                            v-model="newProjectName"
-                            placeholder="Project name"
-                            :icon="iconFolder"
-                            class="w-full"
-                        />
-                    </UFormField>
-                    <UFormField
-                        v-bind="sidebarFormFieldProps"
-                        label="Description"
-                        name="newProjectDescription"
-                    >
-                        <UTextarea
-                            v-model="newProjectDescription"
-                            :rows="3"
-                            placeholder="Optional description"
-                            class="w-full border-[var(--md-border-width)] rounded-[6px]"
-                        />
-                    </UFormField>
-                    <p v-if="addToProjectError" class="text-error text-xs">
-                        {{ addToProjectError }}
-                    </p>
-                </div>
-            </div>
-        </template>
-        <template #footer>
-            <UButton variant="ghost" @click="closeAddToProject">Cancel</UButton>
-            <UButton
-                color="primary"
-                :disabled="
-                    addingToProject ||
-                    (addMode === 'select'
-                        ? !selectedProjectId
-                        : !newProjectName.trim())
-                "
-                @click="submitAddToProject"
-            >
-                <span v-if="!addingToProject">Add</span>
-                <span v-else class="inline-flex items-center gap-1"
-                    ><UIcon
-                        name="i-lucide-loader"
-                        class="animate-spin"
-                    />Adding</span
-                >
-            </UButton>
-        </template>
-    </UModal>
-    <!-- New Document Naming Modal -->
-    <UModal
-        v-bind="createDocumentModalProps"
-        v-model:open="showCreateDocumentModal"
+        :mode="addMode"
+        :selected-project-id="selectedProjectId"
+        :new-project-name="newProjectName"
+        :new-project-description="newProjectDescription"
+        :error-message="addToProjectError"
+        :project-select-options="projectSelectOptions"
+        :icon-folder="iconFolder"
+        :loading-icon="iconLoading"
+        :loading="addingToProject"
+        :form-field-props="sidebarFormFieldProps"
+        :select-props="sidebarProjectSelectProps"
+        @update:open="showAddToProjectModal = $event"
+        @update:mode="addMode = $event"
+        @update:selected-project-id="selectedProjectId = $event"
+        @update:new-project-name="newProjectName = $event"
+        @update:new-project-description="newProjectDescription = $event"
+        @close="closeAddToProject"
+        @submit="submitAddToProject"
+    />
+
+    <SidebarCreateDocumentModal
+        v-if="documentsEnabled"
+        :modal-props="createDocumentModalProps"
+        :open="showCreateDocumentModal"
         title="New Document"
-    >
-        <template #body>
-            <div class="space-y-4">
-                <UForm
-                    :state="newDocumentState"
-                    @submit.prevent="submitCreateDocument"
-                >
-                    <UFormField
-                        v-bind="sidebarFormFieldProps"
-                        label="Title"
-                        name="title"
-                        :error="newDocumentErrors.title"
-                    >
-                        <UInput
-                            v-model="newDocumentState.title"
-                            required
-                            placeholder="Document title"
-                            :icon="iconNote"
-                            class="w-full"
-                            @keyup.enter="submitCreateDocument"
-                        />
-                    </UFormField>
-                </UForm>
-            </div>
-        </template>
-        <template #footer>
-            <UButton variant="ghost" @click="closeCreateDocumentModal"
-                >Cancel</UButton
-            >
-            <UButton
-                color="primary"
-                :disabled="creatingDocument || !newDocumentState.title.trim()"
-                @click="submitCreateDocument"
-            >
-                <span v-if="!creatingDocument">Create</span>
-                <span v-else class="inline-flex items-center gap-1">
-                    <UIcon name="i-lucide-loader" class="animate-spin" />
-                    Creating
-                </span>
-            </UButton>
-        </template>
-    </UModal>
+        :value="newDocumentState.title"
+        :error="newDocumentErrors.title"
+        placeholder="Document title"
+        :icon="iconNote"
+        :loading-icon="iconLoading"
+        :loading="creatingDocument"
+        :form-field-props="sidebarFormFieldProps"
+        @update:open="showCreateDocumentModal = $event"
+        @update:value="newDocumentState.title = $event"
+        @close="closeCreateDocumentModal"
+        @submit="submitCreateDocument"
+    />
 </template>
 
 <script setup lang="ts">
@@ -396,9 +158,7 @@ import {
     watch,
     computed,
     nextTick,
-    defineAsyncComponent,
 } from 'vue';
-import type { Component } from 'vue';
 import { useHooks } from '~/core/hooks/useHooks';
 import { liveQuery } from 'dexie';
 import {
@@ -413,8 +173,8 @@ import { nowSec } from '~/db/util';
 import { updateDocument } from '~/db/documents';
 import { loadDocument } from '~/composables/documents/useDocumentsStore';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import { useOr3Config } from '~/composables/useOr3Config';
 import {
     normalizeProjectData,
     type ProjectEntry,
@@ -423,30 +183,22 @@ import {
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import type { ThreadItem, DocumentItem } from '~/types/sidebar';
 import { getOpenDocumentIds, getOpenThreadIds } from '~/utils/multiPaneHelpers';
-
-/**
- * Helper to check if a post is a document
- */
-function isDocumentPost(
-    post: Post | undefined
-): post is Post & { postType: 'doc' } {
-    return post !== undefined && post.postType === 'doc';
-}
-
-/**
- * Rename target types - can be from project tree or direct selection
- */
-type RenamePayload =
-    | { projectId: string; entryId: string; kind: 'chat' | 'doc' }
-    | { docId: string }
-    | ThreadItem
-    | DocumentItem;
+import SidebarAddToProjectModal from './SidebarAddToProjectModal.vue';
+import SidebarCreateDocumentModal from './SidebarCreateDocumentModal.vue';
+import SidebarCreateProjectModal from './SidebarCreateProjectModal.vue';
+import {
+    isDocumentPost,
+    type SidebarProject,
+    type SidebarRenamePayload,
+} from '~/core/sidebar/sidebar-types';
+import { useResolvedSidebarSections } from '~/core/sidebar/sidebar-section-components';
+import { useSidebarThemeProps } from '~/composables/sidebar/useSidebarThemeProps';
 
 const iconEdit = useIcon('ui.edit');
 const iconFolder = useIcon('sidebar.folder');
 const iconNote = useIcon('sidebar.note');
+const iconLoading = useIcon('ui.loading');
 
-type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 // (Temporarily removed virtualization for chats — use simple list for now)
 
 const {
@@ -459,12 +211,15 @@ const {
     syncProjectEntryTitle,
 } = useProjectsCrud();
 
+const or3Config = useOr3Config();
+const documentsEnabled = computed(() => or3Config.features.documents.enabled);
+
 // Section visibility (multi-select) defaults to all on
 const activeSections = ref<{
     projects: boolean;
     chats: boolean;
     docs: boolean;
-}>({ projects: true, chats: true, docs: true });
+}>({ projects: true, chats: true, docs: documentsEnabled.value });
 
 const props = defineProps<{
     activeThread?: string;
@@ -484,11 +239,19 @@ const projects = ref<SidebarProject[]>([]);
 const expandedProjects = ref<string[]>([]);
 const listHeight = ref(400);
 import { useSidebarSearch } from '~/composables/sidebar/useSidebarSearch';
+import { useSidebarProjectDisplay } from '~/composables/sidebar/useSidebarProjectDisplay';
 import {
     useSidebarSections,
     useSidebarFooterActions,
+    type SidebarSection,
+    type SidebarFooterActionEntry,
 } from '~/composables/sidebar/useSidebarSections';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
+import { useCommandPalette } from '~/composables/search/useCommandPalette';
+import {
+    consumePaletteProjectReveal,
+    subscribePaletteProjectReveal,
+} from '~/core/search/command-palette/project-reveal';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import type { ComponentPublicInstance } from 'vue';
 // Documents live query (docs only) to feed search
@@ -509,89 +272,9 @@ const activeThreadIds = computed<string[]>(() => {
     return props.activeThread ? [props.activeThread] : [];
 });
 
-const sectionComponentCache = new Map<string, Component>();
-
-/**
- * Type guard to check if source is a Vue component (not an async loader)
- */
-function isVueComponent(source: unknown): source is Component {
-    return (
-        typeof source === 'object' &&
-        source !== null &&
-        ('render' in source || 'setup' in source)
-    );
-}
-
-/**
- * Module type for async component loading
- */
-interface ComponentModule {
-    default?: Component;
-    component?: Component;
-}
-
-function resolveSidebarSectionComponent(
-    id: string,
-    source: SidebarSection['component']
-): Component {
-    // If it's already a component, return it directly
-    if (isVueComponent(source)) {
-        return source;
-    }
-
-    // Otherwise it's an async loader function
-    if (typeof source === 'function') {
-        const cached = sectionComponentCache.get(id);
-        if (cached) return cached;
-
-        const asyncComp = defineAsyncComponent(async () => {
-            const mod = await (
-                source as () => Promise<ComponentModule | Component>
-            )();
-
-            // Handle module with default export
-            if (mod && typeof mod === 'object' && 'default' in mod) {
-                const moduleWithDefault = mod as ComponentModule;
-                const comp =
-                    moduleWithDefault.default ?? moduleWithDefault.component;
-                if (process.dev && !comp) {
-                    console.warn(
-                        `[useSidebarSections] Async section loader for ${id} returned invalid component`,
-                        mod
-                    );
-                }
-                return comp!;
-            }
-
-            // Module is the component itself
-            return mod as Component;
-        });
-        sectionComponentCache.set(id, asyncComp);
-        return asyncComp;
-    }
-
-    // Fallback - should not happen with proper types
-    return source as Component;
-}
-
 const sidebarSections = useSidebarSections();
-
-const resolvedSidebarSections = computed(() => {
-    const groups = sidebarSections.value;
-    const mapSections = (entries: SidebarSection[]) =>
-        entries.map((entry) => ({
-            id: entry.id,
-            component: resolveSidebarSectionComponent(
-                entry.id,
-                entry.component
-            ),
-        }));
-    return {
-        top: mapSections(groups.top),
-        main: mapSections(groups.main),
-        bottom: mapSections(groups.bottom),
-    };
-});
+const resolvedSidebarSections =
+    useResolvedSidebarSections(sidebarSections);
 
 const getSidebarFooterContext = () => ({
     activeThreadId: activeThreadIds.value[0] ?? null,
@@ -601,31 +284,10 @@ const getSidebarFooterContext = () => ({
 
 const sidebarFooterActions = useSidebarFooterActions(getSidebarFooterContext);
 
-const sidebarProjectSelectOverrides = useThemeOverrides({
-    component: 'selectmenu',
-    context: 'sidebar',
-    identifier: 'sidebar.project-select',
-    isNuxtUI: true,
-});
-
-const sidebarProjectSelectProps = computed(() => {
-    const overrideValue =
-        (sidebarProjectSelectOverrides.value as Record<string, any>) || {};
-    const mergedClass = ['w-full', overrideValue.class || '']
-        .filter(Boolean)
-        .join(' ');
-
-    return {
-        ...overrideValue,
-        class: mergedClass,
-    };
-});
-
-const sidebarFormFieldProps = useThemeOverrides({
-    component: 'formField',
-    context: 'sidebar',
-    isNuxtUI: true,
-});
+const {
+    projectSelect: sidebarProjectSelectProps,
+    formField: sidebarFormFieldProps,
+} = useSidebarThemeProps();
 
 async function handleSidebarFooterAction(entry: SidebarFooterActionEntry) {
     if (entry.disabled) return;
@@ -646,52 +308,17 @@ const {
     documentResults,
 } = useSidebarSearch(items, projects, docs);
 
-const displayThreads = computed(() =>
-    sidebarQuery.value.trim() ? threadResults.value : items.value
-);
-// Filter projects + entries when query active
-const projectsFilteredByExistence = computed<SidebarProject[]>(() => {
-    const threadSet = new Set(items.value.map((t) => t.id));
-    const docSet = new Set(docs.value.map((d) => d.id));
-
-    return projects.value.map((p) => {
-        const filteredEntries = p.data.filter((entry) => {
-            const id = entry?.id;
-            if (!id) return false;
-            const kind = entry.kind ?? 'chat';
-            return (
-                (kind === 'chat' && threadSet.has(id)) ||
-                (kind === 'doc' && docSet.has(id)) ||
-                (kind !== 'chat' && kind !== 'doc')
-            );
-        });
-        return filteredEntries.length === p.data.length
-            ? p
-            : { ...p, data: filteredEntries };
+const { displayThreads, displayProjects, displayDocuments } =
+    useSidebarProjectDisplay({
+        sidebarQuery,
+        items,
+        projects,
+        docs,
+        threadResults,
+        projectResults,
+        documentResults: documentResults as Ref<Post[]>,
+        documentsEnabled,
     });
-});
-
-const displayProjects = computed<SidebarProject[]>(() => {
-    if (!sidebarQuery.value.trim()) return projectsFilteredByExistence.value;
-    const threadSet = new Set(threadResults.value.map((t: any) => t.id));
-    const docSet = new Set(documentResults.value.map((d: any) => d.id));
-    const directProjectSet = new Set(
-        projectResults.value.map((p: any) => p.id)
-    );
-    const results: SidebarProject[] = [];
-    for (const project of projectsFilteredByExistence.value) {
-        const filteredEntries = project.data.filter(
-            (entry) => threadSet.has(entry.id) || docSet.has(entry.id)
-        );
-        if (directProjectSet.has(project.id) || filteredEntries.length > 0) {
-            results.push({ ...project, data: filteredEntries });
-        }
-    }
-    return results;
-});
-const displayDocuments = computed(() =>
-    sidebarQuery.value.trim() ? (documentResults.value as Post[]) : undefined
-);
 function onEscapeClear() {
     if (sidebarQuery.value) sidebarQuery.value = '';
 }
@@ -735,9 +362,11 @@ const sideNavHeaderElementRef = computed(
 );
 
 // Setup resize observer on sidebar header element (VueUse handles cleanup)
-useResizeObserver(sideNavHeaderElementRef, () => {
-    recomputeListHeight();
-});
+if (import.meta.client) {
+    useResizeObserver(sideNavHeaderElementRef, () => {
+        recomputeListHeight();
+    });
+}
 
 // Listen to window resize (VueUse handles cleanup)
 useEventListener(window, 'resize', recomputeListHeight);
@@ -777,19 +406,23 @@ onMounted(async () => {
         },
         error: (err) => console.error('projects liveQuery error', err),
     });
-    // Documents subscription (docs only, excluding deleted)
-    subDocs = liveQuery(() =>
-        db.posts
-            .where('postType')
-            .equals('doc')
-            .and((r) => !r.deleted)
-            .toArray()
-    ).subscribe({
-        next: (res) => {
-            docs.value = res.map((d: any) => ({ ...d }));
-        },
-        error: (err) => console.error('documents liveQuery error', err),
-    });
+    if (documentsEnabled.value) {
+        // Documents subscription (docs only, excluding deleted)
+        subDocs = liveQuery(() =>
+            db.posts
+                .where('postType')
+                .equals('doc')
+                .and((r) => !r.deleted)
+                .toArray()
+        ).subscribe({
+            next: (res) => {
+                docs.value = res.map((d: any) => ({ ...d }));
+            },
+            error: (err) => console.error('documents liveQuery error', err),
+        });
+    } else {
+        docs.value = [];
+    }
 });
 
 // Re-measure bottom pad when data that can change nav size or list height updates (debounced by nextTick)
@@ -801,10 +434,56 @@ watch([projects, expandedProjects, sidebarFooterActions], () => {
 
 // (Removed verbose debug watcher)
 
+// --------------- Command palette project reveal ---------------
+const { open: openCommandPalette } = useCommandPalette();
+
+const REVEAL_CLASS = 'or3-project-revealed';
+let stopRevealSubscription: (() => void) | null = null;
+let revealHighlightTimer: ReturnType<typeof setTimeout> | null = null;
+let revealedElement: HTMLElement | null = null;
+
+function clearRevealHighlight() {
+    if (revealHighlightTimer) clearTimeout(revealHighlightTimer);
+    revealHighlightTimer = null;
+    revealedElement?.classList.remove(REVEAL_CLASS);
+    revealedElement = null;
+}
+
+async function revealProject(projectId: string) {
+    if (!projectId) return;
+    if (!activeSections.value.projects) activeSections.value.projects = true;
+    if (!expandedProjects.value.includes(projectId)) {
+        expandedProjects.value = [...expandedProjects.value, projectId];
+    }
+    await nextTick();
+    clearRevealHighlight();
+    const row = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-project-id]')
+    ).find((element) => element.dataset.projectId === projectId);
+    if (!row) return;
+    row.scrollIntoView({ block: 'nearest' });
+    // Transient highlight: the palette already navigated, this only orients the eye.
+    row.classList.add(REVEAL_CLASS);
+    revealedElement = row;
+    revealHighlightTimer = setTimeout(clearRevealHighlight, 2200);
+}
+
+onMounted(() => {
+    stopRevealSubscription = subscribePaletteProjectReveal((request) => {
+        consumePaletteProjectReveal();
+        void revealProject(request.projectId);
+    });
+    // A request may have landed before this sidebar mounted.
+    const pending = consumePaletteProjectReveal();
+    if (pending) void revealProject(pending.projectId);
+});
+
 onUnmounted(() => {
     sub?.unsubscribe();
     subProjects?.unsubscribe();
     subDocs?.unsubscribe();
+    stopRevealSubscription?.();
+    clearRevealHighlight();
 });
 
 const emit = defineEmits<{
@@ -866,7 +545,7 @@ const deleteProjectModalProps = createSidebarModalProps(
     }
 );
 
-async function openRename(target: RenamePayload) {
+async function openRename(target: SidebarRenamePayload) {
     // Case 1: payload from project tree: { projectId, entryId, kind }
     if ('entryId' in target) {
         const { entryId, kind } = target;
@@ -901,7 +580,7 @@ async function openRename(target: RenamePayload) {
     // Case 2: direct thread or document object
     if ('id' in target) {
         renameId.value = target.id;
-        renameTitle.value = 'title' in target ? target.title ?? '' : '';
+        renameTitle.value = 'title' in target ? (target.title ?? '') : '';
         showRenameModal.value = true;
         renameMetaKind.value =
             'postType' in target && target.postType === 'doc' ? 'doc' : 'chat';
@@ -968,8 +647,8 @@ function confirmDeleteProject(projectOrId: string | Project) {
         typeof projectOrId === 'string'
             ? projectOrId
             : projectOrId && typeof projectOrId === 'object'
-            ? projectOrId.id
-            : null;
+              ? projectOrId.id
+              : null;
     if (!id) return;
     deleteProjectId.value = id as string;
     showDeleteProjectModal.value = true;
@@ -1323,6 +1002,7 @@ const createDocumentModalProps = createSidebarModalProps(
 );
 
 function openCreateDocumentModal() {
+    if (!documentsEnabled.value) return;
     showCreateDocumentModal.value = true;
     newDocumentState.value = { title: '' };
     newDocumentErrors.value = {};
@@ -1332,6 +1012,7 @@ function closeCreateDocumentModal() {
 }
 async function submitCreateDocument() {
     if (creatingDocument.value) return;
+    if (!documentsEnabled.value) return;
     const title = newDocumentState.value.title.trim();
     if (!title) {
         newDocumentErrors.value.title = 'Title required';
@@ -1362,9 +1043,25 @@ async function focusSearchInput() {
     return focused;
 }
 
+async function activateDefaultPage() {
+    if (activePageId.value === DEFAULT_PAGE_ID) return true;
+    return await resetToDefault();
+}
+
 defineExpose({
     focusSearchInput,
     openCreateDocumentModal,
     openCreateProject,
+    activateDefaultPage,
 });
 </script>
+
+<style>
+/* Transient orientation cue after the command palette reveals a project. */
+.or3-project-revealed > .project-root-toggle {
+    outline: var(--md-border-width, 2px) solid var(--md-primary);
+    outline-offset: -1px;
+    background: color-mix(in srgb, var(--md-primary) 12%, transparent);
+    transition: outline-color 200ms ease, background-color 200ms ease;
+}
+</style>

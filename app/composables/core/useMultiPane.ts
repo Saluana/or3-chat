@@ -4,22 +4,24 @@
 import {
     ref,
     computed,
-    nextTick,
     onScopeDispose,
+    getCurrentScope,
+    toValue,
     type Ref,
     type ComputedRef,
-    watch,
+    type MaybeRefOrGetter,
 } from 'vue';
 import { useLocalStorage } from '@vueuse/core';
 import Dexie from 'dexie';
-import { db } from '~/db';
-import { useHooks } from '../../core/hooks/useHooks';
+import { getDb } from '~/db/client';
+import { useHooks } from '~/core/hooks/useHooks';
 import {
     getGlobalMultiPaneApi,
     setGlobalMultiPaneApi,
 } from '~/utils/multiPaneApi';
 import { deriveMessageContent } from '~/utils/chat/messages';
 import { usePaneApps } from './usePaneApps';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 type PaneAppGetter = ReturnType<typeof usePaneApps>['getPaneApp'];
 
@@ -50,12 +52,13 @@ export interface PaneState {
 
 export interface UseMultiPaneOptions {
     initialThreadId?: string;
-    maxPanes?: number; // default 3
+    maxPanes?: MaybeRefOrGetter<number>; // default 3
     onFlushDocument?: (id: string) => void | Promise<void>;
     loadMessagesFor?: (id: string) => Promise<MultiPaneMessage[]>; // override for tests
     minPaneWidth?: number; // minimum width per pane in pixels (default 280)
     maxPaneWidth?: number; // maximum width per pane in pixels (default 2000)
     storageKey?: string; // localStorage key for persisting widths (default 'pane-widths')
+    allowMultiplePanes?: MaybeRefOrGetter<boolean>; // responsive or policy-level pane creation guard
 }
 
 export interface UseMultiPaneApi {
@@ -93,13 +96,7 @@ export interface UseMultiPaneApi {
 }
 
 function genId(): string {
-    if (
-        typeof crypto !== 'undefined' &&
-        typeof crypto.randomUUID === 'function'
-    ) {
-        return crypto.randomUUID();
-    }
-    return 'pane-' + Math.random().toString(36).slice(2);
+    return createRuntimeUuid();
 }
 
 function createEmptyPane(initialThreadId = ''): PaneState {
@@ -124,22 +121,62 @@ interface DbMessageRow {
     deleted?: boolean;
 }
 
+/**
+ * Fast structural validation for DB message rows.
+ * Checks essential fields without heavy parsing.
+ */
+function isValidMessageRow(msg: unknown): msg is DbMessageRow {
+    if (msg === null || typeof msg !== 'object') return false;
+    const m = msg as Record<string, unknown>;
+    return (
+        typeof m.id === 'string' &&
+        m.id.length > 0 &&
+        typeof m.role === 'string' &&
+        m.role.length > 0 &&
+        // deleted should be boolean or undefined (truthy check)
+        (m.deleted === undefined || typeof m.deleted === 'boolean')
+    );
+}
+
 async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
     if (!id) return [];
     try {
+        const db = getDb();
         const msgs = await db.messages
             .where('[thread_id+index]')
             .between([id, Dexie.minKey], [id, Dexie.maxKey])
             .filter((m) => !m.deleted)
             .toArray();
-        return msgs.map((msg) => {
-            const row = msg as unknown as DbMessageRow;
+        
+        const result: MultiPaneMessage[] = [];
+        let skippedCount = 0;
+        
+        for (const msg of msgs) {
+            // Fast structural validation
+            if (!isValidMessageRow(msg)) {
+                skippedCount++;
+                if (import.meta.dev) {
+                    console.warn(
+                        '[useMultiPane] Skipping invalid message row:',
+                        msg
+                    );
+                }
+                continue;
+            }
+            
+            // Skip deleted messages (double check after filter)
+            if (msg.deleted) {
+                continue;
+            }
+            
+            const row = msg as DbMessageRow;
             const data = row.data;
             const content = deriveMessageContent({
                 content: row.content,
                 data,
             });
-            return {
+            
+            result.push({
                 role: row.role as 'user' | 'assistant' | 'system' | 'tool',
                 content,
                 file_hashes: row.file_hashes,
@@ -150,9 +187,21 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
                 index: typeof row.index === 'number' ? row.index : null,
                 created_at:
                     typeof row.created_at === 'number' ? row.created_at : null,
-            } as MultiPaneMessage;
-        });
-    } catch {
+            } as MultiPaneMessage);
+        }
+        
+        // Dev-only diagnostics
+        if (import.meta.dev && skippedCount > 0) {
+            console.warn(
+                `[useMultiPane] Skipped ${skippedCount} invalid message(s) for thread ${id}`
+            );
+        }
+        
+        return result;
+    } catch (error) {
+        if (import.meta.dev) {
+            console.error('[useMultiPane] Failed to load messages:', error);
+        }
         return [];
     }
 }
@@ -166,12 +215,39 @@ function ensurePaneAppGetter(): PaneAppGetter {
     return cachedPaneAppGetter;
 }
 
+/**
+ * `useMultiPane`
+ *
+ * Purpose:
+ * Manages multi-pane state for chat and document panes.
+ *
+ * Behavior:
+ * - Tracks panes and active index
+ * - Loads thread messages on demand
+ * - Persists pane widths with local storage
+ * - Emits pane hooks for open, close, and thread changes
+ *
+ * Constraints:
+ * - Pane widths rely on `document` for measurement
+ * - Message loading assumes Dexie table shape when using defaults
+ *
+ * Non-Goals:
+ * - Does not render panes or UI
+ * - Does not enforce business rules for pane app content
+ *
+ * @example
+ * ```ts
+ * const { addPane, setPaneThread } = useMultiPane({ maxPanes: 3 });
+ * addPane();
+ * await setPaneThread(0, 'thread-123');
+ * ```
+ */
 export function useMultiPane(
     options: UseMultiPaneOptions = {}
 ): UseMultiPaneApi {
     const {
         initialThreadId = '',
-        maxPanes = 3,
+        maxPanes: configuredMaxPanes = 3,
         minPaneWidth = 280,
         maxPaneWidth = 2000,
         storageKey = 'pane-widths',
@@ -180,6 +256,9 @@ export function useMultiPane(
     const panes = ref<PaneState[]>([createEmptyPane(initialThreadId)]);
     const activePaneIndex = ref(0);
     const hooks = useHooks();
+    const threadLoadGenerations = new Map<string, number>();
+    const closingPaneIds = new Set<string>();
+    const pendingPaneCreations = ref(0);
 
     // Width management state using useLocalStorage
     const paneWidths = useLocalStorage<number[]>(storageKey, [], {
@@ -190,9 +269,13 @@ export function useMultiPane(
                 try {
                     const parsed: unknown = JSON.parse(raw);
                     if (!Array.isArray(parsed)) return [];
-                    const isValidArray = parsed.every((w): w is number => typeof w === 'number' && w > 0);
+                    const isValidArray = parsed.every(
+                        (w): w is number => typeof w === 'number' && w > 0
+                    );
                     if (!isValidArray) return [];
-                    return parsed.map((w) => Math.max(minPaneWidth, Math.min(maxPaneWidth, w)));
+                    return parsed.map((w) =>
+                        Math.max(minPaneWidth, Math.min(maxPaneWidth, w))
+                    );
                 } catch {
                     return [];
                 }
@@ -203,10 +286,25 @@ export function useMultiPane(
         },
     });
 
-    const canAddPane = computed(() => panes.value.length < maxPanes);
-    const newWindowTooltip = computed(() =>
-        canAddPane.value ? 'New window' : `Max ${maxPanes} windows`
+    const multiplePanesAllowed = computed(
+        () =>
+            options.allowMultiplePanes === undefined ||
+            toValue(options.allowMultiplePanes)
     );
+    const maxPanes = computed(() =>
+        Math.max(1, Math.floor(toValue(configuredMaxPanes)))
+    );
+    const canAddPane = computed(
+        () =>
+            multiplePanesAllowed.value &&
+            panes.value.length + pendingPaneCreations.value < maxPanes.value
+    );
+    const newWindowTooltip = computed(() => {
+        if (!multiplePanesAllowed.value) return 'Single pane on this display';
+        return canAddPane.value
+            ? 'New window'
+            : `Max ${maxPanes.value} windows`;
+    });
 
     const loadMessagesFor = options.loadMessagesFor || defaultLoadMessagesFor;
 
@@ -230,6 +328,16 @@ export function useMultiPane(
     }
 
     /**
+     * Normalize stored widths to match current pane count.
+     * Truncates if stored widths exceed pane count to prevent localStorage bloat.
+     */
+    function normalizeStoredWidths(paneCount: number) {
+        if (paneWidths.value.length > paneCount) {
+            paneWidths.value = paneWidths.value.slice(0, paneCount);
+        }
+    }
+
+    /**
      * Get width for a specific pane as a CSS value
      */
     function getPaneWidth(index: number): string {
@@ -237,6 +345,11 @@ export function useMultiPane(
 
         // Single pane or no panes
         if (paneCount <= 1) return '100%';
+
+        // Normalize widths if mismatch detected
+        if (paneWidths.value.length > paneCount) {
+            normalizeStoredWidths(paneCount);
+        }
 
         // Stored widths match current pane count
         if (
@@ -255,12 +368,16 @@ export function useMultiPane(
      * Initialize widths based on current container size
      */
     function initializeWidths() {
-        if (typeof document === 'undefined') return;
+        const doc = (globalThis as {
+            document?: { querySelector: (selector: string) => { clientWidth?: number } | null };
+        }).document;
+        if (!doc) return;
 
-        const container = document.querySelector('.pane-container');
+        const container = doc.querySelector('.pane-container');
         if (!container) return;
 
-        const totalWidth = container.clientWidth;
+        const totalWidth = container.clientWidth ?? 0;
+        if (!totalWidth) return;
         recalculateWidthsForContainer(totalWidth);
     }
 
@@ -365,6 +482,9 @@ export function useMultiPane(
     async function setPaneThread(index: number, threadId: string) {
         const pane = panes.value[index];
         if (!pane) return;
+        const loadGeneration =
+            (threadLoadGenerations.get(pane.id) ?? 0) + 1;
+        threadLoadGenerations.set(pane.id, loadGeneration);
         const oldId = pane.threadId;
         let requested: string | false = threadId;
         if (import.meta.dev) {
@@ -389,6 +509,7 @@ export function useMultiPane(
         } catch {
             /* intentionally empty */
         }
+        if (threadLoadGenerations.get(pane.id) !== loadGeneration) return;
         if (requested === false) return; // veto
         // Clear association
         if (requested === '') {
@@ -415,7 +536,15 @@ export function useMultiPane(
             return;
         }
         pane.threadId = requested;
-        pane.messages = await loadMessagesFor(requested);
+        const loadedMessages = await loadMessagesFor(requested);
+        if (
+            threadLoadGenerations.get(pane.id) !== loadGeneration ||
+            pane.threadId !== requested ||
+            !panes.value.includes(pane)
+        ) {
+            return;
+        }
+        pane.messages = loadedMessages;
         if (oldId !== requested)
             void hooks.doAction('ui.pane.thread:action:changed', {
                 pane,
@@ -500,6 +629,10 @@ export function useMultiPane(
         }
 
         panes.value.push(pane);
+        
+        // Normalize widths after adding pane
+        normalizeStoredWidths(panes.value.length);
+        
         const prevIndex = activePaneIndex.value;
         const newIndex = panes.value.length - 1;
         setActive(newIndex);
@@ -514,56 +647,70 @@ export function useMultiPane(
         if (panes.value.length <= 1) return; // never close last
         const closing = panes.value[i];
         if (!closing) return;
-        // Pre-close hook
-        void hooks.doAction('ui.pane.close:action:before', {
-            pane: closing,
-            index: i,
-            previousIndex: activePaneIndex.value,
-        });
-        if (
-            closing.mode === 'doc' &&
-            closing.documentId &&
-            options.onFlushDocument
-        ) {
-            try {
-                await options.onFlushDocument(closing.documentId);
-            } catch {
-                /* intentionally empty */
-            }
-        }
-
-        // Redistribute width to remaining panes
-        if (
-            paneWidths.value.length > i &&
-            paneWidths.value.length === panes.value.length
-        ) {
-            const removedWidth = paneWidths.value[i];
-            if (removedWidth !== undefined) {
-                paneWidths.value.splice(i, 1);
-
-                if (paneWidths.value.length > 0) {
-                    const additionPerPane =
-                        removedWidth / paneWidths.value.length;
-                    paneWidths.value = paneWidths.value.map((w) =>
-                        clampWidth(w + additionPerPane)
-                    );
+        if (closingPaneIds.has(closing.id)) return;
+        closingPaneIds.add(closing.id);
+        try {
+            void hooks.doAction('ui.pane.close:action:before', {
+                pane: closing,
+                index: i,
+                previousIndex: activePaneIndex.value,
+            });
+            if (
+                closing.mode === 'doc' &&
+                closing.documentId &&
+                options.onFlushDocument
+            ) {
+                try {
+                    await options.onFlushDocument(closing.documentId);
+                } catch {
+                    /* intentionally empty */
                 }
-                persistWidths();
             }
-        }
 
-        const wasActive = i === activePaneIndex.value;
-        panes.value.splice(i, 1);
-        if (!panes.value.length) {
-            panes.value.push(createEmptyPane());
-            activePaneIndex.value = 0;
-            return;
-        }
-        if (wasActive) {
-            const newIndex = Math.min(i, panes.value.length - 1);
-            setActive(newIndex);
-        } else if (i < activePaneIndex.value) {
-            activePaneIndex.value -= 1; // shift left
+            const closingIndex = panes.value.indexOf(closing);
+            if (closingIndex === -1 || panes.value.length <= 1) return;
+
+            if (
+                paneWidths.value.length > closingIndex &&
+                paneWidths.value.length === panes.value.length
+            ) {
+                const removedWidth = paneWidths.value[closingIndex];
+                if (removedWidth !== undefined) {
+                    paneWidths.value.splice(closingIndex, 1);
+                    if (paneWidths.value.length > 0) {
+                        const additionPerPane =
+                            removedWidth / paneWidths.value.length;
+                        paneWidths.value = paneWidths.value.map((width) =>
+                            clampWidth(width + additionPerPane)
+                        );
+                    }
+                    persistWidths();
+                }
+            }
+
+            const wasActive = closingIndex === activePaneIndex.value;
+            panes.value.splice(closingIndex, 1);
+            threadLoadGenerations.delete(closing.id);
+            normalizeStoredWidths(panes.value.length);
+            void hooks.doAction('ui.pane.close:action:after', {
+                pane: closing,
+                index: closingIndex,
+            });
+
+            if (!panes.value.length) {
+                panes.value.push(createEmptyPane());
+                activePaneIndex.value = 0;
+                return;
+            }
+            if (wasActive) {
+                setActive(
+                    Math.min(closingIndex, panes.value.length - 1)
+                );
+            } else if (closingIndex < activePaneIndex.value) {
+                activePaneIndex.value -= 1;
+            }
+        } finally {
+            closingPaneIds.delete(closing.id);
         }
     }
 
@@ -598,7 +745,7 @@ export function useMultiPane(
         if (!canAddPane.value) {
             if (import.meta.dev) {
                 console.warn(
-                    `[multiPane] newPaneForApp: Cannot add pane, limit reached (${maxPanes})`
+                    `[multiPane] newPaneForApp: Cannot add pane, limit reached (${maxPanes.value})`
                 );
             }
             return;
@@ -618,6 +765,16 @@ export function useMultiPane(
             return;
         }
 
+        // Reserve capacity before awaiting app-owned initialization. Without a
+        // reservation, concurrent launches can all pass the same pane-limit
+        // check and overfill the workspace.
+        if (
+            panes.value.length + pendingPaneCreations.value >=
+            maxPanes.value
+        )
+            return;
+        pendingPaneCreations.value++;
+
         // Create pane skeleton
         const pane: PaneState = {
             id: genId(),
@@ -628,51 +785,54 @@ export function useMultiPane(
             validating: false,
         };
 
-        // If createInitialRecord is provided and no initialRecordId, call it
-        if (!opts.initialRecordId && appDef.createInitialRecord) {
-            try {
+        try {
+            // If createInitialRecord is provided and no initialRecordId, call it
+            if (!opts.initialRecordId && appDef.createInitialRecord) {
                 const result = await appDef.createInitialRecord({
                     app: appDef,
                 });
                 if (result && result.id) {
                     pane.documentId = result.id;
                 }
-            } catch (error) {
-                if (import.meta.dev) {
-                    console.error(
-                        `[multiPane] newPaneForApp: createInitialRecord failed for "${appId}"`,
-                        error
-                    );
+            }
+
+            // Synchronous pane additions may have consumed the reserved slot.
+            if (panes.value.length >= maxPanes.value) return;
+
+            // Push pane and activate
+            const prevIndex = activePaneIndex.value;
+            panes.value.push(pane);
+            const newIndex = panes.value.length - 1;
+            setActive(newIndex);
+
+            // Fire existing pane open hook
+            void hooks.doAction('ui.pane.open:action:after', {
+                pane,
+                index: newIndex,
+                previousIndex: prevIndex === newIndex ? undefined : prevIndex,
+            });
+
+            if (import.meta.dev) {
+                try {
+                    console.debug('[multiPane] newPaneForApp:created', {
+                        appId,
+                        paneId: pane.id,
+                        recordId: pane.documentId,
+                        index: newIndex,
+                    });
+                } catch {
+                    /* intentionally empty */
                 }
-                // Abort pane creation on error
-                return;
             }
-        }
-
-        // Push pane and activate
-        const prevIndex = activePaneIndex.value;
-        panes.value.push(pane);
-        const newIndex = panes.value.length - 1;
-        setActive(newIndex);
-
-        // Fire existing pane open hook
-        void hooks.doAction('ui.pane.open:action:after', {
-            pane,
-            index: newIndex,
-            previousIndex: prevIndex === newIndex ? undefined : prevIndex,
-        });
-
-        if (import.meta.dev) {
-            try {
-                console.debug('[multiPane] newPaneForApp:created', {
-                    appId,
-                    paneId: pane.id,
-                    recordId: pane.documentId,
-                    index: newIndex,
-                });
-            } catch {
-                /* intentionally empty */
+        } catch (error) {
+            if (import.meta.dev) {
+                console.error(
+                    `[multiPane] newPaneForApp: createInitialRecord failed for "${appId}"`,
+                    error
+                );
             }
+        } finally {
+            pendingPaneCreations.value--;
         }
     }
 
@@ -822,11 +982,13 @@ export function useMultiPane(
     }
 
     // Clean up global reference on scope disposal to prevent memory leaks
-    onScopeDispose(() => {
-        if (getGlobalMultiPaneApi() === api) {
-            setGlobalMultiPaneApi(undefined);
-        }
-    });
+    if (getCurrentScope()) {
+        onScopeDispose(() => {
+            if (getGlobalMultiPaneApi() === api) {
+                setGlobalMultiPaneApi(undefined);
+            }
+        });
+    }
 
     // Width restoration removed - useLocalStorage handles it automatically
 

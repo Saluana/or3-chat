@@ -1,3 +1,10 @@
+/**
+ * @module app/utils/chat/uiMessages
+ *
+ * Purpose:
+ * Transforms raw message records into UI-ready chat message objects.
+ */
+
 // Canonical UI message utilities (content part type no longer needed directly)
 import { parseHashes } from '~/utils/files/attachments';
 import {
@@ -5,6 +12,7 @@ import {
     type UiWorkflowState,
 } from '~/utils/chat/workflow-types';
 import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 interface ContentPartLike {
     type?: string;
@@ -32,6 +40,12 @@ interface RawMessageLike {
     created_at?: number | null;
 }
 
+/**
+ * `ToolCallInfo`
+ *
+ * Purpose:
+ * UI representation of a tool call state.
+ */
 export interface ToolCallInfo {
     id?: string;
     name: string;
@@ -40,8 +54,28 @@ export interface ToolCallInfo {
     args?: string;
     result?: string;
     error?: string;
+    fingerprint?: string;
+    completedAt?: number;
 }
 
+export type UiChatMessagePart =
+    | {
+          id: string;
+          type: 'text';
+          text: string;
+      }
+    | {
+          id: string;
+          type: 'tool';
+          toolCall: ToolCallInfo;
+      };
+
+/**
+ * `UiChatMessage`
+ *
+ * Purpose:
+ * UI-friendly message shape with flattened text and optional workflow data.
+ */
 export interface UiChatMessage {
     id: string;
     role: 'user' | 'assistant' | 'system' | 'tool';
@@ -51,6 +85,11 @@ export interface UiChatMessage {
     stream_id?: string;
     pending?: boolean;
     toolCalls?: ToolCallInfo[];
+    /**
+     * Ordered assistant content. When present, text and tool calls are rendered
+     * in the same sequence in which the provider emitted them.
+     */
+    parts?: UiChatMessagePart[];
     error?: string | null;
 
     // Workflow-specific fields (optional - no breaking changes)
@@ -60,6 +99,12 @@ export interface UiChatMessage {
     workflowState?: UiWorkflowState;
 }
 
+/**
+ * `partsToText`
+ *
+ * Purpose:
+ * Flattens content parts into a displayable text string.
+ */
 export function partsToText(
     parts: string | ContentPartLike[] | null | undefined,
     role?: string
@@ -87,8 +132,14 @@ export function partsToText(
     return out;
 }
 
+/**
+ * `ensureUiMessage`
+ *
+ * Purpose:
+ * Converts a raw message record into a UI-ready message object.
+ */
 export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
-    const id = raw.id || raw.stream_id || crypto.randomUUID();
+    const id = raw.id || raw.stream_id || createRuntimeUuid();
     const role = raw.role || 'user';
     let file_hashes: string[] | undefined;
     if (Array.isArray(raw.file_hashes)) file_hashes = raw.file_hashes.slice();
@@ -205,6 +256,11 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         ? workflowState.executionState === 'running'
         : Boolean(raw.pending);
 
+    const errorValue = raw.error ??
+        (raw.data && typeof raw.data === 'object'
+            ? (raw.data as { error?: string | null }).error ?? null
+            : null);
+
     return {
         id,
         role,
@@ -214,21 +270,8 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         stream_id: raw.stream_id,
         pending,
         toolCalls,
-        error:
-            raw.error ??
-            (raw.data && typeof raw.data === 'object'
-                ? (raw.data as { error?: string | null }).error ?? null
-                : null),
+        error: errorValue,
         isWorkflow,
         workflowState,
     };
-}
-
-// Legacy raw storage (non reactive). We expose accessor for plugins.
-const _rawMessages: RawMessageLike[] = [];
-export function recordRawMessage(m: RawMessageLike): void {
-    _rawMessages.push(m);
-}
-export function getRawMessages(): readonly RawMessageLike[] {
-    return _rawMessages.slice();
 }

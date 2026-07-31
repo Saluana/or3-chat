@@ -1,8 +1,28 @@
+/**
+ * @module app/theme/_shared/generate-css-variables
+ *
+ * Purpose:
+ * Generates CSS variable blocks from theme definitions.
+ *
+ * Behavior:
+ * - Produces light and optional dark CSS variable blocks
+ * - Adds font and border variables when configured
+ *
+ * Constraints:
+ * - Only string values are emitted as variables
+ *
+ * Non-Goals:
+ * - Validating color values
+ */
+
 import type { ThemeDefinition, ColorPalette, ThemeFontSet } from './types';
+import { COLOR_TOKEN_REGISTRY } from './design-token-registry';
 
 /**
- * Generate CSS variable declarations from theme color palette.
- * Supports light and dark palette (dark overrides).
+ * `generateThemeCssVariables`
+ *
+ * Purpose:
+ * Generates the CSS variable blocks for a theme.
  */
 export function generateThemeCssVariables(def: ThemeDefinition): string {
     const light = buildPalette(def.colors);
@@ -37,6 +57,8 @@ export function generateThemeCssVariables(def: ThemeDefinition): string {
     return lightBlock + (darkBlock ? '\n' + darkBlock : '');
 }
 
+// Safe to keep unbounded: keys come from theme token names, which are finite
+// and author-controlled (not user-generated runtime input).
 const kebabCache = new Map<string, string>();
 
 function kebab(str: string): string {
@@ -54,7 +76,9 @@ function buildPalette(colors: ColorPalette): Record<string, string> {
         const value = colors[key as keyof ColorPalette];
         if (typeof value !== 'string') continue;
         // prefix variables with md for material design tokens
-        const varName = `--md-${kebab(key)}`;
+        const varName =
+            COLOR_TOKEN_REGISTRY[key as keyof typeof COLOR_TOKEN_REGISTRY] ??
+            `--md-${kebab(key)}`;
         entries[varName] = value;
     }
     return entries;

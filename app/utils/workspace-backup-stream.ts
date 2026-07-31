@@ -1,8 +1,42 @@
+/**
+ * @module app/utils/workspace-backup-stream
+ *
+ * Purpose:
+ * Streams workspace backups to and from a JSONL format optimized for large
+ * datasets and file blobs.
+ *
+ * Behavior:
+ * - Exports tables as a line-delimited stream with a metadata header
+ * - Imports by streaming lines into Dexie transactions
+ * - Applies special handling for `file_blobs` to keep line size bounded
+ *
+ * Constraints:
+ * - The backup format is versioned and validated on import
+ * - Import can be destructive when `clearTables` is true
+ *
+ * Non-Goals:
+ * - Cross-database migration between unrelated schemas
+ * - Encrypted backups (handled at a higher layer)
+ */
+
 import Dexie from 'dexie';
 import type { IndexableType } from 'dexie';
 import type { Or3DB } from '~/db/client';
 
+/**
+ * `WORKSPACE_BACKUP_FORMAT`
+ *
+ * Purpose:
+ * Identifies the JSONL backup stream format.
+ */
 export const WORKSPACE_BACKUP_FORMAT = 'or3-backup-stream';
+
+/**
+ * `WORKSPACE_BACKUP_VERSION`
+ *
+ * Purpose:
+ * Current backup format version.
+ */
 export const WORKSPACE_BACKUP_VERSION = 1;
 
 export interface WorkspaceBackupTableSummary {
@@ -106,6 +140,12 @@ function base64ToBlob(payload: { data: string; type: string }): Blob {
     return new Blob([bytes.buffer], { type: payload.type });
 }
 
+/**
+ * `detectWorkspaceBackupFormat`
+ *
+ * Purpose:
+ * Peeks at the first line to determine the backup format type.
+ */
 export async function detectWorkspaceBackupFormat(
     file: Blob
 ): Promise<'stream' | 'dexie' | 'unknown'> {
@@ -129,6 +169,12 @@ export async function detectWorkspaceBackupFormat(
     return 'unknown';
 }
 
+/**
+ * `streamWorkspaceExport`
+ *
+ * Purpose:
+ * Streams a workspace backup to a FileSystem file handle.
+ */
 export async function streamWorkspaceExport({
     db,
     fileHandle,
@@ -154,6 +200,12 @@ export async function streamWorkspaceExport({
     });
 }
 
+/**
+ * `streamWorkspaceExportToWritable`
+ *
+ * Purpose:
+ * Streams a workspace backup to an existing WritableStream writer.
+ */
 export async function streamWorkspaceExportToWritable({
     db,
     writable,
@@ -394,6 +446,12 @@ function isValidBackupVersion(
     return version === WORKSPACE_BACKUP_VERSION;
 }
 
+/**
+ * `peekWorkspaceBackupMetadata`
+ *
+ * Purpose:
+ * Reads the backup header metadata without importing the full file.
+ */
 export async function peekWorkspaceBackupMetadata(
     file: Blob
 ): Promise<WorkspaceBackupHeaderLine> {
@@ -413,6 +471,15 @@ export async function peekWorkspaceBackupMetadata(
     throw new Error('Backup metadata not found.');
 }
 
+/**
+ * `importWorkspaceStream`
+ *
+ * Purpose:
+ * Imports a workspace backup stream into the provided Dexie database.
+ *
+ * Constraints:
+ * - Throws when the backup targets a different DB name or newer schema
+ */
 export async function importWorkspaceStream({
     db,
     file,
@@ -451,6 +518,32 @@ export async function importWorkspaceStream({
     const inboundMap = new Map(
         header.tables.map((table) => [table.name, table.inbound])
     );
+    const expectedRowsByTable = new Map<string, number>();
+    for (const table of header.tables) {
+        if (
+            !table.name ||
+            !Number.isSafeInteger(table.rowCount) ||
+            table.rowCount < 0 ||
+            expectedRowsByTable.has(table.name) ||
+            !tableByName.has(table.name)
+        ) {
+            throw new Error('Backup contains invalid table metadata.');
+        }
+        expectedRowsByTable.set(table.name, table.rowCount);
+    }
+    if (
+        clearTables &&
+        (
+            expectedRowsByTable.size !== tableByName.size ||
+            [...tableByName.keys()].some(
+                (tableName) => !expectedRowsByTable.has(tableName)
+            )
+        )
+    ) {
+        throw new Error(
+            'Replace backup must include every database table before existing data can be cleared.'
+        );
+    }
 
     const progress: WorkspaceBackupProgress = {
         completedRows: 0,
@@ -497,6 +590,9 @@ export async function importWorkspaceStream({
         }
 
         let currentTable: string | null = null;
+        let sawEnd = false;
+        const completedTables = new Set<string>();
+        const importedRowsByTable = new Map<string, number>();
 
         try {
             for (;;) {
@@ -505,21 +601,57 @@ export async function importWorkspaceStream({
                 const raw = next.value.trim();
                 if (!raw) continue;
 
+                if (sawEnd) {
+                    throw new Error(
+                        'Backup contains trailing records after terminal marker.'
+                    );
+                }
+
                 const entry = JSON.parse(raw) as WorkspaceBackupLine;
 
                 if (entry.type === 'table-start') {
+                    if (
+                        currentTable ||
+                        completedTables.has(entry.table) ||
+                        !expectedRowsByTable.has(entry.table)
+                    ) {
+                        throw new Error(
+                            `Invalid table start marker for "${entry.table}".`
+                        );
+                    }
                     currentTable = entry.table;
+                    importedRowsByTable.set(entry.table, 0);
                     continue;
                 }
                 if (entry.type === 'table-end') {
+                    if (!currentTable || entry.table !== currentTable) {
+                        throw new Error(
+                            `Invalid table end marker for "${entry.table}".`
+                        );
+                    }
+                    const expectedRows =
+                        expectedRowsByTable.get(currentTable) ?? 0;
+                    const importedRows =
+                        importedRowsByTable.get(currentTable) ?? 0;
+                    if (importedRows !== expectedRows) {
+                        throw new Error(
+                            `Backup table "${currentTable}" expected ${expectedRows} rows but contained ${importedRows}.`
+                        );
+                    }
+                    completedTables.add(currentTable);
                     currentTable = null;
                     progress.completedTables += 1;
                     emitProgress(progress, onProgress);
                     continue;
                 }
                 if (entry.type === 'rows') {
-                    if (!currentTable) {
+                    if (!currentTable || entry.table !== currentTable) {
                         throw new Error('Encountered rows before table start.');
+                    }
+                    if (!Array.isArray(entry.rows)) {
+                        throw new Error(
+                            `Invalid rows payload for table "${currentTable}".`
+                        );
                     }
                     const table = tableByName.get(currentTable);
                     if (!table) {
@@ -528,6 +660,17 @@ export async function importWorkspaceStream({
                         );
                     }
                     const inbound = inboundMap.get(currentTable) ?? true;
+                    const nextRowCount =
+                        (importedRowsByTable.get(currentTable) ?? 0) +
+                        entry.rows.length;
+                    const expectedRows =
+                        expectedRowsByTable.get(currentTable) ?? 0;
+                    if (nextRowCount > expectedRows) {
+                        throw new Error(
+                            `Backup table "${currentTable}" contains more rows than declared.`
+                        );
+                    }
+                    importedRowsByTable.set(currentTable, nextRowCount);
 
                     if (currentTable === 'file_blobs') {
                         const typedRows = entry.rows as Array<{
@@ -585,8 +728,25 @@ export async function importWorkspaceStream({
                 }
 
                 if (entry.type === 'end') {
-                    break;
+                    if (
+                        currentTable ||
+                        completedTables.size !== expectedRowsByTable.size
+                    ) {
+                        throw new Error(
+                            'Backup ended before all declared tables were complete.'
+                        );
+                    }
+                    sawEnd = true;
+                    continue;
                 }
+
+                throw new Error('Backup contains an unsupported record type.');
+            }
+
+            if (!sawEnd) {
+                throw new Error(
+                    'Backup is incomplete or truncated: terminal marker missing.'
+                );
             }
         } finally {
             try {

@@ -8,6 +8,7 @@
                 :item-key="(item) => item.key"
                 :estimate-height="40"
                 :overscan="240"
+                mutation-mode="arbitrary"
                 :maintain-bottom="false"
                 class="flex-1 min-h-0 sidebar-scroll"
             >
@@ -36,6 +37,7 @@
                         :label="item.label"
                         :description="item.description"
                         :icon="item.icon"
+                        :accent="item.accent"
                         :class="item.class"
                         @select="setActivePage(item.pageId)"
                     />
@@ -51,6 +53,7 @@
                         @toggle-collapse="
                             projectsCollapsed = !projectsCollapsed
                         "
+                        @new-project="emit('new-project')"
                         @update:expanded-projects="
                             (val) => emit('update:expandedProjects', val)
                         "
@@ -72,10 +75,23 @@
                         @select-document="(id) => emit('select-document', id)"
                     />
 
+                    <!-- Recent section label -->
+                    <div
+                        v-else-if="item.type === 'recent-header'"
+                        class="mx-1 mt-4 mb-1 px-2.5 flex items-center justify-between sb-recent-header"
+                        style="width: calc(100% - 8px)"
+                    >
+                        <span
+                            class="text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--md-on-surface-variant)]"
+                        >
+                            Recent
+                        </span>
+                    </div>
+
                     <!-- Time Group Header -->
                     <SidebarGroupHeader
                         v-else-if="item.type === 'time-group-header'"
-                        class="mt-3"
+                        class="mt-1 time-group-header"
                         :label="item.label"
                         :collapsed="collapsedGroups.has(item.groupKey)"
                         @toggle="toggleGroup(item.groupKey)"
@@ -87,11 +103,14 @@
                         :item="item.item"
                         :active="allActiveIds.includes(item.item.id)"
                         :time-display="
-                            formatTimeDisplay(item.item.updatedAt, item.groupKey)
+                            formatTimeDisplay(
+                                item.item.updatedAt,
+                                item.groupKey
+                            )
                         "
                         :class="[
                             'mb-0.5',
-                            collapsingGroups.has(item.groupKey) && 'is-exiting'
+                            collapsingGroups.has(item.groupKey) && 'is-exiting',
                         ]"
                         @select="() => onItemSelected(item.item)"
                         @rename="() => onItemRename(item.item)"
@@ -106,14 +125,14 @@
                         title="No activity yet"
                         description="Kick things off with a project, or jump straight into a chat or document."
                         actions-layout="column"
-                        class="mx-1"
-                        style="width: calc(100% - 8px);"
+                        class="mx-1 sb-empty-state"
+                        style="width: calc(100% - 8px)"
                     >
                         <template #actions>
                             <UButton
                                 size="sm"
                                 variant="ghost"
-                                class="w-full justify-center whitespace-nowrap truncate text-[12px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                                class="w-full justify-center whitespace-nowrap truncate text-[14px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-on-surface)]/80 hover:bg-[color:var(--md-primary)]/15 backdrop-blur theme-btn"
                                 title="Create your first project"
                                 @click="emit('new-project')"
                             >
@@ -122,16 +141,17 @@
                             <UButton
                                 size="sm"
                                 variant="ghost"
-                                class="w-full justify-center whitespace-nowrap truncate text-[12px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                                class="w-full justify-center whitespace-nowrap truncate text-[14px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-on-surface)]/80 hover:bg-[color:var(--md-primary)]/15 backdrop-blur theme-btn"
                                 title="Start a new chat"
                                 @click="emit('new-chat')"
                             >
                                 Start a new chat
                             </UButton>
                             <UButton
+                                v-if="documentsEnabled"
                                 size="sm"
                                 variant="ghost"
-                                class="w-full justify-center whitespace-nowrap truncate text-[12px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/15"
+                                class="w-full justify-center whitespace-nowrap truncate text-[14px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-on-surface)]/80 hover:bg-[color:var(--md-primary)]/15 backdrop-blur theme-btn"
                                 title="Create a document"
                                 @click="emit('new-document')"
                             >
@@ -225,15 +245,42 @@ import SidebarUnifiedItem from './SidebarUnifiedItem.vue';
 import { useIcon } from '~/composables/useIcon';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import type { SidebarFooterActionEntry } from '~/composables/sidebar/useSidebarSections';
+import { useOr3Config } from '~/composables/useOr3Config';
+import { resolvedWorkspaceProfile } from '~/core/workspace-profiles/projection';
+import { isMobile } from '~/state/global';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 type SidebarCombinedItem =
-    | { key: string; type: 'custom-top' | 'custom-main' | 'custom-bottom'; component: Component }
-    | { key: string; type: 'page-link'; label: string; description: string; icon: string; pageId: string; class?: string }
+    | {
+          key: string;
+          type: 'custom-top' | 'custom-main' | 'custom-bottom';
+          component: Component;
+      }
+    | {
+          key: string;
+          type: 'page-link';
+          label: string;
+          description: string;
+          icon: string;
+          pageId: string;
+          accent?: 'chats' | 'docs' | 'projects';
+          class?: string;
+      }
     | { key: string; type: 'projects' }
     | { key: string; type: 'empty-state' }
-    | { key: string; type: 'time-group-header'; label: string; groupKey: TimeGroup }
-    | { key: string; type: 'time-group-item'; item: UnifiedSidebarItem; groupKey: TimeGroup };
+    | { key: string; type: 'recent-header' }
+    | {
+          key: string;
+          type: 'time-group-header';
+          label: string;
+          groupKey: TimeGroup;
+      }
+    | {
+          key: string;
+          type: 'time-group-item';
+          item: UnifiedSidebarItem;
+          groupKey: TimeGroup;
+      };
 
 interface SidebarPageProps {
     pageId: string;
@@ -325,10 +372,15 @@ function toggleGroup(groupKey: string) {
     }
 }
 
+// Config and feature flags (must be declared before usePaginatedSidebarItems)
+const or3Config = useOr3Config();
+const documentsEnabled = computed(() => or3Config.features.documents.enabled);
+
 // Paginated items
 const sidebarQuery = computed(() => props.sidebarQuery.trim());
 const { items, loading, reset } = usePaginatedSidebarItems({
     query: sidebarQuery,
+    type: documentsEnabled.value ? 'all' : 'thread',
 });
 
 const iconChats = useIcon('sidebar.page.messages');
@@ -359,7 +411,9 @@ const groupedItems = computed(() => {
     return groups;
 });
 
-const showEmptyState = computed(() => !loading.value && items.value.length === 0);
+const showEmptyState = computed(
+    () => !loading.value && items.value.length === 0
+);
 const isCompletelyEmpty = computed(
     () => showEmptyState.value && props.displayProjects.length === 0
 );
@@ -386,24 +440,50 @@ const combinedItems = computed(() => {
         });
     }
 
-    result.push(
+    const pageLinks: SidebarCombinedItem[] = [
         {
             key: 'page-link-chats',
             type: 'page-link',
             label: 'Chats',
-            description: 'Jump into your conversation history.',
+            class: 'mb-1.5',
+            description: 'View your chat history',
             icon: iconChats.value,
             pageId: 'sidebar-chats',
+            accent: 'chats',
         },
-        {
-            key: 'page-link-docs',
-            type: 'page-link',
-            label: 'Documents',
-            description: 'Open and manage your docs.',
-            icon: iconDocs.value,
-            pageId: 'sidebar-docs',
-            class: 'mb-3',
-        }
+        ...(documentsEnabled.value
+            ? [
+                  {
+                      key: 'page-link-docs',
+                      type: 'page-link' as const,
+                      label: 'Documents',
+                      description: 'View your documents',
+                      icon: iconDocs.value,
+                      pageId: 'sidebar-docs',
+                      class: 'mb-1.5',
+                      accent: 'docs' as const,
+                  },
+              ]
+            : []),
+    ];
+    const navigationOrder = isMobile.value
+        ? resolvedWorkspaceProfile.value.mobile.bottomNavigation
+        : resolvedWorkspaceProfile.value.navigation.items;
+    pageLinks.sort(
+        (left, right) =>
+            navigationOrder.indexOf(
+                left.type === 'page-link' ? left.pageId : ''
+            ) -
+            navigationOrder.indexOf(
+                right.type === 'page-link' ? right.pageId : ''
+            )
+    );
+    result.push(
+        ...pageLinks.filter(
+            (item) =>
+                item.type === 'page-link' &&
+                navigationOrder.includes(item.pageId)
+        )
     );
 
     // Projects section (single item that renders the whole section)
@@ -422,7 +502,16 @@ const combinedItems = computed(() => {
     }
 
     // Time-grouped items (flattened for true per-item virtualization)
+    let recentHeaderAdded = false;
     for (const [groupKey, groupItems] of groupedItems.value) {
+        if (!recentHeaderAdded) {
+            result.push({
+                key: 'recent-header',
+                type: 'recent-header',
+            });
+            recentHeaderAdded = true;
+        }
+
         result.push({
             key: `time-group-header-${groupKey}`,
             type: 'time-group-header',

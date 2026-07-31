@@ -58,6 +58,10 @@ function toWorkflowModel(model: OpenRouterModel): WorkflowModel {
         perRequestLimits: (model.per_request_limits as ModelPerRequestLimits) ?? null,
         supportedParameters: (model.supported_parameters ?? []) as ModelParameter[],
         defaultParameters: null,
+        links: {
+            details: `https://openrouter.ai/api/v1/models/${encodeURIComponent(model.id)}/endpoints`,
+        },
+        supportedVoices: null,
     };
 }
 

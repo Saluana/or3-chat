@@ -9,20 +9,25 @@
  */
 
 import { defineNuxtPlugin } from '#app';
-import { useAppConfig, useHooks, useToast, useModelStore } from '#imports';
+import { useAppConfig, useHooks, useToast, useModelStore, useRuntimeConfig, useSessionContext } from '#imports';
+import { useOr3Config } from '~/composables/useOr3Config';
+import { useUserApiKey } from '~/core/auth/useUserApiKey';
+import type { Or3DB } from '~/db/client';
 import type { Extension, Node } from '@tiptap/core';
 import type {
     ToolCallEventWithNode,
     HITLRequest,
     HITLResponse,
 } from 'or3-workflow-core';
-import { modelRegistry } from 'or3-workflow-core';
 import type { OpenRouterMessage } from '~/core/hooks/hook-types';
 import type { WorkflowExecutionController } from './WorkflowSlashCommands/executeWorkflow';
 import type { Attachment } from 'or3-workflow-core';
 import { createWorkflowStreamAccumulator } from '~/composables/chat/useWorkflowStreamAccumulator';
-import { nowSec } from '~/db/util';
+import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
 import { reportError } from '~/utils/errors';
+import { isBackgroundStreamingEnabled } from '~/utils/chat/openrouterStream';
+import { startBackgroundWorkflow, respondHitlRequest } from '~/utils/chat/backgroundWorkflow';
+import { ensureBackgroundJobTracker } from '~/utils/chat/useAi-internal/backgroundJobs';
 import {
     isWorkflowMessageData,
     deriveStartNodeId,
@@ -30,6 +35,30 @@ import {
     type HitlRequestState,
     type HitlAction,
 } from '~/utils/chat/workflow-types';
+import {
+    extractImageAttachments,
+    inheritAttachmentsFromMessages,
+    normalizeAttachmentUrl,
+    normalizeMessagesPayload,
+    toChatHistoryMessage,
+    type MessagesPayload,
+} from './WorkflowSlashCommands/workflowAttachments';
+import {
+    generateImageCaption,
+    shouldGenerateCaption,
+} from './WorkflowSlashCommands/workflowImageCaption';
+import {
+    consumeChatSendHandled,
+    markChatSendHandled,
+} from '~/utils/chat/send-interception';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
+import { getDb } from '~/db/client';
+import type { Message } from '~/db';
+import { getActivityRegistry } from '~/core/activity/registry';
+import {
+    createWorkflowActivitySource,
+    type WorkflowActivityMessage,
+} from '~/core/activity/adapters/workflow';
 
 // Types for lazy-loaded modules
 interface SlashCommandsModule {
@@ -66,11 +95,6 @@ interface WorkflowSlashConfig {
     debounceMs?: number;
 }
 
-// Message payload type
-type MessagesPayload =
-    | { messages: OpenRouterMessage[] }
-    | { messages: OpenRouterMessage[] }[];
-
 type SDKAttachmentPayload = {
     contentType?: string;
     mediaType?: string;
@@ -81,491 +105,12 @@ type SDKAttachmentPayload = {
     name?: string;
 };
 
-function normalizeMessagesPayload(
-    payload: MessagesPayload
-): OpenRouterMessage[] {
-    if (Array.isArray(payload)) {
-        return payload.flatMap((p) => p.messages);
-    }
-    if ('messages' in payload && Array.isArray(payload.messages)) {
-        return payload.messages;
-    }
-    return [];
-}
-
-function parseDataUrlMimeType(url: string): string | null {
-    const match = /^data:([^;]+);base64,/i.exec(url);
-    if (!match || !match[1]) return null;
-    return match[1].toLowerCase();
-}
-
-const imageExtensionByMime: Record<string, string> = {
-    'image/png': 'png',
-    'image/jpeg': 'jpg',
-    'image/webp': 'webp',
-    'image/gif': 'gif',
-    'image/avif': 'avif',
-};
-
-function extensionFromMime(mimeType: string): string {
-    return imageExtensionByMime[mimeType.toLowerCase()] || 'png';
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
-}
-
-function extractImageUrl(part: unknown): string | null {
-    if (!isRecord(part)) return null;
-    const type = typeof part.type === 'string' ? part.type : '';
-    if (type === 'image_url') {
-        const imageUrl = part.image_url;
-        if (typeof imageUrl === 'string') return imageUrl;
-        if (isRecord(imageUrl) && typeof imageUrl.url === 'string')
-            return imageUrl.url;
-        const camel = part.imageUrl;
-        if (isRecord(camel) && typeof camel.url === 'string') return camel.url;
-        return null;
-    }
-    if (type === 'image' && typeof part.image === 'string') {
-        return part.image;
-    }
-    return null;
-}
-
-/**
- * Safely convert engine-level ChatMessage (multimodal) to UI-level ChatHistoryMessage (string content)
- * by flattening multimodal content parts into a single string.
- */
-function toChatHistoryMessage(
-    msg: import('or3-workflow-core').ChatMessage
-): ChatHistoryMessage {
-    let content = '';
-    if (typeof msg.content === 'string') {
-        content = msg.content;
-    } else if (Array.isArray(msg.content)) {
-        content = msg.content
-            .map((part) => {
-                if (part.type === 'text') return part.text;
-                if (part.type === 'image_url')
-                    return `[Image: ${part.imageUrl.url}]`;
-                if (part.type === 'file')
-                    return `[File: ${part.file.filename}]`;
-                return '';
-            })
-            .join(' ');
-    }
-
-    return {
-        role: msg.role as 'user' | 'assistant' | 'system',
-        content,
-    };
-}
-
-type FilePartCandidate = {
-    data?: unknown;
-    fileData?: unknown;
-    file_data?: unknown;
-    mediaType?: unknown;
-    mimeType?: unknown;
-    mime?: unknown;
-    name?: unknown;
-    filename?: unknown;
-    file?: {
-        fileData?: unknown;
-        file_data?: unknown;
-        data?: unknown;
-        filename?: unknown;
-        name?: unknown;
-        mediaType?: unknown;
-        mimeType?: unknown;
-        mime?: unknown;
-    };
-};
-
-function extractFilePart(part: unknown): {
-    fileData: string;
-    filename?: string;
-    mimeType?: string;
-} | null {
-    if (!isRecord(part) || part.type !== 'file') return null;
-    const filePart = part as FilePartCandidate;
-    const nested = isRecord(filePart.file) ? filePart.file : undefined;
-    const fileData =
-        filePart.data ||
-        filePart.fileData ||
-        filePart.file_data ||
-        nested?.fileData ||
-        nested?.file_data ||
-        nested?.data;
-    if (typeof fileData !== 'string') return null;
-
-    const filename =
-        (typeof filePart.name === 'string' && filePart.name) ||
-        (typeof filePart.filename === 'string' && filePart.filename) ||
-        (typeof nested?.filename === 'string' && nested?.filename) ||
-        (typeof nested?.name === 'string' && nested?.name) ||
-        undefined;
-
-    const explicitMime =
-        (typeof filePart.mediaType === 'string' && filePart.mediaType) ||
-        (typeof filePart.mimeType === 'string' && filePart.mimeType) ||
-        (typeof filePart.mime === 'string' && filePart.mime) ||
-        (typeof nested?.mediaType === 'string' && nested?.mediaType) ||
-        (typeof nested?.mimeType === 'string' && nested?.mimeType) ||
-        (typeof nested?.mime === 'string' && nested?.mime) ||
-        undefined;
-
-    return { fileData, filename, mimeType: explicitMime };
-}
-
-function extractImageAttachments(
-    content: OpenRouterMessage['content'],
-    timestamp: number
-): Attachment[] {
-    if (!Array.isArray(content)) return [];
-
-    const attachments: Attachment[] = [];
-    let imageIndex = 0;
-    let fileIndex = 0;
-
-    for (const part of content) {
-        const url = extractImageUrl(part);
-        if (url) {
-            const mimeType = parseDataUrlMimeType(url) || 'image/png';
-            const extension = extensionFromMime(mimeType);
-
-            attachments.push({
-                id: `att-${timestamp}-${imageIndex}`,
-                type: 'image',
-                url,
-                mimeType,
-                name: `image-${imageIndex}.${extension}`,
-            });
-            imageIndex += 1;
-            continue;
-        }
-
-        const file = extractFilePart(part);
-        if (file) {
-            const dataUrlMime = file.fileData.startsWith('data:')
-                ? parseDataUrlMimeType(file.fileData)
-                : null;
-            let mimeType =
-                (file.mimeType && file.mimeType.toLowerCase()) ||
-                dataUrlMime ||
-                'application/octet-stream';
-            if (
-                mimeType === 'application/octet-stream' &&
-                file.filename?.toLowerCase().endsWith('.pdf')
-            ) {
-                mimeType = 'application/pdf';
-            }
-
-            attachments.push({
-                id: `att-file-${timestamp}-${fileIndex}`,
-                type: 'file',
-                url: file.fileData,
-                mimeType,
-                name: file.filename || `file-${fileIndex}`,
-            });
-            fileIndex += 1;
-        }
-    }
-
-    if (import.meta.dev && attachments.length > 0) {
-        console.log(
-            '[workflow-slash] Extracted attachments:',
-            attachments.map((a) => ({
-                id: a.id,
-                type: a.type,
-                mimeType: a.mimeType,
-                name: a.name,
-                urlLength: a.url?.length || 0,
-            }))
-        );
-    }
-
-    return attachments;
-}
-
-async function blobToDataUrl(blob: Blob, mimeType?: string): Promise<string> {
-    const normalized = mimeType ? new Blob([blob], { type: mimeType }) : blob;
-    return new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = () =>
-            reject(reader.error ?? new Error('FileReader error'));
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(normalized);
-    });
-}
-
-async function normalizeAttachmentUrl(
-    value: unknown,
-    mimeType: string
-): Promise<string | null> {
-    if (typeof value === 'string') return value;
-    if (typeof Blob !== 'undefined' && value instanceof Blob) {
-        return blobToDataUrl(value, mimeType || value.type);
-    }
-    const toArrayBuffer = (
-        input: ArrayBuffer | SharedArrayBuffer
-    ): ArrayBuffer => {
-        if (input instanceof ArrayBuffer) return input;
-        if (
-            typeof SharedArrayBuffer !== 'undefined' &&
-            input instanceof SharedArrayBuffer
-        ) {
-            const copy = new Uint8Array(input.byteLength);
-            copy.set(new Uint8Array(input));
-            return copy.buffer;
-        }
-        return input as unknown as ArrayBuffer;
-    };
-    if (value instanceof ArrayBuffer) {
-        const buffer = toArrayBuffer(value);
-        return blobToDataUrl(new Blob([buffer], { type: mimeType }), mimeType);
-    }
-    if (
-        typeof SharedArrayBuffer !== 'undefined' &&
-        value instanceof SharedArrayBuffer
-    ) {
-        const buffer = toArrayBuffer(value);
-        return blobToDataUrl(new Blob([buffer], { type: mimeType }), mimeType);
-    }
-    if (ArrayBuffer.isView(value)) {
-        const view = value as ArrayBufferView;
-        const source = view.buffer;
-        const buffer = toArrayBuffer(source);
-        const slice = buffer.slice(
-            view.byteOffset,
-            view.byteOffset + view.byteLength
-        );
-        return blobToDataUrl(new Blob([slice], { type: mimeType }), mimeType);
-    }
-    return null;
-}
-
-function inheritAttachmentsFromMessages(
-    messages: OpenRouterMessage[],
-    limit = 8
-): Attachment[] {
-    const collected: Attachment[] = [];
-    const seen = new Set<string>();
-    for (let i = messages.length - 1; i >= 0 && collected.length < limit; i--) {
-        const msg = messages[i];
-        if (!msg) continue;
-        const next = extractImageAttachments(msg.content, nowSec());
-        for (const att of next) {
-            const key = att.url || att.id;
-            if (!key || seen.has(key)) continue;
-            seen.add(key);
-            collected.push(att);
-            if (collected.length >= limit) break;
-        }
-    }
-    return collected;
-}
-
-function buildAttachmentUrl(attachment: Attachment): string | null {
-    if (attachment.url) return attachment.url;
-    if (attachment.content) {
-        return `data:${attachment.mimeType};base64,${attachment.content}`;
-    }
-    return null;
-}
-
-function pickCaptionModelId(): string | null {
-    const visionModels = modelRegistry.getVisionModels();
-    return visionModels[0]?.id ?? null;
-}
-
-function collectWorkflowModelIds(workflow: unknown): {
-    modelIds: string[];
-    hasMissingModel: boolean;
-} {
-    if (!workflow || typeof workflow !== 'object') {
-        return { modelIds: [], hasMissingModel: true };
-    }
-
-    const nodes = (workflow as { nodes?: unknown }).nodes;
-    if (!Array.isArray(nodes)) {
-        return { modelIds: [], hasMissingModel: true };
-    }
-
-    const modelIds: string[] = [];
-    let hasMissingModel = false;
-
-    for (const node of nodes) {
-        if (!node || typeof node !== 'object') continue;
-        const typed = node as { type?: string; data?: any };
-        const type = typed.type;
-        const data = typed.data || {};
-
-        if (type === 'agent' || type === 'router') {
-            if (typeof data.model === 'string' && data.model.trim()) {
-                modelIds.push(data.model.trim());
-            } else {
-                hasMissingModel = true;
-            }
-        }
-
-        if (type === 'parallel') {
-            const parentModel =
-                typeof data.model === 'string' && data.model.trim()
-                    ? data.model.trim()
-                    : null;
-            if (parentModel) {
-                modelIds.push(parentModel);
-            }
-            if (Array.isArray(data.branches)) {
-                for (const branch of data.branches) {
-                    if (
-                        branch &&
-                        typeof branch === 'object' &&
-                        typeof branch.model === 'string' &&
-                        branch.model.trim()
-                    ) {
-                        modelIds.push(branch.model.trim());
-                    } else if (
-                        !parentModel &&
-                        branch &&
-                        typeof branch === 'object'
-                    ) {
-                        hasMissingModel = true;
-                    }
-                }
-            }
-        }
-
-        if (type === 'subflow') {
-            hasMissingModel = true;
-        }
-    }
-
-    return { modelIds, hasMissingModel };
-}
-
-async function shouldGenerateCaption(
-    workflow: unknown,
-    attachments: Attachment[] | undefined
-): Promise<boolean> {
-    if (!attachments || attachments.length === 0) return false;
-    const images = attachments.filter(
-        (attachment) => attachment.type === 'image'
-    );
-    if (!images.length) return false;
-
-    const { modelIds, hasMissingModel } = collectWorkflowModelIds(workflow);
-    if (hasMissingModel) return true;
-    if (modelIds.length === 0) return true;
-
-    const { catalog, fetchModels } = useModelStore();
-    let modelList = catalog.value;
-    if (!modelList.length) {
-        try {
-            modelList = await fetchModels({ ttlMs: 60 * 60 * 1000 });
-        } catch (error) {
-            console.warn(
-                '[workflow-slash] Failed to load model catalog',
-                error
-            );
-            return true;
-        }
-    }
-    if (!modelList || modelList.length === 0) return true;
-
-    const modelMap = new Map(
-        modelList.map((model) => [
-            model.id,
-            Array.isArray(model.architecture?.input_modalities)
-                ? model.architecture.input_modalities.map((m) =>
-                      String(m).toLowerCase()
-                  )
-                : [],
-        ])
-    );
-
-    return modelIds.some((modelId) => {
-        const modalities = modelMap.get(modelId);
-        if (!modalities) {
-            return !modelRegistry.supportsInputModality(modelId, 'image');
-        }
-        return !modalities.includes('image');
-    });
-}
-
-function extractTextFromMessageContent(content: unknown): string {
-    if (typeof content === 'string') return content;
-    if (!Array.isArray(content)) return '';
-    return content
-        .map((part) => {
-            if (!part || typeof part !== 'object') return '';
-            const text = (part as { text?: string }).text;
-            return typeof text === 'string' ? text : '';
-        })
-        .join('')
-        .trim();
-}
-
-async function generateImageCaption(
-    attachments: Attachment[],
-    apiKey: string
-): Promise<string | null> {
-    const images = attachments.filter(
-        (attachment) => attachment.type === 'image'
-    );
-    if (!images.length) return null;
-
-    const modelId = pickCaptionModelId();
-    if (!modelId) return null;
-
-    const parts = images
-        .map((attachment) => {
-            const url = buildAttachmentUrl(attachment);
-            if (!url) return null;
-            return {
-                type: 'image_url',
-                imageUrl: { url },
-            };
-        })
-        .filter(Boolean) as Array<{
-        type: 'image_url';
-        imageUrl: { url: string };
-    }>;
-
-    if (!parts.length) return null;
-
-    const { OpenRouter } = await import('@openrouter/sdk');
-    const client = new OpenRouter({ apiKey });
-
-    const result = await client.chat.send({
-        model: modelId,
-        messages: [
-            {
-                role: 'user',
-                content: [
-                    {
-                        type: 'text',
-                        text: 'Provide a concise, plain-text description of the image(s) for downstream text-only models.',
-                    },
-                    ...parts,
-                ],
-            },
-        ],
-        stream: false,
-    });
-
-    const messageContent = (result as any)?.choices?.[0]?.message?.content;
-    const caption = extractTextFromMessageContent(messageContent);
-    return caption ? caption.slice(0, 1000) : null;
-}
-
 // ─────────────────────────────────────────────────────────────
 // Active Execution Tracking (for stop functionality)
 // ─────────────────────────────────────────────────────────────
 
 let activeController: WorkflowExecutionController | null = null;
+let activeWorkflowMessageId: string | null = null;
 const pendingHitlRequests = new Map<
     string,
     {
@@ -596,26 +141,26 @@ let pendingEditorJson: unknown | null = null;
  * Flag to signal that a workflow is handling the current request.
  * This is checked by the chat system to skip the AI call.
  */
-let workflowHandlingRequest = false;
-
 /**
  * Get and reset the workflow handling flag.
  * Called by the chat system to check if it should skip the AI call.
  */
 export function consumeWorkflowHandlingFlag(): boolean {
-    const was = workflowHandlingRequest;
-    workflowHandlingRequest = false;
-    return was;
+    return consumeChatSendHandled();
 }
 
 /**
  * Stop the currently running workflow execution.
  * Can be called from anywhere in the app.
  */
-export function stopWorkflowExecution(): boolean {
-    if (activeController) {
+export function stopWorkflowExecution(messageId?: string): boolean {
+    if (
+        activeController &&
+        (!messageId || messageId === activeWorkflowMessageId)
+    ) {
         activeController.stop();
         activeController = null;
+        activeWorkflowMessageId = null;
         return true;
     }
     return false;
@@ -628,13 +173,36 @@ export function isWorkflowExecuting(): boolean {
     return activeController !== null && activeController.isRunning();
 }
 
-function respondToHitlRequest(
+async function respondToHitlRequest(
     requestId: string,
     action: HitlAction,
-    data?: string | Record<string, unknown>
-): boolean {
+    data?: string | Record<string, unknown>,
+    jobId?: string
+): Promise<boolean> {
     const pending = pendingHitlRequests.get(requestId);
-    if (!pending) return false;
+    if (!pending) {
+        if (!jobId) {
+            return false;
+        }
+        try {
+            await respondHitlRequest({
+                requestId,
+                jobId,
+                action,
+                data,
+            });
+            return true;
+        } catch (error) {
+            if (import.meta.dev) {
+                console.warn('[workflow-slash] HITL response failed', {
+                    requestId,
+                    jobId,
+                    error,
+                });
+            }
+            return false;
+        }
+    }
 
     if (action === 'reject') {
         stopWorkflowExecution();
@@ -657,18 +225,51 @@ export default defineNuxtPlugin((nuxtApp) => {
     // SSR guard
     if (!import.meta.client) return;
 
+    const or3Config = useOr3Config();
+    if (!or3Config.features.workflows.enabled) {
+        console.log('[workflow-slash] Workflows disabled via OR3 config');
+        return;
+    }
+
+    const workflowExecutionEnabled =
+        or3Config.features.workflows.enabled &&
+        or3Config.features.workflows.execution;
+    const workflowSlashEnabled =
+        or3Config.features.workflows.enabled &&
+        or3Config.features.workflows.slashCommands;
+
     const appConfig = useAppConfig();
     const slashConfig: WorkflowSlashConfig =
         ((appConfig as Record<string, unknown>)
             ?.workflowSlashCommands as WorkflowSlashConfig) || {};
 
     // Check feature flag
-    if (slashConfig.enabled === false) {
+    if (slashConfig.enabled === false || !workflowSlashEnabled) {
         console.log('[workflow-slash] Plugin disabled via feature flag');
         return;
     }
 
     const hooks = useHooks();
+    // Resolve context-backed composables while the Nuxt plugin is initializing.
+    // Workflow execution and retry handlers run asynchronously, after Vue's
+    // active setup context has been cleared.
+    const runtimeConfig = useRuntimeConfig();
+    const sessionContext =
+        runtimeConfig.public.ssrAuthEnabled === true
+            ? useSessionContext()
+            : null;
+    const { apiKey } = useUserApiKey();
+
+    const withMessageSyncTransaction = async <T>(
+        db: Or3DB,
+        fn: () => Promise<T>
+    ): Promise<T> => {
+        return await db.transaction(
+            'rw',
+            getWriteTxTableNames(db, 'messages'),
+            fn
+        );
+    };
 
     hooks.on(
         'ui.chat.editor:action:before_send',
@@ -692,42 +293,44 @@ export default defineNuxtPlugin((nuxtApp) => {
 
             if (!stale.length) return;
 
-            await db.messages
-                .where('[data.type+data.executionState]')
-                .equals(['workflow-execution', 'running'])
-                .modify((m: any) => {
-                    const data = m.data || {};
-                    const nodeOutputs = data.nodeOutputs || {};
-                    const startNodeId = deriveStartNodeId({
-                        resumeState: data.resumeState,
-                        failedNodeId: data.failedNodeId,
-                        currentNodeId: data.currentNodeId,
-                        nodeStates: data.nodeStates,
-                        lastActiveNodeId: data.lastActiveNodeId,
-                    });
-
-                    m.data.executionState = 'interrupted';
-                    if (startNodeId) {
-                        m.data.resumeState = {
-                            startNodeId,
-                            nodeOutputs,
-                            executionOrder:
-                                data.executionOrder || Object.keys(nodeOutputs),
+            await withMessageSyncTransaction(db, async () => {
+                await db.messages
+                    .where('[data.type+data.executionState]')
+                    .equals(['workflow-execution', 'running'])
+                    .modify((m: any) => {
+                        const data = m.data || {};
+                        const nodeOutputs = data.nodeOutputs || {};
+                        const startNodeId = deriveStartNodeId({
+                            resumeState: data.resumeState,
+                            failedNodeId: data.failedNodeId,
+                            currentNodeId: data.currentNodeId,
+                            nodeStates: data.nodeStates,
                             lastActiveNodeId: data.lastActiveNodeId,
-                            sessionMessages: data.sessionMessages,
-                            resumeInput: data.lastActiveNodeId
-                                ? nodeOutputs[data.lastActiveNodeId]
-                                : undefined,
+                        });
+
+                        m.data.executionState = 'interrupted';
+                        if (startNodeId) {
+                            m.data.resumeState = {
+                                startNodeId,
+                                nodeOutputs,
+                                executionOrder:
+                                    data.executionOrder || Object.keys(nodeOutputs),
+                                lastActiveNodeId: data.lastActiveNodeId,
+                                sessionMessages: data.sessionMessages,
+                                resumeInput: data.lastActiveNodeId
+                                    ? nodeOutputs[data.lastActiveNodeId]
+                                    : undefined,
+                            };
+                        }
+                        m.data.result = {
+                            success: false,
+                            duration: 0,
+                            error: 'Execution interrupted',
                         };
-                    }
-                    m.data.result = {
-                        success: false,
-                        duration: 0,
-                        error: 'Execution interrupted',
-                    };
-                    m.updated_at = now;
-                    m.pending = false;
-                });
+                        m.updated_at = now;
+                        m.pending = false;
+                    });
+            });
 
             stale.forEach((m) => {
                 if (!isWorkflowMessageData(m.data)) return;
@@ -790,6 +393,68 @@ export default defineNuxtPlugin((nuxtApp) => {
         retry: retryWorkflowMessage,
         respondHitl: respondToHitlRequest,
     };
+    const toActivityMessage = (
+        row: Message | undefined
+    ): WorkflowActivityMessage | undefined => {
+        if (!row || !isWorkflowMessageData(row.data)) return undefined;
+        return {
+            id: row.id,
+            threadId: row.thread_id,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            data: row.data,
+        };
+    };
+    const activitySourceHandle = getActivityRegistry().register(
+        createWorkflowActivitySource({
+            store: {
+                async list() {
+                    const rows = await getDb()
+                        .messages.where('data.type')
+                        .equals('workflow-execution')
+                        .toArray();
+                    return rows
+                        .map(toActivityMessage)
+                        .filter(
+                            (
+                                item
+                            ): item is WorkflowActivityMessage =>
+                                item !== undefined
+                        );
+                },
+                async get(messageId) {
+                    return toActivityMessage(
+                        await getDb().messages.get(messageId)
+                    );
+                },
+            },
+            updates: {
+                subscribe(listener) {
+                    return hooks.on(
+                        'workflow.execution:action:state_update',
+                        ({ messageId, state }) => {
+                            if (!isWorkflowMessageData(state)) return;
+                            listener(messageId, state);
+                        }
+                    );
+                },
+            },
+            actions: {
+                cancel(messageId) {
+                    return stopWorkflowExecution(messageId);
+                },
+                retry: retryWorkflowMessage,
+                respond(_messageId, requestId, action, jobId) {
+                    return respondToHitlRequest(
+                        requestId,
+                        action,
+                        undefined,
+                        jobId
+                    );
+                },
+            },
+        })
+    );
 
     // Listen for stop-stream event to stop workflow execution (with cleanup to avoid leaks in HMR)
     const stopAbort = new AbortController();
@@ -1071,44 +736,44 @@ export default defineNuxtPlugin((nuxtApp) => {
                 )
             );
 
-            db.messages
-                .get(assistantContext.id)
-                .then(async (msg) => {
-                    const timestamp = nowSec();
-                    if (msg) {
-                        return db.messages.put({
-                            ...msg,
-                            data,
-                            pending: data.executionState === 'running',
-                            updated_at: timestamp,
-                        });
-                    }
-
-                    // Create placeholder assistant message so UI can render it
-                    const index = Math.floor(Date.now());
-                    return db.messages.put({
-                        id: assistantContext.id,
-                        role: 'assistant',
+            withMessageSyncTransaction(db, async () => {
+                const msg = await db.messages.get(assistantContext.id);
+                const timestamp = nowSec();
+                if (msg) {
+                    await db.messages.put({
+                        ...msg,
                         data,
                         pending: data.executionState === 'running',
-                        created_at: timestamp,
                         updated_at: timestamp,
-                        error: null,
-                        deleted: false,
-                        thread_id: assistantContext.threadId || '',
-                        index,
-                        clock: 0,
-                        stream_id: assistantContext.streamId,
-                        file_hashes: null,
+                        clock: nextClock(msg.clock),
                     });
+                    return;
+                }
+
+                // Create placeholder assistant message so UI can render it
+                const index = Math.floor(Date.now());
+                await db.messages.put({
+                    id: assistantContext.id,
+                    role: 'assistant',
+                    data,
+                    pending: data.executionState === 'running',
+                    created_at: timestamp,
+                    updated_at: timestamp,
+                    error: null,
+                    deleted: false,
+                    thread_id: assistantContext.threadId || '',
+                    index,
+                    clock: nextClock(),
+                    stream_id: assistantContext.streamId,
+                    file_hashes: null,
+                });
+            }).catch((e) =>
+                reportError(e, {
+                    code: 'ERR_DB_WRITE_FAILED',
+                    message: 'Persist failed',
+                    silent: true,
                 })
-                .catch((e) =>
-                    reportError(e, {
-                        code: 'ERR_DB_WRITE_FAILED',
-                        message: 'Persist failed',
-                        silent: true,
-                    })
-                );
+            );
         };
 
         const resolveHitlRequestsForNode = (nodeId: string) => {
@@ -1346,6 +1011,86 @@ export default defineNuxtPlugin((nuxtApp) => {
             workflowId: workflowPost.id,
         });
 
+        const session = sessionContext?.data.value?.session ?? null;
+        const backgroundAllowed =
+            runtimeConfig.public.backgroundStreaming?.enabled === true &&
+            isBackgroundStreamingEnabled(
+                runtimeConfig.public.backgroundStreaming?.enabled
+            ) &&
+            Boolean(session?.authenticated && session.user?.id);
+
+        if (backgroundAllowed) {
+            let backgroundJob:
+                | Awaited<ReturnType<typeof startBackgroundWorkflow>>
+                | null = null;
+            try {
+                backgroundJob = await startBackgroundWorkflow({
+                    workflowId: workflowPost.id,
+                    workflowName: workflowPost.title || 'Workflow',
+                    workflowUpdatedAt: workflowPost.updated_at,
+                    workflowVersion:
+                        typeof workflowPost.meta?.meta?.version === 'string'
+                            ? workflowPost.meta.meta.version
+                            : undefined,
+                    prompt: executionPrompt,
+                    threadId: assistantContext.threadId || '',
+                    messageId: assistantContext.id,
+                    conversationHistory:
+                        conversationHistory ||
+                        (await execMod.getConversationHistory(
+                            assistantContext.threadId || ''
+                        )),
+                    apiKey,
+                    attachments,
+                });
+            } catch (error) {
+                console.warn(
+                    '[workflow-slash] Background workflow admission failed, falling back',
+                    error
+                );
+            }
+
+            if (backgroundJob) {
+                try {
+                    await withMessageSyncTransaction(db, async () => {
+                        const msg = await db.messages.get(assistantContext.id);
+                        if (!msg) return;
+                        await db.messages.put({
+                            ...msg,
+                            data: {
+                                ...(msg.data as Record<string, unknown>),
+                                background_job_id: backgroundJob.jobId,
+                                background_job_status: 'streaming',
+                            },
+                            pending: true,
+                            updated_at: nowSec(),
+                            clock: nextClock(msg.clock),
+                        });
+                    });
+                } catch (error) {
+                    // Admission already succeeded. Falling through to foreground
+                    // here would execute workflow tools twice, so keep tracking
+                    // the accepted server job and let its first update repair the
+                    // message metadata atomically.
+                    console.warn(
+                        '[workflow-slash] Failed to persist background workflow metadata',
+                        error
+                    );
+                }
+
+                ensureBackgroundJobTracker({
+                    jobId: backgroundJob.jobId,
+                    userId: session?.user?.id || '',
+                    threadId: assistantContext.threadId || '',
+                    messageId: assistantContext.id,
+                    initialContent: '',
+                    useSse: true,
+                });
+
+                return;
+            }
+        }
+
         // Create execution controller
         const controller = execMod.executeWorkflow({
             workflow: workflowPost.meta,
@@ -1373,11 +1118,13 @@ export default defineNuxtPlugin((nuxtApp) => {
         });
 
         activeController = controller;
+        activeWorkflowMessageId = assistantContext.id;
 
         // Handle completion
         controller.promise
             .then(async ({ result, stopped }) => {
                 activeController = null;
+                activeWorkflowMessageId = null;
 
                 const finalOutput = result?.finalOutput ?? result?.output ?? '';
                 accumulator.finalize({
@@ -1413,6 +1160,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             })
             .catch((error) => {
                 activeController = null;
+                activeWorkflowMessageId = null;
                 accumulator.finalize({ error });
                 emitStateUpdateSync();
                 persist(true);
@@ -1428,6 +1176,15 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     async function retryWorkflowMessage(messageId: string): Promise<boolean> {
         try {
+            if (!workflowExecutionEnabled) {
+                toast.add({
+                    title: 'Workflow execution disabled',
+                    description:
+                        'This deployment has workflow execution turned off.',
+                    color: 'warning',
+                });
+                return false;
+            }
             const [slashMod, execMod] = await Promise.all([
                 loadSlashModule(),
                 loadExecutionModule(),
@@ -1485,9 +1242,6 @@ export default defineNuxtPlugin((nuxtApp) => {
                 return false;
             }
 
-            const { useUserApiKey } = await import('~/core/auth/useUserApiKey');
-            const { apiKey } = useUserApiKey();
-
             if (!apiKey.value) {
                 reportError('Please connect your OpenRouter account', {
                     code: 'ERR_AUTH',
@@ -1506,7 +1260,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             // Reuse the original message ID so UI updates in place
             const assistantContext = {
                 id: messageId,
-                streamId: crypto.randomUUID(),
+                streamId: createRuntimeUuid(),
                 threadId: message.thread_id || '',
             };
 
@@ -1590,6 +1344,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     hooks.on(
         'editor:request-extensions',
         async () => {
+            if (!workflowSlashEnabled) return;
             const module = await loadSlashModule();
             if (!module) return;
 
@@ -1630,6 +1385,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         import.meta.hot.dispose(() => {
             stopAbort.abort();
             editorExtensionsCleanup?.();
+            activitySourceHandle.dispose();
         });
     }
 
@@ -1639,6 +1395,9 @@ export default defineNuxtPlugin((nuxtApp) => {
     hooks.on(
         'ai.chat.messages:filter:before_send',
         async (payload: MessagesPayload) => {
+            if (!workflowSlashEnabled) {
+                return { messages: normalizeMessagesPayload(payload) };
+            }
             const messages = normalizeMessagesPayload(payload);
 
             if (!messages.length) {
@@ -1829,10 +1588,17 @@ export default defineNuxtPlugin((nuxtApp) => {
                 }
             }
 
-            // Get API key
-            const { useUserApiKey } = await import('~/core/auth/useUserApiKey');
-            const { apiKey } = useUserApiKey();
+            if (!workflowExecutionEnabled) {
+                toast.add({
+                    title: 'Workflow execution disabled',
+                    description:
+                        'This deployment has workflow execution turned off.',
+                    color: 'warning',
+                });
+                return { messages };
+            }
 
+            // Get API key
             if (!apiKey.value) {
                 reportError('Please connect your OpenRouter account', {
                     code: 'ERR_AUTH',
@@ -1893,7 +1659,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             pendingAssistantContext = null;
 
             // Signal to the chat system that workflow is handling this request
-            workflowHandlingRequest = true;
+            markChatSendHandled();
 
             return { messages: [] };
         }

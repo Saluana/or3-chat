@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import ChatContainer from '../ChatContainer.vue';
-import { ref, nextTick } from 'vue';
 
 // Mocks
 vi.mock('or3-scroll', () => ({
@@ -28,9 +28,15 @@ vi.mock('~/composables/core/usePanePrompt', () => ({
     getPanePendingPrompt: vi.fn(),
     clearPanePendingPrompt: vi.fn(),
     setPanePendingPrompt: vi.fn(),
+    setupPanePromptCleanup: vi.fn(),
+    usePanePendingPrompt: vi.fn(() => ({
+        __v_isRef: true,
+        value: undefined,
+    })),
 }));
 
 vi.mock('~/state/global', () => ({
+    state: { value: { openrouterKey: '' } },
     isMobile: { value: false },
 }));
 
@@ -38,21 +44,63 @@ vi.mock('~/utils/chat/uiMessages', () => ({
     ensureUiMessage: (m: any) => m,
 }));
 
-vi.mock('#imports', () => ({
-    useToast: () => ({ add: vi.fn() }),
-    useChat: () => ({
-        messages: { value: [] },
-        loading: { value: false },
-        threadId: { value: 'thread-1' },
-        sendMessage: vi.fn().mockResolvedValue(undefined),
-        clear: vi.fn(),
-    }),
-    useHooks: () => ({
-        on: vi.fn().mockReturnValue(() => {}),
-        off: vi.fn(),
-        doAction: vi.fn(),
-    }),
-}));
+const chatInstances: Array<{
+    ensureHistorySynced: ReturnType<typeof vi.fn>;
+    clear: ReturnType<typeof vi.fn>;
+    switchThread: ReturnType<typeof vi.fn>;
+    setPendingPrompt: ReturnType<typeof vi.fn>;
+}> = [];
+
+const makeChatInstance = vi.hoisted(
+    () => (overrides: Record<string, unknown> = {}) => {
+        const threadId = { value: 'thread-1' as string | undefined };
+        const instance = {
+            messages: { value: [] },
+            loading: { value: false },
+            threadId,
+            streamId: { value: undefined },
+            streamState: { finalized: true },
+            tailAssistant: { value: null },
+            backgroundJobId: { value: null },
+            backgroundJobMode: { value: 'none' },
+            sendMessage: vi.fn().mockResolvedValue(undefined),
+            retryMessage: vi.fn(),
+            continueMessage: vi.fn(),
+            applyLocalEdit: vi.fn().mockReturnValue(false),
+            ensureHistorySynced: vi.fn().mockResolvedValue(undefined),
+            clear: vi.fn(),
+            setPendingPrompt: vi.fn(),
+            switchThread: vi.fn(async (nextThreadId: string | undefined) => {
+                threadId.value = nextThreadId;
+            }),
+        };
+        return { ...instance, ...overrides };
+    }
+);
+
+const useChatMock = vi.hoisted(() =>
+    vi.fn(() => {
+        const instance = makeChatInstance();
+        chatInstances.push({
+            ensureHistorySynced: instance.ensureHistorySynced,
+            clear: instance.clear,
+            switchThread: instance.switchThread,
+            setPendingPrompt: instance.setPendingPrompt,
+        });
+        return instance;
+    })
+);
+
+useChatMock.mockImplementation(() => {
+    const instance = makeChatInstance();
+    chatInstances.push({
+        ensureHistorySynced: instance.ensureHistorySynced,
+        clear: instance.clear,
+        switchThread: instance.switchThread,
+        setPendingPrompt: instance.setPendingPrompt,
+    });
+    return instance;
+});
 
 vi.mock('@vueuse/core', () => ({
     useElementSize: () => ({ width: { value: 1000 }, height: { value: 800 } }),
@@ -62,6 +110,15 @@ vi.mock('@vueuse/core', () => ({
 const LazyChatMessage = { template: '<div>Message</div>' };
 const LazyChatInputDropper = { template: '<div>Input</div>' };
 
+const createThemeMock = () => ({
+    activeComponents: {
+        value: {
+            'chat-message': LazyChatMessage,
+            'chat-input': LazyChatInputDropper,
+        },
+    },
+});
+
 describe('ChatContainer', () => {
     const defaultProps = {
         threadId: 'thread-1',
@@ -69,10 +126,19 @@ describe('ChatContainer', () => {
         paneId: 'pane-1',
     };
 
+    beforeEach(() => {
+        chatInstances.length = 0;
+        useChatMock.mockClear();
+        (globalThis as Record<string, unknown>).useChat = useChatMock;
+    });
+
     it('renders scroll to bottom button when scrolled up', async () => {
         const wrapper = mount(ChatContainer, {
             props: defaultProps,
             global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
                 stubs: {
                     LazyChatMessage,
                     LazyChatInputDropper,
@@ -148,10 +214,43 @@ describe('ChatContainer', () => {
         expect(buttonContainer.attributes('style')).toContain('opacity: 0.5');
     });
 
+    it('does not throw when background job refs are null', async () => {
+        useChatMock.mockImplementationOnce(() =>
+            makeChatInstance({
+                backgroundJobId: null,
+                backgroundJobMode: null,
+            })
+        );
+
+        const wrapper = mount(ChatContainer, {
+            props: defaultProps,
+            global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
+                stubs: {
+                    LazyChatMessage,
+                    LazyChatInputDropper,
+                    ClientOnly: { template: '<div><slot /></div>' },
+                    UButton: {
+                        template:
+                            '<button class="u-button" @click="$emit(\'click\')"></button>',
+                    },
+                },
+            },
+        });
+
+        await nextTick();
+        expect(wrapper.exists()).toBe(true);
+    });
+
     it('calls scrollToBottom when button is clicked', async () => {
         const wrapper = mount(ChatContainer, {
             props: defaultProps,
             global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
                 stubs: {
                     LazyChatMessage,
                     LazyChatInputDropper,
@@ -184,6 +283,37 @@ describe('ChatContainer', () => {
 
         expect(scroller.vm.scrollToBottom).toHaveBeenCalledWith({
             smooth: true,
+        });
+    });
+
+    it('ensures history is synced on mount and thread switch', async () => {
+        const wrapper = mount(ChatContainer, {
+            props: defaultProps,
+            global: {
+                mocks: {
+                    $theme: createThemeMock(),
+                },
+                stubs: {
+                    LazyChatMessage,
+                    LazyChatInputDropper,
+                    ClientOnly: { template: '<div><slot /></div>' },
+                    UButton: {
+                        template:
+                            '<button class="u-button" @click="$emit(\'click\')"></button>',
+                    },
+                },
+            },
+        });
+
+        expect(chatInstances[0]?.ensureHistorySynced).toHaveBeenCalledTimes(1);
+
+        await wrapper.setProps({ threadId: 'thread-2' });
+        await nextTick();
+
+        // Thread switches rebind in place — do not recreate useChat outside setup.
+        expect(useChatMock).toHaveBeenCalledTimes(1);
+        expect(chatInstances[0]?.switchThread).toHaveBeenCalledWith('thread-2', {
+            pendingPromptId: undefined,
         });
     });
 });

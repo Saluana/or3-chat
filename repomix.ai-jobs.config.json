@@ -1,0 +1,59 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "style": "markdown",
+    "filePath": "or3-ai-background-jobs-audit.md",
+    "removeComments": false,
+    "showLineNumbers": true,
+    "topFilesLength": 20,
+    "headerText": "OR3 OpenRouter AI Proxy + Background Jobs — Security Audit Pack\n\nScope: Server OpenRouter stream proxy, background job start/stream/status/abort, in-process job provider, client stream helpers + background trackers, user API key persistence, tool registry used during streams, related docs/tests.\n\nPrimary surfaces:\n1. server/api/openrouter/stream.post.ts — SSR stream + _background job start (session/workspace gated)\n2. server/api/jobs/* — SSE attach, poll status, abort\n3. server/utils/background-jobs/* — stream handler, viewers, memory provider, concurrency\n4. app/utils/chat/openrouterStream.ts + useAi-internal/* — client routing, availability caches, background trackers\n5. app/composables/chat/useAi.ts — eligibility (tools/modality/background flags)\n6. app/core/auth/useUserApiKey + openRouterKeyAvailability — client key persistence / server-route fallback rules\n7. server/utils/llm/rate-limiter + shared/openrouter — request shaping / SSE parse / deadlines\n\nExcluded: Full chat UI, sync/storage engines, auth can() implementation (separate pack — jobs still call into it), webhooks, themes/plugins."
+  },
+  "include": [
+    "server/api/openrouter/**",
+    "server/api/jobs/**",
+    "server/utils/background-jobs/**",
+    "server/utils/llm/**",
+    "server/utils/chat/**",
+    "shared/openrouter/**",
+    "shared/chat/tool-policy.ts",
+    "shared/chat/tool-schema.ts",
+    "shared/chat/tool-execution.ts",
+    "shared/chat/tool-limits.ts",
+    "shared/chat/tool-ledger.ts",
+    "shared/chat/__tests__/tool-*.test.ts",
+    "app/composables/chat/useAi.ts",
+    "app/composables/chat/__tests__/useAi*.ts",
+    "app/utils/chat/openrouterStream.ts",
+    "app/utils/chat/backgroundWorkflow.ts",
+    "app/utils/chat/generation-lease.ts",
+    "app/utils/chat/tool-registry.ts",
+    "app/utils/chat/tools-public.ts",
+    "app/utils/chat/useAi-internal/**",
+    "app/utils/chat/__tests__/openrouterStream.test.ts",
+    "app/utils/chat/__tests__/generation-lease.test.ts",
+    "app/utils/chat/__tests__/tool-*.ts",
+    "app/utils/chat/__tests__/tools-public.contract.test.ts",
+    "app/core/auth/useUserApiKey.ts",
+    "app/core/auth/openRouterKeyAvailability.ts",
+    "app/core/auth/openrouter-auth.ts",
+    "app/core/auth/openrouter-build.ts",
+    "app/core/auth/useOpenrouter.ts",
+    "app/core/auth/__tests__/useUserApiKey.test.ts",
+    "app/core/auth/__tests__/openrouter-build-tool.test.ts",
+    "tests/unit/openRouterKeyAvailability.test.ts",
+    "planning/complete/background-jobs-execution/**",
+    "public/_documentation/cloud/background-execution.md"
+  ],
+  "ignore": {
+    "customPatterns": [
+      "**/node_modules/**",
+      "**/.nuxt/**",
+      "**/.output/**",
+      "**/webhooks/**",
+      "**/*webhook*",
+      "or3-*-audit.md",
+      "or3-repo.md",
+      "or3-intern-full-codebase.md"
+    ]
+  }
+}

@@ -1,13 +1,16 @@
-import { ref, watch, computed } from 'vue';
+/** Singleton, batched user theme override store. */
+import { computed, ref, watch, type Ref, type WatchStopHandle } from 'vue';
+import { useNuxtApp } from '#app';
+import type { ThemePlugin } from '~/theme/_shared/types';
 import type { UserThemeOverrides } from './user-overrides-types';
 import { EMPTY_USER_OVERRIDES } from './user-overrides-types';
 import { applyMergedTheme } from './apply-merged-theme';
-import { revokeBackgroundBlobs } from './backgrounds';
+import { invalidateBackgroundToken, revokeBackgroundBlobs } from './backgrounds';
 import { isBrowser } from '~/utils/env';
 
-// Storage keys
 const STORAGE_KEY_LIGHT = 'or3:user-theme-overrides:light';
 const STORAGE_KEY_DARK = 'or3:user-theme-overrides:dark';
+const PERSIST_DELAY_MS = 50;
 
 interface ToastPayload {
     title?: string;
@@ -16,36 +19,49 @@ interface ToastPayload {
     timeout?: number;
 }
 
-type UserThemeOverrideGlobals = typeof globalThis & {
-    __or3UserThemeOverrides?: {
-        light: ReturnType<typeof ref<UserThemeOverrides>>;
-        dark: ReturnType<typeof ref<UserThemeOverrides>>;
-        activeMode: ReturnType<typeof ref<'light' | 'dark'>>;
-        loaded: boolean;
-    };
-    useNuxtApp?: () => {
-        $toast?: { add?: (payload: ToastPayload) => void };
-        $theme?: { set?: (mode: 'light' | 'dark') => void };
-    };
-};
-
-// HMR-safe singleton
-const g = globalThis as UserThemeOverrideGlobals;
-if (!g.__or3UserThemeOverrides) {
-    g.__or3UserThemeOverrides = {
-        light: ref<UserThemeOverrides>({ ...EMPTY_USER_OVERRIDES }),
-        dark: ref<UserThemeOverrides>({ ...EMPTY_USER_OVERRIDES }),
-        activeMode: ref<'light' | 'dark'>('light'),
-        loaded: false,
-    };
+interface StoreState {
+    light: Ref<UserThemeOverrides>;
+    dark: Ref<UserThemeOverrides>;
+    activeMode: Ref<'light' | 'dark'>;
+    loaded: boolean;
+    revision: number;
+    commitQueued: boolean;
+    persistTimer: ReturnType<typeof setTimeout> | null;
+    stopWatch?: WatchStopHandle;
+    observer?: MutationObserver;
+    themePlugin?: ThemePlugin;
+    toast?: { add?: (payload: ToastPayload) => void };
 }
 
-const store = g.__or3UserThemeOverrides;
+type StoreGlobal = typeof globalThis & {
+    __or3UserThemeOverrides?: StoreState;
+};
+
+function createEmpty(): UserThemeOverrides {
+    return typeof globalThis.structuredClone === 'function'
+        ? globalThis.structuredClone(EMPTY_USER_OVERRIDES)
+        : JSON.parse(JSON.stringify(EMPTY_USER_OVERRIDES));
+}
+
+function getStore(): StoreState {
+    const globalStore = globalThis as StoreGlobal;
+    globalStore.__or3UserThemeOverrides ??= {
+        light: ref(createEmpty()),
+        dark: ref(createEmpty()),
+        activeMode: ref('light'),
+        loaded: false,
+        revision: 0,
+        commitQueued: false,
+        persistTimer: null,
+    };
+    return globalStore.__or3UserThemeOverrides!;
+}
 
 function detectModeFromHtml(): 'light' | 'dark' {
     if (!isBrowser()) return 'light';
-    const cls = document.documentElement.className;
-    return /\bdark\b/.test(cls) ? 'dark' : 'light';
+    return /\bdark\b/.test(document.documentElement.className)
+        ? 'dark'
+        : 'light';
 }
 
 function loadFromStorage(mode: 'light' | 'dark'): UserThemeOverrides | null {
@@ -53,27 +69,21 @@ function loadFromStorage(mode: 'light' | 'dark'): UserThemeOverrides | null {
     try {
         const key = mode === 'light' ? STORAGE_KEY_LIGHT : STORAGE_KEY_DARK;
         const raw = localStorage.getItem(key);
-        if (!raw) return null;
-        return JSON.parse(raw) as UserThemeOverrides;
-    } catch (e) {
-        console.warn('[user-theme-overrides] Failed to parse stored data', e);
+        return raw ? (JSON.parse(raw) as UserThemeOverrides) : null;
+    } catch (error) {
+        console.warn('[user-theme-overrides] Failed to parse stored data', error);
         return null;
     }
 }
 
-function saveToStorage(mode: 'light' | 'dark', overrides: UserThemeOverrides) {
+function persist(store: StoreState): void {
     if (!isBrowser()) return;
     try {
-        const key = mode === 'light' ? STORAGE_KEY_LIGHT : STORAGE_KEY_DARK;
-        localStorage.setItem(key, JSON.stringify(overrides));
-    } catch (e) {
-        if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-            console.error(
-                '[user-theme-overrides] Storage quota exceeded. Customizations not saved.'
-            );
-            // Notify user via toast if available
-            const nuxtApp = g.useNuxtApp?.();
-            nuxtApp?.$toast?.add?.({
+        localStorage.setItem(STORAGE_KEY_LIGHT, JSON.stringify(store.light.value));
+        localStorage.setItem(STORAGE_KEY_DARK, JSON.stringify(store.dark.value));
+    } catch (error) {
+        if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+            store.toast?.add?.({
                 title: 'Storage Full',
                 description:
                     'Could not save theme customizations. Clear browser data to free space.',
@@ -81,148 +91,119 @@ function saveToStorage(mode: 'light' | 'dark', overrides: UserThemeOverrides) {
                 timeout: 5000,
             });
         } else {
-            console.warn('[user-theme-overrides] Failed to save', e);
+            console.warn('[user-theme-overrides] Failed to save', error);
         }
     }
 }
 
-export function useUserThemeOverrides() {
-    const current = computed<UserThemeOverrides>(() => {
-        const lightValue = store.light.value;
-        const darkValue = store.dark.value;
-        const modeValue = store.activeMode.value;
-
-        return modeValue === 'light' ? lightValue : darkValue;
-    });
-
-    // Initialize on first use
-    if (!store.loaded && isBrowser()) {
-        const loadedLight = loadFromStorage('light');
-        const loadedDark = loadFromStorage('dark');
-        if (loadedLight) store.light.value = loadedLight;
-        if (loadedDark) store.dark.value = loadedDark;
-
-        store.activeMode.value = detectModeFromHtml();
-
-        // Apply initial theme (async)
-        void applyMergedTheme(store.activeMode.value, current.value);
-
-        // Watch for mode changes (html class mutations)
-        const mo = new MutationObserver(() => {
-            const mode = detectModeFromHtml();
-            if (mode !== store.activeMode.value) {
-                store.activeMode.value = mode;
-                void applyMergedTheme(mode, current.value);
-            }
+function scheduleCommit(store: StoreState): void {
+    const revision = ++store.revision;
+    if (!store.commitQueued) {
+        store.commitQueued = true;
+        queueMicrotask(() => {
+            store.commitQueued = false;
+            if (revision !== store.revision) return scheduleCommit(store);
+            const mode = store.activeMode.value;
+            const overrides = mode === 'light' ? store.light.value : store.dark.value;
+            void applyMergedTheme(mode, overrides, store.themePlugin, () => revision === store.revision);
         });
-        mo.observe(document.documentElement, {
-            attributes: true,
-            attributeFilter: ['class'],
-        });
-
-        if (import.meta.hot) {
-            import.meta.hot.dispose(() => {
-                mo.disconnect();
-                revokeBackgroundBlobs();
-            });
-        }
-
-        store.loaded = true;
     }
+
+    if (store.persistTimer) clearTimeout(store.persistTimer);
+    store.persistTimer = setTimeout(() => {
+        store.persistTimer = null;
+        persist(store);
+    }, PERSIST_DELAY_MS);
+}
+
+function backgroundUrls(value: UserThemeOverrides): Array<string | null | undefined> {
+    return [
+        value.backgrounds?.content?.base?.url,
+        value.backgrounds?.content?.overlay?.url,
+        value.backgrounds?.sidebar?.url,
+    ];
+}
+
+function invalidateChangedBackgrounds(
+    previous: UserThemeOverrides,
+    next: UserThemeOverrides
+): void {
+    const before = backgroundUrls(previous);
+    const after = backgroundUrls(next);
+    for (let index = 0; index < before.length; index++) {
+        const oldUrl = before[index];
+        if (oldUrl === after[index] || !oldUrl?.startsWith('internal-file://')) continue;
+        invalidateBackgroundToken(oldUrl.slice('internal-file://'.length));
+    }
+}
+
+function initializeStore(store: StoreState): void {
+    if (store.loaded || !isBrowser()) return;
+    const nuxtApp = useNuxtApp() as unknown as {
+        $theme?: ThemePlugin;
+        $toast?: { add?: (payload: ToastPayload) => void };
+    };
+    store.themePlugin = nuxtApp.$theme;
+    store.toast = nuxtApp.$toast;
+    store.light.value = loadFromStorage('light') ?? createEmpty();
+    store.dark.value = loadFromStorage('dark') ?? createEmpty();
+    store.activeMode.value = detectModeFromHtml();
+
+    store.stopWatch = watch(
+        [
+            store.light,
+            store.dark,
+            store.activeMode,
+            () => store.themePlugin?.resolversVersion?.value,
+        ],
+        () => scheduleCommit(store),
+        { deep: true, flush: 'sync' }
+    );
+
+    store.observer = new MutationObserver(() => {
+        const mode = detectModeFromHtml();
+        if (mode !== store.activeMode.value) store.activeMode.value = mode;
+    });
+    store.observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class'],
+    });
+    store.loaded = true;
+    scheduleCommit(store);
+
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => {
+            store.stopWatch?.();
+            store.observer?.disconnect();
+            if (store.persistTimer) clearTimeout(store.persistTimer);
+            revokeBackgroundBlobs();
+            delete (globalThis as StoreGlobal).__or3UserThemeOverrides;
+        });
+    }
+}
+
+export function useUserThemeOverrides() {
+    const store = getStore();
+    initializeStore(store);
+    const current = computed(() =>
+        store.activeMode.value === 'light' ? store.light.value : store.dark.value
+    );
 
     function set(patch: Partial<UserThemeOverrides>) {
         const mode = store.activeMode.value;
-        const baseValue =
-            mode === 'light' ? store.light.value : store.dark.value;
-
-        // Validate before merge
-        const validated = validatePatch(patch);
-        const merged = deepMerge(baseValue, validated);
-
+        const previous = mode === 'light' ? store.light.value : store.dark.value;
+        const merged = deepMerge(previous, validatePatch(patch));
+        invalidateChangedBackgrounds(previous, merged);
         if (mode === 'light') store.light.value = merged;
         else store.dark.value = merged;
-
-        void applyMergedTheme(mode, merged);
-        saveToStorage(mode, merged);
     }
 
-    function validatePatch(
-        patch: Partial<UserThemeOverrides>
-    ): Partial<UserThemeOverrides> {
-        const result: Partial<UserThemeOverrides> = { ...patch };
-
-        // Validate typography
-        if (result.typography?.baseFontPx !== undefined) {
-            result.typography = {
-                ...result.typography,
-                baseFontPx: Math.max(
-                    14,
-                    Math.min(24, result.typography.baseFontPx)
-                ),
-            };
-        }
-
-        // Validate background layer opacities
-        if (result.backgrounds?.content?.base?.opacity !== undefined) {
-            const base = result.backgrounds.content.base;
-            const opacity = base.opacity ?? 0;
-            result.backgrounds = {
-                ...result.backgrounds,
-                content: {
-                    ...result.backgrounds.content,
-                    base: {
-                        ...base,
-                        opacity: Math.max(0, Math.min(1, opacity)),
-                    },
-                },
-            };
-        }
-
-        if (result.backgrounds?.content?.overlay?.opacity !== undefined) {
-            const overlay = result.backgrounds.content.overlay;
-            const opacity = overlay.opacity ?? 0;
-            result.backgrounds = {
-                ...result.backgrounds,
-                content: {
-                    ...result.backgrounds.content,
-                    overlay: {
-                        ...overlay,
-                        opacity: Math.max(0, Math.min(1, opacity)),
-                    },
-                },
-            };
-        }
-
-        if (result.backgrounds?.sidebar?.opacity !== undefined) {
-            const sidebar = result.backgrounds.sidebar;
-            const opacity = sidebar.opacity ?? 0;
-            result.backgrounds = {
-                ...result.backgrounds,
-                sidebar: {
-                    ...sidebar,
-                    opacity: Math.max(0, Math.min(1, opacity)),
-                },
-            };
-        }
-
-        return result;
-    }
-
-    function reset(mode?: 'light' | 'dark') {
-        const target = mode ?? store.activeMode.value;
-        const empty = { ...EMPTY_USER_OVERRIDES };
-
-        if (target === 'light') {
-            store.light.value = empty;
-            saveToStorage('light', empty);
-        } else {
-            store.dark.value = empty;
-            saveToStorage('dark', empty);
-        }
-
-        if (target === store.activeMode.value) {
-            void applyMergedTheme(target, empty);
-        }
+    function reset(mode: 'light' | 'dark' = store.activeMode.value) {
+        const previous = mode === 'light' ? store.light.value : store.dark.value;
+        const empty = createEmpty();
+        invalidateChangedBackgrounds(previous, empty);
+        if (mode === 'light') store.light.value = empty;
+        else store.dark.value = empty;
     }
 
     function resetAll() {
@@ -233,45 +214,11 @@ export function useUserThemeOverrides() {
     function switchMode(mode: 'light' | 'dark') {
         if (mode === store.activeMode.value) return;
         store.activeMode.value = mode;
-        const overrides =
-            mode === 'light' ? store.light.value : store.dark.value;
-        void applyMergedTheme(mode, overrides);
-
-        // Also update theme plugin to sync classes
-        if (isBrowser()) {
-            const nuxtApp = g.useNuxtApp?.();
-            nuxtApp?.$theme?.set?.(mode);
-        }
+        store.themePlugin?.set?.(mode);
     }
 
     function reapply() {
-        const mode = store.activeMode.value;
-        void applyMergedTheme(mode, current.value);
-    }
-
-    // Watch for changes and persist
-    if (isBrowser()) {
-        watch(
-            () => store.light.value,
-            (v) => {
-                if (store.activeMode.value === 'light') {
-                    void applyMergedTheme('light', v);
-                }
-                saveToStorage('light', v);
-            },
-            { deep: true }
-        );
-
-        watch(
-            () => store.dark.value,
-            (v) => {
-                if (store.activeMode.value === 'dark') {
-                    void applyMergedTheme('dark', v);
-                }
-                saveToStorage('dark', v);
-            },
-            { deep: true }
-        );
+        scheduleCommit(store);
     }
 
     return {
@@ -287,24 +234,55 @@ export function useUserThemeOverrides() {
     };
 }
 
-/** Deep merge helper for user overrides */
+function validatePatch(patch: Partial<UserThemeOverrides>): Partial<UserThemeOverrides> {
+    const result = deepMerge({} as UserThemeOverrides, patch);
+    if (result.typography?.baseFontPx !== undefined) {
+        result.typography.baseFontPx = Math.max(
+            14,
+            Math.min(24, result.typography.baseFontPx)
+        );
+    }
+    for (const layer of [
+        result.backgrounds?.content?.base,
+        result.backgrounds?.content?.overlay,
+        result.backgrounds?.sidebar,
+    ]) {
+        if (layer?.opacity !== undefined) {
+            layer.opacity = Math.max(0, Math.min(1, layer.opacity));
+        }
+    }
+    return result;
+}
+
+function mergeRecords(
+    base: Record<string, unknown>,
+    patch: Record<string, unknown>
+): Record<string, unknown> {
+    const result = { ...base } as Record<string, unknown>;
+    for (const [key, value] of Object.entries(patch)) {
+        if (value === undefined) continue;
+        const previous = result[key];
+        result[key] =
+            value !== null &&
+            typeof value === 'object' &&
+            !Array.isArray(value)
+                ? mergeRecords(
+                      previous && typeof previous === 'object' && !Array.isArray(previous)
+                          ? (previous as Record<string, unknown>)
+                          : {},
+                      value as Record<string, unknown>
+                  )
+                : value;
+    }
+    return result;
+}
+
 function deepMerge(
     base: UserThemeOverrides,
     patch: Partial<UserThemeOverrides>
 ): UserThemeOverrides {
-    const result = { ...base } as Record<string, unknown>;
-    for (const key in patch) {
-        const val = (patch as Record<string, unknown>)[key];
-        if (val === undefined) continue; // skip undefined
-
-        if (val === null || typeof val !== 'object' || Array.isArray(val)) {
-            result[key] = val; // allow null to clear, primitives, and arrays
-        } else {
-            result[key] = deepMerge(
-                (result[key] || {}) as UserThemeOverrides,
-                val as Partial<UserThemeOverrides>
-            );
-        }
-    }
-    return result as UserThemeOverrides;
+    return mergeRecords(
+        base as unknown as Record<string, unknown>,
+        patch as unknown as Record<string, unknown>
+    ) as unknown as UserThemeOverrides;
 }

@@ -29,19 +29,20 @@
                 :content="{
                     side: 'right',
                 }"
-                text="Search"
+                text="Search everything"
             >
                 <UButton
                     v-bind="searchButtonProps"
                     id="btn-search"
-                    aria-label="Search"
+                    aria-label="Open command palette"
                     class="flex item-center justify-center"
                     @click="emit('focus-search')"
                 >
-                    <span class="sr-only">Search</span>
+                    <span class="sr-only">Open command palette</span>
                 </UButton>
             </UTooltip>
             <UTooltip
+                v-if="documentsEnabled"
                 id="tooltip-doc"
                 :delay-duration="0"
                 :content="{
@@ -84,6 +85,7 @@
                     class="pt-2 flex flex-col space-y-2 border-t-[length:var(--md-border-width)] border-t-[color:var(--md-border-color)]"
                 >
                     <UTooltip
+                        v-if="showHomePage"
                         id="tooltip-home"
                         :delay-duration="0"
                         :content="{
@@ -111,34 +113,42 @@
                             "
                         />
                     </UTooltip>
-                    <UTooltip
-                        v-for="page in orderedPages"
-                        :key="`sidebar-page-btn-${page.id}`"
-                        :content="{
-                            side: 'right',
-                        }"
-                        :delay-duration="0"
-                        :text="page.label"
-                        class="page-nav-item"
+                    <div
+                        v-for="group in orderedPageGroups"
+                        :key="`sidebar-page-group-${group.id}`"
+                        class="profile-navigation-group flex flex-col space-y-2"
+                        :data-profile-navigation-group="group.id"
                     >
-                        <UButton
-                            v-bind="
-                                activePageId === page.id
-                                    ? pageButtonActiveProps
-                                    : pageButtonProps
-                            "
-                            :id="`btn-page-${page.id}`"
-                            class="flex item-center justify-center"
-                            :icon="page.icon || iconPageDefault"
-                            :aria-pressed="activePageId === page.id"
-                            :aria-label="page.label"
-                            @click="() => handlePageSelect(page.id)"
-                            @keydown.enter="() => handlePageSelect(page.id)"
-                            @keydown.space.prevent="
-                                () => handlePageSelect(page.id)
-                            "
-                        />
-                    </UTooltip>
+                        <span class="sr-only">{{ group.label }}</span>
+                        <UTooltip
+                            v-for="page in group.pages"
+                            :key="`sidebar-page-btn-${page.id}`"
+                            :content="{
+                                side: 'right',
+                            }"
+                            :delay-duration="0"
+                            :text="page.label"
+                            class="page-nav-item"
+                        >
+                            <UButton
+                                v-bind="
+                                    activePageId === page.id
+                                        ? pageButtonActiveProps
+                                        : pageButtonProps
+                                "
+                                :id="`btn-page-${page.id}`"
+                                class="flex item-center justify-center"
+                                :icon="page.icon || iconPageDefault"
+                                :aria-pressed="activePageId === page.id"
+                                :aria-label="page.label"
+                                @click="() => handlePageSelect(page.id)"
+                                @keydown.enter="() => handlePageSelect(page.id)"
+                                @keydown.space.prevent="
+                                    () => handlePageSelect(page.id)
+                                "
+                            />
+                        </UTooltip>
+                    </div>
                 </div>
             </ClientOnly>
         </div>
@@ -197,7 +207,7 @@
 </template>
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useToast } from '#imports';
+import { useToast, navigateTo } from '#imports';
 import {
     useSidebarFooterActions,
     type SidebarFooterActionEntry,
@@ -208,6 +218,12 @@ import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import SideBottomNav from './SideBottomNav.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import { useOr3Config } from '~/composables/useOr3Config';
+import {
+    projectProfileItems,
+    resolvedWorkspaceProfile,
+} from '~/core/workspace-profiles/projection';
+import { isMobile } from '~/state/global';
 
 const iconNewChat = useIcon('sidebar.new_chat');
 const iconSearch = useIcon('sidebar.search');
@@ -215,6 +231,8 @@ const iconNewNote = useIcon('sidebar.new_note');
 const iconNewFolder = useIcon('sidebar.new_folder');
 const iconPageHome = useIcon('sidebar.page.home');
 const iconPageDefault = useIcon('sidebar.page.default');
+const or3Config = useOr3Config();
+const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 
 const props = defineProps<{
     activeThread?: string;
@@ -351,9 +369,21 @@ const pageButtonActiveProps = createCollapsedPageButtonProps('active');
 const { listSidebarPages } = useSidebarPages();
 const { activePageId, setActivePage } = useActiveSidebarPage();
 
+const projectedPages = computed(() => {
+    void resolvedWorkspaceProfile.value;
+    return projectProfileItems(
+        isMobile.value ? 'mobile-bottom-navigation' : 'navigation',
+        listSidebarPages.value
+    );
+});
+const showHomePage = computed(() => {
+    const pageIds = isMobile.value
+        ? resolvedWorkspaceProfile.value.mobile.bottomNavigation
+        : resolvedWorkspaceProfile.value.navigation.items;
+    return pageIds.includes(DEFAULT_PAGE_ID);
+});
 const orderedPages = computed(() => {
-    const pages = listSidebarPages.value.slice();
-    if (!pages.length) return [];
+    if (!projectedPages.value.length) return [];
 
     // Filter out the default and inline pages as they are rendered in the home scroll
     const hiddenPages = new Set([
@@ -361,10 +391,35 @@ const orderedPages = computed(() => {
         'sidebar-chats',
         'sidebar-docs',
     ]);
-    const filtered = pages.filter((page) => !hiddenPages.has(page.id));
+    const filtered = projectedPages.value.filter(
+        (page) => !hiddenPages.has(page.id)
+    );
 
-    // Sort by order (default 200) so custom pages appear under built-in controls
-    return filtered.sort((a, b) => (a.order ?? 200) - (b.order ?? 200));
+    // The profile projector has already applied explicit order and append rules.
+    return filtered;
+});
+const orderedPageGroups = computed(() => {
+    const pages = new Map(orderedPages.value.map((page) => [page.id, page]));
+    const groups = resolvedWorkspaceProfile.value.navigation.groups
+        .map((group) => ({
+            id: group.id,
+            label: group.label,
+            pages: group.items.flatMap((id) => {
+                const page = pages.get(id);
+                return page ? [page] : [];
+            }),
+        }))
+        .filter((group) => group.pages.length > 0);
+    const grouped = new Set(
+        groups.flatMap((group) => group.pages.map((page) => page.id))
+    );
+    const remaining = orderedPages.value.filter(
+        (page) => !grouped.has(page.id)
+    );
+    if (remaining.length) {
+        groups.push({ id: 'other', label: 'Other', pages: remaining });
+    }
+    return groups;
 });
 
 const activeDocumentIds = computed<string[]>(() => {
@@ -412,6 +467,11 @@ async function handleSidebarFooterAction(entry: SidebarFooterActionEntry) {
 const toast = useToast();
 
 async function handlePageSelect(pageId: string) {
+    // If selecting home, ensure we navigate to root if not already there
+    if (pageId === DEFAULT_PAGE_ID) {
+        await navigateTo('/');
+    }
+
     if (pageId === activePageId.value) return;
 
     try {

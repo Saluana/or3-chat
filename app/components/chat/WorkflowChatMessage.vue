@@ -7,7 +7,8 @@
     >
         <!-- Workflow Execution Status (Progress/Steps) -->
         <div v-if="props.message.workflowState" class="mb-4">
-            <WorkflowExecutionStatus
+            <component
+                :is="workflowStatusComponent"
                 :workflow-state="props.message.workflowState"
             />
         </div>
@@ -39,7 +40,7 @@
         <div
             class="flex justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity"
         >
-            <UButtonGroup
+            <UFieldGroup
                 class="bg-(--md-surface) rounded-(--md-border-radius) shadow-sm border border-(--md-outline-variant) overflow-hidden"
             >
                 <UTooltip
@@ -55,13 +56,21 @@
                 <UTooltip
                     v-if="canRetry"
                     :delay-duration="500"
-                    text="Retry from failed node"
+                    :text="
+                        workflowExecutionEnabled
+                            ? 'Retry from failed node'
+                            : 'Workflow execution disabled'
+                    "
                     :teleport="true"
                 >
-                    <UButton v-bind="retryButtonProps" @click="retryFromHere" />
+                    <UButton
+                        v-bind="retryButtonProps"
+                        :disabled="!workflowExecutionEnabled"
+                        @click="retryFromHere"
+                    />
                 </UTooltip>
                 <!-- Add more actions like Retry/Stop here if needed in future -->
-            </UButtonGroup>
+            </UFieldGroup>
         </div>
     </div>
 </template>
@@ -71,13 +80,14 @@ import { computed, onMounted } from 'vue';
 import { useClipboard } from '@vueuse/core';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { deriveStartNodeId } from '~/utils/chat/workflow-types';
-import WorkflowExecutionStatus from './WorkflowExecutionStatus.vue';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { useToast } from '#imports';
+import { useOr3Config } from '~/composables/useOr3Config';
+import WorkflowExecutionStatus from './WorkflowExecutionStatus.vue';
 
 const props = defineProps<{
     message: UiChatMessage;
@@ -85,6 +95,12 @@ const props = defineProps<{
 
 const toast = useToast();
 const nuxtApp = useNuxtApp();
+const or3Config = useOr3Config();
+const workflowExecutionEnabled = computed(
+    () =>
+        or3Config.features.workflows.enabled &&
+        or3Config.features.workflows.execution
+);
 
 // Theme
 const themePlugin = computed<ThemePlugin>(() => nuxtApp.$theme);
@@ -95,6 +111,11 @@ const currentShikiTheme = computed(() => {
         ? 'github-dark'
         : 'github-light';
 });
+const workflowStatusComponent = computed(
+    () =>
+        themePlugin.value.activeComponents.value['workflow-status'] ??
+        WorkflowExecutionStatus
+);
 
 // Prefer finalOutput, fall back to live streaming text so the last message always renders as Markdown.
 // finalOutput is set once on finalize; finalStreamingText updates during execution.
@@ -199,6 +220,14 @@ function copyResult() {
 
 async function retryFromHere() {
     if (!canRetry.value) return;
+    if (!workflowExecutionEnabled.value) {
+        toast.add({
+            title: 'Workflow execution disabled',
+            description: 'This deployment has workflow execution turned off.',
+            color: 'warning',
+        });
+        return;
+    }
     const svc = nuxtApp.$workflowSlash;
     if (!svc?.retry) return;
     const ok = await svc.retry(props.message.id);

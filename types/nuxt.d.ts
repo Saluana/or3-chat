@@ -1,26 +1,9 @@
+import type { ThemePlugin } from '~/theme/_shared/types';
+
 // Type augmentation for the theme plugin
 declare module '#app' {
     interface NuxtApp {
-        $theme: {
-            // Original theme API (light/dark mode)
-            set: (name: string) => void;
-            toggle: () => void;
-            get: () => string;
-            system: () => 'light' | 'dark';
-            current: import('vue').Ref<string>;
-
-            // Refined theme system API (theme variants)
-            activeTheme: import('vue').Ref<string>;
-            setActiveTheme: (themeName: string) => Promise<void>;
-            getResolver: (
-                themeName: string
-            ) =>
-                | import('~/theme/_shared/runtime-resolver').RuntimeResolver
-                | null;
-            loadCompiledTheme: (
-                themeName: string
-            ) => Promise<import('~/theme/_shared/types').CompiledTheme | null>;
-        };
+        $theme: ThemePlugin;
         $hooks: import('../app/utils/typed-hooks').TypedHookEngine;
 
         $workflowSlash?: {
@@ -30,9 +13,22 @@ declare module '#app' {
             respondHitl: (
                 requestId: string,
                 action: import('~/utils/chat/workflow-types').HitlAction,
-                data?: string | Record<string, unknown>
-            ) => boolean;
+                data?: string | Record<string, unknown>,
+                jobId?: string
+            ) => Promise<boolean>;
         };
+    }
+}
+
+declare module 'vue' {
+    interface ComponentCustomProperties {
+        $theme: ThemePlugin;
+    }
+}
+
+declare module '@vue/runtime-core' {
+    interface ComponentCustomProperties {
+        $theme: ThemePlugin;
     }
 }
 

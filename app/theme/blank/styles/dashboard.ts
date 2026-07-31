@@ -1,8 +1,8 @@
-const galleryButtons = 'bg-white/10! backdrop-blur-md! hover:bg-white/20! active:bg-white/30! flex items-center justify-center';
+const galleryButtons = 'bg-black/10! backdrop-blur-md! hover:bg-black/20! active:bg-black/30! flex items-center justify-center border-0 rounded-full';
 const destructiveOutlineButton = {
     color: 'neutral' as const,
     ui: {
-        base: 'text-[var(--md-error)] border-[color:var(--md-error)]/40 hover:bg-[var(--md-error)]/10 active:bg-[var(--md-error)]/15',
+        base: 'text-[var(--md-error)] hover:bg-[var(--md-error)]/10 active:bg-[var(--md-error)]/15 border-0',
     },
 };
 
@@ -10,11 +10,19 @@ export const dashboardOverrides = {
     'button.image-viewer': {
         color: 'on-surface' as const,
         variant: 'solid',
+        class: 'border-0',
+    },
+    'selectmenu#dashboard.workspace.logout-policy': {
+        class: 'w-full',
+        ui: {
+            content:
+                'z-[30] ring-0! border-0! rounded-xl bg-[var(--md-surface)] shadow-lg text-[14px]!',
+        },
     },
     'button#dashboard.back': {
-        variant: 'basic' as const,
+        variant: 'ghost' as const,
         ui: {
-            base: 'ml-0! border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]!',
+            base: 'ml-0! border-0 rounded-xl text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]!',
         },
     },
     'button#images.gallery.download': {
@@ -29,22 +37,20 @@ export const dashboardOverrides = {
 export const dashboardStyles = {
     '.dashboard-plugin-icon-label': {
         style: {
-            fontFamily:
-                '"IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important',
             fontSize: '12px',
         },
     },
     '.dashboard-plugin-icon-button': {
         style: {
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            borderRadius: 'var(--md-border-radius) !important',
-            backgroundColor: 'var(--md-surface)',
+            border: 'none',
+            borderRadius: '12px !important',
+            backgroundColor: 'var(--md-surface-hover)',
             color: 'var(--md-on-surface)',
         },
     },
     '.dashboard-plugin-icon-button:hover': {
         style: {
-            backgroundColor: 'var(--md-surface-hover)',
+            backgroundColor: 'var(--md-surface-active)',
         },
     },
     '.dashboard-plugin-icon-button:active': {
@@ -54,24 +60,25 @@ export const dashboardStyles = {
     },
     '.dashboard-landing-item': {
         style: {
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            borderRadius: 'var(--md-border-radius) !important',
-            backgroundColor: 'var(--md-surface)',
+            border: 'none',
+            borderRadius: '12px !important',
+            backgroundColor: 'var(--md-surface-hover)',
             color: 'var(--md-on-surface)',
             cursor: 'pointer',
         },
     },
     '.dashboard-landing-item:hover': {
         style: {
-            backgroundColor: 'var(--md-surface-hover)',
+            backgroundColor: 'var(--md-surface-active)',
         },
     },
     '.section-card': {
         style: {
             backgroundColor: 'var(--md-surface)',
-            border: 'var(--md-border-width) solid var(--md-border-color) !important',
-            borderRadius: 'var(--md-border-radius) !important',
+            border: 'none !important',
+            borderRadius: '12px !important',
             padding: '20px 16px',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
         },
     },
 };

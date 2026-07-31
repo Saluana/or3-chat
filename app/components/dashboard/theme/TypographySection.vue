@@ -78,10 +78,3 @@ watch(
     }
 );
 </script>
-
-<style scoped>
-.group-heading {
-    margin-top: -0.25rem;
-    letter-spacing: 0.08em;
-}
-</style>

@@ -1,7 +1,17 @@
 /**
- * Composable for managing the active sidebar page state with persistence and lifecycle hooks.
- * Handles page transitions, activation guards, and maintains global singleton state.
- * Integrates with the hooks system for extensibility and analytics.
+ * @module app/composables/sidebar/useActiveSidebarPage
+ *
+ * Purpose:
+ * Centralizes active sidebar page state with persistence and lifecycle-safe updates.
+ *
+ * Responsibilities:
+ * - Tracks the active sidebar page ID across components
+ * - Persists selection in local storage
+ * - Executes activation and deactivation hooks
+ *
+ * Non-responsibilities:
+ * - Does not render sidebar UI
+ * - Does not register pages; use `useSidebarPages` for registration
  */
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
 import { useLocalStorage } from '@vueuse/core';
@@ -13,6 +23,11 @@ import type {
 import { useHooks } from '~/core/hooks/useHooks';
 import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
+import {
+    resolvedWorkspaceProfile,
+    workspaceProfileDefaultPage,
+} from '~/core/workspace-profiles/projection';
+import { isMobile } from '~/state/global';
 
 /**
  * Default page ID used when no specific page is requested or available.
@@ -28,25 +43,28 @@ const STORAGE_KEY = 'or3-active-sidebar-page';
 const storedActivePageId = useLocalStorage<string>(STORAGE_KEY, DEFAULT_PAGE_ID);
 
 // Global singleton state (similar to useSidebarPages registry pattern)
+interface ActiveSidebarPageState {
+    activePageId: ReturnType<typeof ref<string>>;
+    previousPageId: ReturnType<typeof ref<string | null>>;
+    initialRequestedPageId: string | null;
+    isInitialized: boolean;
+}
+
 const g = globalThis as {
-    __or3ActiveSidebarPageState?: {
-        activePageId: ReturnType<typeof ref<string>>;
-        previousPageId: ReturnType<typeof ref<string | null>>;
-        initialRequestedPageId: string | null;
-        isInitialized: boolean;
-    };
+    __or3ActiveSidebarPageState?: ActiveSidebarPageState;
 };
 
 /**
  * Initialize global singleton state once for the entire application.
+ *
  * Ensures consistent state across all component instances.
  */
-if (!g.__or3ActiveSidebarPageState) {
+function createActiveSidebarPageState(): ActiveSidebarPageState {
     const storedId = storedActivePageId.value;
     const initialRequestedPageId =
         storedId && storedId !== DEFAULT_PAGE_ID ? storedId : null;
 
-    g.__or3ActiveSidebarPageState = {
+    return {
         activePageId: ref<string>(
             initialRequestedPageId
                 ? DEFAULT_PAGE_ID
@@ -58,10 +76,32 @@ if (!g.__or3ActiveSidebarPageState) {
     };
 }
 
+if (!g.__or3ActiveSidebarPageState) {
+    g.__or3ActiveSidebarPageState = createActiveSidebarPageState();
+}
+
+export function __resetActiveSidebarPageForTests(): void {
+    storedActivePageId.value = DEFAULT_PAGE_ID;
+    g.__or3ActiveSidebarPageState = createActiveSidebarPageState();
+}
+
 /**
- * Composable for managing the active sidebar page state.
- * Handles persistence, activation hooks, and page transitions.
- * Uses global singleton state to ensure consistency across all components.
+ * `useActiveSidebarPage`
+ *
+ * Purpose:
+ * Exposes reactive active page state and safe transition helpers.
+ *
+ * Behavior:
+ * Maintains a global singleton store, persists selections, and runs activation
+ * hooks through the shared hooks system.
+ *
+ * Constraints:
+ * - Must run in a client environment to mutate state
+ * - Activation uses the registered page definitions from `useSidebarPages`
+ *
+ * Non-Goals:
+ * - Does not synchronize state to the server
+ * - Does not enforce UI routing or rendering decisions
  */
 export function useActiveSidebarPage() {
     const { getSidebarPage, listSidebarPages } = useSidebarPages();
@@ -72,6 +112,12 @@ export function useActiveSidebarPage() {
     const activePageId = state.activePageId;
     const previousPageId = state.previousPageId;
     const initialRequestedPageId = state.initialRequestedPageId;
+    const activeProfilePageIds = () =>
+        isMobile.value
+            ? resolvedWorkspaceProfile.value.mobile.bottomNavigation
+            : resolvedWorkspaceProfile.value.navigation.items;
+    const activeProfileDefaultPage = () =>
+        workspaceProfileDefaultPage(isMobile.value);
 
     // Computed for the active page definition
     const activePageDef = computed<RegisteredSidebarPage | null>(() => {
@@ -81,20 +127,26 @@ export function useActiveSidebarPage() {
         );
     });
 
-/**
- * Set the active sidebar page with comprehensive hook execution and error handling.
- * Executes activation guards, deactivation hooks, and activation hooks in sequence.
- * Handles errors gracefully with state rollback and proper error reporting.
- * 
- * @param id - The ID of the page to activate
- * @returns True if activation succeeded, false if it failed or was blocked
- */
+    /**
+     * Set the active sidebar page with comprehensive hook execution and error handling.
+     *
+     * Executes activation guards, deactivation hooks, and activation hooks in sequence.
+     * Handles errors gracefully with state rollback and proper error reporting.
+     *
+     * @param id - The ID of the page to activate.
+     * @returns True if activation succeeded, false if it failed or was blocked.
+     */
     async function setActivePage(id: string): Promise<boolean> {
         if (!process.client) {
             return false;
         }
 
-        const nextPage = getSidebarPage(id) || getSidebarPage(DEFAULT_PAGE_ID);
+        const nextPage =
+            (activeProfilePageIds().includes(id)
+                ? getSidebarPage(id)
+                : undefined) ||
+            getSidebarPage(activeProfileDefaultPage()) ||
+            getSidebarPage(DEFAULT_PAGE_ID);
         if (!nextPage) {
             if (import.meta.dev) {
                 console.warn(
@@ -220,16 +272,18 @@ export function useActiveSidebarPage() {
 
     /**
      * Reset to the default page (sidebar-home).
- * Provides a simple way to return to the home page.
-     * 
-     * @returns True if reset succeeded, false if it failed
+     *
+     * Provides a simple way to return to the home page.
+     *
+     * @returns True if reset succeeded, false if it failed.
      */
     async function resetToDefault(): Promise<boolean> {
-        return await setActivePage(DEFAULT_PAGE_ID);
+        return await setActivePage(activeProfileDefaultPage());
     }
 
     /**
      * Watch for page changes and validate they exist in the registry.
+     *
      * Automatically resets to default page if the active page becomes unavailable.
      */
     watch(activePageId, (newId) => {
@@ -239,25 +293,60 @@ export function useActiveSidebarPage() {
             console.warn(
                 `[useActiveSidebarPage] Active page ${pageId} not found, resetting to default`
             );
-            activePageId.value = DEFAULT_PAGE_ID;
+            void setActivePage(activeProfileDefaultPage());
         }
     });
+
+    const stopProfileVisibilityWatch = watch(
+        () => ({
+            profileId: resolvedWorkspaceProfile.value.id,
+            pageIds: activeProfilePageIds().join('|'),
+            defaultPageId: activeProfileDefaultPage(),
+            mobile: isMobile.value,
+        }),
+        (projection, previousProjection) => {
+            const current = activePageId.value ?? DEFAULT_PAGE_ID;
+            const available = projection.pageIds
+                ? projection.pageIds.split('|')
+                : [];
+            const followedPreviousDefault =
+                projection.mobile &&
+                previousProjection !== undefined &&
+                projection.defaultPageId !==
+                    previousProjection.defaultPageId &&
+                current === previousProjection.defaultPageId;
+            if (!available.includes(current) || followedPreviousDefault) {
+                void setActivePage(projection.defaultPageId);
+            }
+        }
+    );
+    onUnmounted(stopProfileVisibilityWatch);
 
     // Only run initialization logic once globally
     /**
      * Initialize the composable by attempting to restore the previously active page.
+     *
      * Watches for page registration if the requested page isn't immediately available.
      * Ensures proper cleanup on component unmount.
      */
     onMounted(() => {
-        if (state.isInitialized || !initialRequestedPageId) return;
+        if (state.isInitialized) return;
         state.isInitialized = true;
+        const requestedPageId =
+            initialRequestedPageId ?? activeProfileDefaultPage();
+
+        if (
+            activePageId.value === requestedPageId &&
+            getSidebarPage(requestedPageId)
+        ) {
+            return;
+        }
 
         const attemptActivation = async () => {
-            await setActivePage(initialRequestedPageId);
+            await setActivePage(requestedPageId);
         };
 
-        if (getSidebarPage(initialRequestedPageId)) {
+        if (getSidebarPage(requestedPageId)) {
             void attemptActivation();
             return;
         }
@@ -267,7 +356,7 @@ export function useActiveSidebarPage() {
         stopWatch = watch(
             () => listSidebarPages.value.map((page) => page.id),
             (ids) => {
-                if (ids.includes(initialRequestedPageId)) {
+                if (ids.includes(requestedPageId)) {
                     void attemptActivation();
                     stopWatch?.();
                     stopWatch = null;

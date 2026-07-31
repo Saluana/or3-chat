@@ -8,7 +8,7 @@ Dexie database client that defines the `Or3DB` schema, typed tables, and version
 
 -   Establishes the single IndexedDB database named `or3-db`.
 -   Declares typed `Dexie.Table` instances for every entity (projects, threads, messages, etc.).
--   Collapses historical migrations into version `5` so existing installs stay compatible without upgrade churn.
+-   Applies the current version `15` schema while preserving explicit upgrade paths for older installs.
 
 ---
 
@@ -45,5 +45,6 @@ const allThreads = await db.threads.toArray();
 
 ## Versioning tips
 
--   Keep version pegged at `5` until you add columns or indexes. When you bump, implement Dexie upgrade paths to migrate data.
--   Since older migrations were consolidated, new changes should avoid breaking existing user stores—plan upgrades carefully.
+-   Add new schema changes with `this.version(<next>).stores({...})` and a transactional upgrade when stored rows need repair.
+-   Older clients cannot open a database created by a newer schema. Restore backups only into the same or a newer application version.
+-   Workspace database instances are held in a bounded LRU cache. The active workspace is kept hot while inactive connections are evicted, and closed cached instances can reopen if browser storage is cleared.

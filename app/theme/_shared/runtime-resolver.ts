@@ -1,13 +1,19 @@
 /**
- * Runtime Override Resolver
+ * @module app/theme/_shared/runtime-resolver
  *
- * This class is responsible for resolving theme overrides at runtime.
- * It matches component parameters against compiled overrides and merges
- * them by specificity.
+ * Purpose:
+ * Resolves theme overrides at runtime by matching compiled selectors.
  *
- * Performance targets:
- * - Override resolution: < 1ms per component
- * - Theme switch: < 50ms total
+ * Behavior:
+ * - Uses an index per component for fast matching
+ * - Caches results when no attribute matching is required
+ *
+ * Constraints:
+ * - Attribute matching requires an element reference
+ * - Cache size is capped to limit memory usage
+ *
+ * Non-Goals:
+ * - Exact parity with CSS selector engines
  */
 
 import type {
@@ -15,47 +21,15 @@ import type {
     CompiledTheme,
     AttributeMatcher,
     PropClassMaps,
+    ResolveParams,
+    ResolvedOverride,
+    ResolvedOverrideProps,
 } from './types';
 
-/**
- * Parameters for resolving overrides
- */
-export interface ResolveParams {
-    /** Component type (e.g., 'button', 'input', 'modal') */
-    component: string;
-
-    /** Context name (e.g., 'chat', 'sidebar', 'dashboard') */
-    context?: string;
-
-    /** Theme identifier (e.g., 'chat.send', 'search.query') */
-    identifier?: string;
-
-    /** Component state (e.g., 'hover', 'active', 'focus') */
-    state?: string;
-
-    /** HTML element for attribute matching */
-    element?: HTMLElement;
-
-    /** Whether component is a Nuxt UI component (for prop mapping) */
-    isNuxtUI?: boolean;
-}
+export type { ResolveParams, ResolvedOverride } from './types';
 
 /**
- * Resolved override result
- */
-export interface ResolvedOverride {
-    /** Merged props to apply to component */
-    props: Record<string, unknown>;
-}
-
-/**
- * Simple LRU Cache implementation for override resolution.
- * Limits memory usage by evicting least recently used entries.
- *
- * Note: This LRU implementation treats Map insertion order as access order.
- * When a key is accessed or set, it is deleted and re-inserted to move it to the end of the Map,
- * representing the most recently used position. This is a non-standard LRU approach; typical LRU caches
- * maintain a separate order-tracking structure.
+ * Internal LRU cache for override resolution.
  */
 class LRUCache<K, V> {
     private cache: Map<K, V>;
@@ -77,6 +51,8 @@ class LRUCache<K, V> {
     }
 
     set(key: K, value: V): void {
+        // Map-based LRU: simple, dependency-free, and O(1) enough for our hot path.
+        // We intentionally avoid a more complex "true" linked-list LRU here.
         // Delete if exists to re-insert at end
         if (this.cache.has(key)) {
             this.cache.delete(key);
@@ -101,10 +77,10 @@ class LRUCache<K, V> {
 }
 
 /**
- * Runtime resolver for theme overrides
+ * `RuntimeResolver`
  *
- * The resolver is initialized with a compiled theme configuration
- * and provides efficient override resolution based on component parameters.
+ * Purpose:
+ * Resolves overrides for a compiled theme with caching.
  */
 export class RuntimeResolver {
     private overrides: CompiledOverride[]; // Keep reference for tests
@@ -115,16 +91,16 @@ export class RuntimeResolver {
     private componentsWithAttributes: Set<string>;
 
     /**
-     * Create a new runtime resolver
-     *
-     * @param compiledTheme - Compiled theme configuration from build time
+     * Creates a runtime resolver for a compiled theme.
      */
     constructor(compiledTheme: CompiledTheme) {
         // Build index by component type for fast lookup
         // Overrides should already be sorted by specificity in the compiled theme
         // but we sort here for safety and to maintain test compatibility
         this.overrides = [...compiledTheme.overrides].sort(
-            (a, b) => b.specificity - a.specificity
+            (a, b) =>
+                b.specificity - a.specificity ||
+                (b.sourceOrder ?? 0) - (a.sourceOrder ?? 0)
         );
 
         this.overrideIndex = new Map();
@@ -144,8 +120,18 @@ export class RuntimeResolver {
 
         // Store prop-to-class mappings (merge with defaults)
         this.propMaps = {
-            ...defaultPropMaps,
-            ...(compiledTheme.propMaps || {}),
+            variant: {
+                ...defaultPropMaps.variant,
+                ...compiledTheme.propMaps?.variant,
+            },
+            size: {
+                ...defaultPropMaps.size,
+                ...compiledTheme.propMaps?.size,
+            },
+            color: {
+                ...defaultPropMaps.color,
+                ...compiledTheme.propMaps?.color,
+            },
         };
         this.themeName = compiledTheme.name;
         // Use LRU cache with max 100 entries to limit memory usage
@@ -153,13 +139,7 @@ export class RuntimeResolver {
     }
 
     /**
-     * Resolve overrides for a component instance
-     *
-     * Matches component parameters against compiled overrides and merges
-     * by specificity. Returns merged props ready to apply to component.
-     *
-     * @param params - Component parameters for resolution
-     * @returns Resolved override props
+     * Resolves overrides for a component instance.
      */
     resolve(params: ResolveParams): ResolvedOverride {
         // Check cache first
@@ -247,6 +227,7 @@ export class RuntimeResolver {
             } else {
                 result = merged;
             }
+            this.deepFreeze(result.props);
 
             // Cache the result
             if (canCache && cacheKey) {
@@ -273,7 +254,7 @@ export class RuntimeResolver {
     }
 
     /**
-     * Generate a cache key for resolution parameters
+     * Generates a cache key for resolution parameters.
      */
     private getCacheKey(params: ResolveParams): string {
         // Format: component|context|identifier|state|isNuxtUI
@@ -284,18 +265,7 @@ export class RuntimeResolver {
     }
 
     /**
-     * Check if an override matches the given component parameters
-     *
-     * Implements CSS-like specificity matching:
-     * 1. Component type must match
-     * 2. Context must match (if specified in override)
-     * 3. Identifier must match (if specified in override)
-     * 4. State must match (if specified in override)
-     * 5. HTML attributes must match (if specified in override)
-     *
-     * @param override - Compiled override to check
-     * @param params - Component parameters to match against
-     * @returns true if override matches
+     * Checks whether an override matches the given component parameters.
      */
     private matches(
         override: CompiledOverride,
@@ -358,7 +328,7 @@ export class RuntimeResolver {
      * @returns true if element matches
      */
     private matchesAttribute(
-        element: HTMLElement | undefined,
+        element: { getAttribute(name: string): string | null } | undefined,
         matcher: AttributeMatcher
     ): boolean {
         if (!element) return false;
@@ -412,7 +382,7 @@ export class RuntimeResolver {
      * @returns Merged override props
      */
     private merge(overrides: CompiledOverride[]): ResolvedOverride {
-        const merged: Record<string, unknown> = {};
+        const merged: ResolvedOverrideProps = {};
 
         // Iterate in reverse (lowest specificity first, highest last)
         // This ensures highest specificity wins
@@ -428,12 +398,16 @@ export class RuntimeResolver {
                     merged[key] =
                         String(value) + (existingClassStr ? ` ${existingClassStr}` : '');
                 } else if (key === 'ui') {
-                    // Deep merge ui objects
                     const existingUi = merged[key];
                     merged[key] = this.deepMerge(
                         (existingUi && typeof existingUi === 'object' ? existingUi : {}) as Record<string, unknown>,
                         value as Record<string, unknown>
                     );
+                } else if (key === 'style') {
+                    merged.style = {
+                        ...(merged.style ?? {}),
+                        ...(value as Record<string, string>),
+                    };
                 } else {
                     // Higher specificity wins
                     merged[key] = value;
@@ -478,6 +452,15 @@ export class RuntimeResolver {
         return result;
     }
 
+    private deepFreeze<T extends Record<string, unknown>>(value: T): T {
+        for (const child of Object.values(value)) {
+            if (child && typeof child === 'object' && !Object.isFrozen(child)) {
+                this.deepFreeze(child as Record<string, unknown>);
+            }
+        }
+        return Object.freeze(value);
+    }
+
     /**
      * Convert semantic props (variant, size, color) to CSS classes
      *
@@ -489,7 +472,7 @@ export class RuntimeResolver {
      */
     private mapPropsToClasses(override: ResolvedOverride): ResolvedOverride {
         const classes: string[] = [];
-        const cleanProps: Record<string, unknown> = {};
+        const cleanProps: ResolvedOverrideProps = {};
 
         const entries = Object.entries(override.props);
 

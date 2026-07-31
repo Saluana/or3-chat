@@ -1,7 +1,23 @@
-import { db } from './client';
+/**
+ * @module app/db/attachments
+ *
+ * Purpose:
+ * Local attachment persistence APIs with hook integration for creation,
+ * updates, and deletion lifecycles.
+ *
+ * Responsibilities:
+ * - Validate attachment inputs with Zod schemas
+ * - Persist attachment rows to IndexedDB via Dexie
+ * - Emit hook actions and filters for extension points
+ *
+ * Non-responsibilities:
+ * - Uploading or downloading attachment binaries
+ * - Server-side storage lifecycle management
+ */
+import { getDb } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
-import { parseOrThrow, nowSec } from './util';
+import { parseOrThrow, nowSec, getWriteTxTableNames } from './util';
 import {
     AttachmentCreateSchema,
     AttachmentSchema,
@@ -9,6 +25,20 @@ import {
     type AttachmentCreate,
 } from './schema';
 
+/**
+ * Purpose:
+ * Create a new attachment record in the local database.
+ *
+ * Behavior:
+ * Filters input, validates it, writes to Dexie, and emits before and after hooks.
+ *
+ * Constraints:
+ * - Validation errors throw.
+ * - Uses the active workspace DB from `getDb()`.
+ *
+ * Non-Goals:
+ * - Does not handle file storage or upload.
+ */
 export async function createAttachment(
     input: AttachmentCreate
 ): Promise<Attachment> {
@@ -23,7 +53,7 @@ export async function createAttachment(
     });
     const value = parseOrThrow(AttachmentCreateSchema, filtered);
     await dbTry(
-        () => db.attachments.put(value),
+        () => getDb().attachments.put(value),
         { op: 'write', entity: 'attachments', action: 'create' },
         { rethrow: true }
     );
@@ -34,6 +64,19 @@ export async function createAttachment(
     return value;
 }
 
+/**
+ * Purpose:
+ * Upsert an attachment record with hook integration.
+ *
+ * Behavior:
+ * Filters input, validates the full schema, and writes to Dexie.
+ *
+ * Constraints:
+ * - Requires a fully shaped `Attachment` value.
+ *
+ * Non-Goals:
+ * - Does not merge partial updates.
+ */
 export async function upsertAttachment(value: Attachment): Promise<void> {
     const hooks = useHooks();
     const filtered = await hooks.applyFilters(
@@ -46,7 +89,7 @@ export async function upsertAttachment(value: Attachment): Promise<void> {
     });
     const validated = parseOrThrow(AttachmentSchema, filtered);
     await dbTry(
-        () => db.attachments.put(validated),
+        () => getDb().attachments.put(validated),
         { op: 'write', entity: 'attachments', action: 'upsert' },
         { rethrow: true }
     );
@@ -56,10 +99,23 @@ export async function upsertAttachment(value: Attachment): Promise<void> {
     });
 }
 
+/**
+ * Purpose:
+ * Soft delete an attachment by setting the deleted flag.
+ *
+ * Behavior:
+ * Loads the row, toggles the deleted flag, updates timestamps, and emits hooks.
+ *
+ * Constraints:
+ * - No-op if the attachment does not exist.
+ *
+ * Non-Goals:
+ * - Does not remove the row permanently.
+ */
 export async function softDeleteAttachment(id: string): Promise<void> {
     const hooks = useHooks();
-    await db.transaction('rw', db.attachments, async () => {
-        const a = await dbTry(() => db.attachments.get(id), {
+    await getDb().transaction('rw', getDb().attachments, async () => {
+        const a = await dbTry(() => getDb().attachments.get(id), {
             op: 'read',
             entity: 'attachments',
             action: 'get',
@@ -70,7 +126,7 @@ export async function softDeleteAttachment(id: string): Promise<void> {
             id: a.id,
             tableName: 'attachments',
         });
-        await db.attachments.put({
+        await getDb().attachments.put({
             ...a,
             deleted: true,
             updated_at: nowSec(),
@@ -83,29 +139,63 @@ export async function softDeleteAttachment(id: string): Promise<void> {
     });
 }
 
+/**
+ * Purpose:
+ * Hard delete an attachment row from IndexedDB.
+ *
+ * Behavior:
+ * Emits before and after hooks around the Dexie delete.
+ *
+ * Constraints:
+ * - Caller is responsible for any external cleanup.
+ *
+ * Non-Goals:
+ * - Does not cascade deletes to related tables.
+ */
 export async function hardDeleteAttachment(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => db.attachments.get(id), {
-        op: 'read',
-        entity: 'attachments',
-        action: 'get',
-    });
-    await hooks.doAction('db.attachments.delete:action:hard:before', {
-        entity: existing!,
-        id,
-        tableName: 'attachments',
-    });
-    await db.attachments.delete(id);
-    await hooks.doAction('db.attachments.delete:action:hard:after', {
-        entity: existing!,
-        id,
-        tableName: 'attachments',
-    });
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'attachments', { includePendingOps: false }),
+        async () => {
+            const existing = await dbTry(() => db.attachments.get(id), {
+                op: 'read',
+                entity: 'attachments',
+                action: 'get',
+            });
+            if (!existing) return;
+            await hooks.doAction('db.attachments.delete:action:hard:before', {
+                entity: existing,
+                id,
+                tableName: 'attachments',
+            });
+            await db.attachments.delete(id);
+            await hooks.doAction('db.attachments.delete:action:hard:after', {
+                entity: existing,
+                id,
+                tableName: 'attachments',
+            });
+        }
+    );
 }
 
+/**
+ * Purpose:
+ * Retrieve a single attachment by id with hook filtering.
+ *
+ * Behavior:
+ * Reads the row and runs it through output filters.
+ *
+ * Constraints:
+ * - Returns undefined when not found or filtered out.
+ *
+ * Non-Goals:
+ * - Does not return related entity data.
+ */
 export async function getAttachment(id: string) {
     const hooks = useHooks();
-    const res = await dbTry(() => db.attachments.get(id), {
+    const res = await dbTry(() => getDb().attachments.get(id), {
         op: 'read',
         entity: 'attachments',
         action: 'get',

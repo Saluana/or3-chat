@@ -15,7 +15,7 @@ import {
     ServiceUnavailableResponseError,
     EdgeNetworkTimeoutResponseError,
     ProviderOverloadedResponseError,
-    ChatError,
+    UnprocessableEntityResponseError,
 } from '@openrouter/sdk/models/errors';
 
 export type ErrorCode =
@@ -29,7 +29,6 @@ export type ErrorCode =
     | 'ERR_SERVER'
     | 'ERR_PROVIDER'
     | 'ERR_OVERLOADED'
-    | 'ERR_CHAT'
     | 'ERR_ABORTED'
     | 'ERR_UNKNOWN';
 
@@ -39,6 +38,86 @@ export interface NormalizedError {
     status: number;
     retryable: boolean;
     raw?: unknown;
+}
+
+export type OpenRouterStreamFailureKind =
+    | 'transport'
+    | 'protocol'
+    | 'provider';
+
+/**
+ * Error thrown by the raw-fetch OpenRouter streaming path.
+ * Carries enough metadata for the caller to decide whether to retry.
+ */
+export class OpenRouterStreamError extends Error {
+    status: number;
+    retryAfterMs: number | undefined;
+    retryable: boolean;
+    kind: OpenRouterStreamFailureKind;
+    providerCode: string | number | undefined;
+    finishReason: string | undefined;
+
+    constructor(
+        message: string,
+        {
+            status,
+            retryAfterMs,
+            retryable,
+            kind = 'transport',
+            providerCode,
+            finishReason,
+        }: {
+            status: number;
+            retryAfterMs?: number;
+            retryable: boolean;
+            kind?: OpenRouterStreamFailureKind;
+            providerCode?: string | number;
+            finishReason?: string;
+        }
+    ) {
+        super(message);
+        this.name = 'OpenRouterStreamError';
+        this.status = status;
+        this.retryAfterMs = retryAfterMs;
+        this.retryable = retryable;
+        this.kind = kind;
+        this.providerCode = providerCode;
+        this.finishReason = finishReason;
+    }
+}
+
+/** A syntactically invalid or contract-breaking upstream SSE response. */
+export class OpenRouterProtocolError extends OpenRouterStreamError {
+    constructor(message: string) {
+        super(message, {
+            status: 0,
+            retryable: false,
+            kind: 'protocol',
+        });
+        this.name = 'OpenRouterProtocolError';
+    }
+}
+
+/** A valid stream event in which the upstream provider reports failure. */
+export class OpenRouterProviderError extends OpenRouterStreamError {
+    constructor(
+        message: string,
+        options: {
+            status?: number;
+            retryable?: boolean;
+            providerCode?: string | number;
+            finishReason?: string;
+        } = {}
+    ) {
+        super(message, {
+            status: options.status ?? 0,
+            retryable: options.retryable ?? false,
+            kind: 'provider',
+            providerCode: options.providerCode,
+            finishReason: options.finishReason,
+        });
+        this.name = 'OpenRouterProviderError';
+    }
 }
 
 /**
@@ -156,12 +235,12 @@ export function normalizeSDKError(error: unknown): NormalizedError {
         };
     }
 
-    if (error instanceof ChatError) {
+    if (error instanceof UnprocessableEntityResponseError) {
         const errData = error.error;
         return {
-            code: 'ERR_CHAT',
-            message: errData.message || 'Chat request failed.',
-            status: 400,
+            code: 'ERR_BAD_REQUEST',
+            message: errData.message || 'Invalid request parameters.',
+            status: 422,
             retryable: false,
             raw: error,
         };

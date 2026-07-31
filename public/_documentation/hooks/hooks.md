@@ -79,3 +79,21 @@ Diagnostics live under `_diagnostics` with per-hook timing arrays and error coun
 -   `hook-types.ts` — Type system describing hook names and payloads.
 -   `typed-hooks.ts` — Zero-cost typed wrapper around this engine.
 -   `useHookEffect` — Vue composable for lifecycle-aware subscriptions.
+
+---
+
+## Plugin Runtime V2
+
+Hook Runtime V2 is selected only when `OR3_HOOK_ENGINE_V2_ENABLED` is set at process start. The public `useHooks()` / `HookEngine` surface above remains the V1-compatible API. V2 packages register through `@or3/plugin-sdk` `context.hooks` instead of app-private imports. See [Plugin Runtime V2](/plugins/runtime-v2-overview) and [Plugin SDK](/plugins/plugin-sdk).
+
+## Sync hook keys
+
+High-signal sync hooks used by the DB sync layer:
+
+-   `sync.bootstrap:action:start`
+-   `sync.bootstrap:action:progress`
+-   `sync.bootstrap:action:complete`
+-   `sync.pull:action:received`
+-   `sync.pull:action:applied`
+-   `sync.pull:action:error`
+-   `sync.subscription:action:statusChange`

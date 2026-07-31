@@ -1,0 +1,8 @@
+@import '~/assets/css/or3-prose.css';
+/* Remove default details marker */
+details > summary {
+    list-style: none;
+}
+details > summary::-webkit-details-marker {
+    display: none;
+}

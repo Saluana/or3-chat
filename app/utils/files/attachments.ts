@@ -1,6 +1,23 @@
-// Unified file hash & image normalization utilities (Task 0)
-// Keep minimal & pure for easy reuse and tree-shaking.
+/**
+ * @module app/utils/files/attachments
+ *
+ * Purpose:
+ * Normalizes file hash and image attachment inputs into consistent shapes.
+ *
+ * Behavior:
+ * - Accepts tolerant inputs (arrays, JSON strings, comma lists)
+ * - Deduplicates hashes while preserving order
+ *
+ * Constraints:
+ * - Pure functions with no side effects
+ */
 
+/**
+ * `NormalizedImageAttachment`
+ *
+ * Purpose:
+ * Canonical image attachment shape used by chat and workflow utilities.
+ */
 export interface NormalizedImageAttachment {
     kind: 'image';
     src: string; // data URL or remote URL
@@ -24,7 +41,15 @@ function parseJsonArray(raw: string): unknown[] | null {
     }
 }
 
-// Tolerant hash parser: accepts array, JSON string, comma list, single hash.
+/**
+ * `parseHashes`
+ *
+ * Purpose:
+ * Parses a hash payload into a string array.
+ *
+ * Behavior:
+ * - Accepts arrays, JSON array strings, comma lists, or a single hash string
+ */
 export function parseHashes(raw: unknown): string[] {
     if (!raw) return [];
     if (Array.isArray(raw)) return raw.filter((h) => typeof h === 'string');
@@ -48,7 +73,12 @@ export function parseHashes(raw: unknown): string[] {
     return [];
 }
 
-// Merge previous assistant hashes with current (dedupe, preserve first-seen order)
+/**
+ * `mergeAssistantFileHashes`
+ *
+ * Purpose:
+ * Merges hash arrays while deduplicating and preserving first-seen order.
+ */
 export function mergeAssistantFileHashes(
     prev: string[] | null | undefined,
     current: string[] | null | undefined
@@ -70,7 +100,12 @@ export function mergeAssistantFileHashes(
     return out;
 }
 
-// Normalize images param variants -> attachment objects.
+/**
+ * `normalizeImagesParam`
+ *
+ * Purpose:
+ * Normalizes mixed image inputs into attachment objects.
+ */
 export function normalizeImagesParam(
     input: unknown
 ): NormalizedImageAttachment[] {

@@ -1,9 +1,30 @@
 import { useWorkflowStorage as useCoreStorage } from 'or3-workflow-vue';
 import { LocalStorageAdapter, type WorkflowData } from 'or3-workflow-core';
+import { ref } from 'vue';
 
 export type SavedWorkflow = WorkflowData & { id: string };
 
 export function useWorkflowStorage() {
+    if (!import.meta.client || typeof localStorage === 'undefined') {
+        const savedWorkflows = ref<SavedWorkflow[]>([]);
+
+        return {
+            savedWorkflows,
+            storage: null,
+            loadSavedWorkflows: async () => [] as SavedWorkflow[],
+            loadList: async () => [] as SavedWorkflow[],
+            load: async () => null as WorkflowData | null,
+            saveWorkflow: async (workflow: WorkflowData) => workflow,
+            deleteWorkflow: async () => undefined,
+            exportWorkflow: () => undefined,
+            importWorkflow: async () => {
+                throw new Error('Workflow import is only available in the browser');
+            },
+            autosave: () => undefined,
+            loadAutosave: () => null as WorkflowData | null,
+        };
+    }
+
     const adapter = new LocalStorageAdapter('or3-workflow-saved');
     const { workflows, loadList, load, save, remove } = useCoreStorage(adapter);
 

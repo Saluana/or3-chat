@@ -1,5 +1,8 @@
 /**
- * Utility functions for system prompts
+ * @module app/utils/chat/prompt-utils
+ *
+ * Purpose:
+ * Utilities for transforming and composing system prompts.
  */
 
 /** TipTap node types */
@@ -21,8 +24,10 @@ interface TipTapDocument {
 }
 
 /**
- * Converts TipTap JSON content to plain text string for use as system message.
- * Extracts text from paragraph nodes and joins with newlines.
+ * `promptJsonToString`
+ *
+ * Purpose:
+ * Converts TipTap JSON content to a plain text system prompt.
  */
 export function promptJsonToString(
     json: TipTapDocument | TipTapNode[] | null | undefined
@@ -82,10 +87,10 @@ export function promptJsonToString(
 }
 
 /**
- * Compose final system prompt from master + per-thread system text.
- * - Trims both sides
- * - Returns null if both are empty
- * - Orders: master then thread, separated by two newlines
+ * `composeSystemPrompt`
+ *
+ * Purpose:
+ * Combines global and per-thread system prompt text.
  */
 export function composeSystemPrompt(
     master: string,

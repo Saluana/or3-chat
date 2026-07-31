@@ -1,11 +1,25 @@
 /**
- * Composable for managing sidebar sections and footer actions.
- * Provides registration system and reactive access to sidebar UI components.
+ * @module app/composables/sidebar/useSidebarSections
+ *
+ * Purpose:
+ * Defines registries and composables for sidebar sections and footer actions.
+ *
+ * Responsibilities:
+ * - Registers sidebar sections and footer actions
+ * - Exposes grouped, ordered lists for rendering
+ *
+ * Non-responsibilities:
+ * - Does not render sidebar UI
+ * - Does not persist registry state across sessions
  */
 import { computed } from 'vue';
 import type { Component, ComputedRef } from 'vue';
 import { createRegistry } from '../_registry';
 import type { RegistryItem } from '../_registry';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
 /**
  * Placement options for sidebar sections relative to built-in sections.
@@ -13,8 +27,19 @@ import type { RegistryItem } from '../_registry';
 export type SidebarSectionPlacement = 'top' | 'main' | 'bottom';
 
 /**
- * Interface defining a sidebar section that can be registered and rendered.
- * Extends the base RegistryItem with sidebar-specific properties.
+ * `SidebarSection`
+ *
+ * Purpose:
+ * Defines a sidebar section entry for registration and rendering.
+ *
+ * Behavior:
+ * Captures component metadata, placement, and ordering details.
+ *
+ * Constraints:
+ * - `id` must be unique in the registry
+ *
+ * Non-Goals:
+ * - Does not define rendering layout
  */
 export interface SidebarSection extends RegistryItem {
     /** Unique id (stable across reloads). */
@@ -25,11 +50,26 @@ export interface SidebarSection extends RegistryItem {
     order?: number;
     /** Where the section should render relative to built-ins. Defaults to `main`. */
     placement?: SidebarSectionPlacement;
+    /** Optional plugin id used for workspace policy lookup. */
+    pluginId?: string;
+    /** Optional access policy for this section. */
+    access?: PluginGatePolicy;
 }
 
 /**
- * Interface grouping sidebar sections by their placement.
- * Provides organized access to sections in different sidebar regions.
+ * `SidebarSectionGroups`
+ *
+ * Purpose:
+ * Groups sidebar sections by placement for rendering.
+ *
+ * Behavior:
+ * Organizes sections into top, main, and bottom lists.
+ *
+ * Constraints:
+ * - Placement defaults to `main` when omitted
+ *
+ * Non-Goals:
+ * - Does not handle visibility or permissions
  */
 export interface SidebarSectionGroups {
     /** Sections that appear at the top of the sidebar */
@@ -41,8 +81,19 @@ export interface SidebarSectionGroups {
 }
 
 /**
- * Context object provided to sidebar footer action handlers.
- * Contains information about the current sidebar state for conditional behavior.
+ * `SidebarFooterActionContext`
+ *
+ * Purpose:
+ * Provides footer action handlers with sidebar state context.
+ *
+ * Behavior:
+ * Supplies active IDs and collapsed state for action logic.
+ *
+ * Constraints:
+ * - Values may be undefined depending on the current view
+ *
+ * Non-Goals:
+ * - Does not resolve active IDs automatically
  */
 export interface SidebarFooterActionContext {
     /** ID of the currently active thread, if any */
@@ -54,8 +105,16 @@ export interface SidebarFooterActionContext {
 }
 
 /**
- * Color variants for sidebar footer actions.
+ * `ChromeActionColor`
+ *
+ * Purpose:
+ * Enumerates color variants available to chrome action buttons.
+ *
+ * Behavior:
  * Maps to UI component color schemes for consistent theming.
+ *
+ * Constraints:
+ * - Variants are defined by the UI theme
  */
 export type ChromeActionColor =
     | 'neutral'
@@ -68,8 +127,19 @@ export type ChromeActionColor =
     | 'inverse-primary';
 
 /**
- * Interface defining a sidebar footer action button.
- * Extends the base RegistryItem with footer-specific properties and behavior.
+ * `SidebarFooterAction`
+ *
+ * Purpose:
+ * Defines a footer action entry for the sidebar.
+ *
+ * Behavior:
+ * Captures icon, label, and handler metadata with optional visibility controls.
+ *
+ * Constraints:
+ * - `id` must be unique in the registry
+ *
+ * Non-Goals:
+ * - Does not render buttons directly
  */
 export interface SidebarFooterAction extends RegistryItem {
     /** Unique id (stable across reloads). */
@@ -90,6 +160,10 @@ export interface SidebarFooterAction extends RegistryItem {
     visible?: (ctx: SidebarFooterActionContext) => boolean;
     /** Optionally disable the action for a given context. */
     disabled?: (ctx: SidebarFooterActionContext) => boolean;
+    /** Optional plugin id used for workspace policy lookup. */
+    pluginId?: string;
+    /** Optional access policy for this action. */
+    access?: PluginGatePolicy;
 }
 
 /**
@@ -97,12 +171,34 @@ export interface SidebarFooterAction extends RegistryItem {
  */
 const DEFAULT_ORDER = 200;
 
+function isEntryAllowed(
+    pluginId?: string,
+    access?: PluginGatePolicy
+): boolean {
+    return getPluginGateDecision(pluginId, access).allowed;
+}
+
 /**
  * Global registry for sidebar sections using the factory pattern.
  */
 const sectionRegistry = createRegistry<SidebarSection>(
     '__or3SidebarSectionsRegistry'
 );
+const sectionV2Kernel = getContributionSurfaceKernel<SidebarSection>(
+    'sidebar-sections',
+    {
+        getId: (section) => section.id,
+        normalize: (section) => Object.freeze({ ...section }),
+        compare: (left, right) =>
+            (left.order ?? DEFAULT_ORDER) -
+                (right.order ?? DEFAULT_ORDER) ||
+            left.id.localeCompare(right.id),
+    }
+);
+
+function useSectionV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('sidebar-sections');
+}
 
 /**
  * Global registry for sidebar footer actions using the factory pattern.
@@ -110,10 +206,35 @@ const sectionRegistry = createRegistry<SidebarSection>(
 const footerRegistry = createRegistry<SidebarFooterAction>(
     '__or3SidebarFooterActionsRegistry'
 );
+const footerV2Kernel = getContributionSurfaceKernel<SidebarFooterAction>(
+    'sidebar-footer-actions',
+    {
+        getId: (action) => action.id,
+        normalize: (action) => Object.freeze({ ...action }),
+        compare: (left, right) =>
+            (left.order ?? DEFAULT_ORDER) - (right.order ?? DEFAULT_ORDER) ||
+            left.id.localeCompare(right.id),
+    }
+);
+
+function useFooterV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('sidebar-footer-actions');
+}
 
 /**
- * Interface for footer action entries with computed disabled state.
- * Used in the reactive list returned by useSidebarFooterActions.
+ * `SidebarFooterActionEntry`
+ *
+ * Purpose:
+ * Represents a resolved footer action plus disabled state.
+ *
+ * Behavior:
+ * Combines the action definition with a context-derived disabled flag.
+ *
+ * Constraints:
+ * - Disabled state is recalculated on each reactive update
+ *
+ * Non-Goals:
+ * - Does not apply visibility filtering
  */
 export interface SidebarFooterActionEntry {
     /** The footer action definition */
@@ -123,67 +244,125 @@ export interface SidebarFooterActionEntry {
 }
 
 /**
- * Register a new sidebar section.
- * Adds the section to the global registry for reactive access.
+ * `registerSidebarSection`
  *
- * @param section - The sidebar section to register
+ * Purpose:
+ * Adds a sidebar section to the registry.
+ *
+ * Behavior:
+ * Registers the section for retrieval by `useSidebarSections`.
+ *
+ * Constraints:
+ * - Overwrites existing entries with the same ID
+ *
+ * Non-Goals:
+ * - Does not validate component structure
  */
 export function registerSidebarSection(section: SidebarSection) {
-    sectionRegistry.register(section);
+    if (useSectionV2Surface()) {
+        sectionV2Kernel.registry.registerLegacy({ value: section });
+    } else {
+        sectionRegistry.register(section);
+    }
 }
 
 /**
- * Unregister a sidebar section by ID.
- * Removes the section from the global registry.
+ * `unregisterSidebarSection`
  *
- * @param id - The ID of the section to unregister
+ * Purpose:
+ * Removes a sidebar section from the registry.
+ *
+ * Behavior:
+ * Deletes the section entry if present.
+ *
+ * Constraints:
+ * - No-op when the ID is not found
+ *
+ * Non-Goals:
+ * - Does not run teardown hooks
  */
 export function unregisterSidebarSection(id: string) {
-    sectionRegistry.unregister(id);
+    if (useSectionV2Surface()) sectionV2Kernel.registry.unregisterLegacy(id);
+    else sectionRegistry.unregister(id);
 }
 
 /**
- * Register a new sidebar footer action.
- * Adds the action to the global registry for reactive access.
+ * `registerSidebarFooterAction`
  *
- * @param action - The footer action to register
+ * Purpose:
+ * Adds a footer action to the registry.
+ *
+ * Behavior:
+ * Registers the action for retrieval by `useSidebarFooterActions`.
+ *
+ * Constraints:
+ * - Overwrites existing entries with the same ID
+ *
+ * Non-Goals:
+ * - Does not validate action handlers
  */
 export function registerSidebarFooterAction(action: SidebarFooterAction) {
-    footerRegistry.register(action);
+    return useFooterV2Surface()
+        ? footerV2Kernel.registry.registerLegacy({ value: action })
+        : footerRegistry.register(action);
 }
 
 /**
- * Unregister a sidebar footer action by ID.
- * Removes the action from the global registry.
+ * `unregisterSidebarFooterAction`
  *
- * @param id - The ID of the action to unregister
+ * Purpose:
+ * Removes a footer action from the registry.
+ *
+ * Behavior:
+ * Deletes the action entry if present.
+ *
+ * Constraints:
+ * - No-op when the ID is not found
+ *
+ * Non-Goals:
+ * - Does not run teardown hooks
  */
 export function unregisterSidebarFooterAction(id: string) {
-    footerRegistry.unregister(id);
+    if (useFooterV2Surface()) footerV2Kernel.registry.unregisterLegacy(id);
+    else footerRegistry.unregister(id);
 }
 
 /**
- * Composable for accessing sidebar sections organized by placement.
- * Returns reactive groups of sections sorted by their order property.
+ * `useSidebarSections`
  *
- * @returns ComputedRef containing sections grouped by placement (top, main, bottom)
+ * Purpose:
+ * Provides a grouped, ordered list of sidebar sections.
+ *
+ * Behavior:
+ * Filters sections by placement and sorts them by order.
+ *
+ * Constraints:
+ * - Must be called during component setup for reactivity
+ *
+ * Non-Goals:
+ * - Does not filter by visibility or permissions
  */
 export function useSidebarSections() {
-    const items = sectionRegistry.useItems();
+    const items = useSectionV2Surface()
+        ? computed(() => sectionV2Kernel.items.value)
+        : sectionRegistry.useItems();
+    const allowed = computed(() =>
+        items.value.filter((entry) => isEntryAllowed(entry.pluginId, entry.access))
+    );
     return computed<SidebarSectionGroups>(() => ({
-        top: items.value
+        top: allowed.value
             .filter((entry) => (entry.placement ?? 'main') === 'top')
             .sort(
                 (a, b) =>
                     (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
             ),
-        main: items.value
+        main: allowed.value
             .filter((entry) => (entry.placement ?? 'main') === 'main')
             .sort(
                 (a, b) =>
                     (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
             ),
-        bottom: items.value
+        bottom: allowed.value
             .filter((entry) => (entry.placement ?? 'main') === 'bottom')
             .sort(
                 (a, b) =>
@@ -193,19 +372,28 @@ export function useSidebarSections() {
 }
 
 /**
- * Composable for accessing sidebar footer actions with context-aware filtering.
- * Returns a reactive list of actions filtered by visibility and computed disabled state.
+ * `useSidebarFooterActions`
  *
- * @param context - Function that returns the current footer action context
- * @returns ComputedRef containing filtered and sorted footer action entries
+ * Purpose:
+ * Provides a context-aware list of footer actions.
+ *
+ * Behavior:
+ * Applies visibility filters, sorts by order, and computes disabled state.
+ *
+ * Constraints:
+ * - Must be called during component setup for reactivity
+ *
+ * Non-Goals:
+ * - Does not memoize results across contexts
  */
 export function useSidebarFooterActions(
     context: () => SidebarFooterActionContext = () => ({})
 ): ComputedRef<SidebarFooterActionEntry[]> {
-    const items = footerRegistry.useItems();
+    const items = useFooterV2Surface() ? footerV2Kernel.items : footerRegistry.useItems();
     return computed(() => {
         const ctx = context();
         return items.value
+            .filter((action) => isEntryAllowed(action.pluginId, action.access))
             .filter((action) => !action.visible || action.visible(ctx))
             .sort(
                 (a, b) =>
@@ -219,21 +407,43 @@ export function useSidebarFooterActions(
 }
 
 /**
- * Get a list of all registered sidebar section IDs.
- * Useful for debugging and registry inspection.
+ * `listRegisteredSidebarSectionIds`
  *
- * @returns Array of registered section IDs
+ * Purpose:
+ * Lists registered sidebar section IDs for inspection.
+ *
+ * Behavior:
+ * Returns IDs in registry order.
+ *
+ * Constraints:
+ * - Intended for debugging or diagnostics
+ *
+ * Non-Goals:
+ * - Does not reflect visibility or placement
  */
 export function listRegisteredSidebarSectionIds(): string[] {
-    return sectionRegistry.listIds();
+    return useSectionV2Surface()
+        ? [...sectionV2Kernel.registry.listLegacyIds()]
+        : sectionRegistry.listIds();
 }
 
 /**
- * Get a list of all registered sidebar footer action IDs.
- * Useful for debugging and registry inspection.
+ * `listRegisteredSidebarFooterActionIds`
  *
- * @returns Array of registered footer action IDs
+ * Purpose:
+ * Lists registered footer action IDs for inspection.
+ *
+ * Behavior:
+ * Returns IDs in registry order.
+ *
+ * Constraints:
+ * - Intended for debugging or diagnostics
+ *
+ * Non-Goals:
+ * - Does not reflect visibility or ordering
  */
 export function listRegisteredSidebarFooterActionIds(): string[] {
-    return footerRegistry.listIds();
+    return useFooterV2Surface()
+        ? [...footerV2Kernel.registry.listLegacyIds()]
+        : footerRegistry.listIds();
 }

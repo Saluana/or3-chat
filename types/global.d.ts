@@ -16,6 +16,37 @@ import type {
 import type { EditorToolbarButton } from '~/composables/editor/useEditorToolbar';
 import type { ToolRegistryState } from '~/utils/chat/tool-registry';
 
+// Admin Dashboard Types
+// Keep in sync with server/admin/stores/types.ts
+
+/** Workspace member information for admin dashboard */
+export interface WorkspaceMemberInfo {
+    userId: string;
+    email?: string;
+    role: 'owner' | 'editor' | 'viewer';
+}
+
+/** Workspace summary for list views in admin dashboard */
+export interface WorkspaceSummary {
+    id: string;
+    name: string;
+    description?: string;
+    createdAt: number;
+    deleted: boolean;
+    deletedAt?: number;
+    ownerUserId?: string;
+    ownerEmail?: string;
+    memberCount: number;
+}
+
+/** Admin user information */
+export interface AdminUserInfo {
+    userId: string;
+    email?: string;
+    displayName?: string;
+    createdAt: number;
+}
+
 declare global {
     type ActivePluginContext = { pluginId: string | null | undefined };
 
@@ -23,10 +54,16 @@ declare global {
         registry: Ref<
             Array<{
                 paneId: string;
-                api: { setText(t: string): void; triggerSend(): void };
+                api: {
+                    setText(t: string): void;
+                    triggerSend(): Promise<import('~/utils/chat/types').SendResult>;
+                };
             }>
         >;
-        programmaticSend: (paneId: string, text: string) => boolean;
+        programmaticSend: (
+            paneId: string,
+            text: string
+        ) => Promise<import('~/utils/chat/types').SendResult>;
         hasPane: (paneId: string) => boolean;
     }
 

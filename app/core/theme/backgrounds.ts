@@ -1,3 +1,28 @@
+/**
+ * @module app/core/theme/backgrounds
+ *
+ * Purpose:
+ * Applies theme background layers (images, colors, gradients) to the DOM
+ * via CSS custom properties. Handles blob URL lifecycle (creation and
+ * revocation) for locally stored file-backed backgrounds.
+ *
+ * Responsibilities:
+ * - Resolve `internal-file://` tokens to blob URLs via the Dexie file store
+ * - Cache resolved blob URLs globally to avoid repeated blob creation
+ * - Apply background image, opacity, size, repeat, and color CSS variables
+ * - Apply header and bottom-nav gradient overlays
+ * - Revoke all cached blob URLs on cleanup (HMR, theme switch)
+ *
+ * Constraints:
+ * - Client-only (guards via `isBrowserWithDocument()`)
+ * - Blob URL cache is global (survives component re-mounts, cleared on HMR)
+ * - Background layers follow the `ThemeBackgroundLayer` type from the theme DSL
+ * - Default size is `150px`; default repeat is `repeat`
+ *
+ * @see core/theme/apply-merged-theme for the orchestrator that calls this
+ * @see docs/theme-backgrounds.md for the background system specification
+ * @see theme/_shared/types for ThemeBackgrounds / ThemeBackgroundLayer types
+ */
 import type {
     ThemeBackgroundLayer,
     ThemeBackgrounds,
@@ -19,6 +44,17 @@ function getCache(): Map<string, string> {
     return g[CACHE_KEY];
 }
 
+/**
+ * Purpose:
+ * Revoke all blob URLs created for resolved background tokens.
+ *
+ * Behavior:
+ * - Calls `URL.revokeObjectURL()` for cached blob URLs
+ * - Clears the global token cache
+ *
+ * Constraints:
+ * - Client-only; safe to call during HMR disposal and theme resets
+ */
 export function revokeBackgroundBlobs() {
     const cache = getCache();
     for (const url of cache.values()) {
@@ -29,6 +65,14 @@ export function revokeBackgroundBlobs() {
     cache.clear();
 }
 
+/**
+ * Purpose:
+ * Invalidate a single cached background token by file hash.
+ *
+ * Behavior:
+ * - Revokes the cached blob URL if present
+ * - Removes the entry from the token cache
+ */
 export function invalidateBackgroundToken(hash: string) {
     const cache = getCache();
     const url = cache.get(hash);
@@ -38,6 +82,17 @@ export function invalidateBackgroundToken(hash: string) {
     cache.delete(hash);
 }
 
+/**
+ * Purpose:
+ * Create a token resolver for theme background image references.
+ *
+ * Behavior:
+ * - Passes through normal URLs
+ * - Resolves `internal-file://<hash>` tokens to cached `blob:` URLs
+ *
+ * Constraints:
+ * - Uses a global cache so repeated calls share blob URLs
+ */
 export function createThemeBackgroundTokenResolver() {
     const cache = getCache();
     return async (token: string): Promise<string | null> => {
@@ -90,59 +145,48 @@ function determineSize(
     return fallback;
 }
 
-async function applyLayer(
+async function resolveLayer(
     cssVar: string,
     layer: ThemeBackgroundLayer | undefined,
     resolveToken: (token: string) => Promise<string | null>
-) {
-    if (!isBrowserWithDocument()) return;
-    const style = document.documentElement.style;
+): Promise<Record<string, string>> {
+    const result: Record<string, string> = {};
     const colorVar = getColorVar(cssVar);
 
     if (colorVar) {
         if (layer?.color && layer.color.trim().length > 0) {
-            style.setProperty(colorVar, layer.color);
+            result[colorVar] = layer.color;
         } else {
-            style.removeProperty(colorVar);
+            result[colorVar] = '';
         }
     }
 
-    if (!layer) {
-        style.setProperty(cssVar, 'none');
-        style.setProperty(`${cssVar}-opacity`, '1');
-        style.setProperty(`${cssVar}-repeat`, DEFAULT_REPEAT);
-        style.setProperty(`${cssVar}-size`, DEFAULT_SIZE);
-        return;
-    }
-
-    if (!layer.image) {
-        style.setProperty(cssVar, 'none');
-        style.setProperty(`${cssVar}-opacity`, '1');
-        style.setProperty(`${cssVar}-repeat`, DEFAULT_REPEAT);
-        style.setProperty(`${cssVar}-size`, DEFAULT_SIZE);
-        return;
+    if (!layer?.image) {
+        result[cssVar] = 'none';
+        result[`${cssVar}-opacity`] = '1';
+        result[`${cssVar}-repeat`] = DEFAULT_REPEAT;
+        result[`${cssVar}-size`] = DEFAULT_SIZE;
+        return result;
     }
 
     const url = await resolveToken(layer.image);
-    style.setProperty(cssVar, url ? `url("${url}")` : 'none');
-    style.setProperty(`${cssVar}-opacity`, String(clampOpacity(layer.opacity)));
-    style.setProperty(`${cssVar}-repeat`, normalizeRepeat(layer.repeat));
-    style.setProperty(`${cssVar}-size`, determineSize(layer, DEFAULT_SIZE));
+    result[cssVar] = url ? `url("${url}")` : 'none';
+    result[`${cssVar}-opacity`] = String(clampOpacity(layer.opacity));
+    result[`${cssVar}-repeat`] = normalizeRepeat(layer.repeat);
+    result[`${cssVar}-size`] = determineSize(layer, DEFAULT_SIZE);
+    return result;
 }
 
-async function applyGradient(
+async function resolveGradient(
     cssVar: string,
     layer: ThemeBackgroundLayer | undefined,
     resolveToken: (token: string) => Promise<string | null>
-) {
-    if (!isBrowserWithDocument()) return;
-    const style = document.documentElement.style;
+): Promise<Record<string, string>> {
     if (!layer || !layer.image) {
-        style.setProperty(cssVar, 'none');
-        return;
+        return { [cssVar]: 'none' };
     }
     const url = await resolveToken(layer.image);
-    style.setProperty(cssVar, url ? `url("${url}")` : 'none');
+    return { [cssVar]: url ? `url("${url}")` : 'none' };
 }
 
 function getColorVar(cssVar: string): string | null {
@@ -158,38 +202,58 @@ function getColorVar(cssVar: string): string | null {
     }
 }
 
+/**
+ * Purpose:
+ * Apply theme background layers (content/sidebar + gradients) to CSS variables.
+ *
+ * Behavior:
+ * - Resolves layer image tokens using the provided resolver
+ * - Writes CSS custom properties on `document.documentElement.style`
+ *
+ * Constraints:
+ * - Client-only; no-ops if `document` is unavailable
+ */
 export async function applyThemeBackgrounds(
     backgrounds: ThemeBackgrounds | undefined,
-    options: { resolveToken: (token: string) => Promise<string | null> }
+    options: {
+        resolveToken: (token: string) => Promise<string | null>;
+        shouldCommit?: () => boolean;
+    }
 ) {
     if (!isBrowserWithDocument()) return;
-    await Promise.all([
-        applyLayer(
+    const plans = await Promise.all([
+        resolveLayer(
             '--app-content-bg-1',
             backgrounds?.content?.base,
             options.resolveToken
         ),
-        applyLayer(
+        resolveLayer(
             '--app-content-bg-2',
             backgrounds?.content?.overlay,
             options.resolveToken
         ),
-        applyLayer(
+        resolveLayer(
             '--app-sidebar-bg-1',
             backgrounds?.sidebar,
             options.resolveToken
         ),
-    ]);
-    await Promise.all([
-        applyGradient(
+        resolveGradient(
             '--app-header-gradient',
             backgrounds?.headerGradient,
             options.resolveToken
         ),
-        applyGradient(
+        resolveGradient(
             '--app-bottomnav-gradient',
             backgrounds?.bottomNavGradient,
             options.resolveToken
         ),
     ]);
+    if (options.shouldCommit && !options.shouldCommit()) return;
+    const style = document.documentElement.style;
+    for (const plan of plans) {
+        for (const [property, value] of Object.entries(plan)) {
+            if (value) style.setProperty(property, value);
+            else style.removeProperty(property);
+        }
+    }
 }

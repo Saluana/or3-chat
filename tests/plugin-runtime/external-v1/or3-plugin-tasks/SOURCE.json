@@ -1,0 +1,19 @@
+{
+  "fixtureVersion": 1,
+  "pluginId": "or3-tasks",
+  "packageName": "or3-plugin-tasks",
+  "packageVersion": "0.1.0",
+  "license": "MIT",
+  "repository": "https://github.com/Saluana/or3-plugin-tasks.git",
+  "sourceCommit": "0b10b6287947dd199e264e2145cdf761d57708cb",
+  "capturedOn": "2026-07-20",
+  "derivedFrom": [
+    "plugin.client.ts",
+    "src/runtime/plugin.client.ts",
+    "src/tasks/runtime/register.ts",
+    "src/tasks/tooling/registerTaskTools.ts"
+  ],
+  "credentialsReviewed": true,
+  "containsCredentials": false,
+  "maintenancePolicy": "Immutable until the maintained external plugin source commit is intentionally advanced. Host API changes must compile this fixture without compatibility edits."
+}

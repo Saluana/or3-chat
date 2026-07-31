@@ -1,0 +1,140 @@
+/**
+ * @module server/api/sync/push.post
+ *
+ * Purpose:
+ * Receives a batch of local mutations (ops) and pushes them to the server.
+ *
+ * Responsibilities:
+ * - Validates payload structure against shared schemas (ensures snake_case/camelCase drift is handled).
+ * - Authorizes write access (`workspace.write`).
+ * - Enforces rate limits (`sync:push`).
+ * - Dispatches to registered SyncGatewayAdapter.
+ */
+import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
+import {
+    PushBatchSchema,
+    PushResultSchema,
+    TABLE_PAYLOAD_SCHEMAS,
+    getPushResultContractError,
+} from '~~/shared/sync/schemas';
+import { resolveSessionContext } from '../../auth/session';
+import { requireCan } from '../../auth/can';
+import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
+import { isSyncEnabled } from '../../utils/sync/is-sync-enabled';
+import { getActiveSyncGatewayAdapter } from '../../sync/gateway/registry';
+import {
+    checkSyncRateLimit,
+    recordSyncRequest,
+    getSyncRateLimitStats,
+} from '../../utils/sync/rate-limiter';
+import { setNoCacheHeaders } from '../../utils/headers';
+
+/**
+ * POST /api/sync/push
+ *
+ * Purpose:
+ * Apply client-side CRDT-like operations to the central store.
+ *
+ * Behavior:
+ * 1. Validates each operation's payload schema (e.g. `MessageSchema`).
+ * 2. Authenticates user.
+ * 3. Rate limits.
+ * 4. Dispatches to registered SyncGatewayAdapter.
+ *
+ * Constraints:
+ * - Atomic-ish: If one op fails validation here, the whole batch is rejected (400).
+ * - Backend might still reject individual ops or conflict resolve.
+ */
+export default defineEventHandler(async (event) => {
+    if (!isSsrAuthEnabled(event) || !isSyncEnabled(event)) {
+        throw createError({ statusCode: 404, statusMessage: 'Not Found' });
+    }
+
+    // Prevent caching of sensitive sync data
+    setNoCacheHeaders(event);
+
+    const body: unknown = await readBody(event);
+    const parsed = PushBatchSchema.safeParse(body);
+    if (!parsed.success) {
+        throw createError({ statusCode: 400, statusMessage: 'Invalid push request' });
+    }
+
+    const normalizedOps = parsed.data.ops.map((op) => ({ ...op }));
+
+    // Validate each op payload.
+    // IMPORTANT: Only validate `put` payloads against table schemas.
+    // Delete ops intentionally send minimal tombstone-ish payloads (or none at all),
+    // and must not be rejected for missing non-delete fields.
+    for (const op of normalizedOps) {
+        if (op.operation !== 'put') continue;
+        const schema = TABLE_PAYLOAD_SCHEMAS[op.tableName];
+        if (!schema) continue;
+        const result = schema.safeParse(op.payload ?? {});
+        if (!result.success) {
+            throw createError({
+                statusCode: 400,
+                statusMessage: `Invalid payload for ${op.tableName}: ${result.error.message}`,
+            });
+        }
+        // Normalize wire payload casing on ingestion to canonical snake_case.
+        op.payload = result.data as Record<string, unknown>;
+    }
+
+    const normalizedBatch = {
+        ...parsed.data,
+        ops: normalizedOps,
+    };
+
+    const session = await resolveSessionContext(event);
+    if (!session.authenticated || !session.user || !session.workspace) {
+        throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
+    }
+
+    requireCan(session, 'workspace.write', {
+        kind: 'workspace',
+        id: normalizedBatch.scope.workspaceId,
+    });
+
+    // Rate limiting (per-user)
+    const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:push');
+    if (!rateLimitResult.allowed) {
+        const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
+        setResponseHeader(event, 'Retry-After', retryAfterSec);
+        throw createError({
+            statusCode: 429,
+            statusMessage: `Rate limit exceeded. Retry after ${retryAfterSec}s`,
+        });
+    }
+
+    // Add rate limit headers
+    const stats = getSyncRateLimitStats(session.user.id, 'sync:push');
+    if (stats) {
+        setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
+        setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
+    }
+
+    // Get sync gateway adapter from registry
+    const adapter = getActiveSyncGatewayAdapter();
+    if (!adapter) {
+        throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
+    }
+
+    // Dispatch to adapter
+    const result = PushResultSchema.safeParse(
+        await adapter.push(event, normalizedBatch)
+    );
+    if (
+        !result.success ||
+        getPushResultContractError(normalizedBatch, result.data)
+    ) {
+        throw createError({
+            statusCode: 502,
+            statusMessage: 'Invalid push response',
+        });
+    }
+
+    // Record successful request for rate limiting
+    recordSyncRequest(session.user.id, 'sync:push');
+
+    return result.data;
+});

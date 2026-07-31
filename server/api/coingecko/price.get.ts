@@ -1,8 +1,15 @@
 /**
- * Nitro server route: GET /api/coingecko/price
+ * @module server/api/coingecko/price.get
  *
- * Simple proxy to avoid browser CORS issues when calling CoinGecko from tools.
+ * Purpose:
+ * Proxy for CoinGecko API to retrive crypto prices.
+ *
+ * Responsibilities:
+ * - Caches responses to reduce upstream API calls (30s TTL).
+ * - Implements a "simulated" price fallback when API rate limits (429) are hit.
+ * - Handles simple CORS proxying.
  */
+import { defineEventHandler, getQuery, setResponseStatus, setHeader } from 'h3';
 
 const COINGECKO_URL = 'https://api.coingecko.com/api/v3/simple/price';
 const CACHE_TTL_MS = 30 * 1000;
@@ -24,6 +31,10 @@ function buildCacheKey(ids: string, vsCurrencies: string): string {
     return `${ids}|${vsCurrencies}`;
 }
 
+/**
+ * Generates deterministic fake price data seeded by hour + currency pair.
+ * Used when CoinGecko throttles us (which is frequent on the free tier).
+ */
 function simulatedPrice(
     coinId: string,
     vsCurrency: string
@@ -43,6 +54,21 @@ function simulatedPrice(
     return Number((base + jitter).toFixed(2));
 }
 
+/**
+ * GET /api/coingecko/price
+ *
+ * Purpose:
+ * Fetch current prices for crypto assets.
+ *
+ * Behavior:
+ * 1. Checks memory cache.
+ * 2. If miss, calls CoinGecko.
+ * 3. If CoinGecko 429s, falls back to simulated data or stale cache.
+ *
+ * Query Params:
+ * - `ids`: Comma-separated coin IDs (e.g. bitcoin,ethereum).
+ * - `vs_currencies`: Comma-separated currencies (e.g. usd,eur).
+ */
 export default defineEventHandler(async (event) => {
     const query = getQuery(event);
     const ids = typeof query.ids === 'string' ? query.ids.trim() : '';

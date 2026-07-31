@@ -1,29 +1,35 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ref } from 'vue';
 
-// Use vi.hoisted to ensure mockStore is available before the mock runs
-const mockStore = vi.hoisted(() => ({ store: {} as Record<string, any> }));
+// Mock KV storage
+const mockKvStore = new Map<string, string>();
 
-vi.mock('@vueuse/core', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@vueuse/core')>();
-    const { ref } = await import('vue');
-    return {
-        ...actual,
-        useLocalStorage: <T>(key: string, defaultValue: T, _options?: any) => {
-            if (!(key in mockStore.store)) {
-                mockStore.store[key] = ref(
-                    typeof defaultValue === 'object' ? { ...defaultValue as object } : defaultValue
-                );
-            }
-            return mockStore.store[key];
+vi.mock('~/db/kv', () => ({
+    getKvByName: vi.fn(async (name: string) => {
+        const value = mockKvStore.get(name);
+        return value ? { id: `kv:${name}`, name, value } : undefined;
+    }),
+    setKvByName: vi.fn(async (name: string, value: string) => {
+        mockKvStore.set(name, value);
+        return { id: `kv:${name}`, name, value };
+    }),
+}));
+
+// Mock db for getKvByName fallback
+vi.mock('~/db', () => ({
+    db: {
+        kv: {
+            where: () => ({
+                equals: () => ({
+                    first: async () => undefined,
+                }),
+            }),
         },
-    };
-});
+    },
+}));
 
 import {
     DEFAULT_AI_SETTINGS,
     sanitizeAiSettings,
-    AI_SETTINGS_STORAGE_KEY,
     useAiSettings,
     type AiSettingsV1,
 } from '../chat/useAiSettings';
@@ -31,9 +37,7 @@ import {
 describe('useAiSettings', () => {
     beforeEach(() => {
         // Clear the mock store between tests
-        for (const key of Object.keys(mockStore.store)) {
-            delete mockStore.store[key];
-        }
+        mockKvStore.clear();
         vi.clearAllMocks();
     });
 
@@ -61,9 +65,10 @@ describe('useAiSettings', () => {
         }
     });
 
-    it('persists and loads settings', () => {
-        const { set, load, settings } = useAiSettings();
-        set({
+    it('persists and loads settings', async () => {
+        const { set, load, settings, ensureLoaded } = useAiSettings();
+        await ensureLoaded();
+        await set({
             masterSystemPrompt: 'hello',
             defaultModelMode: 'fixed',
             fixedModelId: 'm1',
@@ -76,10 +81,9 @@ describe('useAiSettings', () => {
         expect(settings.value.masterSystemPrompt).toBe('hello');
     });
 
-    it('handles bad JSON in storage gracefully', () => {
-        // With the mock, there's no real localStorage to corrupt.
-        // Instead, test that load() returns valid defaults when store is empty.
-        const { load } = useAiSettings();
+    it('handles missing KV gracefully', async () => {
+        const { load, ensureLoaded } = useAiSettings();
+        await ensureLoaded();
         const after = load();
         // Should return defaults, not throw
         expect(after.version).toBe(1);

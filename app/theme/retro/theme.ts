@@ -13,6 +13,7 @@ import { sidebarOverrides, sidebarCssSelectors } from './styles/sidebar';
 import { chatOverrides, chatCssSelectors } from './styles/chat';
 import { dashboardOverrides, dashboardStyles } from './styles/dashboard';
 import { documentsOverrides, documentsStyles } from './styles/documents';
+import { paletteOverrides, paletteCssSelectors } from './styles/palette';
 
 export default defineTheme({
     name: 'retro',
@@ -53,8 +54,9 @@ export default defineTheme({
         surface: '#ffffff',
         surfaceHover: '#F2F7FC',
         surfaceActive: '#EBF3FB',
+        surfaceContainerLowest: '#F8FAFC',
         onSurface: '#022344',
-        surfaceVariant: '#ffffff',
+        surfaceVariant: '#e5e7eb',
         onSurfaceVariant: '#43474e',
         inverseSurface: '#2f3033',
         inverseOnSurface: '#f1f0f4',
@@ -71,6 +73,7 @@ export default defineTheme({
         infoHover: '#DCEAF4',
         infoActive: '#C6DDEE',
         onInfo: '#000000',
+        topHeaderBg: '#F1F3F5',
 
         // Dark mode overrides
         dark: {
@@ -94,11 +97,12 @@ export default defineTheme({
             tertiaryContainer: '#554600',
             onTertiaryContainer: '#fff9c4',
 
-            surface: '#000000',
+            surface: '#1A1E23',
             surfaceHover: '#172332',
             surfaceActive: '#223344',
+            surfaceContainerLowest: '#111417',
             onSurface: '#e2e2e6',
-            surfaceVariant: '#000000',
+            surfaceVariant: '#223344',
             onSurfaceVariant: '#c3c7cf',
             inverseSurface: '#e2e2e6',
             inverseOnSurface: '#2f3033',
@@ -112,7 +116,8 @@ export default defineTheme({
             onInfo: '#DDE3E8',
             success: '#51cf66',
             warning: '#ffa94d',
-            error: '#ffb3b3',
+            error: '#ff6b6b',
+            topHeaderBg: '#1A1E23',
         },
     },
 
@@ -120,20 +125,20 @@ export default defineTheme({
         content: {
             base: {
                 image: '/bg-repeat.v2.webp',
-                opacity: 0.055,
+                opacity: 0.065,
                 repeat: 'repeat',
                 size: '150px',
             },
             overlay: {
                 image: '/bg-repeat-2.v2.webp',
-                opacity: 0.085,
+                opacity: 0.075,
                 repeat: 'repeat',
                 size: '420px',
             },
         },
         sidebar: {
             image: '/sidebar-repeater.v2.webp',
-            opacity: 0.065,
+            opacity: 0.055,
             repeat: 'repeat',
             size: '240px',
         },
@@ -146,10 +151,23 @@ export default defineTheme({
             image: null,
             color: 'transparent',
         },
+        dark: {
+            content: {
+                base: {
+                    opacity: 0.02,
+                },
+                overlay: {
+                    opacity: 0.03,
+                },
+            },
+            sidebar: {
+                opacity: 0.04,
+            },
+        },
     },
 
     fonts: {
-        sans: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
+        sans: '"VT323", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
         heading: '"Press Start 2P", ui-sans-serif, system-ui, sans-serif',
         baseSize: '16px',
         baseWeight: '400',
@@ -190,6 +208,7 @@ export default defineTheme({
         ...sidebarOverrides,
         ...dashboardOverrides,
         ...documentsOverrides,
+        ...paletteOverrides,
     },
     // CSS Selectors for direct DOM targeting
     // These target elements that can't easily be integrated with the component override system
@@ -198,6 +217,7 @@ export default defineTheme({
         ...chatCssSelectors,
         ...dashboardStyles,
         ...documentsStyles,
+        ...paletteCssSelectors,
         '.theme-btn': {
             style: {
                 border: 'var(--md-border-width) solid var(--md-border-color)',
@@ -205,16 +225,6 @@ export default defineTheme({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-            },
-        },
-        '.theme-btn:hover': {
-            style: {
-                backgroundColor: 'var(--md-surface-hover)',
-            },
-        },
-        '.theme-btn:active': {
-            style: {
-                backgroundColor: 'var(--md-surface-active)',
             },
         },
         '#top-header .theme-btn': {

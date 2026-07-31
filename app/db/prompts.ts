@@ -1,5 +1,19 @@
-import { db } from './client';
-import { newId, nowSec } from './util';
+/**
+ * @module app/db/prompts
+ *
+ * Purpose:
+ * Prompt CRUD utilities built on top of the posts table with hook support.
+ *
+ * Responsibilities:
+ * - Manage prompt-specific metadata and content parsing
+ * - Emit hook actions and filters for prompt lifecycle events
+ *
+ * Non-responsibilities:
+ * - Prompt templating or formatting for providers
+ * - Server-side prompt synchronization
+ */
+import { getDb } from './client';
+import { newId, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { useHooks } from '../core/hooks/useHooks';
 import type {
     DbCreatePayload,
@@ -24,6 +38,19 @@ function isPromptPost(
  * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
  * Content is persisted as a JSON string (TipTap JSON) for flexibility.
  */
+/**
+ * Purpose:
+ * Internal storage shape for prompt rows in the posts table.
+ *
+ * Behavior:
+ * Persists TipTap JSON as a string for compact storage.
+ *
+ * Constraints:
+ * - `postType` must be `prompt`.
+ *
+ * Non-Goals:
+ * - Not intended for direct UI consumption.
+ */
 export interface PromptRow {
     id: string;
     title: string; // non-empty trimmed
@@ -32,13 +59,35 @@ export interface PromptRow {
     created_at: number; // seconds
     updated_at: number; // seconds
     deleted: boolean;
+    meta: Post['meta'];
+    clock?: number;
+}
+
+export interface PromptMeta {
+    tags: string[];
+    favorite: boolean;
 }
 
 /** Public facing record with content already parsed. */
+/**
+ * Purpose:
+ * Public prompt record shape returned to callers.
+ *
+ * Behavior:
+ * Parses stored JSON content into a TipTap document.
+ *
+ * Constraints:
+ * - Content is normalized to valid TipTap JSON.
+ *
+ * Non-Goals:
+ * - Does not retain raw JSON strings.
+ */
 export interface PromptRecord {
     id: string;
     title: string;
     content: TipTapDocument | null; // TipTap JSON object
+    tags: string[];
+    favorite: boolean;
     created_at: number;
     updated_at: number;
     deleted: boolean;
@@ -46,11 +95,44 @@ export interface PromptRecord {
 
 const PROMPT_TABLE = 'prompts';
 
+async function putPromptPostRow(row: Post, includeTombstones = false): Promise<void> {
+    const db = getDb();
+    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+        await db.posts.put(row);
+        return;
+    }
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'posts', { includeTombstones }),
+        async () => {
+            await db.posts.put(row);
+        }
+    );
+}
+
+async function deletePromptPostRow(id: string): Promise<void> {
+    const db = getDb();
+    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+        await db.posts.delete(id);
+        return;
+    }
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
+        async () => {
+            await db.posts.delete(id);
+        }
+    );
+}
+
 function toPromptEntity(row: PromptRow): PromptEntity {
+    const meta = parsePromptMeta(row.meta);
     return {
         id: row.id,
         name: row.title,
         text: row.content,
+        tags: meta.tags,
+        favorite: meta.favorite,
     };
 }
 
@@ -67,8 +149,11 @@ function promptEntityToRow(entity: PromptEntity, base?: PromptRow): PromptRow {
             created_at: nowSec(),
             updated_at: nowSec(),
             deleted: false,
+            meta: serializePromptMeta(),
+            clock: 0,
         } as PromptRow);
 
+    const fallbackMeta = parsePromptMeta(fallback.meta);
     return {
         ...fallback,
         id: entity.id,
@@ -78,6 +163,11 @@ function promptEntityToRow(entity: PromptEntity, base?: PromptRow): PromptRow {
         updated_at: fallback.updated_at,
         postType: 'prompt',
         deleted: fallback.deleted,
+        meta: serializePromptMeta({
+            tags: entity.tags ?? fallbackMeta.tags,
+            favorite: entity.favorite ?? fallbackMeta.favorite,
+        }),
+        clock: fallback.clock,
     };
 }
 
@@ -100,6 +190,12 @@ function buildPromptUpdatePayload(
     };
     if (patch.title !== undefined) patchEntity.name = updatedRow.title;
     if (patch.content !== undefined) patchEntity.text = updatedRow.content;
+    if (patch.tags !== undefined) {
+        patchEntity.tags = parsePromptMeta(updatedRow.meta).tags;
+    }
+    if (patch.favorite !== undefined) {
+        patchEntity.favorite = parsePromptMeta(updatedRow.meta).favorite;
+    }
 
     return {
         existing: toPromptEntity(existingRow),
@@ -111,6 +207,51 @@ function buildPromptUpdatePayload(
 
 function emptyPromptJSON(): TipTapDocument {
     return { type: 'doc', content: [] };
+}
+
+export function normalizePromptTags(tags: unknown): string[] {
+    if (!Array.isArray(tags)) return [];
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+    for (const value of tags) {
+        if (typeof value !== 'string') continue;
+        const tag = value.trim();
+        if (!tag) continue;
+        const key = tag.toLocaleLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        normalized.push(tag);
+    }
+    return normalized;
+}
+
+export function parsePromptMeta(raw: unknown): PromptMeta {
+    let value = raw;
+    if (typeof value === 'string') {
+        if (!value.trim()) return { tags: [], favorite: false };
+        try {
+            value = JSON.parse(value);
+        } catch {
+            return { tags: [], favorite: false };
+        }
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return { tags: [], favorite: false };
+    }
+    const record = value as Record<string, unknown>;
+    return {
+        tags: normalizePromptTags(record.tags),
+        favorite: record.favorite === true,
+    };
+}
+
+function serializePromptMeta(
+    meta: Partial<PromptMeta> = {}
+): string {
+    return JSON.stringify({
+        tags: normalizePromptTags(meta.tags),
+        favorite: meta.favorite === true,
+    } satisfies PromptMeta);
 }
 
 function normalizeTitle(
@@ -146,21 +287,53 @@ function parseContent(raw: string | null | undefined): TipTapDocument {
 }
 
 function rowToRecord(row: PromptRow): PromptRecord {
+    const meta = parsePromptMeta(row.meta);
     return {
         id: row.id,
         title: row.title,
         content: parseContent(row.content),
+        tags: meta.tags,
+        favorite: meta.favorite,
         created_at: row.created_at,
         updated_at: row.updated_at,
         deleted: row.deleted,
     };
 }
 
+/**
+ * Purpose:
+ * Input payload for creating prompts.
+ *
+ * Behavior:
+ * Allows optional title and TipTap JSON content.
+ *
+ * Constraints:
+ * - Title is normalized and may be empty when allowed.
+ *
+ * Non-Goals:
+ * - Does not accept markdown or other formats.
+ */
 export interface CreatePromptInput {
     title?: string | null;
     content?: TipTapDocument | null; // TipTap JSON object
+    tags?: string[];
+    favorite?: boolean;
 }
 
+/**
+ * Purpose:
+ * Create and persist a prompt record.
+ *
+ * Behavior:
+ * Normalizes title, validates content, writes to the posts table, and emits
+ * lifecycle hooks.
+ *
+ * Constraints:
+ * - Stored content is JSON-stringified TipTap documents.
+ *
+ * Non-Goals:
+ * - Does not apply server-side validation.
+ */
 export async function createPrompt(
     input: CreatePromptInput = {}
 ): Promise<PromptRecord> {
@@ -173,6 +346,11 @@ export async function createPrompt(
         created_at: nowSec(),
         updated_at: nowSec(),
         deleted: false,
+        meta: serializePromptMeta({
+            tags: input.tags,
+            favorite: input.favorite,
+        }),
+        clock: nextClock(),
     };
     const filteredEntity = await hooks.applyFilters(
         'db.prompts.create:filter:input',
@@ -185,7 +363,7 @@ export async function createPrompt(
     };
     await hooks.doAction('db.prompts.create:action:before', actionPayload);
     const persistedRow = promptEntityToRow(actionPayload.entity, filteredRow);
-    // Convert PromptRow to Post type for db.posts.put
+    // Convert PromptRow to Post type for getDb().posts.put
     const postRow: Post = {
         id: persistedRow.id,
         title: persistedRow.title,
@@ -194,9 +372,10 @@ export async function createPrompt(
         created_at: persistedRow.created_at,
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
-        meta: '',
+        meta: persistedRow.meta,
+        clock: persistedRow.clock ?? 0,
     };
-    await db.posts.put(postRow); // reuse posts table
+    await putPromptPostRow(postRow); // reuse posts table
     actionPayload = {
         ...actionPayload,
         entity: toPromptEntity(persistedRow),
@@ -205,9 +384,22 @@ export async function createPrompt(
     return rowToRecord(persistedRow);
 }
 
+/**
+ * Purpose:
+ * Fetch a single prompt by id.
+ *
+ * Behavior:
+ * Reads the post row, filters through hooks, and returns a parsed record.
+ *
+ * Constraints:
+ * - Returns undefined when missing or filtered out.
+ *
+ * Non-Goals:
+ * - Does not resolve linked entities.
+ */
 export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
     const hooks = useHooks();
-    const row = await db.posts.get(id);
+    const row = await getDb().posts.get(id);
     if (!isPromptPost(row)) return undefined;
     const baseRow: PromptRow = {
         id: row.id,
@@ -217,6 +409,8 @@ export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
         created_at: row.created_at,
         updated_at: row.updated_at,
         deleted: row.deleted,
+        meta: row.meta,
+        clock: row.clock,
     };
     const filteredEntity = await hooks.applyFilters(
         'db.prompts.get:filter:output',
@@ -227,10 +421,23 @@ export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
     return rowToRecord(mergedRow);
 }
 
-export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
+/**
+ * Purpose:
+ * List prompts ordered by most recently updated, with optional limiting.
+ *
+ * Behavior:
+ * Filters by `postType = prompt`, excludes deleted rows, and sorts by `updated_at`.
+ *
+ * Constraints:
+ * - Sorting is done in-memory for small result sets.
+ *
+ * Non-Goals:
+ * - Does not paginate via cursor semantics.
+ */
+export async function listPrompts(limit?: number): Promise<PromptRecord[]> {
     const hooks = useHooks();
     // Filter by postType (indexed) and non-deleted
-    const rows = await db.posts
+    const rows = await getDb().posts
         .where('postType')
         .equals('prompt')
         .and((r) => !r.deleted)
@@ -238,7 +445,9 @@ export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
         .toArray();
     // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
     rows.sort((a, b) => b.updated_at - a.updated_at);
-    const sliced = rows.slice(0, limit) as PromptRow[];
+    const sliced = (
+        typeof limit === 'number' ? rows.slice(0, limit) : rows
+    ) as PromptRow[];
     const baseMap = new Map(sliced.map((row) => [row.id, row]));
     const filteredEntities = await hooks.applyFilters(
         'db.prompts.list:filter:output',
@@ -247,17 +456,45 @@ export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
     return mergePromptEntities(filteredEntities, baseMap).map(rowToRecord);
 }
 
+/**
+ * Purpose:
+ * Patch payload for prompt updates.
+ *
+ * Behavior:
+ * Accepts optional title and content updates.
+ *
+ * Constraints:
+ * - Undefined values are ignored.
+ *
+ * Non-Goals:
+ * - Does not apply partial TipTap patches.
+ */
 export interface UpdatePromptPatch {
     title?: string;
     content?: TipTapDocument | null; // TipTap JSON object
+    tags?: string[];
+    favorite?: boolean;
 }
 
+/**
+ * Purpose:
+ * Update an existing prompt record.
+ *
+ * Behavior:
+ * Loads the row, applies the patch, persists changes, and emits hooks.
+ *
+ * Constraints:
+ * - Returns undefined if the prompt does not exist.
+ *
+ * Non-Goals:
+ * - Does not merge concurrent edits.
+ */
 export async function updatePrompt(
     id: string,
     patch: UpdatePromptPatch
 ): Promise<PromptRecord | undefined> {
     const hooks = useHooks();
-    const existing = await db.posts.get(id);
+    const existing = await getDb().posts.get(id);
     if (!isPromptPost(existing)) return undefined;
     const existingRow: PromptRow = {
         id: existing.id,
@@ -267,20 +504,35 @@ export async function updatePrompt(
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
+        meta: existing.meta,
+        clock: existing.clock,
     };
+    const existingMeta = parsePromptMeta(existingRow.meta);
     const updatedRow: PromptRow = {
         id: existingRow.id,
         title:
             patch.title !== undefined
                 ? normalizeTitle(patch.title, { allowEmpty: true })
                 : existingRow.title,
-        content: patch.content
-            ? JSON.stringify(patch.content)
-            : existingRow.content,
+        content:
+            patch.content !== undefined
+                ? JSON.stringify(patch.content ?? emptyPromptJSON())
+                : existingRow.content,
         postType: 'prompt',
         created_at: existingRow.created_at,
         updated_at: nowSec(),
         deleted: existingRow.deleted,
+        meta: serializePromptMeta({
+            tags:
+                patch.tags !== undefined
+                    ? patch.tags
+                    : existingMeta.tags,
+            favorite:
+                patch.favorite !== undefined
+                    ? patch.favorite
+                    : existingMeta.favorite,
+        }),
+        clock: nextClock(existingRow.clock),
     };
 
     const basePayload = buildPromptUpdatePayload(
@@ -301,7 +553,7 @@ export async function updatePrompt(
 
     await hooks.doAction('db.prompts.update:action:before', actionPayload);
     const persistedRow = promptEntityToRow(actionPayload.updated, mergedRow);
-    // Convert PromptRow to Post type for db.posts.put
+    // Convert PromptRow to Post type for getDb().posts.put
     const postRow: Post = {
         id: persistedRow.id,
         title: persistedRow.title,
@@ -310,9 +562,10 @@ export async function updatePrompt(
         created_at: persistedRow.created_at,
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
-        meta: '',
+        meta: persistedRow.meta,
+        clock: persistedRow.clock ?? 0,
     };
-    await db.posts.put(postRow);
+    await putPromptPostRow(postRow);
     actionPayload = {
         ...actionPayload,
         updated: toPromptEntity(persistedRow),
@@ -321,10 +574,24 @@ export async function updatePrompt(
     return rowToRecord(persistedRow);
 }
 
+/**
+ * Purpose:
+ * Soft delete a prompt by marking the row as deleted.
+ *
+ * Behavior:
+ * Updates deletion metadata and emits delete hooks.
+ *
+ * Constraints:
+ * - No-op when the prompt does not exist.
+ *
+ * Non-Goals:
+ * - Does not permanently remove the row.
+ */
 export async function softDeletePrompt(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await db.posts.get(id);
+    const existing = await getDb().posts.get(id);
     if (!isPromptPost(existing)) return;
+    if (existing.deleted) return;
     const existingRow: PromptRow = {
         id: existing.id,
         title: existing.title,
@@ -333,6 +600,8 @@ export async function softDeletePrompt(id: string): Promise<void> {
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
+        meta: existing.meta,
+        clock: existing.clock,
     };
     const payload: DbDeletePayload<PromptEntity> = {
         entity: toPromptEntity(existingRow),
@@ -344,8 +613,9 @@ export async function softDeletePrompt(id: string): Promise<void> {
         ...existingRow,
         deleted: true,
         updated_at: nowSec(),
+        clock: nextClock(existingRow.clock),
     };
-    // Convert to Post type for db.posts.put
+    // Convert to Post type for getDb().posts.put
     const postRow: Post = {
         id: updatedRow.id,
         title: updatedRow.title,
@@ -354,15 +624,29 @@ export async function softDeletePrompt(id: string): Promise<void> {
         created_at: updatedRow.created_at,
         updated_at: updatedRow.updated_at,
         deleted: updatedRow.deleted,
-        meta: '',
+        meta: updatedRow.meta,
+        clock: updatedRow.clock,
     };
-    await db.posts.put(postRow);
+    await putPromptPostRow(postRow, true);
     await hooks.doAction('db.prompts.delete:action:soft:after', payload);
 }
 
+/**
+ * Purpose:
+ * Hard delete a prompt row from the posts table.
+ *
+ * Behavior:
+ * Removes the row and emits delete hooks.
+ *
+ * Constraints:
+ * - No-op when the prompt does not exist.
+ *
+ * Non-Goals:
+ * - Does not clean up external resources.
+ */
 export async function hardDeletePrompt(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await db.posts.get(id);
+    const existing = await getDb().posts.get(id);
     if (!isPromptPost(existing)) return;
     const existingRow: PromptRow = {
         id: existing.id,
@@ -372,6 +656,8 @@ export async function hardDeletePrompt(id: string): Promise<void> {
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
+        meta: existing.meta,
+        clock: existing.clock,
     };
     const payload: DbDeletePayload<PromptEntity> = {
         entity: toPromptEntity(existingRow),
@@ -379,8 +665,21 @@ export async function hardDeletePrompt(id: string): Promise<void> {
         tableName: PROMPT_TABLE,
     };
     await hooks.doAction('db.prompts.delete:action:hard:before', payload);
-    await db.posts.delete(id);
+    await deletePromptPostRow(id);
     await hooks.doAction('db.prompts.delete:action:hard:after', payload);
 }
 
+/**
+ * Purpose:
+ * Public type alias for prompt records.
+ *
+ * Behavior:
+ * Mirrors `PromptRecord`.
+ *
+ * Constraints:
+ * - Provided for backward compatibility.
+ *
+ * Non-Goals:
+ * - Does not represent the internal storage row shape.
+ */
 export type { PromptRecord as Prompt };

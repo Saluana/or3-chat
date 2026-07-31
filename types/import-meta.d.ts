@@ -18,5 +18,8 @@ declare global {
             options?: { eager?: boolean; import?: string; query?: string }
         ) => Record<string, unknown>;
         dev?: boolean;
+        client?: boolean;
+        server?: boolean;
+        test?: boolean;
     }
 }

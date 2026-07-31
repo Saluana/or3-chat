@@ -1,6 +1,21 @@
-import { db } from './client';
+/**
+ * @module app/db/documents
+ *
+ * Purpose:
+ * Document CRUD utilities built on top of the posts table with hook support.
+ *
+ * Responsibilities:
+ * - Manage document-specific metadata and content parsing
+ * - Emit hook actions and filters for document lifecycle events
+ * - Provide stable typed APIs for document records
+ *
+ * Non-responsibilities:
+ * - Rich-text editor state management
+ * - Server-side document synchronization
+ */
+import { getDb } from './client';
 import { dbTry } from './dbTry';
-import { newId, nowSec } from './util';
+import { newId, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { useHooks } from '../core/hooks/useHooks';
 import type {
     DbCreatePayload,
@@ -11,6 +26,7 @@ import type {
 import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
 import type { TipTapDocument } from '~/types/database';
 import type { Post } from './schema';
+import { serializeDocumentFileHashes } from '~/utils/documents/document-content';
 
 /**
  * Type guard to check if a post is a document
@@ -26,6 +42,19 @@ function isDocumentPost(
  * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
  * Content is persisted as a JSON string (TipTap JSON) for flexibility.
  */
+/**
+ * Purpose:
+ * Internal storage shape for document rows in the posts table.
+ *
+ * Behavior:
+ * Persists TipTap JSON as a string to keep Dexie rows compact.
+ *
+ * Constraints:
+ * - `postType` must be `doc`.
+ *
+ * Non-Goals:
+ * - Not intended for direct consumption by UI.
+ */
 export interface DocumentRow {
     id: string;
     title: string; // non-empty trimmed
@@ -34,9 +63,24 @@ export interface DocumentRow {
     created_at: number; // seconds
     updated_at: number; // seconds
     deleted: boolean;
+    clock?: number;
+    file_hashes?: string | null;
 }
 
 /** Public facing record with content already parsed. */
+/**
+ * Purpose:
+ * Public document record shape returned to callers.
+ *
+ * Behavior:
+ * Parses the stored JSON content into a TipTap document.
+ *
+ * Constraints:
+ * - Content is normalized to a valid TipTap JSON structure.
+ *
+ * Non-Goals:
+ * - Does not retain raw JSON strings.
+ */
 export interface DocumentRecord {
     id: string;
     title: string;
@@ -44,9 +88,40 @@ export interface DocumentRecord {
     created_at: number;
     updated_at: number;
     deleted: boolean;
+    file_hashes?: string | null;
 }
 
 const DOCUMENT_TABLE = 'documents';
+
+async function putDocumentPostRow(row: Post, includeTombstones = false): Promise<void> {
+    const db = getDb();
+    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+        await db.posts.put(row);
+        return;
+    }
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'posts', { includeTombstones }),
+        async () => {
+            await db.posts.put(row);
+        }
+    );
+}
+
+async function deleteDocumentPostRow(id: string): Promise<void> {
+    const db = getDb();
+    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+        await db.posts.delete(id);
+        return;
+    }
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
+        async () => {
+            await db.posts.delete(id);
+        }
+    );
+}
 
 function toDocumentEntity(row: DocumentRow): DocumentEntity {
     return {
@@ -55,6 +130,7 @@ function toDocumentEntity(row: DocumentRow): DocumentEntity {
         content: row.content,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        file_hashes: row.file_hashes,
     };
 }
 
@@ -72,6 +148,8 @@ function documentEntityToRow(
             created_at: entity.created_at ?? nowSec(),
             updated_at: entity.updated_at ?? nowSec(),
             deleted: false,
+            clock: 0,
+            file_hashes: entity.file_hashes,
         } as DocumentRow);
 
     return {
@@ -83,6 +161,8 @@ function documentEntityToRow(
         updated_at: entity.updated_at ?? fallback.updated_at,
         postType: 'doc',
         deleted: fallback.deleted,
+        clock: fallback.clock,
+        file_hashes: entity.file_hashes ?? fallback.file_hashes,
     };
 }
 
@@ -106,6 +186,9 @@ function buildDocumentUpdatePayload(
     };
     if (patch.title !== undefined) patchEntity.title = updatedRow.title;
     if (patch.content !== undefined) patchEntity.content = updatedRow.content;
+    if (patch.content !== undefined) {
+        patchEntity.file_hashes = updatedRow.file_hashes;
+    }
 
     return {
         existing: toDocumentEntity(existingRow),
@@ -172,14 +255,42 @@ function rowToRecord(row: DocumentRow): DocumentRecord {
         created_at: row.created_at,
         updated_at: row.updated_at,
         deleted: row.deleted,
+        file_hashes: row.file_hashes,
     };
 }
 
+/**
+ * Purpose:
+ * Input payload for creating new documents.
+ *
+ * Behavior:
+ * Allows optional title and TipTap JSON content.
+ *
+ * Constraints:
+ * - Title is normalized and defaults to a non-empty value.
+ *
+ * Non-Goals:
+ * - Does not accept markdown or other formats.
+ */
 export interface CreateDocumentInput {
     title?: string | null;
     content?: TipTapDocument | null; // TipTap JSON object
 }
 
+/**
+ * Purpose:
+ * Create and persist a document record.
+ *
+ * Behavior:
+ * Normalizes title, validates content, writes to the posts table, and emits
+ * lifecycle hooks.
+ *
+ * Constraints:
+ * - Stored content is JSON-stringified TipTap documents.
+ *
+ * Non-Goals:
+ * - Does not perform collaborative merge logic.
+ */
 export async function createDocument(
     input: CreateDocumentInput = {}
 ): Promise<DocumentRecord> {
@@ -187,16 +298,18 @@ export async function createDocument(
     const id = newId();
     const baseRow: DocumentRow = {
         id,
-        title: await resolveTitle(hooks, input.title ?? null, {
+        title: await resolveTitle(hooks, input.title, {
             phase: 'create',
             id,
-            rawTitle: input.title ?? null,
+            rawTitle: input.title,
         }),
         content: JSON.stringify(input.content ?? emptyDocJSON()),
         postType: 'doc',
         created_at: nowSec(),
         updated_at: nowSec(),
         deleted: false,
+        clock: nextClock(),
+        file_hashes: serializeDocumentFileHashes(input.content),
     };
     const filteredEntity = await hooks.applyFilters(
         'db.documents.create:filter:input',
@@ -209,7 +322,7 @@ export async function createDocument(
     };
     await hooks.doAction('db.documents.create:action:before', actionPayload);
     const persistedRow = documentEntityToRow(actionPayload.entity, filteredRow);
-    // Convert DocumentRow to Post type for db.posts.put
+    // Convert DocumentRow to Post type for getDb().posts.put
     const postRow: Post = {
         id: persistedRow.id,
         title: persistedRow.title,
@@ -219,9 +332,11 @@ export async function createDocument(
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
         meta: '',
+        clock: persistedRow.clock ?? 0,
+        file_hashes: persistedRow.file_hashes,
     };
     await dbTry(
-        () => db.posts.put(postRow),
+        () => putDocumentPostRow(postRow),
         { op: 'write', entity: 'posts', action: 'createDocument' },
         { rethrow: true }
     );
@@ -233,11 +348,24 @@ export async function createDocument(
     return rowToRecord(persistedRow);
 }
 
+/**
+ * Purpose:
+ * Fetch a single document by id.
+ *
+ * Behavior:
+ * Reads the post row, filters through hooks, and returns a parsed record.
+ *
+ * Constraints:
+ * - Returns undefined when the record is missing or filtered out.
+ *
+ * Non-Goals:
+ * - Does not resolve linked entities or attachments.
+ */
 export async function getDocument(
     id: string
 ): Promise<DocumentRecord | undefined> {
     const hooks = useHooks();
-    const row = await dbTry(() => db.posts.get(id), {
+    const row = await dbTry(() => getDb().posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
@@ -251,6 +379,8 @@ export async function getDocument(
         created_at: row.created_at,
         updated_at: row.updated_at,
         deleted: row.deleted,
+        clock: row.clock,
+        file_hashes: row.file_hashes,
     };
     const filteredEntity = await hooks.applyFilters(
         'db.documents.get:filter:output',
@@ -261,12 +391,25 @@ export async function getDocument(
     return rowToRecord(mergedRow);
 }
 
+/**
+ * Purpose:
+ * List recent documents with optional limiting.
+ *
+ * Behavior:
+ * Filters by `postType = doc`, excludes deleted rows, and sorts by `updated_at`.
+ *
+ * Constraints:
+ * - Sorting is done in-memory for small result sets.
+ *
+ * Non-Goals:
+ * - Does not paginate via cursor semantics.
+ */
 export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
     const hooks = useHooks();
     // Filter by postType (indexed) and non-deleted
     const rows = await dbTry(
         () =>
-            db.posts
+            getDb().posts
                 .where('postType')
                 .equals('doc')
                 .and((r) => !r.deleted)
@@ -286,17 +429,43 @@ export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
     return mergeDocumentEntities(filteredEntities, baseMap).map(rowToRecord);
 }
 
+/**
+ * Purpose:
+ * Patch payload for document updates.
+ *
+ * Behavior:
+ * Accepts optional title and content updates.
+ *
+ * Constraints:
+ * - Undefined values are ignored.
+ *
+ * Non-Goals:
+ * - Does not allow partial TipTap patch application.
+ */
 export interface UpdateDocumentPatch {
     title?: string;
     content?: TipTapDocument | null; // TipTap JSON object
 }
 
+/**
+ * Purpose:
+ * Update an existing document record.
+ *
+ * Behavior:
+ * Loads the row, applies the patch, persists changes, and emits hooks.
+ *
+ * Constraints:
+ * - Returns undefined if the document does not exist.
+ *
+ * Non-Goals:
+ * - Does not merge concurrent edits.
+ */
 export async function updateDocument(
     id: string,
     patch: UpdateDocumentPatch
 ): Promise<DocumentRecord | undefined> {
     const hooks = useHooks();
-    const existing = await dbTry(() => db.posts.get(id), {
+    const existing = await dbTry(() => getDb().posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
@@ -310,10 +479,12 @@ export async function updateDocument(
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
+        clock: existing.clock,
+        file_hashes: existing.file_hashes,
     };
     const updatedRow: DocumentRow = {
         id: existingRow.id,
-        title: patch.title
+        title: patch.title !== undefined
             ? await resolveTitle(hooks, patch.title, {
                   phase: 'update',
                   id: existingRow.id,
@@ -321,13 +492,18 @@ export async function updateDocument(
                   existing: toDocumentEntity(existingRow),
               })
             : existingRow.title,
-        content: patch.content
+        content: patch.content !== undefined && patch.content !== null
             ? JSON.stringify(patch.content)
             : existingRow.content,
         postType: 'doc',
         created_at: existingRow.created_at,
         updated_at: nowSec(),
         deleted: existingRow.deleted,
+        clock: nextClock(existingRow.clock),
+        file_hashes:
+            patch.content !== undefined
+                ? serializeDocumentFileHashes(patch.content)
+                : existingRow.file_hashes,
     };
 
     const basePayload = buildDocumentUpdatePayload(
@@ -349,7 +525,7 @@ export async function updateDocument(
     await hooks.doAction('db.documents.update:action:before', actionPayload);
 
     const persistedRow = documentEntityToRow(actionPayload.updated, mergedRow);
-    // Convert DocumentRow to Post type for db.posts.put
+    // Convert DocumentRow to Post type for getDb().posts.put
     const postRow: Post = {
         id: persistedRow.id,
         title: persistedRow.title,
@@ -359,9 +535,11 @@ export async function updateDocument(
         updated_at: persistedRow.updated_at,
         deleted: persistedRow.deleted,
         meta: '',
+        clock: persistedRow.clock ?? 0,
+        file_hashes: persistedRow.file_hashes,
     };
     await dbTry(
-        () => db.posts.put(postRow),
+        () => putDocumentPostRow(postRow),
         { op: 'write', entity: 'posts', action: 'updateDocument' },
         { rethrow: true }
     );
@@ -374,14 +552,28 @@ export async function updateDocument(
     return rowToRecord(persistedRow);
 }
 
+/**
+ * Purpose:
+ * Soft delete a document by marking the row as deleted.
+ *
+ * Behavior:
+ * Updates deletion metadata and emits delete hooks.
+ *
+ * Constraints:
+ * - No-op when the document does not exist.
+ *
+ * Non-Goals:
+ * - Does not permanently remove the row.
+ */
 export async function softDeleteDocument(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => db.posts.get(id), {
+    const existing = await dbTry(() => getDb().posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
     });
     if (!isDocumentPost(existing)) return;
+    if (existing.deleted) return;
     const existingRow: DocumentRow = {
         id: existing.id,
         title: existing.title,
@@ -390,6 +582,8 @@ export async function softDeleteDocument(id: string): Promise<void> {
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
+        clock: existing.clock,
+        file_hashes: existing.file_hashes,
     };
     const payload: DbDeletePayload<DocumentEntity> = {
         entity: toDocumentEntity(existingRow),
@@ -401,8 +595,9 @@ export async function softDeleteDocument(id: string): Promise<void> {
         ...existingRow,
         deleted: true,
         updated_at: nowSec(),
+        clock: nextClock(existingRow.clock),
     };
-    // Convert to Post type for db.posts.put
+    // Convert to Post type for getDb().posts.put
     const postRow: Post = {
         id: updatedRow.id,
         title: updatedRow.title,
@@ -412,18 +607,33 @@ export async function softDeleteDocument(id: string): Promise<void> {
         updated_at: updatedRow.updated_at,
         deleted: updatedRow.deleted,
         meta: '',
+        clock: updatedRow.clock,
+        file_hashes: updatedRow.file_hashes,
     };
     await dbTry(
-        () => db.posts.put(postRow),
+        () => putDocumentPostRow(postRow, true),
         { op: 'write', entity: 'posts', action: 'softDeleteDocument' },
         { rethrow: true }
     );
     await hooks.doAction('db.documents.delete:action:soft:after', payload);
 }
 
+/**
+ * Purpose:
+ * Hard delete a document row from the posts table.
+ *
+ * Behavior:
+ * Removes the row and emits delete hooks.
+ *
+ * Constraints:
+ * - No-op when the document does not exist.
+ *
+ * Non-Goals:
+ * - Does not clean up external resources.
+ */
 export async function hardDeleteDocument(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => db.posts.get(id), {
+    const existing = await dbTry(() => getDb().posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
@@ -437,6 +647,8 @@ export async function hardDeleteDocument(id: string): Promise<void> {
         created_at: existing.created_at,
         updated_at: existing.updated_at,
         deleted: existing.deleted,
+        clock: existing.clock,
+        file_hashes: existing.file_hashes,
     };
     const payload: DbDeletePayload<DocumentEntity> = {
         entity: toDocumentEntity(existingRow),
@@ -445,11 +657,24 @@ export async function hardDeleteDocument(id: string): Promise<void> {
     };
     await hooks.doAction('db.documents.delete:action:hard:before', payload);
     await dbTry(
-        () => db.posts.delete(id),
+        () => deleteDocumentPostRow(id),
         { op: 'write', entity: 'posts', action: 'hardDeleteDocument' },
         { rethrow: true }
     );
     await hooks.doAction('db.documents.delete:action:hard:after', payload);
 }
 
+/**
+ * Purpose:
+ * Public type alias for document records.
+ *
+ * Behavior:
+ * Mirrors `DocumentRecord`.
+ *
+ * Constraints:
+ * - Provided for backward compatibility.
+ *
+ * Non-Goals:
+ * - Does not represent the internal storage row shape.
+ */
 export type { DocumentRecord as Document };

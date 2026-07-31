@@ -1,6 +1,63 @@
+import 'fake-indexeddb/auto';
 // Global test setup: mock heavy virtualization lib to avoid jsdom/Bun hangs.
 import { vi } from 'vitest';
-import { defineComponent, h, ref } from 'vue';
+import { defineComponent, h, computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { config } from '@vue/test-utils';
+
+const PassthroughDiv = defineComponent({
+    name: 'PassthroughDiv',
+    template: '<div><slot /></div>',
+});
+
+const UIconStub = defineComponent({
+    name: 'UIcon',
+    props: {
+        name: { default: '' },
+    },
+    template: '<span class="u-icon" :data-name="String(name)"><slot /></span>',
+});
+
+const UButtonStub = defineComponent({
+    name: 'UButton',
+    emits: ['click'],
+    template:
+        '<button type="button" @click="$emit(\'click\', $event)"><slot /></button>',
+});
+
+config.global.stubs = {
+    ...config.global.stubs,
+    UIcon: UIconStub,
+    UButton: UButtonStub,
+    UCard: PassthroughDiv,
+    UPopover: PassthroughDiv,
+    UTooltip: PassthroughDiv,
+    UInput: PassthroughDiv,
+    UForm: PassthroughDiv,
+    ClientOnly: PassthroughDiv,
+    ChatSettingsPopover: PassthroughDiv,
+    Suspense: PassthroughDiv,
+};
+
+config.global.config = {
+    ...(config.global.config ?? {}),
+    warnHandler(msg, instance, trace) {
+        // Ignore Vue's one-time Suspense experimental warning in unit tests.
+        if (msg.includes('<Suspense> is an experimental feature')) return;
+        console.warn(msg, instance, trace);
+    },
+};
+
+// Nuxt macro stub for non-Nuxt Vitest runtime.
+// Many pages call definePageMeta() without an explicit import.
+(globalThis as any).definePageMeta = () => {};
+
+// Nuxt auto-imports Vue composables. Make the common ones available globally so
+// Nuxt pages can mount under plain Vitest + Vite.
+(globalThis as any).ref = ref;
+(globalThis as any).computed = computed;
+(globalThis as any).watch = watch;
+(globalThis as any).onMounted = onMounted;
+(globalThis as any).onUnmounted = onUnmounted;
 
 // Polyfill ResizeObserver for jsdom
 class ResizeObserver {
@@ -14,7 +71,12 @@ class ResizeObserver {
 vi.mock('~/utils/errors', () => ({
     reportError: vi.fn(),
     err: vi.fn(
-        (_code: string, _message: string, meta: Record<string, unknown>) => meta
+        (code: string, message: string, meta?: Record<string, unknown>) => {
+            const e = new Error(message) as Error & { code: string; tags?: unknown };
+            e.code = code;
+            if (meta?.tags) e.tags = meta.tags;
+            return e;
+        }
     ),
 }));
 
@@ -68,6 +130,7 @@ vi.mock('#app', async () => {
                 setActiveTheme: vi.fn(),
             },
         }),
+        defineNuxtPlugin: (plugin: unknown) => plugin,
     };
 });
 
@@ -81,28 +144,95 @@ vi.mock('~/composables/useThemeResolver', () => ({
     }),
 }));
 
+// Global test-configurable runtime config
+const defaultTestConfig = {
+    auth: { enabled: true, provider: 'clerk', sessionProvisioningFailure: 'throw' },
+    sync: { enabled: true, provider: 'convex', convexUrl: 'https://convex.test' },
+    storage: { enabled: true, provider: 'convex', allowedMimeTypes: undefined, workspaceQuotaBytes: undefined, gcRetentionSeconds: 2592000, gcCooldownMs: 60000 },
+    backgroundJobs: { enabled: false, storageProvider: 'memory', maxConcurrentJobs: 20, maxConcurrentJobsPerUser: 5, jobTimeoutMs: 300000, completedJobRetentionMs: 300000 },
+    admin: { 
+        allowedHosts: [],
+        allowRestart: false,
+        allowRebuild: false,
+        rebuildCommand: 'bun run build',
+        basePath: '/admin',
+        auth: {
+            username: '',
+            password: '',
+            jwtSecret: '',
+            jwtExpiry: '24h',
+            deletedWorkspaceRetentionDays: '',
+        },
+    },
+    branding: { appName: 'Test', logoUrl: '', defaultTheme: 'dark' },
+    legal: { termsUrl: '', privacyUrl: '' },
+    security: { allowedOrigins: [], forceHttps: false },
+    limits: { enabled: false, requestsPerMinute: 20, maxConversations: 0, maxMessagesPerDay: 0, storageProvider: 'memory', operationRateLimits: {} },
+    public: { 
+        ssrAuthEnabled: true,
+        openRouter: {
+            allowUserOverride: true,
+            hasInstanceKey: false,
+            requireUserKey: false,
+            baseUrl: 'https://openrouter.ai/api/v1',
+        },
+        branding: { appName: 'Test', logoUrl: '', defaultTheme: 'dark' },
+        legal: { termsUrl: '', privacyUrl: '' },
+    },
+    clerkSecretKey: 'secret',
+    openrouterApiKey: '',
+    openrouterBaseUrl: 'https://openrouter.ai/api/v1',
+    openrouterAllowUserOverride: true,
+    openrouterRequireUserKey: false,
+} as any;
+
+export const testRuntimeConfig = {
+    value: defaultTestConfig,
+};
+
 // Mock #imports
-vi.mock('#imports', () => ({
-    useNuxtApp: () => ({
-        $iconRegistry: {
-            resolve: (token: string) => {
-                if (token === 'sidebar.page.home') return 'pixelarticons:home';
-                return token;
+vi.mock('#imports', async (importOriginal) => {
+    // Return the actual module first to allow @clerk/nuxt to resolve it
+    const actual = await importOriginal<typeof import('#imports')>();
+    return {
+        ...actual,
+        useNuxtApp: () => ({
+            $iconRegistry: {
+                resolve: (token: string) => {
+                    if (token === 'sidebar.page.home') return 'pixelarticons:home';
+                    return token;
+                },
             },
+            $theme: {
+                activeTheme: { value: 'light' },
+                getResolver: () => ({ resolve: () => ({ props: {} }) }),
+                setActiveTheme: vi.fn(),
+            },
+        }),
+        useChat: (...args: unknown[]) => {
+            const g = globalThis as Record<string, unknown>;
+            const fn = g.useChat as ((...a: unknown[]) => unknown) | undefined;
+            return fn ? fn(...args) : undefined;
         },
-        $theme: {
-            activeTheme: { value: 'light' },
-            getResolver: () => ({ resolve: () => ({ props: {} }) }),
-            setActiveTheme: vi.fn(),
+        useToast: () => ({ add: vi.fn() }),
+        useHooks: () => ({
+            on: vi.fn().mockReturnValue(() => {}),
+            off: vi.fn(),
+            doAction: vi.fn(),
+        }),
+        useRuntimeConfig: vi.fn(() => testRuntimeConfig.value),
+        useState: (key: string, init?: () => unknown) => {
+            const state = new Map();
+            if (!state.has(key) && init) {
+                state.set(key, init());
+            }
+            return { value: state.get(key) };
         },
-    }),
-    useRuntimeConfig: () => ({
-        public: {},
-    }),
-    useHead: vi.fn(),
-    useColorMode: () => ({ value: 'light' }),
-    useIcon: (token: string) => ({ value: token }),
-}));
+        useHead: vi.fn(),
+        useColorMode: () => ({ value: 'light' }),
+        useIcon: (token: string) => ({ value: token }),
+    };
+});
 
 vi.mock('virtua/vue', () => {
     const Base = defineComponent({

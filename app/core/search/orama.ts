@@ -75,6 +75,15 @@ export async function buildIndex<T = unknown>(
     return db;
 }
 
+export interface OramaSearchOptions {
+    returning?: string[];
+    where?: Record<string, unknown>;
+    properties?: string[] | '*';
+    boost?: Record<string, number>;
+    tolerance?: number;
+    offset?: number;
+}
+
 /**
  * Search the Orama index with a term and limit.
  *
@@ -87,7 +96,7 @@ export async function searchWithIndex(
     db: OramaInstance,
     term: string,
     limit = 100,
-    options?: { returning?: string[]; where?: Record<string, unknown> }
+    options?: OramaSearchOptions
 ): Promise<{ hits: unknown[] }> {
     const orama = await importOrama();
     const searchFn = orama.search as (
@@ -101,9 +110,66 @@ export async function searchWithIndex(
     if (options?.where) {
         query.where = options.where;
     }
+    if (options?.properties) {
+        query.properties = options.properties;
+    }
+    if (options?.boost) {
+        query.boost = options.boost;
+    }
+    if (typeof options?.tolerance === 'number') {
+        query.tolerance = options.tolerance;
+    }
+    if (typeof options?.offset === 'number') {
+        query.offset = options.offset;
+    }
     const result = await searchFn(db, query);
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- searchFn may return null at runtime
     return result ?? { hits: [] };
+}
+
+/**
+ * Insert documents in bounded batches, yielding between batches so the main
+ * thread can remain responsive during large index builds.
+ */
+export async function insertDocumentsBatched<T = unknown>(
+    db: OramaInstance,
+    docs: readonly T[],
+    options?: {
+        batchSize?: number;
+        yieldBetweenBatches?: boolean;
+        signal?: AbortSignal;
+        onBatchComplete?: (durationMs: number, count: number) => void;
+    }
+): Promise<void> {
+    if (!docs.length) return;
+    const requestedBatchSize = options?.batchSize ?? 500;
+    const batchSize =
+        Number.isFinite(requestedBatchSize) && requestedBatchSize > 0
+            ? Math.floor(requestedBatchSize)
+            : 500;
+    const shouldYield = options?.yieldBetweenBatches !== false;
+    for (let i = 0; i < docs.length; i += batchSize) {
+        if (options?.signal?.aborted) {
+            throw new DOMException('Index insert aborted', 'AbortError');
+        }
+        const batch = docs.slice(i, i + batchSize);
+        const started = performance.now();
+        await buildIndex(db, batch as T[]);
+        options?.onBatchComplete?.(performance.now() - started, batch.length);
+        if (shouldYield && i + batchSize < docs.length) {
+            await yieldToMain();
+        }
+    }
+}
+
+export function yieldToMain(): Promise<void> {
+    return new Promise((resolve) => {
+        if (typeof globalThis.setTimeout === 'function') {
+            globalThis.setTimeout(() => resolve(), 0);
+            return;
+        }
+        resolve();
+    });
 }
 
 /**
@@ -127,4 +193,63 @@ export function createTokenCounter(): {
         next: () => ++counter,
         current: () => counter,
     };
+}
+
+/**
+ * Insert a single document into the Orama index.
+ *
+ * @param db - Orama database instance
+ * @param doc - Document to insert
+ * @returns Promise resolving to the new document ID
+ */
+export async function insertDoc<T = unknown>(
+    db: OramaInstance,
+    doc: T
+): Promise<string> {
+    const orama = await importOrama();
+    const insert = orama.insert as (
+        db: OramaInstance,
+        doc: T
+    ) => Promise<string>;
+    return insert(db, doc);
+}
+
+/**
+ * Remove a document from the Orama index by ID.
+ *
+ * @param db - Orama database instance
+ * @param id - ID of the document to remove
+ */
+export async function removeDoc(
+    db: OramaInstance,
+    id: string
+): Promise<void> {
+    const orama = await importOrama();
+    const remove = orama.remove as (
+        db: OramaInstance,
+        id: string
+    ) => Promise<void>;
+    await remove(db, id);
+}
+
+/**
+ * Update a document in the Orama index by ID.
+ *
+ * @param db - Orama database instance
+ * @param id - ID of the document to update
+ * @param doc - New document content
+ * @returns Promise resolving to the updated document ID
+ */
+export async function updateDoc<T = unknown>(
+    db: OramaInstance,
+    id: string,
+    doc: T
+): Promise<string> {
+    const orama = await importOrama();
+    const update = orama.update as (
+        db: OramaInstance,
+        id: string,
+        doc: T
+    ) => Promise<string>;
+    return update(db, id, doc);
 }

@@ -2,12 +2,14 @@
     <div
         :class="[
             collapsed
-                ? 'px-0 justify-center w-[63.5px]'
+                ? 'px-0 justify-center w-[64px]'
                 : 'px-3 justify-between w-full',
             'flex items-center min-h-12 max-h-12 header-pattern py-2 border-b-(--md-border-width) border-(--md-border-color)',
+            { 'sidebar-header--retro': activeTheme === 'retro' },
             sidebarHeaderProps.class || '',
         ]"
         id="top-header"
+        :data-sidebar-state="collapsed ? 'collapsed' : 'expanded'"
         :style="sidebarHeaderStyle"
         :data-theme-target="sidebarHeaderProps['data-theme-target']"
         :data-theme-matches="sidebarHeaderProps['data-theme-matches']"
@@ -16,10 +18,13 @@
             <slot name="sidebar-header">
                 <div id="header-content" class="flex items-center px-[6px]">
                     <img
-                        src="/logos/logo-svg.svg"
-                        alt="Or3.chat"
+                        :src="logoUrl"
+                        :alt="appName"
                         class="h-7 w-auto"
                     />
+                    <span v-if="!logoUrl" class="header-title ml-2 text-[9px]">
+                        {{ appName }}
+                    </span>
                 </div>
             </slot>
         </div>
@@ -43,7 +48,10 @@ import {
     type StyleValue,
     type ComputedRef,
 } from 'vue';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
+import {
+    useThemeOverrides,
+    useThemeResolver,
+} from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 
 const props = defineProps({
@@ -54,6 +62,14 @@ const props = defineProps({
 const emit = defineEmits(['toggle']);
 
 const theme = useNuxtApp().$theme as ThemePlugin | undefined;
+const { activeTheme } = useThemeResolver();
+const runtimeConfig = useRuntimeConfig();
+const appName = computed(
+    () => runtimeConfig.public?.branding?.appName || 'OR3'
+);
+const logoUrl = computed(
+    () => runtimeConfig.public?.branding?.logoUrl || '/logos/logo-svg.svg'
+);
 
 const sidebarToggleOverrides = theme
     ? useThemeOverrides({
@@ -148,7 +164,7 @@ const sidebarHeaderProps = computed<HeaderOverrideProps>(() => {
 
 const sidebarHeaderStyle = computed<StyleValue>(() => {
     const baseStyle: StyleValue = props.collapsed
-        ? { width: '63.5px' }
+        ? { width: '64px', boxSizing: 'border-box' }
         : undefined;
     const overrides = sidebarHeaderProps.value.style;
 
@@ -177,6 +193,12 @@ function onToggle() {
     background-repeat: repeat-x;
     background-position: left center;
     background-size: auto 100%;
+}
+
+/* The Retro header pattern already supplies its own visual edge. */
+.sidebar-header--retro {
+    border-bottom: 0 !important;
+    box-shadow: none !important;
 }
 
 /* Retro logo title: pixel shadow + underline accent (no stroke) */

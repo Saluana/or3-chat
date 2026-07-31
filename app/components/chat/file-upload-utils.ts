@@ -1,9 +1,26 @@
 import { reportError, err } from '~/utils/errors';
 import { createOrRefFile } from '~/db/files';
 import { useHooks } from '~/core/hooks/useHooks';
+import { useRuntimeConfig } from '#imports';
 import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
 
-export const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB
+const DEFAULT_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+
+export function getMaxFileBytes(): number {
+    try {
+        const runtimeConfig = useRuntimeConfig();
+        const candidate = Number(
+            (runtimeConfig.public as { or3?: { limits?: { maxFileSizeBytes?: number } } }).or3
+                ?.limits?.maxFileSizeBytes
+        );
+        if (Number.isFinite(candidate) && candidate > 0) {
+            return Math.floor(candidate);
+        }
+    } catch {
+        // Fall through to default when runtime config is not available.
+    }
+    return DEFAULT_MAX_FILE_SIZE_BYTES;
+}
 
 export function classifyKind(mime: string): 'image' | 'pdf' | null {
     if (mime.startsWith('image/')) return 'image';
@@ -24,11 +41,12 @@ export function validateFile(
             code: 'ERR_FILE_VALIDATION',
             message: 'Unsupported file type',
         };
-    if (file.size > MAX_FILE_BYTES)
+    const limit = getMaxFileBytes();
+    if (file.size > limit)
         return {
             ok: false,
             code: 'ERR_FILE_VALIDATION',
-            message: 'File too large (max 20MB)',
+            message: `File too large (max ${Math.round(limit / 1024 / 1024)}MB)`,
         };
     return { ok: true, kind };
 }

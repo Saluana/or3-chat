@@ -1,12 +1,14 @@
 <template>
-    <div id="side-nav-content-header" class="px-3 pt-2 border-b border-[color:var(--md-border-color)]/10 pb-2">
+    <div id="side-nav-content-header" class="pt-2 pb-2">
         <div class="flex w-full items-center gap-2">
-            <div class="relative flex-1 pr-2">
+            <div class="relative flex-1">
                 <UInput
+                    id="sidebar-search"
                     ref="searchInputWrapper"
                     v-model="sidebarQuery"
                     v-bind="searchInputProps"
-                    aria-label="Search"
+                    name="sidebar-search"
+                    aria-label="Search chats, documents, and projects"
                     class="w-full"
                     @keydown.escape.prevent.stop="onEscapeClear"
                 >
@@ -18,296 +20,121 @@
                             aria-label="Clear input"
                             @click="sidebarQuery = ''"
                         />
+                        <button
+                            v-else
+                            type="button"
+                            class="inline-flex items-center justify-center h-5 px-1.5 rounded-md border border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)] text-[10px] leading-none font-medium text-[color:var(--md-on-surface-variant)] select-none font-[system-ui,ui-sans-serif,sans-serif] transition-colors hover:border-[color:var(--md-primary)] hover:text-[color:var(--md-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--md-primary)]/40"
+                            :title="`Search everything (${searchShortcutLabel})`"
+                            aria-label="Open command palette"
+                            @click="openCommandPalette"
+                        >
+                            {{ searchShortcutLabel }}
+                        </button>
                     </template>
                 </UInput>
             </div>
         </div>
 
-        <!-- Rename modal -->
-        <UModal
-            v-bind="renameModalProps"
-            v-model:open="showRenameModal"
+        <SidebarRenameEntityModal
+            :modal-props="renameModalProps"
+            :open="showRenameModal"
             :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
-        >
-            <template #body>
-                <div class="space-y-4">
-                    <UInput
-                        v-model="renameTitle"
-                        :placeholder="
-                            isRenamingDoc ? 'Document title' : 'Thread title'
-                        "
-                        :icon="iconEdit"
-                        @keyup.enter="saveRename"
-                    />
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="showRenameModal = false"
-                    >Cancel</UButton
-                >
-                <UButton color="primary" @click="saveRename">Save</UButton>
-            </template>
-        </UModal>
+            :placeholder="isRenamingDoc ? 'Document title' : 'Thread title'"
+            :icon="iconEdit"
+            :value="renameTitle"
+            @update:open="showRenameModal = $event"
+            @update:value="renameTitle = $event"
+            @submit="saveRename"
+        />
 
-        <!-- Rename Project Modal -->
-        <UModal
-            v-bind="renameProjectModalProps"
-            v-model:open="showRenameProjectModal"
-            title="Rename project"
-        >
-            <template #body>
-                <div class="space-y-4">
-                    <UInput
-                        v-model="renameProjectName"
-                        placeholder="Project name"
-                        :icon="iconFolder"
-                        @keyup.enter="saveRenameProject"
-                    />
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="showRenameProjectModal = false"
-                    >Cancel</UButton
-                >
-                <UButton
-                    color="primary"
-                    :disabled="!renameProjectName.trim()"
-                    @click="saveRenameProject"
-                    >Save</UButton
-                >
-            </template>
-        </UModal>
+        <SidebarRenameProjectModal
+            :modal-props="renameProjectModalProps"
+            :open="showRenameProjectModal"
+            :value="renameProjectName"
+            :icon-folder="iconFolder"
+            @update:open="showRenameProjectModal = $event"
+            @update:value="renameProjectName = $event"
+            @submit="saveRenameProject"
+        />
 
-        <!-- Create Project Modal -->
-        <UModal
-            v-bind="createProjectModalProps"
-            v-model:open="showCreateProjectModal"
+        <SidebarCreateProjectModal
+            :modal-props="createProjectModalProps"
+            :open="showCreateProjectModal"
             title="New project"
-        >
-            <template #body>
-                <div class="space-y-4">
-                    <UForm
-                        :state="createProjectState"
-                        @submit.prevent="submitCreateProject"
-                    >
-                        <div class="flex flex-col space-y-3">
-                            <UFormField
-                                v-bind="sidebarFormFieldProps"
-                                label="Title"
-                                name="name"
-                                :error="createProjectErrors.name"
-                            >
-                                <UInput
-                                    v-model="createProjectState.name"
-                                    required
-                                    placeholder="Project title"
-                                    :icon="iconFolder"
-                                    class="w-full"
-                                    @keyup.enter="submitCreateProject"
-                                />
-                            </UFormField>
-                            <UFormField
-                                v-bind="sidebarFormFieldProps"
-                                label="Description"
-                                name="description"
-                            >
-                                <UTextarea
-                                    class="w-full border-[var(--md-border-width)] rounded-[6px]"
-                                    v-model="createProjectState.description"
-                                    :rows="3"
-                                    placeholder="Optional description"
-                                />
-                            </UFormField>
-                        </div>
-                    </UForm>
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="closeCreateProject"
-                    >Cancel</UButton
-                >
-                <UButton
-                    :disabled="
-                        !createProjectState.name.trim() || creatingProject
-                    "
-                    color="primary"
-                    @click="submitCreateProject"
-                >
-                    <span v-if="!creatingProject">Create</span>
-                    <span v-else class="inline-flex items-center gap-1">
-                        <UIcon :name="iconLoading" class="animate-spin" />
-                        Creating
-                    </span>
-                </UButton>
-            </template>
-        </UModal>
+            :name="createProjectState.name"
+            :description="createProjectState.description"
+            :name-error="createProjectErrors.name"
+            :icon-folder="iconFolder"
+            :loading-icon="iconLoading"
+            :loading="creatingProject"
+            :form-field-props="sidebarFormFieldProps"
+            @update:open="showCreateProjectModal = $event"
+            @update:name="createProjectState.name = $event"
+            @update:description="createProjectState.description = $event"
+            @close="closeCreateProject"
+            @submit="submitCreateProject"
+        />
 
-        <!-- Add To Project Modal -->
-        <UModal
-            v-bind="addToProjectModalProps"
-            v-model:open="showAddToProjectModal"
+        <SidebarAddToProjectModal
+            :modal-props="addToProjectModalProps"
+            :open="showAddToProjectModal"
             title="Add thread to project"
-        >
-            <template #body>
-                <div class="space-y-4">
-                    <div class="flex gap-2 text-xs font-mono">
-                        <button
-                            class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
-                            :class="
-                                addMode === 'select'
-                                    ? 'bg-primary/30'
-                                    : 'opacity-70'
-                            "
-                            @click="addMode = 'select'"
-                        >
-                            Select Existing
-                        </button>
-                        <button
-                            class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
-                            :class="
-                                addMode === 'create'
-                                    ? 'bg-primary/30'
-                                    : 'opacity-70'
-                            "
-                            @click="addMode = 'create'"
-                        >
-                            Create New
-                        </button>
-                    </div>
-                    <div v-if="addMode === 'select'" class="space-y-3">
-                        <UFormField
-                            v-bind="sidebarFormFieldProps"
-                            label="Project"
-                            name="project"
-                        >
-                            <USelectMenu
-                                v-model="selectedProjectId"
-                                :items="projectSelectOptions"
-                                :value-key="'value'"
-                                searchable
-                                placeholder="Select project"
-                                v-bind="sidebarProjectSelectProps"
-                            />
-                        </UFormField>
-                        <p v-if="addToProjectError" class="text-error text-xs">
-                            {{ addToProjectError }}
-                        </p>
-                    </div>
-                    <div v-else class="space-y-3">
-                        <UFormField
-                            v-bind="sidebarFormFieldProps"
-                            label="Project Title"
-                            name="newProjectName"
-                        >
-                            <UInput
-                                v-model="newProjectName"
-                                placeholder="Project name"
-                                :icon="iconFolder"
-                                class="w-full"
-                            />
-                        </UFormField>
-                        <UFormField
-                            v-bind="sidebarFormFieldProps"
-                            label="Description"
-                            name="newProjectDescription"
-                        >
-                            <UTextarea
-                                v-model="newProjectDescription"
-                                :rows="3"
-                                placeholder="Optional description"
-                                class="w-full border-[var(--md-border-width)] rounded-[6px]"
-                            />
-                        </UFormField>
-                        <p v-if="addToProjectError" class="text-error text-xs">
-                            {{ addToProjectError }}
-                        </p>
-                    </div>
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="closeAddToProject"
-                    >Cancel</UButton
-                >
-                <UButton
-                    color="primary"
-                    :disabled="
-                        addingToProject ||
-                        (addMode === 'select'
-                            ? !selectedProjectId
-                            : !newProjectName.trim())
-                    "
-                    @click="submitAddToProject"
-                >
-                    <span v-if="!addingToProject">Add</span>
-                    <span v-else class="inline-flex items-center gap-1"
-                        ><UIcon
-                            :name="iconLoading"
-                            class="animate-spin"
-                        />Adding</span
-                    >
-                </UButton>
-            </template>
-        </UModal>
+            :mode="addMode"
+            :selected-project-id="selectedProjectId"
+            :new-project-name="newProjectName"
+            :new-project-description="newProjectDescription"
+            :error-message="addToProjectError"
+            :project-select-options="projectSelectOptions"
+            :icon-folder="iconFolder"
+            :loading-icon="iconLoading"
+            :loading="addingToProject"
+            :searchable="true"
+            :form-field-props="sidebarFormFieldProps"
+            :select-props="sidebarProjectSelectProps"
+            @update:open="showAddToProjectModal = $event"
+            @update:mode="addMode = $event"
+            @update:selected-project-id="selectedProjectId = $event"
+            @update:new-project-name="newProjectName = $event"
+            @update:new-project-description="newProjectDescription = $event"
+            @close="closeAddToProject"
+            @submit="submitAddToProject"
+        />
 
-        <!-- New Document Naming Modal -->
-        <UModal
-            v-bind="createDocumentModalProps"
-            v-model:open="showCreateDocumentModal"
+        <SidebarCreateDocumentModal
+            :modal-props="createDocumentModalProps"
+            :open="showCreateDocumentModal"
             title="Name new document"
-        >
-            <template #body>
-                <div class="space-y-4">
-                    <UForm
-                        :state="newDocumentState"
-                        @submit.prevent="submitCreateDocument"
-                    >
-                        <UFormField
-                            v-bind="sidebarFormFieldProps"
-                            label="Title"
-                            name="title"
-                            :error="newDocumentErrors.title"
-                        >
-                            <UInput
-                                v-model="newDocumentState.title"
-                                required
-                                placeholder="Document title"
-                                :icon="iconNote"
-                                class="w-full"
-                                @keyup.enter="submitCreateDocument"
-                            />
-                        </UFormField>
-                    </UForm>
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="closeCreateDocumentModal"
-                    >Cancel</UButton
-                >
-                <UButton
-                    color="primary"
-                    :disabled="
-                        creatingDocument || !newDocumentState.title.trim()
-                    "
-                    @click="submitCreateDocument"
-                >
-                    <span v-if="!creatingDocument">Create</span>
-                    <span v-else class="inline-flex items-center gap-1">
-                        <UIcon :name="iconLoading" class="animate-spin" />
-                        Creating
-                    </span>
-                </UButton>
-            </template>
-        </UModal>
+            :value="newDocumentState.title"
+            :error="newDocumentErrors.title"
+            placeholder="Document title"
+            :icon="iconNote"
+            :loading-icon="iconLoading"
+            :loading="creatingDocument"
+            :form-field-props="sidebarFormFieldProps"
+            @update:open="showCreateDocumentModal = $event"
+            @update:value="newDocumentState.title = $event"
+            @close="closeCreateDocumentModal"
+            @submit="submitCreateDocument"
+        />
     </div>
 </template>
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
+import { useCommandPalette } from '~/composables/search/useCommandPalette';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import { useIcon } from '~/composables/useIcon';
+import SidebarAddToProjectModal from '~/components/sidebar/SidebarAddToProjectModal.vue';
+import SidebarCreateDocumentModal from '~/components/sidebar/SidebarCreateDocumentModal.vue';
+import SidebarCreateProjectModal from '~/components/sidebar/SidebarCreateProjectModal.vue';
+import SidebarRenameEntityModal from '~/components/sidebar/SidebarRenameEntityModal.vue';
+import SidebarRenameProjectModal from '~/components/sidebar/SidebarRenameProjectModal.vue';
 import type { Project } from '~/db';
-import type { ProjectEntry, ProjectEntryKind } from '~/utils/projects/normalizeProjectData';
+import type {
+    ProjectEntry,
+    ProjectEntryKind,
+} from '~/utils/projects/normalizeProjectData';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
@@ -349,7 +176,10 @@ const emit = defineEmits<{
     (e: 'new-document', initial?: { title?: string }): void;
     (e: 'open-rename', target: RenameTarget): void;
     (e: 'open-rename-project', projectId: string): void;
-    (e: 'add-to-project', payload: UnifiedSidebarItem | AddToProjectRequest): void;
+    (
+        e: 'add-to-project',
+        payload: UnifiedSidebarItem | AddToProjectRequest
+    ): void;
     (e: 'add-document-to-project', payload: UnifiedSidebarItem): void;
 }>();
 
@@ -375,21 +205,31 @@ const searchInputProps = computed(() => {
     // Merge theme UI with component-specific UI
     const themeUi = (searchInputOverrides.value as any)?.ui || {};
     const componentUi = {
-        base: 'rounded-[18px] border border-[color:var(--md-border-color)]/80 bg-[color:var(--md-surface)]/85 shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] placeholder:text-[color:var(--md-on-surface-variant)]/70 focus:border-[color:var(--md-primary)]/40 focus:ring-2 focus:ring-[color:var(--md-primary)]/10',
-
-        trailing: 'pr-1',
+        base: 'rounded-xl border border-[color:var(--md-border-color)] bg-[color:var(--md-surface)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] placeholder:text-[color:var(--md-on-surface-variant)]/70 focus:border-[color:var(--md-primary)]/35 focus:ring-2 focus:ring-[color:var(--md-primary)]/10',
+        trailing: 'pr-1.5 gap-0',
     };
-    const mergedUi = { ...themeUi, ...componentUi };
+    const mergedUi = { ...componentUi, ...themeUi };
 
     return {
         leadingIcon: iconSearch.value,
-        trailing: false,
         size: 'md' as const,
         variant: 'outline' as const,
-        placeholder: 'Search...',
         ...(searchInputOverrides.value as any),
+        // Slot provides trailing content; don't also enable empty trailing-icon chrome.
+        trailingIcon: undefined,
+        placeholder: 'Search chats, documents, projects...',
         ui: mergedUi,
     };
+});
+
+const { open: openCommandPalette } = useCommandPalette();
+
+const searchShortcutLabel = computed(() => {
+    if (!import.meta.client) return '⌘K';
+    const ua = navigator.userAgent || '';
+    const platform = navigator.platform || '';
+    const isApple = /Mac|iPhone|iPad|iPod/i.test(`${platform} ${ua}`);
+    return isApple ? '⌘K' : 'Ctrl+K';
 });
 
 const searchClearButtonProps = computed(() => {

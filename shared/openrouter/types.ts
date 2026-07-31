@@ -3,6 +3,10 @@
 
 import type { Model as SDKModel } from '@openrouter/sdk/models';
 import { z } from 'zod';
+import {
+    OPENROUTER_REASONING_EFFORTS,
+    type OpenRouterReasoningEffort,
+} from './reasoning';
 
 // Define the OpenRouterModel interface here to avoid circular imports
 // This is the canonical snake_case representation matching the OpenRouter REST API
@@ -37,6 +41,13 @@ export interface OpenRouterModel {
     hugging_face_id?: string;
     per_request_limits?: Record<string, unknown>;
     supported_parameters?: string[];
+    reasoning?: {
+        supported_efforts?: OpenRouterReasoningEffort[] | null;
+        default_effort?: OpenRouterReasoningEffort | 'none';
+        default_enabled?: boolean;
+        supports_max_tokens?: boolean;
+        mandatory?: boolean;
+    };
 }
 
 export const openRouterModelSchema = z
@@ -80,6 +91,23 @@ export const openRouterModelSchema = z
         hugging_face_id: z.string().optional(),
         per_request_limits: z.record(z.string(), z.unknown()).optional(),
         supported_parameters: z.array(z.string()).optional(),
+        reasoning: z
+            .object({
+                supported_efforts: z
+                    .array(
+                        z.enum(['minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
+                    )
+                    .nullable()
+                    .optional(),
+                default_effort: z
+                    .enum(['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'none'])
+                    .optional(),
+                default_enabled: z.boolean().optional(),
+                supports_max_tokens: z.boolean().optional(),
+                mandatory: z.boolean().optional(),
+            })
+            .passthrough()
+            .optional(),
     })
     .passthrough();
 
@@ -92,6 +120,43 @@ export const openRouterModelListSchema = z.array(openRouterModelSchema);
  * The SDK returns models in camelCase format, but our internal OpenRouterModel interface
  * uses snake_case to match the OpenRouter REST API directly.
  */
+function isSupportedReasoningEffort(
+    value: unknown
+): value is OpenRouterReasoningEffort {
+    return (
+        typeof value === 'string' &&
+        (OPENROUTER_REASONING_EFFORTS as readonly string[]).includes(value)
+    );
+}
+
+function isDefaultReasoningEffort(
+    value: unknown
+): value is OpenRouterReasoningEffort | 'none' {
+    return value === 'none' || isSupportedReasoningEffort(value);
+}
+
+function mapSdkReasoning(
+    reasoning: SDKModel['reasoning']
+): OpenRouterModel['reasoning'] | undefined {
+    if (!reasoning) return undefined;
+
+    const supportedEfforts = Array.isArray(reasoning.supportedEfforts)
+        ? reasoning.supportedEfforts.filter(isSupportedReasoningEffort)
+        : reasoning.supportedEfforts === null
+          ? null
+          : undefined;
+
+    return {
+        mandatory: reasoning.mandatory,
+        default_enabled: reasoning.defaultEnabled,
+        default_effort: isDefaultReasoningEffort(reasoning.defaultEffort)
+            ? reasoning.defaultEffort
+            : undefined,
+        supported_efforts: supportedEfforts,
+        supports_max_tokens: reasoning.supportsMaxTokens,
+    };
+}
+
 export function sdkModelToLocal(model: SDKModel): OpenRouterModel {
     return {
         id: model.id,
@@ -101,7 +166,10 @@ export function sdkModelToLocal(model: SDKModel): OpenRouterModel {
         architecture: {
             input_modalities: model.architecture.inputModalities,
             output_modalities: model.architecture.outputModalities,
-            tokenizer: model.architecture.tokenizer ?? undefined,
+            tokenizer:
+                model.architecture.tokenizer != null
+                    ? String(model.architecture.tokenizer)
+                    : undefined,
             instruct_type: model.architecture.instructType ?? undefined,
         },
         top_provider: {
@@ -135,9 +203,12 @@ export function sdkModelToLocal(model: SDKModel): OpenRouterModel {
         canonical_slug: model.canonicalSlug,
         context_length: model.contextLength ?? undefined,
         hugging_face_id: model.huggingFaceId ?? undefined,
-        per_request_limits: model.perRequestLimits ?? undefined,
+        per_request_limits:
+            (model.perRequestLimits as Record<string, unknown> | null) ??
+            undefined,
         supported_parameters: model.supportedParameters.map((p) =>
             typeof p === 'string' ? p : String(p)
         ),
+        reasoning: mapSdkReasoning(model.reasoning),
     };
 }

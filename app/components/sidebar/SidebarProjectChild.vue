@@ -72,11 +72,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
+import { useSidebarProjectActionButtonProps } from '~/composables/sidebar/useSidebarProjectActionButtonProps';
 
 const { handlePopoverTriggerKey } = usePopoverKeyboard();
 
@@ -97,34 +96,13 @@ const emit = defineEmits<{
     (e: 'remove'): void;
 }>();
 
-// Theme overrides for project child action buttons
-const renameOverrides = useThemeOverrides({
-    component: 'button',
-    context: 'sidebar',
+const renameButtonProps = useSidebarProjectActionButtonProps({
     identifier: 'sidebar.project-entry-rename',
-    isNuxtUI: true,
-});
-
-const renameButtonProps = computed(() => ({
-    color: 'neutral' as const,
-    variant: 'popover' as const,
-    size: 'sm' as const,
     icon: iconEdit.value,
-    ...(renameOverrides.value as any),
-}));
-
-const removeOverrides = useThemeOverrides({
-    component: 'button',
-    context: 'sidebar',
-    identifier: 'sidebar.project-entry-remove',
-    isNuxtUI: true,
 });
 
-const removeButtonProps = computed(() => ({
-    color: 'neutral' as const,
-    variant: 'popover' as const,
-    size: 'sm' as const,
+const removeButtonProps = useSidebarProjectActionButtonProps({
+    identifier: 'sidebar.project-entry-remove',
     icon: iconTrash.value,
-    ...(removeOverrides.value as any),
-}));
+});
 </script>

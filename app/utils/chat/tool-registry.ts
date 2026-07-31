@@ -1,17 +1,60 @@
+/**
+ * @module app/utils/chat/tool-registry
+ *
+ * Purpose:
+ * Provides a global registry for AI tools with enablement persistence and
+ * execution helpers.
+ *
+ * Behavior:
+ * - Tools are registered with metadata and a handler
+ * - Enablement state is stored in localStorage (debounced)
+ * - Execution validates arguments and enforces a timeout
+ *
+ * Constraints:
+ * - Persistence is client-only
+ * - Handlers must return a string
+ */
+
 import { markRaw, shallowReactive, ref, watch, computed, type Ref } from 'vue';
-import type { ToolDefinition } from './types';
+import type { ToolDefinition, ToolExecutionAdmission, ToolExecutionContext, ToolRuntime } from './types';
+import { toolDefinitionEquals } from '~~/shared/chat/tool-policy';
+import { validateToolArguments, validateToolDefinition } from '~~/shared/chat/tool-schema';
+import {
+    executeWithAbortTimeout,
+    ToolExecutionTimeoutError,
+} from '~~/shared/chat/tool-execution';
+import {
+    assertUtf8Limit,
+    MAX_TOOL_ARGUMENT_BYTES,
+    MAX_TOOL_DURABLE_RESULT_BYTES,
+} from '~~/shared/chat/tool-limits';
+import type { WorkflowToolRegistrationPolicy } from '~~/shared/chat/workflow-tool-policy';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 
 /**
- * Tool handler function signature.
- * Takes parsed arguments and returns a string result or promise thereof.
- * Handlers run in the app context and should handle their own error handling/downstream validation.
+ * `ToolHandler`
+ *
+ * Purpose:
+ * Tool handler signature. Handlers run in the app context.
  */
-export type ToolHandler<TArgs = Record<string, unknown>> = (
+export type LegacyToolHandler<TArgs = Record<string, unknown>> = (
     args: TArgs
 ) => Promise<string> | string;
+export type ContextualToolHandler<TArgs = Record<string, unknown>> = (
+    args: TArgs,
+    context: ToolExecutionContext
+) => Promise<string> | string;
+// A one-argument legacy handler remains assignable to this signature, while a
+// single contextual signature preserves contextual typing for inline handlers.
+export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;
 
 /**
- * Extended tool definition with optional UI metadata.
+ * `ExtendedToolDefinition`
+ *
+ * Purpose:
+ * Tool definition with optional UI metadata.
  */
 export interface ExtendedToolDefinition extends ToolDefinition {
     description?: string; // human-readable summary for toggles or docs
@@ -20,26 +63,43 @@ export interface ExtendedToolDefinition extends ToolDefinition {
     defaultEnabled?: boolean; // default toggle state
 }
 
+export type TypedToolDefinition<TArgs extends Record<string, unknown>> =
+    ExtendedToolDefinition & { readonly __toolArgs?: TArgs };
+
 /**
- * A registered tool with handler and reactive enabled state.
+ * `RegisteredTool`
+ *
+ * Purpose:
+ * Registered tool record with handler and reactive state.
  */
 export interface RegisteredTool {
     definition: ExtendedToolDefinition;
-    handler: ToolHandler;
+    handler: ContextualToolHandler;
     enabled: Ref<boolean>;
     lastError: Ref<string | null>;
+    runtime: ToolRuntime;
+    workflowPolicy?: WorkflowToolRegistrationPolicy;
+    /** Removes this exact registration; returns false after replacement/disposal. */
+    dispose: () => boolean;
+    _owner: symbol;
+    _stopWatcher: () => void;
 }
 
 interface RegisterOptions {
     override?: boolean; // allow replacing an existing tool
     enabled?: boolean; // explicit initial enabled state
+    runtime?: ToolRuntime;
+    workflowPolicy?: WorkflowToolRegistrationPolicy;
 }
 
 const TOOL_STORAGE_KEY = 'or3.tools.enabled';
 const DEFAULT_TIMEOUT_MS = 10000;
 
 /**
- * Global registry state singleton.
+ * `ToolRegistryState`
+ *
+ * Purpose:
+ * Internal singleton state for the tool registry.
  */
 export interface ToolRegistryState {
     tools: Map<string, RegisteredTool>;
@@ -60,6 +120,17 @@ if (!g.__or3ToolRegistry) {
 }
 
 const registryState = g.__or3ToolRegistry;
+
+const toolV2Kernel = getContributionSurfaceKernel<RegisteredTool>(
+    'client-tools',
+    {
+        getId: (tool) => tool.definition.function.name,
+    }
+);
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('client-tools');
+}
 
 // HMR cleanup: clear the debounce timer on module disposal
 if (import.meta.hot) {
@@ -123,77 +194,16 @@ function persistEnabledStates() {
  * Validate arguments against a JSON schema.
  * Returns { valid: true } on success, { valid: false, error: string } on failure.
  */
-function safeParse(
-    jsonString: string,
-    schema: {
-        type: string;
-        properties?: Record<string, unknown>;
-        required?: string[];
-    }
-): { valid: boolean; args: Record<string, unknown> | null; error?: string } {
-    try {
-        const parsed: unknown = JSON.parse(jsonString);
-
-        if (
-            typeof parsed !== 'object' ||
-            parsed === null ||
-            Array.isArray(parsed)
-        ) {
-            return {
-                valid: false,
-                args: null,
-                error: 'Arguments must be a JSON object.',
-            };
-        }
-
-        const args = parsed as Record<string, unknown>;
-
-        // Validate required fields
-        if (schema.required) {
-            const missing = schema.required.filter((key) => !(key in args));
-            if (missing.length > 0) {
-                return {
-                    valid: false,
-                    args: null,
-                    error: `Missing required parameters: ${missing.join(
-                        ', '
-                    )}.`,
-                };
-            }
-        }
-
-        return { valid: true, args };
-    } catch (e) {
-        return {
-            valid: false,
-            args: null,
-            error: `Failed to parse JSON arguments: ${
-                e instanceof Error ? e.message : String(e)
-            }`,
-        };
-    }
-}
-
 /**
  * Execute a handler with timeout protection.
  */
 async function withTimeout(
-    handler: () => Promise<string> | string,
+    handler: (signal: AbortSignal) => Promise<string> | string,
+    signal: AbortSignal,
     timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<{ result: string | null; timedOut: boolean; error?: string }> {
     try {
-        const result = await Promise.race([
-            (async () => handler())(),
-            new Promise<string>((_, reject) =>
-                setTimeout(
-                    () =>
-                        reject(
-                            new Error(`Handler timeout after ${timeoutMs}ms`)
-                        ),
-                    timeoutMs
-                )
-            ),
-        ]);
+        const result = await executeWithAbortTimeout({ signal, timeoutMs, execute: handler });
 
         // Ensure result is a string
         if (typeof result !== 'string') {
@@ -206,7 +216,7 @@ async function withTimeout(
 
         return { result, timedOut: false };
     } catch (e) {
-        const isTimeout = e instanceof Error && e.message.includes('timeout');
+        const isTimeout = e instanceof ToolExecutionTimeoutError;
         return {
             result: null,
             timedOut: isTimeout,
@@ -216,7 +226,10 @@ async function withTimeout(
 }
 
 /**
- * Main registry API composable.
+ * `useToolRegistry`
+ *
+ * Purpose:
+ * Returns the registry API for registering tools and executing tool calls.
  */
 export function useToolRegistry() {
     // Lazy hydrate on first access
@@ -240,12 +253,17 @@ export function useToolRegistry() {
     /**
      * Register a new tool with metadata and handler.
      */
-    function registerTool(
-        definition: ExtendedToolDefinition,
-        handler: ToolHandler,
+    function registerTool<TArgs extends Record<string, unknown> = Record<string, unknown>>(
+        definition: TypedToolDefinition<TArgs>,
+        handler: ToolHandler<TArgs>,
         opts: RegisterOptions = {}
     ): RegisteredTool {
         ensureHydrated();
+
+        const validation = validateToolDefinition(definition);
+        if (!validation.valid) {
+            throw new Error(`Cannot register tool: ${validation.error}`);
+        }
 
         const { name } = definition.function;
 
@@ -261,23 +279,47 @@ export function useToolRegistry() {
             opts.enabled ??
             persistedStates[name] ??
             definition.defaultEnabled ??
+            definition.ui?.defaultEnabled ??
             true;
 
+        const runtime = opts.runtime ?? definition.runtime ?? 'hybrid';
+        const normalizedHandler: ContextualToolHandler = (args, context) =>
+            handler(args as TArgs, context);
+        const previous = registryState.tools.get(name);
+        previous?._stopWatcher();
+        const owner = Symbol(name);
         const tool: RegisteredTool = {
-            definition,
-            handler: markRaw(handler), // Prevent Vue from proxying the handler
+            definition: {
+                ...definition,
+                runtime,
+            },
+            handler: markRaw(normalizedHandler), // Prevent Vue from proxying the handler
             enabled: ref(initialEnabled),
             lastError: ref(null),
+            runtime,
+            workflowPolicy: opts.workflowPolicy,
+            _owner: owner,
+            _stopWatcher: () => undefined,
+            dispose: () => {
+                const current = registryState.tools.get(name);
+                if (!current || current._owner !== owner) return false;
+                current._stopWatcher();
+                registryState.tools.delete(name);
+                if (useV2Surface()) toolV2Kernel.registry.removeOwner(owner);
+                persistEnabledStates();
+                return true;
+            },
         };
-
-        registryState.tools.set(name, tool);
-
-        // Watch for enablement changes and persist
-        watch(
+        tool._stopWatcher = watch(
             () => tool.enabled.value,
             () => persistEnabledStates(),
             { immediate: false }
         );
+
+        registryState.tools.set(name, tool);
+        if (useV2Surface()) {
+            toolV2Kernel.registry.registerLegacy({ value: tool, owner });
+        }
 
         return tool;
     }
@@ -286,7 +328,9 @@ export function useToolRegistry() {
      * Unregister a tool by name.
      */
     function unregisterTool(name: string): void {
+        registryState.tools.get(name)?._stopWatcher();
         registryState.tools.delete(name);
+        if (useV2Surface()) toolV2Kernel.registry.unregisterLegacy(name);
         persistEnabledStates();
     }
 
@@ -340,13 +384,20 @@ export function useToolRegistry() {
      */
     async function executeTool(
         toolName: string,
-        argumentsJson: string
+        argumentsJson: string,
+        context?: ToolExecutionContext,
+        admission?: ToolExecutionAdmission
     ): Promise<{
         result: string | null;
         toolName: string;
         error?: string;
         timedOut: boolean;
     }> {
+        try {
+            assertUtf8Limit(argumentsJson, MAX_TOOL_ARGUMENT_BYTES, 'Tool arguments');
+        } catch (error) {
+            return { result: null, toolName, error: (error as Error).message, timedOut: false };
+        }
         const tool = getTool(toolName);
 
         if (!tool) {
@@ -358,8 +409,20 @@ export function useToolRegistry() {
             };
         }
 
+        if (admission) {
+            if (!admission.ignoreGlobalEnabled && !tool.enabled.value) {
+                return { result: null, toolName, error: `Tool "${toolName}" is disabled.`, timedOut: false };
+            }
+            if (tool.runtime === 'server') {
+                return { result: null, toolName, error: `Tool "${toolName}" is server-only.`, timedOut: false };
+            }
+            if (!toolDefinitionEquals(tool.definition, admission.definition)) {
+                return { result: null, toolName, error: `Tool "${toolName}" no longer matches its admitted definition.`, timedOut: false };
+            }
+        }
+
         // Validate arguments
-        const parsed = safeParse(
+        const parsed = validateToolArguments(
             argumentsJson,
             tool.definition.function.parameters
         );
@@ -375,13 +438,32 @@ export function useToolRegistry() {
         }
 
         // Execute with timeout
+        const baseContext = context ?? {
+            subject: null,
+            workspaceId: null,
+            threadId: null,
+            messageId: null,
+            callId: createRuntimeUuid(),
+            requestId: createRuntimeUuid(),
+            abortSignal: new AbortController().signal,
+        };
         const execution = await withTimeout(
-            () => tool.handler(parsed.args ?? {}),
+            (abortSignal) => tool.handler(
+                parsed.value,
+                { ...baseContext, abortSignal }
+            ),
+            baseContext.abortSignal,
             DEFAULT_TIMEOUT_MS
         );
 
         if (execution.error) {
             tool.lastError.value = execution.error;
+        }
+
+        try {
+            assertUtf8Limit(execution.result ?? '', MAX_TOOL_DURABLE_RESULT_BYTES, 'Tool result');
+        } catch (error) {
+            return { result: null, toolName, error: (error as Error).message, timedOut: false };
         }
 
         if (execution.timedOut) {

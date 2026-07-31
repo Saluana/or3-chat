@@ -1,14 +1,11 @@
 import { Extension, Editor } from '@tiptap/core';
-import { Plugin, PluginKey, EditorState, Transaction } from 'prosemirror-state';
-import { Decoration, DecorationSet, EditorView } from 'prosemirror-view';
+import { Plugin, PluginKey, EditorState, Transaction } from '@tiptap/pm/state';
+import { Decoration, DecorationSet, EditorView } from '@tiptap/pm/view';
 import { useDebounceFn } from '@vueuse/core';
 import { state, isMobile } from '~/state/global';
+import { openRouterStream } from '~/utils/chat/openrouterStream';
 import AutocompleteState from './state';
-import {
-    createOpenRouterClient,
-    getRequestOptions,
-} from '~~/shared/openrouter/client';
-import { normalizeSDKError } from '~~/shared/openrouter/errors';
+import { normalizeAutocompleteSuggestion } from './suggestion-utils';
 
 interface AutocompletePluginState {
     suggestion: string;
@@ -16,88 +13,87 @@ interface AutocompletePluginState {
     recentlyBackspace: boolean;
 }
 
+function isAbortLikeError(error: unknown): boolean {
+    if (error instanceof DOMException) return error.name === 'AbortError';
+    return error instanceof Error && error.name === 'AbortError';
+}
+
+function isMissingKeyError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+    const message = error.message.toLowerCase();
+    return (
+        message.includes('missing openrouter api key') ||
+        message.includes('user openrouter api key required') ||
+        message.includes('openrouter api key not found')
+    );
+}
+
 async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
     const orKey =
         state.value.openrouterKey ||
         localStorage.getItem('openrouter_api_key') ||
-        '';
-
-    if (!orKey) {
-        throw new Error('OpenRouter API key not found');
-    }
+        null;
 
     const { default: systemPrompt } = await import('./AutocompletePrompt');
     const prompt = systemPrompt(content);
 
-    const client = createOpenRouterClient({ apiKey: orKey });
+    let generatedText = '';
 
     try {
-        const completion = await client.chat.send(
-            {
-                model: AutocompleteState.value.aiModel || 'openai/gpt-4o-mini',
-                messages: [
-                    {
-                        role: 'system',
-                        content: prompt,
-                    },
-                    {
-                        role: 'user',
-                        content,
-                    },
-                ],
-            },
-            getRequestOptions(abortSignal)
-        );
-
-        // SDK returns ChatResponse with choices array
-        // content can be string or array of content parts - extract text for regex matching
-        const rawContent = completion.choices?.[0]?.message?.content;
-        let generatedText = '';
-        if (typeof rawContent === 'string') {
-            generatedText = rawContent;
-        } else if (Array.isArray(rawContent)) {
-            // Extract text from content parts (e.g., { type: 'text', text: '...' })
-            generatedText = rawContent
-                .filter(
-                    (part): part is { type: 'text'; text: string } =>
-                        typeof part === 'object' &&
-                        part !== null &&
-                        part.type === 'text' &&
-                        typeof part.text === 'string'
-                )
-                .map((part) => part.text)
-                .join('');
+        for await (const event of openRouterStream({
+            apiKey: orKey,
+            model: AutocompleteState.value.aiModel || 'openai/gpt-5.6-luna',
+            orMessages: [
+                {
+                    role: 'system',
+                    content: prompt,
+                },
+                {
+                    role: 'user',
+                    content,
+                },
+            ],
+            modalities: ['text'],
+            signal: abortSignal,
+        })) {
+            if (event.type === 'text') {
+                generatedText += event.text;
+            }
         }
-
-        let parsedCompletion = '';
-
-        // Try to match with closing tag first
-        let match = /<next_line>(.*?)<\/next_line>/s.exec(generatedText);
-
-        // If no closing tag, try to match just the opening tag and take everything after it
-        if (!match) {
-            match = /<next_line>(.+)/s.exec(generatedText);
+    } catch (error) {
+        if (isAbortLikeError(error)) {
+            throw error;
         }
-
-        if (match && match[1]) {
-            // Don't trim! The AI handles spacing based on the prompt instructions
-            parsedCompletion = match[1];
-        }
-
-        if (!parsedCompletion || parsedCompletion.length === 0) {
+        // In local/dev builds without any OpenRouter key configured, autocomplete
+        // should fail soft instead of throwing on every keystroke.
+        if (isMissingKeyError(error)) {
             return { completion: '' };
         }
-
-        return { completion: parsedCompletion };
-    } catch (error) {
-        const normalized = normalizeSDKError(error);
-
-        if (normalized.code === 'ERR_ABORTED') {
-            throw error; // Re-throw AbortError for existing handling
-        }
-
-        throw new Error(normalized.message);
+        throw new Error(
+            error instanceof Error ? error.message : 'Autocomplete request failed'
+        );
     }
+
+    let parsedCompletion = '';
+
+    // Try to match with closing tag first
+    let match = /<next_line>(.*?)<\/next_line>/s.exec(generatedText);
+
+    // If no closing tag, try to match just the opening tag and take everything after it
+    if (!match) {
+        match = /<next_line>(.+)/s.exec(generatedText);
+    }
+
+    if (match && match[1]) {
+        // Don't trim! The AI handles spacing based on the prompt instructions
+        parsedCompletion = match[1];
+    }
+
+    if (!parsedCompletion || parsedCompletion.length === 0) {
+        return { completion: '' };
+    }
+
+    return { completion: parsedCompletion };
 }
 
 const pluginKey = new PluginKey<AutocompletePluginState>('autocomplete');
@@ -117,6 +113,18 @@ function getContextWithCursor(state: EditorState): string {
     const after = doc.textBetween(selection.from, end, '\n');
 
     return `${before}<cursor-position />${after}`;
+}
+
+function getTextBeforeCursor(state: EditorState, maxChars = 240): string {
+    const start = Math.max(0, state.selection.from - maxChars);
+    return state.doc.textBetween(start, state.selection.from, '\n');
+}
+
+function canShowAutocomplete(state: EditorState): boolean {
+    const { selection } = state;
+    return selection.empty &&
+        selection.$from.parent.isTextblock &&
+        selection.$from.parentOffset === selection.$from.parent.content.size;
 }
 
 export const AutocompleteExtension = Extension.create<{}>({
@@ -199,6 +207,16 @@ export const AutocompleteExtension = Extension.create<{}>({
             }
 
             const latestState = pluginKey.getState(editorView.state);
+
+            if (!canShowAutocomplete(editorView.state)) {
+                if (latestState?.suggestion || latestState?.loading) {
+                    dispatchStateUpdate(editorView, {
+                        suggestionCleared: true,
+                        loading: false,
+                    });
+                }
+                return;
+            }
 
             if (latestState?.recentlyBackspace) {
                 // Ensure loading is false if we skip here and it was somehow true
@@ -335,7 +353,8 @@ export const AutocompleteExtension = Extension.create<{}>({
                             const pluginState = pluginKey.getState(view.state);
                             if (
                                 pluginState?.suggestion &&
-                                !pluginState.loading
+                                !pluginState.loading &&
+                                canShowAutocomplete(view.state)
                             ) {
                                 event.preventDefault(); // Stop default behavior
                                 event.stopPropagation(); // Stop event bubbling
@@ -483,6 +502,18 @@ export const AutocompleteExtension = Extension.create<{}>({
                         const lastKeyBackspace = tr.getMeta('lastKeyBackspace');
                         const loadingMeta = tr.getMeta('loading');
 
+                        if (
+                            !canShowAutocomplete(newState) &&
+                            (value.suggestion || value.loading)
+                        ) {
+                            abortCurrentRequest();
+                            return {
+                                suggestion: '',
+                                loading: false,
+                                recentlyBackspace: false,
+                            };
+                        }
+
                         // Default next state to current value, we'll override if needed
                         let nextState = { ...value };
 
@@ -553,9 +584,12 @@ export const AutocompleteExtension = Extension.create<{}>({
                         // Handle API response
                         if (suggestionFromAPI !== undefined) {
                             const rawSuggestion = suggestionFromAPI ?? '';
-
-                            // For suggestion storage, don't trim - we'll trim at insertion time based on position
-                            const finalSuggestion = rawSuggestion;
+                            const finalSuggestion = canShowAutocomplete(newState)
+                                ? normalizeAutocompleteSuggestion(
+                                    rawSuggestion,
+                                    getTextBeforeCursor(newState),
+                                )
+                                : '';
 
                             // Override nextState, ensure flag is false
                             nextState = {
@@ -583,7 +617,12 @@ export const AutocompleteExtension = Extension.create<{}>({
 
                         if (suggestionSet !== undefined) {
                             nextState = {
-                                suggestion: suggestionSet,
+                                suggestion: canShowAutocomplete(newState)
+                                    ? normalizeAutocompleteSuggestion(
+                                        suggestionSet,
+                                        getTextBeforeCursor(newState),
+                                    )
+                                    : '',
                                 loading: false,
                                 recentlyBackspace: false,
                             };
@@ -619,7 +658,7 @@ export const AutocompleteExtension = Extension.create<{}>({
                             pluginKey.getState(stateEditor) || {};
                         const { selection } = stateEditor;
 
-                        if (suggestion && selection.empty) {
+                        if (suggestion && canShowAutocomplete(stateEditor)) {
                             const { from } = selection;
 
                             // Check if on mobile using the imported isMobile
@@ -632,12 +671,14 @@ export const AutocompleteExtension = Extension.create<{}>({
                                     const container =
                                         document.createElement('span');
                                     container.contentEditable = 'false';
+                                    container.className = 'autocomplete-suggestion';
+                                    container.setAttribute('data-autocomplete-suggestion', '');
 
                                     const suggestionSpan =
                                         document.createElement('span');
-                                    suggestionSpan.className = 'suggestion';
+                                    suggestionSpan.className = 'autocomplete-suggestion__text';
                                     suggestionSpan.textContent = suggestion;
-                                    suggestionSpan.style.color = 'grey';
+                                    suggestionSpan.setAttribute('aria-hidden', 'true');
                                     container.appendChild(suggestionSpan);
 
                                     if (mobile) {
@@ -645,17 +686,12 @@ export const AutocompleteExtension = Extension.create<{}>({
                                             document.createElement('button');
                                         acceptButton.className =
                                             'suggestion-accept-btn';
-                                        acceptButton.textContent = 'accept';
-                                        acceptButton.style.marginLeft = '4px';
-                                        acceptButton.style.padding = '1px 5px';
-                                        acceptButton.style.fontSize = '11px';
-                                        acceptButton.style.border =
-                                            '1px solid #cccccc';
-                                        acceptButton.style.borderRadius = '4px';
-                                        acceptButton.style.cursor = 'pointer';
-                                        acceptButton.style.backgroundColor =
-                                            '#f0f0f0';
-                                        acceptButton.style.lineHeight = '1';
+                                        acceptButton.type = 'button';
+                                        acceptButton.textContent = 'Accept';
+                                        acceptButton.setAttribute(
+                                            'aria-label',
+                                            'Accept autocomplete suggestion',
+                                        );
 
                                         acceptButton.addEventListener(
                                             'mousedown',
@@ -671,7 +707,10 @@ export const AutocompleteExtension = Extension.create<{}>({
                                                     view;
                                                 const pluginState =
                                                     pluginKey.getState(state);
-                                                if (!pluginState?.suggestion)
+                                                if (
+                                                    !pluginState?.suggestion ||
+                                                    !canShowAutocomplete(state)
+                                                )
                                                     return;
 
                                                 const { from } =
@@ -724,6 +763,12 @@ export const AutocompleteExtension = Extension.create<{}>({
                                         );
 
                                         container.appendChild(acceptButton);
+                                    } else {
+                                        const keyboardHint = document.createElement('span');
+                                        keyboardHint.className = 'autocomplete-suggestion__hint';
+                                        keyboardHint.textContent = 'Tab';
+                                        keyboardHint.setAttribute('aria-hidden', 'true');
+                                        container.appendChild(keyboardHint);
                                     }
 
                                     return container;
@@ -737,9 +782,17 @@ export const AutocompleteExtension = Extension.create<{}>({
                                 }
                             );
 
-                            return DecorationSet.create(stateEditor.doc, [
-                                deco,
-                            ]);
+                            const decorations: Decoration[] = [deco];
+                            const { $from } = selection;
+                            if ($from.depth > 0 && $from.parent.isTextblock) {
+                                decorations.unshift(Decoration.node(
+                                    $from.before($from.depth),
+                                    $from.after($from.depth),
+                                    { class: 'has-autocomplete-suggestion' },
+                                ));
+                            }
+
+                            return DecorationSet.create(stateEditor.doc, decorations);
                         } else {
                             return DecorationSet.empty;
                         }
@@ -758,7 +811,11 @@ export const AutocompleteExtension = Extension.create<{}>({
                 }
 
                 const pluginState = pluginKey.getState(editor.state);
-                if (pluginState?.suggestion && !pluginState?.loading) {
+                if (
+                    pluginState?.suggestion &&
+                    !pluginState?.loading &&
+                    canShowAutocomplete(editor.state)
+                ) {
                     const { state, dispatch } = editor.view;
                     const { from } = state.selection;
                     const $from = state.selection.$from;
@@ -876,7 +933,12 @@ export const AutocompleteExtension = Extension.create<{}>({
                     };
                     const { selection } = state;
 
-                    if (suggestion && selection.empty && dispatch) {
+                    if (
+                        suggestion &&
+                        selection.empty &&
+                        canShowAutocomplete(state) &&
+                        dispatch
+                    ) {
                         const { from } = selection;
                         const $from = selection.$from;
                         const atNodeStart = $from.parentOffset === 0;

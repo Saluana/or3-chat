@@ -2,6 +2,8 @@ import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import { useToast } from '#imports';
 import { createDocument, type CreateDocumentInput } from '~/db/documents';
 import { registerMessageAction } from '~/composables/chat/useMessageActions';
+import { isMobile } from '~/state/global';
+import { markdownToTipTapDoc } from '~/utils/chat/markdownToTipTapDoc';
 
 export default defineNuxtPlugin(() => {
     registerMessageAction({
@@ -14,39 +16,25 @@ export default defineNuxtPlugin(() => {
             if (import.meta.dev)
                 console.debug('Create document action invoked', message);
 
-            // Convert markdown -> TipTap JSON using headless Editor & tiptap-markdown
-            async function markdownToTipTapDoc(md: string) {
-                const markdown = (md || '').trim();
-                if (!markdown) return { type: 'doc', content: [] };
-                try {
-                    const [{ Editor }] = await Promise.all([
-                        import('@tiptap/core'),
-                    ]);
-                    const StarterKit = (await import('@tiptap/starter-kit'))
-                        .default;
-                    // tiptap-markdown exports markdownToProseMirror function
-                    const { Markdown } = await import('tiptap-markdown');
-
-                    const editor = new Editor({
-                        extensions: [StarterKit, Markdown],
-                        content: '',
-                    });
-
-                    editor.commands.setContent(markdown);
-                    return editor.getJSON();
-                } catch {
-                    useToast().add({
-                        title: 'Error converting markdown',
-                        color: 'error',
-                    });
-                    return { type: 'doc', content: [] };
-                }
-            }
-
             // UiChatMessage usually has 'text' property for text content
             const markdownSource = message.text || '';
 
-            const tiptapDoc = await markdownToTipTapDoc(markdownSource);
+            let tiptapDoc: ReturnType<typeof markdownToTipTapDoc>;
+            try {
+                tiptapDoc = markdownToTipTapDoc(markdownSource);
+            } catch (conversionError) {
+                console.error(
+                    'Failed to convert message Markdown:',
+                    conversionError
+                );
+                useToast().add({
+                    title: 'Error converting markdown',
+                    description:
+                        'The document was not created. Please try again.',
+                    color: 'error',
+                });
+                return;
+            }
 
             let doc: Awaited<ReturnType<typeof createDocument>>;
             try {
@@ -67,11 +55,16 @@ export default defineNuxtPlugin(() => {
 
             // Attempt to open in a new pane (if capacity) else reuse active pane
             const mp = getGlobalMultiPaneApi();
+            let openedInNewPane = false;
             try {
                 if (mp) {
-                    const couldAdd = mp.canAddPane?.value === true; // snapshot before add
+                    const panesBeforeAdd = mp.panes?.value?.length ?? 0;
+                    const couldAdd =
+                        !isMobile.value && mp.canAddPane?.value === true;
                     if (couldAdd && typeof mp.addPane === 'function') {
                         mp.addPane(); // sets new pane active
+                        openedInNewPane =
+                            (mp.panes?.value?.length ?? 0) > panesBeforeAdd;
                     }
                     const panes = mp.panes?.value;
 
@@ -96,7 +89,7 @@ export default defineNuxtPlugin(() => {
             useToast().add({
                 title: 'Document created',
                 description: `Opened in ${
-                    mp?.canAddPane?.value ? 'new' : 'current'
+                    openedInNewPane ? 'new' : 'current'
                 } pane: ${doc.id}`,
                 duration: 2600,
             });

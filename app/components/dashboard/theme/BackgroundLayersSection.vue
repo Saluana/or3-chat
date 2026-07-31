@@ -1,114 +1,53 @@
 <template>
     <div class="space-y-12">
-        <!-- Content Background Layer 1 -->
         <DashboardBackgroundLayerEditor
-            title="Content Layer 1"
-            description="Primary pattern beneath UI chrome. Size slider disabled when Fit is enabled."
-            section-id="content-layer1"
-            :url="contentBg1Url"
-            :opacity="local.contentBg1Opacity"
-            :size-px="local.contentBg1SizePx"
-            :repeat="contentBg1Repeat"
-            :fit="contentBg1Fit"
-            :color="contentBg1Color"
-            :preview-style="contentBg1PreviewStyle"
-            :presets="presetsContent1"
+            v-for="layer in layerEditors"
+            :key="layer.key"
+            :title="layer.title"
+            :description="layer.description"
+            :section-id="layer.sectionId"
+            :url="layer.url"
+            :opacity="layer.opacity"
+            :size-px="layer.sizePx"
+            :repeat="layer.repeat"
+            :fit="layer.fit"
+            :color="layer.color"
+            :preview-style="layer.previewStyle"
+            :presets="layer.presets"
             :bg-enabled="bgEnabled"
-            empty-label="None"
+            :empty-label="layer.emptyLabel"
             :preset-button-props="presetButtonProps"
             :remove-layer-button-props="removeLayerButtonProps"
             :repeat-button-props="repeatButtonProps"
             :color-picker-props="backgroundColorPickerProps"
             :hex-input-props="hexInputProps"
             :copy-button-props="copyButtonProps"
-            @update:opacity="(v: number) => { local.contentBg1Opacity = v; commitOpacity('contentBg1Opacity', v); }"
-            @update:size-px="(v: number) => { local.contentBg1SizePx = v; commitSize('contentBg1SizePx', v); }"
-            @update:repeat="(v: 'repeat' | 'no-repeat') => set({ backgrounds: { content: { base: { repeat: v } } } })"
-            @update:fit="(v: boolean) => set({ backgrounds: { content: { base: { fit: v } } } })"
-            @update:color="(c: string) => set({ backgrounds: { content: { base: { color: c } } } })"
-            @upload="(file: File) => handleLayerUpload(file, 'contentBg1')"
-            @remove="removeLayer('contentBg1')"
-            @apply-preset="(src: string, opacity: number) => applyPreset('contentBg1', src, opacity)"
-        />
-
-        <!-- Content Background Layer 2 -->
-        <DashboardBackgroundLayerEditor
-            title="Content Layer 2"
-            description="Optional overlay pattern. Lower opacity recommended for subtle texture."
-            section-id="content-layer2"
-            :url="contentBg2Url"
-            :opacity="local.contentBg2Opacity"
-            :size-px="local.contentBg2SizePx"
-            :repeat="contentBg2Repeat"
-            :fit="contentBg2Fit"
-            :color="contentBg2Color"
-            :preview-style="contentBg2PreviewStyle"
-            :presets="presetsContent2"
-            :bg-enabled="bgEnabled"
-            empty-label="Disabled"
-            :preset-button-props="presetButtonProps"
-            :remove-layer-button-props="removeLayerButtonProps"
-            :repeat-button-props="repeatButtonProps"
-            :color-picker-props="backgroundColorPickerProps"
-            :hex-input-props="hexInputProps"
-            :copy-button-props="copyButtonProps"
-            @update:opacity="(v: number) => { local.contentBg2Opacity = v; commitOpacity('contentBg2Opacity', v); }"
-            @update:size-px="(v: number) => { local.contentBg2SizePx = v; commitSize('contentBg2SizePx', v); }"
-            @update:repeat="(v: 'repeat' | 'no-repeat') => set({ backgrounds: { content: { overlay: { repeat: v } } } })"
-            @update:fit="(v: boolean) => set({ backgrounds: { content: { overlay: { fit: v } } } })"
-            @update:color="(c: string) => set({ backgrounds: { content: { overlay: { color: c } } } })"
-            @upload="(file: File) => handleLayerUpload(file, 'contentBg2')"
-            @remove="removeLayer('contentBg2')"
-            @apply-preset="(src: string, opacity: number) => applyPreset('contentBg2', src, opacity)"
-        />
-
-        <!-- Sidebar Background -->
-        <DashboardBackgroundLayerEditor
-            title="Sidebar Background"
-            description="Applies to navigation rail / project tree area."
-            section-id="sidebar"
-            :url="sidebarBgUrl"
-            :opacity="local.sidebarBgOpacity"
-            :size-px="local.sidebarBgSizePx"
-            :repeat="sidebarRepeat"
-            :fit="sidebarBgFit"
-            :color="sidebarBgColor"
-            :preview-style="sidebarBgPreviewStyle"
-            :presets="presetsSidebar"
-            :bg-enabled="bgEnabled"
-            empty-label="None"
-            :preset-button-props="presetButtonProps"
-            :remove-layer-button-props="removeLayerButtonProps"
-            :repeat-button-props="repeatButtonProps"
-            :color-picker-props="backgroundColorPickerProps"
-            :hex-input-props="hexInputProps"
-            :copy-button-props="copyButtonProps"
-            @update:opacity="(v: number) => { local.sidebarBgOpacity = v; commitOpacity('sidebarBgOpacity', v); }"
-            @update:size-px="(v: number) => { local.sidebarBgSizePx = v; commitSize('sidebarBgSizePx', v); }"
-            @update:repeat="(v: 'repeat' | 'no-repeat') => set({ backgrounds: { sidebar: { repeat: v } } })"
-            @update:fit="(v: boolean) => set({ backgrounds: { sidebar: { fit: v } } })"
-            @update:color="(c: string) => set({ backgrounds: { sidebar: { color: c } } })"
-            @upload="(file: File) => handleLayerUpload(file, 'sidebarBg')"
-            @remove="removeLayer('sidebarBg')"
-            @apply-preset="(src: string, opacity: number) => applyPreset('sidebarBg', src, opacity)"
+            @update:opacity="(v: number) => onLayerOpacity(layer.key, v)"
+            @update:size-px="(v: number) => onLayerSize(layer.key, v)"
+            @update:repeat="(v: 'repeat' | 'no-repeat') => layer.onRepeat(v)"
+            @update:fit="(v: boolean) => layer.onFit(v)"
+            @update:color="(c: string) => layer.onColor(c)"
+            @upload="(file: File) => handleLayerUpload(file, layer.key)"
+            @remove="removeLayer(layer.key)"
+            @apply-preset="(src: string, opacity: number) => applyPreset(layer.key, src, opacity)"
         />
     </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, ref, watch, onBeforeUnmount } from 'vue';
+import { reactive, computed, watch } from 'vue';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useDebounceFn } from '@vueuse/core';
 import { isBrowser } from '~/utils/env';
-import { createOrRefFile, getFileBlob } from '~/db/files';
+import { createOrRefFile } from '~/db/files';
+import { useResolvedThemeAsset } from '~/core/theme/useResolvedThemeAsset';
 import { isAllowedImageType, validateImageMagicNumber } from './types';
 import type { BackgroundPreset } from './types';
 
 const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides;
 const set = themeApi.set;
-const activeMode = themeApi.activeMode;
 
 // Computed helpers for cleaner bindings
 const bgEnabled = computed(() => overrides.value.backgrounds?.enabled ?? false);
@@ -135,120 +74,109 @@ const local = reactive({
     sidebarBgSizePx: overrides.value.backgrounds?.sidebar?.sizePx || 240,
 });
 
+type LayerKey = 'contentBg1' | 'contentBg2' | 'sidebarBg';
+type OpacityLocalKey = 'contentBg1Opacity' | 'contentBg2Opacity' | 'sidebarBgOpacity';
+type SizeLocalKey = 'contentBg1SizePx' | 'contentBg2SizePx' | 'sidebarBgSizePx';
+
 // Theme overrides for buttons/inputs
+const presetButtonOverride = useThemeOverrides({
+    component: 'button', context: 'dashboard', identifier: 'dashboard.theme.preset', isNuxtUI: true,
+});
 const presetButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.preset',
-        isNuxtUI: true,
-    });
     return {
         size: 'sm' as const,
         variant: 'outline' as const,
         color: 'on-surface' as const,
-        ...(overrides.value as any),
+        ...(presetButtonOverride.value as any),
     };
 });
 
+const removeLayerButtonOverride = useThemeOverrides({
+    component: 'button', context: 'dashboard', identifier: 'dashboard.theme.remove-layer', isNuxtUI: true,
+});
 const removeLayerButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.remove-layer',
-        isNuxtUI: true,
-    });
     return {
         size: 'sm' as const,
         variant: 'outline' as const,
         color: 'on-surface' as const,
-        ...(overrides.value as any),
+        ...(removeLayerButtonOverride.value as any),
     };
 });
 
+const repeatButtonOverride = useThemeOverrides({
+    component: 'button', context: 'dashboard', identifier: 'dashboard.theme.repeat', isNuxtUI: true,
+});
 const repeatButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.repeat',
-        isNuxtUI: true,
-    });
     return {
         size: 'sm' as const,
         variant: 'outline' as const,
         color: 'on-surface' as const,
-        ...(overrides.value as any),
+        ...(repeatButtonOverride.value as any),
     };
 });
 
-const backgroundColorPickerProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'color-picker',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.background-picker',
-        isNuxtUI: true,
-    });
-    return overrides.value || {};
+const backgroundColorPickerOverride = useThemeOverrides({
+    component: 'color-picker', context: 'dashboard', identifier: 'dashboard.theme.background-picker', isNuxtUI: true,
 });
+const backgroundColorPickerProps = computed(() => backgroundColorPickerOverride.value || {});
 
+const hexInputOverride = useThemeOverrides({
+    component: 'input', context: 'dashboard', identifier: 'dashboard.theme.hex-input', isNuxtUI: true,
+});
 const hexInputProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'input',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.hex-input',
-        isNuxtUI: true,
-    });
     return {
         size: 'sm' as const,
         variant: 'outline' as const,
-        ...(overrides.value as any),
+        ...(hexInputOverride.value as any),
     };
 });
 
+const copyButtonOverride = useThemeOverrides({
+    component: 'button', context: 'dashboard', identifier: 'dashboard.theme.copy-color', isNuxtUI: true,
+});
+const copyIcon = useIcon('ui.copy');
 const copyButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.copy-color',
-        isNuxtUI: true,
-    });
     return {
         size: 'sm' as const,
         variant: 'ghost' as const,
-        icon: useIcon('ui.copy').value,
+        icon: copyIcon.value,
         square: true,
-        ...(overrides.value as any),
+        ...(copyButtonOverride.value as any),
     };
 });
 
 // Debounce helpers for sliders
 const commitOpacity = useDebounceFn(
-    (key: 'contentBg1Opacity' | 'contentBg2Opacity' | 'sidebarBgOpacity', v: number) => {
-        if (key === 'contentBg1Opacity') {
-            set({ backgrounds: { content: { base: { opacity: v } } } });
-        } else if (key === 'contentBg2Opacity') {
-            set({ backgrounds: { content: { overlay: { opacity: v } } } });
-        } else if (key === 'sidebarBgOpacity') {
-            set({ backgrounds: { sidebar: { opacity: v } } });
-        }
+    (key: OpacityLocalKey, v: number) => {
+        const updater: Record<OpacityLocalKey, () => void> = {
+            contentBg1Opacity: () =>
+                set({ backgrounds: { content: { base: { opacity: v } } } }),
+            contentBg2Opacity: () =>
+                set({ backgrounds: { content: { overlay: { opacity: v } } } }),
+            sidebarBgOpacity: () =>
+                set({ backgrounds: { sidebar: { opacity: v } } }),
+        };
+        updater[key]();
     },
     70
 );
 
 const commitSize = useDebounceFn(
-    (key: 'contentBg1SizePx' | 'contentBg2SizePx' | 'sidebarBgSizePx', v: number) => {
-        if (key === 'contentBg1SizePx') {
-            set({ backgrounds: { content: { base: { sizePx: v } } } });
-        } else if (key === 'contentBg2SizePx') {
-            set({ backgrounds: { content: { overlay: { sizePx: v } } } });
-        } else if (key === 'sidebarBgSizePx') {
-            set({ backgrounds: { sidebar: { sizePx: v } } });
-        }
+    (key: SizeLocalKey, v: number) => {
+        const updater: Record<SizeLocalKey, () => void> = {
+            contentBg1SizePx: () =>
+                set({ backgrounds: { content: { base: { sizePx: v } } } }),
+            contentBg2SizePx: () =>
+                set({ backgrounds: { content: { overlay: { sizePx: v } } } }),
+            sidebarBgSizePx: () =>
+                set({ backgrounds: { sidebar: { sizePx: v } } }),
+        };
+        updater[key]();
     },
     70
 );
 
-function removeLayer(which: 'contentBg1' | 'contentBg2' | 'sidebarBg') {
+function removeLayer(which: LayerKey) {
     if (which === 'contentBg1') {
         set({ backgrounds: { content: { base: { url: null, opacity: 0 } } } });
     } else if (which === 'contentBg2') {
@@ -268,7 +196,7 @@ const presetsSidebar: BackgroundPreset[] = [
     { label: 'Default', src: '/sidebar-repeater.v2.webp', opacity: 0.1 },
 ];
 
-function applyPreset(which: 'contentBg1' | 'contentBg2' | 'sidebarBg', src: string, opacity: number) {
+function applyPreset(which: LayerKey, src: string, opacity: number) {
     if (which === 'contentBg1')
         set({ backgrounds: { content: { base: { url: src, opacity } } } });
     else if (which === 'contentBg2')
@@ -277,41 +205,94 @@ function applyPreset(which: 'contentBg1' | 'contentBg2' | 'sidebarBg', src: stri
         set({ backgrounds: { sidebar: { url: src, opacity } } });
 }
 
-// Cache of resolved object URLs for internal-file tokens
-const internalUrlCache = new Map<string, string>();
-const objectUrls = new Set<string>();
-// Initialize immediately to avoid null checks
-const abortController = ref<AbortController>(new AbortController());
+const layerLocalKeys: Record<
+    LayerKey,
+    { opacity: OpacityLocalKey; size: SizeLocalKey }
+> = {
+    contentBg1: { opacity: 'contentBg1Opacity', size: 'contentBg1SizePx' },
+    contentBg2: { opacity: 'contentBg2Opacity', size: 'contentBg2SizePx' },
+    sidebarBg: { opacity: 'sidebarBgOpacity', size: 'sidebarBgSizePx' },
+};
 
-function registerObjectUrl(u: string) {
-    objectUrls.add(u);
+function onLayerOpacity(layer: LayerKey, value: number) {
+    const localKey = layerLocalKeys[layer].opacity;
+    local[localKey] = value;
+    commitOpacity(localKey, value);
 }
 
-function revokeAll() {
-    objectUrls.forEach((u) => URL.revokeObjectURL(u));
-    objectUrls.clear();
+function onLayerSize(layer: LayerKey, value: number) {
+    const localKey = layerLocalKeys[layer].size;
+    local[localKey] = value;
+    commitSize(localKey, value);
 }
 
-async function resolveInternalPath(v: string | null): Promise<string | null> {
-    if (!v) return null;
-    if (!v.startsWith('internal-file://')) return v;
-    const hash = v.slice('internal-file://'.length);
-    if (internalUrlCache.has(hash)) return internalUrlCache.get(hash)!;
-    
-    // Check if aborted (no null check needed now)
-    if (abortController.value.signal.aborted) return null;
-    
-    try {
-        const blob = await getFileBlob(hash);
-        if (!blob || abortController.value.signal.aborted) return null;
-        const u = URL.createObjectURL(blob);
-        internalUrlCache.set(hash, u);
-        registerObjectUrl(u);
-        return u;
-    } catch {
-        return null;
-    }
-}
+const layerEditors = computed(() => [
+    {
+        key: 'contentBg1' as const,
+        title: 'Content Layer 1',
+        description:
+            'Primary pattern beneath UI chrome. Size slider disabled when Fit is enabled.',
+        sectionId: 'content-layer1',
+        url: contentBg1Url.value,
+        opacity: local.contentBg1Opacity,
+        sizePx: local.contentBg1SizePx,
+        repeat: contentBg1Repeat.value,
+        fit: contentBg1Fit.value,
+        color: contentBg1Color.value,
+        previewStyle: contentBg1PreviewStyle.value,
+        presets: presetsContent1,
+        emptyLabel: 'None',
+        onRepeat: (value: 'repeat' | 'no-repeat') =>
+            set({ backgrounds: { content: { base: { repeat: value } } } }),
+        onFit: (value: boolean) =>
+            set({ backgrounds: { content: { base: { fit: value } } } }),
+        onColor: (value: string) =>
+            set({ backgrounds: { content: { base: { color: value } } } }),
+    },
+    {
+        key: 'contentBg2' as const,
+        title: 'Content Layer 2',
+        description:
+            'Optional overlay pattern. Lower opacity recommended for subtle texture.',
+        sectionId: 'content-layer2',
+        url: contentBg2Url.value,
+        opacity: local.contentBg2Opacity,
+        sizePx: local.contentBg2SizePx,
+        repeat: contentBg2Repeat.value,
+        fit: contentBg2Fit.value,
+        color: contentBg2Color.value,
+        previewStyle: contentBg2PreviewStyle.value,
+        presets: presetsContent2,
+        emptyLabel: 'Disabled',
+        onRepeat: (value: 'repeat' | 'no-repeat') =>
+            set({ backgrounds: { content: { overlay: { repeat: value } } } }),
+        onFit: (value: boolean) =>
+            set({ backgrounds: { content: { overlay: { fit: value } } } }),
+        onColor: (value: string) =>
+            set({ backgrounds: { content: { overlay: { color: value } } } }),
+    },
+    {
+        key: 'sidebarBg' as const,
+        title: 'Sidebar Background',
+        description: 'Applies to navigation rail / project tree area.',
+        sectionId: 'sidebar',
+        url: sidebarBgUrl.value,
+        opacity: local.sidebarBgOpacity,
+        sizePx: local.sidebarBgSizePx,
+        repeat: sidebarRepeat.value,
+        fit: sidebarBgFit.value,
+        color: sidebarBgColor.value,
+        previewStyle: sidebarBgPreviewStyle.value,
+        presets: presetsSidebar,
+        emptyLabel: 'None',
+        onRepeat: (value: 'repeat' | 'no-repeat') =>
+            set({ backgrounds: { sidebar: { repeat: value } } }),
+        onFit: (value: boolean) =>
+            set({ backgrounds: { sidebar: { fit: value } } }),
+        onColor: (value: string) =>
+            set({ backgrounds: { sidebar: { color: value } } }),
+    },
+]);
 
 function getCssVarUrl(cssVar: string): string | null {
     if (!isBrowser()) return null;
@@ -329,43 +310,9 @@ function getCssVarUrl(cssVar: string): string | null {
     }
 }
 
-// Reactive resolved URLs
-const resolvedContentBg1 = ref<string | null>(null);
-const resolvedContentBg2 = ref<string | null>(null);
-const resolvedSidebarBg = ref<string | null>(null);
-
-async function refreshResolved() {
-    const o1 = overrides.value.backgrounds?.content?.base?.url || null;
-    const r1 = await resolveInternalPath(o1);
-    resolvedContentBg1.value = r1 || getCssVarUrl('--app-content-bg-1');
-
-    const o2 = overrides.value.backgrounds?.content?.overlay?.url || null;
-    const r2 = await resolveInternalPath(o2);
-    resolvedContentBg2.value = r2 || getCssVarUrl('--app-content-bg-2');
-
-    const os = overrides.value.backgrounds?.sidebar?.url || null;
-    const rs = await resolveInternalPath(os);
-    resolvedSidebarBg.value = rs || getCssVarUrl('--app-sidebar-bg-1');
-}
-
-watch(
-    () => [
-        overrides.value.backgrounds?.content?.base?.url,
-        overrides.value.backgrounds?.content?.overlay?.url,
-        overrides.value.backgrounds?.sidebar?.url,
-    ],
-    () => {
-        refreshResolved();
-    },
-    { immediate: true }
-);
-
-// Revoke ObjectURLs when switching modes to prevent leak
-watch(activeMode, () => {
-    revokeAll();
-    internalUrlCache.clear();
-    refreshResolved();
-});
+const resolvedContentBg1 = useResolvedThemeAsset(contentBg1Url);
+const resolvedContentBg2 = useResolvedThemeAsset(contentBg2Url);
+const resolvedSidebarBg = useResolvedThemeAsset(sidebarBgUrl);
 
 // Preview styles
 const contentBg1PreviewStyle = computed(() => {
@@ -373,9 +320,9 @@ const contentBg1PreviewStyle = computed(() => {
     const repeatEnabled = overrides.value.backgrounds?.content?.base?.repeat === 'repeat' && !fit;
     
     return {
-        backgroundImage: resolvedContentBg1.value ? `url(${resolvedContentBg1.value})` : 'none',
+        backgroundImage: resolvedContentBg1.value ? `url(${resolvedContentBg1.value})` : `url(${getCssVarUrl('--app-content-bg-1') || ''})`,
         backgroundRepeat: repeatEnabled ? 'repeat' : 'no-repeat',
-        backgroundSize: fit ? 'cover' : repeatEnabled ? '32px 32px' : 'contain',
+        backgroundSize: fit ? 'cover' : repeatEnabled ? `${local.contentBg1SizePx}px` : 'contain',
         backgroundPosition: 'center',
     } as const;
 });
@@ -385,9 +332,9 @@ const contentBg2PreviewStyle = computed(() => {
     const repeatEnabled = overrides.value.backgrounds?.content?.overlay?.repeat === 'repeat' && !fit;
     
     return {
-        backgroundImage: resolvedContentBg2.value ? `url(${resolvedContentBg2.value})` : 'none',
+        backgroundImage: resolvedContentBg2.value ? `url(${resolvedContentBg2.value})` : `url(${getCssVarUrl('--app-content-bg-2') || ''})`,
         backgroundRepeat: repeatEnabled ? 'repeat' : 'no-repeat',
-        backgroundSize: fit ? 'cover' : repeatEnabled ? '32px 32px' : 'contain',
+        backgroundSize: fit ? 'cover' : repeatEnabled ? `${local.contentBg2SizePx}px` : 'contain',
         backgroundPosition: 'center',
     } as const;
 });
@@ -397,9 +344,9 @@ const sidebarBgPreviewStyle = computed(() => {
     const repeatEnabled = overrides.value.backgrounds?.sidebar?.repeat === 'repeat' && !fit;
     
     return {
-        backgroundImage: resolvedSidebarBg.value ? `url(${resolvedSidebarBg.value})` : 'none',
+        backgroundImage: resolvedSidebarBg.value ? `url(${resolvedSidebarBg.value})` : `url(${getCssVarUrl('--app-sidebar-bg-1') || ''})`,
         backgroundRepeat: repeatEnabled ? 'repeat' : 'no-repeat',
-        backgroundSize: fit ? 'cover' : repeatEnabled ? '32px 32px' : 'contain',
+        backgroundSize: fit ? 'cover' : repeatEnabled ? `${local.sidebarBgSizePx}px` : 'contain',
         backgroundPosition: 'center',
     } as const;
 });
@@ -442,12 +389,6 @@ async function handleLayerUpload(file: File, which: 'contentBg1' | 'contentBg2' 
         console.error('[BackgroundLayersSection] Upload failed:', e?.message);
     }
 }
-
-// Lifecycle - abort pending operations on unmount
-onBeforeUnmount(() => {
-    abortController.value.abort();
-    revokeAll();
-});
 
 // Sync local sliders when overrides change (targeted updates only)
 // Note: We rely on the existing specific watchers (L351-360) for URL changes.

@@ -1,6 +1,6 @@
 # Editor Extensions (TipTap)
 
-This guide explains how to extend the document editor with custom toolbar buttons, nodes, marks, and generic extensions. It follows the same plugin pattern as message actions and other UI registries.
+This guide explains how to extend the document editor with custom toolbar buttons, inspector panels, AI actions, nodes, marks, and generic extensions. It follows the same plugin pattern as message actions and other UI registries.
 
 ## Where to import
 
@@ -12,6 +12,13 @@ Helpers are auto-imported by Nuxt, so you can call them from plugins or componen
 -   `unregisterEditorToolbarButton()`
 -   `useEditorToolbarButtons(editorRef)`
 -   `listRegisteredEditorToolbarButtonIds()`
+
+**Inspector and document AI:**
+
+-   `registerEditorInspectorPanel()` / `unregisterEditorInspectorPanel()`
+-   `useEditorInspectorPanels()`
+-   `registerDocumentAiAction()` / `unregisterDocumentAiAction()`
+-   `useDocumentAiActions()`
 
 **Generic Extensions:**
 
@@ -28,8 +35,10 @@ Helpers are auto-imported by Nuxt, so you can call them from plugins or componen
 
 The implementations live at:
 
--   `app/composables/ui-extensions/editor/useEditorToolbar.ts`
--   `app/composables/ui-extensions/editor/useEditorNodes.ts`
+-   `app/composables/editor/useEditorToolbar.ts`
+-   `app/composables/editor/useEditorInspectorPanels.ts`
+-   `app/composables/editor/useDocumentAiActions.ts`
+-   `app/composables/editor/useEditorNodes.ts`
 
 ## Toolbar Buttons
 
@@ -41,6 +50,9 @@ export interface EditorToolbarButton {
     icon: string; // icon name for UButton
     tooltip?: string; // tooltip text
     order?: number; // lower = earlier (default 200)
+    group?: string; // defaults to the plugin overflow group
+    priority?: number; // higher values survive compact layouts longer
+    responsive?: 'always' | 'compact' | 'overflow';
     isActive?: (editor: Editor) => boolean; // highlight when active
     onClick: (editor: Editor) => void | Promise<void>; // click handler
     visible?: (editor: Editor) => boolean; // optional visibility check
@@ -78,6 +90,45 @@ unregisterEditorToolbarButton('my-plugin:strikethrough');
 ### Ordering
 
 Built-in toolbar buttons use order < 200. External plugins should use `order >= 200` to appear after them unless you intentionally want to appear earlier.
+
+Toolbar registrations remain source-compatible. Buttons without responsive metadata are placed in the plugin overflow group. Use `responsive: 'always'` sparingly for actions that must remain visible in narrow panes; all other actions should remain reachable through overflow.
+
+## Inspector panels and AI actions
+
+Inspector panels are lazily displayed beside the editor on wide panes, in a drawer on medium panes, and in a bottom sheet below 720px. Components receive `editor` and `documentId` props. Access policy and contribution-surface selection are applied before a panel is exposed.
+
+```ts
+export default defineNuxtPlugin(() => {
+    const panel = registerEditorInspectorPanel({
+        id: 'my-plugin:metadata',
+        label: 'Metadata',
+        icon: 'lucide:tags',
+        component: defineAsyncComponent(() => import('./MetadataPanel.vue')),
+        pluginId: 'my-plugin',
+        order: 300,
+    });
+
+    const action = registerDocumentAiAction({
+        id: 'my-plugin:house-style',
+        label: 'Apply house style',
+        prompt: 'Rewrite this in our house style while preserving all facts.',
+        defaultScope: 'section',
+        pluginId: 'my-plugin',
+        order: 300,
+    });
+
+    return {
+        provide: {
+            disposeEditorContributions: () => {
+                panel.dispose();
+                action.dispose();
+            },
+        },
+    };
+});
+```
+
+Document AI actions supply prompts and a default scope only; the built-in controller still owns credential checks, schema validation, review, stale-result protection, and acceptance. The related plugin hooks are `ai.document.edit:filter:request`, `ai.document.edit:before`, `ai.document.edit:after`, and `ai.document.edit:error`.
 
 ## Generic Extensions
 

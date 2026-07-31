@@ -1,44 +1,77 @@
-import { ref } from 'vue';
-import { useToast, useAppConfig } from '#imports';
-import { nowSec, newId } from '~/db/util';
-import { create, db, tx, upsert, type Message } from '~/db';
-import { createOrRefFile } from '~/db/files';
-import {
-    serializeFileHashes,
-    parseFileHashes,
-    MAX_MESSAGE_FILE_HASHES,
-} from '~/db/files-util';
+/**
+ * @module app/composables/chat/useAi.ts
+ *
+ * Purpose:
+ * Primary chat composable that coordinates local-first persistence, model
+ * message preparation, streaming, and hook orchestration for the chat UI.
+ *
+ * Responsibilities:
+ * - Manage chat state for a thread (messages, loading, aborts)
+ * - Build model input and system prompts for send requests
+ * - Orchestrate streaming lifecycle and background job integration
+ * - Emit hooks for plugins and extensions
+ *
+ * Non-Goals:
+ * - Direct provider implementation details
+ * - Server-only auth or SSR middleware behavior
+ * - Long-lived background job processing
+ *
+ * Invariants:
+ * - Local IndexedDB is the source of truth for UI state
+ * - Hook timing order remains stable for plugins
+ * - Abort always finalizes stream accumulator state
+ */
+
+import { ref, computed, watch, onScopeDispose, getCurrentScope } from 'vue';
+import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
+import { nowSec, newId, getWriteTxTableNames } from '~/db/util';
+import { type Message } from '~/db';
+import { getDb, type Or3DB } from '~/db/client';
+import { serializeFileHashes } from '~/db/files-util';
+import { normalizeFileUrl } from '~/utils/chat/useAi-internal/files';
 import {
     parseHashes,
     mergeAssistantFileHashes,
 } from '~/utils/files/attachments';
-import { getThreadSystemPrompt } from '~/db/threads';
-import { messagesByThread } from '~/db/messages';
-import { getPrompt } from '~/db/prompts';
+import { appendMessageToDb, messagesByThread } from '~/db/messages';
+import { createThreadInDb } from '~/db/threads';
 import type {
     ContentPart,
     ChatMessage,
     SendMessageParams,
-    ToolCall,
+    SendResult,
+    ChatRequestState,
 } from '~/utils/chat/types';
-import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
+import { ToolIterationLimitError } from '~~/shared/chat/stream-errors';
+import type { ToolLedgerEntry } from '~~/shared/chat/tool-ledger';
+import {
+    isStaleForegroundGeneration,
+    remainingForegroundLeaseMs,
+    createForegroundGenerationLease,
+} from '~/utils/chat/generation-lease';
+import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { reportError, err } from '~/utils/errors';
-import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import {
     buildParts,
     deriveMessageContent,
-    trimOrMessagesImages,
+    shouldKeepAssistantMessage,
+    getChatModalities,
+    resolveChatInputTokenBudget,
 } from '~/utils/chat/messages';
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
-import { openRouterStream } from '../../utils/chat/openrouterStream';
-import { useToolRegistry } from '~/utils/chat/tool-registry';
-import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
 import {
-    promptJsonToString,
-    composeSystemPrompt,
-} from '~/utils/chat/prompt-utils';
+    startBackgroundStream,
+    abortBackgroundJob,
+    isBackgroundStreamingEnabled,
+    type BackgroundJobStatus,
+    type OpenRouterReasoningConfig,
+} from '../../utils/chat/openrouterStream';
+import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
+import { useToolRegistry } from '~/utils/chat/tool-registry';
+import { inferMimeFromUrl } from '~/utils/chat/files';
 import { createStreamAccumulator } from '~/composables/chat/useStreamAccumulator';
+import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { resolveDefaultModel } from '~/core/auth/models-service';
@@ -48,20 +81,53 @@ import { useUserApiKey } from '#imports';
 import { useActivePrompt } from '#imports';
 import { getDefaultPromptId } from '#imports';
 import { useHooks } from '#imports';
-import { consumeWorkflowHandlingFlag } from '~/plugins/workflow-slash-commands.client';
+import { consumeChatSendHandled } from '~/utils/chat/send-interception';
+import { resolveNotificationUserId } from '~/core/notifications/notification-user';
+import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 // settings/model store are provided elsewhere at runtime; keep dynamic access guards
 import type {
     ChatSettings,
     ModelInfo,
     PaneContext,
     ExtendedSendMessageParams,
-    ModelInputMessage,
 } from '../../../types/chat-internal';
 import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
 import type { ORMessage } from '~/core/auth/openrouter-build';
 import type { ToolCallInfo } from '~/utils/chat/uiMessages';
+import {
+    type BackgroundJobSubscriber,
+    type BackgroundJobTracker,
+    backgroundJobTrackers,
+    primeBackgroundJobUpdate,
+    stopBackgroundJobTracking,
+    ensureBackgroundJobTracker,
+    subscribeBackgroundJob,
+    runForegroundStreamLoop,
+    resolveSystemPromptText,
+    buildSystemPromptMessage,
+    buildOpenRouterMessagesForSend,
+    enforceOpenRouterMessageTokenBudget,
+    retryMessageImpl,
+    continueMessageImpl,
+    makeAssistantPersister,
+    updateMessageRecord,
+} from '~/utils/chat/useAi-internal';
+import {
+    assistantTranscriptData,
+    userTranscriptData,
+} from '~/utils/chat/transcript';
+
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
+
+const THINKING_SUFFIX = ':thinking';
+
+function stripThinkingSuffix(modelId: string): string {
+    return modelId.endsWith(THINKING_SUFFIX)
+        ? modelId.slice(0, -THINKING_SUFFIX.length)
+        : modelId;
+}
 
 type GlobalWithPaneApi = typeof globalThis & {
     __or3MultiPaneApi?: UseMultiPaneApi;
@@ -72,6 +138,9 @@ type StoredMessage = Message & {
         content?: string;
         reasoning_text?: string | null;
         tool_calls?: ToolCallInfo[] | null;
+        background_job_id?: string;
+        background_job_status?: BackgroundJobStatus['status'];
+        background_job_error?: string | null;
         [key: string]: unknown;
     } | null;
     content?: string | ContentPart[];
@@ -87,25 +156,121 @@ type OpenRouterMessage =
           [key: string]: unknown;
       };
 
+type ChatHistoryModule = typeof import('~/utils/chat/history');
+
 // Per-instance streaming tail state
 
+/**
+ * Purpose:
+ * Provides reactive chat state and operations for a single thread.
+ * Handles message creation, streaming, background jobs, and lifecycle cleanup.
+ *
+ * Behavior:
+ * - Appends user messages to IndexedDB and UI state
+ * - Streams assistant responses with tool execution support
+ * - Supports background streaming when enabled and safe
+ * - Emits hook actions and filters during key phases
+ * - Aborts in-flight streams on request and preserves partial output
+ *
+ * Constraints:
+ * - Must be used within a Vue setup scope
+ * - Thread id must be set before sending messages
+ * - Background streaming only enabled for text-only requests
+ *
+ * Non-Goals:
+ * - Does not manage navigation or routing
+ * - Does not expose provider secrets in client state
+ */
 export function useChat(
     msgs: ChatMessage[] = [],
     initialThreadId?: string,
-    pendingPromptId?: string
+    pendingPromptId?: string,
+    options: { historyAlreadyLoaded?: boolean } = {}
 ) {
     // Messages and basic state
     const messages = ref<UiChatMessage[]>(msgs.map((m) => ensureUiMessage(m)));
     const rawMessages = ref<ChatMessage[]>([...msgs]);
     const loading = ref(false);
+    const requestState = ref<ChatRequestState>({ status: 'idle' });
+    let activeRequestId: string | null = null;
     const abortController = ref<AbortController | null>(null);
-    const aborted = ref(false);
+    const aborted = ref<boolean>(false);
     const { apiKey, setKey } = useUserApiKey();
+    const runtimeConfig = useRuntimeConfig();
+    // Nuxt UI resolves its toast service through Vue injection. Capture it
+    // while useChat is still running inside setup; calling useToast() later
+    // from an async send handler triggers Vue's "inject() can only be used
+    // inside setup()" warning.
+    const toast = useToast();
+    const syncConfig = runtimeConfig.public.sync;
+    const serverNotificationsEnabled = computed(
+        () =>
+            runtimeConfig.public.ssrAuthEnabled === true &&
+            syncConfig.enabled === true &&
+            syncConfig.provider === CONVEX_PROVIDER_ID &&
+            Boolean(syncConfig.convexUrl)
+    );
+    const sessionContext =
+        runtimeConfig.public.ssrAuthEnabled === true ? useSessionContext() : null;
+    const notificationUserId = computed(() =>
+        resolveNotificationUserId(sessionContext?.data.value?.session)
+    );
+    const openRouterConfig = computed(() => runtimeConfig.public.openRouter);
+    const requireUserKey = computed(
+        () => openRouterConfig.value.requireUserKey === true
+    );
+    const allowUserOverride = computed(
+        () =>
+            openRouterConfig.value.allowUserOverride !== false ||
+            requireUserKey.value
+    );
+    const hasInstanceKey = computed(
+        () =>
+            openRouterConfig.value.hasInstanceKey === true &&
+            !requireUserKey.value
+    );
+    const effectiveApiKey = computed(() =>
+        allowUserOverride.value ? apiKey.value : null
+    );
+    const guestAccessEnabled = computed(
+        () => runtimeConfig.public.guestAccessEnabled === true
+    );
+    const limitsConfig = computed(() => runtimeConfig.public.limits);
     const hooks = useHooks();
     const { activePromptContent } = useActivePrompt();
     const threadIdRef = ref<string | undefined>(initialThreadId);
-    const historyLoadedFor = ref<string | null>(null);
+    // Mutable so ChatContainer can update without re-calling useChat() outside setup.
+    const pendingPromptIdRef = ref<string | undefined>(pendingPromptId);
+    const historyLoadedFor = ref<string | null>(
+        options.historyAlreadyLoaded && initialThreadId
+            ? initialThreadId
+            : null
+    );
     const cleanupFns: Array<() => void> = [];
+    const logBgStream = (
+        _stage: string,
+        _details?: Record<string, unknown>
+    ): void => {};
+    const warnBgStream = (
+        _stage: string,
+        _details?: Record<string, unknown>
+    ): void => {};
+
+    watch(
+        () => notificationUserId.value,
+        (nextUserId) => {
+            if (!nextUserId) return;
+            logBgStream('notification-user-sync', {
+                threadId: threadIdRef.value || null,
+                nextUserId,
+                trackerCount: backgroundJobTrackers.size,
+            });
+            for (const tracker of backgroundJobTrackers.values()) {
+                tracker.userId = nextUserId;
+            }
+        },
+        { immediate: true }
+    );
 
     if (import.meta.dev) {
         if (state.value.openrouterKey && apiKey.value) {
@@ -116,32 +281,169 @@ export function useChat(
     const streamAcc = createStreamAccumulator();
     const streamState = streamAcc.state;
     const streamId = ref<string | undefined>(undefined);
+    type ChatRequestScope = {
+        requestId: string;
+        originDb: Or3DB;
+        accumulator: typeof streamAcc;
+        streamId?: string;
+        abortController: AbortController | null;
+        toolLedger: Map<string, ToolLedgerEntry>;
+        persistAssistant?: ReturnType<typeof makeAssistantPersister>;
+    };
+    let activeRequestScope: ChatRequestScope | null = null;
+    const backgroundJobId = ref<string | null>(null);
+    const backgroundJobMode = ref<'none' | 'background'>('none');
+    const backgroundJobInfo = ref<{
+        jobId: string;
+        threadId: string;
+        messageId: string;
+    } | null>(null);
+    const backgroundJobDisposers: Array<() => void> = [];
+    const attachedBackgroundJobs = new Set<string>();
+    const detached = ref<boolean>(false);
+    const isDetached = () => detached.value;
+    /**
+     * Purpose:
+     * Resets per-request stream state and clears the active stream id.
+     *
+     * Behavior:
+     * - Clears stream accumulator buffers
+     * - Clears the public `streamId` ref
+     *
+     * Constraints:
+     * - Safe to call multiple times
+     */
     function resetStream() {
         streamAcc.reset();
         streamId.value = undefined;
     }
 
-    async function getSystemPromptContent(): Promise<string | null> {
-        if (!threadIdRef.value) return null;
-        try {
-            const promptId = await getThreadSystemPrompt(threadIdRef.value);
-            if (promptId) {
-                const prompt = await getPrompt(promptId);
-                if (prompt) return promptJsonToString(prompt.content);
-            }
-        } catch (e) {
-            console.warn('Failed to load thread system prompt', e);
+    const backgroundStreamingConfig = computed(
+        () =>
+            (
+                runtimeConfig.public as {
+                    backgroundStreaming?: {
+                        enabled?: boolean;
+                        startMode?: 'foreground' | 'background';
+                    };
+                }
+            ).backgroundStreaming
+    );
+    const backgroundStreamStartMode = computed(
+        () => backgroundStreamingConfig.value?.startMode ?? 'foreground'
+    );
+    const backgroundStreamingAllowed = computed(
+        () => {
+            if (runtimeConfig.public.ssrAuthEnabled !== true) return false;
+            if (backgroundStreamingConfig.value?.enabled !== true) return false;
+            if (
+                !isBackgroundStreamingEnabled(
+                    backgroundStreamingConfig.value?.enabled
+                )
+            )
+                return false;
+            const session = sessionContext
+                ? sessionContext.data.value?.session ?? null
+                : null;
+            if (!session) return false;
+            return Boolean(session.authenticated && session.workspace?.id);
         }
-        return activePromptContent.value
-            ? promptJsonToString(
-                  activePromptContent.value as Parameters<
-                      typeof promptJsonToString
-                  >[0]
-              )
-            : null;
+    );
+
+    /**
+     * Purpose:
+     * Enforces local client-side limits for conversations and daily messages.
+     *
+     * Behavior:
+     * - Checks max conversation count for new threads
+     * - Checks daily message quota
+     * - Emits toast warnings when limits are exceeded
+     *
+     * Constraints:
+     * - This is a client-side guard only, not an authorization layer
+     */
+    async function enforceClientLimits(isNewThread: boolean): Promise<boolean> {
+        const limits = limitsConfig.value;
+        if (limits.enabled === false) return true;
+
+        const maxConversations =
+            typeof limits.maxConversations === 'number'
+                ? limits.maxConversations
+                : 0;
+        if (isNewThread && maxConversations > 0) {
+            const threadCount = await getDb().threads
+                .filter((thread) => thread.deleted !== true)
+                .count();
+            if (threadCount >= maxConversations) {
+                toast.add({
+                    title: 'Conversation limit reached',
+                    description:
+                        'You have reached the maximum number of conversations allowed for this instance.',
+                    color: 'warning',
+                    duration: 4000,
+                });
+                return false;
+            }
+        }
+
+        const maxMessagesPerDay =
+            typeof limits.maxMessagesPerDay === 'number'
+                ? limits.maxMessagesPerDay
+                : 0;
+        if (maxMessagesPerDay > 0) {
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            const startOfDaySec = Math.floor(startOfDay.getTime() / 1000);
+            const messageCount = await getDb().messages
+                .where('created_at')
+                .aboveOrEqual(startOfDaySec)
+                .and((msg) => msg.deleted !== true)
+                .count();
+            if (messageCount >= maxMessagesPerDay) {
+                toast.add({
+                    title: 'Daily message limit reached',
+                    description:
+                        'You have reached the maximum messages per day for this instance.',
+                    color: 'warning',
+                    duration: 4000,
+                });
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Purpose:
+     * Resolves the effective system prompt content for the current thread.
+     *
+     * Behavior:
+     * - Prefers thread-bound prompt if present
+     * - Falls back to active prompt content
+     *
+     * Constraints:
+     * - Returns null when no prompt content is available
+     */
+    async function getSystemPromptContent(): Promise<string | null> {
+        return resolveSystemPromptText({
+            threadId: threadIdRef.value,
+            activePromptContent: activePromptContent.value,
+        });
     }
 
     // Helpers to reduce duplication and improve clarity/perf
+    /**
+     * Purpose:
+     * Finds the active chat pane context when multi-pane is enabled.
+     *
+     * Behavior:
+     * - Locates the pane bound to the current thread
+     * - Returns pane and index for hook emission
+     *
+     * Constraints:
+     * - Returns null when no active pane is available
+     */
     function getActivePaneContext(): PaneContext | null {
         try {
             const mpApi = (globalThis as GlobalWithPaneApi).__or3MultiPaneApi;
@@ -157,78 +459,17 @@ export function useChat(
         }
     }
 
-    function makeAssistantPersister(
-        assistantDbMsg: StoredMessage,
-        assistantFileHashes: string[]
-    ) {
-        // Cache last serialized file hashes to avoid recomputing on each write
-        let lastSerialized: string | null = assistantDbMsg.file_hashes || null;
-        return async function persist({
-            content,
-            reasoning,
-            toolCalls,
-        }: {
-            content?: string;
-            reasoning?: string | null;
-            toolCalls?: ToolCallInfo[] | null;
-        }) {
-            const baseData =
-                assistantDbMsg.data && typeof assistantDbMsg.data === 'object'
-                    ? (assistantDbMsg.data as Record<string, unknown>)
-                    : {};
-            const serialized = assistantFileHashes.length
-                ? serializeFileHashes(assistantFileHashes)
-                : lastSerialized;
-            if (
-                serialized !== lastSerialized ||
-                content != null ||
-                reasoning != null ||
-                toolCalls != null
-            ) {
-                const payload: StoredMessage = {
-                    ...assistantDbMsg,
-                    data: {
-                        ...baseData,
-                        content:
-                            content ??
-                            (typeof baseData.content === 'string'
-                                ? baseData.content
-                                : ''),
-                        reasoning_text:
-                            reasoning ??
-                            (typeof baseData.reasoning_text === 'string'
-                                ? baseData.reasoning_text
-                                : null),
-                        ...(toolCalls
-                            ? {
-                                  tool_calls: toolCalls.map((t) => ({ ...t })),
-                              }
-                            : {}),
-                    },
-                    file_hashes: serialized,
-                    updated_at: nowSec(),
-                };
-                await upsert.message(payload);
-                lastSerialized = serialized ?? null;
-            }
-            return lastSerialized;
-        };
-    }
-
-    function shouldKeepAssistantMessage(m: ChatMessage): boolean {
-        if (m.role !== 'assistant') return true;
-        const c = m.content;
-        if (typeof c === 'string') return c.trim().length > 0;
-        if (Array.isArray(c)) {
-            return c.some((p) => {
-                if (p.type === 'text') return p.text.trim().length > 0;
-                // image and file parts are always considered non-empty
-                return true;
-            });
-        }
-        return true;
-    }
-
+    /**
+     * Purpose:
+     * Applies workflow output to UI and raw message state when AI is bypassed.
+     *
+     * Behavior:
+     * - Updates in-memory message arrays when possible
+     * - Falls back to Dexie read to reconstruct missing entries
+     *
+     * Constraints:
+     * - No-op when message id or output is missing
+     */
     async function applyWorkflowResultToMessages(
         messageId: string,
         finalOutput: string
@@ -258,7 +499,7 @@ export function useChat(
 
         if (!updated && threadIdRef.value) {
             try {
-                const row = await db.messages.get(messageId);
+                const row = await getDb().messages.get(messageId);
                 if (row && row.thread_id === threadIdRef.value) {
                     const data =
                         (row.data as Record<string, unknown> | null) || null;
@@ -337,36 +578,690 @@ export function useChat(
         )
     );
 
+    let historySyncInFlight = false;
+    let historyModulePromise: Promise<ChatHistoryModule> | null = null;
+    const getHistoryModule = async (): Promise<ChatHistoryModule> => {
+        if (!historyModulePromise) {
+            historyModulePromise = import('~/utils/chat/history');
+        }
+        return historyModulePromise;
+    };
+    /**
+     * Purpose:
+     * Loads thread history into memory and reattaches background jobs if needed.
+     *
+     * Behavior:
+     * - Ensures thread history is loaded once per thread id
+     * - Rebuilds UI message list from raw messages
+     * - Reattaches background jobs after history sync
+     *
+     * Constraints:
+     * - No-op if a sync is already in flight
+     * - Safe to call repeatedly
+     */
     async function ensureHistorySynced() {
+        if (historySyncInFlight) {
+            logBgStream('history-sync-skip-in-flight', {
+                threadId: threadIdRef.value || null,
+            });
+            return;
+        }
         if (threadIdRef.value && historyLoadedFor.value !== threadIdRef.value) {
-            const { ensureThreadHistoryLoaded } = await import(
-                '~/utils/chat/history'
-            );
-            await ensureThreadHistoryLoaded(
-                threadIdRef,
-                historyLoadedFor,
-                rawMessages
-            );
-            messages.value = rawMessages.value
-                .filter((m) => m.role !== 'tool')
-                .map((m) => ensureUiMessage(m));
+            logBgStream('history-sync-start', {
+                threadId: threadIdRef.value,
+                historyLoadedFor: historyLoadedFor.value,
+                detached: detached.value,
+            });
+            historySyncInFlight = true;
+            try {
+                if (detached.value) detached.value = false;
+                const { ensureThreadHistoryLoaded } = await getHistoryModule();
+                await ensureThreadHistoryLoaded(
+                    threadIdRef,
+                    historyLoadedFor,
+                    rawMessages
+                );
+                messages.value = rawMessages.value
+                    .filter((m: ChatMessage) => m.role !== 'tool')
+                    .map((m) => ensureUiMessage(m));
+                await reattachBackgroundJobs();
+                await reconcileForegroundGenerations();
+                logBgStream('history-sync-complete', {
+                    threadId: threadIdRef.value,
+                    rawCount: rawMessages.value.length,
+                    uiCount: messages.value.length,
+                    attachedJobs: attachedBackgroundJobs.size,
+                });
+            } finally {
+                historySyncInFlight = false;
+            }
         }
     }
 
     const tailAssistant = ref<UiChatMessage | null>(null);
     let lastSuppressedAssistantId: string | null = null;
+    /**
+     * Purpose:
+     * Flushes the in-progress assistant message into the UI list.
+     *
+     * Behavior:
+     * - Adds tail assistant to messages if missing
+     * - Clears tail reference afterwards
+     *
+     * Constraints:
+     * - No-op when no tail assistant exists
+     */
     function flushTailAssistant() {
-        if (!tailAssistant.value) return;
-        if (!messages.value.find((m) => m.id === tailAssistant.value!.id)) {
-            messages.value.push(tailAssistant.value);
+        const tail = tailAssistant.value;
+        if (!tail) return;
+        if (!messages.value.find((m) => m.id === tail.id)) {
+            messages.value.push(tail);
         }
         tailAssistant.value = null;
     }
 
+    /**
+     * Purpose:
+     * Resolves a UI message by id, preferring the tail assistant.
+     *
+     * Behavior:
+     * - Returns tail assistant when ids match
+     * - Falls back to messages list
+     */
+    function resolveUiMessage(messageId: string): UiChatMessage | null {
+        if (tailAssistant.value?.id === messageId) return tailAssistant.value;
+        return messages.value.find((m) => m.id === messageId) ?? null;
+    }
+
+    function syncTailAccumulator(
+        messageId: string,
+        nextContent: string,
+        delta: string
+    ): boolean {
+        if (tailAssistant.value?.id !== messageId) return false;
+        if (!nextContent) return true;
+
+        const currentContent = streamState.text || '';
+        const canAppendDelta =
+            delta.length > 0 &&
+            nextContent.length === currentContent.length + delta.length &&
+            nextContent.startsWith(currentContent);
+
+        if (canAppendDelta) {
+            streamAcc.append(delta, { kind: 'text' });
+            return true;
+        }
+
+        streamAcc.reset();
+        streamAcc.append(nextContent, { kind: 'text' });
+        return true;
+    }
+
+    /**
+     * Purpose:
+     * Normalizes background tool call payloads into UI-safe tool call state.
+     *
+     * Behavior:
+     * - Converts server `skipped` status into UI `error` for existing indicator states
+     * - Preserves args/result/error fields for inline tool details
+     */
+    function normalizeBackgroundToolCalls(
+        calls: BackgroundJobStatus['tool_calls']
+    ): ToolCallInfo[] | undefined {
+        if (!Array.isArray(calls)) return undefined;
+        return calls.map((call) => {
+            const mappedStatus =
+                call.status === 'skipped' ? 'error' : call.status;
+            return {
+                id: call.id,
+                name: call.name,
+                status: mappedStatus,
+                args: call.args,
+                result: call.result,
+                error:
+                    mappedStatus === 'error'
+                        ? call.error ||
+                          `Tool "${call.name}" is not available in background mode.`
+                        : call.error,
+            };
+        });
+    }
+
+    /**
+     * Purpose:
+     * Clears background job subscriptions and optionally stops tracking.
+     *
+     * Behavior:
+     * - Unsubscribes all background job listeners
+     * - Optionally stops tracking of active jobs
+     *
+     * Constraints:
+     * - Safe to call multiple times
+     */
+    function clearBackgroundJobSubscriptions(options?: {
+        keepTracking?: boolean;
+    }): void {
+        if (!backgroundJobDisposers.length) {
+            logBgStream('clear-bg-subs-skip-none', {
+                keepTracking: options?.keepTracking === true,
+            });
+            return;
+        }
+        logBgStream('clear-bg-subs-start', {
+            keepTracking: options?.keepTracking === true,
+            disposerCount: backgroundJobDisposers.length,
+            attachedJobs: [...attachedBackgroundJobs],
+        });
+        for (const jobId of attachedBackgroundJobs) {
+            const tracker = backgroundJobTrackers.get(jobId);
+            if (tracker && !options?.keepTracking) {
+                stopBackgroundJobTracking(tracker);
+            }
+        }
+        for (const dispose of backgroundJobDisposers.splice(0, backgroundJobDisposers.length)) {
+            try {
+                dispose();
+            } catch {
+                /* intentionally empty */
+            }
+        }
+        attachedBackgroundJobs.clear();
+        logBgStream('clear-bg-subs-complete', {
+            keepTracking: options?.keepTracking === true,
+        });
+    }
+
+    /**
+     * Purpose:
+     * Attaches a background job tracker to UI state and streaming buffers.
+     *
+     * Behavior:
+     * - Ensures tracker exists and seeds baseline content
+     * - Subscribes to updates and syncs UI text
+     * - Finalizes stream accumulator on completion
+     *
+     * Constraints:
+     * - Only attaches once per job id
+     * - Respects detached mode to avoid UI updates
+     */
+    function attachBackgroundJobToUi(params: {
+        jobId: string;
+        userId: string;
+        messageId: string;
+        threadId: string;
+        initialContent?: string;
+        isReattach?: boolean;
+        useSse?: boolean;
+    }): BackgroundJobTracker {
+        logBgStream('attach-bg-job-start', {
+            jobId: params.jobId,
+            messageId: params.messageId,
+            threadId: params.threadId,
+            userId: params.userId,
+            isReattach: Boolean(params.isReattach),
+            useSse: Boolean(params.useSse),
+            initialContentLength:
+                typeof params.initialContent === 'string'
+                    ? params.initialContent.length
+                    : 0,
+            detached: detached.value,
+        });
+        const tracker = ensureBackgroundJobTracker({
+            jobId: params.jobId,
+            userId: params.userId,
+            threadId: params.threadId,
+            messageId: params.messageId,
+            preferServerNotifications: serverNotificationsEnabled.value,
+            // Seed with DB content - server must have MORE to update
+            initialContent: params.initialContent,
+            useSse: params.useSse,
+        });
+        if (params.isReattach && typeof params.initialContent === 'string') {
+            // Set tracker baseline to DB content
+            // Server must have MORE content to trigger an update
+            if (params.initialContent.length > tracker.lastContent.length) {
+                tracker.lastContent = params.initialContent;
+                tracker.lastPersistedLength = params.initialContent.length;
+            }
+            tracker.lastPersistAt = 0;
+            // Sync UI with DB content (don't clear it)
+            const target = resolveUiMessage(params.messageId);
+            if (target && params.initialContent.length > target.text.length) {
+                target.text = params.initialContent;
+            }
+            logBgStream('attach-bg-job-reattach-seed', {
+                jobId: params.jobId,
+                messageId: params.messageId,
+                trackerContentLength: tracker.lastContent.length,
+                targetLength: resolveUiMessage(params.messageId)?.text.length ?? 0,
+            });
+        }
+        if (params.isReattach && tailAssistant.value?.id === params.messageId) {
+            // Seed stream accumulator with current content
+            streamAcc.reset();
+            if (
+                typeof params.initialContent === 'string' &&
+                params.initialContent.length > 0
+            ) {
+                streamAcc.append(params.initialContent, { kind: 'text' });
+            }
+        }
+        const shouldBindUiSubscriber = !detached.value;
+        if (shouldBindUiSubscriber && !attachedBackgroundJobs.has(params.jobId)) {
+            logBgStream('attach-bg-job-bind-subscriber', {
+                jobId: params.jobId,
+                messageId: params.messageId,
+                threadId: params.threadId,
+                detached: detached.value,
+                attachedAlready: attachedBackgroundJobs.has(params.jobId),
+            });
+            const subscriber: BackgroundJobSubscriber = {
+                onUpdate: ({ content, delta, status }) => {
+                    if (detached.value) {
+                        return;
+                    }
+                    const target = resolveUiMessage(params.messageId);
+                    if (!target) return;
+                    const previousText = target.text;
+
+                    const nextToolCalls = normalizeBackgroundToolCalls(
+                        status.tool_calls
+                    );
+                    const hasToolUpdate = nextToolCalls !== undefined;
+                    if (hasToolUpdate) {
+                        target.toolCalls = nextToolCalls;
+                    }
+
+                    const currentLen = target.text.length;
+                    const contentChanged =
+                        content.length >= currentLen && content !== target.text;
+
+                    if (contentChanged) {
+                        target.text = content;
+                    }
+
+                    if (target.pending && (delta || hasToolUpdate || contentChanged)) {
+                        target.pending = false;
+                    }
+
+                    if (syncTailAccumulator(params.messageId, content, delta)) {
+                        return;
+                    } else if (delta || hasToolUpdate || contentChanged) {
+                        if (
+                            contentChanged &&
+                            delta.length > 0 &&
+                            content.length === previousText.length + delta.length &&
+                            content.startsWith(previousText)
+                        ) {
+                            return;
+                        }
+                        messages.value = [...messages.value];
+                    }
+                },
+                onComplete: ({ content, status }) => {
+                    if (detached.value) {
+                        logBgStream('attach-bg-job-on-complete-skipped-detached', {
+                            jobId: params.jobId,
+                            messageId: params.messageId,
+                        });
+                        return;
+                    }
+                    const target = resolveUiMessage(params.messageId);
+                    if (!target) return;
+                    logBgStream('attach-bg-job-on-complete', {
+                        jobId: params.jobId,
+                        messageId: params.messageId,
+                        status: status.status,
+                        contentLength: content.length,
+                        toolCalls: Array.isArray(status.tool_calls)
+                            ? status.tool_calls.length
+                            : 0,
+                    });
+                    target.text = content;
+                    const nextToolCalls = normalizeBackgroundToolCalls(
+                        status.tool_calls
+                    );
+                    if (nextToolCalls) {
+                        target.toolCalls = nextToolCalls;
+                    }
+                    target.pending = false;
+                    if (syncTailAccumulator(params.messageId, content, content)) {
+                        streamAcc.finalize();
+                    } else {
+                        messages.value = [...messages.value];
+                    }
+                    if (backgroundJobId.value === params.jobId) {
+                        loading.value = false;
+                        backgroundJobId.value = null;
+                        backgroundJobMode.value = 'none';
+                        backgroundJobInfo.value = null;
+                    }
+                },
+                onError: ({ status }) => {
+                    if (detached.value) {
+                        logBgStream('attach-bg-job-on-error-skipped-detached', {
+                            jobId: params.jobId,
+                            messageId: params.messageId,
+                        });
+                        return;
+                    }
+                    const target = resolveUiMessage(params.messageId);
+                    if (!target) return;
+                    logBgStream('attach-bg-job-on-error', {
+                        jobId: params.jobId,
+                        messageId: params.messageId,
+                        status: status.status,
+                        error: status.error || null,
+                    });
+                    const nextToolCalls = normalizeBackgroundToolCalls(
+                        status.tool_calls
+                    );
+                    if (nextToolCalls) {
+                        target.toolCalls = nextToolCalls;
+                    }
+                    target.pending = false;
+                    target.error = status.error || 'Background response failed';
+                    if (tailAssistant.value?.id !== params.messageId) {
+                        messages.value = [...messages.value];
+                    }
+                    streamAcc.finalize({
+                        error: new Error(target.error || 'Background response failed'),
+                    });
+                    if (backgroundJobId.value === params.jobId) {
+                        loading.value = false;
+                        backgroundJobId.value = null;
+                        backgroundJobMode.value = 'none';
+                        backgroundJobInfo.value = null;
+                    }
+                },
+                onAbort: ({ status }) => {
+                    if (detached.value) {
+                        logBgStream('attach-bg-job-on-abort-skipped-detached', {
+                            jobId: params.jobId,
+                            messageId: params.messageId,
+                        });
+                        return;
+                    }
+                    const target = resolveUiMessage(params.messageId);
+                    if (!target) return;
+                    logBgStream('attach-bg-job-on-abort', {
+                        jobId: params.jobId,
+                        messageId: params.messageId,
+                        status: status.status,
+                    });
+                    const nextToolCalls = normalizeBackgroundToolCalls(
+                        status.tool_calls
+                    );
+                    if (nextToolCalls) {
+                        target.toolCalls = nextToolCalls;
+                    }
+                    target.pending = false;
+                    target.error = 'stopped';
+                    if (tailAssistant.value?.id !== params.messageId) {
+                        messages.value = [...messages.value];
+                    }
+                    streamAcc.finalize({ aborted: true });
+                    void updateMessageRecord(
+                        tracker.originDb ?? getDb(),
+                        params.messageId,
+                        {
+                            pending: false,
+                            error: 'stopped',
+                        }
+                    );
+                    if (backgroundJobId.value === params.jobId) {
+                        loading.value = false;
+                        backgroundJobId.value = null;
+                        backgroundJobMode.value = 'none';
+                        backgroundJobInfo.value = null;
+                    }
+                },
+            };
+            const unsubscribe = subscribeBackgroundJob(tracker, subscriber);
+            attachedBackgroundJobs.add(params.jobId);
+            backgroundJobDisposers.push(unsubscribe);
+            logBgStream('attach-bg-job-subscriber-registered', {
+                jobId: params.jobId,
+                attachedCount: attachedBackgroundJobs.size,
+                disposerCount: backgroundJobDisposers.length,
+                trackerStatus: tracker.status,
+                trackerPolling: tracker.polling,
+                trackerStreaming: tracker.streaming,
+            });
+            if (params.isReattach && !tracker.polling && !tracker.streaming) {
+                // Only prime if polling hasn't started yet
+                logBgStream('attach-bg-job-prime-triggered', {
+                    jobId: params.jobId,
+                });
+                void primeBackgroundJobUpdate(tracker);
+            }
+            // If polling is already running, resetting tracker.lastContent = ''
+            // will cause next poll to fetch full content automatically
+        } else {
+            logBgStream('attach-bg-job-subscriber-not-bound', {
+                jobId: params.jobId,
+                shouldBindUiSubscriber,
+                alreadyAttached: attachedBackgroundJobs.has(params.jobId),
+                detached: detached.value,
+            });
+        }
+        return tracker;
+    }
+
+    /**
+     * Purpose:
+     * Reattaches background jobs for the current thread after history load.
+     *
+     * Behavior:
+     * - Scans pending assistant messages for active job metadata
+     * - Rehydrates trackers and restores UI state
+     *
+     * Constraints:
+     * - No-op when background streaming is disabled
+     */
+    async function reconcileForegroundGenerations(): Promise<void> {
+        if (!threadIdRef.value) return;
+        const persisted = (await messagesByThread(threadIdRef.value)) as
+            | StoredMessage[]
+            | undefined;
+        for (const row of persisted ?? []) {
+            const rowData = row.data as Record<string, unknown> | null;
+            if (
+                row.role !== 'assistant' ||
+                row.pending !== true ||
+                typeof rowData?.background_job_id === 'string'
+            ) continue;
+
+            const interrupt = async () => {
+                const db = getDb();
+                const latest = (await db.messages.get(row.id)) as
+                    | StoredMessage
+                    | undefined;
+                if (!latest || !isStaleForegroundGeneration(latest)) return;
+                await updateMessageRecord(
+                    db,
+                    row.id,
+                    {
+                        pending: false,
+                        error: 'stream_interrupted',
+                        data: { generation_state: 'interrupted' },
+                    },
+                    latest
+                );
+                const raw = rawMessages.value.find((message) => message.id === row.id);
+                if (raw) raw.error = 'stream_interrupted';
+                const ui = messages.value.find((message) => message.id === row.id);
+                if (ui) {
+                    ui.pending = false;
+                    ui.error = 'stream_interrupted';
+                }
+            };
+
+            const remaining = remainingForegroundLeaseMs(row);
+            if (remaining === 0 || isStaleForegroundGeneration(row)) {
+                await interrupt();
+            } else {
+                const timer = setTimeout(() => void interrupt(), remaining);
+                cleanupFns.push(() => clearTimeout(timer));
+            }
+        }
+    }
+
+    async function reattachBackgroundJobs(): Promise<void> {
+        if (!backgroundStreamingAllowed.value || !threadIdRef.value) {
+            logBgStream('reattach-skip-disabled-or-missing-thread', {
+                threadId: threadIdRef.value || null,
+                backgroundStreamingAllowed: backgroundStreamingAllowed.value,
+            });
+            return;
+        }
+        logBgStream('reattach-start', {
+            threadId: threadIdRef.value,
+            detached: detached.value,
+            activeBackgroundJobId: backgroundJobId.value,
+        });
+
+        try {
+            const dbMessages = (await messagesByThread(threadIdRef.value)) as
+                | StoredMessage[]
+                | undefined;
+            const list = Array.isArray(dbMessages) ? dbMessages : [];
+            logBgStream('reattach-scan', {
+                threadId: threadIdRef.value,
+                messageCount: list.length,
+            });
+            for (const msg of list) {
+                if (msg.role !== 'assistant' || !msg.pending || !msg.data) continue;
+                const data = msg.data as Record<string, unknown>;
+                const jobId =
+                    typeof data.background_job_id === 'string'
+                        ? data.background_job_id
+                        : null;
+                const status =
+                    typeof data.background_job_status === 'string'
+                        ? data.background_job_status
+                        : 'streaming';
+                if (!jobId || status !== 'streaming') continue;
+
+                const initialContent =
+                    typeof data.content === 'string'
+                        ? data.content
+                        : typeof msg.content === 'string'
+                        ? msg.content
+                        : '';
+
+                attachBackgroundJobToUi({
+                    jobId,
+                    userId: notificationUserId.value,
+                    messageId: msg.id,
+                    threadId: threadIdRef.value,
+                    initialContent,
+                    isReattach: true,
+                    useSse: backgroundStreamingAllowed.value,
+                });
+                logBgStream('reattach-job-bound', {
+                    threadId: threadIdRef.value,
+                    messageId: msg.id,
+                    jobId,
+                    status,
+                    initialContentLength: initialContent.length,
+                });
+
+                if (!backgroundJobId.value) backgroundJobId.value = jobId;
+                if (backgroundJobMode.value === 'none') {
+                    backgroundJobMode.value = 'background';
+                }
+            }
+            logBgStream('reattach-complete', {
+                threadId: threadIdRef.value,
+                attachedJobs: attachedBackgroundJobs.size,
+                backgroundJobId: backgroundJobId.value,
+                backgroundJobMode: backgroundJobMode.value,
+            });
+        } catch (error) {
+            warnBgStream('reattach-failed', {
+                threadId: threadIdRef.value || null,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
+
+    /**
+     * Purpose:
+     * Sends a user message, performs validation, and streams an assistant response.
+     *
+     * Behavior:
+     * - Validates API key and client-side limits
+     * - Persists user message and builds model input
+     * - Orchestrates foreground or background streaming
+     *
+     * Constraints:
+     * - Returns early when message is filtered or blocked
+     * - Requires thread id to be initialized before send
+     */
     async function sendMessage(
         contentOrParams: string | (SendMessageParams & { content: string }),
         maybeParams?: SendMessageParams
-    ) {
+    ): Promise<SendResult> {
+        if (activeRequestId) return { status: 'rejected', reason: 'busy' };
+        const requestId = newId();
+        const requestScope: ChatRequestScope = {
+            requestId,
+            originDb: getDb(),
+            accumulator: streamAcc,
+            abortController: null,
+            toolLedger: new Map(),
+        };
+        activeRequestId = requestId;
+        activeRequestScope = requestScope;
+        requestScope.accumulator.reset();
+        loading.value = true;
+        requestState.value = { status: 'admitted', requestId };
+        let result: SendResult;
+        try {
+            result = await executeSendMessage(
+                requestScope,
+                contentOrParams,
+                maybeParams
+            );
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error);
+            result = {
+                status: 'failed', requestId,
+                reason: error instanceof ToolIterationLimitError
+                    ? 'tool_iteration_limit'
+                    : 'stream_error',
+                error: message,
+            };
+            if (import.meta.dev) {
+                console.warn('[useChat] sendMessage threw', error);
+            }
+            reportError(
+                err('ERR_INTERNAL', message || 'Failed to send message', {
+                    severity: 'error',
+                    tags: { domain: 'chat', stage: 'send' },
+                }),
+                { toast: true }
+            );
+        } finally {
+            if (activeRequestId === requestId) activeRequestId = null;
+            if (activeRequestScope === requestScope) {
+                activeRequestScope = null;
+                abortController.value = null;
+            }
+            loading.value = false;
+        }
+        requestState.value = { status: 'terminal', requestId, result };
+        return result;
+    }
+
+    async function executeSendMessage(
+        requestScope: ChatRequestScope,
+        contentOrParams: string | (SendMessageParams & { content: string }),
+        maybeParams?: SendMessageParams
+    ): Promise<SendResult> {
+        const requestId = requestScope.requestId;
         let content: string;
         let sendMessagesParams: SendMessageParams;
 
@@ -384,7 +1279,55 @@ export function useChat(
             sendMessagesParams = contentOrParams;
         }
 
-        if (!apiKey.value) return;
+        const hasKey =
+            Boolean(effectiveApiKey.value) || hasInstanceKey.value;
+        if (!hasKey) {
+            if (allowUserOverride.value && guestAccessEnabled.value) {
+                // Guest access enabled - trigger OpenRouter login
+                const openrouter = useOpenRouterAuth();
+                openrouter.startLogin();
+            } else if (!allowUserOverride.value) {
+                toast.add({
+                    title: 'Instance key required',
+                    description:
+                        'This deployment requires a managed OpenRouter key. Contact your administrator.',
+                    color: 'warning',
+                    duration: 4000,
+                });
+            } else if (runtimeConfig.public.ssrAuthEnabled === true) {
+                // SSR mode: user must authenticate via the auth provider first
+                toast.add({
+                    title: 'Sign in required',
+                    description:
+                        'Please sign in to continue chatting.',
+                    color: 'info',
+                    duration: 4000,
+                });
+            } else {
+                // Static/local mode: there is no "sign in" — the user just
+                // needs an OpenRouter key. The chat input already shows
+                // connect/paste actions; this is only a backstop.
+                toast.add({
+                    title: 'Connect to OpenRouter',
+                    description:
+                        'Add an OpenRouter API key to start chatting.',
+                    color: 'info',
+                    duration: 4000,
+                });
+            }
+            return { status: 'rejected', requestId, reason: 'missing_credentials' };
+        }
+
+        // Extract extra text parts early so we can account for them in validation.
+        // Large pastes (>600 words) are captured into extraTextParts while the
+        // editor text field (content) is left empty — the send button and model
+        // must still accept the message.
+        const earlyExtraTextParts: string[] =
+            Array.isArray(sendMessagesParams.extraTextParts)
+                ? sendMessagesParams.extraTextParts.filter(
+                      (t): t is string => typeof t === 'string' && t.trim() !== ''
+                  )
+                : [];
 
         const outgoing = await hooks.applyFilters(
             'ui.chat.message:filter:outgoing',
@@ -392,20 +1335,23 @@ export function useChat(
         );
 
         if (
-            !outgoing ||
-            typeof outgoing !== 'string' ||
-            outgoing.trim() === ''
+            (!outgoing || typeof outgoing !== 'string' || outgoing.trim() === '') &&
+            earlyExtraTextParts.length === 0
         ) {
-            useToast().add({
+            toast.add({
                 title: 'Message blocked',
                 description: 'Your message was filtered out.',
                 duration: 3000,
             });
-            return;
+            return { status: 'rejected', requestId, reason: 'filtered' };
         }
 
+        const canSend = await enforceClientLimits(!threadIdRef.value);
+        if (!canSend) return { status: 'rejected', requestId, reason: 'client_limit' };
+
         if (!threadIdRef.value) {
-            let effectivePromptId: string | null = pendingPromptId || null;
+            let effectivePromptId: string | null =
+                pendingPromptIdRef.value || null;
             if (!effectivePromptId) {
                 try {
                     effectivePromptId = await getDefaultPromptId();
@@ -452,7 +1398,7 @@ export function useChat(
                     chosen.reason !== 'fixed'
                 ) {
                     try {
-                        useToast().add({
+                        toast.add({
                             title: 'Model fallback in effect',
                             description:
                                 'Your fixed model was not used. Falling back to last selected or default.',
@@ -465,12 +1411,21 @@ export function useChat(
             } catch {
                 /* intentionally empty */
             }
-            const newThread = await create.thread({
-                title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
-                last_message_at: nowSec(),
-                parent_thread_id: null,
-                system_prompt_id: effectivePromptId || null,
-            });
+            const newThread = await createThreadInDb(
+                requestScope.originDb,
+                {
+                    title:
+                        content.split(' ').slice(0, 6).join(' ') ||
+                        'New Thread',
+                    last_message_at: nowSec(),
+                    parent_thread_id: null,
+                    system_prompt_id: effectivePromptId || null,
+                },
+                {
+                    hooks,
+                    limits: runtimeConfig.public.limits,
+                }
+            );
             threadIdRef.value = newThread.id;
             // Bind thread to active pane immediately (before first user message hook) if multi-pane present.
             try {
@@ -520,9 +1475,15 @@ export function useChat(
             ? parseHashes(prevAssistantRaw.file_hashes)
             : [];
 
-        streamAcc.reset();
+        requestScope.accumulator.reset();
         let { files, model, file_hashes } = sendMessagesParams;
-        const { extraTextParts, online, context_hashes } = sendMessagesParams;
+        const {
+            extraTextParts,
+            online,
+            thinking,
+            reasoningEffort,
+            context_hashes,
+        } = sendMessagesParams;
         const extendedParams = sendMessagesParams as ExtendedSendMessageParams;
         if (
             (!files || files.length === 0) &&
@@ -550,185 +1511,69 @@ export function useChat(
                 );
         }
         if (!model) model = DEFAULT_AI_MODEL;
+        const originalModelId = model;
+        const normalizedModelId = stripThinkingSuffix(originalModelId);
+        const { catalog, favoriteModels } = useModelStore();
+        const modelMeta =
+            catalog.value.find((m: ModelInfo) => m.id === normalizedModelId) ||
+            favoriteModels.value.find(
+                (m: ModelInfo) => m.id === normalizedModelId
+            );
+        const requestedThinking =
+            thinking === true || originalModelId.endsWith(THINKING_SUFFIX);
+        const reasoning = requestedThinking
+            ? resolveReasoningConfig({
+                  model: modelMeta,
+                  enabled: true,
+                  effort: reasoningEffort,
+              })
+            : undefined;
+        model = normalizedModelId;
         if (online === true) model = model + ':online';
 
         file_hashes = mergeAssistantFileHashes(assistantHashes, file_hashes);
-
-        // Helper: convert a Blob to a data URL (used only for API preparation)
-        const blobToDataUrl = (blob: Blob): Promise<string> =>
-            new Promise((resolve, reject) => {
-                const fr = new FileReader();
-                fr.onerror = () =>
-                    reject(fr.error ?? new Error('FileReader error'));
-                fr.onload = () => resolve(fr.result as string);
-                fr.readAsDataURL(blob);
-            });
-
-        // UI path: verify blob exists, return hash reference without Base64 conversion
-        // This keeps UI state lean - Base64 conversion happens just-in-time for API
-        const normalizeFileUrl = async (f: { type: string; url: string }) => {
-            if (typeof FileReader === 'undefined') return f; // SSR safeguard
-            const mime = f.type || '';
-            // Only process images; leave other files (e.g., PDFs) untouched for now.
-            if (!mime.startsWith('image/')) return f;
-            let url = f.url || '';
-            // Already a data URL - pass through (for pasted images not yet stored)
-            if (url.startsWith('data:image/')) return { ...f, url };
-            try {
-                // Local hash -> verify blob exists, return hash reference
-                if (!/^https?:|^data:|^blob:/i.test(url)) {
-                    const { getFileBlob } = await import('~/db/files');
-                    const blob = await getFileBlob(url);
-                    if (blob) {
-                        // Return hash reference - verified blob exists
-                        // UI will use createObjectURL when needed, API will convert later
-                        return { ...f, url, _verified: true };
-                    }
-                }
-                // blob: object URL - pass through (already efficient)
-                if (url.startsWith('blob:')) {
-                    return { ...f, url, _verified: true };
-                }
-            } catch {
-                // fall through to original url
-            }
-            return { ...f, url };
-        };
-
-        // API path: convert hash references and blob URLs to Base64 for model input
-        // This is called just-in-time before buildOpenRouterMessages
-        const prepareFilesForModel = async (
-            files: Array<{ type: string; url: string }>
-        ): Promise<ContentPart[]> => {
-            const parts: ContentPart[] = [];
-            for (const f of files) {
-                if (!f.url) continue;
-                const mime = f.type || '';
-
-                try {
-                    // Hash reference -> load from IndexedDB and convert to Base64
-                    if (!/^https?:|^data:|^blob:/i.test(f.url)) {
-                        const { getFileMeta, getFileBlob } = await import(
-                            '~/db/files'
-                        );
-                        const blob = await getFileBlob(f.url);
-                        if (!blob) continue;
-
-                        const dataUrl = await blobToDataUrl(blob);
-                        if (mime.startsWith('image/')) {
-                            parts.push({
-                                type: 'image',
-                                image: dataUrl,
-                                mediaType: mime,
-                            });
-                        } else if (mime === 'application/pdf') {
-                            const meta = await getFileMeta(f.url).catch(
-                                () => null
-                            );
-                            parts.push({
-                                type: 'file',
-                                data: dataUrl,
-                                mediaType: mime,
-                                name: meta?.name || 'document.pdf',
-                            });
-                        }
-                        continue;
-                    }
-
-                    // blob: URL -> fetch and convert to Base64
-                    if (f.url.startsWith('blob:')) {
-                        try {
-                            const blob = await $fetch<Blob>(f.url, {
-                                responseType: 'blob',
-                            });
-                            const dataUrl = await blobToDataUrl(blob);
-                            if (mime.startsWith('image/')) {
-                                parts.push({
-                                    type: 'image',
-                                    image: dataUrl,
-                                    mediaType: mime,
-                                });
-                            }
-                        } catch {
-                            // ignore fetch error
-                        }
-                        continue;
-                    }
-
-                    // Already Base64 data URL -> use directly
-                    if (f.url.startsWith('data:')) {
-                        if (mime.startsWith('image/')) {
-                            parts.push({
-                                type: 'image',
-                                image: f.url,
-                                mediaType: mime,
-                            });
-                        }
-                    }
-                } catch {
-                    // Skip files that fail to convert
-                }
-            }
-            return parts;
-        };
-
-        // Convert hash to ContentPart for context injection (just-in-time for API)
-        const hashToContentPart = async (
-            hash: string
-        ): Promise<ContentPart | null> => {
-            try {
-                const { getFileMeta, getFileBlob } = await import('~/db/files');
-                const meta = await getFileMeta(hash).catch(() => null);
-                const blob = await getFileBlob(hash);
-                if (!blob) return null;
-                // Only include images/PDFs to avoid bloating text-only contexts
-                const mime = meta?.mime_type || blob.type || '';
-                if (mime === 'application/pdf') {
-                    const dataUrl = await blobToDataUrl(blob);
-                    return {
-                        type: 'file',
-                        data: dataUrl,
-                        mediaType: mime,
-                        name: meta?.name || 'document.pdf',
-                    };
-                }
-                if (!mime.startsWith('image/')) return null;
-                const dataUrl = await blobToDataUrl(blob);
-                return {
-                    type: 'image',
-                    image: dataUrl,
-                    mediaType: mime,
-                };
-            } catch {
-                return null;
-            }
-        };
 
         // Verify files exist (no Base64 conversion - that happens in buildOpenRouterMessages)
         const hydratedFiles = await Promise.all(
             Array.isArray(files) ? files.map(normalizeFileUrl) : []
         );
 
-        const userDbMsg = await tx.appendMessage({
-            thread_id: threadIdRef.value,
-            role: 'user',
-            data: { content: outgoing, attachments: files ?? [] },
-            file_hashes: file_hashes.length
-                ? serializeFileHashes(file_hashes)
-                : undefined,
-        });
         const parts: ContentPart[] = buildParts(
             outgoing,
             hydratedFiles,
             extraTextParts
         );
+        // Persist the full user-visible text so reloads and retries keep pasted
+        // large-text blocks. The in-flight model input still uses `parts` so
+        // image/file parts are preserved for this request.
+        const persistedUserText = [outgoing, ...(extraTextParts ?? [])]
+            .filter(
+                (t): t is string => typeof t === 'string' && t.trim() !== ''
+            )
+            .join('\n\n');
+        const nextUserMessageId = newId();
+        const userDbMsg = await appendMessageToDb(requestScope.originDb, {
+            id: nextUserMessageId,
+            thread_id: threadIdRef.value,
+            role: 'user',
+            data: {
+                ...userTranscriptData(nextUserMessageId),
+                content: persistedUserText,
+                attachments: files ?? [],
+            },
+            file_hashes: file_hashes.length
+                ? serializeFileHashes(file_hashes)
+                : undefined,
+        });
+        requestState.value = {
+            status: 'persisted', requestId, userMessageId: userDbMsg.id,
+        };
         const rawUser: ChatMessage = {
             role: 'user',
             content: parts,
             id: userDbMsg.id,
             file_hashes: userDbMsg.file_hashes,
         };
-        recordRawMessage(rawUser);
         rawMessages.value.push(rawUser);
         messages.value.push(ensureUiMessage(rawUser));
 
@@ -753,39 +1598,48 @@ export function useChat(
         }
 
         loading.value = true;
+        requestScope.streamId = undefined;
         streamId.value = undefined;
+        backgroundJobId.value = null;
+        detached.value = false;
 
         let currentModelId: string | undefined;
+        let terminalResult: SendResult | undefined;
         try {
             const startedAt = Date.now();
-            const modelId = await hooks.applyFilters(
+            const modelIdPromise = hooks.applyFilters(
                 'ai.chat.model:filter:select',
                 model
             );
-            currentModelId = modelId;
+            const historySyncPromise = ensureHistorySynced();
 
-            const messagesWithSystemRaw = [...rawMessages.value];
-            const threadSystemText = await getSystemPromptContent();
-            let finalSystem: string | null = null;
+            let masterPrompt = '';
             try {
                 const { settings } = useAiSettings();
                 const settingsValue = settings.value as
                     | ChatSettings
                     | undefined;
-                const master = settingsValue?.masterSystemPrompt ?? '';
-                finalSystem = composeSystemPrompt(
-                    master,
-                    threadSystemText || null
-                );
+                masterPrompt = settingsValue?.masterSystemPrompt ?? '';
             } catch {
-                finalSystem = (threadSystemText || '').trim() || null;
+                masterPrompt = '';
             }
-            if (finalSystem && finalSystem.trim()) {
-                messagesWithSystemRaw.unshift({
-                    role: 'system',
-                    content: finalSystem,
-                    id: `system-${newId()}`,
-                });
+            const systemMessagePromise = buildSystemPromptMessage({
+                threadId: threadIdRef.value,
+                activePromptContent: activePromptContent.value,
+                masterPrompt,
+            });
+            const [modelId] = await Promise.all([
+                modelIdPromise,
+                historySyncPromise,
+            ]);
+            currentModelId = modelId;
+            const systemMessage = await systemMessagePromise;
+
+            const messagesWithSystemRaw = sendMessagesParams.historyOverride
+                ? [...sendMessagesParams.historyOverride, rawUser]
+                : [...rawMessages.value];
+            if (systemMessage) {
+                messagesWithSystemRaw.unshift(systemMessage);
             }
 
             const effectiveMessages = await hooks.applyFilters(
@@ -798,124 +1652,79 @@ export function useChat(
                 Array.isArray(effectiveMessages) ? effectiveMessages : []
             ).filter(shouldKeepAssistantMessage);
 
-            const isModelMessage = (
-                m: ChatMessage
-            ): m is ChatMessage & { role: 'user' | 'assistant' | 'system' } =>
-                m.role !== 'tool';
-
-            const { buildOpenRouterMessages } = await import(
-                '~/core/auth/openrouter-build'
+            const budgetModelId = stripThinkingSuffix(modelId).replace(
+                /:online$/,
+                ''
             );
+            const budgetModelMeta =
+                catalog.value.find(
+                    (candidate: ModelInfo) => candidate.id === budgetModelId
+                ) ||
+                favoriteModels.value.find(
+                    (candidate: ModelInfo) => candidate.id === budgetModelId
+                ) ||
+                modelMeta;
+            const maxInputTokens =
+                resolveChatInputTokenBudget(budgetModelMeta);
 
-            // Load thread history if not already loaded
-            await ensureHistorySynced();
-
-            const modelInputMessages: ModelInputMessage[] =
-                sanitizedEffectiveMessages.filter(isModelMessage).map(
-                    (m): ModelInputMessage => ({
-                        role: m.role,
-                        content: m.content,
-                        id: m.id,
-                        file_hashes: m.file_hashes,
-                        name: m.name,
-                        tool_call_id: m.tool_call_id,
-                    })
-                );
-            if (assistantHashes.length && prevAssistant?.id) {
-                const target = modelInputMessages.find(
-                    (m) => m.id === prevAssistant.id
-                );
-                if (target) target.file_hashes = null;
+            let orMessages = await buildOpenRouterMessagesForSend({
+                effectiveMessages: sanitizedEffectiveMessages,
+                assistantHashes,
+                prevAssistantId: prevAssistant?.id,
+                contextHashes: context_hashes,
+                fileHashes: Array.isArray(file_hashes) ? file_hashes : [],
+                maxImageInputs: 5,
+                imageInclusionPolicy: 'all',
+                maxInputTokens,
+            });
+            if (orMessages.length === 0) {
+                return {
+                    status: 'failed', requestId, reason: 'empty_context',
+                    error: 'No model input remained after message preparation.',
+                    userMessageId: userDbMsg.id,
+                };
             }
-            const contextHashesList = Array.isArray(context_hashes)
-                ? context_hashes.slice(0, MAX_MESSAGE_FILE_HASHES)
-                : [];
-            if (contextHashesList.length) {
-                const seenContext = new Set<string>(
-                    Array.isArray(file_hashes) ? file_hashes : []
-                );
-                const contextParts: ContentPart[] = [];
-                for (const h of contextHashesList) {
-                    if (!h || seenContext.has(h)) continue;
-                    if (contextParts.length >= MAX_MESSAGE_FILE_HASHES) break;
-                    const part = await hashToContentPart(h);
-                    if (part) {
-                        contextParts.push(part);
-                        seenContext.add(h);
-                    }
-                }
-                if (contextParts.length) {
-                    const lastUserIdx = [...modelInputMessages]
-                        .map((m, idx: number) => (m.role === 'user' ? idx : -1))
-                        .filter((idx) => idx >= 0)
-                        .pop();
-                    if (lastUserIdx != null && lastUserIdx >= 0) {
-                        const target = modelInputMessages[lastUserIdx];
-                        if (target) {
-                            if (!Array.isArray(target.content)) {
-                                if (typeof target.content === 'string') {
-                                    target.content = [
-                                        { type: 'text', text: target.content },
-                                    ];
-                                } else {
-                                    target.content = [];
-                                }
-                            }
-                            target.content.push(...contextParts);
-                        }
-                    }
-                }
-            }
-            let orMessages: OpenRouterMessage[] = await buildOpenRouterMessages(
-                modelInputMessages,
-                {
-                    maxImageInputs: 16,
-                    imageInclusionPolicy: 'all',
-                    debug: false,
-                }
-            );
-            trimOrMessagesImages(
-                orMessages as Parameters<typeof trimOrMessagesImages>[0],
-                5
-            );
-            if (orMessages.length === 0) return;
 
-            const hasImageInput = modelInputMessages.some((m) =>
-                Array.isArray(m.content)
-                    ? m.content.some((p) => {
-                          const part = p as {
-                              type?: string;
-                              mediaType?: string;
-                          };
-                          if (
-                              part.type === 'image' ||
-                              part.type === 'image_url'
-                          )
-                              return true;
-                          if (part.mediaType)
-                              return /image\//.test(part.mediaType);
-                          return false;
-                      })
-                    : false
-            );
-            const modelImageHint = /image|vision|flash/i.test(modelId);
-            const modalities =
-                hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
+            // modalities controls OUTPUT format, not input capability
+            const modalities = getChatModalities(modelId);
 
             const newStreamId = newId();
+            requestScope.streamId = newStreamId;
             streamId.value = newStreamId;
-            const assistantDbMsg = (await tx.appendMessage({
+            const nextAssistantId = newId();
+            const assistantDbMsg = (await appendMessageToDb(requestScope.originDb, {
+                id: nextAssistantId,
                 thread_id: threadIdRef.value,
                 role: 'assistant',
                 stream_id: newStreamId,
-                data: { content: '', attachments: [], reasoning_text: null },
+                pending: true, // Mark as streaming - HookBridge will skip sync until finalized
+                data: {
+                    ...assistantTranscriptData({
+                        turnId: userDbMsg.id,
+                        requestId,
+                        generationId: newStreamId,
+                        mode: 'foreground',
+                    }),
+                    content: '',
+                    attachments: [],
+                    reasoning_text: null,
+                    generation_state: 'streaming',
+                    ...createForegroundGenerationLease(requestId),
+                },
             })) as StoredMessage;
+            requestState.value = {
+                status: 'streaming', requestId, userMessageId: userDbMsg.id,
+                assistantMessageId: assistantDbMsg.id,
+            };
             // Track file hashes across loop iterations
             const assistantFileHashes: string[] = [];
             const persistAssistant = makeAssistantPersister(
+                requestScope.originDb,
                 assistantDbMsg,
-                assistantFileHashes
+                assistantFileHashes,
+                requestId
             );
+            requestScope.persistAssistant = persistAssistant;
 
             await hooks.doAction('ai.chat.send:action:before', {
                 threadId: threadIdRef.value,
@@ -934,11 +1743,11 @@ export function useChat(
             const activeToolCalls = new Map<string, ToolCallInfo>();
 
             aborted.value = false;
-            abortController.value = new AbortController();
-
-            let continueLoop = true;
-            let loopIteration = 0;
-            const MAX_TOOL_ITERATIONS = 10; // Prevent infinite loops
+            requestScope.abortController = null;
+            abortController.value = null;
+            backgroundJobId.value = null;
+            backgroundJobMode.value = 'none';
+            backgroundJobInfo.value = null;
 
             const filteredMessages = await hooks.applyFilters(
                 'ai.chat.messages:filter:before_send',
@@ -958,14 +1767,13 @@ export function useChat(
                     orMessages = candidate;
                 }
             }
+            orMessages = await enforceOpenRouterMessageTokenBudget(
+                orMessages,
+                maxInputTokens
+            );
 
             // Check if a workflow is handling this request - skip AI call
-            if (consumeWorkflowHandlingFlag()) {
-                if (import.meta.dev) {
-                    console.log(
-                        '[useAi] Workflow is handling request, skipping AI call'
-                    );
-                }
+            if (consumeChatSendHandled()) {
                 // Seed UI with assistant placeholder so workflow state can render immediately
                 const workflowAssistant: ChatMessage = {
                     role: 'assistant',
@@ -974,43 +1782,51 @@ export function useChat(
                     stream_id: newStreamId,
                     reasoning_text: null,
                 };
-                recordRawMessage(workflowAssistant);
                 rawMessages.value.push(workflowAssistant);
                 const uiAssistant = ensureUiMessage(workflowAssistant);
                 uiAssistant.pending = true;
                 messages.value.push(uiAssistant);
                 loading.value = false;
+                requestScope.abortController = null;
                 abortController.value = null;
-                return;
+                return {
+                    status: 'detached', requestId, reason: 'detached',
+                    userMessageId: userDbMsg.id,
+                    assistantMessageId: assistantDbMsg.id,
+                };
             }
 
             // Also skip if messages array is empty (e.g., workflow returned empty)
             if (orMessages.length === 0) {
-                if (import.meta.dev) {
-                    console.log(
-                        '[useAi] No messages to send, skipping AI call'
-                    );
-                }
                 loading.value = false;
-                return;
+                return {
+                    status: 'failed', requestId, reason: 'empty_context',
+                    error: 'No model input remained after request filters.',
+                    userMessageId: userDbMsg.id,
+                    assistantMessageId: assistantDbMsg.id,
+                };
             }
 
-            while (continueLoop && loopIteration < MAX_TOOL_ITERATIONS) {
-                continueLoop = false;
-                loopIteration++;
+            const allowBackgroundStreaming =
+                backgroundStreamingAllowed.value &&
+                backgroundStreamStartMode.value === 'background' &&
+                modalities.length === 1 &&
+                modalities[0] === 'text';
+            logBgStream('send-message-stream-mode-decision', {
+                threadId: threadIdRef.value || null,
+                allowBackgroundStreaming,
+                backgroundStreamingAllowed: backgroundStreamingAllowed.value,
+                backgroundStreamStartMode: backgroundStreamStartMode.value,
+                enabledToolCount: enabledToolDefs.length,
+                modalities,
+            });
 
-                const stream = openRouterStream({
-                    apiKey: apiKey.value,
-                    model: modelId,
-                    orMessages: orMessages as Parameters<
-                        typeof openRouterStream
-                    >[0]['orMessages'],
-                    modalities,
-                    tools:
-                        enabledToolDefs.length > 0
-                            ? enabledToolDefs
-                            : undefined,
-                    signal: abortController.value.signal,
+            if (allowBackgroundStreaming) {
+                backgroundJobMode.value = 'background';
+                logBgStream('send-message-background-start', {
+                    threadId: threadIdRef.value || null,
+                    messageId: assistantDbMsg.id,
+                    streamId: newStreamId,
                 });
 
                 const rawAssistant: ChatMessage = {
@@ -1021,278 +1837,217 @@ export function useChat(
                     reasoning_text: null,
                 };
 
-                if (loopIteration === 1) {
-                    recordRawMessage(rawAssistant);
-                    rawMessages.value.push(rawAssistant);
-                    const uiAssistant = ensureUiMessage(rawAssistant);
-                    uiAssistant.pending = true;
-                    tailAssistant.value = uiAssistant;
-                }
+                rawMessages.value.push(rawAssistant);
+                const uiAssistant = ensureUiMessage(rawAssistant);
+                uiAssistant.pending = true;
+                tailAssistant.value = uiAssistant;
 
-                const current =
-                    tailAssistant.value || ensureUiMessage(rawAssistant);
-                let chunkIndex = 0;
-                const WRITE_INTERVAL_MS = 500;
-                let lastPersistAt = 0;
-                const pendingToolCalls: ToolCall[] = [];
+                // Background admission can block before a job ID exists. Keep it
+                // cancellable through the same request-scoped controller as foreground.
+                requestScope.abortController = new AbortController();
+                abortController.value = requestScope.abortController;
 
                 try {
-                    for await (const ev of stream) {
-                        if (ev.type === 'tool_call') {
-                            // Tool call detected - enqueue for execution after stream closes
-                            if (current.pending) current.pending = false;
+                    const toolRuntime =
+                        enabledToolDefs.length > 0
+                            ? enabledToolDefs.reduce<Record<string, string>>(
+                                  (acc, tool) => {
+                                      if (tool.runtime) {
+                                          acc[tool.function.name] = tool.runtime;
+                                      }
+                                      return acc;
+                                  },
+                                  {}
+                              )
+                            : undefined;
 
-                            const toolCall = ev.tool_call;
+                    const result = await startBackgroundStream({
+                        apiKey: effectiveApiKey.value,
+                        model: modelId,
+                        orMessages: orMessages as Parameters<
+                            typeof startBackgroundStream
+                        >[0]['orMessages'],
+                        modalities,
+                        threadId: threadIdRef.value!,
+                        messageId: assistantDbMsg.id,
+                        reasoning,
+                        tools:
+                            enabledToolDefs.length > 0
+                                ? enabledToolDefs
+                                : undefined,
+                        toolRuntime,
+                        signal: requestScope.abortController.signal,
+                    });
 
-                            // Add tool call to tracking with loading status
-                            activeToolCalls.set(toolCall.id, {
-                                id: toolCall.id,
-                                name: toolCall.function.name,
-                                status: 'loading',
-                                args: toolCall.function.arguments,
-                            });
+                    backgroundJobId.value = result.jobId;
+                    backgroundJobInfo.value = {
+                        jobId: result.jobId,
+                        threadId: threadIdRef.value!,
+                        messageId: assistantDbMsg.id,
+                    };
+                    logBgStream('send-message-background-job-created', {
+                        threadId: threadIdRef.value!,
+                        messageId: assistantDbMsg.id,
+                        streamId: newStreamId,
+                        jobId: result.jobId,
+                    });
 
-                            // Update UI with loading state
-                            current.toolCalls = Array.from(
-                                activeToolCalls.values()
-                            );
-
-                            // Persist current assistant state (function call request)
-                            await persistAssistant({
-                                content: current.text,
-                                reasoning: current.reasoning_text ?? null,
-                                toolCalls: current.toolCalls ?? undefined,
-                            });
-
-                            pendingToolCalls.push(toolCall);
-                            continue;
-                        } else if (ev.type === 'reasoning') {
-                            if (current.reasoning_text === null)
-                                current.reasoning_text = ev.text;
-                            else current.reasoning_text += ev.text;
-                            streamAcc.append(ev.text, { kind: 'reasoning' });
-                            try {
-                                await hooks.doAction(
-                                    'ai.chat.stream:action:reasoning',
-                                    ev.text,
-                                    {
-                                        threadId: threadIdRef.value,
-                                        assistantId: assistantDbMsg.id,
-                                        streamId: newStreamId,
-                                        reasoningLength:
-                                            current.reasoning_text?.length || 0,
-                                    }
-                                );
-                            } catch {
-                                /* intentionally empty */
-                            }
-                        } else if (ev.type === 'text') {
-                            if (current.pending) current.pending = false;
-                            const delta = ev.text;
-                            streamAcc.append(delta, { kind: 'text' });
-                            await hooks.doAction(
-                                'ai.chat.stream:action:delta',
-                                delta,
-                                {
-                                    threadId: threadIdRef.value,
-                                    assistantId: assistantDbMsg.id,
-                                    streamId: newStreamId,
-                                    deltaLength: delta.length,
-                                    totalLength:
-                                        current.text.length + delta.length,
-                                    chunkIndex: chunkIndex++,
-                                }
-                            );
-                            current.text += delta;
-                        } else if (ev.type === 'image') {
-                            if (current.pending) current.pending = false;
-                            // Store image first, then use hash placeholder (not Base64)
-                            if (assistantFileHashes.length < 6) {
-                                let blob: Blob | null = null;
-                                if (ev.url.startsWith('data:image/'))
-                                    blob = dataUrlToBlob(ev.url);
-                                else if (/^https?:/.test(ev.url)) {
-                                    try {
-                                        // Use $fetch with responseType: 'blob'
-                                        blob = await $fetch<Blob>(ev.url, {
-                                            responseType: 'blob',
-                                        });
-                                    } catch {
-                                        /* intentionally empty */
-                                    }
-                                }
-                                if (blob) {
-                                    try {
-                                        const meta = await createOrRefFile(
-                                            blob,
-                                            'gen-image'
-                                        );
-                                        assistantFileHashes.push(meta.hash);
-                                        // Use valid 1x1 transparent pixel and store hash in alt text to eliminate console errors
-                                        const placeholder = `![file-hash:${meta.hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`;
-                                        const already =
-                                            current.text.includes(placeholder);
-                                        if (!already) {
-                                            current.text +=
-                                                (current.text ? '\n\n' : '') +
-                                                placeholder;
-                                        }
-                                        const serialized =
-                                            await persistAssistant({
-                                                content: current.text,
-                                                reasoning:
-                                                    current.reasoning_text ??
-                                                    null,
-                                            });
-                                        current.file_hashes =
-                                            serialized?.split(',') ?? [];
-                                    } catch {
-                                        /* intentionally empty */
-                                    }
-                                } else {
-                                    // Fallback: couldn't convert to blob, use URL directly
-                                    const placeholder = `![generated image](${ev.url})`;
-                                    const already =
-                                        current.text.includes(placeholder);
-                                    if (!already) {
-                                        current.text +=
-                                            (current.text ? '\n\n' : '') +
-                                            placeholder;
-                                    }
-                                }
-                            }
-                        }
-
-                        // Batch writes: persist every 500ms OR every 50 chunks (whichever comes first)
-                        // to reduce DB pressure while maintaining progress safety
-                        const now = Date.now();
-                        const shouldPersist =
-                            now - lastPersistAt >= WRITE_INTERVAL_MS ||
-                            chunkIndex % 50 === 0;
-                        if (shouldPersist) {
-                            await persistAssistant({
-                                content: current.text,
-                                reasoning: current.reasoning_text ?? null,
-                            });
-                            if (assistantFileHashes.length) {
-                                current.file_hashes = assistantFileHashes;
-                            }
-                            lastPersistAt = now;
-                        }
+                    if (assistantDbMsg.data && typeof assistantDbMsg.data === 'object') {
+                        assistantDbMsg.data = {
+                            ...(assistantDbMsg.data as Record<string, unknown>),
+                            background_job_id: result.jobId,
+                            background_job_status: 'streaming',
+                        };
+                    } else {
+                        assistantDbMsg.data = {
+                            background_job_id: result.jobId,
+                            background_job_status: 'streaming',
+                        } as Record<string, unknown>;
                     }
+                    await updateMessageRecord(requestScope.originDb, assistantDbMsg.id, {
+                        data: {
+                            background_job_id: result.jobId,
+                            background_job_status: 'streaming',
+                            generation_mode: 'background',
+                            generation_state: 'streaming',
+                        },
+                    });
 
-                    if (pendingToolCalls.length > 0) {
-                        const toolResultsForNextLoop: Array<{
-                            call: ToolCall;
-                            result: string;
-                        }> = [];
+                    const tracker = attachBackgroundJobToUi({
+                        jobId: result.jobId,
+                        userId: notificationUserId.value,
+                        messageId: assistantDbMsg.id,
+                        threadId: threadIdRef.value!,
+                        initialContent: '',
+                        useSse: backgroundStreamingAllowed.value,
+                    });
 
-                        for (const toolCall of pendingToolCalls) {
-                            const execution = await toolRegistry.executeTool(
-                                toolCall.function.name,
-                                toolCall.function.arguments
-                            );
-
-                            let toolResultText: string;
-                            let toolStatus: 'complete' | 'error' = 'complete';
-                            if (execution.error) {
-                                toolStatus = 'error';
-                                toolResultText = `Error executing tool "${toolCall.function.name}": ${execution.error}`;
-                                console.warn('[useChat] tool execution error', {
-                                    tool: toolCall.function.name,
-                                    error: execution.error,
-                                    timedOut: execution.timedOut,
-                                });
-                            } else {
-                                toolResultText = execution.result || '';
-                            }
-
-                            activeToolCalls.set(toolCall.id, {
-                                id: toolCall.id,
-                                name: toolCall.function.name,
-                                status: toolStatus,
-                                args: toolCall.function.arguments,
-                                result:
-                                    toolStatus === 'complete'
-                                        ? toolResultText
-                                        : undefined,
-                                error:
-                                    toolStatus === 'error'
-                                        ? execution.error
-                                        : undefined,
-                            });
-                            current.toolCalls = Array.from(
-                                activeToolCalls.values()
-                            );
-
-                            const SUMMARY_THRESHOLD = 500;
-                            let uiSummary = toolResultText;
-                            if (toolResultText.length > SUMMARY_THRESHOLD) {
-                                uiSummary = `Tool result (${Math.round(
-                                    toolResultText.length / 1024
-                                )}KB): ${toolResultText.slice(
-                                    0,
-                                    200
-                                )}... [truncated for display]`;
-                            }
-
-                            await tx.appendMessage({
-                                thread_id: threadIdRef.value,
-                                role: 'tool',
-                                data: {
-                                    content: uiSummary,
-                                    tool_call_id: toolCall.id,
-                                    tool_name: toolCall.function.name,
-                                },
-                            });
-
-                            toolResultsForNextLoop.push({
-                                call: toolCall,
-                                result: toolResultText,
-                            });
-                        }
-
-                        orMessages.push({
-                            role: 'assistant',
-                            content: [
-                                { type: 'text', text: current.text || '' },
-                            ],
-                            tool_calls: pendingToolCalls.map((toolCall) => ({
-                                id: toolCall.id,
-                                type: 'function' as const,
-                                function: {
-                                    name: toolCall.function.name,
-                                    arguments: toolCall.function.arguments,
-                                },
-                            })),
+                    logBgStream('send-message-background-await-completion', {
+                        jobId: tracker.jobId,
+                        threadId: threadIdRef.value!,
+                        messageId: assistantDbMsg.id,
+                    });
+                    const completion = await tracker.completion;
+                    logBgStream('send-message-background-completed', {
+                        jobId: tracker.jobId,
+                        threadId: threadIdRef.value!,
+                        messageId: assistantDbMsg.id,
+                    });
+                    if (completion.status === 'aborted') {
+                        return {
+                            status: 'aborted', requestId, reason: 'aborted',
+                            userMessageId: userDbMsg.id,
+                            assistantMessageId: assistantDbMsg.id,
+                        };
+                    }
+                    if (completion.status === 'error') {
+                        return {
+                            status: 'failed', requestId, reason: 'stream_error',
+                            error: completion.error || 'Background stream failed',
+                            userMessageId: userDbMsg.id,
+                            assistantMessageId: assistantDbMsg.id,
+                        };
+                    }
+                } catch (error) {
+                    if (
+                        aborted.value ||
+                        requestScope.abortController?.signal.aborted ||
+                        (error instanceof Error &&
+                            error.name === 'AbortError')
+                    ) {
+                        // Let the request-level abort path own cleanup and the
+                        // terminal result. Treating admission cancellation as a
+                        // provider failure leaves a false error row behind.
+                        throw error;
+                    }
+                    const errMessage =
+                        error instanceof Error
+                            ? error.message
+                            : 'Background stream failed';
+                    warnBgStream('send-message-background-failed', {
+                        threadId: threadIdRef.value || null,
+                        messageId: assistantDbMsg.id,
+                        error: errMessage,
+                    });
+                    const target = resolveUiMessage(assistantDbMsg.id);
+                    if (target) {
+                        target.pending = false;
+                        target.error = errMessage;
+                        messages.value = [...messages.value];
+                    }
+                    try {
+                        await persistAssistant({
+                            content: target?.text ?? '',
+                            reasoning: target?.reasoning_text ?? null,
+                            toolCalls: target?.toolCalls ?? null,
+                            finalize: true,
                         });
-
-                        for (const payload of toolResultsForNextLoop) {
-                            orMessages.push({
-                                role: 'tool',
-                                tool_call_id: payload.call.id,
-                                name: payload.call.function.name,
-                                content: [
-                                    { type: 'text', text: payload.result },
-                                ],
-                            });
-                        }
-
-                        pendingToolCalls.length = 0;
-                        continueLoop = true;
-                        continue;
+                        await updateMessageRecord(requestScope.originDb, assistantDbMsg.id, {
+                            pending: false,
+                            error: errMessage,
+                            data: {
+                                background_job_status: 'error',
+                                background_job_error: errMessage,
+                                error: errMessage,
+                            },
+                        });
+                    } catch (persistError) {
+                        warnBgStream('background-start-finalize-failed', {
+                            threadId: threadIdRef.value || null,
+                            messageId: assistantDbMsg.id,
+                            error: persistError instanceof Error
+                                ? persistError.message
+                                : String(persistError),
+                        });
                     }
-                } catch (streamError) {
-                    if (loopIteration > 1) {
-                        console.warn(
-                            '[useChat] Stream error during tool loop',
-                            streamError
-                        );
-                        continueLoop = false;
-                    }
-                    throw streamError;
+                    requestScope.accumulator.finalize({
+                        error: new Error(errMessage),
+                    });
+                    loading.value = false;
+                    backgroundJobId.value = null;
+                    backgroundJobMode.value = 'none';
+                    backgroundJobInfo.value = null;
+                    return {
+                        status: 'failed', requestId, reason: 'stream_error',
+                        error: errMessage, userMessageId: userDbMsg.id,
+                        assistantMessageId: assistantDbMsg.id,
+                    };
                 }
+
+                return {
+                    status: 'complete', requestId, userMessageId: userDbMsg.id,
+                    assistantMessageId: assistantDbMsg.id,
+                };
             }
+
+            requestScope.abortController = new AbortController();
+            abortController.value = requestScope.abortController;
+
+            await runForegroundStreamLoop({
+                apiKey: effectiveApiKey.value,
+                modelId,
+                orMessages,
+                modalities,
+                reasoning,
+                tools:
+                    enabledToolDefs.length > 0
+                        ? enabledToolDefs
+                        : undefined,
+                abortSignal: requestScope.abortController.signal,
+                assistantId: assistantDbMsg.id,
+                parentTurnId: userDbMsg.id,
+                streamId: newStreamId,
+                threadId: threadIdRef.value!,
+                streamAcc: requestScope.accumulator,
+                hooks,
+                toolRegistry,
+                persistAssistant,
+                assistantFileHashes,
+                activeToolCalls,
+                tailAssistant,
+                rawMessages,
+                toolLedger: requestScope.toolLedger,
+            });
 
             const current = tailAssistant.value!;
             const fullText = current.text;
@@ -1313,6 +2068,7 @@ export function useChat(
                 content: incoming,
                 reasoning: current.reasoning_text ?? null,
                 toolCalls: current.toolCalls ?? null,
+                finalize: true, // Clear pending flag to trigger sync
             });
             const finalized: StoredMessage = {
                 ...assistantDbMsg,
@@ -1362,9 +2118,29 @@ export function useChat(
                 },
                 aborted: false,
             });
-            streamAcc.finalize();
+            requestScope.accumulator.finalize();
+            backgroundJobId.value = null;
+            backgroundJobMode.value = 'none';
+            backgroundJobInfo.value = null;
+            terminalResult = {
+                status: 'complete', requestId, userMessageId: userDbMsg.id,
+                assistantMessageId: assistantDbMsg.id,
+            };
         } catch (err) {
+            if (err instanceof Error && err.name === 'AbortError') {
+                if (isDetached()) {
+                    return {
+                        status: 'detached', requestId, reason: 'detached',
+                        userMessageId: userDbMsg.id,
+                    };
+                }
+            }
             if (aborted.value) {
+                terminalResult = {
+                    status: 'aborted', requestId, reason: 'aborted',
+                    userMessageId: userDbMsg.id,
+                    assistantMessageId: tailAssistant.value?.id,
+                };
                 if (tailAssistant.value?.pending)
                     tailAssistant.value.pending = false;
                 try {
@@ -1380,7 +2156,15 @@ export function useChat(
                 // Only delete if there's no text; otherwise preserve with 'stopped' status
                 if (tailAssistant.value?.id && !tailAssistant.value.text) {
                     try {
-                        await db.messages.delete(tailAssistant.value.id);
+                        const db = getDb();
+                        await db.transaction(
+                            'rw',
+                            getWriteTxTableNames(db, 'messages', {
+                                includeTombstones: true,
+                            }),
+                            async () => {
+                            await db.messages.delete(tailAssistant.value!.id);
+                        });
                         const idx = rawMessages.value.findIndex(
                             (m) => m.id === tailAssistant.value!.id
                         );
@@ -1433,29 +2217,45 @@ export function useChat(
                         }
                     }
                     try {
-                        const existing = (await db.messages.get(
+                        const existing = (await requestScope.originDb.messages.get(
                             tailAssistant.value.id
                         )) as StoredMessage | undefined;
                         const baseData =
                             existing?.data && typeof existing.data === 'object'
                                 ? (existing.data as Record<string, unknown>)
                                 : {};
-                        await db.messages.update(tailAssistant.value.id, {
-                            data: {
-                                ...baseData,
-                                content: tailAssistant.value.text,
-                                reasoning_text:
-                                    tailAssistant.value.reasoning_text ?? null,
+                        await updateMessageRecord(
+                            requestScope.originDb,
+                            tailAssistant.value.id,
+                            {
+                                pending: false, // Clear pending so sync captures this
+                                data: {
+                                    ...baseData,
+                                    content: tailAssistant.value.text,
+                                    reasoning_text:
+                                        tailAssistant.value.reasoning_text ??
+                                        null,
+                                    error: 'stopped', // Store in data for reliable sync
+                                },
+                                error: 'stopped', // Also at top-level for local reads
                             },
-                            error: 'stopped',
-                            updated_at: nowSec(),
-                        });
+                            existing
+                        );
                     } catch {
                         /* intentionally empty */
                     }
                     tailAssistant.value = null;
                 }
             } else {
+                const terminalError = err instanceof Error ? err.message : String(err);
+                terminalResult = {
+                    status: 'failed', requestId,
+                    reason: err instanceof ToolIterationLimitError
+                        ? 'tool_iteration_limit'
+                        : 'stream_error',
+                    error: terminalError, userMessageId: userDbMsg.id,
+                    assistantMessageId: tailAssistant.value?.id,
+                };
                 const lastUser = [...messages.value]
                     .reverse()
                     .find((m) => m.role === 'user');
@@ -1470,7 +2270,7 @@ export function useChat(
                     tags: {
                         domain: 'chat',
                         threadId: threadIdRef.value || '',
-                        streamId: streamId.value || '',
+                        streamId: requestScope.streamId || '',
                         modelId: currentModelId || '',
                         stage: 'stream',
                     },
@@ -1479,16 +2279,25 @@ export function useChat(
                     retryable: !!retryFn,
                 });
                 const e = err instanceof Error ? err : new Error(String(err));
-                streamAcc.finalize({ error: e });
+                requestScope.accumulator.finalize({ error: e });
                 await hooks.doAction('ai.chat.stream:action:error', {
                     threadId: threadIdRef.value,
-                    streamId: streamId.value,
+                    streamId: requestScope.streamId,
                     error: e,
                     aborted: false,
                 });
                 if (!tailAssistant.value?.text && tailAssistant.value?.id) {
                     try {
-                        await db.messages.delete(tailAssistant.value.id);
+                        await requestScope.originDb.transaction(
+                            'rw',
+                            getWriteTxTableNames(requestScope.originDb, 'messages', {
+                                includeTombstones: true,
+                            }),
+                            async () => {
+                            await requestScope.originDb.messages.delete(
+                                tailAssistant.value!.id
+                            );
+                        });
                         const idx = rawMessages.value.findIndex(
                             (m) => m.id === tailAssistant.value!.id
                         );
@@ -1516,23 +2325,30 @@ export function useChat(
                         }
                     }
                     try {
-                        const existing = (await db.messages.get(
+                        const existing = (await requestScope.originDb.messages.get(
                             tailAssistant.value.id
                         )) as StoredMessage | undefined;
                         const baseData =
                             existing?.data && typeof existing.data === 'object'
                                 ? (existing.data as Record<string, unknown>)
                                 : {};
-                        await db.messages.update(tailAssistant.value.id, {
-                            data: {
-                                ...baseData,
-                                content: tailAssistant.value.text,
-                                reasoning_text:
-                                    tailAssistant.value.reasoning_text ?? null,
+                        await updateMessageRecord(
+                            requestScope.originDb,
+                            tailAssistant.value.id,
+                            {
+                                pending: false, // Clear pending so sync captures this
+                                data: {
+                                    ...baseData,
+                                    content: tailAssistant.value.text,
+                                    reasoning_text:
+                                        tailAssistant.value.reasoning_text ??
+                                        null,
+                                    error: 'stream_interrupted', // Store in data for reliable sync
+                                },
+                                error: 'stream_interrupted', // Also at top-level for local reads
                             },
-                            error: 'stream_interrupted',
-                            updated_at: nowSec(),
-                        });
+                            existing
+                        );
                     } catch {
                         /* intentionally empty */
                     }
@@ -1543,855 +2359,275 @@ export function useChat(
         } finally {
             loading.value = false;
             // CRITICAL: Ensure abort controller is cleaned up to prevent memory leak
-            if (abortController.value) {
+            if (activeRequestScope === requestScope && abortController.value) {
                 abortController.value = null;
             }
             setTimeout(() => {
-                if (!loading.value && streamState.finalized) resetStream();
+                if (
+                    activeRequestScope === null &&
+                    !loading.value &&
+                    requestScope.accumulator.state.finalized
+                ) {
+                    resetStream();
+                }
             }, 0);
         }
+        return terminalResult ?? {
+            status: 'failed', requestId, reason: 'stream_error',
+            error: 'Chat request ended without a terminal state.',
+            userMessageId: userDbMsg.id,
+        };
     }
 
     // END sendMessage
 
+    /**
+     * Purpose:
+     * Retries a prior user message by removing its assistant response and resending.
+     *
+     * Behavior:
+     * - Rebuilds message context from local state
+     * - Reuses the current settings unless a model override is supplied
+     *
+     * Constraints:
+     * - No-op if message or thread context is missing
+     */
     async function retryMessage(messageId: string, modelOverride?: string) {
-        if (loading.value || !threadIdRef.value) return;
-        try {
-            const target = await db.messages.get(messageId);
-            if (!target || target.thread_id !== threadIdRef.value) return;
-            let userMsg = target.role === 'user' ? target : undefined;
-            if (!userMsg && target.role === 'assistant') {
-                const DexieMod = (await import('dexie')).default;
-                userMsg = await db.messages
-                    .where('[thread_id+index]')
-                    .between(
-                        [target.thread_id, DexieMod.minKey],
-                        [target.thread_id, target.index]
-                    )
-                    .filter(
-                        (m: Message) =>
-                            m.role === 'user' &&
-                            !m.deleted &&
-                            m.index < target.index
-                    )
-                    .last();
-            }
-            if (!userMsg) return;
-            const DexieMod2 = (await import('dexie')).default;
-            const assistant = await db.messages
-                .where('[thread_id+index]')
-                .between(
-                    [
-                        userMsg.thread_id,
-                        (typeof userMsg.index === 'number'
-                            ? userMsg.index
-                            : 0) + 1,
-                    ],
-                    [userMsg.thread_id, DexieMod2.maxKey]
-                )
-                .filter((m: Message) => m.role === 'assistant' && !m.deleted)
-                .first();
-
-            // Suppress flushing of the previous tail assistant if it corresponds to the
-            // assistant we are removing for retry. We cannot rely solely on clearing the ref
-            // because sendMessage() calls flushTailAssistant() unconditionally; instead we
-            // record the id and skip a single flush on next send.
-            if (assistant && tailAssistant.value?.id === assistant.id) {
-                lastSuppressedAssistantId = assistant.id;
-                tailAssistant.value = null;
-            } else if (
-                target.role === 'assistant' &&
-                tailAssistant.value?.id === target.id
-            ) {
-                lastSuppressedAssistantId = target.id;
-                tailAssistant.value = null;
-            }
-
-            await hooks.doAction('ai.chat.retry:action:before', {
-                threadId: threadIdRef.value,
-                originalUserId: userMsg.id,
-                originalAssistantId: assistant?.id,
-                triggeredBy: target.role as 'user' | 'assistant',
-            });
-
-            // Store original text and hashes before deletion
-            const originalText =
-                typeof (userMsg as StoredMessage).content === 'string'
-                    ? (userMsg as StoredMessage).content
-                    : userMsg.data &&
-                      typeof userMsg.data === 'object' &&
-                      'content' in userMsg.data &&
-                      typeof (userMsg.data as { content?: unknown }).content ===
-                          'string'
-                    ? ((userMsg.data as { content?: string }).content as string)
-                    : '';
-            let hashes: string[] = [];
-            if (userMsg.file_hashes) {
-                hashes = parseFileHashes(userMsg.file_hashes);
-            }
-
-            // CRITICAL: Before deleting, ensure in-memory state matches DB state
-            // This handles edge cases where messages exist in DB but not in memory
-            const dbMessages =
-                ((await messagesByThread(threadIdRef.value)) as
-                    | StoredMessage[]
-                    | undefined) || [];
-
-            // If DB has more messages than our in-memory arrays, we need to sync first
-            if (dbMessages.length > rawMessages.value.length) {
-                console.warn('[retry] Syncing messages from DB before retry', {
-                    dbCount: dbMessages.length,
-                    memoryCount: rawMessages.value.length,
-                });
-                const toReasoning = (m: StoredMessage) => {
-                    if (
-                        m.data &&
-                        typeof m.data === 'object' &&
-                        'reasoning_text' in m.data &&
-                        typeof (m.data as { reasoning_text?: unknown })
-                            .reasoning_text === 'string'
-                    ) {
-                        return (m.data as { reasoning_text: string })
-                            .reasoning_text;
-                    }
-                    return typeof m.reasoning_text === 'string'
-                        ? m.reasoning_text
-                        : null;
-                };
-                const toContent = (m: StoredMessage) =>
-                    deriveMessageContent({
-                        content: m.content,
-                        data: m.data,
-                    });
-                rawMessages.value = dbMessages.map(
-                    (m): ChatMessage => ({
-                        role: m.role as ChatMessage['role'],
-                        content: toContent(m),
-                        id: m.id,
-                        stream_id: m.stream_id ?? undefined,
-                        file_hashes: m.file_hashes ?? undefined,
-                        reasoning_text: toReasoning(m),
-                        data: m.data || null,
-                        error: m.error ?? null,
-                        index:
-                            typeof m.index === 'number'
-                                ? m.index
-                                : typeof m.index === 'string'
-                                ? Number(m.index) || null
-                                : null,
-                        created_at:
-                            typeof m.created_at === 'number'
-                                ? m.created_at
-                                : null,
-                    })
-                );
-                const uiMessages = dbMessages.filter((m) => m.role !== 'tool');
-                messages.value = uiMessages.map((m) =>
-                    ensureUiMessage({
-                        role: m.role as
-                            | 'user'
-                            | 'assistant'
-                            | 'system'
-                            | 'tool',
-                        content: toContent(m),
-                        id: m.id,
-                        stream_id: m.stream_id ?? undefined,
-                        file_hashes: m.file_hashes ?? undefined,
-                        reasoning_text: toReasoning(m),
-                        error: m.error ?? null,
-                        data: m.data
-                            ? {
-                                  ...m.data,
-                                  tool_calls: m.data.tool_calls ?? undefined,
-                              }
-                            : m.data,
-                        index:
-                            typeof m.index === 'number'
-                                ? m.index
-                                : typeof m.index === 'string'
-                                ? Number(m.index) || null
-                                : null,
-                        created_at:
-                            typeof m.created_at === 'number'
-                                ? m.created_at
-                                : null,
-                    })
-                );
-            }
-
-            // Delete from database
-            await db.transaction('rw', db.messages, async () => {
-                await db.messages.delete(userMsg.id);
-                if (assistant) await db.messages.delete(assistant.id);
-            });
-
-            // Remove deleted messages from in-memory arrays
-            rawMessages.value = rawMessages.value.filter(
-                (m) => m.id !== userMsg.id && m.id !== assistant?.id
-            );
-            messages.value = messages.value.filter(
-                (m) => m.id !== userMsg.id && m.id !== assistant?.id
-            );
-
-            let textToSend = '';
-            if (typeof originalText === 'string') {
-                textToSend = originalText;
-            } else if (Array.isArray(originalText)) {
-                textToSend = originalText
-                    .filter((p) => p.type === 'text')
-                    .map((p) => (p as { text: string }).text)
-                    .join('');
-            }
-
-            await sendMessage(textToSend, {
-                model: modelOverride || DEFAULT_AI_MODEL,
-                file_hashes: hashes,
-                files: [],
-                online: false,
-            });
-            const tail = messages.value.slice(-2);
-            const newUser = tail.find((m) => m.role === 'user');
-            const newAssistant = tail.find((m) => m.role === 'assistant');
-            await hooks.doAction('ai.chat.retry:action:after', {
-                threadId: threadIdRef.value,
-                originalUserId: userMsg.id,
-                originalAssistantId: assistant?.id,
-                newUserId: newUser?.id,
-                newAssistantId: newAssistant?.id,
-            });
-        } catch (e) {
-            reportError(
-                e instanceof Error
-                    ? e
-                    : err('ERR_INTERNAL', '[retryMessage] failed', {
-                          tags: { domain: 'chat', op: 'retryMessage' },
-                      }),
-                {
-                    code: 'ERR_INTERNAL',
-                    tags: { domain: 'chat', op: 'retryMessage' },
-                }
-            );
-        }
+        return await retryMessageImpl(
+            {
+                loading,
+                threadIdRef,
+                tailAssistant,
+                rawMessages,
+                messages,
+                hooks,
+                sendMessage,
+                defaultModelId: DEFAULT_AI_MODEL,
+                suppressNextTailFlush: (assistantId: string) => {
+                    lastSuppressedAssistantId = assistantId;
+                },
+            },
+            messageId,
+            modelOverride
+        );
     }
 
+    /**
+     * Purpose:
+     * Continues a partially generated assistant message.
+     *
+     * Behavior:
+     * - Builds a continuation prompt from recent assistant output
+     * - Streams new content into the existing assistant message
+     *
+     * Constraints:
+     * - Requires an existing assistant message id
+     */
     async function continueMessage(messageId: string, modelOverride?: string) {
-        if (loading.value || !threadIdRef.value) return;
-        if (!apiKey.value) return;
-        try {
-            const target = (await db.messages.get(messageId)) as
-                | StoredMessage
-                | undefined;
-            if (
-                !target ||
-                target.thread_id !== threadIdRef.value ||
-                target.role !== 'assistant'
-            )
-                return;
-
-            const inMemoryText =
-                tailAssistant.value?.id === target.id
-                    ? tailAssistant.value.text
-                    : '';
-            const existingText =
-                inMemoryText ||
-                deriveMessageContent({
-                    content: (
-                        target as {
-                            content?: string | ContentPart[] | null;
-                        }
-                    ).content,
-                    data: target.data,
-                });
-            if (!existingText) return;
-
-            const DexieMod = (await import('dexie')).default;
-            const all = await db.messages
-                .where('[thread_id+index]')
-                .between(
-                    [threadIdRef.value, DexieMod.minKey],
-                    [threadIdRef.value, target.index]
-                )
-                .filter((m: Message) => !m.deleted)
-                .toArray();
-            all.sort((a, b) => (a.index || 0) - (b.index || 0));
-
-            const toReasoning = (m: StoredMessage) => {
-                if (
-                    m.data &&
-                    typeof m.data === 'object' &&
-                    'reasoning_text' in m.data &&
-                    typeof (m.data as { reasoning_text?: unknown })
-                        .reasoning_text === 'string'
-                ) {
-                    return (m.data as { reasoning_text: string })
-                        .reasoning_text;
-                }
-                return typeof m.reasoning_text === 'string'
-                    ? m.reasoning_text
-                    : null;
-            };
-            const toContent = (m: StoredMessage) => {
-                if (m.id === target.id) return existingText;
-                return deriveMessageContent({
-                    content: (
-                        m as {
-                            content?: string | ContentPart[] | null;
-                        }
-                    ).content,
-                    data: m.data,
-                });
-            };
-
-            const baseMessages: ChatMessage[] = all.map((m): ChatMessage => {
-                const storedMsg: StoredMessage = {
-                    ...m,
-                    data:
-                        m.data && typeof m.data === 'object'
-                            ? (m.data as StoredMessage['data'])
-                            : null,
-                };
-                const rawData = storedMsg.data;
-                const data: Record<string, unknown> | null = rawData
-                    ? (rawData as Record<string, unknown>)
-                    : null;
-                const name =
-                    data &&
-                    typeof (data as { tool_name?: unknown }).tool_name ===
-                        'string'
-                        ? ((data as { tool_name: string }).tool_name as string)
-                        : undefined;
-                const toolCallId =
-                    data &&
-                    typeof (data as { tool_call_id?: unknown }).tool_call_id ===
-                        'string'
-                        ? ((data as { tool_call_id: string })
-                              .tool_call_id as string)
-                        : undefined;
-                return {
-                    role: m.role as ChatMessage['role'],
-                    content: toContent(storedMsg),
-                    id: m.id,
-                    stream_id: m.stream_id ?? undefined,
-                    file_hashes: m.file_hashes ?? undefined,
-                    reasoning_text: toReasoning(storedMsg),
-                    data,
-                    name,
-                    tool_call_id: toolCallId,
-                    error: m.error ?? null,
-                    index:
-                        typeof m.index === 'number'
-                            ? m.index
-                            : typeof m.index === 'string'
-                            ? Number(m.index) || null
-                            : null,
-                    created_at:
-                        typeof m.created_at === 'number' ? m.created_at : null,
-                };
-            });
-
-            const CONTINUE_TAIL_CHARS = 1200;
-            const tailSnippet = existingText.slice(-CONTINUE_TAIL_CHARS);
-            const continuationText = tailSnippet
-                ? [
-                      'You are a text recovery engine. Your only task is to continue the text stream seamlessly.',
-                      '',
-                      'CONTEXT (the previous assistant output ends exactly here):',
-                      '<<CONTEXT>>',
-                      tailSnippet,
-                      '<<END CONTEXT>>',
-                      '',
-                      'INSTRUCTIONS:',
-                      '1. Continue immediately from the last character in the context.',
-                      '2. Assume the context ends at a valid character boundary.',
-                      '3. Do not extend or retype the final word unless it is clearly incomplete.',
-                      '4. Decide whether the next character should be punctuation, a space, or a letter, and start with that.',
-                      '5. If a sentence should end, emit the punctuation first, then continue.',
-                      '6. Do not repeat any of the context.',
-                      '7. Do not add any conversational filler or meta commentary.',
-                      '8. Start your response with ">>" and then the continuation.',
-                      'Examples:',
-                      'A) Context ends with: "the" -> Response: ">> dog walked..."',
-                      'B) Context ends with: "revolu" -> Response: ">>tion..."',
-                      'C) Context ends with: "data warehouses" -> Response: ">>. Organizations..."',
-                  ].join('\n')
-                : 'Please continue your previous response from where you left off.';
-            baseMessages.push({
-                role: 'user',
-                content: [
-                    {
-                        type: 'text',
-                        text: continuationText,
-                    },
-                ],
-                id: `continue-${newId()}`,
-            });
-
-            const threadSystemText = await getSystemPromptContent();
-            let finalSystem: string | null = null;
-            try {
-                const { settings } = useAiSettings();
-                const settingsValue = settings.value as
-                    | ChatSettings
-                    | undefined;
-                const master = settingsValue?.masterSystemPrompt ?? '';
-                finalSystem = composeSystemPrompt(
-                    master,
-                    threadSystemText || null
-                );
-            } catch {
-                finalSystem = (threadSystemText || '').trim() || null;
-            }
-            const continueSystemPrefix = [
-                'First and foremost, you are a text autocomplete engine.',
-                'You will be given the end of a text stream.',
-                'Output only the exact continuation with matching tone, voice, and formatting.',
-                'Never repeat the provided context.',
-                'Never add commentary, apologies, or meta statements.',
-                'Assume the context ends at a valid character boundary.',
-                'Do not extend or retype the final word unless it is clearly incomplete.',
-                'Decide whether the very next character should be punctuation, a space, or a letter.',
-                'If a sentence should end, start with the correct punctuation (e.g. ".", "?", "!") before continuing.',
-            ].join(' ');
-            if (finalSystem && finalSystem.trim()) {
-                finalSystem = `${continueSystemPrefix}\n\n${finalSystem.trim()}`;
-            } else {
-                finalSystem = continueSystemPrefix;
-            }
-            if (finalSystem && finalSystem.trim()) {
-                baseMessages.unshift({
-                    role: 'system',
-                    content: finalSystem,
-                    id: `system-${newId()}`,
-                });
-            }
-
-            const effectiveMessages = await hooks.applyFilters(
-                'ai.chat.messages:filter:input',
-                baseMessages
-            );
-
-            const sanitizedEffectiveMessages = (
-                Array.isArray(effectiveMessages) ? effectiveMessages : []
-            ).filter(shouldKeepAssistantMessage);
-
-            const isModelMessage = (
-                m: ChatMessage
-            ): m is ChatMessage & { role: 'user' | 'assistant' | 'system' } =>
-                m.role !== 'tool';
-
-            const modelInputMessages: ModelInputMessage[] =
-                sanitizedEffectiveMessages.filter(isModelMessage).map(
-                    (m): ModelInputMessage => ({
-                        role: m.role,
-                        content: m.content,
-                        id: m.id,
-                        file_hashes: m.file_hashes,
-                        name: m.name,
-                        tool_call_id: m.tool_call_id,
-                    })
-                );
-
-            const { buildOpenRouterMessages } = await import(
-                '~/core/auth/openrouter-build'
-            );
-            let orMessages: OpenRouterMessage[] = await buildOpenRouterMessages(
-                modelInputMessages,
-                {
-                    maxImageInputs: 16,
-                    imageInclusionPolicy: 'all',
-                    debug: false,
-                }
-            );
-            trimOrMessagesImages(
-                orMessages as Parameters<typeof trimOrMessagesImages>[0],
-                5
-            );
-
-            const filteredMessages = await hooks.applyFilters(
-                'ai.chat.messages:filter:before_send',
-                { messages: orMessages }
-            );
-
-            if (
-                typeof filteredMessages === 'object' &&
-                'messages' in filteredMessages
-            ) {
-                const candidate = (
-                    filteredMessages as {
-                        messages?: OpenRouterMessage[];
-                    }
-                ).messages;
-                if (Array.isArray(candidate)) {
-                    orMessages = candidate;
-                }
-            }
-
-            const hasImageInput = modelInputMessages.some((m) =>
-                Array.isArray(m.content)
-                    ? m.content.some((p) => {
-                          const part = p as {
-                              type?: string;
-                              mediaType?: string;
-                          };
-                          if (
-                              part.type === 'image' ||
-                              part.type === 'image_url'
-                          )
-                              return true;
-                          if (part.mediaType)
-                              return /image\//.test(part.mediaType);
-                          return false;
-                      })
-                    : false
-            );
-            const modelId =
-                (await hooks.applyFilters(
-                    'ai.chat.model:filter:select',
-                    modelOverride || DEFAULT_AI_MODEL
-                )) ||
-                modelOverride ||
-                DEFAULT_AI_MODEL;
-            const modelImageHint = /image|vision|flash/i.test(modelId);
-            const modalities =
-                hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
-
-            streamAcc.reset();
-            const newStreamId = newId();
-            streamId.value = newStreamId;
-            loading.value = true;
-            aborted.value = false;
-            abortController.value = new AbortController();
-
-            const existingReasoning = toReasoning(target);
-            const existingHashes = target.file_hashes
-                ? parseHashes(target.file_hashes)
-                : [];
-            let existingUiIndex = messages.value.findIndex(
-                (m) => m.id === target.id
-            );
-            let existingUi: UiChatMessage | null = null;
-            if (existingUiIndex >= 0) {
-                existingUi = messages.value[existingUiIndex] ?? null;
-                messages.value.splice(existingUiIndex, 1);
-                messages.value = [...messages.value];
-            }
-
-            const current =
-                (tailAssistant.value && tailAssistant.value.id === target.id
-                    ? tailAssistant.value
-                    : existingUi) ||
-                ensureUiMessage({
-                    role: 'assistant',
-                    content: existingText,
-                    id: target.id,
-                    stream_id: target.stream_id ?? undefined,
-                    reasoning_text: existingReasoning,
-                    file_hashes: target.file_hashes ?? undefined,
-                    error: null,
-                });
-            current.text = existingText;
-            current.reasoning_text = existingReasoning;
-            current.pending = true;
-            current.error = null;
-            if (existingHashes.length) current.file_hashes = existingHashes;
-            tailAssistant.value = current;
-
-            if (existingText) {
-                streamAcc.append(existingText, { kind: 'text' });
-            }
-            if (existingReasoning) {
-                streamAcc.append(existingReasoning, { kind: 'reasoning' });
-            }
-
-            const assistantFileHashes = existingHashes.slice();
-            const persistAssistant = makeAssistantPersister(
-                target,
-                assistantFileHashes
-            );
-
-            const stream = openRouterStream({
-                apiKey: apiKey.value,
-                model: modelId,
-                orMessages: orMessages as Parameters<
-                    typeof openRouterStream
-                >[0]['orMessages'],
-                modalities,
-                signal: abortController.value.signal,
-            });
-
-            let chunkIndex = 0;
-            let stripPrefixPending = true;
-            let prefixBuffer = '';
-            const CONTINUATION_PREFIX = '>>';
-            let boundarySpacingApplied = false;
-            const needsBoundarySpace = (prev: string, next: string) => {
-                if (!prev || !next) return false;
-                if (/\s$/.test(prev) || /^\s/.test(next)) return false;
-                const last = prev.slice(-1);
-                const first = next[0];
-                const noSpaceAfter = new Set([
-                    '(',
-                    '[',
-                    '{',
-                    '<',
-                    '«',
-                    '“',
-                    '‘',
-                    '"',
-                    "'",
-                    '`',
-                    '/',
-                    '\\',
-                    '-',
-                    '–',
-                    '—',
-                ]);
-                const noSpaceBefore = new Set([
-                    ',',
-                    '.',
-                    '…',
-                    ';',
-                    ':',
-                    '!',
-                    '?',
-                    '%',
-                    ')',
-                    ']',
-                    '}',
-                    '>',
-                    '»',
-                    '”',
-                    '’',
-                    '"',
-                    "'",
-                    '`',
-                ]);
-                if (noSpaceAfter.has(last)) return false;
-                if (!first || noSpaceBefore.has(first)) return false;
-                const isWordChar = (c: string) => /[\p{L}\p{N}]/u.test(c);
-                const isClosePunct = /[)\]}>"'»”’]/.test(last);
-                const isSentencePunct = /[.!?;:…]/.test(last);
-                if (isWordChar(last) && isWordChar(first)) return true;
-                if ((isSentencePunct || isClosePunct) && isWordChar(first))
-                    return true;
-                return false;
-            };
-            const applyBoundarySpacing = (prev: string, next: string) => {
-                if (boundarySpacingApplied) return next;
-                boundarySpacingApplied = true;
-                return needsBoundarySpace(prev, next) ? ` ${next}` : next;
-            };
-            const consumeContinuationDelta = (delta: string) => {
-                if (!stripPrefixPending) return delta;
-                prefixBuffer += delta;
-                if (prefixBuffer.length < CONTINUATION_PREFIX.length) return '';
-                if (prefixBuffer.startsWith(CONTINUATION_PREFIX)) {
-                    prefixBuffer = prefixBuffer.slice(
-                        CONTINUATION_PREFIX.length
-                    );
-                }
-                stripPrefixPending = false;
-                const out = prefixBuffer;
-                prefixBuffer = '';
-                return out;
-            };
-            const WRITE_INTERVAL_MS = 500;
-            let lastPersistAt = 0;
-
-            try {
-                for await (const ev of stream) {
-                    if (ev.type === 'reasoning') {
-                        if (current.reasoning_text === null)
-                            current.reasoning_text = ev.text;
-                        else current.reasoning_text += ev.text;
-                        streamAcc.append(ev.text, { kind: 'reasoning' });
-                    } else if (ev.type === 'text') {
-                        if (current.pending) current.pending = false;
-                        const rawDelta = consumeContinuationDelta(ev.text);
-                        if (!rawDelta) continue;
-                        const delta = applyBoundarySpacing(
-                            current.text,
-                            rawDelta
+        await continueMessageImpl(
+            {
+                loading,
+                aborted,
+                abortController,
+                threadIdRef,
+                tailAssistant,
+                rawMessages,
+                messages,
+                streamId,
+                streamAcc,
+                streamState,
+                hooks,
+                effectiveApiKey,
+                hasInstanceKey,
+                defaultModelId: DEFAULT_AI_MODEL,
+                getSystemPromptContent,
+                useAiSettings,
+                resolveInputTokenBudget: (selectedModelId: string) => {
+                    const normalizedId = stripThinkingSuffix(
+                        selectedModelId
+                    ).replace(/:online$/, '');
+                    const { catalog, favoriteModels } = useModelStore();
+                    const metadata =
+                        catalog.value.find(
+                            (candidate: ModelInfo) =>
+                                candidate.id === normalizedId
+                        ) ||
+                        favoriteModels.value.find(
+                            (candidate: ModelInfo) =>
+                                candidate.id === normalizedId
                         );
-                        if (!delta) continue;
-                        streamAcc.append(delta, { kind: 'text' });
-                        current.text += delta;
-                        chunkIndex++;
-                    } else if (ev.type === 'image') {
-                        if (current.pending) current.pending = false;
-                        // Store image first, then use hash placeholder (not Base64)
-                        if (assistantFileHashes.length < 6) {
-                            let blob: Blob | null = null;
-                            if (ev.url.startsWith('data:image/'))
-                                blob = dataUrlToBlob(ev.url);
-                            else if (/^https?:/.test(ev.url)) {
-                                try {
-                                    blob = await $fetch<Blob>(ev.url, {
-                                        responseType: 'blob',
-                                    });
-                                } catch {
-                                    /* intentionally empty */
-                                }
-                            }
-                            if (blob) {
-                                try {
-                                    const meta = await createOrRefFile(
-                                        blob,
-                                        'gen-image'
-                                    );
-                                    assistantFileHashes.push(meta.hash);
-                                    // Use valid 1x1 transparent pixel and store hash in alt text to eliminate console errors
-                                    const placeholder = `![file-hash:${meta.hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`;
-                                    const already =
-                                        current.text.includes(placeholder);
-                                    if (!already) {
-                                        current.text +=
-                                            (current.text ? '\n\n' : '') +
-                                            placeholder;
-                                    }
-                                    const serialized = await persistAssistant({
-                                        content: current.text,
-                                        reasoning:
-                                            current.reasoning_text ?? null,
-                                    });
-                                    current.file_hashes =
-                                        serialized?.split(',') ?? [];
-                                } catch {
-                                    /* intentionally empty */
-                                }
-                            } else {
-                                // Fallback: couldn't convert to blob, use URL directly
-                                const placeholder = `![generated image](${ev.url})`;
-                                const already =
-                                    current.text.includes(placeholder);
-                                if (!already) {
-                                    current.text +=
-                                        (current.text ? '\n\n' : '') +
-                                        placeholder;
-                                }
-                            }
-                        }
-                    }
+                    return resolveChatInputTokenBudget(metadata);
+                },
+                resetStream,
+            },
+            messageId,
+            modelOverride
+        );
+    }
 
-                    const now = Date.now();
-                    const shouldPersist =
-                        now - lastPersistAt >= WRITE_INTERVAL_MS ||
-                        chunkIndex % 50 === 0;
-                    if (shouldPersist) {
-                        await persistAssistant({
-                            content: current.text,
-                            reasoning: current.reasoning_text ?? null,
-                            toolCalls: current.toolCalls ?? undefined,
-                        });
-                        if (assistantFileHashes.length) {
-                            current.file_hashes = assistantFileHashes;
-                        }
-                        lastPersistAt = now;
-                    }
-                }
+    /**
+     * Purpose:
+     * Clears local chat state and tears down subscriptions.
+     *
+     * Behavior:
+     * - Aborts active streams when safe
+     * - Clears UI and raw message arrays
+     * - Disposes hook listeners and background job subscriptions
+     *
+     * Constraints:
+     * - In background mode, detaches without stopping the job
+     */
+    let disposed = false;
 
-                if (current.pending) current.pending = false;
-                await persistAssistant({
-                    content: current.text,
-                    reasoning: current.reasoning_text ?? null,
-                    toolCalls: current.toolCalls ?? null,
-                });
-                await db.messages.update(messageId, {
-                    error: null,
-                    updated_at: nowSec(),
-                });
-                current.error = null;
-                const rawIdx = rawMessages.value.findIndex(
-                    (m) => m.id === messageId
-                );
-                if (rawIdx >= 0) {
-                    const existingRaw = rawMessages.value[rawIdx];
-                    if (existingRaw) {
-                        rawMessages.value[rawIdx] = {
-                            ...existingRaw,
-                            role: existingRaw.role,
-                            content: current.text,
-                            reasoning_text: current.reasoning_text ?? null,
-                            error: null,
-                        };
-                    }
+    function disposeHooks() {
+            if (!cleanupFns.length) return;
+            for (const dispose of cleanupFns.splice(0, cleanupFns.length)) {
+                try {
+                    dispose();
+                } catch {
+                    /* intentionally empty */
                 }
-                streamAcc.finalize();
-            } catch (streamError) {
-                const e =
-                    streamError instanceof Error
-                        ? streamError
-                        : new Error(String(streamError));
-                streamAcc.finalize({ error: e });
-                if (tailAssistant.value.text) {
-                    await persistAssistant({
-                        content: tailAssistant.value.text,
-                        reasoning: tailAssistant.value.reasoning_text ?? null,
-                        toolCalls: tailAssistant.value.toolCalls ?? null,
-                    });
-                    tailAssistant.value.error = 'stream_interrupted';
-                }
-                const rawIdx = rawMessages.value.findIndex(
-                    (m) => m.id === messageId
-                );
-                if (rawIdx >= 0) {
-                    const existingRaw = rawMessages.value[rawIdx];
-                    if (existingRaw) {
-                        rawMessages.value[rawIdx] = {
-                            ...existingRaw,
-                            role: existingRaw.role,
-                            content:
-                                tailAssistant.value.text || existingRaw.content,
-                            reasoning_text:
-                                tailAssistant.value.reasoning_text ??
-                                existingRaw.reasoning_text,
-                            error: 'stream_interrupted',
-                        };
-                    }
-                }
-                await db.messages.update(messageId, {
-                    error: 'stream_interrupted',
-                    updated_at: nowSec(),
-                });
-                reportError(e, {
-                    code: 'ERR_STREAM_FAILURE',
-                    tags: {
-                        domain: 'chat',
-                        threadId: threadIdRef.value || '',
-                        streamId: streamId.value || '',
-                        modelId,
-                        stage: 'continue',
-                    },
-                    toast: true,
-                });
-            } finally {
-                loading.value = false;
-                if (tailAssistant.value.pending) {
-                    tailAssistant.value.pending = false;
-                }
-                abortController.value = null;
-                setTimeout(() => {
-                    if (!loading.value && streamState.finalized) resetStream();
-                }, 0);
             }
-        } catch (e) {
-            reportError(
-                e instanceof Error
-                    ? e
-                    : err('ERR_INTERNAL', '[continueMessage] failed', {
-                          tags: { domain: 'chat', op: 'continueMessage' },
-                      }),
-                {
-                    code: 'ERR_INTERNAL',
-                    tags: { domain: 'chat', op: 'continueMessage' },
-                }
-            );
+    }
+
+    /** Release listeners/subscriptions without mutating conversation state. */
+    function dispose() {
+        if (disposed) return;
+        disposed = true;
+        const keepTracking = Boolean(
+            backgroundJobId.value ||
+            backgroundJobMode.value !== 'none' ||
+            (loading.value && abortController.value)
+        );
+        if (keepTracking) detached.value = true;
+        clearBackgroundJobSubscriptions({ keepTracking });
+        disposeHooks();
+    }
+
+    /** Clear only in-memory conversation projections; durable rows are preserved. */
+    function clearConversation(options: { persistence?: 'preserve' } = {}) {
+        if ((options.persistence ?? 'preserve') !== 'preserve') {
+            throw new Error('Only persistence: "preserve" is supported');
         }
+        rawMessages.value = [];
+        messages.value = [];
+        streamAcc.reset();
+    }
+
+    function setPendingPrompt(promptId: string | null | undefined) {
+        pendingPromptIdRef.value = promptId || undefined;
+    }
+
+    /**
+     * Rebind this instance to another thread without re-entering setup-only
+     * composables (useToast/useHooks/useSessionContext).
+     */
+    async function switchThread(
+        nextThreadId: string | undefined,
+        switchOptions: {
+            seedMessages?: ChatMessage[];
+            pendingPromptId?: string | null;
+            historyAlreadyLoaded?: boolean;
+        } = {}
+    ): Promise<void> {
+        if (disposed) {
+            throw new Error('Cannot switchThread on a disposed useChat instance');
+        }
+
+        const currentId = threadIdRef.value;
+        if (nextThreadId && currentId && nextThreadId === currentId) {
+            if (switchOptions.pendingPromptId !== undefined) {
+                setPendingPrompt(switchOptions.pendingPromptId);
+            }
+            return;
+        }
+
+        const isBackgroundActive =
+            backgroundStreamingAllowed.value &&
+            (backgroundJobId.value || backgroundJobMode.value !== 'none');
+        const isForegroundStreamActive =
+            loading.value &&
+            !backgroundJobId.value &&
+            backgroundJobMode.value === 'none' &&
+            Boolean(abortController.value);
+
+        if (isBackgroundActive || isForegroundStreamActive) {
+            // Keep durable background/foreground work alive; detach UI bindings.
+            detached.value = true;
+            clearBackgroundJobSubscriptions({ keepTracking: true });
+        } else if (abortController.value) {
+            aborted.value = true;
+            try {
+                abortController.value.abort();
+            } catch {
+                /* intentionally empty */
+            }
+            streamAcc.finalize({ aborted: true });
+            abortController.value = null;
+            clearBackgroundJobSubscriptions({ keepTracking: false });
+        } else {
+            clearBackgroundJobSubscriptions({ keepTracking: false });
+        }
+
+        threadIdRef.value = nextThreadId;
+        if (switchOptions.pendingPromptId !== undefined) {
+            setPendingPrompt(switchOptions.pendingPromptId);
+        }
+        historyLoadedFor.value =
+            switchOptions.historyAlreadyLoaded && nextThreadId
+                ? nextThreadId
+                : null;
+        backgroundJobId.value = null;
+        backgroundJobMode.value = 'none';
+        loading.value = false;
+        requestState.value = { status: 'idle' };
+        activeRequestId = null;
+        activeRequestScope = null;
+        aborted.value = false;
+        streamId.value = undefined;
+        tailAssistant.value = null;
+        streamAcc.reset();
+        detached.value = false;
+
+        if (switchOptions.seedMessages) {
+            replaceCanonicalHistory(switchOptions.seedMessages);
+        } else {
+            clearConversation({ persistence: 'preserve' });
+        }
+
+        await ensureHistorySynced();
     }
 
     function clear() {
-        // CRITICAL: Abort any active stream before clearing to prevent memory leaks
+
+        const isBackgroundActive =
+            backgroundStreamingAllowed.value &&
+            (backgroundJobId.value || backgroundJobMode.value !== 'none');
+        const isForegroundStreamActive =
+            loading.value &&
+            !backgroundJobId.value &&
+            backgroundJobMode.value === 'none' &&
+            Boolean(abortController.value);
+
+        if (isBackgroundActive || isForegroundStreamActive) {
+            logBgStream('clear-detach-active-stream', {
+                threadId: threadIdRef.value || null,
+                isBackgroundActive,
+                isForegroundStreamActive,
+                backgroundJobId: backgroundJobId.value,
+                backgroundJobMode: backgroundJobMode.value,
+                loading: loading.value,
+            });
+            detached.value = true;
+            dispose();
+            // Do NOT reset backgroundJobId, backgroundJobMode, or backgroundJobInfo
+            // This allows reattachment or background processing to continue.
+            // Foreground streams are also detached here so they can finish when
+            // users switch threads/routes mid-stream.
+            return;
+        }
         if (abortController.value) {
+            // CRITICAL: Abort any active stream before clearing to prevent memory leaks
             aborted.value = true;
             try {
                 abortController.value.abort();
@@ -2407,23 +2643,24 @@ export function useChat(
             abortController.value = null;
         }
 
-        // Clean up any registered hooks to avoid leaking listeners across threads
-        if (cleanupFns.length) {
-            for (const dispose of cleanupFns.splice(0, cleanupFns.length)) {
-                try {
-                    dispose();
-                } catch {
-                    /* intentionally empty */
-                }
-            }
-        }
-
-        rawMessages.value = [];
-        messages.value = [];
-        streamAcc.reset();
+        dispose();
+        clearConversation({ persistence: 'preserve' });
+        logBgStream('clear-full-reset', {
+            threadId: threadIdRef.value || null,
+        });
     }
 
-    // Keep in-memory history in sync when a message is edited elsewhere (e.g., inline edit UI)
+    /**
+     * Purpose:
+     * Applies a local text edit to in-memory message state.
+     *
+     * Behavior:
+     * - Updates raw and UI message caches
+     * - Updates tail assistant if it matches
+     *
+     * Constraints:
+     * - Does not persist to IndexedDB
+     */
     function applyLocalEdit(id: string, text: string) {
         let updated = false;
         const rawIdx = rawMessages.value.findIndex((m) => m.id === id);
@@ -2455,6 +2692,126 @@ export function useChat(
         return updated;
     }
 
+    /** Atomically replaces both provider and presentation history projections. */
+    function replaceCanonicalHistory(nextMessages: ChatMessage[]) {
+        const nextRaw = nextMessages.map((message) => ({ ...message }));
+        const nextUi = nextRaw
+            .filter((message) => message.role !== 'tool')
+            .map((message) => ensureUiMessage(message));
+        rawMessages.value = nextRaw;
+        messages.value = nextUi;
+    }
+
+    void reattachBackgroundJobs();
+
+    if (getCurrentScope()) {
+        onScopeDispose(() => {
+            clear();
+        });
+    }
+
+    /**
+     * Purpose:
+     * Aborts any active streaming request and finalizes state.
+     *
+     * Behavior:
+     * - Aborts foreground streams or background jobs
+     * - Marks partial messages as stopped
+     * - Emits abort error telemetry when configured
+     *
+     * Constraints:
+     * - No-op if no active stream is present
+     */
+    function abortChat() {
+        if (backgroundJobId.value) {
+            const jobId = backgroundJobId.value;
+            const info = backgroundJobInfo.value;
+            logBgStream('abort-background-job', {
+                jobId,
+                threadId: info?.threadId || threadIdRef.value || null,
+                messageId: info?.messageId || null,
+            });
+            backgroundJobId.value = null;
+            backgroundJobMode.value = 'none';
+            backgroundJobInfo.value = null;
+            aborted.value = true;
+            void abortBackgroundJob(jobId);
+            if (abortController.value) {
+                try {
+                    abortController.value.abort();
+                } catch {
+                    /* intentionally empty */
+                }
+                abortController.value = null;
+            }
+            streamAcc.finalize({ aborted: true });
+            if (tailAssistant.value?.pending)
+                tailAssistant.value.pending = false;
+            if (info?.messageId) {
+                const target = resolveUiMessage(info.messageId);
+                if (target) {
+                    target.pending = false;
+                    target.error = 'stopped';
+                    messages.value = [...messages.value];
+                }
+                const trackerDb =
+                    backgroundJobTrackers.get(jobId)?.originDb ?? getDb();
+                void updateMessageRecord(trackerDb, info.messageId, {
+                    pending: false,
+                    error: 'stopped',
+                });
+            }
+            return;
+        }
+
+        const requestScope = activeRequestScope;
+        const requestAbortController =
+            requestScope?.abortController ?? abortController.value;
+        if (!loading.value || !requestAbortController) {
+            logBgStream('abort-ignored-no-active-foreground', {
+                loading: loading.value,
+                hasAbortController: Boolean(abortController.value),
+                threadId: threadIdRef.value || null,
+            });
+            return;
+        }
+        logBgStream('abort-foreground-stream', {
+            threadId: threadIdRef.value || null,
+            streamId: streamId.value || null,
+        });
+        aborted.value = true;
+        try {
+            requestAbortController.abort();
+        } catch {
+            /* intentionally empty */
+        }
+        (requestScope?.accumulator ?? streamAcc).finalize({ aborted: true });
+        if (tailAssistant.value?.pending)
+            tailAssistant.value.pending = false;
+        try {
+            const appConfig = useAppConfig() as {
+                errors?: { showAbortInfo?: boolean };
+            };
+            const showAbort =
+                typeof appConfig.errors === 'object' &&
+                appConfig.errors.showAbortInfo === true;
+            reportError(
+                err('ERR_STREAM_ABORTED', 'Generation aborted', {
+                    severity: 'info',
+                    tags: {
+                        domain: 'chat',
+                        threadId: threadIdRef.value || '',
+                        streamId: streamId.value || '',
+                        stage: 'abort',
+                    },
+                }),
+                { code: 'ERR_STREAM_ABORTED', toast: showAbort }
+            );
+        } catch {
+            /* intentionally empty */
+        }
+    }
+
     return {
         messages,
         rawMessages,
@@ -2463,6 +2820,9 @@ export function useChat(
         retryMessage,
         continueMessage,
         loading,
+        requestState,
+        backgroundJobId,
+        backgroundJobMode,
         threadId: threadIdRef,
         streamId,
         resetStream,
@@ -2470,41 +2830,13 @@ export function useChat(
         tailAssistant,
         flushTailAssistant,
         applyLocalEdit,
+        replaceCanonicalHistory,
         ensureHistorySynced,
-        abort: () => {
-            if (!loading.value || !abortController.value) return;
-            aborted.value = true;
-            try {
-                abortController.value.abort();
-            } catch {
-                /* intentionally empty */
-            }
-            streamAcc.finalize({ aborted: true });
-            if (tailAssistant.value?.pending)
-                tailAssistant.value.pending = false;
-            try {
-                const appConfig = useAppConfig() as {
-                    errors?: { showAbortInfo?: boolean };
-                };
-                const showAbort =
-                    typeof appConfig.errors === 'object' &&
-                    appConfig.errors.showAbortInfo === true;
-                reportError(
-                    err('ERR_STREAM_ABORTED', 'Generation aborted', {
-                        severity: 'info',
-                        tags: {
-                            domain: 'chat',
-                            threadId: threadIdRef.value || '',
-                            streamId: streamId.value || '',
-                            stage: 'abort',
-                        },
-                    }),
-                    { code: 'ERR_STREAM_ABORTED', toast: showAbort }
-                );
-            } catch {
-                /* intentionally empty */
-            }
-        },
+        abort: abortChat,
         clear,
+        clearConversation,
+        dispose,
+        switchThread,
+        setPendingPrompt,
     };
 }

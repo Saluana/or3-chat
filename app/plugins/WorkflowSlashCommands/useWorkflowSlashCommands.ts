@@ -54,7 +54,8 @@ export async function searchWorkflows(
     limit: number | undefined = 10
 ): Promise<WorkflowItem[]> {
     try {
-        const { db } = await import('~/db');
+        const { getDb } = await import('~/db/client');
+        const db = getDb();
 
         // Get all non-deleted workflows
         const workflows = await db.posts
@@ -102,7 +103,8 @@ export async function getWorkflowByName(
     name: string
 ): Promise<WorkflowRecord | null> {
     try {
-        const { db } = await import('~/db');
+        const { getDb } = await import('~/db/client');
+        const db = getDb();
 
         const workflow = await db.posts
             .where('postType')
@@ -155,7 +157,8 @@ export async function getWorkflowById(
     id: string
 ): Promise<WorkflowRecord | null> {
     try {
-        const { db } = await import('~/db');
+        const { getDb } = await import('~/db/client');
+        const db = getDb();
 
         const workflow = await db.posts.get(id);
 
@@ -199,7 +202,8 @@ export async function getWorkflowById(
  */
 export async function listWorkflowsWithMeta(): Promise<WorkflowRecord[]> {
     try {
-        const { db } = await import('~/db');
+        const { getDb } = await import('~/db/client');
+        const db = getDb();
 
         const workflows = await db.posts
             .where('postType')

@@ -1,7 +1,37 @@
-import { db } from './client';
+/**
+ * @module app/db/files
+ *
+ * Purpose:
+ * Local file metadata and blob storage with deduplication and hook integration.
+ *
+ * Responsibilities:
+ * - Deduplicate files by content hash
+ * - Store file metadata and blobs in IndexedDB
+ * - Emit hook actions and filters for file lifecycle events
+ *
+ * Non-responsibilities:
+ * - Remote storage synchronization
+ * - File rendering or UI workflows
+ *
+ * Hook Points:
+ * - `db.files.create:filter:input`
+ * - `db.files.create:action:before`
+ * - `db.files.create:action:after`
+ * - `db.files.get:filter:output`
+ * - `db.files.refchange:action:after`
+ * - `db.files.delete:action:soft:before`
+ * - `db.files.delete:action:soft:after`
+ * - `db.files.delete:action:hard:before`
+ * - `db.files.delete:action:hard:after`
+ * - `db.files.restore:action:before`
+ * - `db.files.restore:action:after`
+ *
+ * @see docs/core-hook-map.md for hook conventions
+ */
+import Dexie from 'dexie';
+import { getDb } from './client';
 import { useHooks } from '../core/hooks/useHooks';
-import { parseOrThrow } from './util';
-import { nowSec } from './util';
+import { parseOrThrow, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { FileMetaCreateSchema, FileMetaSchema, type FileMeta } from './schema';
 import { computeFileHash } from '../utils/hash';
 import { reportError, err } from '../utils/errors';
@@ -10,27 +40,38 @@ import type {
     DbDeletePayload,
     FileEntity,
 } from '../core/hooks/hook-types';
+import { useRuntimeConfig } from '#imports';
 
-/**
- * File storage and deduplication layer with hook integration.
- *
- * Hook Points:
- * - `db.files.create:filter:input` - Transform FileMetaCreate before validation (line 86-89)
- * - `db.files.create:action:before` - Called before file metadata is written to DB (line 93)
- * - `db.files.create:action:after` - Called after file metadata and blob are persisted (line 96)
- * - `db.files.get:filter:output` - Transform FileMeta on retrieval (line 114)
- * - `db.files.refchange:action:after` - Called after ref_count changes (line 28-32)
- * - `db.files.delete:action:soft:before` - Called before soft delete (line 129, 150)
- * - `db.files.delete:action:soft:after` - Called after soft delete (line 135, 156)
- * - `db.files.delete:action:hard:before` - Called before hard delete (line 192-195)
- * - `db.files.delete:action:hard:after` - Called after hard delete (line 198)
- * - `db.files.restore:action:before` - Called before restoring soft-deleted file (line 171)
- * - `db.files.restore:action:after` - Called after restore (line 177)
- *
- * All hooks receive relevant metadata; filters can transform or veto (return false to reject).
- */
+// Default max file size (20MB) - can be overridden by config
+const DEFAULT_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 
-const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB cap
+// Cached config value to avoid repeated dynamic imports
+let cachedMaxFileSize: number | null = null;
+
+function resolveConfiguredMaxFileSize(): number {
+    try {
+        const runtimeConfig = useRuntimeConfig();
+        const candidate = Number(
+            (runtimeConfig.public as { or3?: { limits?: { maxFileSizeBytes?: number } } }).or3
+                ?.limits?.maxFileSizeBytes
+        );
+        if (Number.isFinite(candidate) && candidate > 0) {
+            return Math.floor(candidate);
+        }
+    } catch {
+        // Runtime config unavailable; keep fallback.
+    }
+    return DEFAULT_MAX_FILE_SIZE_BYTES;
+}
+
+// Get max file size from OR3 config
+function getMaxFileSizeBytes(): number {
+    if (cachedMaxFileSize !== null) {
+        return cachedMaxFileSize;
+    }
+    cachedMaxFileSize = resolveConfiguredMaxFileSize();
+    return cachedMaxFileSize;
+}
 
 const FILE_TABLE = 'files';
 
@@ -80,26 +121,50 @@ function createFileDeletePayload(
 }
 
 /** Internal helper to change ref_count and fire hook */
-async function changeRefCount(hash: string, delta: number) {
-    await db.transaction('rw', db.file_meta, async () => {
-        const meta = await db.file_meta.get(hash);
-        if (!meta) return;
-        const next = {
-            ...meta,
-            ref_count: Math.max(0, meta.ref_count + delta),
-            updated_at: nowSec(),
-        };
-        await db.file_meta.put(next);
-        const hooks = useHooks();
-        await hooks.doAction('db.files.refchange:action:after', {
-            before: toFileEntity(meta),
-            after: toFileEntity(next),
-            delta,
-        });
-    });
+async function changeRefCount(
+    hash: string,
+    delta: number
+): Promise<FileMeta | undefined> {
+    const db = getDb();
+    return db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'file_meta'),
+        async () => {
+            const meta = await db.file_meta.get(hash);
+            if (!meta) return undefined;
+            const next = {
+                ...meta,
+                ref_count: Math.max(0, meta.ref_count + delta),
+                updated_at: nowSec(),
+                clock: nextClock(meta.clock),
+            };
+            await db.file_meta.put(next);
+            const hooks = useHooks();
+            await hooks.doAction('db.files.refchange:action:after', {
+                before: toFileEntity(meta),
+                after: toFileEntity(next),
+                delta,
+            });
+            return next;
+        }
+    );
 }
 
-/** Create or reference existing file by content hash (dedupe). */
+/**
+ * Purpose:
+ * Create a file entry or reference an existing entry by hash.
+ *
+ * Behavior:
+ * Computes a hash, increments ref count if it exists, or stores metadata and
+ * blob data if it is new. Emits hooks during creation.
+ *
+ * Constraints:
+ * - Enforces max file size limit.
+ * - Requires browser APIs for blob hashing and storage.
+ *
+ * Non-Goals:
+ * - Does not upload to remote storage directly.
+ */
 export async function createOrRefFile(
     file: Blob,
     name: string
@@ -111,21 +176,26 @@ export async function createOrRefFile(
             ? `filestore-${Date.now()}-${Math.random().toString(36).slice(2)}`
             : undefined;
     if (markId && hasPerf) performance.mark(`${markId}:start`);
-    if (file.size > MAX_FILE_SIZE_BYTES) throw new Error('file too large');
+    if (file.size > getMaxFileSizeBytes()) throw new Error('file too large');
     const hooks = useHooks();
     const hash = await computeFileHash(file);
-    const existing = await db.file_meta.get(hash);
+    const existing = await getDb().file_meta.get(hash);
     if (existing) {
-        await changeRefCount(hash, 1);
-        if (import.meta.dev) {
-            console.debug('[files] ref existing', {
-                hash: hash.slice(0, 8),
-                size: existing.size_bytes,
-                ref_count: existing.ref_count + 1,
-            });
+        const incremented = await changeRefCount(hash, 1);
+        if (incremented) {
+            if (import.meta.dev) {
+                console.debug('[files] ref existing', {
+                    hash: hash.slice(0, 8),
+                    size: incremented.size_bytes,
+                    ref_count: incremented.ref_count,
+                });
+            }
+            if (markId && hasPerf) finalizePerf(markId, 'ref', file.size);
+            if (!incremented.storage_id) {
+                await enqueueUpload(hash);
+            }
+            return incremented;
         }
-        if (markId && hasPerf) finalizePerf(markId, 'ref', file.size);
-        return existing;
     }
     const mime = file.type || 'application/octet-stream';
     // Basic image dimension extraction if image
@@ -165,18 +235,45 @@ export async function createOrRefFile(
         applyFileEntityToMeta(baseCreate, filteredEntity)
     );
     const meta = parseOrThrow(FileMetaSchema, prepared);
+    const seededMeta = { ...meta, clock: nextClock(meta.clock) };
 
     let actionPayload: DbCreatePayload<FileEntity> = {
-        entity: toFileEntity(meta),
+        entity: toFileEntity(seededMeta),
         tableName: FILE_TABLE,
     };
 
     let storedMeta: FileMeta | null = null;
-    await db.transaction('rw', db.file_meta, db.file_blobs, async () => {
+    let createdNew = false;
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'file_meta', { include: ['file_blobs'] }),
+        async () => {
+        // The initial lookup happens before image metadata/filter work. Recheck
+        // under the write transaction so concurrent identical files increment
+        // the single canonical row instead of overwriting each other at one.
+        const concurrentExisting = await db.file_meta.get(hash);
+        if (concurrentExisting) {
+            const next = {
+                ...concurrentExisting,
+                ref_count: concurrentExisting.ref_count + 1,
+                updated_at: nowSec(),
+                clock: nextClock(concurrentExisting.clock),
+            };
+            await db.file_meta.put(next);
+            await hooks.doAction('db.files.refchange:action:after', {
+                before: toFileEntity(concurrentExisting),
+                after: toFileEntity(next),
+                delta: 1,
+            });
+            storedMeta = next;
+            return;
+        }
+
         await hooks.doAction('db.files.create:action:before', actionPayload);
         const mergedMeta = parseOrThrow(
             FileMetaSchema,
-            applyFileEntityToMeta(meta, actionPayload.entity)
+            applyFileEntityToMeta(seededMeta, actionPayload.entity)
         );
         // Parallel writes for ~20% faster file creation
         await Promise.all([
@@ -184,6 +281,7 @@ export async function createOrRefFile(
             db.file_blobs.put({ hash: mergedMeta.hash, blob: file }),
         ]);
         storedMeta = mergedMeta;
+        createdNew = true;
         actionPayload = {
             entity: toFileEntity(mergedMeta),
             tableName: FILE_TABLE,
@@ -194,20 +292,37 @@ export async function createOrRefFile(
     // Use non-null assertion since the transaction guarantees the value is set
     const finalMeta = storedMeta!;
     if (import.meta.dev) {
-        console.debug('[files] created', {
+        console.debug(createdNew ? '[files] created' : '[files] ref existing', {
             hash: finalMeta.hash.slice(0, 8),
             size: file.size,
             mime,
         });
     }
-    if (markId && hasPerf) finalizePerf(markId, 'create', file.size);
+    if (markId && hasPerf) {
+        finalizePerf(markId, createdNew ? 'create' : 'ref', file.size);
+    }
+    if (!finalMeta.storage_id) {
+        await enqueueUpload(finalMeta.hash);
+    }
     return finalMeta;
 }
 
-/** Get file metadata by hash */
+/**
+ * Purpose:
+ * Fetch file metadata for a content hash.
+ *
+ * Behavior:
+ * Reads metadata and applies output filters.
+ *
+ * Constraints:
+ * - Returns undefined if the row is missing or filtered out.
+ *
+ * Non-Goals:
+ * - Does not fetch blobs.
+ */
 export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
     const hooks = useHooks();
-    const meta = await db.file_meta.get(hash);
+    const meta = await getDb().file_meta.get(hash);
     if (!meta) return undefined;
     const entity = await hooks.applyFilters(
         'db.files.get:filter:output',
@@ -217,86 +332,232 @@ export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
     return parseOrThrow(FileMetaSchema, applyFileEntityToMeta(meta, entity));
 }
 
-/** Get binary Blob by hash */
+/**
+ * Purpose:
+ * Retrieve the binary blob for a content hash.
+ *
+ * Behavior:
+ * Returns the stored blob if present, otherwise attempts to ensure it exists.
+ *
+ * Constraints:
+ * - May return undefined if blob is not available locally.
+ *
+ * Non-Goals:
+ * - Does not guarantee a remote download.
+ */
 export async function getFileBlob(hash: string): Promise<Blob | undefined> {
-    const row = await db.file_blobs.get(hash);
-    return row?.blob;
+    const row = await getDb().file_blobs.get(hash);
+    if (row?.blob) return row.blob;
+    return ensureFileBlob(hash);
 }
 
-/** Soft delete file (mark deleted flag only) */
+/**
+ * Purpose:
+ * Ensure a blob exists locally, downloading if required.
+ *
+ * Behavior:
+ * Checks local storage first, then uses the transfer queue when available.
+ *
+ * Constraints:
+ * - Client-only. Returns undefined in non-browser contexts.
+ *
+ * Non-Goals:
+ * - Does not force a download when the queue is unavailable.
+ */
+export async function ensureFileBlob(
+    hash: string
+): Promise<Blob | undefined> {
+    const row = await getDb().file_blobs.get(hash);
+    if (row?.blob) return row.blob;
+    if (!import.meta.client) return undefined;
+    try {
+        const { getStorageTransferQueue } = await import(
+            '~/core/storage/transfer-queue'
+        );
+        const queue = getStorageTransferQueue();
+        if (!queue) return undefined;
+        return await queue.ensureDownloadedBlob(hash);
+    } catch (error) {
+        const { isRecoverableTransferError } = await import(
+            '~/core/storage/transfer-queue-support'
+        );
+        // Expected pre-commit / remote-gap races — no error telemetry.
+        if (isRecoverableTransferError(error)) return undefined;
+        reportError(error, {
+            silent: true,
+            tags: { domain: 'storage', stage: 'download' },
+        });
+        return undefined;
+    }
+}
+
+/**
+ * Purpose:
+ * Soft delete a single file metadata row.
+ *
+ * Behavior:
+ * Marks the row as deleted and updates timestamps with hook emission.
+ *
+ * Constraints:
+ * - No-op if the file metadata does not exist.
+ *
+ * Non-Goals:
+ * - Does not remove blobs from storage.
+ */
 export async function softDeleteFile(hash: string): Promise<void> {
     const hooks = useHooks();
-    await db.transaction('rw', db.file_meta, async () => {
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'file_meta', { includeTombstones: true }),
+        async () => {
         const meta = await db.file_meta.get(hash);
         if (!meta) return;
         const payload = createFileDeletePayload(meta, hash);
         await hooks.doAction('db.files.delete:action:soft:before', payload);
+        const now = nowSec();
         await db.file_meta.put({
             ...meta,
             deleted: true,
-            updated_at: nowSec(),
+            deleted_at: now,
+            updated_at: now,
+            clock: nextClock(meta.clock),
         });
         await hooks.doAction('db.files.delete:action:soft:after', payload);
-    });
+        }
+    );
 }
 
-/** Soft delete multiple files in one transaction */
+/**
+ * Purpose:
+ * Soft delete multiple files in a single transaction.
+ *
+ * Behavior:
+ * Updates deletion flags and timestamps for each unique hash and emits hooks.
+ *
+ * Constraints:
+ * - Skips hashes that are missing or already deleted.
+ *
+ * Non-Goals:
+ * - Does not remove blobs from storage.
+ */
 export async function softDeleteMany(hashes: string[]): Promise<void> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return;
     const hooks = useHooks();
-    await db.transaction('rw', db.file_meta, async () => {
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'file_meta', { includeTombstones: true }),
+        async () => {
         const metas = await db.file_meta.bulkGet(unique);
+        const updates: FileMeta[] = [];
+        const payloads: DbDeletePayload<FileEntity>[] = [];
+
         for (let i = 0; i < unique.length; i++) {
             const hash = unique[i]!;
             const meta = metas[i];
             if (!meta || meta.deleted) continue;
             const payload = createFileDeletePayload(meta, hash);
             await hooks.doAction('db.files.delete:action:soft:before', payload);
-            await db.file_meta.put({
+
+            const now = nowSec();
+            updates.push({
                 ...meta,
                 deleted: true,
-                updated_at: nowSec(),
+                deleted_at: now,
+                updated_at: now,
+                clock: nextClock(meta.clock),
             });
+            payloads.push(payload);
+        }
+
+        if (updates.length > 0) {
+            await db.file_meta.bulkPut(updates);
+        }
+
+        for (const payload of payloads) {
             await hooks.doAction('db.files.delete:action:soft:after', payload);
         }
-    });
+        }
+    );
 }
 
-/** Restore multiple files that were soft deleted */
+/**
+ * Purpose:
+ * Restore soft deleted file metadata rows.
+ *
+ * Behavior:
+ * Clears deleted flags and emits restore hooks.
+ *
+ * Constraints:
+ * - Only affects rows currently marked deleted.
+ *
+ * Non-Goals:
+ * - Does not restore missing blobs.
+ */
 export async function restoreMany(hashes: string[]): Promise<void> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return;
     const hooks = useHooks();
-    await db.transaction('rw', db.file_meta, async () => {
+    const db = getDb();
+    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
         const metas = await db.file_meta.bulkGet(unique);
+        const updates: FileMeta[] = [];
+
         for (let i = 0; i < unique.length; i++) {
             const meta = metas[i];
             if (!meta || meta.deleted !== true) continue;
-            await hooks.doAction(
-                'db.files.restore:action:before',
-                toFileEntity(meta)
+            await Dexie.waitFor(
+                hooks.doAction('db.files.restore:action:before', toFileEntity(meta))
             );
-            const updatedMeta = {
+            updates.push({
                 ...meta,
                 deleted: false,
                 updated_at: nowSec(),
-            } as FileMeta;
-            await db.file_meta.put(updatedMeta);
-            await hooks.doAction(
-                'db.files.restore:action:after',
-                toFileEntity(updatedMeta)
-            );
+                clock: nextClock(meta.clock),
+            } as FileMeta);
+        }
+
+        if (updates.length > 0) {
+            await db.file_meta.bulkPut(updates);
+            for (const updatedMeta of updates) {
+                await Dexie.waitFor(
+                    hooks.doAction(
+                        'db.files.restore:action:after',
+                        toFileEntity(updatedMeta)
+                    )
+                );
+            }
         }
     });
 }
 
-/** Hard delete files (remove metadata + blob) */
+/**
+ * Purpose:
+ * Hard delete file metadata and blobs.
+ *
+ * Behavior:
+ * Removes rows from file meta and blob tables in a transaction.
+ *
+ * Constraints:
+ * - Deletes are permanent for local storage.
+ *
+ * Non-Goals:
+ * - Does not delete remote storage objects.
+ */
 export async function hardDeleteMany(hashes: string[]): Promise<void> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return;
     const hooks = useHooks();
-    await db.transaction('rw', db.file_meta, db.file_blobs, async () => {
+    const db = getDb();
+    await db.transaction(
+        'rw',
+        getWriteTxTableNames(db, 'file_meta', {
+            include: ['file_blobs'],
+            includeTombstones: true,
+        }),
+        async () => {
         const metas = await db.file_meta.bulkGet(unique);
         for (let i = 0; i < unique.length; i++) {
             const hash = unique[i]!;
@@ -310,11 +571,36 @@ export async function hardDeleteMany(hashes: string[]): Promise<void> {
     });
 }
 
-/** Remove one reference to a file; if dropping to 0 we keep data (GC future) */
+/**
+ * Purpose:
+ * Decrement a file reference count without deleting the file.
+ *
+ * Behavior:
+ * Updates ref count and timestamps with hook emission.
+ *
+ * Constraints:
+ * - Ref count is clamped to zero.
+ *
+ * Non-Goals:
+ * - Does not garbage collect files when ref count reaches zero.
+ */
 export async function derefFile(hash: string): Promise<void> {
     await changeRefCount(hash, -1);
 }
 
+/**
+ * Purpose:
+ * Standardize file delete errors for reporting.
+ *
+ * Behavior:
+ * Creates an `ERR_DB_WRITE_FAILED` error with file-specific tags.
+ *
+ * Constraints:
+ * - Intended for internal error handling.
+ *
+ * Non-Goals:
+ * - Does not report the error automatically.
+ */
 export function fileDeleteError(message: string, cause?: unknown) {
     return err('ERR_DB_WRITE_FAILED', message, {
         cause,
@@ -322,17 +608,67 @@ export function fileDeleteError(message: string, cause?: unknown) {
     });
 }
 
-// Export internal for testing / tasks list mapping
+/**
+ * Purpose:
+ * Internal API for adjusting file reference counts.
+ *
+ * Behavior:
+ * Updates ref_count and emits ref change hooks inside a transaction.
+ *
+ * Constraints:
+ * - Exported for composition and tests.
+ *
+ * Non-Goals:
+ * - Does not validate file existence outside the transaction.
+ */
 export { changeRefCount };
+
+async function enqueueUpload(hash: string): Promise<void> {
+    if (!import.meta.client) return;
+    try {
+        const { getStorageTransferQueue } = await import(
+            '~/core/storage/transfer-queue'
+        );
+        const queue = getStorageTransferQueue();
+        if (!queue) return;
+        await queue.enqueue(hash, 'upload');
+    } catch (error) {
+        reportError(error, {
+            silent: true,
+            tags: { domain: 'storage', stage: 'enqueue-upload' },
+        });
+    }
+}
 
 // Lightweight image dimension extraction with timeout to prevent hung operations
 const IMAGE_SIZE_TIMEOUT_MS = 5000; // 5s timeout
 
+// Type for the image-like object we create
+interface ImageLike {
+    src: string;
+    naturalWidth: number;
+    naturalHeight: number;
+    onload: (() => void) | null;
+    onerror: (() => void) | null;
+}
+
+type ImageConstructor = new () => ImageLike;
+
+function getImageConstructor(value: unknown): ImageConstructor | null {
+    return typeof value === 'function' ? (value as ImageConstructor) : null;
+}
+
 async function blobImageSize(
     blob: Blob
 ): Promise<{ width: number; height: number } | undefined> {
+    // Guard for non-browser environments where Image constructor is unavailable
+    const imageCtor = getImageConstructor((globalThis as { Image?: unknown }).Image);
+    if (!imageCtor) {
+        return undefined;
+    }
+
     return new Promise((resolve) => {
-        const img = new Image();
+        const img: ImageLike = new imageCtor();
         let resolved = false;
 
         // Timeout to prevent hung operations from malformed images

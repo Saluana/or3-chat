@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "qualificationVersion": "milestone-1-shadow-v1",
+  "milestone": "Milestone 1 — Descriptor contracts and shadow ownership",
+  "entryEvidence": [
+    "shared/plugins/runtime-descriptor.ts",
+    "shared/plugins/runtime-state.ts",
+    "shared/plugins/descriptor-resolver.ts",
+    "shared/plugins/bundled-plugin-catalog.ts",
+    "shared/plugins/safe-mode.ts",
+    "app/composables/plugins/shadow-plugin-manager.ts",
+    "app/composables/plugins/workspace-plugin-shadow-observer.ts",
+    "app/plugins/workspace-plugins.client.ts",
+    "planning/plugin-runtime-v2/qualification/shadow-rollback.md"
+  ],
+  "gates": [
+    {
+      "id": "contracts-and-shadow",
+      "commands": [
+        ["bun", "run", "plugin-runtime:contracts:check"],
+        [
+          "bun",
+          "x",
+          "vitest",
+          "run",
+          "shared/plugins/__tests__/runtime-state.test.ts",
+          "shared/plugins/__tests__/descriptor-resolver.test.ts",
+          "app/composables/plugins/__tests__/shadow-plugin-manager.test.ts",
+          "shared/plugins/__tests__/safe-mode.test.ts"
+        ]
+      ]
+    },
+    {
+      "id": "observer-rollback-drill",
+      "commands": [
+        [
+          "bun",
+          "x",
+          "vitest",
+          "run",
+          "app/composables/plugins/__tests__/shadow-rollback.test.ts",
+          "app/composables/plugins/__tests__/workspace-runtime.test.ts"
+        ]
+      ]
+    },
+    {
+      "id": "frozen-v1-qualification",
+      "commands": [["bun", "run", "plugin-runtime:milestone-0:qualify"]]
+    }
+  ],
+  "rollback": {
+    "scope": "Disable only the read-only Milestone 1 observer; keep the authoritative V1 loader and all installed plugin data unchanged.",
+    "procedure": [
+      "Set OR3_PLUGIN_RUNTIME_SHADOW_ENABLED=false outside the plugin admin UI.",
+      "Restart the OR3 process before any non-core plugin executes.",
+      "Verify the Runtime Inspector reports V1 only and run the maintained V1 corpus.",
+      "Keep the observer disabled if the complete Milestone 0 qualification is not green."
+    ],
+    "drill": "The observer-rollback-drill gate proves the V1 import/register trace remains exact and observer dependencies are never constructed; the frozen-v1-qualification gate then re-runs all Milestone 0 exit gates."
+  }
+}
+

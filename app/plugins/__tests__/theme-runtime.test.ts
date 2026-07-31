@@ -1,101 +1,41 @@
 import { describe, it, expect } from 'vitest';
-import type {
-    ParsedSelector,
-    AttributeMatcher,
-    AttributeOperator,
-} from '~/theme/_shared/types';
-import { KNOWN_THEME_CONTEXTS } from '~/theme/_shared/contexts';
-
-// Note: These functions need to be exported from theme.client.ts for testing
-// For now, we'll re-implement them here to demonstrate the test structure
-
-/**
- * Parse a CSS selector into components
- */
-function parseSelector(selector: string): ParsedSelector {
-    const normalized = normalizeSelector(selector);
-
-    const component = normalized.match(/^(\w+)/)?.[1] || 'button';
-    const context = normalized.match(/data-context="([^"]+)"/)?.[1];
-    const identifier = normalized.match(/data-id="([^"]+)"/)?.[1];
-    const state = normalized.match(/:(\w+)/)?.[1];
-
-    // Extract HTML attribute selectors
-    const attributes: AttributeMatcher[] = [];
-    // Fixed regex: match attribute name (word chars, hyphens), then optional operator and value
-    const attrRegex = /\[([\w-]+)(([~|^$*]=|=)"([^"]+)")?\]/g;
-    let match: RegExpExecArray | null;
-
-    while ((match = attrRegex.exec(normalized)) !== null) {
-        const attrName = match[1];
-        if (!attrName || attrName === 'data-context' || attrName === 'data-id')
-            continue;
-
-        const fullMatch = match[2]; // e.g., ^="btn" or ="submit"
-        let operator: AttributeOperator = 'exists';
-        let attrValue: string | undefined;
-
-        if (fullMatch) {
-            const op = match[3]; // e.g., "^=" or "="
-            operator = op as AttributeOperator;
-            attrValue = match[4]; // e.g., "btn" or "submit"
-        }
-
-        attributes.push({
-            attribute: attrName,
-            operator,
-            value: attrValue,
-        });
-    }
-
-    return {
-        component,
-        context,
-        identifier,
-        state,
-        attributes: attributes.length > 0 ? attributes : undefined,
-    };
-}
-
-/**
- * Normalize simple selector syntax to attribute selectors
- */
-function normalizeSelector(selector: string): string {
-    let result = selector;
-
-    // Convert .context to [data-context="context"]
-    const knownContexts = KNOWN_THEME_CONTEXTS;
-    result = result.replace(
-        /(\w+)\.(\w+)(?=[:\[]|$)/g,
-        (match, component, context) => {
-            if (knownContexts.includes(context)) {
-                return `${component}[data-context="${context}"]`;
-            }
-            return match;
-        }
-    );
-
-    // Convert #identifier to [data-id="identifier"]
-    result = result.replace(/(\w+)#([\w.]+)(?=[:\[]|$)/g, '$1[data-id="$2"]');
-
-    return result;
-}
+import type { AttributeOperator, ParsedSelector } from '~/theme/_shared/types';
+import {
+    parseSelector,
+    normalizeSelector,
+    calculateSpecificity as calculateProductionSpecificity,
+} from '~/theme/_shared/compiler-core';
 
 /**
  * Calculate CSS specificity
  */
 function calculateSpecificity(parsed: ParsedSelector): number {
-    let specificity = 1; // element
-
-    if (parsed.context) specificity += 10;
-    if (parsed.identifier) specificity += 20;
-    if (parsed.state) specificity += 10;
-    if (parsed.attributes) specificity += parsed.attributes.length * 10;
-
-    return specificity;
+    return calculateProductionSpecificity('', parsed);
 }
 
 describe('parseSelector', () => {
+    it('parses hyphenated component targets', () => {
+        expect(parseSelector('color-picker.dashboard').component).toBe(
+            'color-picker'
+        );
+    });
+
+    it('rejects unknown contexts instead of broadening the rule globally', () => {
+        expect(() => parseSelector('button.unknown')).toThrow(
+            'Unknown theme context'
+        );
+    });
+
+    it('parses a state followed by an attribute', () => {
+        const parsed = parseSelector('button:hover[aria-busy="true"]');
+        expect(parsed.state).toBe('hover');
+        expect(parsed.attributes?.[0]).toMatchObject({
+            attribute: 'aria-busy',
+            operator: '=',
+            value: 'true',
+        });
+    });
+
     it('should return ParsedSelector type with all fields', () => {
         const result = parseSelector('button#chat.send');
 
@@ -239,8 +179,7 @@ describe('calculateSpecificity', () => {
 
         // Calculate based on what we actually parse
         const actualSpecificity = calculateSpecificity(parsed);
-        // If context is missing: 1 + 20 (identifier) + 10 (state) + 10 (attribute) = 41
-        expect(actualSpecificity).toBe(41);
+        expect(actualSpecificity).toBe(51);
     });
 
     it('should handle multiple attributes', () => {

@@ -1,39 +1,92 @@
-// Utility helpers to build OpenRouter payload messages including historical images.
-// Focus: hydrate file_hashes into base64 data URLs, enforce limits, dedupe, and
-// produce OpenAI-compatible content arrays.
-//
-// This module handles OpenRouter API response parsing which requires flexible typing.
+/**
+ * @module app/core/auth/openrouter-build
+ *
+ * Purpose:
+ * Transforms local chat messages into the OpenRouter/OpenAI-compatible wire
+ * format. The primary complexity is image handling: hydrating local file hashes
+ * and remote URLs into base64 data URLs suitable for multimodal API calls.
+ *
+ * Responsibilities:
+ * - Build `ORMessage[]` arrays from local `ChatMessageLike` records
+ * - Hydrate `file_hashes` (local blobs) into base64 data URLs
+ * - Hydrate remote/blob URLs into data URLs with size guards (5 MB cap)
+ * - Enforce image limits, deduplication, and inclusion policies
+ * - Decide output modalities based on prompt heuristics
+ *
+ * Non-responsibilities:
+ * - Does not send the request (see streaming composables)
+ * - Does not manage the model catalog or API key
+ * - Does not handle response parsing
+ *
+ * Constraints:
+ * - Global data URL cache is bounded (LRU, max 64 entries)
+ * - Remote fetches have an 8-second timeout to avoid blocking sends
+ * - File parts for non-image types (PDFs) are handled separately from image_url parts
+ * - Modality detection is intentionally conservative (text-only output)
+ *
+ * @see core/auth/models-service for model catalog
+ * @see db/files for local blob storage
+ */
 
 import { parseFileHashes } from '~/db/files-util';
 
+/**
+ * Purpose:
+ * Lightweight reference to an image-like input discovered while scanning message history.
+ * Used to apply inclusion policies (recent-only, user-only) and dedupe rules.
+ */
 export interface BuildImageCandidate {
     hash: string;
     role: 'user' | 'assistant';
     messageIndex: number; // chronological index in original messages array
 }
 
+/**
+ * Purpose:
+ * OpenRouter/OpenAI message content part for plain text.
+ */
 export interface ORContentPartText {
     type: 'text';
     text: string;
 }
+/**
+ * Purpose:
+ * OpenRouter/OpenAI message content part for images.
+ *
+ * Constraints:
+ * - `image_url.url` is typically a `data:image/*` URL when hydrated from local files
+ */
 export interface ORContentPartImageUrl {
     type: 'image_url';
     image_url: { url: string };
 }
+/**
+ * Purpose:
+ * OpenRouter/OpenAI message content part for non-image files.
+ */
 export interface ORContentPartFile {
     type: 'file';
     file: { filename: string; file_data: string };
 }
+/**
+ * Purpose:
+ * Union of supported content parts produced by this module.
+ */
 export type ORContentPart =
     | ORContentPartText
     | ORContentPartImageUrl
     | ORContentPartFile;
 
+/**
+ * Purpose:
+ * OpenRouter/OpenAI-compatible chat message.
+ */
 export interface ORMessage {
-    role: 'user' | 'assistant' | 'system';
+    role: 'user' | 'assistant' | 'system' | 'tool';
     content: ORContentPart[];
-
     tool_calls?: unknown[];
+    tool_call_id?: string;
+    name?: string;
 }
 
 // Caches on global scope to avoid repeated blob -> base64 conversions.
@@ -57,6 +110,17 @@ function pruneCache(map: Map<string, string>, limit = MAX_DATA_URL_CACHE) {
         if (oldestKey === undefined) break;
         map.delete(oldestKey);
     }
+}
+
+// Lazy, singleton import of the client file store so we don't pay the dynamic
+// import cost on every message or image candidate, while still avoiding a
+// static server-side import if this module is ever evaluated outside the client.
+let filesModPromise: Promise<typeof import('~/db/files')> | null = null;
+function getFilesMod(): Promise<typeof import('~/db/files')> {
+    if (!filesModPromise) {
+        filesModPromise = import('~/db/files');
+    }
+    return filesModPromise;
 }
 
 // Remote / blob URL hydration cache shares same map (keyed by original ref string)
@@ -105,7 +169,7 @@ async function hydrateHashToDataUrl(hash: string): Promise<string | null> {
     if (inflight.has(hash)) return inflight.get(hash)!;
     const p = (async () => {
         try {
-            const { getFileBlob } = await import('~/db/files');
+            const { getFileBlob } = await getFilesMod();
             const blob = await getFileBlob(hash);
             if (!blob) throw new Error('blob-missing');
             const dataUrl = await blobToDataUrl(blob);
@@ -122,6 +186,14 @@ async function hydrateHashToDataUrl(hash: string): Promise<string | null> {
     return p;
 }
 
+/**
+ * Purpose:
+ * Controls how message history is transformed into OpenRouter wire messages.
+ *
+ * Notes:
+ * - `filterIncludeImages` behaves like a filter hook and can drop or reorder candidates
+ * - `imageInclusionPolicy` affects how far back message scanning goes
+ */
 export interface BuildOptions {
     maxImageInputs?: number; // total images across history
     dedupeImages?: boolean; // skip duplicate hashes
@@ -142,9 +214,12 @@ export interface BuildOptions {
 const DEFAULT_MAX_IMAGE_INPUTS = 8;
 
 interface ChatMessageLike {
-    role: 'user' | 'assistant' | 'system';
+    role: 'user' | 'assistant' | 'system' | 'tool';
     content: string | ChatContentPart[]; // proper content typing
     file_hashes?: string | null;
+    tool_calls?: unknown[];
+    tool_call_id?: string;
+    name?: string;
 }
 
 /** Incoming message content part (from Vercel AI SDK / DB format) */
@@ -160,6 +235,19 @@ interface ChatContentPart {
 }
 
 // Build OpenRouter messages with hydrated images.
+/**
+ * Purpose:
+ * Build OpenRouter/OpenAI-compatible message array from local chat records.
+ *
+ * Behavior:
+ * - Converts string content to a text part
+ * - Hydrates `file_hashes` and supported image refs into `data:image/*` URLs
+ * - Enforces image inclusion policy, dedupe, and max image count
+ *
+ * Constraints:
+ * - Hydration uses an in-memory global LRU cache to avoid repeated blob conversions
+ * - Remote and blob URLs are fetched and converted with size and timeout guards
+ */
 export async function buildOpenRouterMessages(
     messages: ChatMessageLike[],
     opts: BuildOptions = {}
@@ -222,7 +310,11 @@ export async function buildOpenRouterMessages(
         // Also inspect inline parts if array form
         if (Array.isArray(m.content)) {
             for (const p of m.content) {
-                if (p.type === 'image' && typeof p.image === 'string') {
+                if (
+                    (m.role === 'user' || m.role === 'assistant') &&
+                    p.type === 'image' &&
+                    typeof p.image === 'string'
+                ) {
                     if (
                         p.image.startsWith('data:image/') ||
                         /^https?:/i.test(p.image) ||
@@ -308,7 +400,7 @@ export async function buildOpenRouterMessages(
                     // Local hash or opaque ref -> hydrate via blob to data URL preserving mime
                     if (!/^data:|^https?:|^blob:/i.test(String(fileData))) {
                         try {
-                            const { getFileBlob } = await import('~/db/files');
+                            const { getFileBlob } = await getFilesMod();
                             const blob = await getFileBlob(String(fileData));
                             if (blob) {
                                 const mime = blob.type || mediaType;
@@ -398,7 +490,7 @@ export async function buildOpenRouterMessages(
             let isImage = false;
             if (looksLocal) {
                 try {
-                    const { getFileMeta } = await import('~/db/files');
+                    const { getFileMeta } = await getFilesMod();
                     const meta = await getFileMeta(img.hash).catch(() => null);
                     const metaMime =
                         typeof meta?.mime_type === 'string'
@@ -438,7 +530,13 @@ export async function buildOpenRouterMessages(
             }
         }
 
-        orMessages.push({ role: m.role, content: parts });
+        orMessages.push({
+            role: m.role,
+            content: parts,
+            ...(Array.isArray(m.tool_calls) ? { tool_calls: m.tool_calls } : {}),
+            ...(m.tool_call_id ? { tool_call_id: m.tool_call_id } : {}),
+            ...(m.name ? { name: m.name } : {}),
+        });
     }
 
     if (debug) {
@@ -446,20 +544,4 @@ export async function buildOpenRouterMessages(
     }
 
     return orMessages;
-}
-
-// Decide modalities based on prepared ORMessages + heuristic prompt.
-export function decideModalities(orMessages: ORMessage[]): string[] {
-    const hasImageInput = orMessages.some((m) =>
-        m.content.some((p) => p.type === 'image_url')
-    );
-    const lastUser = [...orMessages].reverse().find((m) => m.role === 'user');
-    const prompt = lastUser?.content.find((p) => p.type === 'text')?.text || '';
-    const imageIntent =
-        /(generate|create|make|produce|draw)\s+(an?\s+)?(image|picture|photo|logo|scene|illustration)/i.test(
-            prompt
-        );
-    const modalities = ['text'];
-    if (hasImageInput || imageIntent) modalities.push('image');
-    return modalities;
 }

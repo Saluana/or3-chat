@@ -23,13 +23,18 @@ overrides: {
 Use attributes or states only when needed. State selectors (`:hover`, `:active`)
 only match when you pass `state` to the resolver manually.
 
-## Use v-theme everywhere
+## Choose the correct component boundary
 
-If a component should be themed, add `v-theme`. Remove hardcoded props that the
-theme is responsible for.
+Use `useThemeOverrides()` with `v-bind` for Vue component props. Use `v-theme`
+for DOM classes, inline style declarations, identifiers, and target annotations.
 
 ```vue
-<UButton v-theme="'chat.send'">Send</UButton>
+<script setup lang="ts">
+const sendTheme = useThemeOverrides({
+  component: 'button', context: 'chat', identifier: 'chat.send', isNuxtUI: true,
+});
+</script>
+<UButton v-bind="sendTheme" v-theme="'chat.send'">Send</UButton>
 ```
 
 Keep dynamic props (disabled/loading/etc.) explicit.
@@ -56,6 +61,42 @@ utilities.
 - Prefer context-level overrides over per-component identifiers.
 - Reuse resolver instances via `useThemeResolver`.
 - Use `useThemeOverrides` for reactive resolution instead of recomputing.
+
+## Mobile editable controls
+
+Mobile Safari and other touch browsers may zoom focused editable controls when
+their computed font size is below `16px`.
+
+- Keep text-like `input`, `textarea`, `select`, and contenteditable surfaces at
+  least `16px` on touch devices.
+- Theme app-config variants are not sufficient by themselves because raw DOM
+  controls, portal content, and third-party editors can bypass them.
+- Use a theme-scoped touch media query as the final enforcement layer while
+  preserving compact desktop typography.
+- Do not disable browser zoom with `maximum-scale` or `user-scalable`; users
+  must retain page-zoom accessibility.
+
+## Mobile control sizing
+
+For the built-in touch presentation, use a 44px minimum hit region for buttons,
+menu items, tabs, switches, and text-like form controls. This follows Apple's
+44×44pt guidance and works because CSS pixels map closely to iOS layout points
+in a correctly configured viewport.
+
+- Keep the 44px requirement inside touch/mobile media queries so compact
+  desktop layouts remain unchanged.
+- A control's visible icon may be smaller than 44px, but its interactive region
+  must not be.
+- Use 16–17px for primary control and navigation labels, and at least 16px for
+  editable text on mobile. Supporting labels may be smaller, but keep ordinary
+  supporting copy at or above 12px and use adequate contrast.
+- Use 20–24px visible icons inside the larger hit region. Primary navigation
+  rows can be 48–56px tall while secondary inline actions stay visually
+  compact.
+- Preserve at least a small visual gap between adjacent hit regions to reduce
+  accidental taps.
+- Theme-level rules must cover portal content and raw DOM controls; component
+  overrides with fixed `!important` dimensions need their own mobile rule.
 
 ## Contexts
 

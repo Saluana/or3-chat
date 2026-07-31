@@ -5,10 +5,13 @@
 .nitro
 .cache
 dist
-
+opencode.json
+playwright-report 
+test-results
+output/
 # Node dependencies
 node_modules
-
+convex
 # Logs
 logs
 *.log
@@ -24,7 +27,24 @@ logs
 !.env.example
 or3-repo.md
 
+# Convex generated artifacts
+convex/_generated/
+
 package-lock.json
 bun.lockb
 
 .champion-prompt.md
+
+# Deployment extensions (installed at runtime)
+extensions/**
+!extensions/.gitkeep
+!extensions/plugins/.gitkeep
+!extensions/themes/.gitkeep
+!extensions/admin-plugins/.gitkeep
+
+
+test-theme
+test-theme-cyberpunk.zip
+
+# Large repomix audit packs (local-only; do not commit)
+or3-*-audit.md

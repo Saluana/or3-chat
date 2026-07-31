@@ -282,13 +282,13 @@ const activePageComponent = computed(() => {
     return activePageDef.value?.component || SidebarHomePage;
 });
 
+// KeepAlive include must use component names defined inside each page via defineOptions({ name }).
+// Since async wrappers don't expose inner component names, we rely on the convention that
+// component names match page IDs (e.g., 'sidebar-home', 'sidebar-docs', 'sidebar-chats').
 const keepAliveInclude = computed(() =>
     listSidebarPages.value
         .filter((page) => page.keepAlive)
-        .map((page) => {
-            const componentName = (page.component as { name?: string })?.name;
-            return componentName ?? page.id;
-        })
+        .map((page) => page.id)
 );
 
 // Props to pass to active page

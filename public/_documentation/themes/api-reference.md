@@ -27,7 +27,34 @@ export interface ThemeDefinition {
   propMaps?: PropClassMaps;
   backgrounds?: ThemeBackgrounds;
   icons?: Record<string, string>;
+  customComponents?: Partial<Record<AppThemeComponent, string>>;
 }
+```
+
+For a practical guide to replacing app components, see
+`/themes/component-overrides`.
+
+### AppThemeComponent
+
+Theme component overrides are keyed by a strict union. Paths are relative to the
+theme root directory, for example:
+`customComponents: { 'chat-message': './components/MyChatMessage.vue' }`.
+
+```ts
+export type AppThemeComponent =
+  | 'sidebar'
+  | 'sidebar-collapsed'
+  | 'chat-page'
+  | 'chat-message'
+  | 'chat-input'
+  | 'document-editor'
+  | 'dashboard-modal'
+  | 'model-selector'
+  | 'system-prompts-modal'
+  | 'model-catalog-modal'
+  | 'sidebar-auth-button'
+  | 'documentation-shell'
+  | 'workflow-status';
 ```
 
 ### ColorPalette
@@ -170,11 +197,49 @@ The directive walks DOM ancestry and matches these containers:
 - `#app-header` or `[data-context="header"]`
 - fallback: `global`
 
+For manual bindings (`v-theme="{ context: '...' }"`), the known context set is:
+
+- `chat`
+- `sidebar`
+- `dashboard`
+- `header`
+- `global`
+- `settings`
+- `shell`
+- `message`
+- `modal`
+- `document`
+- `image-viewer`
+- `images`
+- `prompt`
+- `docs`
+- `ui`
+
+These values come from the shared context list used by the theme runtime (`app/theme/_shared/contexts.ts`).
+
 ### Attributes added
 
 The directive sets `data-v-theme` and may add `data-id`,
 `data-theme-color`, `data-theme-variant`, and `data-theme-size`
-on the rendered element.
+on the rendered element. It also applies resolved `class` and `style` values
+and removes only the DOM state it owns when the theme changes or the directive
+unmounts.
+
+The directive does **not** mutate Vue component props. For component props,
+bind the reactive result from `useThemeOverrides()`:
+
+```vue
+<script setup lang="ts">
+const sendTheme = useThemeOverrides({
+  component: 'button',
+  context: 'chat',
+  identifier: 'chat.send',
+  isNuxtUI: true,
+});
+</script>
+
+<template><UButton v-bind="sendTheme">Send</UButton></template>
+```
 
 ## RuntimeResolver
 
@@ -249,6 +314,19 @@ Key APIs:
 - `getTheme(themeName)`
 - `loadTheme(themeName)`
 - `resolversVersion` ref
+- `activeComponents` ref
+
+### activeComponents
+
+`activeComponents` is the runtime map of resolved app component targets.
+
+It always contains every supported `AppThemeComponent` key. Any key not
+overridden by the active theme points to the core default component.
+
+The client keeps this map on the default component set through hydration, then
+swaps in theme overrides after mount. That behavior is intentional and prevents
+SSR hydration mismatches when a theme override renders a different root
+structure than the core component.
 
 ## CLI Commands
 
@@ -257,7 +335,7 @@ Key APIs:
   `types/theme-generated.d.ts`.
 - `bun run theme:build-css` build `/public/themes/<name>.css` from
   `cssSelectors.style`.
-- `bun run theme:switch` update the default theme in app config
+- `bun run theme:switch` update `OR3_DEFAULT_THEME` in `.env`
   (does not change the current runtime theme).
 
 ## Generated Types

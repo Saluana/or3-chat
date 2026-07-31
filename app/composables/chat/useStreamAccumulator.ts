@@ -1,4 +1,56 @@
 /**
+ * @module composables/chat/useStreamAccumulator
+ *
+ * **Purpose**
+ * Provides a minimal, RAF-batched streaming text accumulator for chat message generation.
+ * Replaces legacy `useTailStream` and ad-hoc reactive refs with a unified, performant solution.
+ * Accumulates text and reasoning deltas from LLM streams and batches reactive updates to
+ * minimize DOM thrashing and Vue reactivity overhead.
+ *
+ * **Responsibilities**
+ * - Accumulate text and reasoning deltas via `append(delta, { kind })`
+ * - Batch DOM/reactive writes to ≤1 per animation frame using RAF
+ * - Provide `finalize()` with success/error/abort semantics (idempotent)
+ * - Expose readonly reactive `StreamingState` for UI consumption
+ * - Track version counter for lightweight change detection
+ * - Warn on excessive memory accumulation (>100KB) in dev mode
+ *
+ * **Non-responsibilities**
+ * - Does NOT handle network streaming or fetch (see openRouterStream, useAi)
+ * - Does NOT persist messages to DB (see useAi message persistence)
+ * - Does NOT manage UI rendering (see ChatMessage.vue, StreamingMessage.vue)
+ * - Does NOT handle abort signals (caller manages AbortController)
+ *
+ * **State Lifecycle**
+ * - Create: `createStreamAccumulator()` returns fresh accumulator with `isActive: true`
+ * - Append: `append(delta, { kind })` buffers deltas and schedules RAF flush
+ * - Finalize: `finalize({ error?, aborted? })` commits pending, sets `isActive: false`, `finalized: true`
+ * - Reset: `reset()` clears state and prepares for new stream (reusable accumulator)
+ *
+ * **Performance**
+ * - RAF batching reduces reactive updates from ~100/sec to ~60/sec (one per frame)
+ * - Expected token rate: 10-100 tokens/sec from LLM (depends on model speed)
+ * - Memory: typical message accumulates 1-10KB, warns at 100KB
+ * - Version counter: increments on every flush (used by watchers)
+ *
+ * **Error Handling**
+ * - `finalize({ error })` sets `state.error` and `finalized: true`
+ * - Append/finalize after finalize are ignored with dev-mode warnings
+ * - RAF cancellation is idempotent (safe to call multiple times)
+ *
+ * **Testing Strategy**
+ * - Unit tests: verify RAF batching reduces mutation count
+ * - Unit tests: verify finalize is idempotent
+ * - Unit tests: verify reset clears state
+ * - Integration tests: verify correct text accumulation from event sequences
+ * - Performance tests: measure update latency under high token throughput
+ *
+ * **Migration Notes**
+ * - Replaces `useTailStream` (deprecated)
+ * - `UnifiedStreamingState` type alias is deprecated; use `StreamingState` instead
+ */
+
+/**
  * Unified streaming accumulator (Task 1 – Unified Streaming Core)
  * Minimal rAF‑batched token buffer replacing legacy useTailStream + ad hoc refs.
  *
@@ -9,12 +61,14 @@
  *  - Expose readonly reactive StreamingState for UI consumption
  */
 import { reactive } from 'vue';
+import { normalizeStreamingMessage } from '~/utils/chat/messages';
 
 export interface StreamingState {
     text: string;
     reasoningText: string;
     isActive: boolean;
     finalized: boolean;
+    aborted: boolean;
     error: Error | null;
     version: number; // increments on each flush for lightweight watchers
 }
@@ -24,28 +78,24 @@ export type AppendKind = 'text' | 'reasoning';
 export interface StreamAccumulatorApi {
     state: Readonly<StreamingState>;
     append(delta: string, options: { kind: AppendKind }): void;
+    hydrate(seed: {
+        text?: unknown;
+        reasoningText?: unknown;
+    }): void;
     finalize(opts?: { error?: Error; aborted?: boolean }): void; // idempotent
     reset(): void; // prepare for a fresh stream
 }
 
 // Resolve rAF/CAF dynamically to honor test-time stubs and late availability
-function nowTs(): number {
-    try {
-        return globalThis.performance.now();
-    } catch {
-        return Date.now();
-    }
-}
 type GlobalWithRAF = typeof globalThis & {
     requestAnimationFrame?: (cb: FrameRequestCallback) => number;
     cancelAnimationFrame?: (id: number) => void;
 };
 
 function getRAF(): (cb: FrameRequestCallback) => number {
-    const g = globalThis as GlobalWithRAF;
-    if (typeof g.requestAnimationFrame === 'function') return g.requestAnimationFrame;
-    return (cb: FrameRequestCallback) =>
-        setTimeout(() => cb(nowTs()), 0) as unknown as number;
+    return (globalThis as GlobalWithRAF).requestAnimationFrame as (
+        cb: FrameRequestCallback
+    ) => number;
 }
 function getCAF(): (id: number) => void {
     const g = globalThis as GlobalWithRAF;
@@ -60,13 +110,10 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         reasoningText: '',
         isActive: true,
         finalized: false,
+        aborted: false,
         error: null,
         version: 0,
     });
-    // TODO(normalization): Future message normalization pass will consolidate assistant
-    // message text assembly so accumulator text piping can directly hydrate persisted
-    // message content without duplicate string concatenation in useChat.
-
     let pendingMain: string[] = [];
     let pendingReasoning: string[] = [];
     let frame: number | null = null;
@@ -91,6 +138,7 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         }
         
         // Warn if accumulator grows too large (potential memory issue)
+        /* v8 ignore start -- development-only memory diagnostic */
         if (!warnedAboutSize && import.meta.dev) {
             const totalLen = state.text.length + state.reasoningText.length;
             if (totalLen > MAX_REASONABLE_LENGTH) {
@@ -101,6 +149,7 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
                 warnedAboutSize = true;
             }
         }
+        /* v8 ignore stop */
         
         state.version++;
     }
@@ -125,9 +174,11 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
     /** Ensure stream not already finalized. Returns false if already finalized. */
     function ensureNotFinalized(op: string): boolean {
         if (_finalized) {
+            /* v8 ignore start -- development-only misuse diagnostic */
             if (import.meta.dev) {
                 console.warn(`[stream] ${op} after finalize ignored`);
             }
+            /* v8 ignore stop */
             return false;
         }
         return true;
@@ -136,11 +187,13 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
     function append(delta: string, { kind }: { kind: AppendKind }) {
         if (!ensureNotFinalized('append')) return;
         if (!delta) {
+            /* v8 ignore start -- development-only upstream diagnostic */
             if (import.meta.dev && ++emptyAppendWarnings <= 3) {
                 console.warn(
                     '[stream] empty delta append ignored (possible upstream tokenization issue)'
                 );
             }
+            /* v8 ignore stop */
             return;
         }
         if (kind === 'reasoning') pendingReasoning.push(delta);
@@ -163,8 +216,30 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         if (pendingMain.length || pendingReasoning.length) flush();
         else state.version++;
         if (opts?.error) state.error = opts.error;
+        state.aborted = opts?.aborted === true;
         state.isActive = false;
         state.finalized = true;
+    }
+
+    function hydrate(seed: {
+        text?: unknown;
+        reasoningText?: unknown;
+    }) {
+        if (!ensureNotFinalized('hydrate')) return;
+        if (frame != null) {
+            getCAF()(frame);
+            frame = null;
+        }
+        microtaskToken = null;
+        pendingMain = [];
+        pendingReasoning = [];
+        const normalized = normalizeStreamingMessage({
+            text: seed.text,
+            reasoning_text: seed.reasoningText,
+        });
+        state.text = normalized.text;
+        state.reasoningText = normalized.reasoningText ?? '';
+        state.version++;
     }
 
     function reset() {
@@ -182,12 +257,13 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         state.text = '';
         state.reasoningText = '';
         state.error = null;
+        state.aborted = false;
         state.isActive = true;
         state.finalized = false;
         state.version++;
     }
 
-    return { state, append, finalize, reset };
+    return { state, append, hydrate, finalize, reset };
 }
 
 // Convenience factory (future usage) - could be extended to support options
@@ -195,4 +271,19 @@ export function useStreamAccumulator() {
     return createStreamAccumulator();
 }
 
+/**
+ * @deprecated Use `StreamingState` instead. This alias exists for backward compatibility
+ * with code that was written during the migration from legacy streaming infrastructure.
+ * It will be removed in a future release.
+ *
+ * **Migration Guide**
+ * Replace:
+ * ```ts
+ * import type { UnifiedStreamingState } from '~/composables/chat/useStreamAccumulator';
+ * ```
+ * With:
+ * ```ts
+ * import type { StreamingState } from '~/composables/chat/useStreamAccumulator';
+ * ```
+ */
 export type { StreamingState as UnifiedStreamingState };

@@ -160,4 +160,34 @@ describe('UI chrome registries', () => {
             'test:late',
         ]);
     });
+
+    it('hides entries denied by access policy', () => {
+        registerHeaderAction({
+            id: 'test:auth-only',
+            icon: 'pixelarticons:lock',
+            handler: () => {},
+            access: { authRequired: true },
+        });
+        registerComposerAction({
+            id: 'test:free',
+            icon: 'pixelarticons:check',
+            handler: () => {},
+        });
+
+        const headerEntries = useHeaderActions(() => ({
+            route: null,
+            isMobile: false,
+        })).value;
+        const composerEntries = useComposerActions(() => ({
+            editor: null,
+            threadId: 't-1',
+            paneId: 'pane-1',
+            isStreaming: false,
+        })).value;
+
+        expect(headerEntries.map((entry) => entry.action.id)).toEqual([]);
+        expect(composerEntries.map((entry) => entry.action.id)).toEqual([
+            'test:free',
+        ]);
+    });
 });

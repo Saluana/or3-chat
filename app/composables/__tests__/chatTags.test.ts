@@ -40,6 +40,11 @@ vi.mock('~/utils/chat/messages', () => ({
     buildParts: (t: string) => [{ type: 'text', text: t }],
     mergeFileHashes: (a: any) => a,
     trimOrMessagesImages: (x: any) => x,
+    shouldKeepAssistantMessage: () => true,
+    getChatModalities: (modelId: string) =>
+        /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId)
+            ? ['image', 'text']
+            : ['text'],
 }));
 vi.mock('~/utils/chat/uiMessages', () => ({
     ensureUiMessage: (m: any) => ({ ...m, pending: false }),

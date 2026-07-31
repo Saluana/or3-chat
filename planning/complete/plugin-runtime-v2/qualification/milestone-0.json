@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "qualificationVersion": "milestone-0-v1",
+  "milestone": "Milestone 0 — Freeze and qualify V1",
+  "entryEvidence": [
+    "planning/plugin-runtime-v2/compatibility-ledger.json",
+    "planning/plugin-runtime-v2/compatibility-ledger.modules.json",
+    "planning/plugin-runtime-v2/compatibility-profiles.json",
+    "planning/plugin-runtime-v2/snapshots",
+    "planning/plugin-runtime-v2/benchmarks/budgets.json",
+    "planning/plugin-runtime-v2/benchmarks/milestone-0-v1.json",
+    "tests/plugin-runtime/v1-examples",
+    "tests/plugin-runtime/external-v1",
+    "tests/plugin-runtime/build-fixtures"
+  ],
+  "gates": [
+    {
+      "id": "declarations",
+      "commands": [
+        ["bun", "run", "plugin-runtime:compatibility:check"],
+        ["bun", "x", "vitest", "run", "scripts/__tests__/plugin-runtime-compatibility-snapshots.test.ts"]
+      ]
+    },
+    {
+      "id": "corpus",
+      "commands": [
+        ["bun", "run", "plugin-runtime:examples:check"],
+        ["bun", "run", "plugin-runtime:external-v1:check"]
+      ]
+    },
+    {
+      "id": "behavior",
+      "commands": [
+        [
+          "bun",
+          "x",
+          "vitest",
+          "run",
+          "server/admin/extensions/__tests__/extension-manager.test.ts",
+          "server/admin/extensions/__tests__/install.test.ts",
+          "server/admin/extensions/__tests__/limits.test.ts",
+          "server/admin/extensions/__tests__/uninstall-security.test.ts",
+          "server/admin/extensions/__tests__/url-fetch.test.ts",
+          "shared/plugins/__tests__/registration-handle.test.ts",
+          "app/composables/plugins/__tests__/workspace-runtime.test.ts",
+          "server/api/plugins/__tests__/runtime-manifest.get.test.ts",
+          "server/api/plugins/__tests__/dispatcher.test.ts",
+          "server/auth/__tests__/hooks.test.ts",
+          "shared/hooks/__tests__/hook-engine-core.test.ts",
+          "shared/hooks/__tests__/v1-diagnostics-compat.test.ts",
+          "app/plugins/__tests__/hookInspector.test.ts",
+          "app/composables/__tests__/registry-family-profiles.test.ts",
+          "app/composables/__tests__/sidebar-pane-profiles.test.ts",
+          "app/composables/__tests__/dashboard-profile.test.ts",
+          "app/composables/__tests__/editor-admin-profiles.test.ts",
+          "app/composables/core/__tests__/usePaneApps.test.ts",
+          "app/composables/dashboard/__tests__/useDashboardPlugins.test.ts",
+          "app/utils/chat/__tests__/tool-registry-profiles.test.ts",
+          "app/utils/chat/__tests__/tool-schema-parity.test.ts",
+          "app/utils/chat/__tests__/tools-public.contract.test.ts",
+          "server/utils/chat/__tests__/tool-registry.test.ts"
+        ]
+      ]
+    },
+    {
+      "id": "benchmarks",
+      "commands": [["bun", "run", "plugin-runtime:benchmarks:check"]]
+    },
+    {
+      "id": "production-builds",
+      "commands": [
+        ["bun", "run", "build"],
+        ["bun", "run", "generate:static"]
+      ]
+    }
+  ],
+  "rollback": {
+    "scope": "No V2 runtime flag is enabled at Milestone 0; the qualified runtime remains V1.",
+    "procedure": [
+      "Keep all future V2 startup flags disabled.",
+      "Revert the candidate change that failed this qualification command.",
+      "Re-run this qualification on the selected benchmark runner before promotion."
+    ],
+    "drill": "The production-build gate loads an unchanged V1 workspace fixture through SSR and static builds and proves it remains client-only. A failed gate leaves the existing V1 loader/runtime selection unchanged."
+  }
+}

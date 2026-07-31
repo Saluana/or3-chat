@@ -3,7 +3,12 @@ import {
     StarterKit,
     type WorkflowData,
 } from 'or3-workflow-core';
+import { computed } from 'vue';
 
+import {
+    usePostsList,
+    type PostData as ListedPostData,
+} from '~/composables/posts/usePostsList';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 
 const POST_TYPE = 'workflow-entry';
@@ -135,6 +140,45 @@ export interface WorkflowPost {
     updated_at: number;
 }
 
+function toWorkflowPost(
+    post: Pick<
+        ListedPostData,
+        'id' | 'title' | 'content' | 'meta' | 'created_at' | 'updated_at'
+    >
+): WorkflowPost {
+    return {
+        id: post.id,
+        title: post.title,
+        content: post.content,
+        postType: POST_TYPE,
+        meta: (post.meta as WorkflowData | null | undefined) ?? null,
+        created_at: post.created_at,
+        updated_at: post.updated_at,
+    };
+}
+
+/**
+ * Reactive workflow list backed by Dexie liveQuery.
+ * Automatically reflects local writes and remote sync pulls.
+ */
+export function useWorkflowList(limit?: number) {
+    const { items, loading, error, refresh } = usePostsList(POST_TYPE, {
+        limit,
+        sort: 'updated_at',
+        sortDir: 'desc',
+    });
+
+    const workflows = computed(() => items.value.map(toWorkflowPost));
+    const errorMessage = computed(() => error.value?.message ?? null);
+
+    return {
+        workflows,
+        loading,
+        error: errorMessage,
+        refresh,
+    };
+}
+
 /**
  * Check if a post is a workflow post
  */
@@ -207,15 +251,7 @@ export function useWorkflowsCrud(postApi: PanePluginApi['posts'] | null) {
             const post = result.post;
             return {
                 ok: true,
-                workflow: {
-                    id: post.id,
-                    title: post.title,
-                    content: post.content,
-                    postType: POST_TYPE,
-                    meta: post.meta as WorkflowData | null,
-                    created_at: post.created_at,
-                    updated_at: post.updated_at,
-                },
+                workflow: toWorkflowPost(post),
             };
         } catch (e) {
             return {
@@ -313,15 +349,7 @@ export function useWorkflowsCrud(postApi: PanePluginApi['posts'] | null) {
                 return { ok: false, error: result.message };
             }
 
-            const workflows: WorkflowPost[] = result.posts.map((post) => ({
-                id: post.id,
-                title: post.title,
-                content: post.content,
-                postType: POST_TYPE,
-                meta: post.meta as WorkflowData | null,
-                created_at: post.created_at,
-                updated_at: post.updated_at,
-            }));
+            const workflows: WorkflowPost[] = result.posts.map(toWorkflowPost);
 
             return { ok: true, workflows };
         } catch (e) {

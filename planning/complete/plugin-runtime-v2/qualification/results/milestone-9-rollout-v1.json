@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "qualificationVersion": "milestone-9-rollout-v1",
+  "milestone": "Milestone 9 — Rollout, tooling, and deprecation",
+  "status": "green",
+  "manifestSha256": "0635cff781e7b6b64c5101ee11a6a58e108aa549639d5472463f8448de6020df",
+  "publishedAt": "2026-07-21T00:18:45.328Z",
+  "durationMs": 112375,
+  "runner": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpuModel": "Apple M4 Pro",
+    "bunVersion": "1.3.6",
+    "nodeVersion": "24.3.0"
+  },
+  "evidence": {
+    "app/composables/plugins/__tests__/bundled-v1-manager-runtime.test.ts": "0074dbbf2ba27dcb6343cb07f52a7a8cefc2fd62ca2fad9b71af6017bf06e99c",
+    "app/composables/plugins/__tests__/manager-canary-rollback.test.ts": "1328ac697e8b26b5c97c1c42c851db1e88100499dc057ceeee6be094aa64dfbf",
+    "packages/plugin-sdk/templates/minimal-v2/or3.manifest.json": "8f37ab2208e8eec0501880417f02ec18c2d793893bcbc894777a8ebebdb29a5d",
+    "planning/plugin-runtime-v2/qualification/promotion-checklist.md": "4ce4c3cb9a153afda5e3bb885b2b398c110e85d53421389844e8e8604032012b",
+    "planning/plugin-runtime-v2/qualification/rollback-drill-milestone-9.md": "36392dd9950b62894c57a90ac93c5f3a08f31f27e85b68b8b380beae54a09545",
+    "planning/plugin-runtime-v2/trust-model-and-safe-mode.md": "663fc27daf629a396fb313e3d7ec11d6745264c3beeb8826623d517624800b19",
+    "planning/plugin-runtime-v2/v1-support-and-migration.md": "ebd6e4cd6dd8a76b47c8014196281cead801ea72bf0e905ecb3298888d25fbc4",
+    "public/_documentation/docmap.json": "4fb2af6f5c564f3f995bf3ff043fc7c4b6ff3c728314aaf00ce72cda39421d28",
+    "public/_documentation/plugins/runtime-v2-overview.md": "6bf03d6317077cc7cd9fefc0c0600aba090f9d2d75f59446a62119382193df5d",
+    "scripts/plugin-runtime/cli/index.ts": "706c9afc4474b23586bdeaedc2a8b80f82f4dce3ad0ec40c77ea43072496a8e6",
+    "scripts/plugin-runtime/codemod-v1-private-imports.ts": "e0869a719d9444e8e67698d9908ae1c294ed48d91cc861e387a13ae230423899",
+    "scripts/plugin-runtime/qualify-milestone-9.ts": "abbe357e54ab31cd8d7205913299c5fc3d826976a76c6ceeab397f9b69d9820c",
+    "shared/plugins/runtime-controls.ts": "333d18d34916be10d37ac6733d5f6eafb0b492e4b0b428de51628d614954fc9a"
+  },
+  "gates": [
+    {
+      "id": "runtime-controls-and-cli",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun x vitest run shared/plugins/__tests__/runtime-controls.test.ts scripts/__tests__/plugin-runtime-cli.test.ts scripts/__tests__/plugin-runtime-v1-codemod.test.ts",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 1139
+        }
+      ]
+    },
+    {
+      "id": "v2-conformance-and-sdk",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run plugin-runtime:v2-conformance:check",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 980
+        },
+        {
+          "command": "bun run plugin-runtime:sdk:check",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 799
+        }
+      ]
+    },
+    {
+      "id": "package-and-isolation-regression",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run plugin-runtime:package-promotion:check",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 1019
+        },
+        {
+          "command": "bun run plugin-runtime:isolation:check",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 1056
+        }
+      ]
+    },
+    {
+      "id": "public-contracts",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run plugin-runtime:compatibility:check",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 5292
+        }
+      ]
+    },
+    {
+      "id": "manager-only-default-promotion",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run scripts/plugin-runtime/check-milestone-9-defaults.ts",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 14
+        },
+        {
+          "command": "bun x vitest run app/composables/plugins/__tests__/manager-canary-rollback.test.ts app/composables/plugins/__tests__/bundled-v1-manager-runtime.test.ts",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 772
+        }
+      ]
+    },
+    {
+      "id": "frozen-v1-qualification",
+      "status": "green",
+      "commands": [
+        {
+          "command": "bun run plugin-runtime:milestone-0:qualify",
+          "status": "green",
+          "exitCode": 0,
+          "durationMs": 101302
+        }
+      ]
+    }
+  ],
+  "rollback": {
+    "scope": "Set OR3_PLUGIN_RUNTIME_V2_ENABLED=false and restart to restore the V1 authority path. Hook Runtime V2, ModuleV2Loader, and isolation remain default-off and independently rollbackable.",
+    "procedure": [
+      "Confirm only the manager production default is true via check-milestone-9-defaults.",
+      "Set OR3_PLUGIN_RUNTIME_V2_ENABLED=false outside the plugin UI and restart before discovery.",
+      "Use safe-mode (OR3_DISABLE_NON_CORE_PLUGINS=true + restart) if non-core plugins must be blocked immediately.",
+      "Package pointer rollback uses server promotion preflight; it never claims incompatible migrated state was restored."
+    ],
+    "drill": "See rollback-drill-milestone-9.md. The automated manager rollback test restores the V1 import/register authority path with the startup flag false."
+  },
+  "releaseReport": {
+    "flags": {
+      "pluginRuntimeV2Enabled": true,
+      "hookEngineV2Enabled": false,
+      "pluginModuleLoaderV2Enabled": false,
+      "pluginIsolationEnabled": false,
+      "promotionStatus": "manager-promoted; hook/surfaces/module-loader/isolation independently evaluated and deferred"
+    },
+    "corpusVersions": {
+      "compatibilityLedger": "planning/plugin-runtime-v2/compatibility-ledger.json",
+      "externalV1": "tests/plugin-runtime/external-v1",
+      "v1Examples": "tests/plugin-runtime/v1-examples",
+      "v2Conformance": "tests/plugin-runtime/v2-conformance",
+      "sdkTemplate": "packages/plugin-sdk/templates/minimal-v2"
+    },
+    "benchmarks": [
+      "plugin-runtime:benchmarks:check",
+      "plugin-runtime:hooks-v2:benchmarks:check"
+    ],
+    "faultTests": [
+      "server/admin/plugins/__tests__/package-promotion.test.ts",
+      "server/admin/plugins/__tests__/package-promotion-e2e.test.ts",
+      "shared/plugins/isolation/__tests__",
+      "server/admin/plugins/isolation/__tests__"
+    ],
+    "rollbackDrills": [
+      "planning/plugin-runtime-v2/qualification/rollback-drill-milestone-9.md",
+      "planning/plugin-runtime-v2/qualification/manager-canary-rollback.md",
+      "planning/plugin-runtime-v2/qualification/shadow-rollback.md"
+    ],
+    "knownLifecycleLimitations": [
+      "trusted-host grants are not a sandbox",
+      "activation is not fleet-atomic across clients/processes",
+      "disable retains immutable package digests and host-managed settings/data",
+      "code rollback never claims incompatible migrated state was restored",
+      "V1 lifecycle coverage remains legacy-global-possible"
+    ]
+  }
+}

@@ -1,11 +1,20 @@
 import {
     computed,
+    defineAsyncComponent,
     reactive,
     markRaw,
     type Component,
     type ComputedRef,
 } from 'vue';
 import { z } from 'zod';
+import {
+    createRegistrationHandle,
+    type RegistrationHandle,
+} from '~~/shared/plugins/registration-handle';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 
 /**
  * Pane app definition: describes a custom pane application that can be registered
@@ -42,6 +51,10 @@ export interface PaneAppDef {
      * Optional ordering (lower = earlier in sorted lists). Defaults to 200.
      */
     order?: number;
+    /** Optional owning plugin id used for workspace policy lookup. */
+    pluginId?: string;
+    /** Optional access policy for this pane app. */
+    access?: PluginGatePolicy;
 }
 
 // RegisteredPaneApp is exactly PaneAppDef, but semantically represents a validated/normalized entry
@@ -73,9 +86,26 @@ const PaneAppDefSchema = z.object({
         .optional(),
     postType: z.string().optional(),
     createInitialRecord: z.function().optional(),
+    pluginId: z.string().optional(),
+    access: z.unknown().optional(),
 });
 
+type OwnedPaneApp = {
+    app: RegisteredPaneApp;
+    owner: symbol;
+};
+
 // Global registry storage
+const ownedRegistry: Map<string, OwnedPaneApp> = (() => {
+    const g = globalThis as {
+        __or3PaneAppsOwnedRegistry?: Map<string, OwnedPaneApp>;
+    };
+    if (!g.__or3PaneAppsOwnedRegistry) {
+        g.__or3PaneAppsOwnedRegistry = new Map();
+    }
+    return g.__or3PaneAppsOwnedRegistry;
+})();
+
 const registry: Map<string, RegisteredPaneApp> = (() => {
     const g = globalThis as {
         __or3PaneAppsRegistry?: Map<string, RegisteredPaneApp>;
@@ -91,15 +121,87 @@ const reactiveRegistry = reactive({ registry });
 
 const DEFAULT_ORDER = 200;
 
+function isAsyncComponentLoader(
+    component: PaneAppDef['component']
+): component is () => Promise<Component> {
+    if (typeof component !== 'function') return false;
+    const candidate = component as {
+        setup?: unknown;
+        render?: unknown;
+        __asyncLoader?: unknown;
+    };
+    return (
+        !candidate.setup &&
+        !candidate.render &&
+        !candidate.__asyncLoader
+    );
+}
+
+function normalizePaneApp(def: PaneAppDef): RegisteredPaneApp {
+    return {
+        ...def,
+        component: markRaw(
+            isAsyncComponentLoader(def.component)
+                ? defineAsyncComponent({
+                      loader: def.component,
+                      timeout: 15000,
+                      suspensible: false,
+                      onError(_error, retry, fail, attempts) {
+                          if (attempts <= 2) retry();
+                          else fail();
+                      },
+                  })
+                : markRaw(def.component)
+        ),
+        order: def.order ?? DEFAULT_ORDER,
+    };
+}
+
+const v2Kernel = getContributionSurfaceKernel<RegisteredPaneApp>('pane-apps', {
+    getId: (app) => app.id,
+    normalize: normalizePaneApp,
+    // Pane apps preserve registration order when order values tie.
+    compare: (left, right) =>
+        (left.order ?? DEFAULT_ORDER) - (right.order ?? DEFAULT_ORDER),
+});
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('pane-apps');
+}
+
 /**
- * Composable to register and manage custom pane applications.
- * Uses a global Map so plugins can register pane apps that persist across component lifecycles.
+ * `usePaneApps`
+ *
+ * Purpose:
+ * Registers and manages custom pane applications.
+ *
+ * Behavior:
+ * Stores definitions in a global Map so plugins can register pane apps that
+ * persist across component lifecycles and HMR.
+ *
+ * Constraints:
+ * - Pane app ids must be lowercase and hyphenated
+ * - Uses Zod validation and throws on invalid definitions
+ *
+ * Non-Goals:
+ * - Does not lazy load or render apps itself
+ * - Access policies affect discovery and lookup, not server-side authorization
+ *
+ * @example
+ * ```ts
+ * const { registerPaneApp } = usePaneApps();
+ * registerPaneApp({
+ *   id: 'notes',
+ *   label: 'Notes',
+ *   component: () => import('~/components/panes/NotesPane.vue'),
+ * });
+ * ```
  */
 export function usePaneApps() {
     /**
      * Register a new pane app. If an app with the same id exists, it is replaced.
      */
-    function registerPaneApp(def: PaneAppDef): void {
+    function registerPaneApp(def: PaneAppDef): RegistrationHandle {
         // Validate input with Zod schema
         const parsed = PaneAppDefSchema.safeParse(def);
         if (!parsed.success) {
@@ -109,24 +211,38 @@ export function usePaneApps() {
             );
         }
 
-        const normalized: RegisteredPaneApp = {
-            ...def,
-            component: markRaw(
-                typeof def.component === 'function'
-                    ? def.component
-                    : markRaw(def.component)
-            ),
-            order: def.order ?? DEFAULT_ORDER,
-        };
+        if (useV2Surface()) {
+            return v2Kernel.registry.registerLegacy({ value: def });
+        }
+
+        const owner = Symbol(`pane-app:${def.id}`);
+        const normalized = normalizePaneApp(def);
+        ownedRegistry.set(def.id, { app: normalized, owner });
         registry.set(def.id, normalized);
         // Trigger reactivity by mutating the reactive wrapper
         reactiveRegistry.registry = new Map(registry);
+        return createRegistrationHandle({
+            id: def.id,
+            owner,
+            isCurrent: () => ownedRegistry.get(def.id)?.owner === owner,
+            remove: () => {
+                if (ownedRegistry.get(def.id)?.owner !== owner) return;
+                ownedRegistry.delete(def.id);
+                registry.delete(def.id);
+                reactiveRegistry.registry = new Map(registry);
+            },
+        });
     }
 
     /**
      * Unregister a pane app by id.
      */
     function unregisterPaneApp(id: string): void {
+        if (useV2Surface()) {
+            v2Kernel.registry.unregisterLegacy(id);
+            return;
+        }
+        ownedRegistry.delete(id);
         registry.delete(id);
         // Trigger reactivity
         reactiveRegistry.registry = new Map(registry);
@@ -136,19 +252,34 @@ export function usePaneApps() {
      * Get a registered pane app by id.
      */
     function getPaneApp(id: string): RegisteredPaneApp | undefined {
-        return registry.get(id);
+        const app = useV2Surface()
+            ? v2Kernel.registry.get(id, undefined)
+            : registry.get(id);
+        return app && getPluginGateDecision(app.pluginId, app.access).allowed
+            ? app
+            : undefined;
     }
 
     /**
      * List all registered pane apps, sorted by order (ascending).
      */
     const listPaneApps: ComputedRef<RegisteredPaneApp[]> = computed(() => {
+        if (useV2Surface()) {
+            return v2Kernel.items.value.filter(
+                (app) => getPluginGateDecision(app.pluginId, app.access).allowed
+            );
+        }
         // Access reactive registry to establish dependency
         const currentRegistry = reactiveRegistry.registry;
         const apps = Array.from(currentRegistry.values());
-        return apps.sort(
-            (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
-        );
+        return apps
+            .filter(
+                (app) => getPluginGateDecision(app.pluginId, app.access).allowed
+            )
+            .sort(
+                (a, b) =>
+                    (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
+            );
     });
 
     return {

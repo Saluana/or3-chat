@@ -61,44 +61,138 @@
  */
 
 import type { Post } from '~/db';
-import { createRegistry } from '../_registry';
+import { computed } from 'vue';
+import {
+    createHistoryActionRegistry,
+    type HistoryActionRegistryItem,
+} from '../history/createHistoryActionRegistry';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 
 /** Definition for an extendable chat message action button. */
-export interface DocumentHistoryAction {
-    /** Unique id (stable across reloads). */
-    id: string;
-    /** Icon name (passed to UButton icon prop). */
-    icon: string;
-    /** Label text. */
-    label: string;
-    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
-    order?: number;
-    /** Handler invoked on click. */
-    handler: (ctx: { document: Post }) => void | Promise<void>;
-}
+export interface DocumentHistoryAction
+    extends HistoryActionRegistryItem<Post> {}
 
-const registry = createRegistry<DocumentHistoryAction>(
+const registry = createHistoryActionRegistry<Post, DocumentHistoryAction>(
     '__or3DocumentHistoryActionsRegistry'
 );
+const v2Kernel = getContributionSurfaceKernel<DocumentHistoryAction>(
+    'document-history-actions',
+    {
+        getId: (action) => action.id,
+        normalize: (action) => Object.freeze({ ...action }),
+        compare: (left, right) =>
+            (left.order ?? 200) - (right.order ?? 200) || left.id.localeCompare(right.id),
+    }
+);
 
-/** Register (or replace) a message action. */
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('document-history-actions');
+}
+
+/**
+ * Purpose:
+ * Add or replace a document history action in the global registry.
+ *
+ * Behavior:
+ * Registers the action by ID, replacing any existing entry.
+ *
+ * Constraints:
+ * - IDs must be unique across actions
+ * - Registry is shared across the app and survives HMR
+ *
+ * Non-Goals:
+ * - Ordering enforcement beyond the shared registry sort rules
+ *
+ * @example
+ * ```ts
+ * registerDocumentHistoryAction({
+ *   id: 'my-plugin:export-doc',
+ *   icon: 'i-carbon-download',
+ *   label: 'Export Document',
+ *   order: 250,
+ *   handler: async ({ document }) => {
+ *     await exportDocument(document.id);
+ *   },
+ * });
+ * ```
+ */
 export function registerDocumentHistoryAction(action: DocumentHistoryAction) {
-    registry.register(action);
+    if (useV2Surface()) v2Kernel.registry.registerLegacy({ value: action });
+    else registry.register(action);
 }
 
-/** Unregister an action by id (optional utility). */
+/**
+ * Purpose:
+ * Remove a previously registered document history action.
+ *
+ * Behavior:
+ * Deletes the entry if it exists and leaves the registry intact.
+ *
+ * Constraints:
+ * - No-op when the ID does not exist
+ *
+ * Non-Goals:
+ * - Resetting registry state for other actions
+ *
+ * @example
+ * ```ts
+ * unregisterDocumentHistoryAction('my-plugin:export-doc');
+ * ```
+ */
 export function unregisterDocumentHistoryAction(id: string) {
-    registry.unregister(id);
+    if (useV2Surface()) v2Kernel.registry.unregisterLegacy(id);
+    else registry.unregister(id);
 }
 
-/** Accessor for actions applicable to a specific message. */
+/**
+ * Purpose:
+ * Read the reactive list of registered document history actions.
+ *
+ * Behavior:
+ * Returns a computed list sorted by the registry rules.
+ *
+ * Constraints:
+ * - Sorting is managed by the registry helper
+ *
+ * Non-Goals:
+ * - Filtering by document type or state
+ *
+ * @example
+ * ```ts
+ * const actions = useDocumentHistoryActions();
+ * ```
+ */
 export function useDocumentHistoryActions() {
-    return registry.useItems();
+    const items = useV2Surface() ? v2Kernel.items : registry.useItems();
+    return computed(() =>
+        items.value.filter(
+            (action) => getPluginGateDecision(action.pluginId, action.access).allowed
+        )
+    );
 }
 
-/** Convenience for plugin authors to check existing action ids. */
+/**
+ * Purpose:
+ * Inspect the registry by ID for debugging or collision checks.
+ *
+ * Behavior:
+ * Returns the action IDs in registration order.
+ *
+ * Constraints:
+ * - Intended for tooling and debugging
+ *
+ * Non-Goals:
+ * - Sorting by action order
+ *
+ * @example
+ * ```ts
+ * const ids = listRegisteredDocumentHistoryActionIds();
+ * ```
+ */
 export function listRegisteredDocumentHistoryActionIds(): string[] {
-    return registry.listIds();
+    return useV2Surface() ? [...v2Kernel.registry.listLegacyIds()] : registry.listIds();
 }
 
 // Note: Core (built-in) actions remain hard-coded in ChatDocumentHistory.vue so they always appear;

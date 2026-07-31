@@ -10,8 +10,8 @@ to integrate it into components and plugins.
 2. The theme plugin (`app/plugins/90.theme.client.ts` and
    `app/plugins/90.theme.server.ts`) loads theme definitions, compiles overrides,
    injects CSS variables, and applies selectors/backgrounds.
-3. Components consume theme overrides via `v-theme` or the `useThemeResolver`
-   composables.
+3. Components bind reactive props from `useThemeOverrides`; `v-theme` is the
+   compatibility DOM class/style and target-annotation directive.
 4. Optional theme assets include UI config, icon maps, backgrounds, and
    stylesheet files.
 
@@ -120,10 +120,11 @@ applies classes like `light`/`dark` to `<html>`.
 
 ## Component integration
 
-### 1) `v-theme` directive (recommended for components)
+### 1) `v-theme` directive (DOM decoration)
 
 The directive auto-detects component name and context, resolves overrides, and
-applies them to components or DOM nodes:
+applies owned classes, inline styles, and `data-*` annotations to the rendered
+DOM node:
 
 ```vue
 <template>
@@ -144,6 +145,8 @@ applies them to components or DOM nodes:
 
 Notes:
 
+- The directive cannot mutate Vue component props such as `variant`, `color`,
+  `size`, or `ui`. Use `useThemeOverrides()` with `v-bind` for those.
 - Vue warns on directives used on components with non-element roots. The
   directive still works (it targets the rendered root), but if the warning is
   noisy wrap the component in a plain element or use `useThemeOverrides`.
@@ -301,7 +304,7 @@ const icon = useIcon('chat.send');
   `types/theme-generated.d.ts`.
 - `bun run theme:build-css` builds `/public/themes/<name>.css` from
   `cssSelectors` that use `style`.
-- `bun run theme:switch` updates the default theme in app config.
+- `bun run theme:switch` updates `OR3_DEFAULT_THEME` in `.env`.
 
 ## Debugging tips
 

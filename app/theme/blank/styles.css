@@ -1,0 +1,648 @@
+@reference '../../assets/css/main.css';
+
+[data-theme="blank"] {
+    --chat-composer-border-radius: 28px;
+
+    /* ── Base reset: borderless, shadowless ── */
+    .theme-btn {
+        @apply flex items-center justify-center border-0 shadow-none;
+    }
+
+    .sb-group-header {
+        @apply px-0 text-xs font-medium text-(--md-on-surface-variant) uppercase tracking-wider;
+    }
+
+    .sidebar-scroll {
+        @apply pr-1.5 pt-1;
+    }
+
+    #nav-header {
+        @apply mb-0 ml-1 mr-1 pb-2 pl-0 border-none;
+    }
+
+    .page-link-btn {
+        @apply shadow-none;
+    }
+
+    .unified-sb-item {
+        @apply mx-1;
+    }
+
+    .unified-sb-item-active {
+        background: color-mix(
+            in srgb,
+            var(--md-primary) 8%,
+            var(--md-surface)
+        ) !important;
+        border-color: color-mix(
+            in srgb,
+            var(--md-primary) 14%,
+            transparent
+        ) !important;
+    }
+
+    .sb-item-time {
+        @apply text-[10px] tracking-wide;
+        opacity: 0.55 !important;
+    }
+
+    .project-empty-state {
+        background: color-mix(
+            in srgb,
+            var(--md-surface-variant) 70%,
+            var(--md-surface)
+        ) !important;
+    }
+
+    /* Chats card: soft brand blue (pairs with docs green, echoes logo #2a8fd6) */
+    .page-link-accent-chats .page-link-icon-container {
+        background: color-mix(in srgb, #2a8fd6 14%, var(--md-surface)) !important;
+        color: #2a8fd6 !important;
+    }
+
+    /* Expanded: soft outer edge against main content */
+    #sidebar-container-outer:has(#top-header[data-sidebar-state='expanded']) {
+        border-right: 1px solid
+            color-mix(in srgb, var(--md-border-color) 70%, transparent) !important;
+        box-sizing: border-box;
+    }
+
+    /* Collapsed: header is the rail top — same edge as the icon column */
+    #top-header[data-sidebar-state='collapsed'] {
+        background-color: var(--md-surface-variant) !important;
+        border-right: 1px solid
+            color-mix(in srgb, var(--md-border-color) 70%, transparent) !important;
+        box-sizing: border-box;
+    }
+
+    #nav-collapsed-container {
+        border-right: 1px solid
+            color-mix(in srgb, var(--md-border-color) 70%, transparent) !important;
+    }
+
+    .chat-input-wrapper {
+        min-height: 0px !important;
+        padding-bottom: 28px !important;
+    }
+
+    .chat-inner-input-container {
+        padding-bottom: 0 !important;
+    }
+
+    .chat-input {
+        margin-bottom: 0 !important;
+    }
+
+    /* ── ChatGPT-style user message bubble ── */
+    .cm-user {
+        background: var(--md-surface-hover) !important;
+        color: var(--md-on-surface) !important;
+        border-radius: 18px !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 12px 18px !important;
+    }
+
+    /* ── Assistant messages: no background ── */
+    .cm-assistant {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+
+    /* ── Action buttons: minimal gray icons ── */
+    .cm-action-group {
+        background: var(--md-surface) !important;
+        border: none !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+        border-radius: 8px !important;
+    }
+
+    /* ── Markdown prose: match ChatGPT text rendering ── */
+    .cm-markdown-assistant {
+        font-size: 16px;
+        line-height: 1.7;
+        letter-spacing: -0.003em;
+        color: var(--md-on-surface);
+    }
+
+    /* ── Code blocks: map streamdown tokens to theme tokens ── */
+    --sd-primary: var(--md-primary);
+    --sd-primary-variant: var(--md-primary-variant);
+    --sd-on-primary: var(--md-on-primary);
+    --sd-on-surface: var(--md-on-surface);
+    --sd-surface: var(--md-surface);
+    --sd-surface-container: var(--md-surface-container);
+    --sd-surface-container-low: var(--md-surface-container-low);
+    --sd-surface-container-lowest: var(--md-surface-container-lowest);
+    --sd-surface-container-high: var(--md-surface-container-high);
+    --sd-border-color: color-mix(in srgb, var(--md-outline) 20%, transparent);
+    --sd-border-radius: 12px;
+    --sd-font-family-base: inherit;
+    --sd-font-family-heading: inherit;
+    --sd-font-family-code-header: inherit;
+    --sd-font-family-code: 'Courier New', ui-monospace, monospace;
+
+    .or3-prose {
+        --or3-prose-code-inline-bg: color-mix(
+            in srgb,
+            var(--md-on-surface) 7%,
+            var(--md-surface)
+        );
+        --or3-prose-code-inline-fg: var(--md-on-surface);
+        --or3-prose-code-block-bg: color-mix(
+            in srgb,
+            var(--md-on-surface) 4%,
+            var(--md-surface)
+        );
+        --or3-prose-code-header-bg: color-mix(
+            in srgb,
+            var(--md-on-surface) 6%,
+            var(--md-surface)
+        );
+        --or3-prose-code-header-fg: var(--md-on-surface-variant);
+        --or3-prose-code-border: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
+        --or3-prose-code-button-fg: var(--md-on-surface-variant);
+        --or3-prose-code-button-hover-bg: color-mix(in srgb, var(--md-on-surface) 10%, var(--md-surface));
+        --or3-prose-code-button-hover-fg: var(--md-on-surface);
+    }
+
+    .or3-prose [data-streamdown='code-block'] {
+        border-radius: 14px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .or3-prose [data-streamdown='code-block-header'] {
+        padding: 0.55rem 0.75rem;
+        font-size: 0.75rem;
+    }
+
+    .or3-prose [data-streamdown='code-lang'] {
+        font-weight: 500;
+        letter-spacing: 0.06em;
+    }
+
+    .or3-prose [data-streamdown='code-body'] {
+        padding: 0.9rem 1rem 1rem;
+    }
+
+    .or3-prose [data-streamdown='code'] {
+        font-size: 0.8125rem !important;
+        line-height: 1.65;
+    }
+
+    .or3-prose [data-streamdown='copy-button'],
+    .or3-prose [data-streamdown='download-button'] {
+        padding: 0.3rem;
+        border-radius: 8px;
+    }
+
+    /* ── Modal: clean and round ── */
+    .modal-overlay {
+        backdrop-filter: blur(4px);
+    }
+
+    /* ── Cards and sections: subtle depth ── */
+    .section-card {
+        border: none !important;
+        border-radius: 12px !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    }
+
+    /* ── Scroll styling ── */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+    }
+
+    /* ── HR dividers like ChatGPT between messages ── */
+    hr {
+        border-color: var(--md-border-color);
+        opacity: 0.5;
+    }
+}
+
+/* ── Dark mode overrides ── */
+[data-theme="blank"].dark {
+    * {
+        scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    }
+
+    .cm-user {
+        background: var(--md-surface-hover) !important;
+    }
+}
+
+/*
+ * Mobile interaction scale
+ *
+ * Apple recommends a 44×44pt hit region for touch controls, 17pt default text,
+ * and 11pt as the absolute minimum for supporting text. CSS px maps closely to
+ * the iOS layout-point coordinate system in a correctly configured viewport.
+ * Keep desktop compact and enforce the larger scale only on touch/small screens.
+ */
+@media (hover: none) and (pointer: coarse), (max-width: 47.999rem) {
+    html[data-theme="blank"] {
+        --blank-mobile-control-min: 44px;
+        --blank-mobile-control-text: 16px;
+        --blank-mobile-input-text: 16px;
+        --blank-mobile-label-text: 14px;
+        --blank-mobile-icon-size: 20px;
+        --blank-mobile-supporting-text: 12px;
+    }
+
+    html[data-theme="blank"] :where(
+        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
+        [role="button"],
+        [role="menuitem"],
+        [role="option"],
+        [role="tab"],
+        [role="treeitem"],
+        summary
+    ) {
+        min-height: var(--blank-mobile-control-min) !important;
+        font-size: var(--blank-mobile-control-text) !important;
+        line-height: 1.35;
+        touch-action: manipulation;
+    }
+
+    html[data-theme="blank"] :where(
+        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
+        [role="button"]
+    ) {
+        min-width: var(--blank-mobile-control-min) !important;
+    }
+
+    /*
+     * A switch's painted track is intentionally smaller than its hit region.
+     * Nuxt UI renders that track as a button[role="switch"], so sizing the
+     * button itself to 44px distorts the track and thumb geometry.
+     */
+    html[data-theme="blank"] :where(
+        .chat-settings-switch,
+        [data-slot="root"]:has([role="switch"]),
+        [data-slot="root"]:has([role="checkbox"]),
+        [data-slot="root"]:has([role="radio"])
+    ) {
+        min-height: var(--blank-mobile-control-min) !important;
+        height: auto !important;
+        touch-action: manipulation;
+    }
+
+    html[data-theme="blank"] :where(
+        [role="switch"],
+        [role="checkbox"],
+        [role="radio"]
+    ) {
+        touch-action: manipulation;
+    }
+
+    html[data-theme="blank"] :where(
+        [role="menuitem"],
+        [role="option"],
+        [role="tab"],
+        [role="treeitem"]
+    ) {
+        padding-block: 0.625rem !important;
+    }
+
+    html[data-theme="blank"] :where(
+        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
+        [role="button"],
+        [role="menuitem"],
+        [role="option"],
+        [role="tab"],
+        [role="treeitem"]
+    ) :where(
+        [data-slot="label"],
+        [data-slot="value"],
+        [data-slot="placeholder"]
+    ) {
+        font-size: inherit !important;
+    }
+
+    /* Keep tiny utility text legible without flattening the whole hierarchy. */
+    html[data-theme="blank"] :where(
+        .text-xs,
+        [class~="text-[7px]"],
+        [class~="text-[8px]"],
+        [class~="text-[9px]"],
+        [class~="text-[10px]"],
+        [class~="text-[11px]"]
+    ) {
+        font-size: var(--blank-mobile-supporting-text) !important;
+        line-height: 1.35;
+    }
+
+    /* Icons may stay visually smaller than their 44px hit target. */
+    html[data-theme="blank"] :where(
+        button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
+        [role="button"],
+        [role="menuitem"],
+        [role="option"],
+        [role="tab"],
+        [role="treeitem"]
+    ) > .iconify {
+        min-width: var(--blank-mobile-icon-size);
+        min-height: var(--blank-mobile-icon-size);
+        font-size: var(--blank-mobile-icon-size) !important;
+    }
+
+    html[data-theme="blank"] :is(
+        input:not([type]),
+        input[type="text"],
+        input[type="search"],
+        input[type="email"],
+        input[type="password"],
+        input[type="url"],
+        input[type="tel"],
+        input[type="number"],
+        input[type="date"],
+        input[type="datetime-local"],
+        input[type="month"],
+        input[type="week"],
+        input[type="time"],
+        textarea,
+        select,
+        [contenteditable]:not([contenteditable="false"])
+    ) {
+        font-size: var(--blank-mobile-input-text) !important;
+        line-height: 1.45;
+    }
+
+    html[data-theme="blank"] :is(
+        input:not([type]),
+        input[type="text"],
+        input[type="search"],
+        input[type="email"],
+        input[type="password"],
+        input[type="url"],
+        input[type="tel"],
+        input[type="number"],
+        input[type="date"],
+        input[type="datetime-local"],
+        input[type="month"],
+        input[type="week"],
+        input[type="time"],
+        select
+    ) {
+        min-height: var(--blank-mobile-control-min) !important;
+    }
+
+    html[data-theme="blank"] :where(
+        .sb-item-time,
+        .sidebar-section-heading,
+        .sb-group-header-label,
+        .dashboard-plugin-icon-label,
+        .tool-row-desc,
+        .tool-group-copy span,
+        .settings-heading span,
+        .setting-card-copy span
+    ) {
+        font-size: var(--blank-mobile-supporting-text) !important;
+        line-height: 1.35;
+    }
+
+    /* Sidebar mobile hierarchy: readable rows, compact section actions. */
+    html[data-theme="blank"] .sb-group-header {
+        min-height: var(--blank-mobile-control-min);
+        height: var(--blank-mobile-control-min);
+    }
+
+    html[data-theme="blank"] :where(
+        .sb-group-header-label,
+        .sb-recent-header > span
+    ) {
+        font-size: 13px !important;
+        line-height: 1.25;
+    }
+
+    html[data-theme="blank"] .sb-group-header-action {
+        font-size: var(--blank-mobile-label-text) !important;
+        line-height: 1.2;
+        padding-inline: 0.625rem;
+    }
+
+    html[data-theme="blank"] .sb-group-header-icon {
+        width: 18px !important;
+        height: 18px !important;
+    }
+
+    html[data-theme="blank"] :where(
+        .sb-btn-title
+    ) {
+        font-size: var(--blank-mobile-control-text) !important;
+        line-height: 1.3;
+    }
+
+    html[data-theme="blank"] .unified-sb-item {
+        min-height: 48px !important;
+        padding-right: 3.25rem !important;
+        overflow: hidden;
+    }
+
+    html[data-theme="blank"] .unified-sb-item .sb-btn-title {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-theme="blank"] .page-link-label {
+        font-size: 15px !important;
+        line-height: 1.25;
+    }
+
+    html[data-theme="blank"] .page-link-description {
+        font-size: 13px !important;
+        line-height: 1.35;
+    }
+
+    @layer utilities {
+        html[data-theme="blank"] .page-link-btn {
+            min-height: 56px !important;
+            padding-block: 6px !important;
+        }
+
+        html[data-theme="blank"] .bottomnav-root
+            [aria-label="Account menu"] {
+            width: var(--blank-mobile-control-min) !important;
+            height: var(--blank-mobile-control-min) !important;
+            min-width: var(--blank-mobile-control-min) !important;
+            min-height: var(--blank-mobile-control-min) !important;
+            padding: 0 !important;
+        }
+
+        html[data-theme="blank"] .bottomnav-root
+            [aria-label="Account menu"] span span {
+            font-size: 8px !important;
+            line-height: 1.15 !important;
+            letter-spacing: 0.04em !important;
+        }
+    }
+
+    html[data-theme="blank"] :where(
+        .page-link-icon-container > .iconify,
+        .page-link-icon,
+        .sb-btn-icon
+    ) {
+        width: 20px !important;
+        height: 20px !important;
+        min-width: 20px;
+        min-height: 20px;
+        font-size: 20px !important;
+    }
+
+    html[data-theme="blank"] .page-link-icon-container {
+        width: 38px;
+        height: 38px;
+    }
+
+    html[data-theme="blank"] .project-empty-icon {
+        width: 40px;
+        height: 40px;
+    }
+
+    html[data-theme="blank"] .project-empty-icon > .iconify {
+        width: 20px !important;
+        height: 20px !important;
+        font-size: 20px !important;
+    }
+
+    html[data-theme="blank"] .project-empty-title {
+        font-size: 16px !important;
+        line-height: 1.3;
+    }
+
+    html[data-theme="blank"] .project-empty-description {
+        font-size: var(--blank-mobile-label-text) !important;
+        line-height: 1.4;
+    }
+
+    html[data-theme="blank"] :where(
+        #nav-top-section,
+        #nav-collapsed-container,
+        .bottomnav-root
+    ) .iconify {
+        width: 24px !important;
+        height: 24px !important;
+        font-size: 24px !important;
+    }
+
+    html[data-theme="blank"] :where(
+        .sidebar-rail-caption
+    ) {
+        font-size: 8px !important;
+        line-height: 1.15;
+        letter-spacing: 0.04em;
+    }
+
+    html[data-theme="blank"] .sidebar-mode-badge {
+        font-size: 9px !important;
+        line-height: 1.1;
+        letter-spacing: 0.04em;
+    }
+
+    /* Header icon buttons share one visual and interactive size. */
+    html[data-theme="blank"] #top-nav :where(
+        .theme-btn,
+        .notification-bell-btn
+    ) {
+        width: var(--blank-mobile-control-min) !important;
+        height: var(--blank-mobile-control-min) !important;
+        min-width: var(--blank-mobile-control-min) !important;
+        min-height: var(--blank-mobile-control-min) !important;
+        padding: 0 !important;
+    }
+
+    html[data-theme="blank"] #top-nav :where(
+        .theme-btn,
+        .notification-bell-btn
+    ) .iconify {
+        width: 22px !important;
+        height: 22px !important;
+        min-width: 22px;
+        min-height: 22px;
+        font-size: 22px !important;
+    }
+
+    html[data-theme="blank"] #top-nav
+        .notification-bell-btn .iconify {
+        width: 24px !important;
+        height: 24px !important;
+        min-width: 24px;
+        min-height: 24px;
+        font-size: 24px !important;
+    }
+
+    /*
+     * Keep the chat composer visually compact. The generic mobile UButton
+     * floor is 44px, so these buttons paint smaller controls and recover the
+     * touch area with their component-level pseudo-elements.
+     */
+    @layer utilities {
+        html[data-theme="blank"] .blank2-chat-dropper.chat-input-main
+            .chat-input-bottom-controls-left
+            :is(.chat-input-attachment-btn, .chat-input-settings-btn)
+            button {
+            width: 2rem !important;
+            height: 2rem !important;
+            min-width: 2rem !important;
+            min-height: 2rem !important;
+            padding: 0 !important;
+        }
+
+        html[data-theme="blank"] .blank2-chat-dropper.chat-input-main
+            .chat-input-bottom-controls-right
+            :is(.chat-input-send-btn, .chat-input-stop-btn) {
+            width: 2.25rem !important;
+            height: 2.25rem !important;
+            min-width: 2.25rem !important;
+            min-height: 2.25rem !important;
+            padding: 0 !important;
+        }
+    }
+
+    /* Chat settings use a full-width row as the hit region, not the switch. */
+    html[data-theme="blank"] .chat-settings-popover .chat-settings-switch {
+        min-height: var(--blank-mobile-control-min) !important;
+        padding-block: 0.25rem;
+    }
+
+    html[data-theme="blank"] .chat-settings-popover .chat-settings-switch
+        [data-slot="label"] {
+        font-size: var(--blank-mobile-control-text) !important;
+        line-height: 1.3;
+    }
+
+    html[data-theme="blank"] .chat-settings-popover
+        .chat-settings-switch > .iconify {
+        width: 22px !important;
+        height: 22px !important;
+        font-size: 22px !important;
+    }
+
+    html[data-theme="blank"] .chat-settings-popover-tool-description {
+        font-size: 13px !important;
+        line-height: 1.4;
+    }
+
+    html[data-theme="blank"] .document-ai-composer :is(
+        .attachment-button,
+        .settings-button,
+        .send-button
+    ) {
+        width: var(--blank-mobile-control-min) !important;
+        height: var(--blank-mobile-control-min) !important;
+        min-width: var(--blank-mobile-control-min) !important;
+        min-height: var(--blank-mobile-control-min) !important;
+    }
+}
+
+@media (max-width: 47.999rem) and (display-mode: standalone) {
+    html[data-theme="blank"] .chat-input-wrapper {
+        padding-bottom: max(34px, env(safe-area-inset-bottom)) !important;
+    }
+}

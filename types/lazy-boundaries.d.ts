@@ -4,7 +4,8 @@ export type LazyBoundaryKey =
     | 'docs-search-panel'
     | 'docs-search-worker'
     | 'workspace-export'
-    | 'workspace-import';
+    | 'workspace-import'
+    | 'command-palette-search';
 
 export type LazyBoundaryState = 'idle' | 'loading' | 'ready' | 'error';
 

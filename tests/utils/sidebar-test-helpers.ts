@@ -74,6 +74,7 @@ export function createMockPost(overrides: Partial<Post> = {}): Post {
         deleted: false,
         meta: null,
         file_hashes: null,
+        clock: 0,
         ...overrides,
     };
 }
@@ -396,64 +397,6 @@ export function createMockMultiPaneApi() {
 }
 
 /**
- * Mocks common composables used in sidebar tests
- */
-export function mockSidebarComposables() {
-    vi.mock('~/composables/sidebar/useSidebarSearch', () => ({
-        useSidebarSearch: () => ({
-            query: ref(''),
-            threadResults: ref([]),
-            projectResults: ref([]),
-            documentResults: ref([]),
-        }),
-    }));
-
-    vi.mock('~/composables/sidebar/useActiveSidebarPage', () => ({
-        useActiveSidebarPage: () => ({
-            activePageId: ref('sidebar-home'),
-            activePageDef: ref({ id: 'sidebar-home', usesDefaultHeader: true }),
-            setActivePage: vi.fn().mockResolvedValue(true),
-            resetToDefault: vi.fn().mockResolvedValue(true),
-        }),
-    }));
-
-    vi.mock('~/db', () => ({
-        db: {
-            threads: {
-                orderBy: () => ({
-                    reverse: () => ({
-                        filter: () => ({ toArray: async () => [] }),
-                    }),
-                }),
-            },
-            projects: {
-                orderBy: () => ({
-                    reverse: () => ({
-                        filter: () => ({ toArray: async () => [] }),
-                    }),
-                }),
-            },
-            posts: {
-                where: () => ({
-                    equals: () => ({
-                        and: () => ({ toArray: async () => [] }),
-                    }),
-                }),
-            },
-        },
-        upsert: vi.fn(),
-        del: vi.fn(),
-        create: vi.fn(),
-    }));
-
-    vi.mock('dexie', () => ({
-        liveQuery: () => ({
-            subscribe: () => ({ unsubscribe() {} }),
-        }),
-    }));
-}
-
-/**
  * Sets up a complete test environment for sidebar tests
  */
 export function setupSidebarTestEnvironment() {
@@ -463,9 +406,6 @@ export function setupSidebarTestEnvironment() {
 
     // Mock process.client
     (global as Record<string, unknown>).process = { client: true };
-
-    // Mock composables
-    mockSidebarComposables();
 
     // Register default home page
     registerSidebarPage({
@@ -514,7 +454,6 @@ export default {
     createFakePosts,
     mountWithSidebar,
     createMockMultiPaneApi,
-    mockSidebarComposables,
     setupSidebarTestEnvironment,
     createSidebarTestData,
 };

@@ -61,44 +61,61 @@
  */
 
 import type { Thread } from '~/db';
-import { createRegistry } from '../_registry';
+import { computed } from 'vue';
+import {
+    createHistoryActionRegistry,
+    type HistoryActionRegistryItem,
+} from '../history/createHistoryActionRegistry';
+import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
+import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
+import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 
 /** Definition for an extendable chat message action button. */
-export interface ThreadHistoryAction {
-    /** Unique id (stable across reloads). */
-    id: string;
-    /** Icon name (passed to UButton icon prop). */
-    icon: string;
-    /** Label text. */
-    label: string;
-    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
-    order?: number;
-    /** Handler invoked on click. */
-    handler: (ctx: { document: Thread }) => void | Promise<void>;
-}
+export interface ThreadHistoryAction
+    extends HistoryActionRegistryItem<Thread> {}
 
-const registry = createRegistry<ThreadHistoryAction>(
+const registry = createHistoryActionRegistry<Thread, ThreadHistoryAction>(
     '__or3ThreadHistoryActionsRegistry'
 );
+const v2Kernel = getContributionSurfaceKernel<ThreadHistoryAction>(
+    'thread-history-actions',
+    {
+        getId: (action) => action.id,
+        normalize: (action) => Object.freeze({ ...action }),
+        compare: (left, right) =>
+            (left.order ?? 200) - (right.order ?? 200) || left.id.localeCompare(right.id),
+    }
+);
+
+function useV2Surface(): boolean {
+    return getContributionSurfaceSelection().isSelected('thread-history-actions');
+}
 
 /** Register (or replace) a message action. */
 export function registerThreadHistoryAction(action: ThreadHistoryAction) {
-    registry.register(action);
+    if (useV2Surface()) v2Kernel.registry.registerLegacy({ value: action });
+    else registry.register(action);
 }
 
 /** Unregister an action by id (optional utility). */
 export function unregisterThreadHistoryAction(id: string) {
-    registry.unregister(id);
+    if (useV2Surface()) v2Kernel.registry.unregisterLegacy(id);
+    else registry.unregister(id);
 }
 
 /** Accessor for actions applicable to a specific message. */
 export function useThreadHistoryActions() {
-    return registry.useItems();
+    const items = useV2Surface() ? v2Kernel.items : registry.useItems();
+    return computed(() =>
+        items.value.filter(
+            (action) => getPluginGateDecision(action.pluginId, action.access).allowed
+        )
+    );
 }
 
 /** Convenience for plugin authors to check existing action ids. */
 export function listRegisteredThreadHistoryActionIds(): string[] {
-    return registry.listIds();
+    return useV2Surface() ? [...v2Kernel.registry.listLegacyIds()] : registry.listIds();
 }
 
 // Note: Core (built-in) actions remain hard-coded in ChatThreadHistory.vue so they always appear;

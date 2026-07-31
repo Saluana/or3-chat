@@ -16,7 +16,7 @@
  */
 
 import { defineNuxtPlugin } from '#app';
-import { onScopeDispose } from 'vue';
+import { onScopeDispose, getCurrentScope } from 'vue';
 import { useToolRegistry, defineTool } from '~/utils/chat/tools-public';
 
 export default defineNuxtPlugin(() => {
@@ -56,7 +56,7 @@ export default defineNuxtPlugin(() => {
             label: 'Calculator',
             icon: 'pixelarticons:calculator',
             descriptionHint: 'Let the AI perform arithmetic calculations',
-            defaultEnabled: true, // Enable by default for testing
+            defaultEnabled: false, // Keep demo tools opt-in by default
             category: 'Demo Tools',
         },
     });
@@ -96,12 +96,18 @@ export default defineNuxtPlugin(() => {
             return `Calculation complete: ${a} ${operation} ${b} = ${result}`;
         },
         {
-            enabled: true, // Start enabled for testing
+            enabled: false, // Start disabled so background streaming can run
         }
     );
 
     // Clean up when plugin is unmounted (e.g., during HMR)
-    onScopeDispose(() => {
+    const scope = getCurrentScope();
+    const cleanup = () => {
         unregisterTool('calculate');
-    });
+    };
+    if (scope) {
+        onScopeDispose(cleanup);
+    } else if (import.meta.hot) {
+        import.meta.hot.dispose(cleanup);
+    }
 });

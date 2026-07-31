@@ -9,7 +9,9 @@ const SidebarPopoverButtonConfig = {
 
 export const sidebarOverrides = {
     /* --- core --- */
-
+    'button#sidebar.unified-item.trigger': {
+        class: 'flex items-center justify-center shadow-none!',
+    },
     // Note: border for chat containers is applied via CSS selector below to avoid duplicate class merges
 
     /* --- Sidebar header --- */
@@ -21,12 +23,10 @@ export const sidebarOverrides = {
     'button#sidebar.filter-item': SidebarPopoverButtonConfig,
 
     'input#sidebar.search': {
-        size: 'md',
-        variant: 'outline',
-        /*
+        class: 'mb-4',
         ui: {
-            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)] text-[14px]! h-[40px]!',
-        },*/
+            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus-visible:ring-0! focus-visible:outline-none! text-[14px]! h-[40px]!',
+        },
     },
     'selectmenu#sidebar.project-select': {
         class: 'w-full',
@@ -38,11 +38,6 @@ export const sidebarOverrides = {
             itemLabel: 'text-[14px]!',
             content:
                 'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[14px]!',
-        },
-        searchInput: {
-            ui: {
-                base: 'text-[14px]! rounded-none border-x-0 border-t-0 border-b-[length:var(--md-border-width)] border-b-[color:var(--md-border-color)]',
-            },
         },
     },
 
@@ -82,13 +77,31 @@ export const sidebarOverrides = {
     },
     /* --- Sidebar bottom nav buttons --- */
     'button#sidebar.bottom-nav.info': {
-        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] hover:bg-[var(--md-info-hover)]! active:bg-[var(--md-info-active)]!',
+        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] hover:bg-[var(--md-info-hover)]! active:bg-[var(--md-info-active)]!',
         variant: 'soft',
     },
     'button#sidebar.bottom-nav.connect': {
-        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] transition-colors duration-150',
-        variant: 'soft',
+        variant: 'outline',
+        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] text-[color:var(--md-on-surface)]! transition-colors duration-150',
     },
+    // SSR Auth button (Clerk sign-in/account) - PRIMARY CTA
+    // Base styles only - hover/active defined per-state to avoid conflicts
+    // NOTE: No variant/color specified - using raw classes only to avoid Nuxt UI blue tint
+    'button#sidebar.bottom-nav.auth': {
+        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] transition-colors duration-150',
+    },
+    // OpenRouter auth button states (static build mode)
+    'button#sidebar.bottom-nav.auth:connected': {
+        class: 'bg-[var(--md-success)]/10! hover:border-[color:var(--md-error)]! hover:bg-[var(--md-error)]/30! active:bg-[var(--md-error)]/40! text-[color:var(--md-on-surface)]',
+    },
+    'button#sidebar.bottom-nav.auth:disconnected': {
+        class: 'hover:bg-[var(--md-success)]/15! active:bg-[var(--md-success)]/25!',
+    },
+    // SSR auth mode (Clerk) - subtle primary styling
+    'button#sidebar.bottom-nav.auth:ssr': {
+        class: 'bg-[var(--md-primary)]/8! border-[color:var(--md-primary)]/30! text-[var(--md-primary)]! hover:bg-[var(--md-primary)]/15! hover:border-[color:var(--md-primary)]/50! active:bg-[var(--md-primary)]/25!',
+    },
+
     'button#sidebar.bottom-nav.connect:connected': {
         class: 'bg-[var(--md-success)]/20 hover:border-[color:var(--md-error)]! hover:bg-[var(--md-error)]/30! active:bg-[var(--md-error)]/40! text-[color:var(--md-on-surface)]',
     },
@@ -96,8 +109,9 @@ export const sidebarOverrides = {
         class: 'hover:bg-[var(--md-success)]/15! active:bg-[var(--md-success)]/25',
     },
 
+    // Dashboard button - SECONDARY action (neutral styling)
     'button#sidebar.bottom-nav.dashboard': {
-        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] hover:bg-[var(--md-info-hover)]! active:bg-[var(--md-info-active)]! ',
+        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)]/70 hover:bg-[var(--md-surface-hover)]! hover:text-[var(--md-on-surface)]! active:bg-[var(--md-surface-active)]!',
         variant: 'soft',
     },
 
@@ -108,21 +122,21 @@ export const sidebarOverrides = {
     /* --- Collapsed sidebar buttons --- */
     'button#sidebar.collapsed-page': {
         ui: {
-            base: 'bg-transparent hover:bg-[var(--md-surface-hover)] hover:ring-1 hover:ring-[var(--md-surface-active)] active:bg-[var(--md-surface-active)] text-[var(--md-on-surface)]',
+            base: 'h-[48px] w-[48px] bg-transparent hover:bg-[var(--md-primary)]/5 hover:ring-1 hover:ring-[var(--md-surface-active)] active:bg-[var(--md-surface-active)] text-[var(--md-on-surface)]',
             leadingIcon: 'w-6 h-6',
         },
     },
     'button#sidebar.collapsed-page:active': {
         ui: {
-            base: 'bg-[var(--md-surface-active)] ring-1 ring-[var(--md-primary-border)]/20 hover:ring-1 hover:ring-[var(--md-primary-border)]/50 hover:bg-[var(--md-surface-active)]  text-[var(--md-on-surface)]',
+            base: 'h-[48px] w-[48px] bg-[var(--md-primary)]/10 ring-1 ring-[var(--md-primary-border)]/30 hover:ring-1 hover:ring-[var(--md-primary-border)]/50 hover:bg-[var(--md-surface-active)] shadow-[3px_3px_0_color-mix(in_srgb,var(--md-primary)_10%,transparent)]! text-[var(--md-on-surface)]',
             leadingIcon: 'w-6 h-6',
         },
     },
     'div#sidebar.header': {
-        class: 'header-pattern flex items-center min-h-12 max-h-12 py-2 border-b-(--md-border-width) border-(--md-border-color)',
+        class: 'header-pattern flex items-center min-h-12 max-h-12 py-2',
     },
     'div#sidebar.header:collapsed': {
-        class: 'px-0 justify-center',
+        class: 'px-0 justify-center w-[63px]! border-r-[1px]',
         style: { width: '62px' },
     },
     'div#sidebar.header:expanded': {
@@ -154,7 +168,7 @@ export const sidebarCssSelectors = {
     },
     '#top-header': {
         style: {
-            backgroundColor: 'var(--md-surface)',
+            backgroundColor: 'var(--md-top-header-bg)',
         },
     },
     '#top-header[data-sidebar-state="collapsed"]': {

@@ -1,0 +1,77 @@
+{
+  "baseUrl": "https://staging.example.invalid",
+  "artifact": {
+    "candidate": "git-sha-or-image-digest",
+    "previous": "previous-image-digest",
+    "providerDataSnapshot": "snapshot-id-or-uri"
+  },
+  "topology": {
+    "instances": 2,
+    "syncProvider": "convex",
+    "storageProvider": "s3",
+    "backgroundProvider": "convex",
+    "viewerSuppressionRequiredForCorrectness": false
+  },
+  "requestHeaders": {
+    "authorization": "Bearer replace-with-short-lived-canary-token"
+  },
+  "shortSoakCycles": 5,
+  "scenarios": {
+    "auth": [
+      { "id": "sign-in", "method": "POST", "path": "/api/canary/auth/sign-in", "expect": { "status": 200, "json": { "authenticated": true } } },
+      { "id": "session-refresh", "method": "POST", "path": "/api/canary/auth/refresh", "expect": { "status": 200, "json": { "authenticated": true } } },
+      { "id": "expired-session-recovery", "method": "POST", "path": "/api/canary/auth/expired-session", "expect": { "status": 200, "json": { "recovered": true } } },
+      { "id": "sign-out", "method": "POST", "path": "/api/canary/auth/sign-out", "expect": { "status": 200, "json": { "authenticated": false } } }
+    ],
+    "sync": [
+      { "id": "sync-push", "method": "POST", "path": "/api/canary/sync/push", "body": { "fixture": "release-canary" }, "expect": { "status": 200, "json": { "ok": true } } },
+      { "id": "sync-pull", "path": "/api/canary/sync/pull", "expect": { "status": 200, "json": { "ok": true } } },
+      { "id": "sync-reconnect", "method": "POST", "path": "/api/canary/sync/reconnect", "expect": { "status": 200, "json": { "converged": true } } },
+      { "id": "sync-two-client-conflict", "method": "POST", "path": "/api/canary/sync/conflict", "expect": { "status": 200, "json": { "deterministicWinner": true } } }
+    ],
+    "storage": [
+      { "id": "storage-presign-upload", "method": "POST", "path": "/api/canary/storage/presign-upload", "expect": { "status": 200, "json": { "authorized": true } } },
+      { "id": "storage-upload-commit", "method": "POST", "path": "/api/canary/storage/upload-commit", "body": { "fixture": "release-canary" }, "expect": { "status": 200, "json": { "committed": true } } },
+      { "id": "storage-download", "path": "/api/canary/storage/download", "expect": { "status": 200, "json": { "checksumVerified": true } } },
+      { "id": "storage-gc", "method": "POST", "path": "/api/canary/storage/gc", "expect": { "status": 200, "json": { "liveFixtureRetained": true } } }
+    ],
+    "backgroundJobs": [
+      { "id": "job-start", "method": "POST", "path": "/api/canary/jobs/start", "expect": { "status": 202 } },
+      { "id": "job-reattach", "path": "/api/canary/jobs/reattach", "expect": { "status": 200, "json": { "attached": true } } },
+      { "id": "job-complete", "path": "/api/canary/jobs/complete", "expect": { "status": 200, "json": { "complete": true } } },
+      { "id": "job-abort", "method": "POST", "path": "/api/canary/jobs/abort", "expect": { "status": 200, "json": { "aborted": true } } }
+    ],
+    "backupRestore": [
+      { "id": "backup-create-restore-isolated", "method": "POST", "path": "/api/canary/backup-restore", "expect": { "status": 200, "json": { "restored": true } } }
+    ],
+    "rollback": [
+      { "id": "rollback-drill", "method": "POST", "path": "/api/canary/rollback", "expect": { "status": 200, "json": { "restoredPreviousArtifact": true, "restoredProviderSnapshot": true } } },
+      { "id": "rollback-deep-health", "path": "/api/health?deep=true", "expect": { "status": 200, "json": { "status": "ok" } } },
+      { "id": "rollback-data-read", "path": "/api/canary/rollback/assert-data", "expect": { "status": 200, "json": { "readable": true } } }
+    ],
+    "rollingRestart": [
+      { "id": "start-active-work", "method": "POST", "path": "/api/canary/reliability/start", "instance": "a", "expect": { "status": 202 } },
+      { "id": "restart-a", "method": "POST", "path": "/api/canary/reliability/restart", "instance": "a", "expect": { "status": 200 } },
+      { "id": "active-sync-survived", "path": "/api/canary/reliability/sync", "instance": "b", "expect": { "status": 200, "json": { "converged": true } } },
+      { "id": "active-job-survived", "path": "/api/canary/reliability/job", "instance": "b", "expect": { "status": 200, "json": { "complete": true } } }
+    ],
+    "failureInjection": [
+      { "id": "convex-unavailable", "method": "POST", "path": "/api/canary/faults/convex", "faultTarget": "convex", "faultPhase": "inject", "expect": { "status": 503 } },
+      { "id": "convex-recovered", "path": "/api/canary/faults/convex/assert", "faultTarget": "convex", "faultPhase": "recover", "expect": { "status": 200, "json": { "recovered": true } } },
+      { "id": "s3-r2-unavailable", "method": "POST", "path": "/api/canary/faults/object-storage", "faultTarget": "object-storage", "faultPhase": "inject", "expect": { "status": 503 } },
+      { "id": "s3-r2-recovered", "path": "/api/canary/faults/object-storage/assert", "faultTarget": "object-storage", "faultPhase": "recover", "expect": { "status": 200, "json": { "recovered": true, "checksumVerified": true } } },
+      { "id": "openrouter-unavailable", "method": "POST", "path": "/api/canary/faults/openrouter", "faultTarget": "openrouter", "faultPhase": "inject", "expect": { "status": 502 } },
+      { "id": "openrouter-recovered", "path": "/api/canary/faults/openrouter/assert", "faultTarget": "openrouter", "faultPhase": "recover", "expect": { "status": 200, "json": { "recovered": true } } },
+      { "id": "network-partition", "method": "POST", "path": "/api/canary/faults/network-partition", "faultTarget": "network-partition", "faultPhase": "inject", "expect": { "status": 503 } },
+      { "id": "network-rejoined", "path": "/api/canary/faults/network-partition/assert", "faultTarget": "network-partition", "faultPhase": "recover", "expect": { "status": 200, "json": { "converged": true, "queueEmpty": true } } },
+      { "id": "partial-provider-outage", "method": "POST", "path": "/api/canary/faults/partial", "faultTarget": "partial-provider-outage", "faultPhase": "inject", "expect": { "status": 200, "json": { "healthyProvidersStayedAvailable": true, "failedProviderIsolated": true } } },
+      { "id": "partial-provider-recovered", "path": "/api/canary/faults/partial/assert", "faultTarget": "partial-provider-outage", "faultPhase": "recover", "expect": { "status": 200, "json": { "allProvidersHealthy": true } } }
+    ],
+    "shortSoak": [
+      { "id": "instance-a-health", "path": "/api/health?deep=true", "instance": "a", "timeoutMs": 5000, "expect": { "status": 200, "json": { "status": "ok" } } },
+      { "id": "instance-b-health", "path": "/api/health?deep=true", "instance": "b", "timeoutMs": 5000, "expect": { "status": 200, "json": { "status": "ok" } } },
+      { "id": "shared-sync-converged", "path": "/api/canary/reliability/sync", "instance": "b", "timeoutMs": 5000, "expect": { "status": 200, "json": { "converged": true } } },
+      { "id": "shared-job-readable", "path": "/api/canary/reliability/job", "instance": "a", "timeoutMs": 5000, "expect": { "status": 200, "json": { "complete": true } } }
+    ]
+  }
+}

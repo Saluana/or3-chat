@@ -1,0 +1,21 @@
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    depends_on:
+      or3:
+        condition: service_healthy
+    environment:
+      OR3_PUBLIC_DOMAIN: ${OR3_PUBLIC_DOMAIN:?Set OR3_PUBLIC_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy-data: {}
+  caddy-config: {}

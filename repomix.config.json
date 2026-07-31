@@ -7,6 +7,6 @@
         "topFilesLength": 10
     },
     "ignore": {
-        "customPatterns": ["*.test.ts", "docs/**", "or3-repo.md"]
+        "customPatterns": ["**.test.ts", "docs/**", "or3-repo.md","public","planning","scripts","config",".playwright-mcp","extensions","convex",".github", "**.txt",".agent",".codex","app/pages/tests/**"]
     }
 }

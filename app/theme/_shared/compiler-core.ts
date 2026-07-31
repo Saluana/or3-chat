@@ -1,3 +1,23 @@
+/**
+ * @module app/theme/_shared/compiler-core
+ *
+ * Purpose:
+ * Parses theme selector DSL strings into structured components for matching.
+ *
+ * Behavior:
+ * - Normalizes shorthand selectors into attribute selectors
+ * - Extracts component, context, identifier, state, and attribute matchers
+ * - Caches parsed selectors for reuse
+ *
+ * Constraints:
+ * - Parsing is intentionally shallow and does not validate full CSS grammar
+ * - Only the DSL patterns used by OR3 are supported
+ *
+ * Non-Goals:
+ * - Full CSS selector parsing
+ * - Validation of component names or context existence
+ */
+
 import type {
     ParsedSelector,
     AttributeMatcher,
@@ -6,34 +26,105 @@ import type {
 import { KNOWN_THEME_CONTEXTS } from './contexts';
 
 /**
- * Parse a selector into its components.
+ * `parseSelector`
+ *
+ * Purpose:
+ * Converts a selector string into a structured representation used by
+ * runtime and build time override matching.
+ *
+ * Behavior:
+ * - Normalizes shorthand before parsing
+ * - Returns cached results for repeated inputs
+ *
+ * Constraints:
+ * - Rejects unsupported or ambiguous syntax instead of broadening its scope
  */
 const selectorCache = new Map<string, ParsedSelector>();
+const MAX_SELECTOR_CACHE_ENTRIES = 500;
 
 export function parseSelector(selector: string): ParsedSelector {
     if (selectorCache.has(selector)) {
         return selectorCache.get(selector)!;
     }
 
-    // Normalize simple syntax to attribute selectors
-    const normalized = normalizeSelector(selector);
+    const input = selector.trim();
+    const componentMatch = /^([a-zA-Z][\w-]*)/.exec(input);
+    if (!componentMatch) {
+        throw new Error(`Invalid theme selector "${selector}": component is required`);
+    }
 
-    // Extract component type (first word)
-    const component = normalized.match(/^(\w+)/)?.[1] || 'button';
+    const component = componentMatch[1]!.toLowerCase();
+    let cursor = componentMatch[0].length;
+    let context: string | undefined;
+    let identifier: string | undefined;
+    let state: string | undefined;
+    const attributes: AttributeMatcher[] = [];
 
-    // Extract data-context
-    const context = normalized.match(/\[data-context="([^"]+)"\]/)?.[1];
+    while (cursor < input.length) {
+        const remainder = input.slice(cursor);
+        if (remainder.startsWith('.')) {
+            const match = /^\.([a-zA-Z][\w-]*)/.exec(remainder);
+            if (!match || context) {
+                throw new Error(`Invalid theme selector "${selector}"`);
+            }
+            if (!(KNOWN_THEME_CONTEXTS as readonly string[]).includes(match[1]!)) {
+                throw new Error(
+                    `Unknown theme context "${match[1]}" in selector "${selector}"`
+                );
+            }
+            context = match[1];
+            cursor += match[0].length;
+            continue;
+        }
+        if (remainder.startsWith('#')) {
+            const match = /^#([\w.-]+)/.exec(remainder);
+            if (!match || identifier) {
+                throw new Error(`Invalid theme selector "${selector}"`);
+            }
+            identifier = match[1];
+            cursor += match[0].length;
+            continue;
+        }
+        if (remainder.startsWith(':')) {
+            const match = /^:([a-zA-Z][\w-]*)/.exec(remainder);
+            if (!match || state || remainder[match[0].length] === '(') {
+                throw new Error(`Unsupported theme state in selector "${selector}"`);
+            }
+            state = match[1];
+            cursor += match[0].length;
+            continue;
+        }
+        if (remainder.startsWith('[')) {
+            const match = /^\[([a-zA-Z][\w-]*)(?:([~|^$*]?=)"([^"]*)")?\]/.exec(
+                remainder
+            );
+            if (!match) {
+                throw new Error(`Invalid attribute selector in "${selector}"`);
+            }
+            const attribute = match[1]!;
+            if (attribute === 'data-context') {
+                if (context || !match[3]) throw new Error(`Invalid context in "${selector}"`);
+                if (!(KNOWN_THEME_CONTEXTS as readonly string[]).includes(match[3])) {
+                    throw new Error(`Unknown theme context "${match[3]}" in selector "${selector}"`);
+                }
+                context = match[3];
+            } else if (attribute === 'data-id') {
+                if (identifier || !match[3]) throw new Error(`Invalid identifier in "${selector}"`);
+                identifier = match[3];
+            } else {
+                attributes.push({
+                    attribute,
+                    operator: (match[2] as AttributeOperator | undefined) ?? 'exists',
+                    value: match[3],
+                });
+            }
+            cursor += match[0].length;
+            continue;
+        }
+        throw new Error(`Unsupported theme selector syntax near "${remainder}"`);
+    }
 
-    // Extract data-id
-    const identifier = normalized.match(/\[data-id="([^"]+)"\]/)?.[1];
-
-    // Extract pseudo-class state
-    const state = normalized.match(/:(\w+)(?:\(|$)/)?.[1];
-
-    // Extract HTML attribute selectors
-    const attributes = extractAttributes(normalized);
-
-    const result = {
+    const result: ParsedSelector = {
         component,
         context,
         identifier,
@@ -41,19 +132,38 @@ export function parseSelector(selector: string): ParsedSelector {
         attributes: attributes.length > 0 ? attributes : undefined,
     };
 
+    if (selectorCache.size >= MAX_SELECTOR_CACHE_ENTRIES) {
+        const firstKey = selectorCache.keys().next().value;
+        if (firstKey) {
+            selectorCache.delete(firstKey);
+        }
+    }
     selectorCache.set(selector, result);
     return result;
 }
 
 /**
- * Escape special regex characters
+ * `escapeRegex`
+ *
+ * Purpose:
+ * Escapes a string for safe regex construction in selector normalization.
  */
 function escapeRegex(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
- * Normalize simple selector syntax to attribute selectors
+ * `normalizeSelector`
+ *
+ * Purpose:
+ * Expands shorthand selector syntax into attribute selectors.
+ *
+ * Behavior:
+ * - Expands `#id` to `data-id` selectors
+ * - Expands `.context` to `data-context` selectors for known contexts
+ *
+ * Constraints:
+ * - Context expansion only applies to known contexts
  */
 export function normalizeSelector(selector: string): string {
     let result = selector;
@@ -77,9 +187,15 @@ export function normalizeSelector(selector: string): string {
 }
 
 /**
- * Extract HTML attribute selectors from normalized selector
+ * `extractAttributes`
+ *
+ * Purpose:
+ * Extracts attribute matchers from a normalized selector string.
+ *
+ * Constraints:
+ * - Ignores data-context and data-id which are handled separately
  */
-function extractAttributes(selector: string): AttributeMatcher[] {
+export function extractAttributes(selector: string): AttributeMatcher[] {
     const attributes: AttributeMatcher[] = [];
     // Match: [attribute] or [attribute="value"] or [attribute*="value"] etc.
     // Group 1: attribute name (without operator)
@@ -113,10 +229,19 @@ function extractAttributes(selector: string): AttributeMatcher[] {
 }
 
 /**
- * Calculate CSS selector specificity
+ * `calculateSpecificity`
+ *
+ * Purpose:
+ * Computes a weighted specificity score for selector matching.
+ *
+ * Behavior:
+ * - Treats context, identifier, attributes, and pseudo classes as weighted inputs
+ *
+ * Non-Goals:
+ * - Exact parity with CSS specificity rules
  */
 export function calculateSpecificity(
-    selector: string,
+    _selector: string,
     parsed: ParsedSelector
 ): number {
     let specificity = 0;
@@ -139,9 +264,7 @@ export function calculateSpecificity(
         specificity += parsed.attributes.length * 10;
     }
 
-    // Pseudo-classes: 10 points each
-    const pseudoCount = (selector.match(/:/g) || []).length;
-    specificity += pseudoCount * 10;
+    if (parsed.state) specificity += 10;
 
     return specificity;
 }

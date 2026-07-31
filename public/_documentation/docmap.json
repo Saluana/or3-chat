@@ -17,13 +17,19 @@
                     "name": "plugin-quickstart.md",
                     "path": "/start/plugin-quickstart",
                     "category": "Tutorial",
-                    "summary": "Hands-on tutorial showing how to create plugins for OR3. Covers dashboard pages, chat message actions, and sidebar extensions with complete working examples and best practices."
+                    "summary": "Hands-on tutorial showing how to create V1 plugins for OR3. Covers dashboard pages, chat message actions, sidebar extensions, installation methods (file upload, URL import, API), and the installable package contract. Points to Plugin Runtime V2 SDK/docs for digest-addressed packages while keeping V1 APIs supported."
                 },
                 {
                     "name": "development-setup.md",
                     "path": "/start/development-setup",
                     "category": "Tutorial",
                     "summary": "Step-by-step guide to setting up a local development environment for OR3. Covers cloning the repo, installing dependencies, running the dev server, and debugging tips."
+                },
+                {
+                    "name": "command-palette.md",
+                    "path": "/start/command-palette",
+                    "category": "Introduction",
+                    "summary": "User guide for the global command palette: Cmd/Ctrl+K and sidebar triggers, full-content search across chats, documents, projects, images, dashboard pages and commands, category prefixes (chat:, doc:, project:, image:, cmd:), keyboard reference including the Tab/Cmd+Enter action tray, preview behavior, unavailable actions, degraded-search fallbacks, and accessibility semantics."
                 },
                 {
                     "name": "snake-game-tutorial.md",
@@ -48,6 +54,12 @@
                     "path": "/composables/useActivePrompt",
                     "category": "Chat",
                     "summary": "Reactive composable that manages the currently selected system prompt for chat conversations.\\n\\nThis composable provides a module-singleton selection state (id + content) so multiple components\\nand composables can read the active system prompt consistently without creating duplicate refs.\\n\\nIt integrates with the local prompt database (`~/db/prompts`) to load prompt content and emits a\\nhook event after a prompt is selected so other subsystems can react."
+                },
+                {
+                    "name": "useSystemPromptsModal.md",
+                    "path": "/composables/useSystemPromptsModal",
+                    "category": "Chat",
+                    "summary": "Shared controller for opening the globally hosted system prompt library in home, edit, or new mode with optional active chat context."
                 },
                 {
                     "name": "useAiSettings.md",
@@ -102,6 +114,12 @@
                     "path": "/composables/useStreamAccumulator",
                     "category": "Chat",
                     "summary": "Frame-batched accumulator for AI streaming tokens. It receives partial text/reasoning deltas, buffers them, and flushes at most once per animation frame so the UI stays smooth.\\n\\n`useStreamAccumulator` replaces ad-hoc refs for building assistant responses. It normalises streaming flow with a single API:\\n\\n-   `append()` collects text or reasoning deltas without immediate DOM churn\\n-   `finalize()` seals the stream and records errors/abort state\\n-   `reset()` prepares for the next stream\\n-   `state` exposes reactive fields (`text`, `reasoningText`, `isActive`, etc.) any component can watch\\n\\nThe accumulator automatically batches writes via `requestAnimationFrame` when available, falling back to microtasks in environments without rAF (tests, SSR stubs)."
+                },
+                {
+                    "name": "useDocumentAiAgent.md",
+                    "path": "/composables/useDocumentAiAgent",
+                    "category": "Documents",
+                    "summary": "Build bounded, reviewable document edit proposals with a TipTap prompt composer. Supports saved and plugin `/` prompt commands, `@` references to workspace documents and chats, read-only context injection, attachments, token estimation, and validated edit operations."
                 },
                 {
                     "name": "useDocumentHistoryActions.md",
@@ -305,7 +323,7 @@
                     "name": "hooks.md",
                     "path": "/hooks/hooks",
                     "category": "Core",
-                    "summary": "Lightweight hook engine powering OR3's action/filter system with priority scheduling, async support, and diagnostics. Register side-effect listeners (actions) or value transformers (filters), match with wildcards, and track execution timing."
+                    "summary": "Lightweight hook engine powering OR3's action/filter system with priority scheduling, async support, and diagnostics. Register side-effect listeners (actions) or value transformers (filters), match with wildcards, and track execution timing. Notes Hook Runtime V2 startup selection and SDK context.hooks for V2 packages."
                 },
                 {
                     "name": "typed-hooks.md",
@@ -506,6 +524,18 @@
                     "summary": "Simplified plugin API for tool registration. Re-exports registry functions and provides a helper for better TypeScript inference when defining tools. Recommended import path for plugins registering tools — keeps plugin code clean and isolated from internal implementation details. Exports useToolRegistry, defineTool helper, and all tool-related type definitions."
                 },
                 {
+                    "name": "tool-runtime.md",
+                    "path": "/utils/tool-runtime",
+                    "category": "Tools",
+                    "summary": "Runtime model for tools across client and server paths. Documents `hybrid|client|server` semantics, default runtime behavior, and how foreground/background execution chooses the correct registry."
+                },
+                {
+                    "name": "server-tool-registry.md",
+                    "path": "/utils/server-tool-registry",
+                    "category": "Tools",
+                    "summary": "Server-side tool registry reference used by SSR background chat/workflow execution. Covers registration API, runtime enforcement, timeout behavior, and Nitro plugin registration patterns."
+                },
+                {
                     "name": "uiMessages.md",
                     "path": "/utils/uiMessages",
                     "category": "Chat",
@@ -578,10 +608,22 @@
                     "summary": "Quick start guide for creating custom themes in OR3. Learn how to use the refined theme system to create a custom theme in under 30 minutes. Covers theme scaffolding with CLI tools, defining Material Design 3 color palettes, component overrides with CSS-like selectors, testing and validation, and applying themes with the v-theme directive."
                 },
                 {
+                    "name": "custom-theme-tutorial.md",
+                    "path": "/themes/custom-theme-tutorial",
+                    "category": "Tutorial",
+                    "summary": "End-to-end tutorial for building, packaging, and installing a custom OR3 theme. Walks through scaffolding with the CLI, defining a full Material Design 3 color palette (light + dark), adding component overrides, icon overrides, Nuxt UI slot patches, scoped CSS, and background images. Covers creating the or3.manifest.json, zipping the theme correctly, installing via the admin panel (file upload or URL import), API (multipart, URL JSON, or base64), and uninstalling. Uses the built-in Cyberpunk theme as a reference throughout."
+                },
+                {
                     "name": "api-reference.md",
                     "path": "/themes/api-reference",
                     "category": "Reference",
                     "summary": "Complete API reference for OR3's refined theme system. Documents all public APIs including defineTheme() factory function, v-theme directive usage patterns, RuntimeResolver class for theme resolution, CLI commands for theme management, TypeScript types (ThemeName, ThemeContext, ThemeIdentifier), composables (useTheme, useRuntimeResolver), and advanced utilities for selector parsing and specificity calculation."
+                },
+                {
+                    "name": "component-overrides.md",
+                    "path": "/themes/component-overrides",
+                    "category": "Guide",
+                    "summary": "Detailed guide to the theme component override system. Explains when to use `customComponents` instead of prop overrides or CSS selectors, how theme-local Vue components are registered, how the runtime resolves and applies them, SSR and hydration behavior, wrapper-vs-fork tradeoffs, contract preservation, and common debugging pitfalls."
                 },
                 {
                     "name": "migration-guide.md",
@@ -612,6 +654,246 @@
                     "path": "/themes/theme-icons",
                     "category": "Reference",
                     "summary": "Documentation for the semantic icon system. Covers core concepts (Tokens, Registry, Composable), usage in components and configuration, adding new icons, and overriding icons in themes."
+                }
+            ]
+        },
+        {
+            "title": "Cloud",
+            "path": "/cloud",
+            "files": [
+                {
+                    "name": "or3-config.md",
+                    "path": "/cloud/or3-config",
+                    "category": "Configuration",
+                    "summary": "Local-first configuration for site branding, feature toggles, and client-side limits. Covers site.name/logo/theme settings, granular feature flags for workflows/documents/mentions/backup, upload limits, and UI defaults like pane count."
+                },
+                {
+                    "name": "or3-cloud-config.md",
+                    "path": "/cloud/or3-cloud-config",
+                    "category": "Configuration",
+                    "summary": "Server-side configuration for cloud features. Covers authentication (Clerk/basic-auth), optional pre-auth lock page behavior, sync (Convex), storage providers, LLM services (OpenRouter managed keys), rate limiting with pluggable backends, legal URLs, and security (CORS, HTTPS). Includes dependency chain and validation rules."
+                },
+                {
+                    "name": "config-reference.md",
+                    "path": "/cloud/config-reference",
+                    "category": "Reference",
+                    "summary": "Authoritative reference for every OR3 configuration setting (base + cloud). Documents all config paths and environment variables with defaults, validation rules, and how each setting affects behavior, including SSR auth lock page controls and their route-gating behavior."
+                },
+                {
+                    "name": "webhooks.md",
+                    "path": "/cloud/webhooks",
+                    "category": "Guide",
+                    "summary": "Complete guide to OR3 webhooks. Covers quick-start setup, user and admin event catalogs with data shapes, payload envelope and headers, HMAC-SHA256 signature verification, a full Express.js receiver example with TypeScript, verification snippets for Python and Go, retry policy, SSRF protection, signing secret encryption, configuration reference, delivery logs, admin custom hook subscriptions, and troubleshooting."
+                },
+                {
+                    "name": "or3-cloud-wizard.md",
+                    "path": "/cloud/or3-cloud-wizard",
+                    "category": "Guide",
+                    "summary": "Guide for the shared OR3 installation wizard used by the CLI and browser UI. Covers true local-only setup, self-hosted provider presets (including email-only and zero-question fast defaults), OR3 Connect remote access, validation, secret-safe env writes, dry-run mode, deploy commands, and Convex backend env setup."
+                },
+                {
+                    "name": "providers.md",
+                    "path": "/cloud/providers",
+                    "category": "Guide",
+                    "summary": "Practical guide for installing cloud provider packages and wiring them through OR3 cloud config. Covers local-only mode, Clerk-only mode, Clerk + Convex setup, and the Clerk to Convex token-broker bridge flow."
+                },
+                {
+                    "name": "provider-clerk.md",
+                    "path": "/cloud/provider-clerk",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-clerk`. Covers install, required env vars, runtime registrations, and token broker behavior for Clerk-backed auth."
+                },
+                {
+                    "name": "provider-basic-auth.md",
+                    "path": "/cloud/provider-basic-auth",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-basic-auth`. Covers install, required env vars, bootstrap credentials, token lifecycle tuning, and operational security checks."
+                },
+                {
+                    "name": "provider-convex.md",
+                    "path": "/cloud/provider-convex",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-convex`. Covers install, backend init/codegen, required config, authorization guardrails, and consistent materialized snapshot pages."
+                },
+                {
+                    "name": "admin-access-bridge.md",
+                    "path": "/cloud/admin-access-bridge",
+                    "category": "Architecture",
+                    "summary": "Explains Clerk + Convex admin identity bridging for the admin dashboard, including how super-admin login can bootstrap `admin_users`, why grants persist, and why admin logout does not revoke Clerk deployment-admin access."
+                },
+                {
+                    "name": "provider-sqlite.md",
+                    "path": "/cloud/provider-sqlite",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-sqlite`. Covers install, required env vars, durability pragmas, sync invariants, and operational notes for persistent SQLite deployments."
+                },
+                {
+                    "name": "provider-s3.md",
+                    "path": "/cloud/provider-s3",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-s3`. Covers server-only S3 credentials, required env vars, endpoint/path-style options for S3-compatible hosts, and required bucket CORS for direct browser uploads/downloads."
+                },
+                {
+                    "name": "provider-fs.md",
+                    "path": "/cloud/provider-fs",
+                    "category": "Guide",
+                    "summary": "Dedicated setup guide for `or3-provider-fs`. Covers install, required env vars, hash/integrity expectations, presign TTL settings, and filesystem storage operational practices."
+                },
+                {
+                    "name": "provider-compatibility-matrix.md",
+                    "path": "/cloud/provider-compatibility-matrix",
+                    "category": "Reference",
+                    "summary": "Compatibility matrix for supported OR3 cloud provider combinations, including default SSR and legacy Clerk+Convex stacks, with package-resolution notes and composition guidance."
+                },
+                {
+                    "name": "migration-default-stack.md",
+                    "path": "/cloud/migration-default-stack",
+                    "category": "Guide",
+                    "summary": "Step-by-step migration guide from Clerk+Convex to the default SSR stack (basic-auth + sqlite + fs), including install, env updates, verification checklist, and rollback plan."
+                },
+                {
+                    "name": "deployment-operations.md",
+                    "path": "/cloud/deployment-operations",
+                    "category": "Operations",
+                    "summary": "Deployment and operations runbook for OR3 Cloud SSR environments. Covers env groups, health checks, logging, scaling, rolling restarts, bounded multi-instance soak checks, and provider failure/recovery evidence."
+                },
+                {
+                    "name": "or3-connect.md",
+                    "path": "/cloud/or3-connect",
+                    "category": "Guide",
+                    "summary": "One-command remote computer setup for OR3 Cloud. Covers browser device authorization, verified bootstrap binaries, persistent macOS/Linux services, Cloudflare named tunnels, Convex environment persistence, security controls, revocation, and production configuration."
+                },
+                {
+                    "name": "release-checklist.md",
+                    "path": "/cloud/release-checklist",
+                    "category": "Operations",
+                    "summary": "Authoritative OR3 Cloud release gate separating reproducible checks from staging, backup/restore, rollback, multi-instance soak, rolling-restart, and dependency failure-injection evidence."
+                },
+                {
+                    "name": "release-notes-production-readiness.md",
+                    "path": "/cloud/release-notes-production-readiness",
+                    "category": "Release Notes",
+                    "summary": "Production-readiness release notes summarizing sync casing normalization, background execution hardening, documentation additions, current limitations, and rollback instructions."
+                },
+                {
+                    "name": "sync-layer.md",
+                    "path": "/cloud/sync-layer",
+                    "category": "Architecture",
+                    "summary": "Detailed overview of the offline-first DB Sync Layer. Covers materialized snapshot bootstrap, retention safety, write/read paths, LWW conflict resolution, and core sync components."
+                },
+                {
+                    "name": "auth-system.md",
+                    "path": "/cloud/auth-system",
+                    "category": "Architecture",
+                    "summary": "Architecture of the Hybrid Authentication System. Explains how Clerk is used for Identity/Sync and OpenRouter for LLM access, including the Server-Side Provisioning flow (Convex Workspaces)."
+                },
+                {
+                    "name": "identity-access-concepts.md",
+                    "path": "/cloud/identity-access-concepts",
+                    "category": "Architecture",
+                    "summary": "Conceptual guide to OR3 access control vocabulary and flow. Explains provider vs internal user IDs, workspaces, active workspace selection, workspace roles, entitlements, `can()` permissions, and how plugin policy decisions are layered."
+                },
+                {
+                    "name": "capability-matrix.md",
+                    "path": "/cloud/capability-matrix",
+                    "category": "Reference",
+                    "summary": "Normative authorization matrix for public Convex, workspace, sync, storage, AI, background-job, workflow, and tool operations, including subject source, resource scope, capability, and allowed roles."
+                },
+                {
+                    "name": "plugin-access-gating.md",
+                    "path": "/cloud/plugin-access-gating",
+                    "category": "Architecture",
+                    "summary": "End-to-end reference for plugin access gating across client and server. Covers policy fields (`authRequired`, role/entitlement requirements), workspace overrides, `plugins.enabled` semantics, `/api/plugins/access`, and UX hardening to prevent dashboard auth flicker."
+                },
+                {
+                    "name": "storage-layer.md",
+                    "path": "/cloud/storage-layer",
+                    "category": "Architecture",
+                    "summary": "Overview of the CAS (Content-Addressable Storage) system for large assets. Details the local-first 'Blob' architecture, FileTransferQueue for offline support, and pluggable ObjectStorageProvider interface."
+                },
+                {
+                    "name": "background-execution.md",
+                    "path": "/cloud/background-execution",
+                    "category": "Architecture",
+                    "summary": "Architecture and API reference for SSR background jobs powering chat streaming, tool execution, and workflow execution with HITL. Covers endpoint contracts, auth/rate-limit gates, reattach flows, and job metadata (`tool_calls`, `workflow_state`)."
+                },
+                {
+                    "name": "notifications.md",
+                    "path": "/cloud/notifications",
+                    "category": "Features",
+                    "summary": "Complete guide to the OR3 Notification Center. Covers AI streaming notifications, sync conflict alerts, system warnings, and custom plugin notifications. Explains local-first architecture, cross-device sync, creating custom notifications via hooks/composables, filtering, and troubleshooting notification issues."
+                },
+                {
+                    "name": "troubleshooting.md",
+                    "path": "/cloud/troubleshooting",
+                    "category": "Guide",
+                    "summary": "Comprehensive troubleshooting guide for OR3 Cloud features. Covers authentication issues (login, session persistence), sync problems (changes not syncing, conflict notifications, bootstrap delays), storage failures (uploads, downloads, quotas), notification issues, and build/deployment problems. Includes diagnostic checklists, debug logging, and common error messages."
+                }
+            ]
+        },
+        {
+            "title": "Architecture",
+            "path": "/architecture",
+            "files": [
+                {
+                    "name": "activity-external-agents.md",
+                    "path": "/architecture/activity-external-agents",
+                    "category": "Architecture",
+                    "summary": "Ownership, lifecycle, security, extension, troubleshooting, and non-goals for the Activity Center and or3-intern-backed External Agents."
+                },
+                {
+                    "name": "workspace-profiles.md",
+                    "path": "/architecture/workspace-profiles",
+                    "category": "Reference",
+                    "summary": "Workspace Profile V1 schema, immutable resolution, fallback, workspace selection, SSR lifecycle, theme recommendations, versioning, and security."
+                }
+            ]
+        },
+        {
+            "title": "Plugins",
+            "path": "/plugins",
+            "files": [
+                {
+                    "name": "runtime-v2-overview.md",
+                    "path": "/plugins/runtime-v2-overview",
+                    "category": "Guide",
+                    "summary": "Overview of Plugin Runtime V2: frozen V1 compatibility, digest-addressed packages, @or3/plugin-sdk authoring, CLI tooling, operator limitations (non-sandbox trusted-host, non-fleet-atomic activation, data retention on disable), and default-off startup flags."
+                },
+                {
+                    "name": "v1-support-and-migration.md",
+                    "path": "/plugins/v1-support-and-migration",
+                    "category": "Guide",
+                    "summary": "V1 support policy through the V2 line, earliest V3 removal posture, migration steps to Manifest V2 / SDK packages, import replacement map, and lifecycle-coverage limitations."
+                },
+                {
+                    "name": "trust-and-safe-mode.md",
+                    "path": "/plugins/trust-and-safe-mode",
+                    "category": "Operations",
+                    "summary": "Trust classes (trusted-host vs isolated), state rollback rules, and the safe-mode operator runbook using OR3_DISABLE_NON_CORE_PLUGINS without the plugin UI."
+                },
+                {
+                    "name": "plugin-sdk.md",
+                    "path": "/plugins/plugin-sdk",
+                    "category": "Reference",
+                    "summary": "Authoring reference for @or3/plugin-sdk: defineOr3Plugin, host-created PluginContext, mediated clients, testing harness, and CLI validate/create commands."
+                },
+                {
+                    "name": "manifest-v2.md",
+                    "path": "/plugins/manifest-v2",
+                    "category": "Reference",
+                    "summary": "Manifest V2 contract: engines, runtime entrypoints, grants, trust, settings/stateCompatibility, and canonical package digests via plugin-runtime CLI inspect/pack."
+                },
+                {
+                    "name": "admin-plugins.md",
+                    "path": "/plugins/admin-plugins",
+                    "category": "Reference",
+                    "summary": "Admin plugin V1 package layout, page and widget registration APIs, install and rebuild requirements, safe mode behavior, and current lifecycle limitations."
+                },
+                {
+                    "name": "command-palette.md",
+                    "path": "/plugins/command-palette",
+                    "category": "Reference",
+                    "summary": "Command palette plugin contracts: ui.command-palette.register grant, post-source and command contribution kinds, V1 workspace API registration, alias rules, mediated isolated command execution, and todo/workflow examples."
                 }
             ]
         }

@@ -1,3 +1,5 @@
+@reference '../../assets/css/main.css';
+
 /**
  * Retro Theme Styles
  * 
@@ -16,55 +18,353 @@
 /* Wrap all retro styles in the theme selector to prevent global leakage */
 [data-theme="retro"] {
 
-/* Screen-reader only helper (follows inclusive components pattern) */
-.sr-only {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	padding: 0;
-	margin: -1px;
-	overflow: hidden;
-	clip: rect(0 0 0 0);
-	clip-path: inset(50%);
-	white-space: nowrap;
-	border: 0;
+	/* Screen-reader only helper (follows inclusive components pattern) */
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		clip-path: inset(50%);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	/* Utility class for retro shadow (used globally) */
+	.retro-shadow,
+	.theme-shadow {
+		/* Use Tailwind shadow vars so we can layer with ring utilities */
+		--tw-shadow: 2px 2px 0 var(--md-border-color);
+		--tw-shadow-colored: 2px 2px 0 var(--tw-shadow-color);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			var(--tw-shadow);
+	}
+
+	.theme-btn {
+		/* Use Tailwind shadow vars so we can layer with ring utilities */
+		--tw-shadow: 2px 2px 0 var(--md-border-color);
+		--tw-shadow-colored: 2px 2px 0 var(--tw-shadow-color);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			var(--tw-shadow);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+	}
+
+	.retro-press {
+		transition: transform 80ms ease, box-shadow 80ms ease;
+	}
+
+	.retro-press:active {
+		transform: translate(2px, 2px);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			0 0 0 var(--md-border-color),
+			inset 0 2px 0 rgba(0, 0, 0, 0.25),
+			inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+	}
+
+	.retro-press:focus-visible {
+		outline: 2px solid var(--md-primary);
+		outline-offset: 2px;
+	}
+
+	.retro-press:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+	}
+
+	#top-header {
+		border-bottom: var(--md-border-width) solid var(--md-border-color);
+	}
+
+	#nav-header {
+		margin-bottom: 0px;
+		margin-left: 12px;
+		margin-right: 24px;
+		padding-bottom: 0px;
+		padding-left: 0px;
+		padding-right: 3px;
+		border-bottom: 3px solid rgba(8, 109, 184, 0.3);
+	}
+
+	.unified-sb-item {
+		@apply transition-all ease-in-out duration-200;
+		margin-bottom: 12px;
+		 border-radius: 3px;
+		box-shadow: 3px 3px 0px 0px var(--md-surface-variant);
+	}
+
+	.unified-sb-item-active,
+	.unified-sb-item-active:hover {
+		background-color: var(--md-surface-active) !important;
+		transform: translate(2px, 2px);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			0 0 0 var(--md-border-color),
+			inset 0 2px 0 rgba(0, 0, 0, 0.25),
+			inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+	}
+
+
+	.unified-sb-item:not(.unified-sb-item-active):hover {
+		background-color: var(--md-surface-hover);
+		--tw-shadow: 2px 2px 0 var(--md-border-color);
+		--tw-shadow-colored: 2px 2px 0 var(--tw-shadow-color);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			var(--tw-shadow);
+
+	}
+
+	.sb-btn-title-active {
+		@apply text-[color:var(--md-primary-shade)] dark:text-[color:var(--md-primary-tint)];
+	}
+	.sb-item-time-active {
+		@apply text-[color:var(--md-primary-tint)]/80 dark:text-[color:var(--md-primary-tint)]/95;
+	}
+	.sb-btn-icon-active {
+		@apply text-[color:var(--md-primary-shade)]/80 dark:text-[color:var(--md-primary-tint)]/90;
+	}
+
+	.unified-sb-item:not(.unified-sb-item-active):active {
+		transform: translate(2px, 2px);
+		background-color: var(--md-surface-active);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			0 0 0 var(--md-border-color),
+			inset 0 2px 0 rgba(0, 0, 0, 0.25),
+			inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+	}
+
+	.sb-group-header {
+	    margin-top: 24px;
+		margin-bottom: 8px;
+		padding-left: 0px !important;
+		padding-right: 0px !important; 
+	}
+
+	.sb-group-header:hover {
+		background-color: transparent;
+	}
+
+	.sb-group-header-label {
+		font-family: 'VT323', 'IBM Plex Mono', monospace;
+		font-size: 18px;
+		font-weight: 500;
+	}
+
+	.sb-item-time {
+		font-size: 12px;
+		opacity: 0.55;
+	}
+
+	.page-link-btn {
+		@apply transition-all ease-in-out p-3 backdrop-blur border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[3px] flex items-center gap-3 w-full text-left hover:cursor-pointer hover:bg-primary/5 active:bg-primary/10;
+	}
+
+	.page-link-btn:hover {
+		--tw-shadow: 2px 2px 0 var(--md-border-color);
+		--tw-shadow-colored: 2px 2px 0 var(--tw-shadow-color);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			var(--tw-shadow);
+
+	}
+
+	.page-link-btn:active {
+		transform: translate(2px, 2px);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			0 0 0 var(--md-border-color),
+			inset 0 2px 0 rgba(0, 0, 0, 0.25),
+			inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+	}
+
+	.page-link-btn:not(:last-child) {
+		margin-bottom: 12px;
+	}
+
+	.page-link-label {
+		font-size: 18px;
+		font-weight: 500;
+		text-box-trim: trim-both;  
+	}
+
+	.page-link-description {
+		font-size: 14px;
+		font-weight: 400;
+		color: var(--md-on-surface-secondary);
+		text-box-trim: trim-both;  
+		line-height: 1rem;
+		opacity: 0.75;
+	}
+
+.project-root-container {
+	height: 40px;
 }
 
-/* Utility class for retro shadow (used globally) */
-.retro-shadow,
-.theme-shadow {
-	/* Use Tailwind shadow vars so we can layer with ring utilities */
-	--tw-shadow: 2px 2px 0 var(--md-border-color);
-	--tw-shadow-colored: 2px 2px 0 var(--tw-shadow-color);
-	box-shadow:
-		var(--tw-ring-offset-shadow, 0 0 #0000),
-		var(--tw-ring-shadow, 0 0 #0000),
-		var(--tw-shadow);
+.project-group-container {
+		box-shadow: 3px 3px 0px 0px var(--md-surface-variant);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		border: var(--md-border-width) solid var(--md-border-color);
+		border-radius: 3px;
+		margin-right: 8px;
 }
 
-.retro-press {
-	transition: transform 80ms ease, box-shadow 80ms ease;
-}
-.retro-press:active {
-	transform: translate(2px, 2px);
-	box-shadow:
-		var(--tw-ring-offset-shadow, 0 0 #0000),
-		var(--tw-ring-shadow, 0 0 #0000),
-		0 0 0 var(--md-border-color),
-		inset 0 2px 0 rgba(0, 0, 0, 0.25),
-		inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-.retro-press:focus-visible {
-	outline: 2px solid var(--md-primary);
-	outline-offset: 2px;
-}
-.retro-press:disabled {
-	opacity: 0.45;
-	cursor: not-allowed;
+.project-group-container:hover {
+		box-shadow: 3px 3px 0px 0px color-mix(in srgb, var(--md-border-color) 80%, transparent);
 }
 
-#top-header {
-	border-bottom: var(--md-border-width) solid var(--md-border-color);
+.project-root-container{
+	margin-bottom: 0px;
 }
 
-} /* End [data-theme="retro"] */
+.page-link-icon-container {
+		border: var(--md-border-width) solid var(--md-border-color);
+		border-radius: 3px;
+		box-shadow: 3px 3px 0px 0px var(--md-surface-variant);
+		height: 40px;
+		width: 40px;
+}
+
+.chat-input-main.chat-composer-shell[data-composer-size] {
+	@apply transition-all! ease-in-out! duration-200!;
+		border: var(--md-border-width) solid var(--md-border-color);
+		/* Use Tailwind shadow vars so we can layer with ring utilities */
+		--tw-shadow: 3px 3px 0 var(--md-border-color);
+		--tw-shadow-colored: 3px 3px 0 var(--tw-shadow-color);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			var(--tw-shadow);
+		transition: box-shadow 150ms ease;
+	}
+
+	.chat-input-main.chat-composer-shell[data-composer-size]:hover {
+		border-color: var(--md-primary-border);
+		--tw-shadow: 3px 3px 0 var(--md-primary-border);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			var(--tw-shadow);
+	}
+
+	.chat-input-main.chat-composer-shell[data-composer-size]:focus-within {
+		border-color: var(--md-primary);
+		--tw-shadow: 3px 3px 0 var(--md-primary);
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			var(--tw-shadow);
+	}
+
+	.cm-action-group {
+		@apply border-none!;
+	}
+
+	/* Workflow editor drag/select toggle buttons */
+	.workflow-toggle-active,
+	.workflow-validation-active {
+		box-shadow: none !important;
+		transform: none !important;
+		border: var(--md-border-width) solid var(--md-border-color) !important;
+	}
+
+	.workflow-toggle-active:hover,
+	.workflow-toggle-active:active,
+	.workflow-validation-active:hover,
+	.workflow-validation-active:active {
+		box-shadow: none !important;
+		transform: none !important;
+		border: var(--md-border-width) solid var(--md-border-color) !important;
+	}
+
+	/* Remove right border from first button in group to avoid double border */
+	.workflow-toolbar .theme-btn:first-child:not(:only-child) {
+		border-right: none !important;
+	}
+
+	/* Ensure non-active toggle buttons have proper border */
+	.workflow-toolbar .theme-btn:not(.workflow-toggle-active):not(.workflow-validation-active) {
+		border: var(--md-border-width) solid var(--md-border-color);
+	}
+}
+
+.cm-assistant {
+	@apply bg-transparent shadow-[2px_2px_0_var(--md-border-color)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] my-5;
+}
+
+.cm-user {
+	@apply shadow-[2px_2px_0_var(--md-border-color)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-5 py-6!;
+}
+
+.sb-bottom-border {
+	@apply mt-2 mb-1.5;
+}
+
+#nav-pages-section {
+	@apply justify-center items-center
+}
+
+.sidebar-scroll {
+	@apply pr-3 pt-5;
+}
+
+/*
+    '.cm-assistant': {
+        style: {
+            backgroundColor: 'transparent',
+            boxShadow: '2px 2px 0 var(--md-border-color)',
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+        },
+    },
+    '.cm-user': {
+        style: {
+            boxShadow: '2px 2px 0 var(--md-border-color)',
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            marginBottom: '20px',
+        },
+    },
+	*/
+
+/* End [data-theme="retro"] */
+
+/*
+ * iOS and other mobile browsers zoom focused text controls below 16px.
+ * Keep desktop typography compact while enforcing a mobile editing floor.
+ */
+@media (hover: none) and (pointer: coarse), (max-width: 47.999rem) {
+    html[data-theme="retro"] :is(
+        input:not([type]),
+        input[type="text"],
+        input[type="search"],
+        input[type="email"],
+        input[type="password"],
+        input[type="url"],
+        input[type="tel"],
+        input[type="number"],
+        input[type="date"],
+        input[type="datetime-local"],
+        input[type="month"],
+        input[type="week"],
+        input[type="time"],
+        textarea,
+        select,
+        [contenteditable]:not([contenteditable="false"])
+    ) {
+        font-size: 16px !important;
+    }
+}

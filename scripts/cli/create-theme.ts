@@ -21,6 +21,14 @@ interface ThemeOptions {
   surfaceColor: string;
 }
 
+function toTsStringLiteral(value: string): string {
+  return JSON.stringify(value);
+}
+
+function toSingleLineDocText(value: string): string {
+  return value.replace(/\r?\n/g, ' ').trim();
+}
+
 function createReadlineInterface() {
   return readline.createInterface({
     input: process.stdin,
@@ -107,27 +115,32 @@ async function promptForThemeDetails(initialName?: string): Promise<ThemeOptions
 }
 
 function generateThemeTemplate(options: ThemeOptions): string {
+  const safeName = toTsStringLiteral(options.name);
+  const safeDisplayName = toTsStringLiteral(options.displayName);
+  const safeDescription = toTsStringLiteral(options.description);
+  const safePrimaryColor = toTsStringLiteral(options.primaryColor);
+  const safeSecondaryColor = toTsStringLiteral(options.secondaryColor);
+  const safeSurfaceColor = toTsStringLiteral(options.surfaceColor);
+
   return `/**
- * ${options.displayName} Theme
- * 
- * ${options.description}
+ * Generated theme scaffold.
  */
 
 import { defineTheme } from '../_shared/define-theme';
 
 export default defineTheme({
-  name: '${options.name}',
-  displayName: '${options.displayName}',
-  description: '${options.description}',
+  name: ${safeName},
+  displayName: ${safeDisplayName},
+  description: ${safeDescription},
   
   colors: {
     // Material Design 3 color tokens
-    primary: '${options.primaryColor}',
-    secondary: '${options.secondaryColor}',
-    tertiary: '${options.primaryColor}', // Adjust if needed
+    primary: ${safePrimaryColor},
+    secondary: ${safeSecondaryColor},
+    tertiary: ${safePrimaryColor}, // Adjust if needed
     
-    surface: '${options.surfaceColor}',
-    surfaceVariant: '${options.surfaceColor}',
+    surface: ${safeSurfaceColor},
+    surfaceVariant: ${safeSurfaceColor},
     
     // Semantic colors
     success: '#4a9763',
@@ -136,7 +149,7 @@ export default defineTheme({
     
     // Dark mode overrides (optional)
     dark: {
-      primary: '${options.primaryColor}', // Adjust for dark mode
+      primary: ${safePrimaryColor}, // Adjust for dark mode
       surface: '#0c130d',
     },
   },
@@ -166,9 +179,13 @@ export default defineTheme({
 }
 
 function generateReadme(options: ThemeOptions): string {
-  return `# ${options.displayName} Theme
+  const docDisplayName = toSingleLineDocText(options.displayName);
+  const docDescription = toSingleLineDocText(options.description);
+  const safeName = toTsStringLiteral(options.name);
 
-${options.description}
+  return `# ${docDisplayName} Theme
+
+${docDescription}
 
 ## Color Palette
 
@@ -183,7 +200,7 @@ This theme is automatically discovered by the theme system. To activate it:
 \`\`\`typescript
 // In your component or app config
 const { setActiveTheme } = useTheme();
-setActiveTheme('${options.name}');
+setActiveTheme(${safeName});
 \`\`\`
 
 ## Customization
@@ -224,7 +241,7 @@ async function createTheme(options: ThemeOptions) {
     console.log('\n📝 Next steps:');
     console.log('  1. Review and customize theme.ts');
     console.log('  2. Add component overrides as needed');
-    console.log('  3. Run npm run theme:validate to check for errors');
+    console.log('  3. Run bun run theme:validate to check for errors');
     console.log(`  4. Activate with setActiveTheme('${options.name}')`);
     console.log('');
     

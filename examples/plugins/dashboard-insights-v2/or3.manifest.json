@@ -1,0 +1,31 @@
+{
+  "manifestVersion": 2,
+  "kind": "plugin",
+  "id": "or3.dashboard-insights",
+  "name": "Dashboard Insights",
+  "version": "2.0.0",
+  "description": "First-party Plugin Runtime V2 lifecycle and SDK sample.",
+  "engines": { "or3": "^0.3.0", "pluginApi": "^2.0.0" },
+  "runtime": {
+    "client": {
+      "entry": "client.mjs",
+      "format": "esm",
+      "isolation": "host"
+    }
+  },
+  "requestedGrants": [
+    "settings.read",
+    "storage.write",
+    "hooks.register",
+    "ui.dashboard.register"
+  ],
+  "features": { "required": ["host.contributions"], "optional": [] },
+  "dependencies": { "required": [], "optional": [] },
+  "trust": "trusted-host",
+  "settings": { "version": 1 },
+  "stateCompatibility": {
+    "version": 1,
+    "reads": { "minimum": 1, "maximum": 1 },
+    "rollback": "safe"
+  }
+}

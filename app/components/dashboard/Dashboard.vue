@@ -15,7 +15,14 @@
                 id="dashboard-grid-view"
                 class="p-4 flex justify-start w-full"
             >
-                <div id="dashboard-plugin-grid" class="dashboard-plugin-grid">
+                <div
+                    v-if="shouldDeferDashboardGrid"
+                    id="dashboard-grid-loading"
+                    class="text-sm opacity-70 px-1"
+                >
+                    Loading dashboard...
+                </div>
+                <div v-else id="dashboard-plugin-grid" class="dashboard-plugin-grid">
                     <plugin-icons
                         v-for="item in dashboardItems"
                         :key="item.id"
@@ -144,9 +151,13 @@ import {
     useDashboardNavigation,
     registerDashboardPluginPage,
     type DashboardPlugin,
-} from '~/composables';
+} from '~/composables/dashboard/useDashboardPlugins';
+import { useRuntimeConfig } from '#imports';
+import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { useIcon } from '~/composables/useIcon';
 import { isMobile } from '~/state/global';
+import { projectProfileItems } from '~/core/workspace-profiles/projection';
 
 const props = defineProps<{
     showModal: boolean;
@@ -160,6 +171,18 @@ const open = computed({
     set: (value: boolean) => emit('update:showModal', value),
 });
 
+const runtimeConfig = useRuntimeConfig();
+const ssrAuthEnabled = runtimeConfig.public.ssrAuthEnabled === true;
+const sessionContext = ssrAuthEnabled ? useSessionContext() : null;
+const shouldDeferDashboardGrid = computed(
+    () =>
+        ssrAuthEnabled &&
+        sessionContext?.pending.value === true &&
+        sessionContext?.data.value === null
+);
+
+const coreAccess = ssrAuthEnabled ? { authRequired: true } : undefined;
+
 // Core (built-in) items; can be overridden by external plugin with same id
 const coreItems: DashboardPlugin[] = [
     {
@@ -167,6 +190,7 @@ const coreItems: DashboardPlugin[] = [
         icon: useIcon('dashboard.settings').value,
         label: 'Settings',
         order: 1,
+        access: coreAccess,
         pages: [
             {
                 id: 'theme-settings',
@@ -182,6 +206,14 @@ const coreItems: DashboardPlugin[] = [
                 icon: useIcon('dashboard.plugins').value,
                 component: () => import('./AiPage.vue'),
             },
+            {
+                id: 'workspace-profile-settings',
+                title: 'Workspace Profile',
+                description:
+                    'Choose how navigation, dashboard tools, commands, and initial panes are arranged.',
+                icon: 'i-lucide-panels-top-left',
+                component: () => import('./WorkspaceProfileSettings.vue'),
+            },
         ],
     },
     {
@@ -189,6 +221,7 @@ const coreItems: DashboardPlugin[] = [
         icon: useIcon('dashboard.images').value,
         label: 'Images',
         order: 10,
+        access: coreAccess,
         pages: [
             {
                 id: 'images-library',
@@ -196,21 +229,6 @@ const coreItems: DashboardPlugin[] = [
                 description: 'Browse saved and generated images.',
                 icon: useIcon('dashboard.images').value,
                 component: () => import('~/pages/images/index.vue'),
-            },
-        ],
-    },
-    {
-        id: 'core:workspace-backup',
-        icon: useIcon('dashboard.restore').value,
-        label: 'Workspace Backup',
-        order: 45,
-        pages: [
-            {
-                id: 'workspace-backup-home',
-                title: 'Workspace Backup',
-                description: 'Export and import full workspace backups.',
-                icon: useIcon('dashboard.restore').value,
-                component: () => import('./workspace/WorkspaceBackupApp.vue'),
             },
         ],
     },
@@ -229,7 +247,7 @@ for (const item of coreItems) {
 const {
     state,
     resolvedPageComponent,
-    dashboardItems,
+    dashboardItems: rawDashboardItems,
     landingPages,
     headerPluginLabel,
     activePageTitle,
@@ -237,6 +255,10 @@ const {
     openPage,
     goBack,
 } = useDashboardNavigation({ baseItems: coreItems });
+
+const dashboardItems = computed(() =>
+    projectProfileItems('dashboard', rawDashboardItems.value)
+);
 
 const handlePluginClick = (pluginId: string) => {
     void openPlugin(pluginId);
@@ -258,7 +280,7 @@ const dashboardModalOverrides = useThemeOverrides({
 
 const dashboardModalProps = computed(() => {
     const baseClass =
-        'w-[98dvw] h-[98dvh] sm:min-w-[720px] sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden';
+        'w-[98dvw] h-[98dvh] sm:w-[720px] sm:max-w-[95dvw] sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden';
     const baseUi = {
         content: 'z-[10]',
         footer: 'justify-end border-t-[var(--md-border-width)]',
@@ -326,35 +348,38 @@ const pluginIconSize = computed(() => {
 </script>
 
 <style scoped>
-#dashboard-plugin-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 64px);
-    gap: 26px 28px;
-    justify-items: center;
-    justify-content: flex-start;
-    width: min(340px, 100%);
+#dashboard-grid-view {
+    display: flex;
+    justify-content: center;
 }
 
-@media (max-width: 349px) {
-    #dashboard-plugin-grid {
-        grid-template-columns: repeat(3, 64px);
-        width: min(248px, 100%);
-    }
+#dashboard-plugin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 100px);
+    gap: 20px 16px;
+    justify-content: start;
+    max-width: 100%;
+}
+
+.dashboard-plugin-icon-item {
+    width: 100px;
+    display: flex;
+    justify-content: center;
 }
 
 @media (min-width: 820px) {
     #dashboard-plugin-grid {
-        grid-template-columns: repeat(6, 86px);
-        gap: 48px 58px;
-        width: min(806px, 100%);
+        grid-template-columns: repeat(auto-fill, 120px);
+        gap: 40px 32px;
+    }
+    .dashboard-plugin-icon-item {
+        width: 120px;
     }
 }
 
 @media (min-width: 1200px) {
     #dashboard-plugin-grid {
-        grid-template-columns: repeat(7, 86px);
-        gap: 54px 70px;
-        width: min(962px, 100%);
+        gap: 48px 40px;
     }
 }
 </style>

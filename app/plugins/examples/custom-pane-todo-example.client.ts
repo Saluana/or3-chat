@@ -23,15 +23,20 @@ import {
 import { useSidebarPageControls } from '~/composables/sidebar/useSidebarPageControls';
 import { usePostsList } from '~/composables/posts/usePostsList';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
+import type { ManagedWorkspacePluginRuntime } from '~/composables/plugins/workspace-runtime';
 
 export default defineNuxtPlugin(async () => {
     if (!process.client) return;
 
+    let pluginRuntime: ManagedWorkspacePluginRuntime | undefined;
     try {
-        const { registerPaneApp } = usePaneApps();
-        const { registerSidebarPage } = await import(
-            '~/composables/sidebar/registerSidebarPage'
+        const { createManagedWorkspacePluginRuntime } = await import(
+            '~/composables/plugins/workspace-runtime'
         );
+        pluginRuntime = createManagedWorkspacePluginRuntime({
+            pluginId: 'example-todo',
+        });
+        const api = pluginRuntime.api;
 
         // Workspace pane component (existing behaviour)
         const TodoPaneComponent = defineComponent({
@@ -478,7 +483,7 @@ export default defineNuxtPlugin(async () => {
         });
 
         // 1. Register pane app (workspace content)
-        registerPaneApp({
+        api.registerPaneApp({
             id: 'example-todo',
             label: 'Todo',
             icon: 'pixelarticons:checkbox',
@@ -507,7 +512,7 @@ export default defineNuxtPlugin(async () => {
         });
 
         // 2. Register sidebar page (navigation surface)
-        registerSidebarPage({
+        api.registerSidebarPage({
             id: 'example-todo-page',
             label: 'Todos',
             icon: 'pixelarticons:list',
@@ -517,8 +522,31 @@ export default defineNuxtPlugin(async () => {
             component: () => Promise.resolve(TodoSidebarPage),
         });
 
+        // 3. Register command-palette post source (`todo:` alias + completed metadata)
+        const todoPaletteDefinition = {
+            id: 'todo-source',
+            label: 'Todos',
+            postType: 'example-todo',
+            categoryId: 'todo',
+            filterAliases: ['todo'] as const,
+            icon: 'pixelarticons:checkbox',
+            order: 210,
+            metaKeys: ['completed'] as const,
+            openTarget: {
+                kind: 'pane-app' as const,
+                appId: 'example-todo',
+            },
+        };
+        api.registerCommandPalettePostSource(todoPaletteDefinition);
+        if (import.meta.hot) {
+            import.meta.hot.dispose(() => {
+                void pluginRuntime?.dispose('todo example HMR');
+            });
+        }
+
         // Registration complete
     } catch (e) {
+        await pluginRuntime?.dispose(e);
         // Handle registration failure
     }
 });

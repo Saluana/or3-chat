@@ -4,6 +4,7 @@
 
 import { defineNuxtPlugin } from '#app';
 import { useAppConfig, useHooks } from '#imports';
+import { useOr3Config, isMentionSourceEnabled } from '~/composables/useOr3Config';
 import type {
     OpenRouterMessage,
     DbCreatePayload,
@@ -74,27 +75,53 @@ function safeId(payload: {
 }
 
 export default defineNuxtPlugin(() => {
+    // Check OR3 config feature flag (master toggle)
+    const or3Config = useOr3Config();
+    if (!or3Config.features.mentions.enabled) {
+        console.log('[mentions] Plugin disabled via OR3 config');
+        return;
+    }
+
+    // Determine which mention sources are enabled
+    const documentsEnabled = isMentionSourceEnabled('documents');
+    const conversationsEnabled = isMentionSourceEnabled('conversations');
+
+    // If both sources are disabled, no point in initializing
+    if (!documentsEnabled && !conversationsEnabled) {
+        console.log('[mentions] All mention sources disabled, skipping initialization');
+        return;
+    }
+
     const appConfig = useAppConfig();
     const mentionsConfig: MentionsConfig =
         ((appConfig as Record<string, unknown>)?.mentions as MentionsConfig) ||
         {};
 
-    // Check feature flag (requirement 8.2)
-    if (mentionsConfig.enabled === false) {
-        console.log('[mentions] Plugin disabled via feature flag');
-        return;
-    }
-
     const hooks = useHooks();
     let indexInitialized = false;
     let mentionsModule: MentionsModule | null = null;
+    let mentionsModulePromise: Promise<MentionsModule | null> | null = null;
     let lastEditorContent: Record<string, unknown> | null = null; // captured TipTap JSON before send
     let extensionsRegistered = false; // Prevent duplicate registrations
 
     // Lazy load the mentions module
-    async function loadMentionsModule(): Promise<MentionsModule | null> {
-        if (mentionsModule) return mentionsModule;
+    function loadMentionsModule(): Promise<MentionsModule | null> {
+        if (mentionsModule) return Promise.resolve(mentionsModule);
+        if (mentionsModulePromise) return mentionsModulePromise;
 
+        const pending = initializeMentionsModule();
+        mentionsModulePromise = pending;
+        const clearPending = () => {
+            if (mentionsModulePromise === pending) {
+                mentionsModulePromise = null;
+            }
+        };
+        void pending.then(clearPending, clearPending);
+
+        return pending;
+    }
+
+    async function initializeMentionsModule(): Promise<MentionsModule | null> {
         try {
             const [
                 MentionModule,
@@ -123,6 +150,10 @@ export default defineNuxtPlugin(() => {
             setMentionsConfig({
                 maxPerGroup: mentionsConfig?.maxPerGroup || 5,
                 maxContextBytes: mentionsConfig?.maxContextBytes || 50_000,
+                enabledSources: {
+                    documents: documentsEnabled,
+                    conversations: conversationsEnabled,
+                },
             });
 
             mentionsModule = {
@@ -249,7 +280,7 @@ export default defineNuxtPlugin(() => {
                 return { messages: originalMessages };
             }
 
-            const mentions = module.collectMentions(editorContent);
+            const mentions = module.collectMentions(editorContent as unknown as Parameters<typeof module.collectMentions>[0]);
             if (mentions.length === 0) {
                 return { messages: originalMessages };
             }
@@ -360,8 +391,11 @@ export default defineNuxtPlugin(() => {
         (payload: DbCreatePayload<ThreadEntity>) => {
             void (async () => {
                 const module = mentionsModule || (await loadMentionsModule());
-                if (module && payload.entity)
-                    module.upsertThread(payload.entity);
+                if (module && payload.entity) {
+                    // Normalize title: convert null to undefined to match ThreadRow type
+                    const threadRow = { ...payload.entity, title: payload.entity.title ?? undefined };
+                    module.upsertThread(threadRow);
+                }
             })();
         },
         { kind: 'action' }
@@ -372,8 +406,11 @@ export default defineNuxtPlugin(() => {
         (payload: DbCreatePayload<ThreadEntity>) => {
             void (async () => {
                 const module = mentionsModule || (await loadMentionsModule());
-                if (module && payload.entity)
-                    module.upsertThread(payload.entity);
+                if (module && payload.entity) {
+                    // Normalize title: convert null to undefined to match ThreadRow type
+                    const threadRow = { ...payload.entity, title: payload.entity.title ?? undefined };
+                    module.upsertThread(threadRow);
+                }
             })();
         },
         { kind: 'action' }

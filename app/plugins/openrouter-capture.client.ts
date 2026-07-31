@@ -13,6 +13,8 @@ export default defineNuxtPlugin(() => {
             const code = url.searchParams.get('code');
             const state = url.searchParams.get('state');
             if (code) {
+                sessionStorage.setItem('openrouter_auth_code', code);
+                localStorage.setItem('openrouter_auth_code', code);
                 sessionStorage.setItem(
                     'openrouter_code_verifier',
                     sessionStorage.getItem('openrouter_code_verifier') ||

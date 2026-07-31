@@ -29,7 +29,7 @@
                     @click.stop="focusFirstPendingHitl"
                 >
                     <UIcon
-                        :name="useIcon('ui.warning').value"
+                        :name="warningIcon"
                         class="w-3 h-3 shrink-0"
                     />
                     {{ pendingHitlBadgeText }}
@@ -163,7 +163,7 @@
                             class="bg-[var(--md-error-container)] text-[var(--md-on-error-container)] p-2 rounded mb-2 text-xs flex items-start gap-2"
                         >
                             <UIcon
-                                :name="useIcon('ui.warning').value"
+                                :name="warningIcon"
                                 class="w-4 h-4 shrink-0 mt-0.5"
                             />
                             <span class="whitespace-pre-wrap">{{
@@ -183,7 +183,7 @@
                             >
                                 <div class="flex items-start gap-2">
                                     <UIcon
-                                        :name="useIcon('ui.warning').value"
+                                        :name="warningIcon"
                                         class="w-4 h-4 shrink-0 mt-0.5"
                                     />
                                     <div class="flex-1">
@@ -422,7 +422,6 @@ import {
     type HitlRequestState,
     type HitlAction,
     MERGE_BRANCH_ID,
-    MERGE_BRANCH_LABEL,
 } from '~/utils/chat/workflow-types';
 import { modelRegistry } from 'or3-workflow-core';
 import { useIcon } from '~/composables/useIcon';
@@ -430,6 +429,23 @@ import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 import { useToast } from '#imports';
+import {
+    branchContent,
+    branchLabel,
+    branchStatusIcon,
+    executionStatusColor,
+    executionStatusIcon,
+    hitlActions as getHitlActions,
+    hitlHeading as getHitlHeading,
+    hitlInputLabel as getHitlInputLabel,
+    nodeStatusColor,
+    nodeStatusIcon,
+    projectWorkflowAttachments,
+    statusColor,
+    toolStatusIcon,
+    toolStatusText as getToolStatusText,
+    type WorkflowStatusIcons,
+} from '~/core/workflows/execution-presentation';
 
 defineOptions({ name: 'WorkflowExecutionStatus' });
 
@@ -477,49 +493,15 @@ const statusTextClass = computed(() =>
     [depth.value > 0 ? 'text-[10px]' : 'text-xs', 'opacity-70'].join(' ')
 );
 
-function buildAttachmentUrl(attachment: {
-    url?: string;
-    content?: string;
-    mimeType?: string;
-}): string | null {
-    if (attachment.url) return attachment.url;
-    if (attachment.content && attachment.mimeType) {
-        return `data:${attachment.mimeType};base64,${attachment.content}`;
-    }
-    return null;
-}
-
-const imageAttachments = computed(() => {
-    const attachments = props.workflowState.attachments || [];
-    return attachments
-        .filter((attachment) => attachment.type === 'image')
-        .map((attachment) => {
-            const url = buildAttachmentUrl(attachment);
-            if (!url) return null;
-            return {
-                id: attachment.id,
-                url,
-                name: attachment.name || 'Image',
-            };
-        })
-        .filter(
-            (
-                attachment
-            ): attachment is { id: string; url: string; name: string } =>
-                Boolean(attachment)
-        );
-});
-
-const fileAttachments = computed(() => {
-    const attachments = props.workflowState.attachments || [];
-    return attachments
-        .filter((attachment) => attachment.type === 'file')
-        .map((attachment) => ({
-            id: attachment.id,
-            name: attachment.name || 'File',
-            mimeType: attachment.mimeType || 'application/octet-stream',
-        }));
-});
+const projectedAttachments = computed(() =>
+    projectWorkflowAttachments(props.workflowState)
+);
+const imageAttachments = computed(
+    () => projectedAttachments.value.images
+);
+const fileAttachments = computed(
+    () => projectedAttachments.value.files
+);
 
 const hasAttachments = computed(
     () => imageAttachments.value.length > 0 || fileAttachments.value.length > 0
@@ -612,7 +594,7 @@ watch(
                 title: pendingHitlBadge.value || 'Approval needed',
                 description: getPendingHitlContextLabel(entry),
                 color: 'warning',
-                icon: useIcon('ui.warning').value,
+                icon: warningIcon.value,
                 actions: [
                     {
                         label: 'Review',
@@ -643,44 +625,66 @@ watch(
 // Icons
 const expandIcon = useIcon('shell.expand');
 const collapseIcon = useIcon('shell.collapse');
+const warningIcon = useIcon('ui.warning');
+const pendingStatusIcon = useIcon('workflow.status.pending');
+const runningStatusIcon = useIcon('workflow.status.running');
+const completedStatusIcon = useIcon('workflow.status.completed');
+const errorStatusIcon = useIcon('workflow.status.error');
+const stoppedStatusIcon = useIcon('workflow.status.stopped');
+const presentationIcons = computed<WorkflowStatusIcons>(() => ({
+    pending: pendingStatusIcon.value,
+    running: runningStatusIcon.value,
+    completed: completedStatusIcon.value,
+    error: errorStatusIcon.value,
+    stopped: stoppedStatusIcon.value,
+}));
 
-const statusIcon = computed(() => {
-    if (hasPendingHitl.value) {
-        return useIcon('workflow.status.pending').value;
+const hitlRequestsByNode = computed(() => {
+    const grouped = new Map<string, HitlRequestState[]>();
+    const requests = props.workflowState.hitlRequests;
+    if (!requests) return grouped;
+    for (const request of Object.values(requests)) {
+        const existing = grouped.get(request.nodeId);
+        if (existing) {
+            existing.push(request);
+        } else {
+            grouped.set(request.nodeId, [request]);
+        }
     }
-    switch (props.workflowState.executionState) {
-        case 'running':
-            return useIcon('workflow.status.running').value;
-        case 'completed':
-            return useIcon('workflow.status.completed').value;
-        case 'error':
-            return useIcon('workflow.status.error').value;
-        case 'stopped':
-        case 'interrupted':
-            return useIcon('workflow.status.stopped').value;
-        default:
-            return useIcon('workflow.status.pending').value;
-    }
+    return grouped;
 });
 
-const statusColorClass = computed(() => {
-    if (hasPendingHitl.value) {
-        return 'text-[var(--md-extended-color-warning-color)] animate-pulse';
+const branchesByNode = computed(() => {
+    const grouped = new Map<string, BranchState[]>();
+    const branches = props.workflowState.branches;
+    if (!branches) return grouped;
+    for (const [key, branch] of Object.entries(branches)) {
+        if (branch.id === MERGE_BRANCH_ID) continue;
+        const [nodeId] = key.split(':', 1);
+        if (!nodeId) continue;
+        const existing = grouped.get(nodeId);
+        if (existing) {
+            existing.push(branch);
+        } else {
+            grouped.set(nodeId, [branch]);
+        }
     }
-    switch (props.workflowState.executionState) {
-        case 'running':
-            return 'text-[var(--md-primary)] animate-spin';
-        case 'completed':
-            return 'text-[var(--md-primary)]';
-        case 'error':
-            return 'text-[var(--md-error)]';
-        case 'stopped':
-        case 'interrupted':
-            return 'text-[var(--md-outline)]';
-        default:
-            return 'text-[var(--md-outline)]';
-    }
+    return grouped;
 });
+
+const statusIcon = computed(() =>
+    executionStatusIcon(
+        props.workflowState.executionState,
+        hasPendingHitl.value,
+        presentationIcons.value
+    )
+);
+const statusColorClass = computed(() =>
+    executionStatusColor(
+        props.workflowState.executionState,
+        hasPendingHitl.value
+    )
+);
 
 const statusText = computed(() => {
     if (hasPendingHitl.value) {
@@ -742,55 +746,18 @@ function getNodeStatus(nodeId: string) {
 }
 
 function getNodeStatusIcon(nodeId: string) {
-    const status = getNodeStatus(nodeId);
-    const execState = props.workflowState.executionState;
-    // If workflow is interrupted/stopped/error but node still shows active, treat as stopped
-    if (
-        status === 'active' &&
-        (execState === 'interrupted' ||
-            execState === 'stopped' ||
-            execState === 'error')
-    ) {
-        return useIcon('workflow.status.stopped').value;
-    }
-    switch (status) {
-        case 'active':
-            return useIcon('workflow.status.running').value;
-        case 'waiting':
-            return useIcon('workflow.status.pending').value;
-        case 'completed':
-            return useIcon('workflow.status.completed').value;
-        case 'error':
-            return useIcon('workflow.status.error').value;
-        default:
-            return useIcon('workflow.status.pending').value;
-    }
+    return nodeStatusIcon(
+        getNodeStatus(nodeId),
+        props.workflowState.executionState,
+        presentationIcons.value
+    );
 }
 
 function getNodeStatusColor(nodeId: string) {
-    const status = getNodeStatus(nodeId);
-    const execState = props.workflowState.executionState;
-    // If workflow is interrupted/stopped/error but node still shows active, treat as stopped
-    if (
-        status === 'active' &&
-        (execState === 'interrupted' ||
-            execState === 'stopped' ||
-            execState === 'error')
-    ) {
-        return 'text-[var(--md-outline)]';
-    }
-    switch (status) {
-        case 'active':
-            return 'text-[var(--md-primary)] animate-spin';
-        case 'waiting':
-            return 'text-[var(--md-extended-color-warning-color)] animate-pulse';
-        case 'completed':
-            return 'text-[var(--md-primary)]';
-        case 'error':
-            return 'text-[var(--md-error)]';
-        default:
-            return 'text-[var(--md-outline)] opacity-50';
-    }
+    return nodeStatusColor(
+        getNodeStatus(nodeId),
+        props.workflowState.executionState
+    );
 }
 
 function getNodeOutput(nodeId: string): string {
@@ -813,9 +780,7 @@ function getNodeToolCalls(nodeId: string): ToolCallState[] {
 }
 
 function getNodeHitlRequests(nodeId: string): HitlRequestState[] {
-    const requests = props.workflowState.hitlRequests;
-    if (!requests) return [];
-    return Object.values(requests).filter((req) => req.nodeId === nodeId);
+    return hitlRequestsByNode.value.get(nodeId) || [];
 }
 
 function getNodePendingHitlCount(nodeId: string): number {
@@ -900,54 +865,27 @@ const pendingHitlContextLabel = computed(() => {
 
 // Branch Helpers
 function hasBranches(nodeId: string): boolean {
-    if (!props.workflowState.branches) return false;
-    // Check if any branch key starts with nodeId + ':'
-    return Object.keys(props.workflowState.branches || {}).some((k) =>
-        k.startsWith(nodeId + ':')
-    );
+    return branchesByNode.value.has(nodeId);
 }
 
 function getBranches(nodeId: string): BranchState[] {
-    if (!props.workflowState.branches) return [];
-    return Object.entries(props.workflowState.branches)
-        .filter(([k]) => k.startsWith(nodeId + ':'))
-        .map(([_, v]) => v)
-        .filter((b) => b.id !== MERGE_BRANCH_ID);
+    return branchesByNode.value.get(nodeId) || [];
 }
 
 function getBranchLabel(branch: BranchState): string {
-    if (branch.id === MERGE_BRANCH_ID) {
-        return branch.status === 'completed' ? 'Merge' : MERGE_BRANCH_LABEL;
-    }
-    return branch.label;
+    return branchLabel(branch);
 }
 
 function getBranchContent(branch: BranchState): string {
-    if (branch.id === MERGE_BRANCH_ID) return '';
-    // Prefer output when present, otherwise show streaming text
-    return branch.output || branch.streamingText || '';
+    return branchContent(branch);
 }
 
 function getBranchStatusIcon(branch: BranchState) {
-    switch (branch.status) {
-        case 'active':
-            return useIcon('workflow.status.running').value;
-        case 'completed':
-            return useIcon('workflow.status.completed').value;
-        default:
-            return useIcon('workflow.status.pending').value;
-    }
+    return branchStatusIcon(branch, presentationIcons.value);
 }
 
 function getBranchStatusColor(branch: BranchState) {
-    switch (branch.status) {
-        case 'active':
-            return 'text-[var(--md-primary)] animate-spin';
-        case 'completed':
-            return 'text-[var(--md-primary)]';
-        default:
-            return 'text-[var(--md-outline)] opacity-50';
-    }
+    return statusColor(branch.status);
 }
 
 function getBranchToolCalls(branch: BranchState): ToolCallState[] {
@@ -955,132 +893,11 @@ function getBranchToolCalls(branch: BranchState): ToolCallState[] {
 }
 
 function getToolStatusIcon(tool: ToolCallState) {
-    switch (tool.status) {
-        case 'active':
-            return useIcon('workflow.status.running').value;
-        case 'completed':
-            return useIcon('workflow.status.completed').value;
-        case 'error':
-            return useIcon('workflow.status.error').value;
-        default:
-            return useIcon('workflow.status.pending').value;
-    }
+    return toolStatusIcon(tool, presentationIcons.value);
 }
 
 function getToolStatusColor(tool: ToolCallState) {
-    switch (tool.status) {
-        case 'active':
-            return 'text-[var(--md-primary)] animate-spin';
-        case 'completed':
-            return 'text-[var(--md-primary)]';
-        case 'error':
-            return 'text-[var(--md-error)]';
-        default:
-            return 'text-[var(--md-outline)] opacity-50';
-    }
-}
-
-function getToolStatusText(status: ToolCallState['status']): string {
-    switch (status) {
-        case 'active':
-            return 'Running';
-        case 'completed':
-            return 'Succeeded';
-        case 'error':
-            return 'Failed';
-        default:
-            return 'Pending';
-    }
-}
-
-type HitlActionDescriptor = {
-    key: string;
-    label: string;
-    action: HitlAction;
-    requiresInput?: boolean;
-    primary?: boolean;
-};
-
-function getHitlHeading(request: HitlRequestState): string {
-    switch (request.mode) {
-        case 'approval':
-            return 'Approval Required';
-        case 'input':
-            return 'Input Required';
-        case 'review':
-            return 'Review Required';
-        default:
-            return 'Action Required';
-    }
-}
-
-function getHitlActions(request: HitlRequestState): HitlActionDescriptor[] {
-    if (request.mode === 'input') {
-        const actions: HitlActionDescriptor[] = [
-            {
-                key: `${request.id}-submit`,
-                label: 'Provide Input',
-                action: 'submit',
-                requiresInput: true,
-                primary: true,
-            },
-            {
-                key: `${request.id}-skip`,
-                label: 'Skip',
-                action: 'skip',
-            },
-        ];
-        return actions;
-    }
-
-    if (request.mode === 'review') {
-        const actions: HitlActionDescriptor[] = [
-            {
-                key: `${request.id}-approve`,
-                label: 'Review & Approve',
-                action: 'approve',
-                primary: true,
-            },
-            {
-                key: `${request.id}-modify`,
-                label: 'Edit Output',
-                action: 'modify',
-                requiresInput: true,
-            },
-        ];
-        return actions;
-    }
-
-    const options: HitlActionDescriptor[] = request.options?.length
-        ? request.options.map(
-              (option): HitlActionDescriptor => ({
-                  key: `${request.id}-${option.id}`,
-                  label:
-                      option.action === 'approve'
-                          ? 'Review & Approve'
-                          : option.action === 'reject'
-                          ? 'Reject & Stop'
-                          : option.label,
-                  action: option.action,
-                  primary: option.action === 'approve',
-                  requiresInput: option.action === 'custom',
-              })
-          )
-        : [
-              {
-                  key: `${request.id}-approve`,
-                  label: 'Review & Approve',
-                  action: 'approve',
-                  primary: true,
-              },
-              {
-                  key: `${request.id}-reject`,
-                  label: 'Reject & Stop',
-                  action: 'reject',
-              },
-          ];
-
-    return options;
+    return statusColor(tool.status);
 }
 
 function getHitlInputDisplay(request: HitlRequestState): string {
@@ -1099,20 +916,7 @@ function getHitlOutputDisplay(request: HitlRequestState): string {
     return '(no output provided)';
 }
 
-function getHitlInputLabel(request: HitlRequestState): string {
-    switch (request.mode) {
-        case 'approval':
-            return 'Input to approve';
-        case 'input':
-            return 'Input provided';
-        case 'review':
-            return 'Input context';
-        default:
-            return 'Input';
-    }
-}
-
-function handleHitlAction(
+async function handleHitlAction(
     request: HitlRequestState,
     action: HitlAction,
     label: string,
@@ -1136,11 +940,35 @@ function handleHitlAction(
         const promptLabel = label || request.prompt;
         const response = window.prompt(promptLabel, defaultValue || '');
         if (response === null) return;
-        workflowSlash.respondHitl(request.id, action, response);
+        const ok = await workflowSlash.respondHitl(
+            request.id,
+            action,
+            response,
+            request.jobId
+        );
+        if (!ok) {
+            toast.add({
+                title: 'Failed to submit response',
+                description: 'Please try again.',
+                color: 'error',
+            });
+        }
         return;
     }
 
-    workflowSlash.respondHitl(request.id, action);
+    const ok = await workflowSlash.respondHitl(
+        request.id,
+        action,
+        undefined,
+        request.jobId
+    );
+    if (!ok) {
+        toast.add({
+            title: 'Failed to submit response',
+            description: 'Please try again.',
+            color: 'error',
+        });
+    }
 }
 
 // Theme
@@ -1160,13 +988,4 @@ onMounted(async () => {
 });
 </script>
 
-<style scoped>
-@import '~/assets/css/or3-prose.css';
-/* Remove default details marker */
-details > summary {
-    list-style: none;
-}
-details > summary::-webkit-details-marker {
-    display: none;
-}
-</style>
+<style scoped src="./WorkflowExecutionStatus.css"></style>
