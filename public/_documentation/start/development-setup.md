@@ -8,7 +8,7 @@ Step-by-step instructions for getting OR3 running locally. This guide covers clo
 
 Make sure the following tools are installed before you start:
 
--   **Node.js 20.11+** (Nuxt 4 targets modern runtimes). Verify with `node -v`.
+-   **Node.js 24+** (the OR3 production baseline). Verify with `node -v`.
 -   **Bun 1.1+** (project uses `bun.lockb`). Install from [bun.sh](https://bun.sh) and verify with `bun -v`.
 -   **Git 2.40+** for cloning and keeping your fork up to date.
 -   A modern browser (Chromium, Firefox, or Safari) for IndexedDB + Nuxt DevTools.
@@ -157,7 +157,7 @@ bun run nuxi prepare
 
 | Problem                           | Fix                                                                                                                   |
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `Error: Please use Node.js >= 20` | Update Node via nvm/Homebrew. Run `nvm install 20 && nvm use 20`.                                                     |
+| `Error: Please use Node.js >= 24` | Update Node via nvm/Homebrew. Run `nvm install 24 && nvm use 24`.                                                     |
 | Port 3000 already in use          | Run `bun run dev -- --port 3001` or free the port (`lsof -i :3000`).                                                  |
 | Tailwind classes not applied      | Ensure the file lives under `app/` or add an explicit `@source` path in `main.css`.                                   |
 | OpenRouter auth redirect fails    | Confirm `NUXT_PUBLIC_OPENROUTER_REDIRECT_URI` matches the URL registered with OpenRouter and the Nuxt dev server URL. |

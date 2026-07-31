@@ -5,9 +5,12 @@ import { fileURLToPath } from 'node:url';
 
 const qualifiedVersions = {
     '@or3/intern-client': '0.1.1',
-    'or3-provider-basic-auth': '0.0.3',
-    'or3-provider-fs': '0.0.3',
-    'or3-provider-sqlite': '0.0.3',
+    'or3-provider-basic-auth': '0.0.4',
+    'or3-provider-clerk': '0.0.4',
+    'or3-provider-convex': '0.0.4',
+    'or3-provider-fs': '0.0.4',
+    'or3-provider-s3': '0.0.4',
+    'or3-provider-sqlite': '0.0.4',
     'or3-scroll': '0.1.1',
     'or3-workflow-core': '0.1.4',
     'or3-workflow-vue': '0.1.6',

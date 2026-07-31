@@ -1,0 +1,109 @@
+name: Deployment smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".dockerignore"
+      - "Dockerfile"
+      - "compose*.yaml"
+      - "package.json"
+      - "package-lock.json"
+      - "bun.lock"
+      - "app/**"
+      - "server/**"
+      - "shared/**"
+      - "modules/**"
+      - "packages/plugin-sdk/**"
+      - "packages/create-or3-chat/**"
+      - "scripts/docker/**"
+      - "scripts/release/**"
+      - ".github/workflows/deployment-smoke.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".dockerignore"
+      - "Dockerfile"
+      - "compose*.yaml"
+      - "package.json"
+      - "package-lock.json"
+      - "bun.lock"
+      - "app/**"
+      - "server/**"
+      - "shared/**"
+      - "modules/**"
+      - "packages/plugin-sdk/**"
+      - "packages/create-or3-chat/**"
+      - "scripts/docker/**"
+      - "scripts/release/**"
+      - ".github/workflows/deployment-smoke.yml"
+
+jobs:
+  clean-install-and-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: npm install --global npm@11.6.2
+      - name: Build registry-clean template and locks
+        run: |
+          node packages/create-or3-chat/scripts/build-template.mjs --generate-locks
+          node scripts/release/check-create-or3-chat.mjs --require-locks
+      - name: Clean npm install and production build
+        working-directory: packages/create-or3-chat/dist/template
+        run: |
+          npm ci
+          npm run build
+      - name: Create isolated smoke configuration
+        working-directory: packages/create-or3-chat/dist/template
+        run: |
+          node -e "require('node:fs').writeFileSync('.env', [
+            'SSR_AUTH_ENABLED=true',
+            'AUTH_PROVIDER=basic-auth',
+            'OR3_AUTH_PROVIDER=basic-auth',
+            'OR3_GUEST_ACCESS_ENABLED=false',
+            'OR3_BASIC_AUTH_JWT_SECRET=ci-only-jwt-secret-0123456789abcdef0123456789abcdef',
+            'OR3_BASIC_AUTH_REFRESH_SECRET=ci-only-refresh-secret-0123456789abcdef0123456789abcdef',
+            'OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=smoke@example.com',
+            'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=SmokePassword1234',
+            'OR3_ADMIN_JWT_SECRET=ci-only-admin-secret-0123456789abcdef0123456789abcdef',
+            'OR3_SYNC_ENABLED=true',
+            'OR3_CLOUD_SYNC_ENABLED=true',
+            'OR3_SYNC_PROVIDER=sqlite',
+            'OR3_STORAGE_ENABLED=true',
+            'OR3_CLOUD_STORAGE_ENABLED=true',
+            'NUXT_PUBLIC_STORAGE_PROVIDER=fs',
+            'OR3_STORAGE_FS_TOKEN_SECRET=ci-only-storage-secret-0123456789abcdef0123456789abcdef',
+            'OR3_ADMIN_USERNAME=smoke-admin',
+            'OR3_ADMIN_PASSWORD=SmokeAdminPassword1234',
+            'OR3_STRICT_CONFIG=true',
+            ''
+          ].join('\n'), { mode: 0o600 })"
+      - name: Container health and persistence
+        working-directory: packages/create-or3-chat/dist/template
+        run: |
+          docker compose -f compose.yaml up --build -d
+          for attempt in $(seq 1 120); do
+            curl --fail --silent "http://127.0.0.1:3000/api/health?deep=true" && break
+            sleep 1
+          done
+          curl --fail "http://127.0.0.1:3000/api/health?deep=true"
+          node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write
+          docker compose -f compose.yaml restart or3
+          for attempt in $(seq 1 60); do
+            curl --fail --silent "http://127.0.0.1:3000/api/health?deep=true" && break
+            sleep 1
+          done
+          curl --fail "http://127.0.0.1:3000/api/health?deep=true"
+          node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify
+      - if: always()
+        working-directory: packages/create-or3-chat/dist/template
+        run: docker compose -f compose.yaml down --volumes

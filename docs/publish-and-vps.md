@@ -179,7 +179,7 @@ docker version
 docker compose version
 ```
 
-Install Node.js 22 or newer from a trusted distribution for the VPS, then
+Install Node.js 24 or newer from a trusted distribution for the VPS, then
 verify:
 
 ```bash

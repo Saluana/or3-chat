@@ -16,7 +16,7 @@
     "dist"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "dependencies": {
     "cross-spawn": "^7.0.6"

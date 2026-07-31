@@ -167,7 +167,7 @@ export function rewriteTemplateManifest(manifest) {
         private: true,
         type: 'module',
         license: manifest.license,
-        engines: { node: '>=22' },
+        engines: { node: '>=24' },
         scripts: {
             build: 'nuxt build',
             start: 'tsx scripts/cli/start.ts',

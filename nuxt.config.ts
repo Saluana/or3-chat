@@ -48,6 +48,30 @@ const strictConnectConfig =
     process.env.NODE_ENV === 'production' ||
     process.env.OR3_STRICT_CONFIG === 'true';
 
+const localPackageCandidates = [
+    {
+        find: /^or3-scroll$/,
+        replacement: resolve(__dirname, '../or3-vsc/src/lib/index.ts'),
+    },
+    {
+        find: /^or3-workflow-vue$/,
+        replacement: resolve(
+            __dirname,
+            '../or3-workflows/packages/workflow-vue/src/index.ts',
+        ),
+    },
+    {
+        find: /^or3-workflow-core$/,
+        replacement: resolve(
+            __dirname,
+            '../or3-workflows/packages/workflow-core/src/index.ts',
+        ),
+    },
+];
+const localPackageAliases = localPackageCandidates.filter(({ replacement }) =>
+    existsSync(replacement)
+);
+
 function isPackageInstalled(pkgName: string): boolean {
     return existsSync(resolve(__dirname, 'node_modules', pkgName));
 }
@@ -1088,29 +1112,10 @@ export default defineNuxtConfig({
     },
     vite: {
         resolve: {
-            alias: [
-                {
-                    find: /^or3-scroll$/,
-                    replacement: resolve(
-                        __dirname,
-                        '../or3-vsc/src/lib/index.ts',
-                    ),
-                },
-                {
-                    find: /^or3-workflow-vue$/,
-                    replacement: resolve(
-                        __dirname,
-                        '../or3-workflows/packages/workflow-vue/src/index.ts',
-                    ),
-                },
-                {
-                    find: /^or3-workflow-core$/,
-                    replacement: resolve(
-                        __dirname,
-                        '../or3-workflows/packages/workflow-core/src/index.ts',
-                    ),
-                },
-            ],
+            // Use sibling source checkouts during multi-repo development, but
+            // fall back to installed registry packages in generated projects
+            // and deployment images where those checkouts do not exist.
+            alias: localPackageAliases,
         },
         optimizeDeps: {
             exclude: [

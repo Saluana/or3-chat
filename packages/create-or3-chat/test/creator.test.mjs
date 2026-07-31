@@ -133,16 +133,16 @@ test('Docker manifest preparation preserves selected custom providers', () => {
         dependencies: {
             '@or3/plugin-sdk': 'file:./packages/plugin-sdk',
             'or3-provider-basic-auth': 'file:../or3-provider-basic-auth',
-            'or3-provider-clerk': '0.0.3',
-            'or3-provider-convex': '0.0.3',
-            'or3-provider-s3': '0.0.3',
+            'or3-provider-clerk': 'file:../or3-provider-clerk',
+            'or3-provider-convex': 'file:../or3-provider-convex',
+            'or3-provider-s3': 'file:../or3-provider-s3',
         },
     });
 
-    assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.3');
-    assert.equal(manifest.dependencies['or3-provider-clerk'], '0.0.3');
-    assert.equal(manifest.dependencies['or3-provider-convex'], '0.0.3');
-    assert.equal(manifest.dependencies['or3-provider-s3'], '0.0.3');
+    assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.4');
+    assert.equal(manifest.dependencies['or3-provider-clerk'], '0.0.4');
+    assert.equal(manifest.dependencies['or3-provider-convex'], '0.0.4');
+    assert.equal(manifest.dependencies['or3-provider-s3'], '0.0.4');
 });
 
 test('generated template has registry-clean first-party dependencies', async () => {
@@ -154,9 +154,9 @@ test('generated template has registry-clean first-party dependencies', async () 
         )
     );
     assert.equal(manifest.private, true);
-    assert.equal(manifest.engines.node, '>=22');
+    assert.equal(manifest.engines.node, '>=24');
     assert.equal(manifest.dependencies['@or3/intern-client'], '0.1.1');
-    assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.3');
+    assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.4');
     for (const [name, version] of Object.entries(manifest.dependencies)) {
         if (String(version).startsWith('file:')) {
             assert.equal(name, '@or3/plugin-sdk');

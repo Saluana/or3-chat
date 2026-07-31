@@ -4,7 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       HOST: 0.0.0.0
       PORT: 3000

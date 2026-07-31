@@ -63,7 +63,7 @@ jobs:
               - '.github/workflows/performance-regression.yml'
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - name: Check command-palette budget
         if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.search == 'true'

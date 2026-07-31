@@ -5,7 +5,7 @@ For the complete maintainer release and first public server walkthrough, see
 
 ## Create a project
 
-OR3 Chat requires Node.js 22 or newer. Use either package manager:
+OR3 Chat requires Node.js 24 or newer. Use either package manager:
 
 ```bash
 npm create or3-chat@latest

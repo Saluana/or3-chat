@@ -101,7 +101,7 @@ The initializer asks no more than three questions: where to create the project,
 whether it is personal-local or self-hosted, and whether to use the browser or
 terminal wizard. Press Enter through the defaults for a running local instance.
 
-Node.js 22 or newer is required. Bun is optional. Docker is only required for
+Node.js 24 or newer is required. Bun is optional. Docker is only required for
 the self-hosted path.
 
 ### Self-host with Docker
