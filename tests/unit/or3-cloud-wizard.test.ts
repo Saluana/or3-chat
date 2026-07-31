@@ -73,6 +73,51 @@ describe('or3 cloud wizard validation', () => {
         expect(result.errors.join('\n')).toContain('OR3_STORAGE_FS_ROOT must be an absolute path');
     });
 
+    it('validates and derives secure public Docker settings', () => {
+        const missingDomain = validateAnswers({
+            ...validRecommendedAnswers(),
+            deploymentTarget: 'docker',
+            dockerExposure: 'public',
+            publicDomain: '',
+        });
+        expect(missingDomain.errors.join('\n')).toContain(
+            'A public domain is required'
+        );
+
+        const result = validateAnswers({
+            ...validRecommendedAnswers(),
+            deploymentTarget: 'docker',
+            dockerExposure: 'public',
+            publicDomain: 'chat.example.com',
+        });
+        expect(result.errors, result.errors.join('\n')).toHaveLength(0);
+        expect(result.derived.env.OR3_PUBLIC_DOMAIN).toBe('chat.example.com');
+        expect(result.derived.env.OR3_ALLOWED_ORIGINS).toBe(
+            'https://chat.example.com'
+        );
+        expect(result.derived.env.OR3_FORCE_HTTPS).toBe('true');
+        expect(result.derived.env.OR3_TRUST_PROXY).toBe('true');
+
+        for (const publicDomain of [
+            'server',
+            '1.2.3.4',
+            'chat.123',
+            'chat.local',
+            'chat.internal',
+            'router.home.arpa',
+        ]) {
+            const invalid = validateAnswers({
+                ...validRecommendedAnswers(),
+                deploymentTarget: 'docker',
+                dockerExposure: 'public',
+                publicDomain,
+            });
+            expect(invalid.errors.join('\n')).toContain(
+                'Public domain must be a hostname'
+            );
+        }
+    });
+
     it('requires convex url when storage provider is convex', () => {
         const result = validateAnswers({
             ...validRecommendedAnswers(),
@@ -214,6 +259,33 @@ describe('or3 cloud wizard validation', () => {
         });
         const providersStep = getStepById(steps, 'providers');
         expect(providersStep.canSkip?.(validRecommendedAnswers())).toBe(true);
+    });
+
+    it('reduces the recommended Docker wizard to setup, login, and review', () => {
+        const answers = {
+            ...validRecommendedAnswers(),
+            wizardMode: 'preset-local' as const,
+            deploymentTarget: 'docker' as const,
+            dockerExposure: 'private' as const,
+            targetAdvancedEnabled: false,
+        };
+        const visibleSteps = getWizardSteps(answers).filter(
+            (step) => !step.canSkip?.(answers)
+        );
+        expect(visibleSteps.map((step) => step.id)).toEqual([
+            'target',
+            'provider-auth',
+            'review',
+        ]);
+        expect(
+            visibleFieldKeys(
+                getStepById(visibleSteps, 'provider-auth'),
+                answers
+            )
+        ).toEqual([
+            'basicAuthBootstrapEmail',
+            'basicAuthBootstrapPassword',
+        ]);
     });
 
     it('skips manual providers step for preset-clerk-convex mode', () => {
@@ -390,6 +462,7 @@ describe('or3 cloud wizard apply', () => {
     it('includes convex dev --once command in deploy plan when convex is selected', () => {
         const plan = buildDeployPlan({
             ...validRecommendedAnswers(),
+            packageManager: 'bun',
             deploymentTarget: 'local-dev',
             syncEnabled: true,
             syncProvider: 'convex',
@@ -405,6 +478,7 @@ describe('or3 cloud wizard apply', () => {
     it('skips convex dev --once for self-hosted convex setups', () => {
         const plan = buildDeployPlan({
             ...validRecommendedAnswers(),
+            packageManager: 'bun',
             deploymentTarget: 'local-dev',
             syncEnabled: true,
             syncProvider: 'convex',
@@ -436,6 +510,65 @@ describe('or3 cloud wizard apply', () => {
         expect(commands).not.toContain('bunx convex dev --once');
     });
 
+    it('builds npm-native local commands without Bun', () => {
+        const plan = buildDeployPlan({
+            ...validRecommendedAnswers(),
+            packageManager: 'npm',
+            deploymentTarget: 'local-dev',
+        });
+        const commands = plan.map(
+            (command) => `${command.command} ${command.args.join(' ')}`
+        );
+        expect(commands).toContain('npm install');
+        expect(commands).toContain('npm run dev:ssr');
+        expect(commands.every((command) => !command.includes('bun'))).toBe(true);
+    });
+
+    it('builds private and public Docker Compose commands', () => {
+        const privatePlan = buildDeployPlan({
+            ...validRecommendedAnswers(),
+            deploymentTarget: 'docker',
+            dockerExposure: 'private',
+        });
+        expect(privatePlan[0]?.args).toEqual([
+            'compose',
+            '-f',
+            'compose.yaml',
+            'up',
+            '--build',
+            '-d',
+        ]);
+
+        const publicPlan = buildDeployPlan({
+            ...validRecommendedAnswers(),
+            deploymentTarget: 'docker',
+            dockerExposure: 'public',
+            publicDomain: 'chat.example.com',
+        });
+        expect(publicPlan[0]?.args).toEqual([
+            'compose',
+            '-f',
+            'compose.yaml',
+            '-f',
+            'compose.public.yaml',
+            'up',
+            '--build',
+            '-d',
+        ]);
+    });
+
+    it('keeps Docker volumes scoped to each generated project', async () => {
+        const compose = await readFile(resolve(process.cwd(), 'compose.yaml'), 'utf8');
+        const publicCompose = await readFile(
+            resolve(process.cwd(), 'compose.public.yaml'),
+            'utf8'
+        );
+
+        expect(compose).not.toMatch(/^name:/m);
+        expect(compose).not.toContain('name: or3-data');
+        expect(publicCompose).not.toContain('name: or3-caddy');
+    });
+
     it('rejects invalid package manager values', async () => {
         expect(() => parseInstallPackageManager('pnpm')).toThrow(
             'Invalid package manager'
@@ -450,6 +583,21 @@ describe('or3 cloud wizard apply', () => {
                 packageManager: 'pnpm' as never,
             })
         ).rejects.toThrow('Invalid package manager');
+    });
+
+    it('pins registry provider installs to release-qualified versions', async () => {
+        const instanceDir = await mkdtemp(
+            resolve(tmpdir(), 'or3-wizard-registry-provider-')
+        );
+        const plan = createDependencyInstallPlan({
+            ...validRecommendedAnswers(),
+            instanceDir,
+        });
+        expect(plan.commands.npm).toContain(
+            'or3-provider-basic-auth@0.0.3'
+        );
+        expect(plan.commands.npm).toContain('or3-provider-fs@0.0.3');
+        expect(plan.commands.npm).toContain('or3-provider-sqlite@0.0.3');
     });
 
     it('uses local provider package specs when sibling workspaces exist', async () => {

@@ -76,11 +76,15 @@ import {
     validateAnswers,
 } from './validation';
 import type {
+    WizardDeploymentTarget,
+    WizardDockerExposure,
     WizardAnswers,
     WizardApi,
     WizardPreset,
     WizardSession,
 } from './types';
+import type { PackageManager } from './package-manager';
+import { generateAdminPassword } from './admin-dashboard';
 
 const BUILTIN_PRESETS: WizardPreset[] = [
     personalLocalPreset,
@@ -485,6 +489,30 @@ function completeAnswers(partial: Partial<WizardAnswers>): WizardAnswers {
     return applySkippedAdvancedDefaults(normalized);
 }
 
+function ensurePresetLocalSecrets(answers: WizardAnswers): WizardAnswers {
+    if (answers.wizardMode !== 'preset-local') return answers;
+
+    const bootstrapPassword =
+        answers.basicAuthBootstrapPassword?.trim() ||
+        answers.adminPassword?.trim() ||
+        generateAdminPassword(24);
+    const bootstrapEmail = answers.basicAuthBootstrapEmail?.trim();
+
+    return {
+        ...answers,
+        basicAuthJwtSecret:
+            answers.basicAuthJwtSecret?.trim() || generateSecureSecret(48),
+        basicAuthRefreshSecret:
+            answers.basicAuthRefreshSecret?.trim() || generateSecureSecret(48),
+        basicAuthBootstrapPassword: bootstrapPassword,
+        fsTokenSecret:
+            answers.fsTokenSecret?.trim() || generateSecureSecret(48),
+        adminUsername:
+            answers.adminUsername?.trim() || bootstrapEmail || answers.adminUsername,
+        adminPassword: answers.adminPassword?.trim() || bootstrapPassword,
+    };
+}
+
 function getFullAnswersForSession(session: WizardSession): WizardAnswers {
     return completeAnswers({
         ...session.answers,
@@ -572,6 +600,11 @@ export class Or3CloudWizardApi implements WizardApi {
             includeSecrets?: boolean;
             prefillFromEnv?: boolean;
             existingEnvMap?: Record<string, string>;
+            packageManager?: PackageManager;
+            deploymentTarget?: WizardDeploymentTarget;
+            dockerExposure?: WizardDockerExposure;
+            publicDomain?: string;
+            wizardMode?: WizardAnswers['wizardMode'];
         } = {}
     ): Promise<WizardSession> {
         const preset = await resolvePreset(input.presetName);
@@ -605,7 +638,25 @@ export class Or3CloudWizardApi implements WizardApi {
         if (preset) {
             answers = applyPresetAnswers(answers, preset);
         }
-        answers = completeAnswers(answers);
+        if (input.wizardMode) {
+            answers = applyWizardModeDefaults(answers, input.wizardMode);
+        }
+        answers = {
+            ...answers,
+            ...(input.packageManager
+                ? { packageManager: input.packageManager }
+                : {}),
+            ...(input.deploymentTarget
+                ? { deploymentTarget: input.deploymentTarget }
+                : {}),
+            ...(input.dockerExposure
+                ? { dockerExposure: input.dockerExposure }
+                : {}),
+            ...(input.publicDomain !== undefined
+                ? { publicDomain: input.publicDomain }
+                : {}),
+        };
+        answers = ensurePresetLocalSecrets(completeAnswers(answers));
 
         const session: WizardSession = {
             id: randomUUID(),
@@ -618,7 +669,9 @@ export class Or3CloudWizardApi implements WizardApi {
             },
         };
         await persistSession(session);
-        return session;
+        return this.getSession(session.id, {
+            includeSecrets: input.includeSecrets ?? false,
+        });
     }
 
     async getSession(
@@ -652,21 +705,35 @@ export class Or3CloudWizardApi implements WizardApi {
         options: { existingEnvMap?: Record<string, string> } = {}
     ): Promise<WizardSession> {
         const session = await readSession(id);
-        const envPrefill = options.existingEnvMap
+        let existingEnvMap = options.existingEnvMap;
+        if (existingEnvMap === undefined) {
+            try {
+                const { map } = await readEnvFile({
+                    instanceDir: session.answers.instanceDir ?? process.cwd(),
+                    envFile: session.answers.envFile ?? '.env',
+                });
+                existingEnvMap = map;
+            } catch {
+                existingEnvMap = undefined;
+            }
+        }
+        const envPrefill = existingEnvMap
             ? pickSecretAnswers(
                   createDefaultAnswers({
                       instanceDir: session.answers.instanceDir ?? process.cwd(),
                       envFile: session.answers.envFile,
-                      existingEnv: options.existingEnvMap,
+                      existingEnv: existingEnvMap,
                   })
               )
             : {};
         const livingSecrets = transientSessionSecrets.get(id) ?? {};
-        const answers = completeAnswers({
-            ...session.answers,
-            ...envPrefill,
-            ...livingSecrets,
-        });
+        const answers = ensurePresetLocalSecrets(
+            completeAnswers({
+                ...session.answers,
+                ...envPrefill,
+                ...livingSecrets,
+            })
+        );
         await persistSession({
             ...session,
             answers,
@@ -715,6 +782,24 @@ export class Or3CloudWizardApi implements WizardApi {
             ...nextAnswers,
             ...patch,
         });
+        if (nextAnswers.wizardMode === 'preset-local') {
+            nextAnswers = completeAnswers({
+                ...nextAnswers,
+                ...(patch.basicAuthBootstrapEmail !== undefined
+                    ? {
+                          adminUsername:
+                              patch.basicAuthBootstrapEmail.trim(),
+                      }
+                    : {}),
+                ...(patch.basicAuthBootstrapPassword !== undefined
+                    ? {
+                          adminPassword:
+                              patch.basicAuthBootstrapPassword,
+                      }
+                    : {}),
+            });
+        }
+        nextAnswers = ensurePresetLocalSecrets(nextAnswers);
 
         const nextSession: WizardSession = {
             ...session,

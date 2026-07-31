@@ -49,6 +49,7 @@ const FIELD_ERROR_RULES: Array<{
     patterns: string[];
 }> = [
     { key: 'instanceDir', patterns: ['INSTANCEDIR', 'PROJECT FOLDER'] },
+    { key: 'publicDomain', patterns: ['PUBLIC DOMAIN', 'OR3_PUBLIC_DOMAIN'] },
     { key: 'or3SiteName', patterns: ['OR3_SITE_NAME'] },
     { key: 'or3DefaultTheme', patterns: ['OR3_DEFAULT_THEME'] },
     { key: 'basicAuthJwtSecret', patterns: ['OR3_BASIC_AUTH_JWT_SECRET'] },
@@ -261,6 +262,26 @@ function getWizardInstanceDirFromLocation(): string | null {
     return trimmed.length > 0 ? trimmed : null;
 }
 
+function getWizardBootstrapQuery(): Record<string, string> | undefined {
+    if (!import.meta.client) return undefined;
+    const search = new URL(globalThis.location.href).searchParams;
+    const allowedKeys = [
+        'instanceDir',
+        'presetName',
+        'packageManager',
+        'deploymentTarget',
+        'dockerExposure',
+        'publicDomain',
+        'wizardMode',
+    ] as const;
+    const query: Record<string, string> = {};
+    for (const key of allowedKeys) {
+        const value = search.get(key)?.trim();
+        if (value) query[key] = value;
+    }
+    return Object.keys(query).length > 0 ? query : undefined;
+}
+
 function getScopedSessionStorageKey(key: string): string {
     if (!import.meta.client) return key;
     const token = getWizardTokenFromLocation();
@@ -334,7 +355,7 @@ function wizardFetchHeaders(): Record<string, string> {
 
 async function waitForAccessUrlReady(accessUrl: string, timeoutMs = 45000): Promise<boolean> {
     const deadline = Date.now() + timeoutMs;
-    const healthUrl = `${accessUrl.replace(/\/$/, '')}/api/healthz`;
+    const healthUrl = `${accessUrl.replace(/\/$/, '')}/api/health`;
 
     while (Date.now() < deadline) {
         try {
@@ -480,7 +501,8 @@ export function useWizardSession() {
 
     function generateSecureKey(key: keyof WizardAnswers, length = 48): void {
         const nextValue =
-            key === 'adminPassword'
+            key === 'adminPassword' ||
+            key === 'basicAuthBootstrapPassword'
                 ? generateAdminPassword(length)
                 : randomSecret(length);
         updateAnswer(key, nextValue as WizardAnswers[keyof WizardAnswers]);
@@ -509,7 +531,8 @@ export function useWizardSession() {
                 }
                 if (current != null && typeof current !== 'string') continue;
                 const nextValue =
-                    field.key === 'adminPassword'
+                    field.key === 'adminPassword' ||
+                    field.key === 'basicAuthBootstrapPassword'
                         ? generateAdminPassword(24)
                         : randomSecret(48);
                 updateAnswer(
@@ -815,8 +838,13 @@ export function useWizardSession() {
                 statusMessage.value =
                     response.deployResult?.instructions || 'Deployment completed.';
             }
-            if (!input.skipDeploy) {
+            if (
+                !input.skipDeploy &&
+                answers.value.deploymentTarget === 'local-dev'
+            ) {
                 void redirectToAccessUrl(response.deployResult?.accessUrl);
+            } else if (!input.dryRun && !input.skipDeploy) {
+                await shutdownWizardUiBestEffort();
             }
             return response;
         } catch (error) {
@@ -863,6 +891,7 @@ export function useWizardSession() {
 
         const bootstrapToken = getWizardTokenFromLocation();
         const requestedInstanceDir = getWizardInstanceDirFromLocation();
+        const bootstrapQuery = getWizardBootstrapQuery();
         if (bootstrapToken) {
             setSessionStorageItem(WIZARD_TOKEN_KEY, bootstrapToken);
         }
@@ -873,9 +902,7 @@ export function useWizardSession() {
             if (!sessionId) {
                 return $fetch<SessionResponse>('/api/wizard/session', {
                     headers: wizardFetchHeaders(),
-                    query: requestedInstanceDir
-                        ? { instanceDir: requestedInstanceDir }
-                        : undefined,
+                    query: bootstrapQuery,
                 });
             }
             return $fetch<SessionResponse>('/api/wizard/session', {

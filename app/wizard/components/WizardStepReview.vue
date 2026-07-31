@@ -102,6 +102,40 @@
         </div>
 
         <div
+            v-if="showBootstrapCredentials"
+            class="rounded-[var(--md-border-radius)] border border-[var(--md-primary)]/40 bg-[var(--md-surface)] px-4 py-4"
+        >
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <p class="text-sm font-semibold">Save your admin login now</p>
+                    <p class="mt-1 text-xs text-[var(--md-on-surface)]/60">
+                        The wizard does not persist this password in its session history.
+                    </p>
+                </div>
+                <UButton
+                    label="Copy login"
+                    size="xs"
+                    variant="outline"
+                    @click="copyBootstrapCredentials"
+                />
+            </div>
+            <dl class="mt-3 grid gap-2 text-sm md:grid-cols-2">
+                <div>
+                    <dt class="text-xs text-[var(--md-on-surface)]/50">Email</dt>
+                    <dd class="mt-1 font-mono">
+                        {{ answers.basicAuthBootstrapEmail }}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-[var(--md-on-surface)]/50">Password</dt>
+                    <dd class="mt-1 break-all font-mono">
+                        {{ answers.basicAuthBootstrapPassword }}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+
+        <div
             v-if="deployResponse?.deployResult?.nextSteps?.length"
             class="rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-surface)] px-4 py-3"
         >
@@ -185,6 +219,22 @@ defineEmits<{
     (event: 'deploy'): void;
 }>();
 
+const showBootstrapCredentials = computed(
+    () =>
+        Boolean(props.deployResponse?.deployResult) &&
+        props.answers.wizardMode === 'preset-local' &&
+        Boolean(props.answers.basicAuthBootstrapEmail) &&
+        Boolean(props.answers.basicAuthBootstrapPassword)
+);
+
+async function copyBootstrapCredentials(): Promise<void> {
+    const email = props.answers.basicAuthBootstrapEmail ?? '';
+    const password = props.answers.basicAuthBootstrapPassword ?? '';
+    await navigator.clipboard.writeText(
+        `OR3 admin login\nEmail: ${email}\nPassword: ${password}`
+    );
+}
+
 const successBanner = computed(() => {
     if (!props.deployResponse?.ok) return null;
     const apply = props.deployResponse.applyResult;
@@ -202,7 +252,10 @@ const successBanner = computed(() => {
     }
     return {
         title: 'Settings applied',
-        body: buildApplyOnlySuccessBody(props.answers.connectEnabled),
+        body: buildApplyOnlySuccessBody(
+            props.answers.connectEnabled,
+            props.answers.packageManager
+        ),
     };
 });
 

@@ -27,15 +27,23 @@
  * @see providerCatalog for dependency declarations
  * @see DependencyInstallPlan for the plan structure
  */
-import { spawn } from 'node:child_process';
+import crossSpawn from 'cross-spawn';
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { getProviderDescriptor } from './catalog';
 import { resolveEffectiveConnectProvider } from './connect-provider';
+import { QUALIFIED_PROVIDER_VERSIONS } from './provider-versions';
+import {
+    formatCommand,
+    installCommand,
+    isPackageManager,
+    parsePackageManager,
+    type PackageManager,
+} from './package-manager';
 import type { WizardAnswers } from './types';
 
 /** Supported package managers for dependency installation. */
-export type InstallPackageManager = 'bun' | 'npm';
+export type InstallPackageManager = PackageManager;
 
 /**
  * Describes what packages would be installed and why.
@@ -63,17 +71,16 @@ function buildDependencyInstallPlan(
 ): DependencyInstallPlan {
     const packages = Array.from(new Set(packageNames)).sort();
     const installSpecs = resolveInstallSpecs(packages, instanceDir);
+    const bunCommand = installCommand('bun', installSpecs);
+    const npmCommand = installCommand('npm', installSpecs);
 
     return {
         packages,
         reasons,
         themeArtifacts,
         commands: {
-            bun: installSpecs.length > 0 ? `bun add ${installSpecs.join(' ')}` : 'bun add',
-            npm:
-                installSpecs.length > 0
-                    ? `npm install --legacy-peer-deps ${installSpecs.join(' ')}`
-                    : 'npm install --legacy-peer-deps',
+            bun: formatCommand(bunCommand),
+            npm: formatCommand(npmCommand),
         },
     };
 }
@@ -113,8 +120,17 @@ function resolveInstallSpecs(
     instanceDir: string
 ): string[] {
     return packageNames.map(
-        (packageName) =>
-            resolveProviderLocalInstallSpec(packageName, instanceDir) ?? packageName
+        (packageName) => {
+            const localSpec = resolveProviderLocalInstallSpec(
+                packageName,
+                instanceDir
+            );
+            if (localSpec) return localSpec;
+            const qualifiedVersion = QUALIFIED_PROVIDER_VERSIONS[packageName];
+            return qualifiedVersion
+                ? `${packageName}@${qualifiedVersion}`
+                : packageName;
+        }
     );
 }
 
@@ -165,20 +181,13 @@ function isPackageInstalled(instanceDir: string, packageName: string): boolean {
 export function isInstallPackageManager(
     value: string
 ): value is InstallPackageManager {
-    return value === 'bun' || value === 'npm';
+    return isPackageManager(value);
 }
 
 export function parseInstallPackageManager(
     value?: string
 ): InstallPackageManager {
-    if (!value) return 'bun';
-    const normalized = value.trim().toLowerCase();
-    if (isInstallPackageManager(normalized)) {
-        return normalized;
-    }
-    throw new Error(
-        `Invalid package manager "${value}". Expected one of: bun, npm.`
-    );
+    return parsePackageManager(value);
 }
 
 function addReason(
@@ -276,7 +285,7 @@ function runCommand(
     cwd: string
 ): Promise<void> {
     return new Promise((resolvePromise, rejectPromise) => {
-        const child = spawn(command, args, {
+        const child = crossSpawn(command, args, {
             cwd,
             stdio: 'inherit',
             env: process.env,
@@ -419,30 +428,7 @@ export async function executeDependencyInstallPlan(
         return;
     }
 
-    if (options.packageManager === 'bun') {
-        await runCommand('bun', ['add', ...specsToInstall], answers.instanceDir);
-        patchInstalledProviderPlugins(answers.instanceDir, providerPackages);
-        return;
-    }
-
-    try {
-        await runCommand(
-            'npm',
-            ['install', '--legacy-peer-deps', ...specsToInstall],
-            answers.instanceDir
-        );
-        patchInstalledProviderPlugins(answers.instanceDir, providerPackages);
-        return;
-    } catch (error) {
-        const hasBunLockfile = existsSync(resolve(answers.instanceDir, 'bun.lock'));
-        if (!hasBunLockfile) {
-            throw error;
-        }
-
-        console.warn(
-            '[wizard] npm install failed in a Bun-managed project. Retrying with bun add.'
-        );
-        await runCommand('bun', ['add', ...specsToInstall], answers.instanceDir);
-        patchInstalledProviderPlugins(answers.instanceDir, providerPackages);
-    }
+    const command = installCommand(options.packageManager, specsToInstall);
+    await runCommand(command.command, command.args, answers.instanceDir);
+    patchInstalledProviderPlugins(answers.instanceDir, providerPackages);
 }

@@ -61,6 +61,33 @@ function parseUrl(value: string): boolean {
     }
 }
 
+function isValidPublicHostname(value: string): boolean {
+    const normalized = value.toLowerCase();
+    const labels = value.split('.');
+    const privateSuffixes = ['localhost', 'local', 'internal', 'home.arpa'];
+    if (
+        value.length > 253 ||
+        value.includes('://') ||
+        value.includes('/') ||
+        value !== value.trim() ||
+        labels.length < 2 ||
+        /^\d+(?:\.\d+){3}$/.test(value) ||
+        /^\d+$/.test(labels.at(-1) ?? '') ||
+        privateSuffixes.some(
+            (suffix) =>
+                normalized === suffix || normalized.endsWith(`.${suffix}`)
+        )
+    ) {
+        return false;
+    }
+    return labels.every(
+        (label) =>
+            label.length > 0 &&
+            label.length <= 63 &&
+            /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(label)
+    );
+}
+
 function isSecretLikeKey(key: string): boolean {
     return /(SECRET|KEY|TOKEN|PASSWORD|ATTESTATION)/i.test(key);
 }
@@ -135,6 +162,20 @@ function validateFieldLevel(answers: WizardAnswers): {
 
     if (!answers.or3SiteName.trim()) {
         errors.push('OR3 site name is required.');
+    }
+
+    if (
+        answers.deploymentTarget === 'docker' &&
+        answers.dockerExposure === 'public'
+    ) {
+        const domain = answers.publicDomain?.trim() ?? '';
+        if (!domain) {
+            errors.push('A public domain is required for public Docker mode.');
+        } else if (!isValidPublicHostname(domain)) {
+            errors.push(
+                'Public domain must be a hostname such as chat.example.com.'
+            );
+        }
     }
 
     if (answers.ssrAuthEnabled && answers.authProvider === 'basic-auth') {
@@ -212,7 +253,10 @@ function validateFieldLevel(answers: WizardAnswers): {
             const parsed = new URL(publicUrl);
             if (parsed.protocol !== 'https:') {
                 const message = 'OR3_CONNECT_PUBLIC_URL must use HTTPS for remote access.';
-                if (answers.deploymentTarget === 'prod-build') {
+                if (
+                    answers.deploymentTarget === 'prod-build' ||
+                    answers.deploymentTarget === 'docker'
+                ) {
                     errors.push(message);
                 } else {
                     warnings.push(message);
@@ -462,7 +506,7 @@ export function pickSecretAnswers(
  *    `buildOr3CloudConfigFromEnv()` with strict mode control.
  *
  * Constraints:
- * - Strict mode defaults to `answers.strictConfig || answers.deploymentTarget === 'prod-build' || NODE_ENV === 'production'`.
+ * - Strict mode defaults to production-oriented deployment targets or `NODE_ENV === 'production'`.
  * - Config builder errors are caught and appended as error strings.
  * - Returns `ok: true` only when `errors` is empty.
  *
@@ -483,6 +527,7 @@ export function validateAnswers(
         options.strict ??
         (effectiveAnswers.strictConfig ||
             effectiveAnswers.deploymentTarget === 'prod-build' ||
+            effectiveAnswers.deploymentTarget === 'docker' ||
             process.env.NODE_ENV === 'production');
 
     try {

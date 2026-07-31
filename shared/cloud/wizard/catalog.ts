@@ -33,6 +33,7 @@ import type {
     WizardPreset,
     WizardProviderDescriptor,
 } from './types';
+import { detectPackageManager } from './package-manager';
 
 /** Available built-in theme identifiers for the theme selection step. */
 export const BUILTIN_THEMES = ['blank', 'retro'] as const;
@@ -151,6 +152,7 @@ export const WIZARD_OWNED_ENV_KEYS = [
     'OR3_MAX_CONVERSATIONS',
     'OR3_MAX_MESSAGES_PER_DAY',
     'OR3_LIMITS_STORAGE_PROVIDER',
+    'OR3_PUBLIC_DOMAIN',
     'OR3_ALLOWED_ORIGINS',
     'OR3_FORCE_HTTPS',
     'OR3_STRICT_CONFIG',
@@ -226,6 +228,7 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 tier: 'core',
                 validate: (value) => {
                     const password = String(value ?? '').trim();
+                    if (!password) return null;
                     if (password.length < 12) {
                         return 'Admin password must be at least 12 characters.';
                     }
@@ -1134,6 +1137,9 @@ export function createDefaultAnswers(
         instanceDir: input.instanceDir,
         envFile: input.envFile ?? '.env',
         deploymentTarget: 'local-dev',
+        packageManager: detectPackageManager(),
+        dockerExposure: 'private',
+        publicDomain: '',
         dryRun: false,
         skipWriteBackup: false,
         presetName,

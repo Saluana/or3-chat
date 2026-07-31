@@ -1,4 +1,4 @@
-import { Blob } from 'node:buffer';
+import { Blob as NodeBlob } from 'node:buffer';
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('dexie', () => ({
@@ -28,6 +28,13 @@ import {
 
 interface TableRow {
     [key: string]: any;
+}
+
+function createBlob(
+    parts: ConstructorParameters<typeof NodeBlob>[0],
+    options?: ConstructorParameters<typeof NodeBlob>[1]
+): Blob {
+    return new NodeBlob(parts, options) as unknown as Blob;
 }
 
 interface TableStub {
@@ -114,7 +121,7 @@ describe('workspace backup export stream', () => {
     it('splits large file blobs into manageable chunks', async () => {
         const blobs = Array.from({ length: 3 }, (_, idx) => ({
             hash: `hash-${idx}`,
-            blob: new Blob([new Uint8Array(300_000).fill(97)]),
+            blob: createBlob([new Uint8Array(300_000).fill(97)]),
         }));
 
         const fileBlobsTable = new TableStubImpl('file_blobs', 'hash', blobs);
@@ -215,7 +222,7 @@ describe('workspace backup import stream integrity', () => {
     }
 
     function backupBlob(lines: unknown[]) {
-        return new Blob([
+        return createBlob([
             lines.map((line) => JSON.stringify(line)).join('\n') + '\n',
         ]);
     }

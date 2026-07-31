@@ -1,9 +1,11 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { isAbsolute, resolve } from 'node:path';
 import { createServer } from 'node:net';
 import { existsSync } from 'node:fs';
+import crossSpawn from 'cross-spawn';
+import { fileURLToPath } from 'node:url';
 import { Or3CloudWizardApi } from '../../shared/cloud/wizard/api';
 import {
     buildRedactedSummary,
@@ -34,6 +36,11 @@ import {
 } from '../../shared/cloud/wizard/install-plan';
 import { readLastSessionId, readSession } from '../../shared/cloud/wizard/store';
 import { runDoctorChecks } from './or3-cloud-doctor';
+import {
+    detectPackageManager,
+    parsePackageManager,
+    runScriptCommand,
+} from '../../shared/cloud/wizard/package-manager';
 import type {
     WizardAnswers,
     WizardDeployResult,
@@ -88,6 +95,41 @@ function hasFlag(flags: CliFlags, key: string): boolean {
     return Object.prototype.hasOwnProperty.call(flags, key);
 }
 
+function resolvePackageManagerFlag(flags: CliFlags) {
+    return parsePackageManager(
+        toStringFlag(flags, 'pm') ??
+            toStringFlag(flags, 'package-manager') ??
+            detectPackageManager()
+    );
+}
+
+function resolveDeploymentTargetFlag(
+    flags: CliFlags
+): WizardAnswers['deploymentTarget'] | undefined {
+    const value = toStringFlag(flags, 'target');
+    if (!value) return undefined;
+    if (value === 'dev' || value === 'local-dev') return 'local-dev';
+    if (value === 'docker') return 'docker';
+    if (value === 'configure' || value === 'configure-only') {
+        return 'configure-only';
+    }
+    if (value === 'prod-build') return 'prod-build';
+    throw new Error(
+        `Invalid target "${value}". Expected dev, docker, or configure.`
+    );
+}
+
+function resolveModePreset(flags: CliFlags): string | undefined {
+    const mode = toStringFlag(flags, 'mode');
+    if (!mode) return toStringFlag(flags, 'preset');
+    if (mode === 'personal') return 'personal-local';
+    if (mode === 'self-hosted') return 'recommended';
+    if (mode === 'custom') return undefined;
+    throw new Error(
+        `Invalid mode "${mode}". Expected personal, self-hosted, or custom.`
+    );
+}
+
 function toInt(value: string): number | null {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return null;
@@ -139,7 +181,7 @@ async function waitForHttpReady(url: string, timeoutMs = 45000): Promise<void> {
         } catch (error) {
             lastError = normalizeErrorMessage(error);
         }
-        await Bun.sleep(300);
+        await new Promise((resolvePromise) => setTimeout(resolvePromise, 300));
     }
 
     throw new Error(
@@ -160,16 +202,38 @@ function openDefaultBrowser(url: string): void {
     if (!command) return;
 
     try {
-        const proc = Bun.spawn(command, {
-            stdout: 'ignore',
-            stderr: 'ignore',
+        const [executable, ...args] = command;
+        const proc = crossSpawn(executable!, args, {
+            stdio: 'ignore',
+            detached: process.platform !== 'win32',
         });
-        proc.unref?.();
+        proc.once('error', () => {});
+        proc.unref();
     } catch (error) {
         console.log(
             `Could not open browser automatically: ${normalizeErrorMessage(error)}`
         );
     }
+}
+
+export function isHeadlessSession(
+    env: NodeJS.ProcessEnv = process.env,
+    platform = process.platform
+): boolean {
+    if (env.CI === 'true' || env.CI === '1' || env.SSH_CONNECTION || env.SSH_TTY) {
+        return true;
+    }
+    if (platform === 'linux') {
+        return !env.DISPLAY && !env.WAYLAND_DISPLAY;
+    }
+    return false;
+}
+
+function waitForChildExit(child: ReturnType<typeof crossSpawn>): Promise<number> {
+    return new Promise((resolvePromise) => {
+        child.once('error', () => resolvePromise(1));
+        child.once('exit', (code) => resolvePromise(code ?? 1));
+    });
 }
 
 function normalizeAnswers(sessionAnswers: Partial<WizardAnswers>): WizardAnswers {
@@ -867,6 +931,7 @@ function printCheatSheet(answers: WizardAnswers): void {
     for (const line of buildCheatSheetLines({
         ssrAuthEnabled: answers.ssrAuthEnabled,
         connectEnabled: answers.connectEnabled,
+        packageManager: answers.packageManager,
     })) {
         lines.push(`  │  ${line}`);
     }
@@ -884,7 +949,10 @@ function isWizardUiHostDir(pathValue: string): boolean {
 }
 
 function resolveUiHostDir(instanceDir: string): string {
-    const currentRepoRoot = resolve(import.meta.dir, '../..');
+    const currentRepoRoot = resolve(
+        fileURLToPath(new URL('.', import.meta.url)),
+        '../..'
+    );
     if (currentRepoRoot !== instanceDir && isWizardUiHostDir(currentRepoRoot)) {
         return currentRepoRoot;
     }
@@ -899,6 +967,7 @@ function resolveUiHostDir(instanceDir: string): string {
 
 async function runUiInit(flags: CliFlags): Promise<void> {
     const instanceDir = toStringFlag(flags, 'instance-dir') ?? process.cwd();
+    const packageManager = resolvePackageManagerFlag(flags);
     const uiHostDir = resolveUiHostDir(instanceDir);
     const explicitPort = toStringFlag(flags, 'ui-port') ?? toStringFlag(flags, 'port');
 
@@ -919,7 +988,25 @@ async function runUiInit(flags: CliFlags): Promise<void> {
 
     const wizardToken = crypto.randomUUID();
     const baseUrl = `http://127.0.0.1:${port}`;
-    const wizardUrl = `${baseUrl}/wizard?token=${wizardToken}&instanceDir=${encodeURIComponent(instanceDir)}`;
+    const wizardParams = new URLSearchParams({
+        token: wizardToken,
+        instanceDir,
+        packageManager,
+    });
+    const presetName = resolveModePreset(flags);
+    const requestedMode = toStringFlag(flags, 'mode');
+    const deploymentTarget = resolveDeploymentTargetFlag(flags);
+    const publicDomain =
+        toStringFlag(flags, 'domain') ?? toStringFlag(flags, 'public-domain');
+    const dockerExposure =
+        toStringFlag(flags, 'docker-exposure') ??
+        (publicDomain ? 'public' : undefined);
+    if (presetName) wizardParams.set('presetName', presetName);
+    if (requestedMode === 'custom') wizardParams.set('wizardMode', 'custom');
+    if (deploymentTarget) wizardParams.set('deploymentTarget', deploymentTarget);
+    if (dockerExposure) wizardParams.set('dockerExposure', dockerExposure);
+    if (publicDomain) wizardParams.set('publicDomain', publicDomain);
+    const wizardUrl = `${baseUrl}/wizard?${wizardParams.toString()}`;
     // Use a static asset prefix to health-check: this path is served by Vite/Nitro
     // without going through SSR auth middleware and cannot redirect-loop.
     const healthUrl = `${baseUrl}/_nuxt/`;
@@ -931,24 +1018,26 @@ async function runUiInit(flags: CliFlags): Promise<void> {
 
     console.log('\nStarting wizard server...');
 
-    const uiServer = Bun.spawn(
-        ['bun', 'run', 'dev', '--', '--host', '127.0.0.1', '--port', String(port)],
-        {
-            cwd: uiHostDir,
-            env: {
-                ...process.env,
-                // Keep the setup UI isolated from the target instance's SSR auth
-                // provider config until the wizard has written a real .env.
-                SSR_AUTH_ENABLED: 'false',
-                HOST: '127.0.0.1',
-                OR3_WIZARD_UI_ENABLED: 'true',
-                OR3_WIZARD_UI_TOKEN: wizardToken,
-            },
-            stdin: 'inherit',
-            stdout: 'inherit',
-            stderr: 'inherit',
-        }
-    );
+    const uiCommand = runScriptCommand(packageManager, 'dev', [
+        '--host',
+        '127.0.0.1',
+        '--port',
+        String(port),
+    ]);
+    const uiServer = crossSpawn(uiCommand.command, uiCommand.args, {
+        cwd: uiHostDir,
+        env: {
+            ...process.env,
+            // Keep the setup UI isolated from the target instance's SSR auth
+            // provider config until the wizard has written a real .env.
+            SSR_AUTH_ENABLED: 'false',
+            HOST: '127.0.0.1',
+            OR3_WIZARD_UI_ENABLED: 'true',
+            OR3_WIZARD_UI_TOKEN: wizardToken,
+        },
+        stdio: 'inherit',
+    });
+    const uiServerExit = waitForChildExit(uiServer);
 
     const shutdown = () => {
         try {
@@ -968,13 +1057,22 @@ async function runUiInit(flags: CliFlags): Promise<void> {
         console.log('┌──────────────────────────────────────────────────────┐');
         console.log('│  OR3 Cloud Wizard                                    │');
         console.log(`│  ${wizardUrl.padEnd(52)} │`);
-        console.log('│  Press Ctrl+C to stop                                │');
+        console.log('│  This server closes after setup completes            │');
         console.log('└──────────────────────────────────────────────────────┘');
         console.log('');
 
-        openDefaultBrowser(wizardUrl);
+        if (isHeadlessSession()) {
+            console.log('Open the wizard from your computer with an SSH tunnel:');
+            console.log(
+                `  ssh -L ${port}:127.0.0.1:${port} <user>@<server>`
+            );
+            console.log(`Then open ${wizardUrl}`);
+            console.log('');
+        } else if (!toBooleanFlag(flags, 'no-open')) {
+            openDefaultBrowser(wizardUrl);
+        }
 
-        const exitCode = await uiServer.exited;
+        const exitCode = await uiServerExit;
         if (exitCode !== 0) {
             throw new Error(`Wizard UI server exited with code ${exitCode}.`);
         }
@@ -992,35 +1090,66 @@ async function runFastInit(flags: CliFlags): Promise<void> {
     const instanceDir = toStringFlag(flags, 'instance-dir') ?? process.cwd();
     const envFile =
         (toStringFlag(flags, 'env-file') as '.env' | '.env.local') ?? '.env';
+    const packageManager = resolvePackageManagerFlag(flags);
+    const deploymentTarget =
+        resolveDeploymentTargetFlag(flags) ?? 'local-dev';
+    const presetName = resolveModePreset(flags) ?? recommendedPreset.name;
+    const requestedMode = toStringFlag(flags, 'mode');
+    if (requestedMode === 'custom') {
+        throw new Error(
+            'Custom mode needs the guided wizard; remove --fast and use --ui or --cli.'
+        );
+    }
+    const isPersonal = presetName === 'personal-local';
+    const publicDomain =
+        toStringFlag(flags, 'domain') ?? toStringFlag(flags, 'public-domain');
+    const dockerExposure: WizardAnswers['dockerExposure'] = publicDomain
+        ? 'public'
+        : 'private';
 
     const bootstrapEmail = 'admin@example.com';
-    const bootstrapPassword = api.generateSecureSecret(24);
+    const bootstrapPassword = generateAdminPassword(24);
     const fsRoot = resolve(instanceDir, '.data', 'or3-storage');
-    await api.validatePath(fsRoot, true);
+    if (!isPersonal) {
+        await api.validatePath(fsRoot, true);
+    }
 
     const session = await api.createSession({
-        presetName: recommendedPreset.name,
+        presetName,
         instanceDir,
         envFile,
+        packageManager,
+        deploymentTarget,
+        dockerExposure,
+        publicDomain,
+        wizardMode: requestedMode === 'custom' ? 'custom' : undefined,
         includeSecrets: false,
         prefillFromEnv: false,
     });
 
-    const adminUsername = 'admin';
-    const adminPassword = generateAdminPassword(24);
+    const adminUsername = bootstrapEmail;
+    const adminPassword = bootstrapPassword;
 
     await api.submitAnswers(session.id, {
-        wizardMode: 'preset-local',
-        presetName: 'recommended',
+        wizardMode: isPersonal ? 'personal-local' : 'preset-local',
+        presetName,
         dryRun,
-        basicAuthJwtSecret: api.generateSecureSecret(48),
-        basicAuthRefreshSecret: api.generateSecureSecret(48),
-        basicAuthBootstrapEmail: bootstrapEmail,
-        basicAuthBootstrapPassword: bootstrapPassword,
-        fsTokenSecret: api.generateSecureSecret(48),
-        fsRoot,
-        adminUsername,
-        adminPassword,
+        packageManager,
+        deploymentTarget,
+        dockerExposure,
+        publicDomain,
+        ...(isPersonal
+            ? {}
+            : {
+                  basicAuthJwtSecret: api.generateSecureSecret(48),
+                  basicAuthRefreshSecret: api.generateSecureSecret(48),
+                  basicAuthBootstrapEmail: bootstrapEmail,
+                  basicAuthBootstrapPassword: bootstrapPassword,
+                  fsTokenSecret: api.generateSecureSecret(48),
+                  fsRoot,
+                  adminUsername,
+                  adminPassword,
+              }),
     });
 
     const validation = await api.validate(
@@ -1044,11 +1173,13 @@ async function runFastInit(flags: CliFlags): Promise<void> {
         return;
     }
 
-    console.log(`  Bootstrap email: ${bootstrapEmail}`);
-    console.log(`  Bootstrap password: ${bootstrapPassword}`);
-    console.log('');
-    console.log(`  Admin dashboard username: ${adminUsername}`);
-    console.log(`  Admin dashboard password: ${adminPassword}`);
+    if (!isPersonal) {
+        console.log(`  Bootstrap email: ${bootstrapEmail}`);
+        console.log(`  Bootstrap password: ${bootstrapPassword}`);
+        console.log('');
+        console.log(`  Admin dashboard username: ${adminUsername}`);
+        console.log(`  Admin dashboard password: ${adminPassword}`);
+    }
 
     const deployResult = await api.deploy(session.id);
     printDeployResult(deployResult);
@@ -1058,7 +1189,7 @@ async function runFastInit(flags: CliFlags): Promise<void> {
 function printHelp(): void {
     console.log(`or3-cloud commands
 
-  or3-cloud init [--preset personal-local|recommended|clerk-convex] [--instance-dir <path>] [--env-file .env|.env.local] [--dry-run] [--cli] [--manual] [--fast] [--ui] [--ui-port <port>] [--enable-install] [--package-manager bun|npm] [--no-focused-prompts]
+  or3-cloud init [--mode personal|self-hosted|custom] [--target dev|docker|configure] [--preset personal-local|recommended|clerk-convex] [--instance-dir <path>] [--env-file .env|.env.local] [--dry-run] [--cli] [--manual] [--fast] [--ui] [--ui-port <port>] [--enable-install] [--pm bun|npm] [--domain <hostname>] [--no-open] [--no-focused-prompts]
   or3-cloud validate [--env-file .env|.env.local] [--strict]
   or3-cloud doctor [--env-file .env|.env.local] [--strict]
   or3-cloud presets list
@@ -1087,7 +1218,7 @@ async function runInit(flags: CliFlags): Promise<void> {
         !forceCli &&
         (toBooleanFlag(flags, 'ui') ||
             (Boolean(input.isTTY && output.isTTY) &&
-                process.env.CI !== 'true'));
+                !isHeadlessSession()));
     if (useUi) {
         await runUiInit(flags);
         return;
@@ -1103,14 +1234,29 @@ async function runInit(flags: CliFlags): Promise<void> {
         toBooleanFlag(flags, 'enable-install') ||
         process.env.OR3_WIZARD_ENABLE_INSTALL === '1';
     const packageManager = parseInstallPackageManager(
-        toStringFlag(flags, 'package-manager')
+        toStringFlag(flags, 'pm') ??
+            toStringFlag(flags, 'package-manager') ??
+            detectPackageManager()
     );
     const focusedPrompts =
         !toBooleanFlag(flags, 'no-focused-prompts') &&
         Boolean(input.isTTY && output.isTTY);
-    const presetFlag = toStringFlag(flags, 'preset');
+    const presetFlag = resolveModePreset(flags);
     const normalizedPresetName =
         presetFlag === 'clerk-convex' ? 'legacy-clerk-convex' : presetFlag;
+    const deploymentTarget = resolveDeploymentTargetFlag(flags);
+    const requestedWizardMode =
+        toStringFlag(flags, 'mode') === 'custom'
+            ? ('custom' as const)
+            : undefined;
+    const publicDomain =
+        toStringFlag(flags, 'domain') ?? toStringFlag(flags, 'public-domain');
+    const dockerExposure: WizardAnswers['dockerExposure'] = publicDomain
+        ? 'public'
+        : (toStringFlag(flags, 'docker-exposure') as
+              | 'private'
+              | 'public'
+              | undefined) ?? 'private';
 
     // Mutable reference for Ctrl+C handler so the finally block can clean it up.
     let sigintCleanup: (() => void) | null = null;
@@ -1160,9 +1306,17 @@ async function runInit(flags: CliFlags): Promise<void> {
         const session =
             resumedSession ??
             (await api.createSession({
-                presetName: normalizedPresetName ?? recommendedPreset.name,
+                presetName:
+                    toStringFlag(flags, 'mode') === 'custom'
+                        ? undefined
+                        : normalizedPresetName ?? recommendedPreset.name,
                 instanceDir,
                 envFile,
+                packageManager,
+                deploymentTarget,
+                dockerExposure,
+                publicDomain,
+                wizardMode: requestedWizardMode,
                 includeSecrets: false,
                 prefillFromEnv,
                 existingEnvMap: prefillFromEnv ? existingEnv.map : undefined,
@@ -1175,7 +1329,7 @@ async function runInit(flags: CliFlags): Promise<void> {
                 `\n\n  Setup paused. Non-secret answers are saved (session ${sessionId}).`
             );
             console.log(
-                '  Resume with: bun run or3-cloud:init  (passwords can be auto-generated again)\n'
+                `  Resume with: ${packageManager} run setup  (passwords can be auto-generated again)\n`
             );
             process.exit(130);
         };
@@ -1335,7 +1489,8 @@ async function runInit(flags: CliFlags): Promise<void> {
                             nextValue.trim().length === 0
                         ) {
                             nextValue =
-                                field.key === 'adminPassword'
+                                field.key === 'adminPassword' ||
+                                field.key === 'basicAuthBootstrapPassword'
                                     ? generateAdminPassword(24)
                                     : api.generateSecureSecret();
                             generatedSecrets.push({
@@ -1599,7 +1754,11 @@ async function runInit(flags: CliFlags): Promise<void> {
             prompt,
             answers.deploymentTarget === 'local-dev'
                 ? 'Start local dev now?'
-                : 'Run production build now?',
+                : answers.deploymentTarget === 'docker'
+                  ? 'Build and start OR3 with Docker now?'
+                  : answers.deploymentTarget === 'configure-only'
+                    ? 'Finish without starting services?'
+                    : 'Run production build now?',
             !dryRun
         );
         if (deployNow) {

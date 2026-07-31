@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
     inspectProductionHostEsmFacade,
     recordProductionHostEsmFacadeReport,
@@ -7,7 +8,7 @@ import {
 
 type Mode = 'ssr' | 'static';
 
-const repoRoot = resolve(import.meta.dir, '../..');
+const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
 const outputRoot = resolve(repoRoot, '.output');
 const publicRoot = resolve(outputRoot, 'public');
 const serverRoot = resolve(outputRoot, 'server');

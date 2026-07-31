@@ -221,14 +221,38 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
     setEnv(env, 'OR3_MAX_MESSAGES_PER_DAY', numberToEnv(answers.maxMessagesPerDay));
     setEnv(env, 'OR3_LIMITS_STORAGE_PROVIDER', answers.limitsStorageProvider);
 
-    setEnv(env, 'OR3_ALLOWED_ORIGINS', csv(answers.allowedOrigins));
-    setEnv(env, 'OR3_FORCE_HTTPS', boolToEnv(answers.forceHttps));
+    const publicDockerDomain =
+        answers.deploymentTarget === 'docker' &&
+        answers.dockerExposure === 'public'
+            ? answers.publicDomain?.trim()
+            : undefined;
+    setEnv(env, 'OR3_PUBLIC_DOMAIN', publicDockerDomain);
+    setEnv(
+        env,
+        'OR3_ALLOWED_ORIGINS',
+        publicDockerDomain
+            ? `https://${publicDockerDomain}`
+            : csv(answers.allowedOrigins)
+    );
+    setEnv(
+        env,
+        'OR3_FORCE_HTTPS',
+        boolToEnv(publicDockerDomain ? true : answers.forceHttps)
+    );
     setEnv(
         env,
         'OR3_STRICT_CONFIG',
-        boolToEnv(answers.strictConfig || answers.deploymentTarget === 'prod-build')
+        boolToEnv(
+            answers.strictConfig ||
+                answers.deploymentTarget === 'prod-build' ||
+                Boolean(publicDockerDomain)
+        )
     );
-    setEnv(env, 'OR3_TRUST_PROXY', boolToEnv(answers.trustProxy));
+    setEnv(
+        env,
+        'OR3_TRUST_PROXY',
+        boolToEnv(publicDockerDomain ? true : answers.trustProxy)
+    );
     setEnv(env, 'OR3_FORWARDED_FOR_HEADER', answers.forwardedForHeader);
 
     // Admin dashboard credentials

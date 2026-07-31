@@ -71,6 +71,14 @@ function isConnectAdvancedEnabled(answers: WizardAnswers): boolean {
     return answers.allAdvancedEnabled || answers.connectAdvancedEnabled;
 }
 
+function isSimplifiedSelfHosted(answers: WizardAnswers): boolean {
+    return (
+        answers.wizardMode === 'preset-local' &&
+        answers.deploymentTarget === 'docker' &&
+        !answers.targetAdvancedEnabled
+    );
+}
+
 function withVisibleWhen(
     field: WizardField,
     visibleWhen: (answers: WizardAnswers) => boolean
@@ -94,6 +102,12 @@ function providerFieldsStep(
     answers: WizardAnswers,
     kind: 'auth' | 'sync' | 'storage'
 ): WizardStep | null {
+    if (
+        isSimplifiedSelfHosted(answers) &&
+        (kind === 'sync' || kind === 'storage')
+    ) {
+        return null;
+    }
     const providerId =
         kind === 'auth'
             ? answers.authProvider
@@ -136,6 +150,15 @@ function providerFieldsStep(
 
     const coreFields = descriptor.fields
         .filter((field) => field.tier !== 'advanced')
+        .filter(
+            (field) =>
+                !(
+                    isSimplifiedSelfHosted(answers) &&
+                    kind === 'auth' &&
+                    providerId === 'basic-auth' &&
+                    field.key === 'basicAuthJwtSecret'
+                )
+        )
         .map((field) => withVisibleWhen(field, visibleForSelectedProvider));
     const advancedFields = descriptor.fields
         .filter((field) => field.tier === 'advanced')
@@ -148,7 +171,7 @@ function providerFieldsStep(
 
     const fields: WizardField[] = [
         ...coreFields,
-        ...(advancedFields.length > 0
+        ...(advancedFields.length > 0 && !isSimplifiedSelfHosted(answers)
             ? [
                   {
                       key: advancedToggleKey,
@@ -211,8 +234,8 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 {
                     key: 'targetAdvancedEnabled',
                     type: 'boolean',
-                    label: 'Customize install location & advanced options?',
-                    help: 'Only needed for unusual setups: different project folder, .env.local file, production build, or a no-changes preview.',
+                    label: 'Customize this setup?',
+                    help: 'Show branding, themes, features, provider choices, install location, and advanced security options.',
                     defaultValue: false,
                 },
                 {
@@ -236,15 +259,76 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     visibleWhen: (current) => current.targetAdvancedEnabled,
                 },
                 {
+                    key: 'packageManager',
+                    type: 'select',
+                    label: 'Package manager',
+                    help: 'This is detected automatically by the initializer.',
+                    options: [
+                        { label: 'npm', value: 'npm' },
+                        { label: 'Bun', value: 'bun' },
+                    ],
+                    visibleWhen: (current) => current.targetAdvancedEnabled,
+                },
+                {
                     key: 'deploymentTarget',
                     type: 'select',
                     label: 'How will you run this?',
-                    help: 'Choose "Local Dev" to try things out, or "Production" when you\'re ready to go live.',
+                    help: 'Use local development on this computer, Docker for a server, or configure without starting anything.',
                     options: [
-                        { label: 'Local Dev — for testing and development', value: 'local-dev' },
-                        { label: 'Production — ready to deploy', value: 'prod-build' },
+                        {
+                            label: 'Local development',
+                            value: 'local-dev',
+                        },
+                        {
+                            label: 'Docker — laptop, home server, or VPS',
+                            value: 'docker',
+                        },
+                        {
+                            label: 'Configure only',
+                            value: 'configure-only',
+                        },
                     ],
                     visibleWhen: (current) => current.targetAdvancedEnabled,
+                },
+                {
+                    key: 'dockerExposure',
+                    type: 'select',
+                    label: 'Docker access',
+                    help: 'Private mode listens only on this machine. Public mode adds Caddy with automatic HTTPS.',
+                    options: [
+                        {
+                            label: 'Private / local network',
+                            value: 'private',
+                        },
+                        {
+                            label: 'Public domain with HTTPS',
+                            value: 'public',
+                        },
+                    ],
+                    visibleWhen: (current) =>
+                        current.deploymentTarget === 'docker',
+                },
+                {
+                    key: 'publicDomain',
+                    type: 'text',
+                    label: 'Public domain',
+                    help: 'Point this hostname at the server before deploying, for example chat.example.com.',
+                    required: true,
+                    visibleWhen: (current) =>
+                        current.deploymentTarget === 'docker' &&
+                        current.dockerExposure === 'public',
+                    validate: (value) => {
+                        const domain = String(value ?? '').trim();
+                        if (
+                            !domain ||
+                            domain.includes('://') ||
+                            domain.includes('/') ||
+                            !domain.includes('.')
+                        ) {
+                            return 'Enter a hostname such as chat.example.com.';
+                        }
+                        return null;
+                    },
                 },
                 {
                     key: 'dryRun',
@@ -296,6 +380,9 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     ],
                 },
             ],
+            canSkip: (current) =>
+                current.wizardMode === 'preset-local' &&
+                current.deploymentTarget === 'docker',
         },
         {
             id: 'branding',
@@ -335,6 +422,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     visibleWhen: isBaseAdvancedEnabled,
                 },
             ],
+            canSkip: isSimplifiedSelfHosted,
         },
         {
             id: 'themes',
@@ -375,6 +463,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                         current.themeInstallMode === 'install-selected',
                 },
             ],
+            canSkip: isSimplifiedSelfHosted,
         },
         {
             id: 'features',
@@ -394,6 +483,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 { key: 'mentionsEnabled', type: 'boolean', label: 'Mentions (@-mention documents and chats)', visibleWhen: (current) => current.featuresAdvancedEnabled },
                 { key: 'dashboardEnabled', type: 'boolean', label: 'Dashboard', visibleWhen: (current) => current.featuresAdvancedEnabled },
             ],
+            canSkip: isSimplifiedSelfHosted,
         },
         {
             id: 'providers',
@@ -453,7 +543,9 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                         current.ssrAuthEnabled && current.storageEnabled,
                 },
             ],
-            canSkip: (current) => current.wizardMode !== 'custom',
+            canSkip: (current) =>
+                current.wizardMode !== 'custom' &&
+                !current.targetAdvancedEnabled,
         },
     ];
 
@@ -610,7 +702,8 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                     isConnectAdvancedEnabled(current),
             },
         ],
-        canSkip: (current) => !current.ssrAuthEnabled,
+        canSkip: (current) =>
+            !current.ssrAuthEnabled || isSimplifiedSelfHosted(current),
     });
 
     steps.push({
@@ -737,6 +830,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 visibleWhen: isCloudAdvancedEnabled,
             },
         ],
+        canSkip: isSimplifiedSelfHosted,
     });
 
     steps.push({
@@ -833,7 +927,8 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                 },
             },
         ],
-        canSkip: (current) => !current.ssrAuthEnabled,
+        canSkip: (current) =>
+            !current.ssrAuthEnabled || isSimplifiedSelfHosted(current),
     });
 
     const openRouterStepIndex = steps.findIndex(

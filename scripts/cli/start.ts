@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 /**
  * @module scripts/cli/start
  *
@@ -7,21 +7,27 @@
  * Behavior:
  * - Installs dependencies on first run (missing node_modules).
  * - On a fresh clone (no .env / mode marker), asks ONE question: local or cloud.
- *   - local → writes a minimal local `.env` marker, then starts `bun run dev`
- *   - cloud → hands off to the install wizard (`bun run or3-cloud:init`)
+ *   - local → writes a minimal local `.env` marker, then starts the selected package manager's dev script
+ *   - cloud → hands off to the install wizard
  * - On subsequent runs, starts the dev server directly.
- * - Non-interactive environments (CI, pipes) go straight to `bun run dev`.
+ * - Non-interactive environments (CI, pipes) go straight to the dev script.
  */
 import { existsSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import crossSpawn from 'cross-spawn';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
+import {
+    detectPackageManager,
+    installCommand,
+    runScriptCommand,
+} from '../../shared/cloud/wizard/package-manager';
 
 /** Marker written after the user picks local so we never re-ask. */
-export const LOCAL_MODE_ENV_CONTENTS = `# OR3 local-first mode (created by \`bun start\`)
+export const LOCAL_MODE_ENV_CONTENTS = `# OR3 personal local mode
 # Your conversations stay in this browser. No cloud providers configured.
-# Run \`bun run or3-cloud:init\` anytime to add accounts, sync & storage.
+# Run \`npm run setup\` or \`bun run setup\` anytime to add accounts, sync & storage.
 SSR_AUTH_ENABLED=false
 `;
 
@@ -37,7 +43,7 @@ export function writeLocalModeMarker(cwd: string): string {
 
 function run(command: string, args: string[]): Promise<number> {
     return new Promise((resolvePromise, rejectPromise) => {
-        const child = spawn(command, args, {
+        const child = crossSpawn(command, args, {
             stdio: 'inherit',
             env: process.env,
         });
@@ -57,13 +63,15 @@ function run(command: string, args: string[]): Promise<number> {
 
 async function main(): Promise<void> {
     const cwd = process.cwd();
+    const packageManager = detectPackageManager();
 
     if (!existsSync(resolve(cwd, 'node_modules'))) {
         console.log('\n  Installing dependencies (first run only)...\n');
-        const installCode = await run('bun', ['install']);
+        const install = installCommand(packageManager);
+        const installCode = await run(install.command, install.args);
         if (installCode !== 0) {
             console.error(
-                '\n  Dependency install failed. Fix the error above and re-run `bun start`.'
+                `\n  Dependency install failed. Fix the error above and re-run \`${packageManager} start\`.`
             );
             process.exit(installCode);
             return;
@@ -74,7 +82,8 @@ async function main(): Promise<void> {
         Boolean(input.isTTY && output.isTTY) && process.env.CI !== 'true';
 
     if (!shouldAskModeChoice(cwd) || !isInteractive) {
-        process.exit(await run('bun', ['run', 'dev']));
+        const dev = runScriptCommand(packageManager, 'dev');
+        process.exit(await run(dev.command, dev.args));
         return;
     }
 
@@ -104,22 +113,24 @@ async function main(): Promise<void> {
     }
 
     if (answer === '2') {
-        process.exit(await run('bun', ['run', 'or3-cloud:init']));
+        const setup = runScriptCommand(packageManager, 'setup');
+        process.exit(await run(setup.command, setup.args));
         return;
     }
 
     const envPath = writeLocalModeMarker(cwd);
     console.log(`\n  Local mode saved to ${envPath}`);
-    console.log('  Next time just run `bun start` — we will not ask again.\n');
+    console.log(
+        `  Next time just run \`${packageManager} start\` — we will not ask again.\n`
+    );
 
-    process.exit(await run('bun', ['run', 'dev']));
+    const dev = runScriptCommand(packageManager, 'dev');
+    process.exit(await run(dev.command, dev.args));
 }
 
 const isDirectRun =
-    typeof Bun !== 'undefined'
-        ? Boolean(Bun.main && import.meta.path === Bun.main)
-        : process.argv[1]?.endsWith('start.ts') === true ||
-          process.argv[1]?.endsWith('start.js') === true;
+    process.argv[1] !== undefined &&
+    resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
 
 if (isDirectRun) {
     main().catch((error) => {

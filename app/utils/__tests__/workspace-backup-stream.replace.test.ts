@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { Blob } from 'node:buffer';
+import { Blob as NodeBlob } from 'node:buffer';
 import Dexie, { type Table } from 'dexie';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -28,6 +28,13 @@ class BackupTestDb extends Dexie {
 
 const databases: BackupTestDb[] = [];
 
+function createBlob(
+    parts: ConstructorParameters<typeof NodeBlob>[0],
+    options?: ConstructorParameters<typeof NodeBlob>[1]
+): Blob {
+    return new NodeBlob(parts, options) as unknown as Blob;
+}
+
 function createDb(): BackupTestDb {
     const db = new BackupTestDb(
         `workspace-backup-replace-${crypto.randomUUID()}`
@@ -37,7 +44,7 @@ function createDb(): BackupTestDb {
 }
 
 function backupBlob(lines: unknown[]): Blob {
-    return new Blob([
+    return createBlob([
         `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`,
     ]);
 }
@@ -252,7 +259,7 @@ describe('workspace backup replace safety', () => {
             ]),
             { type: 'table-start', table: 'messages' },
         ].map((line) => JSON.stringify(line));
-        const file = new Blob([`${[...prefix, ...suffix].join('\n')}\n`]);
+        const file = createBlob([`${[...prefix, ...suffix].join('\n')}\n`]);
 
         await expect(
             importWorkspaceStream({

@@ -13,8 +13,20 @@
  * @see planning/or3-cloud-launch-wizard/design.md for design context
  */
 
-/** Determines whether the wizard prepares a dev server or a production build. */
-export type WizardDeploymentTarget = 'local-dev' | 'prod-build';
+import type { PackageManager } from './package-manager';
+
+/**
+ * Determines what the wizard does after applying configuration.
+ *
+ * `prod-build` remains readable for sessions created before Docker support.
+ */
+export type WizardDeploymentTarget =
+    | 'local-dev'
+    | 'docker'
+    | 'configure-only'
+    | 'prod-build';
+
+export type WizardDockerExposure = 'private' | 'public';
 
 /** Target env file. `.env` is recommended; `.env.local` has known caveats with admin tooling. */
 export type WizardEnvFile = '.env' | '.env.local';
@@ -96,6 +108,12 @@ export interface WizardAnswers {
     envFile: WizardEnvFile;
     /** Whether to prepare a dev server or a production build. */
     deploymentTarget: WizardDeploymentTarget;
+    /** Package manager used for installs and local scripts. */
+    packageManager: PackageManager;
+    /** Whether Docker binds to loopback or uses the public Caddy overlay. */
+    dockerExposure: WizardDockerExposure;
+    /** Public hostname used by the optional Caddy overlay. */
+    publicDomain?: string;
     /** When true, validation and derivation run but no files are written. */
     dryRun: boolean;
     /** When true, skips creating a timestamped backup of the env file. */
@@ -595,6 +613,11 @@ export interface WizardApi {
         prefillFromEnv?: boolean;
         /** Optional env map override used by CLI when it already parsed the env file. */
         existingEnvMap?: Record<string, string>;
+        packageManager?: PackageManager;
+        deploymentTarget?: WizardDeploymentTarget;
+        dockerExposure?: WizardDockerExposure;
+        publicDomain?: string;
+        wizardMode?: WizardMode;
     }): Promise<WizardSession>;
     /** Retrieve an existing session by ID. */
     getSession(

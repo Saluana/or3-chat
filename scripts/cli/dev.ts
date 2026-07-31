@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 /**
  * @module scripts/cli/dev
  *
@@ -13,9 +13,15 @@
  *   on the next free port (interactive) or exits with instructions (CI).
  */
 import { createServer } from 'node:net';
-import { spawn } from 'node:child_process';
+import crossSpawn from 'cross-spawn';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+    detectPackageManager,
+    execPackageCommand,
+} from '../../shared/cloud/wizard/package-manager';
 
 export const DEFAULT_PORT = 3000;
 
@@ -96,7 +102,7 @@ export function rewritePortArg(argv: string[], port: number): string[] {
 }
 
 /**
- * Args that `dev:ssr` / `dev:offline` should pass through `bun run dev -- …`.
+ * Args that `dev:ssr` / `dev:offline` should pass through to the dev script.
  * Kept as a pure helper so tests can assert the package.json → wrapper contract.
  */
 export function forwardDevArgs(argvAfterDoubleDash: string[]): string[] {
@@ -104,8 +110,13 @@ export function forwardDevArgs(argvAfterDoubleDash: string[]): string[] {
 }
 
 function runNuxtDev(argv: string[]): Promise<number> {
+    const command = execPackageCommand(detectPackageManager(), [
+        'nuxt',
+        'dev',
+        ...argv,
+    ]);
     return new Promise((resolvePromise, rejectPromise) => {
-        const child = spawn('bunx', ['nuxt', 'dev', ...argv], {
+        const child = crossSpawn(command.command, command.args, {
             stdio: 'inherit',
             env: process.env,
         });
@@ -125,11 +136,29 @@ function runNuxtDev(argv: string[]): Promise<number> {
 }
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
-    const port = parsePort(argv);
-    const host = parseHost(argv);
+    const offline = argv.includes('--or3-offline');
+    const ssr = argv.includes('--or3-ssr');
+    const nuxtArgs = argv.filter(
+        (arg) => arg !== '--or3-offline' && arg !== '--or3-ssr'
+    );
+    if (offline) {
+        Object.assign(process.env, {
+            SSR_AUTH_ENABLED: 'false',
+            OR3_SYNC_ENABLED: 'false',
+            OR3_CLOUD_SYNC_ENABLED: 'false',
+            OR3_STORAGE_ENABLED: 'false',
+            OR3_CLOUD_STORAGE_ENABLED: 'false',
+            OR3_BACKGROUND_STREAMING_ENABLED: 'false',
+        });
+    } else if (ssr) {
+        process.env.SSR_AUTH_ENABLED = 'true';
+    }
+
+    const port = parsePort(nuxtArgs);
+    const host = parseHost(nuxtArgs);
 
     if (await isPortAvailable(port, host)) {
-        return await runNuxtDev(argv);
+        return await runNuxtDev(nuxtArgs);
     }
 
     console.log('');
@@ -149,7 +178,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     if (!isInteractive || nextFree === null) {
         if (nextFree !== null) {
             console.log(`  Or start on a free port instead:`);
-            console.log(`    bun run dev -- --port ${nextFree}`);
+            console.log(
+                `    ${detectPackageManager()} run dev -- --port ${nextFree}`
+            );
             console.log('');
         }
         return 1;
@@ -171,10 +202,14 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     }
 
     console.log(`\n  Starting on http://localhost:${nextFree}\n`);
-    return await runNuxtDev(rewritePortArg(argv, nextFree));
+    return await runNuxtDev(rewritePortArg(nuxtArgs, nextFree));
 }
 
-if (import.meta.main) {
+const isDirectRun =
+    process.argv[1] !== undefined &&
+    resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+
+if (isDirectRun) {
     main().then(
         (code) => process.exit(code),
         (error) => {

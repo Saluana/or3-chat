@@ -11,7 +11,7 @@ import {
     setHeader,
     type H3Event,
 } from 'h3';
-import { spawn } from 'node:child_process';
+import crossSpawn from 'cross-spawn';
 import { Socket } from 'node:net';
 import { useRuntimeConfig } from '#imports';
 import { Or3CloudWizardApi } from '../../shared/cloud/wizard/api';
@@ -22,6 +22,11 @@ import {
     parseInstallPackageManager,
 } from '../../shared/cloud/wizard/install-plan';
 import { createCleanWizardDeployEnv } from '../../shared/cloud/wizard/runtime-env';
+import {
+    parsePackageManager,
+    runScriptCommand,
+    type PackageManager,
+} from '../../shared/cloud/wizard/package-manager';
 import {
     captureWizardRollbackSnapshots,
     restoreWizardRollbackSnapshots,
@@ -66,6 +71,47 @@ function toStringOrUndefined(value: unknown): string | undefined {
 function toBoolean(value: unknown, fallback: boolean): boolean {
     if (typeof value === 'boolean') return value;
     return fallback;
+}
+
+function parseDeploymentTarget(
+    value: unknown
+): WizardAnswers['deploymentTarget'] | undefined {
+    const target = toStringOrUndefined(value);
+    if (!target) return undefined;
+    if (
+        target === 'local-dev' ||
+        target === 'docker' ||
+        target === 'configure-only' ||
+        target === 'prod-build'
+    ) {
+        return target;
+    }
+    throw new Error(`Invalid wizard deployment target "${target}".`);
+}
+
+function parseDockerExposure(
+    value: unknown
+): WizardAnswers['dockerExposure'] | undefined {
+    const exposure = toStringOrUndefined(value);
+    if (!exposure) return undefined;
+    if (exposure === 'private' || exposure === 'public') return exposure;
+    throw new Error(`Invalid Docker exposure "${exposure}".`);
+}
+
+function parseWizardMode(
+    value: unknown
+): WizardAnswers['wizardMode'] | undefined {
+    const mode = toStringOrUndefined(value);
+    if (!mode) return undefined;
+    if (
+        mode === 'personal-local' ||
+        mode === 'preset-local' ||
+        mode === 'preset-clerk-convex' ||
+        mode === 'custom'
+    ) {
+        return mode;
+    }
+    throw new Error(`Invalid wizard mode "${mode}".`);
 }
 
 function normalizeErrorMessage(error: unknown): string {
@@ -119,19 +165,28 @@ function toCompleteWizardAnswers(input: Partial<WizardAnswers>): WizardAnswers {
     };
 }
 
-function startLocalDevDetached(instanceDir: string): void {
-    const child = spawn('bun', ['run', 'dev:ssr'], {
+function startLocalDevDetached(
+    instanceDir: string,
+    packageManager: PackageManager
+): void {
+    const command = runScriptCommand(packageManager, 'dev:ssr');
+    const child = crossSpawn(command.command, command.args, {
         cwd: instanceDir,
         stdio: 'ignore',
         detached: true,
         env: createCleanWizardDeployEnv(),
     });
+    child.once('error', () => {});
     child.unref();
 }
 
-async function prepareLocalDevRuntime(instanceDir: string): Promise<void> {
+async function prepareLocalDevRuntime(
+    instanceDir: string,
+    packageManager: PackageManager
+): Promise<void> {
+    const command = runScriptCommand(packageManager, 'postinstall');
     await new Promise<void>((resolvePromise, rejectPromise) => {
-        const child = spawn('bun', ['run', 'postinstall'], {
+        const child = crossSpawn(command.command, command.args, {
             cwd: instanceDir,
             stdio: 'ignore',
             env: createCleanWizardDeployEnv(),
@@ -150,7 +205,7 @@ async function prepareLocalDevRuntime(instanceDir: string): Promise<void> {
             }
             rejectPromise(
                 new Error(
-                    `Failed to prepare local dev runtime (bun run postinstall exited with code ${code ?? 'unknown'}).`
+                    `Failed to prepare local dev runtime (${packageManager} run postinstall exited with code ${code ?? 'unknown'}).`
                 )
             );
         });
@@ -264,7 +319,7 @@ export async function getOrCreateWizardSession(event: H3Event): Promise<WizardSe
 
     try {
         if (sessionId) {
-            const session = await api.getSession(sessionId, { includeSecrets: true });
+            const session = await api.getSession(sessionId);
             if (
                 requestedInstanceDir &&
                 session.answers.instanceDir !== requestedInstanceDir
@@ -275,7 +330,7 @@ export async function getOrCreateWizardSession(event: H3Event): Promise<WizardSe
                     prefillFromEnv: true,
                 });
             }
-            return session;
+            return await api.resumeSession(sessionId);
         }
 
         const presetName = toStringOrUndefined(query.presetName);
@@ -284,11 +339,23 @@ export async function getOrCreateWizardSession(event: H3Event): Promise<WizardSe
             | '.env'
             | '.env.local'
             | undefined;
+        const packageManager = parsePackageManager(
+            toStringOrUndefined(query.packageManager)
+        );
+        const deploymentTarget = parseDeploymentTarget(query.deploymentTarget);
+        const dockerExposure = parseDockerExposure(query.dockerExposure);
+        const publicDomain = toStringOrUndefined(query.publicDomain);
+        const wizardMode = parseWizardMode(query.wizardMode);
 
         return await api.createSession({
             presetName,
             instanceDir,
             envFile,
+            packageManager,
+            deploymentTarget,
+            dockerExposure,
+            publicDomain,
+            wizardMode,
             includeSecrets: false,
             prefillFromEnv: true,
         });
@@ -331,7 +398,9 @@ export async function runWizardDeploy(
     const session = await api.getSession(sessionId, { includeSecrets: true });
     const answers = toCompleteWizardAnswers(session.answers);
     const dryRun = toBoolean(options.dryRun, false);
-    const packageManager = parseInstallPackageManager(options.packageManager);
+    const packageManager = parseInstallPackageManager(
+        options.packageManager ?? answers.packageManager
+    );
     const installDependencies = toBoolean(options.installDependencies, true);
 
     const validation = await api.validate(
@@ -398,17 +467,17 @@ export async function runWizardDeploy(
         let accessUrl: string | undefined;
         let started = false;
 
-        await prepareLocalDevRuntime(answers.instanceDir);
+        await prepareLocalDevRuntime(answers.instanceDir, packageManager);
 
         const portInUse = await isPortListening(3000, '127.0.0.1');
         if (portInUse) {
             instructions =
                 'Port 3000 is already in use. The wizard will not stop unrelated processes; stop the existing service and rerun deployment, or start OR3 manually on a free port.';
         } else {
-            startLocalDevDetached(answers.instanceDir);
+            startLocalDevDetached(answers.instanceDir, packageManager);
             started = true;
             try {
-                await waitForHttpReady(`${localDevUrl}/api/healthz`, 45000);
+                await waitForHttpReady(`${localDevUrl}/api/health`, 45000);
                 accessUrl = localDevUrl;
                 instructions =
                     'Local dev started with the updated environment values.';
@@ -425,7 +494,7 @@ export async function runWizardDeploy(
             applyResult,
             deployResult: {
                 started,
-                commands: ['bun run dev:ssr'],
+                commands: [`${packageManager} run dev:ssr`],
                 instructions,
                 accessUrl,
                 nextSteps: accessUrl
@@ -436,7 +505,7 @@ export async function runWizardDeploy(
                     ]
                     : [
                         'Ensure port 3000 is free before starting local dev.',
-                        'Start the app manually with: bun run dev:ssr',
+                        `Start the app manually with: ${packageManager} run dev:ssr`,
                         'Open http://127.0.0.1:3000 in your browser after startup.',
                         'Sign in with your bootstrap/admin account.',
                         'Open the admin dashboard at /admin to manage your instance.',
