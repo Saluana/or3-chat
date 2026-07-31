@@ -17,15 +17,15 @@ single-server deployment using Docker Compose and Caddy.
    npm whoami
    ```
 
-For GitHub Actions, add an npm granular access token as the repository secret
-`NPM_TOKEN`. Restrict it to the packages being released and allow publishing
-without an interactive one-time password. The release workflow also requests
-an OpenID Connect token and publishes npm provenance.
+Configure each existing npm package with
+[GitHub Actions trusted publishing](https://docs.npmjs.com/trusted-publishers/).
+Trust its exact GitHub owner, repository, and `publish.yml` workflow with
+`npm publish` permission. The release workflows use OIDC and npm provenance;
+they do not require an `NPM_TOKEN`. A package normally needs one manual first
+publication before its npm trusted-publisher settings exist.
 
-For a tokenless workflow, configure each existing package on npm with
-[GitHub Actions trusted publishing](https://docs.npmjs.com/trusted-publishers/),
-then remove `NODE_AUTH_TOKEN` from its publish step. A package normally needs
-one manual first publication before its npm trusted-publisher settings exist.
+See [Upgrading and releasing OR3 packages](releasing.md) for version order,
+tag formats, and registry verification.
 
 ## 2. Publish the exact first-party dependencies
 
@@ -132,11 +132,12 @@ For a manual release after the same checks:
 
 ```bash
 cd packages/create-or3-chat
-npm publish --access public --provenance
+npm publish --access public --provenance=false
 ```
 
-Publishing is permanent for that name/version. Use `npm pack --dry-run` and
-verify the version before the final command.
+Local npm runs cannot generate GitHub provenance. Publishing is permanent for
+that name/version, so use `npm pack --dry-run` and verify the version before
+the final command.
 
 ## 4. Prepare the VPS
 
