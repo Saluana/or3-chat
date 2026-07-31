@@ -1,0 +1,23 @@
+{
+  "name": "@or3/skills",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0",
+  "description": "Portable agent skills for installing, extending, theming, and developing OR3 products.",
+  "scripts": {
+    "validate": "bun run scripts/validate-skills.ts",
+    "list": "bun run scripts/validate-skills.ts --list"
+  },
+  "files": [
+    "skills",
+    "shared",
+    "README.md",
+    "architecture.md",
+    "design.md",
+    "tasks.md"
+  ],
+  "engines": {
+    "bun": ">=1.2.0"
+  }
+}
