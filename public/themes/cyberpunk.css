@@ -127,6 +127,14 @@
   box-shadow: 0 0 8px color-mix(in srgb, var(--md-primary) 15%, transparent);
 }
 
+[data-theme="cyberpunk"] .section-card {
+  background-color: var(--md-surface);
+  border: var(--md-border-width) solid var(--md-border-color) !important;
+  border-radius: var(--md-border-radius) !important;
+  padding: 20px 16px;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--md-primary) 10%, transparent);
+}
+
 [data-theme="cyberpunk"] .document-editor-toolbar {
   border-bottom: var(--md-border-width) solid var(--md-border-color);
 }

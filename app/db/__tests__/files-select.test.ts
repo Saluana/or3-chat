@@ -85,7 +85,11 @@ vi.mock('../util', () => ({
     ),
 }));
 
-import { listImageMetasPaged, updateFileName } from '../files-select';
+import {
+    listAllImageMetas,
+    listImageMetasPaged,
+    updateFileName,
+} from '../files-select';
 import { db } from '../client';
 
 const table = db.file_meta as any;
@@ -142,6 +146,28 @@ describe('files-select helpers', () => {
 
             const secondPage = await listImageMetasPaged(2, 2);
             expect(secondPage.map((m) => m.hash)).toEqual(['keep-1']);
+        });
+    });
+
+    describe('listAllImageMetas', () => {
+        it('returns the complete active or deleted image collection', async () => {
+            table.__setRows([
+                baseMeta({ hash: 'active-new', updated_at: 5 }),
+                baseMeta({ hash: 'active-old', updated_at: 2 }),
+                baseMeta({ hash: 'deleted', updated_at: 6, deleted: true }),
+                baseMeta({
+                    hash: 'pdf',
+                    kind: 'pdf',
+                    mime_type: 'application/pdf',
+                }),
+            ]);
+
+            expect(
+                (await listAllImageMetas()).map((item) => item.hash)
+            ).toEqual(['active-new', 'active-old']);
+            expect(
+                (await listAllImageMetas(true)).map((item) => item.hash)
+            ).toEqual(['deleted']);
         });
     });
 

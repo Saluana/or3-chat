@@ -14,25 +14,32 @@
                 <UIcon :name="plusIcon" />
             </button>
         </UTooltip>
-        <div
-            v-if="menu"
-            ref="menuElement"
-            class="workspace-tab-context workspace-new-tab-menu"
-            :style="menuStyle"
-            role="menu"
-            aria-label="Create new tab"
-        >
-            <button
-                v-for="item in items"
-                :key="item.id"
-                role="menuitem"
-                type="button"
-                @click="pick(item.id)"
+        <!--
+          Teleport out of .workspace-chrome: blank theme applies backdrop-filter
+          there, which makes position:fixed use the chrome as containing block.
+          Viewport clientX/clientY then overshoot by ~sidebar width.
+        -->
+        <Teleport to="body">
+            <div
+                v-if="menu"
+                ref="menuElement"
+                class="workspace-tab-context workspace-new-tab-menu"
+                :style="menuStyle"
+                role="menu"
+                aria-label="Create new tab"
             >
-                <UIcon v-if="item.icon" :name="item.icon" class="workspace-new-tab-menu-icon" />
-                <span>{{ item.label }}</span>
-            </button>
-        </div>
+                <button
+                    v-for="item in items"
+                    :key="item.id"
+                    role="menuitem"
+                    type="button"
+                    @click="pick(item.id)"
+                >
+                    <UIcon v-if="item.icon" :name="item.icon" class="workspace-new-tab-menu-icon" />
+                    <span>{{ item.label }}</span>
+                </button>
+            </div>
+        </Teleport>
     </div>
 </template>
 

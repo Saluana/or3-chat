@@ -121,6 +121,63 @@ body,
 	height: 0;
 }
 
+/* Shared structure for dashboard-hosted pages. Visual decoration remains theme-owned. */
+.dashboard-page-frame {
+	width: min(100%, 1080px);
+	margin-inline: auto;
+	padding: 1.25rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+.dashboard-page-intro {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.25rem 0.125rem 0.5rem;
+}
+
+.dashboard-page-eyebrow {
+	color: var(--md-primary);
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+}
+
+.dashboard-page-title {
+	margin-top: 0.2rem;
+	color: var(--md-on-surface);
+	font-size: clamp(1.25rem, 3vw, 1.75rem);
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+.dashboard-page-description {
+	max-width: 68ch;
+	margin-top: 0.35rem;
+	color: var(--md-on-surface-variant, var(--md-on-surface));
+	font-size: 0.82rem;
+	line-height: 1.5;
+	opacity: 0.78;
+}
+
+.dashboard-section-title {
+	color: var(--md-on-surface);
+	font-size: 0.9rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+@media (min-width: 760px) {
+	.dashboard-page-frame {
+		padding: 1.75rem;
+	}
+}
+
 h1,
 h2,
 h3,

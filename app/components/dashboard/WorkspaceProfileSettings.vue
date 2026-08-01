@@ -1,14 +1,17 @@
 <template>
-  <div class="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
-    <header>
-      <h2 class="text-xl font-semibold">Workspace Profile</h2>
-      <p class="mt-1 text-sm opacity-70">
+  <div class="dashboard-page-frame">
+    <header class="dashboard-page-intro">
+      <div>
+      <p class="dashboard-page-eyebrow">Settings</p>
+      <h2 class="dashboard-page-title">Workspace profile</h2>
+      <p class="dashboard-page-description">
         Arrange existing OR3 surfaces without changing your theme, plugins, or
         workspace data.
       </p>
+      </div>
     </header>
 
-    <UCard>
+    <UCard class="section-card">
       <div class="space-y-4">
         <UFormField label="Profile" name="workspace-profile">
           <USelect
@@ -96,7 +99,7 @@
       </div>
     </UCard>
 
-    <UCard v-if="recommendedRegistration">
+    <UCard v-if="recommendedRegistration" class="section-card">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div class="flex-1">
           <strong>Recommended by active theme</strong>
@@ -117,6 +120,7 @@
 
     <UCard
       v-if="showResetConfirmation"
+      class="section-card"
       data-testid="profile-reset-confirmation"
     >
       <div class="space-y-3">

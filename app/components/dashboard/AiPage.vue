@@ -1,69 +1,111 @@
 <template>
-    <div id="dashboard-ai-page-container" class="px-4 py-4 space-y-12 text-sm">
+    <div id="dashboard-ai-page-container" class="dashboard-page-frame text-sm">
         <p ref="liveStatus" class="sr-only" aria-live="polite"></p>
 
-        <!-- Master System Prompt -->
+        <header class="dashboard-page-intro">
+            <div>
+                <p class="dashboard-page-eyebrow">Settings</p>
+                <h1 class="dashboard-page-title">AI preferences</h1>
+                <p class="dashboard-page-description">
+                    Set the defaults applied when a new conversation starts. You
+                    can still change the model and prompt per thread.
+                </p>
+            </div>
+        </header>
+
         <section
             id="dashboard-ai-master-prompt-section"
-            class="section-card space-y-3"
+            class="section-card space-y-4"
             role="group"
             aria-labelledby="ai-section-master-prompt"
         >
-            <h2
-                id="ai-section-master-prompt"
-                class="font-heading text-base uppercase tracking-wide group-heading"
-            >
-                Master System Prompt
-            </h2>
-            <p id="ai-master-help" class="supporting-text">
-                This prompt is prepended to all new chats and works alongside
-                the threads system prompts. Keep it short and general.
-            </p>
+            <div class="dashboard-setting-heading">
+                <span class="dashboard-setting-icon" aria-hidden="true">
+                    <UIcon :name="useIcon('ui.chat').value" class="h-5 w-5" />
+                </span>
+                <div>
+                    <h2
+                        id="ai-section-master-prompt"
+                        class="dashboard-section-title"
+                    >
+                        Master system prompt
+                    </h2>
+                    <p id="ai-master-help" class="supporting-text mt-1">
+                        Prepended to new chats and combined with thread-level
+                        instructions. Keep it short and general.
+                    </p>
+                </div>
+            </div>
             <UTextarea
                 id="dashboard-ai-master-textarea"
                 v-bind="masterPromptTextareaProps"
                 :value="local.masterPrompt"
                 @input="onPromptInput"
-                :aria-describedby="'ai-master-prompt-input'"
+                aria-describedby="ai-master-help ai-master-count"
                 spellcheck="false"
+                :maxlength="4000"
                 placeholder="e.g. You are a concise, helpful assistant who prefers structured, minimal answers."
             ></UTextarea>
             <div
                 id="dashboard-ai-master-actions"
-                class="flex items-center justify-between"
+                class="flex flex-wrap items-center justify-between gap-3"
             >
                 <span
                     id="ai-master-count"
                     class="text-xs opacity-70 tabular-nums"
-                    >{{ local.masterPrompt.length }} chars</span
+                    >{{ local.masterPrompt.length }} / 4000 characters</span
                 >
-                <UButton
-                    id="dashboard-ai-save-master-btn"
-                    v-bind="savePromptButtonProps"
-                    @click="saveMasterPrompt"
-                    :disabled="savingPrompt"
-                >
-                    Save
-                </UButton>
+                <div class="flex items-center gap-3">
+                    <span
+                        v-if="promptSaved && !promptDirty"
+                        class="ai-saved-state"
+                    >
+                        <UIcon
+                            :name="useIcon('ui.check').value"
+                            class="h-4 w-4"
+                        />
+                        Saved
+                    </span>
+                    <UButton
+                        id="dashboard-ai-save-master-btn"
+                        v-bind="savePromptButtonProps"
+                        @click="saveMasterPrompt"
+                        :disabled="savingPrompt || !promptDirty"
+                    >
+                        {{ savingPrompt ? 'Saving…' : 'Save changes' }}
+                    </UButton>
+                </div>
             </div>
         </section>
 
-        <!-- Model Defaults -->
         <section
             id="dashboard-ai-model-defaults-section"
             class="section-card space-y-3"
             role="group"
             aria-labelledby="ai-section-model"
         >
-            <div class="flex items-center justify-between flex-wrap gap-3">
-                <h2
-                    id="ai-section-model"
-                    class="font-heading text-base uppercase tracking-wide group-heading"
-                >
-                    Model Defaults
-                </h2>
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="dashboard-setting-heading">
+                    <span class="dashboard-setting-icon" aria-hidden="true">
+                        <UIcon
+                            :name="useIcon('dashboard.plugins').value"
+                            class="h-5 w-5"
+                        />
+                    </span>
+                    <div>
+                        <h2
+                            id="ai-section-model"
+                            class="dashboard-section-title"
+                        >
+                            Model defaults
+                        </h2>
+                        <p class="supporting-text mt-1">
+                            Choose how new chats pick their starting model.
+                        </p>
+                    </div>
+                </div>
                 <div
-                    class="flex gap-2 items-center"
+                    class="ai-model-mode"
                     role="tablist"
                     aria-label="Default model mode"
                 >
@@ -91,12 +133,10 @@
                     >
                 </div>
             </div>
-            <p class="supporting-text">
-                Choose how new chats pick their starting model. You can still
-                switch per-thread.
-            </p>
-
-            <div v-if="settings.defaultModelMode === 'fixed'" class="space-y-3">
+            <div
+                v-if="settings.defaultModelMode === 'fixed'"
+                class="ai-model-picker space-y-3"
+            >
                 <label class="text-xs" for="dashboard-model-search-input"
                     >Search models</label
                 >
@@ -110,7 +150,7 @@
                 />
                 <div
                     id="dashboard-ai-model-results"
-                    class="max-h-56 overflow-auto border-[var(--md-border-width)] rounded-[var(--md-border-radius)] p-1 space-y-1"
+                    class="max-h-64 overflow-auto border-[var(--md-border-width)] border-[var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)] p-1 space-y-1"
                     role="listbox"
                     aria-label="Model results"
                 >
@@ -163,22 +203,31 @@
             </div>
         </section>
 
-        <!-- Reset -->
         <section
             id="dashboard-ai-reset-section"
-            class="section-card space-y-2"
+            class="section-card flex flex-wrap items-center justify-between gap-4"
             role="group"
             aria-labelledby="ai-section-reset"
         >
-            <h2
-                id="ai-section-reset"
-                class="font-heading text-base uppercase tracking-wide group-heading"
-            >
-                Reset
-            </h2>
-            <p class="text-xs opacity-70">
-                Reset all AI settings back to defaults.
-            </p>
+            <div class="dashboard-setting-heading">
+                <span
+                    class="dashboard-setting-icon dashboard-setting-icon--error"
+                    aria-hidden="true"
+                >
+                    <UIcon
+                        :name="useIcon('ui.refresh').value"
+                        class="h-5 w-5"
+                    />
+                </span>
+                <div>
+                    <h2 id="ai-section-reset" class="dashboard-section-title">
+                        Reset
+                    </h2>
+                    <p class="supporting-text mt-1">
+                        Restore all AI preferences to their defaults.
+                    </p>
+                </div>
+            </div>
             <UButton
                 id="dashboard-ai-reset-btn"
                 v-bind="resetButtonProps"
@@ -186,11 +235,18 @@
                 >Reset to defaults</UButton
             >
         </section>
+
+        <p class="ai-settings-note">
+            <UIcon :name="useIcon('ui.hint').value" class="h-4 w-4" />
+            Model defaults apply immediately. The master prompt is saved when
+            you choose Save changes.
+        </p>
     </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { useIcon } from '#imports';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useModelSearch } from '~/core/search/useModelSearch';
@@ -203,14 +259,22 @@ const settings = computed(() => settingsRef.value!);
 // Master prompt
 const local = ref({ masterPrompt: settings.value.masterSystemPrompt });
 const savingPrompt = ref(false);
+const promptDirty = ref(false);
+const promptSaved = ref(true);
 function onPromptInput(e: Event) {
     const t = e.target as HTMLTextAreaElement;
     local.value.masterPrompt = t.value || '';
+    promptDirty.value =
+        local.value.masterPrompt.trim() !== settings.value.masterSystemPrompt;
+    promptSaved.value = false;
 }
 async function saveMasterPrompt() {
     savingPrompt.value = true;
     set({ masterSystemPrompt: local.value.masterPrompt.trim() });
     if (liveStatus.value) liveStatus.value.textContent = 'Master prompt saved';
+    local.value.masterPrompt = local.value.masterPrompt.trim();
+    promptDirty.value = false;
+    promptSaved.value = true;
     savingPrompt.value = false;
 }
 
@@ -245,6 +309,8 @@ onMounted(async () => {
 function onReset() {
     reset();
     local.value.masterPrompt = '';
+    promptDirty.value = false;
+    promptSaved.value = true;
     if (liveStatus.value)
         liveStatus.value.textContent = 'AI settings reset to defaults';
 }
@@ -378,17 +444,63 @@ const resetButtonProps = computed(() => {
 </script>
 
 <style scoped>
-/* Component-specific layout and typography (non-decorative) */
-.group-heading {
-    margin-top: -0.25rem; /* optical align */
-    letter-spacing: 0.08em;
-}
 .supporting-text {
-    font-size: 15px;
-    line-height: 1.2;
+    font-size: 0.78rem;
+    line-height: 1.45;
     max-width: 82ch;
     color: var(--md-on-surface-variant, var(--md-on-surface));
-    opacity: 0.7;
+    opacity: 0.76;
+}
+.dashboard-setting-heading {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 0.8rem;
+}
+.dashboard-setting-icon {
+    display: grid;
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: 0 0 auto;
+    place-items: center;
+    color: var(--md-primary);
+    background: var(--md-primary-container);
+    border: var(--md-border-width) solid var(--md-outline-variant);
+    border-radius: var(--md-border-radius);
+}
+.dashboard-setting-icon--error {
+    color: var(--md-error);
+    background: var(--md-error-container);
+}
+.ai-saved-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--md-success, var(--md-primary));
+    font-size: 0.72rem;
+}
+.ai-model-mode {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.3rem;
+    padding: 0.3rem;
+    background: var(--md-surface-container-low);
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
+}
+.ai-model-picker {
+    padding-top: 1rem;
+    border-top: var(--md-border-width) solid var(--md-outline-variant);
+}
+.ai-settings-note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.5rem;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    font-size: 0.7rem;
+    opacity: 0.72;
 }
 .model-mode-btn {
     text-transform: none;
@@ -396,11 +508,20 @@ const resetButtonProps = computed(() => {
     min-width: 8rem;
 }
 .model-mode-btn--active {
-    box-shadow: inset 0 0 0 1px var(--md-on-surface),
+    box-shadow:
+        inset 0 0 0 1px var(--md-on-surface),
         0 0 0 1px var(--md-primary);
 }
 .model-mode-btn--inactive {
     opacity: 0.7;
     border-color: var(--md-outline-variant);
+}
+@media (max-width: 640px) {
+    .ai-model-mode {
+        width: 100%;
+    }
+    .model-mode-btn {
+        min-width: 0;
+    }
 }
 </style>

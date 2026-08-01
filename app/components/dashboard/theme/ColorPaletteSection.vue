@@ -5,83 +5,110 @@
         role="group"
         aria-labelledby="theme-section-palette"
     >
-        <h2
-            id="theme-section-palette"
-            class="font-heading text-base uppercase tracking-wide group-heading"
-        >
-            Color Palette
-        </h2>
-        <p class="supporting-text">
-            Override Material Design 3 colors for this mode. Toggle off to use
-            theme defaults.
-        </p>
-        <label class="flex items-center gap-2 cursor-pointer select-none">
-            <input
-                type="checkbox"
-                :checked="overrides.colors?.enabled ?? false"
-                @change="togglePaletteOverrides"
-            />
-            <span class="text-xs">Enable palette overrides</span>
-        </label>
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h2 id="theme-section-palette" class="dashboard-section-title">
+                    Semantic color tokens
+                </h2>
+                <p class="supporting-text mt-1">
+                    Override Material Design 3 roles for this mode. Components
+                    consume these roles instead of page-specific colors.
+                </p>
+            </div>
+            <label class="palette-toggle">
+                <input
+                    type="checkbox"
+                    :checked="overrides.colors?.enabled ?? false"
+                    @change="togglePaletteOverrides"
+                />
+                <span>Enable overrides</span>
+            </label>
+        </div>
 
-        <div
-            v-for="group in colorGroups"
-            :key="group.label"
-            class="space-y-2 pt-2"
-        >
-            <h3 class="text-xs font-semibold opacity-70">
-                {{ group.label }}
-            </h3>
-            <div class="space-y-3 pl-2">
-                <div
-                    v-for="color in group.colors"
-                    :key="color.key"
-                    class="flex items-start gap-2 flex-wrap sm:flex-nowrap sm:items-center"
-                >
-                    <label class="w-full sm:w-40 text-xs pt-2 sm:pt-0">{{
-                        color.label
-                    }}</label>
+        <div class="palette-groups">
+            <div
+                v-for="group in colorGroups"
+                :key="group.label"
+                class="palette-group"
+            >
+                <h3 class="palette-group-title">{{ group.label }}</h3>
+                <div class="divide-y divide-[var(--md-outline-variant)]">
                     <div
-                        class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto"
+                        v-for="color in group.colors"
+                        :key="color.key"
+                        class="palette-token-row"
                     >
-                        <UColorPicker
-                            v-bind="paletteColorPickerProps"
-                            :disabled="!(overrides.colors?.enabled ?? false)"
-                            :model-value="
-                                (overrides.colors?.enabled ?? false) &&
-                                String(overrides.colors?.[color.key as ColorKey] || '').startsWith('#')
-                                    ? overrides.colors?.[color.key as ColorKey]
-                                    : undefined
-                            "
-                            @update:model-value="(c: string | undefined) => { if (c) set({ colors: { [color.key as ColorKey]: c } }); }"
-                            :aria-label="`${color.label} color picker`"
-                            class="scale-60 origin-left shrink-0"
-                        />
-                        <!-- Hex input + copy button row -->
-                        <div class="flex items-center gap-2 w-full sm:w-auto">
-                            <UInput
-                                v-bind="hexInputProps"
-                                class="flex-1 sm:w-24 h-8"
-                                type="text"
-                                :placeholder="'#RRGGBB'"
-                                :model-value="localHex[color.key as ColorKey]"
-                                @update:model-value="(v) => { localHex[color.key as ColorKey] = String(v ?? ''); onHexInput(color.key as ColorKey); }"
+                        <label class="min-w-0 flex-1 text-xs font-medium">
+                            {{ color.label }}
+                        </label>
+                        <div class="flex items-center gap-1.5">
+                            <UColorPicker
+                                v-bind="paletteColorPickerProps"
                                 :disabled="
                                     !(overrides.colors?.enabled ?? false)
                                 "
-                                :aria-label="`${color.label} hex color`"
-                            />
-                            <UButton
-                                v-bind="copyButtonProps"
-                                class="shrink-0"
-                                :disabled="
-                                    !(overrides.colors?.enabled ?? false) ||
-                                    !String(overrides.colors?.[color.key as ColorKey] || '').startsWith('#')
+                                :model-value="
+                                    (overrides.colors?.enabled ?? false) &&
+                                    String(
+                                        overrides.colors?.[
+                                            color.key as ColorKey
+                                        ] || ''
+                                    ).startsWith('#')
+                                        ? overrides.colors?.[
+                                              color.key as ColorKey
+                                          ]
+                                        : undefined
                                 "
-                                :aria-label="`Copy ${color.label}`"
-                                :title="`Copy ${color.label}`"
-                                @click="copyColor(color.key as ColorKey)"
+                                @update:model-value="
+                                    (c: string | undefined) => {
+                                        if (c)
+                                            set({
+                                                colors: {
+                                                    [color.key as ColorKey]: c,
+                                                },
+                                            });
+                                    }
+                                "
+                                :aria-label="`${color.label} color picker`"
+                                class="scale-60 shrink-0"
                             />
+                            <div class="flex items-center gap-1.5">
+                                <UInput
+                                    v-bind="hexInputProps"
+                                    class="w-24 h-8"
+                                    type="text"
+                                    :placeholder="'#RRGGBB'"
+                                    :model-value="
+                                        localHex[color.key as ColorKey]
+                                    "
+                                    @update:model-value="
+                                        (v) => {
+                                            localHex[color.key as ColorKey] =
+                                                String(v ?? '');
+                                            onHexInput(color.key as ColorKey);
+                                        }
+                                    "
+                                    :disabled="
+                                        !(overrides.colors?.enabled ?? false)
+                                    "
+                                    :aria-label="`${color.label} hex color`"
+                                />
+                                <UButton
+                                    v-bind="copyButtonProps"
+                                    class="shrink-0"
+                                    :disabled="
+                                        !(overrides.colors?.enabled ?? false) ||
+                                        !String(
+                                            overrides.colors?.[
+                                                color.key as ColorKey
+                                            ] || ''
+                                        ).startsWith('#')
+                                    "
+                                    :aria-label="`Copy ${color.label}`"
+                                    :title="`Copy ${color.label}`"
+                                    @click="copyColor(color.key as ColorKey)"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -191,7 +218,9 @@ const paletteColorPickerOverride = useThemeOverrides({
     identifier: 'dashboard.theme.palette-picker',
     isNuxtUI: true,
 });
-const paletteColorPickerProps = computed(() => paletteColorPickerOverride.value || {});
+const paletteColorPickerProps = computed(
+    () => paletteColorPickerOverride.value || {}
+);
 
 const hexInputOverride = useThemeOverrides({
     component: 'input',
@@ -317,3 +346,55 @@ watch(
     { deep: true }
 );
 </script>
+
+<style scoped>
+.palette-toggle {
+    display: flex;
+    min-height: 2.25rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.7rem;
+    color: var(--md-on-surface);
+    background: var(--md-surface-container-low);
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
+    cursor: pointer;
+    font-size: 0.72rem;
+    user-select: none;
+}
+.palette-toggle input {
+    accent-color: var(--md-primary);
+}
+.palette-groups {
+    display: grid;
+    gap: 0.75rem;
+}
+.palette-group {
+    overflow: hidden;
+    background: var(--md-surface-container-low);
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
+}
+.palette-group-title {
+    padding: 0.6rem 0.75rem;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    background: var(--md-surface-container);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.palette-token-row {
+    display: flex;
+    min-height: 3rem;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.7rem;
+}
+@media (min-width: 860px) {
+    .palette-groups {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+    }
+}
+</style>

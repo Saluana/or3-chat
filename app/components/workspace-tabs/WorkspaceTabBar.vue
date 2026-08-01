@@ -85,27 +85,33 @@
             @new-tab="emit('new-tab')"
             @create="emit('create-tab', $event)"
         />
-        <div
-            v-if="contextMenu"
-            ref="contextMenuElement"
-            class="workspace-tab-context"
-            :style="contextMenuStyle"
-            role="menu"
-        >
-            <button role="menuitem" type="button" @click="runContext('close')">Close tab</button>
-            <button role="menuitem" type="button" @click="runContext('close-other')">Close other tabs</button>
-            <button role="menuitem" type="button" @click="runContext('close-right')">Close tabs to the right</button>
-            <button role="menuitem" type="button" :disabled="!canReopenClosed" @click="runContext('reopen')">Reopen closed tab</button>
-            <button role="menuitem" type="button" :disabled="!canOpenSplit" @click="runContext('split')">Open in split</button>
-            <button
-                v-if="copyableTabIds.has(contextMenu.tabId)"
-                role="menuitem"
-                type="button"
-                @click="runContext('copy-link')"
-            >Copy resource link</button>
-            <button role="menuitem" type="button" @click="runContext('left')">Move left</button>
-            <button role="menuitem" type="button" @click="runContext('right')">Move right</button>
-        </div>
+        <!--
+          Teleport out of .workspace-chrome: blank theme backdrop-filter creates a
+          fixed containing block, so viewport client coords overshoot by sidebar width.
+        -->
+        <Teleport to="body">
+            <div
+                v-if="contextMenu"
+                ref="contextMenuElement"
+                class="workspace-tab-context"
+                :style="contextMenuStyle"
+                role="menu"
+            >
+                <button role="menuitem" type="button" @click="runContext('close')">Close tab</button>
+                <button role="menuitem" type="button" @click="runContext('close-other')">Close other tabs</button>
+                <button role="menuitem" type="button" @click="runContext('close-right')">Close tabs to the right</button>
+                <button role="menuitem" type="button" :disabled="!canReopenClosed" @click="runContext('reopen')">Reopen closed tab</button>
+                <button role="menuitem" type="button" :disabled="!canOpenSplit" @click="runContext('split')">Open in split</button>
+                <button
+                    v-if="copyableTabIds.has(contextMenu.tabId)"
+                    role="menuitem"
+                    type="button"
+                    @click="runContext('copy-link')"
+                >Copy resource link</button>
+                <button role="menuitem" type="button" @click="runContext('left')">Move left</button>
+                <button role="menuitem" type="button" @click="runContext('right')">Move right</button>
+            </div>
+        </Teleport>
     </div>
 </template>
 

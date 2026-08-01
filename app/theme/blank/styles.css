@@ -11,7 +11,11 @@
     --or3-chrome-overflow-pad: 0px;
 
     .workspace-chrome {
-        --or3-workspace-chrome-bg: var(--md-surface);
+        --or3-workspace-chrome-bg: color-mix(
+            in srgb,
+            var(--md-surface) 78%,
+            transparent
+        );
         --or3-tab-radius: 10px;
         --or3-tab-close-radius: 6px;
         --or3-tab-shadow: none;
@@ -38,6 +42,10 @@
             transparent
         );
         box-shadow: none;
+        border-bottom: 1px solid
+            color-mix(in srgb, var(--md-border-color) 72%, transparent) !important;
+        -webkit-backdrop-filter: blur(14px) saturate(1.08);
+        backdrop-filter: blur(14px) saturate(1.08);
     }
 
     .workspace-tab-wrap.is-active .workspace-tab,
@@ -319,7 +327,7 @@
 
     /* ── Cards and sections: subtle depth ── */
     .section-card {
-        border: none !important;
+        border: 1px solid var(--md-border-color) !important;
         border-radius: 12px !important;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
     }

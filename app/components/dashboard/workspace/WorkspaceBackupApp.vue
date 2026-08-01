@@ -1,9 +1,20 @@
 <template>
     <div
         id="dashboard-workspace-backup-container"
-        class="px-4 py-4 space-y-10 text-sm"
+        class="dashboard-page-frame text-sm"
     >
         <p ref="liveRegion" class="sr-only" aria-live="polite"></p>
+
+        <header class="dashboard-page-intro">
+            <div>
+                <p class="dashboard-page-eyebrow">Workspace</p>
+                <h1 class="dashboard-page-title">Backup and restore</h1>
+                <p class="dashboard-page-description">
+                    Export a portable local backup or restore workspace data
+                    from a previous OR3 archive.
+                </p>
+            </div>
+        </header>
 
         <section
             id="dashboard-workspace-guidance-section"

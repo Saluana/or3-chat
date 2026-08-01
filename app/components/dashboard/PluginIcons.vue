@@ -6,6 +6,7 @@
         <!-- Icon Shell -->
         <button
             type="button"
+            :aria-label="label"
             v-bind="iconButtonProps"
             :class="[
                 'dashboard-plugin-icon-button group relative flex items-center justify-center overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]',

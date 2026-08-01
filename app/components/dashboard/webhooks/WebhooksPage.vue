@@ -1,9 +1,10 @@
 <template>
-    <div class="space-y-6 p-6">
-        <div class="flex flex-wrap items-center justify-between gap-3 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-4">
+    <div class="dashboard-page-frame">
+        <header class="dashboard-page-intro">
             <div>
-                <div class="text-lg font-semibold text-[var(--md-on-surface)]">Webhook Management</div>
-                <p class="mt-0.5 text-sm text-[var(--md-on-surface)] opacity-60">
+                <p class="dashboard-page-eyebrow">Integrations</p>
+                <h1 class="dashboard-page-title">Webhook management</h1>
+                <p class="dashboard-page-description">
                     Configure outbound deliveries for thread, message, document, and notification events.
                 </p>
             </div>
@@ -16,8 +17,9 @@
             >
                 Disable All Webhooks
             </UButton>
-        </div>
+        </header>
 
+        <div class="section-card">
         <WebhooksList
             :webhooks="webhooks"
             :loading="pending"
@@ -32,6 +34,7 @@
             @test="sendTestPing"
             @dismiss-test="testResult = null"
         />
+        </div>
 
         <WebhookForm
             v-model:open="formOpen"

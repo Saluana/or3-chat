@@ -22,7 +22,11 @@
                 >
                     Loading dashboard...
                 </div>
-                <div v-else id="dashboard-plugin-grid" class="dashboard-plugin-grid">
+                <div
+                    v-else
+                    id="dashboard-plugin-grid"
+                    class="dashboard-plugin-grid"
+                >
                     <plugin-icons
                         v-for="item in dashboardItems"
                         :key="item.id"
@@ -42,12 +46,13 @@
             >
                 <div
                     id="dashboard-page-header"
-                    class="flex h-10 shrink-0 items-center border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)] pr-2 px-4"
+                    class="flex h-14 shrink-0 items-center border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-3 sm:px-5"
                 >
                     <UButton
                         id="dashboard-back-button"
+                        aria-label="Back to dashboard"
                         v-bind="backButtonProps"
-                        class="ml-2 text-[20px] gap-0.5"
+                        class="text-[20px] gap-0.5"
                         @click="goBack()"
                     >
                         <UIcon
@@ -110,7 +115,7 @@
                 <div
                     v-else
                     id="dashboard-page-content"
-                    class="flex-1 min-h-0 overflow-y-auto"
+                    class="dashboard-page-scroll flex-1 min-h-0 overflow-y-auto bg-[var(--md-surface-container-low)]"
                 >
                     <div
                         v-if="state.loadingPage"
@@ -284,7 +289,7 @@ const dashboardModalOverrides = useThemeOverrides({
 
 const dashboardModalProps = computed(() => {
     const baseClass =
-        'w-[98dvw] h-[98dvh] sm:w-[720px] sm:max-w-[95dvw] sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden';
+        'w-[calc(100dvw-0.75rem)] h-[calc(100dvh-0.75rem)] sm:w-[96dvw] sm:max-w-[1180px] sm:h-[94dvh] sm:max-h-[900px] overflow-hidden';
     const baseUi = {
         content: 'z-[10]',
         footer: 'justify-end border-t-[var(--md-border-width)]',
@@ -355,6 +360,10 @@ const pluginIconSize = computed(() => {
 #dashboard-grid-view {
     display: flex;
     justify-content: center;
+}
+
+.dashboard-page-scroll {
+    scrollbar-gutter: stable;
 }
 
 #dashboard-plugin-grid {

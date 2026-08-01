@@ -1,12 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import type { FileMeta } from '../../db/schema';
+import { listAllImageMetas, updateFileName } from '../../db/files-select';
 import {
-    listImageMetasPaged,
-    listDeletedImageMetasPaged,
-    updateFileName,
-} from '../../db/files-select';
-import {
+    createOrRefFile,
     getFileBlob,
     getFileMeta,
     softDeleteMany,
@@ -14,6 +11,8 @@ import {
     restoreMany,
     hardDeleteMany,
 } from '../../db/files';
+import { listDocuments } from '../../db/documents';
+import { parseDocumentFileHashes } from '~/utils/documents/document-content';
 import {
     consumePendingPaletteImageSelection,
     subscribePaletteImageSelection,
@@ -24,17 +23,27 @@ import { reportError } from '../../utils/errors';
 import { useToast, useIcon } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { copyImageBlobToClipboard } from './copy-image-to-clipboard';
+import { useImageSearch } from '~/core/search/useImageSearch';
+import {
+    filterImageLibrary,
+    imageLibraryCounts,
+    sortImageLibrary,
+    type ImageLibrarySort,
+    type ImageLibraryView,
+} from './image-library';
 
 const PAGE_SIZE = 50;
 const items = ref<FileMeta[]>([]);
-const offset = ref(0);
 const loading = ref(false);
-const done = ref(false);
+const visibleLimit = ref(PAGE_SIZE);
+const activeView = ref<ImageLibraryView>('all');
+const sortMode = ref<ImageLibrarySort>('newest');
+const usedInDocumentHashes = ref<Set<string>>(new Set());
 const showViewer = ref(false);
 const selected = ref<FileMeta | null>(null);
 const selectionMode = ref(false);
 const selectedHashes = ref<Set<string>>(new Set());
-const trashMode = ref(false);
+const trashMode = computed(() => activeView.value === 'trash');
 type MutationState = 'idle' | 'soft-delete' | 'hard-delete' | 'restore';
 // Keep this union in sync with the computed helpers below so template logic stays DRY.
 const mutationState = ref<MutationState>('idle');
@@ -43,13 +52,85 @@ const isSoftDeleting = computed(() => mutationState.value === 'soft-delete');
 const isHardDeleting = computed(() => mutationState.value === 'hard-delete');
 const isRestoring = computed(() => mutationState.value === 'restore');
 const toast = useToast();
+const uploadInput = ref<HTMLInputElement | null>(null);
+const uploading = ref(false);
 
 const selectedCount = computed(() => selectedHashes.value.size);
 const hasSelection = computed(() => selectedCount.value > 0);
-const hasItems = computed(() => items.value.length > 0);
+const hasItems = computed(() => visibleItems.value.length > 0);
 const canSelectAll = computed(
-    () => hasItems.value && selectedHashes.value.size < items.value.length
+    () =>
+        hasItems.value && selectedHashes.value.size < visibleItems.value.length
 );
+
+const searchableItems = computed(() => items.value);
+const imageSearch = useImageSearch(searchableItems);
+const searchQuery = imageSearch.query;
+const searchedHashes = computed(
+    () => new Set(imageSearch.results.value.map((item) => item.hash))
+);
+const activeItems = computed(() =>
+    items.value.filter((item) => item.deleted === trashMode.value)
+);
+const filteredItems = computed(() => {
+    const searched = searchQuery.value.trim()
+        ? activeItems.value.filter((item) =>
+              searchedHashes.value.has(item.hash)
+          )
+        : activeItems.value;
+    return sortImageLibrary(
+        filterImageLibrary(
+            searched,
+            activeView.value,
+            usedInDocumentHashes.value
+        ),
+        sortMode.value
+    );
+});
+const visibleItems = computed(() =>
+    filteredItems.value.slice(0, visibleLimit.value)
+);
+const done = computed(() => visibleLimit.value >= filteredItems.value.length);
+const counts = computed(() =>
+    imageLibraryCounts(
+        items.value.filter((item) => !item.deleted),
+        items.value.filter((item) => item.deleted),
+        usedInDocumentHashes.value
+    )
+);
+
+const libraryViews: Array<{
+    id: ImageLibraryView;
+    label: string;
+    icon: string;
+}> = [
+    { id: 'all', label: 'All images', icon: useIcon('image.multiple').value },
+    {
+        id: 'uploads',
+        label: 'Uploads',
+        icon: useIcon('dashboard.backup').value,
+    },
+    {
+        id: 'generated',
+        label: 'Generated',
+        icon: useIcon('dashboard.plugins').value,
+    },
+    {
+        id: 'used-in-docs',
+        label: 'Used in docs',
+        icon: useIcon('ui.notes').value,
+    },
+    { id: 'trash', label: 'Trash', icon: useIcon('ui.trash').value },
+];
+
+const sortOptions = [
+    { label: 'Newest first', value: 'newest' },
+    { label: 'Oldest first', value: 'oldest' },
+    { label: 'Name A–Z', value: 'name-asc' },
+    { label: 'Name Z–A', value: 'name-desc' },
+    { label: 'Largest first', value: 'largest' },
+    { label: 'Smallest first', value: 'smallest' },
+];
 
 type DeleteOutcome = {
     attempted: string[];
@@ -65,23 +146,30 @@ type RestoreOutcome = {
     aborted: boolean;
 };
 
-async function loadMore() {
-    if (loading.value || done.value) return;
+async function refreshLibrary() {
+    if (loading.value) return;
     loading.value = true;
     try {
-        const fetcher = trashMode.value
-            ? listDeletedImageMetasPaged
-            : listImageMetasPaged;
-        const chunk = await fetcher(offset.value, PAGE_SIZE);
-        const filteredChunk = chunk.filter((item) =>
-            trashMode.value ? item.deleted === true : item.deleted !== true
+        const [library, trash, documents] = await Promise.all([
+            listAllImageMetas(false),
+            listAllImageMetas(true),
+            listDocuments(Number.MAX_SAFE_INTEGER),
+        ]);
+        items.value = [...library, ...trash];
+        usedInDocumentHashes.value = new Set(
+            documents.flatMap((document) =>
+                parseDocumentFileHashes(document.file_hashes)
+            )
         );
-        if (chunk.length < PAGE_SIZE) done.value = true;
-        items.value.push(...filteredChunk);
-        offset.value += chunk.length;
+        await imageSearch.rebuild();
+        await imageSearch.search();
     } finally {
         loading.value = false;
     }
+}
+
+function loadMore() {
+    visibleLimit.value += PAGE_SIZE;
 }
 
 /**
@@ -101,7 +189,7 @@ async function openPaletteSelection(hash: string) {
 let stopPaletteSelection: (() => void) | null = null;
 
 onMounted(() => {
-    loadMore();
+    void refreshLibrary();
     stopPaletteSelection = subscribePaletteImageSelection((hash) => {
         consumePendingPaletteImageSelection();
         if (hash) void openPaletteSelection(hash);
@@ -185,6 +273,8 @@ async function handleRename(meta: FileMeta) {
     meta.name = next;
     try {
         await updateFileName(meta.hash, next);
+        await imageSearch.rebuild();
+        await imageSearch.search();
     } catch (error) {
         meta.name = old;
         reportError(error, {
@@ -195,26 +285,53 @@ async function handleRename(meta: FileMeta) {
     }
 }
 
+function openUploadPicker() {
+    uploadInput.value?.click();
+}
+
+async function handleUpload(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []).filter((file) =>
+        file.type.startsWith('image/')
+    );
+    if (!files.length) return;
+    uploading.value = true;
+    try {
+        for (const file of files) {
+            await createOrRefFile(file, file.name || 'Uploaded image');
+        }
+        await refreshLibrary();
+        setActiveView('uploads');
+        toast.add({
+            title: files.length === 1 ? 'Image uploaded' : 'Images uploaded',
+            description: `${files.length} image${files.length === 1 ? '' : 's'} added to your library.`,
+            color: 'success',
+        });
+    } catch (error) {
+        reportError(error, {
+            code: 'ERR_DB_WRITE_FAILED',
+            message: 'Could not add the selected images.',
+            tags: { domain: 'images', action: 'upload' },
+        });
+    } finally {
+        uploading.value = false;
+        input.value = '';
+    }
+}
+
 function handleView(meta: FileMeta) {
     selected.value = meta;
     showViewer.value = true;
 }
 
-function resetListing() {
-    items.value = [];
-    offset.value = 0;
-    done.value = false;
-}
-
-function toggleTrashMode() {
-    if (loading.value || isMutating.value) return;
-    trashMode.value = !trashMode.value;
+function setActiveView(view: ImageLibraryView) {
+    if (isMutating.value || activeView.value === view) return;
+    activeView.value = view;
+    visibleLimit.value = PAGE_SIZE;
     selectionMode.value = false;
     clearSelection();
     selected.value = null;
     showViewer.value = false;
-    resetListing();
-    loadMore();
 }
 
 function toggleSelectionMode() {
@@ -229,8 +346,8 @@ function clearSelection() {
 }
 
 function selectAllVisible() {
-    if (!items.value.length) return;
-    selectedHashes.value = new Set(items.value.map((item) => item.hash));
+    if (!visibleItems.value.length) return;
+    selectedHashes.value = new Set(visibleItems.value.map((item) => item.hash));
     if (selectedHashes.value.size > 0) {
         selectionMode.value = true;
     }
@@ -254,7 +371,6 @@ function removeHashesFromState(hashes: string[]) {
     }
     const removal = new Set(hashes);
     const removedSet = new Set<string>();
-    const before = items.value.length;
     items.value = items.value.filter((item) => {
         if (removal.has(item.hash)) {
             removedSet.add(item.hash);
@@ -262,10 +378,6 @@ function removeHashesFromState(hashes: string[]) {
         }
         return true;
     });
-    const removedCount = removedSet.size;
-    if (removedCount > 0) {
-        offset.value = Math.max(0, offset.value - removedCount);
-    }
     const nextSelected = new Set<string>();
     for (const hash of selectedHashes.value) {
         if (!removedSet.has(hash)) nextSelected.add(hash);
@@ -314,6 +426,7 @@ async function executeDeleteByMode(
             await softDeleteMany(attempted);
         }
         const { removedHashes, remaining } = removeHashesFromState(attempted);
+        await refreshLibrary();
         if (removedHashes.length > 0) {
             toast.add({
                 title: options.successTitle,
@@ -398,6 +511,7 @@ async function executeRestore(
     try {
         await restoreMany(attempted);
         const { removedHashes, remaining } = removeHashesFromState(attempted);
+        await refreshLibrary();
         if (removedHashes.length > 0) {
             toast.add({
                 title: 'Images restored',
@@ -454,9 +568,6 @@ async function deleteSingle(meta: FileMeta | null) {
         if (outcome.removed.length > 0 && outcome.remaining.length === 0) {
             clearSelection();
             selectionMode.value = false;
-            if (!done.value && items.value.length < PAGE_SIZE) {
-                loadMore();
-            }
         }
         return outcome.removed.length > 0;
     }
@@ -492,9 +603,6 @@ async function deleteSelected() {
         if (outcome.removed.length > 0 && outcome.remaining.length === 0) {
             clearSelection();
             selectionMode.value = false;
-            if (!done.value && items.value.length < PAGE_SIZE) {
-                loadMore();
-            }
         }
         return outcome.removed.length > 0;
     }
@@ -510,9 +618,6 @@ async function deleteSelected() {
     if (outcome.removed.length > 0 && outcome.remaining.length === 0) {
         clearSelection();
         selectionMode.value = false;
-        if (!done.value && items.value.length < PAGE_SIZE) {
-            loadMore();
-        }
     }
     return outcome.removed.length > 0;
 }
@@ -531,9 +636,6 @@ async function restoreSingle(meta: FileMeta | null) {
     if (outcome.restored.length > 0 && outcome.remaining.length === 0) {
         clearSelection();
         selectionMode.value = false;
-        if (!done.value && items.value.length < PAGE_SIZE) {
-            loadMore();
-        }
     }
     return outcome.restored.length > 0;
 }
@@ -553,28 +655,9 @@ async function restoreSelected() {
     if (outcome.restored.length > 0 && outcome.remaining.length === 0) {
         clearSelection();
         selectionMode.value = false;
-        if (!done.value && items.value.length < PAGE_SIZE) {
-            loadMore();
-        }
     }
     return outcome.restored.length > 0;
 }
-
-const trashToggleButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'images',
-        identifier: 'images.trash-toggle',
-        isNuxtUI: true,
-    });
-    return {
-        size: 'sm' as const,
-        variant: 'outline' as const,
-        class: 'flex items-center gap-1',
-        type: 'button' as const,
-        ...overrides.value,
-    };
-});
 
 const selectionToggleButtonProps = computed(() => {
     const overrides = useThemeOverrides({
@@ -690,34 +773,79 @@ const loadMoreButtonProps = computed(() => {
         ...overrides.value,
     };
 });
+
+const uploadButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'images',
+        identifier: 'images.upload',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'solid' as const,
+        color: 'primary' as const,
+        type: 'button' as const,
+        ...overrides.value,
+    };
+});
+
+const searchInputProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'input',
+        context: 'images',
+        identifier: 'images.search',
+        isNuxtUI: true,
+    });
+    return {
+        icon: useIcon('palette.search').value,
+        size: 'md' as const,
+        ...overrides.value,
+    };
+});
 </script>
 
 <template>
     <div
-        class="p-4 max-w-[1400px] mx-auto relative"
+        class="image-library-page relative"
         :class="{ 'pb-24': selectionMode }"
     >
-        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h1 class="text-xl font-semibold">
-                {{ trashMode ? 'Trash' : 'Images' }}
-            </h1>
-            <div class="flex items-center gap-2">
+        <input
+            ref="uploadInput"
+            class="sr-only"
+            type="file"
+            accept="image/*"
+            multiple
+            @change="handleUpload"
+        />
+
+        <header class="image-library-header">
+            <div>
+                <p class="dashboard-page-eyebrow">Workspace</p>
+                <h1 class="dashboard-page-title">
+                    {{ trashMode ? 'Image trash' : 'Image library' }}
+                </h1>
+                <p class="dashboard-page-description">
+                    {{
+                        trashMode
+                            ? 'Restore deleted images or remove them permanently.'
+                            : 'Search, manage, and reuse generated and uploaded images.'
+                    }}
+                </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
                 <UButton
-                    v-bind="trashToggleButtonProps"
-                    data-test="trash-toggle"
-                    :aria-pressed="trashMode"
-                    @click="toggleTrashMode"
-                    :disabled="loading || isMutating"
+                    v-if="!trashMode"
+                    v-bind="uploadButtonProps"
+                    :loading="uploading"
+                    :disabled="isMutating"
+                    @click="openUploadPicker"
                 >
                     <UIcon
-                        :name="
-                            trashMode
-                                ? useIcon('image.multiple').value
-                                : useIcon('ui.trash').value
-                        "
+                        :name="useIcon('dashboard.restore').value"
                         class="mr-0.5"
                     />
-                    {{ trashMode ? 'Show library' : 'Show trash' }}
+                    Upload images
                 </UButton>
                 <UButton
                     v-bind="selectionToggleButtonProps"
@@ -732,114 +860,196 @@ const loadMoreButtonProps = computed(() => {
                     {{ selectionMode ? 'Cancel' : 'Select' }}
                 </UButton>
             </div>
-        </div>
-        <p v-if="trashMode" class="mb-3 text-sm opacity-80">
-            Showing deleted images. Restore or delete them permanently.
-        </p>
-        <div
-            v-if="selectionMode"
-            class="fixed inset-x-0 bottom-0 z-[1000] border-t-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-high)]/80 backdrop-blur-md"
-        >
-            <div
-                class="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2 px-4 py-2"
-            >
-                <UButton
-                    v-bind="selectionToggleButtonProps"
-                    data-test="multi-toggle"
-                    @click="toggleSelectionMode"
-                    :disabled="isMutating"
+        </header>
+
+        <div class="image-library-shell">
+            <aside class="image-library-nav" aria-label="Image library views">
+                <button
+                    v-for="view in libraryViews"
+                    :key="view.id"
+                    type="button"
+                    class="image-library-nav-item"
+                    :class="{
+                        'image-library-nav-item--active':
+                            activeView === view.id,
+                    }"
+                    :aria-current="activeView === view.id ? 'page' : undefined"
+                    :data-test="
+                        view.id === 'trash' ? 'trash-toggle' : undefined
+                    "
+                    @click="setActiveView(view.id)"
                 >
-                    {{ selectionMode ? 'Cancel' : 'Select' }}
-                </UButton>
-                <template v-if="trashMode">
-                    <UButton
-                        v-bind="selectAllButtonProps"
-                        :disabled="!canSelectAll || isMutating"
-                        @click="selectAllVisible"
-                    >
-                        {{
-                            canSelectAll
-                                ? `Select all (${items.length})`
-                                : 'All selected'
-                        }}
-                    </UButton>
-                    <UButton
-                        v-bind="restoreSelectedButtonProps"
-                        :disabled="!hasSelection || isMutating"
-                        @click="handleRestoreSelectedClick"
-                    >
-                        {{
-                            isRestoring
-                                ? 'Restoring…'
-                                : `Restore (${selectedCount})`
-                        }}
-                    </UButton>
-                    <UButton
-                        v-bind="deletePermanentlyButtonProps"
-                        :disabled="!hasSelection || isMutating"
-                        data-test="delete-selected"
-                        @click="handleDeleteSelectedClick"
-                    >
-                        {{
-                            isHardDeleting
-                                ? 'Deleting…'
-                                : `Delete permanently (${selectedCount})`
-                        }}
-                    </UButton>
-                </template>
-                <template v-else>
-                    <UButton
-                        v-bind="clearSelectionButtonProps"
-                        :disabled="!hasSelection || isMutating"
-                        @click="clearSelection"
-                    >
-                        Clear
-                    </UButton>
-                    <UButton
-                        v-bind="deleteSelectionButtonProps"
-                        :disabled="!hasSelection || isMutating"
-                        data-test="delete-selected"
-                        @click="handleDeleteSelectedClick"
-                    >
-                        {{
-                            isSoftDeleting
-                                ? 'Deleting…'
-                                : `Delete (${selectedCount})`
-                        }}
-                    </UButton>
-                </template>
-                <span
-                    class="ml-auto text-sm opacity-80 hidden sm:inline"
-                    data-test="selected-count"
+                    <UIcon :name="view.icon" class="h-4 w-4 shrink-0" />
+                    <span>{{ view.label }}</span>
+                    <span class="ml-auto tabular-nums opacity-60">{{
+                        counts[view.id]
+                    }}</span>
+                </button>
+
+                <div class="image-library-summary">
+                    <span class="text-xs opacity-65">Stored locally</span>
+                    <strong>{{ counts.all }} active images</strong>
+                    <span class="text-xs opacity-65">
+                        Previews load only when visible.
+                    </span>
+                </div>
+            </aside>
+
+            <main class="min-w-0">
+                <div class="image-library-toolbar">
+                    <UInput
+                        v-model="searchQuery"
+                        v-bind="searchInputProps"
+                        class="min-w-0 flex-1"
+                        placeholder="Search by file name or type"
+                        aria-label="Search images"
+                    />
+                    <USelect
+                        v-model="sortMode"
+                        :items="sortOptions"
+                        value-key="value"
+                        label-key="label"
+                        class="w-full sm:w-44"
+                        aria-label="Sort images"
+                    />
+                </div>
+
+                <div class="image-library-results-meta">
+                    <span>
+                        {{ filteredItems.length }}
+                        {{ filteredItems.length === 1 ? 'image' : 'images' }}
+                    </span>
+                    <span v-if="searchQuery" class="truncate">
+                        matching “{{ searchQuery }}”
+                    </span>
+                </div>
+
+                <div
+                    v-if="selectionMode"
+                    class="fixed inset-x-0 bottom-0 z-[1000] border-t-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-high)]/80 backdrop-blur-md"
                 >
-                    Selected: {{ selectedCount }}
-                </span>
-            </div>
-        </div>
-        <GalleryGrid
-            :items="items"
-            :selection-mode="selectionMode"
-            :selected-hashes="selectedHashes"
-            :is-deleting="isMutating"
-            :trash-mode="trashMode"
-            @view="handleView"
-            @download="handleDownload"
-            @copy="handleCopy"
-            @rename="handleRename"
-            @delete="deleteSingle"
-            @toggle-select="toggleSelect"
-        />
-        <div class="mt-4 flex justify-center">
-            <UButton
-                v-bind="loadMoreButtonProps"
-                :disabled="loading || done || isMutating"
-                @click="loadMore"
-            >
-                <span v-if="!done">{{
-                    loading ? 'Loading…' : 'Load more'
-                }}</span>
-                <span v-else>All loaded</span>
-            </UButton>
+                    <div
+                        class="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2 px-4 py-2"
+                    >
+                        <UButton
+                            v-bind="selectionToggleButtonProps"
+                            data-test="multi-toggle"
+                            @click="toggleSelectionMode"
+                            :disabled="isMutating"
+                        >
+                            {{ selectionMode ? 'Cancel' : 'Select' }}
+                        </UButton>
+                        <template v-if="trashMode">
+                            <UButton
+                                v-bind="selectAllButtonProps"
+                                :disabled="!canSelectAll || isMutating"
+                                @click="selectAllVisible"
+                            >
+                                {{
+                                    canSelectAll
+                                        ? `Select visible (${visibleItems.length})`
+                                        : 'All selected'
+                                }}
+                            </UButton>
+                            <UButton
+                                v-bind="restoreSelectedButtonProps"
+                                :disabled="!hasSelection || isMutating"
+                                @click="handleRestoreSelectedClick"
+                            >
+                                {{
+                                    isRestoring
+                                        ? 'Restoring…'
+                                        : `Restore (${selectedCount})`
+                                }}
+                            </UButton>
+                            <UButton
+                                v-bind="deletePermanentlyButtonProps"
+                                :disabled="!hasSelection || isMutating"
+                                data-test="delete-selected"
+                                @click="handleDeleteSelectedClick"
+                            >
+                                {{
+                                    isHardDeleting
+                                        ? 'Deleting…'
+                                        : `Delete permanently (${selectedCount})`
+                                }}
+                            </UButton>
+                        </template>
+                        <template v-else>
+                            <UButton
+                                v-bind="clearSelectionButtonProps"
+                                :disabled="!hasSelection || isMutating"
+                                @click="clearSelection"
+                            >
+                                Clear
+                            </UButton>
+                            <UButton
+                                v-bind="deleteSelectionButtonProps"
+                                :disabled="!hasSelection || isMutating"
+                                data-test="delete-selected"
+                                @click="handleDeleteSelectedClick"
+                            >
+                                {{
+                                    isSoftDeleting
+                                        ? 'Deleting…'
+                                        : `Delete (${selectedCount})`
+                                }}
+                            </UButton>
+                        </template>
+                        <span
+                            class="ml-auto text-sm opacity-80 hidden sm:inline"
+                            data-test="selected-count"
+                        >
+                            Selected: {{ selectedCount }}
+                        </span>
+                    </div>
+                </div>
+                <GalleryGrid
+                    :items="visibleItems"
+                    :selection-mode="selectionMode"
+                    :selected-hashes="selectedHashes"
+                    :is-deleting="isMutating"
+                    :trash-mode="trashMode"
+                    @view="handleView"
+                    @download="handleDownload"
+                    @copy="handleCopy"
+                    @rename="handleRename"
+                    @delete="deleteSingle"
+                    @toggle-select="toggleSelect"
+                />
+                <div
+                    v-if="!loading && filteredItems.length === 0"
+                    class="image-library-empty"
+                >
+                    <UIcon
+                        :name="useIcon('dashboard.images').value"
+                        class="h-8 w-8"
+                    />
+                    <strong>No images found</strong>
+                    <span>
+                        {{
+                            searchQuery
+                                ? 'Try another search or library view.'
+                                : 'Add an image to get started.'
+                        }}
+                    </span>
+                </div>
+                <div
+                    v-if="filteredItems.length > PAGE_SIZE"
+                    class="mt-5 flex justify-center"
+                >
+                    <UButton
+                        v-bind="loadMoreButtonProps"
+                        :disabled="loading || done || isMutating"
+                        @click="loadMore"
+                    >
+                        <span v-if="!done">{{
+                            loading ? 'Loading…' : 'Load more'
+                        }}</span>
+                        <span v-else>All loaded</span>
+                    </UButton>
+                </div>
+            </main>
         </div>
         <ImageViewer
             v-model="showViewer"
@@ -854,4 +1064,123 @@ const loadMoreButtonProps = computed(() => {
     </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.image-library-page {
+    width: min(100%, 1120px);
+    min-height: 100%;
+    margin-inline: auto;
+    padding: 1.25rem;
+}
+.image-library-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.image-library-shell {
+    display: grid;
+    gap: 1rem;
+}
+.image-library-nav {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+}
+.image-library-nav-item {
+    display: flex;
+    flex: 0 0 auto;
+    min-width: max-content;
+    min-height: 2.5rem;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.55rem 0.7rem;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    background: transparent;
+    border: var(--md-border-width) solid transparent;
+    border-radius: var(--md-border-radius);
+    cursor: pointer;
+    font-size: 0.74rem;
+    text-align: left;
+    white-space: nowrap;
+}
+.image-library-nav-item:hover {
+    color: var(--md-on-surface);
+    background: var(--md-surface-hover);
+}
+.image-library-nav-item--active {
+    color: var(--md-on-primary-container);
+    background: var(--md-primary-container);
+    border-color: var(--md-outline-variant);
+}
+.image-library-summary {
+    display: none;
+}
+.image-library-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    padding: 0.7rem;
+    background: var(--md-surface);
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
+}
+.image-library-results-meta {
+    display: flex;
+    gap: 0.35rem;
+    padding: 0.65rem 0.15rem;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    font-size: 0.68rem;
+    opacity: 0.72;
+}
+.image-library-empty {
+    display: flex;
+    min-height: 14rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    background: var(--md-surface);
+    border: var(--md-border-width) dashed var(--md-outline-variant);
+    border-radius: var(--md-border-radius);
+    text-align: center;
+}
+.image-library-empty span {
+    font-size: 0.72rem;
+    opacity: 0.7;
+}
+@media (min-width: 760px) {
+    .image-library-page {
+        padding: 1.5rem 1.75rem;
+    }
+    .image-library-shell {
+        grid-template-columns: 10.5rem minmax(0, 1fr);
+        align-items: start;
+    }
+    .image-library-nav {
+        position: sticky;
+        top: 0;
+        flex-direction: column;
+        overflow: visible;
+        padding: 0.65rem;
+        background: var(--md-surface);
+        border: var(--md-border-width) solid var(--md-border-color);
+        border-radius: var(--md-border-radius);
+    }
+    .image-library-nav-item {
+        width: 100%;
+        min-width: 0;
+    }
+    .image-library-summary {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        margin-top: 0.4rem;
+        padding: 0.8rem 0.7rem 0.2rem;
+        border-top: var(--md-border-width) solid var(--md-outline-variant);
+    }
+}
+</style>

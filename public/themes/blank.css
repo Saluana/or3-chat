@@ -290,6 +290,14 @@
   bottom: -24px !important;
 }
 
+[data-theme="blank"] #dashboard-page-header {
+  border-bottom: 1px solid var(--md-border-color) !important;
+}
+
+[data-theme="blank"] .dashboard-page-scroll {
+  background-color: var(--md-surface) !important;
+}
+
 [data-theme="blank"] .dashboard-plugin-icon-label {
   font-size: 12px;
 }
@@ -323,7 +331,7 @@
 
 [data-theme="blank"] .section-card {
   background-color: var(--md-surface);
-  border: none !important;
+  border: 1px solid var(--md-border-color) !important;
   border-radius: 12px !important;
   padding: 20px 16px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);

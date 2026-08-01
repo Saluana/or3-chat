@@ -1,4 +1,5 @@
-const galleryButtons = 'bg-black/10! backdrop-blur-md! hover:bg-black/20! active:bg-black/30! flex items-center justify-center border-0 rounded-full';
+const galleryButtons =
+    'bg-black/10! backdrop-blur-md! hover:bg-black/20! active:bg-black/30! flex items-center justify-center border-0 rounded-full';
 const destructiveOutlineButton = {
     color: 'neutral' as const,
     ui: {
@@ -35,6 +36,16 @@ export const dashboardOverrides = {
     'button#images.delete-selection': destructiveOutlineButton,
 };
 export const dashboardStyles = {
+    '#dashboard-page-header': {
+        style: {
+            borderBottom: '1px solid var(--md-border-color) !important',
+        },
+    },
+    '.dashboard-page-scroll': {
+        style: {
+            backgroundColor: 'var(--md-surface) !important',
+        },
+    },
     '.dashboard-plugin-icon-label': {
         style: {
             fontSize: '12px',
@@ -75,7 +86,7 @@ export const dashboardStyles = {
     '.section-card': {
         style: {
             backgroundColor: 'var(--md-surface)',
-            border: 'none !important',
+            border: '1px solid var(--md-border-color) !important',
             borderRadius: '12px !important',
             padding: '20px 16px',
             boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',

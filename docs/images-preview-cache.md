@@ -23,6 +23,7 @@ Adjust these values conservatively; the cache revokes URLs immediately on evicti
 -   `release(hash)` decrements the pin so future evictions can reclaim memory once off-screen.
 -   `drop(hash)` removes a preview immediately and revokes the object URL.
 -   `flushAll()` clears every entry (used when the tab becomes hidden or the grid unmounts).
+-   On `visibilitychange` → `hidden`, `GalleryGrid` flushes blob URLs but keeps the visible-hash set. On `visible`, it reloads those tiles and rebinds the intersection observer (browsers often do not re-notify already-intersecting elements).
 
 ## Dev logging & metrics
 
@@ -36,7 +37,7 @@ Each log includes `urls`, `bytes`, `hits`, `misses`, `evictions`, `maxUrls`, and
 
 ## Integration checklist
 
--   `GalleryGrid.vue` pins visible previews, calls `evictIfNeeded()` after observer updates, and flushes on `visibilitychange`.
+-   `GalleryGrid.vue` pins visible previews, calls `evictIfNeeded()` after observer updates, flushes on tab hide, and reloads visible previews on tab show.
 -   `ImageViewer.vue` reuses cached URLs, promotes on open, and releases on close.
 -   Tests covering cache hit/miss/eviction live under `app/composables/__tests__/previewCache.test.ts` and `app/pages/images/__tests__/image-viewer.cache.test.ts`.
 

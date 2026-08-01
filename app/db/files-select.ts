@@ -80,6 +80,22 @@ export async function listDeletedImageMetasPaged(
         .toArray();
 }
 
+/**
+ * List every image metadata row for library-wide search, filters, and counts.
+ * Binary payloads remain lazy and are not read by this query.
+ */
+export async function listAllImageMetas(deleted = false): Promise<FileMeta[]> {
+    return getDb().file_meta
+        .orderBy('updated_at')
+        .reverse()
+        .filter(
+            (m) =>
+                m.deleted === deleted &&
+                (m.kind === 'image' || m.mime_type.startsWith('image/'))
+        )
+        .toArray();
+}
+
 // Update a file's display name and bump updated_at.
 /**
  * Purpose:

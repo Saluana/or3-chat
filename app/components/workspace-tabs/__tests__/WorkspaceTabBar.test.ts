@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import WorkspaceTabBar from '../WorkspaceTabBar.vue';
 
@@ -28,6 +28,7 @@ function mountBar() {
             activeTabId: 'tab-chat',
             visibleTabIds: new Set(['tab-chat']),
         },
+        attachTo: document.body,
         global: {
             stubs: {
                 UIcon: { template: '<span />' },
@@ -36,7 +37,15 @@ function mountBar() {
     });
 }
 
+function contextMenu(): HTMLElement | null {
+    return document.body.querySelector('.workspace-tab-context');
+}
+
 describe('WorkspaceTabBar', () => {
+    afterEach(() => {
+        document.body.innerHTML = '';
+    });
+
     it('uses a roving tablist and activates adjacent tabs from the keyboard', async () => {
         const scrollIntoView = vi.fn();
         Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
@@ -54,12 +63,14 @@ describe('WorkspaceTabBar', () => {
         expect(wrapper.emitted('activate')).toEqual([
             ['tab-doc', 'keyboard'],
         ]);
+        wrapper.unmount();
     });
 
     it('keeps the new-tab action outside the horizontally scrolling tablist', () => {
         const wrapper = mountBar();
         expect(wrapper.find('[role="tablist"] .workspace-tab-new').exists()).toBe(false);
         expect(wrapper.get('.workspace-tab-new').attributes('aria-label')).toBe('New tab');
+        wrapper.unmount();
     });
 
     it('provides accessible close and split actions without closing a tab on normal click', async () => {
@@ -70,11 +81,15 @@ describe('WorkspaceTabBar', () => {
         await wrapper
             .findAll('[role="tab"]')[1]!
             .trigger('contextmenu', { clientX: 20, clientY: 30 });
-        await wrapper.get('[role="menuitem"]').trigger('click');
+        const firstItem = contextMenu()?.querySelector('[role="menuitem"]');
+        expect(firstItem).toBeTruthy();
+        (firstItem as HTMLButtonElement).click();
+        await wrapper.vm.$nextTick();
         expect(wrapper.emitted('close')).toEqual([
             ['tab-chat'],
             ['tab-doc'],
         ]);
+        wrapper.unmount();
     });
 
     it('dismisses the context menu when the user clicks outside it', async () => {
@@ -82,12 +97,12 @@ describe('WorkspaceTabBar', () => {
         await wrapper
             .findAll('[role="tab"]')[0]!
             .trigger('contextmenu', { clientX: 20, clientY: 30 });
-        expect(wrapper.find('[role="menu"]').exists()).toBe(true);
+        expect(contextMenu()).toBeTruthy();
 
         window.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
         await wrapper.vm.$nextTick();
 
-        expect(wrapper.find('[role="menu"]').exists()).toBe(false);
+        expect(contextMenu()).toBeNull();
         wrapper.unmount();
     });
 
@@ -127,5 +142,6 @@ describe('WorkspaceTabBar', () => {
 
         expect(wrapper.emitted('reorder')).toEqual([['tab-chat', 1]]);
         expect(wrapper.emitted('activate')).toBeUndefined();
+        wrapper.unmount();
     });
 });

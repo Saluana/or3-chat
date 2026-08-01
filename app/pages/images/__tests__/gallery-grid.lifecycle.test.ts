@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { makeMeta } from './test-utils';
 import type { FileMeta } from '~/db/schema';
+import { resetSharedPreviewCache } from '~/composables/core/usePreviewCache';
 
 const { getMocks } = vi.hoisted(() => {
     const toastAdd = vi.fn();
@@ -79,9 +80,11 @@ describe('GalleryGrid lifecycle management', () => {
         mocks.toastAdd.mockReset();
         mocks.getFileBlob.mockReset();
         mocks.reportError.mockReset();
+        resetSharedPreviewCache();
     });
 
     afterEach(() => {
+        resetSharedPreviewCache();
         vi.restoreAllMocks();
         vi.unstubAllGlobals();
         vi.useRealTimers();
@@ -234,6 +237,108 @@ describe('GalleryGrid lifecycle management', () => {
 
         window.requestIdleCallback = originalRequestIdle;
         window.cancelIdleCallback = originalCancelIdle;
+    });
+
+    it('reloads visible previews after the tab is hidden then shown', async () => {
+        let urlSeq = 0;
+        const createObjectURL = vi.fn(() => `blob://preview-${++urlSeq}`);
+        const revokeObjectURL = vi.fn();
+        stubObjectUrl(createObjectURL, revokeObjectURL);
+
+        const idleCallbacks = new Map<number, IdleRequestCallback>();
+        let idleHandle = 1;
+        Object.assign(window as Window & {
+            requestIdleCallback: typeof window.requestIdleCallback;
+            cancelIdleCallback: typeof window.cancelIdleCallback;
+        }, {
+            requestIdleCallback: vi.fn((cb: IdleRequestCallback) => {
+                const id = idleHandle++;
+                idleCallbacks.set(id, cb);
+                return id;
+            }),
+            cancelIdleCallback: vi.fn((id: number) => {
+                idleCallbacks.delete(id);
+            }),
+        });
+
+        vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+            cb(0);
+            return 1;
+        });
+
+        type IoCallback = IntersectionObserverCallback;
+        let ioCallback: IoCallback | null = null;
+        const observe = vi.fn((el: Element) => {
+            if (!ioCallback) return;
+            ioCallback(
+                [
+                    {
+                        isIntersecting: true,
+                        target: el,
+                    } as IntersectionObserverEntry,
+                ],
+                {} as IntersectionObserver
+            );
+        });
+        const disconnect = vi.fn();
+        vi.stubGlobal(
+            'IntersectionObserver',
+            vi.fn(function (this: unknown, cb: IoCallback) {
+                ioCallback = cb;
+                return { observe, disconnect };
+            })
+        );
+
+        Object.defineProperty(document, 'visibilityState', {
+            configurable: true,
+            get: () => visibilityState,
+        });
+        let visibilityState: DocumentVisibilityState = 'visible';
+
+        mocks.getFileBlob.mockResolvedValue(
+            new Blob(['ok'], { type: 'image/png' })
+        );
+
+        const meta = makeMeta('meta-visible');
+        const wrapper = await mountGrid([meta]);
+
+        for (const cb of idleCallbacks.values()) {
+            cb({ didTimeout: false, timeRemaining: () => 5 });
+        }
+        idleCallbacks.clear();
+        await flushPromises();
+        await nextTick();
+
+        expect(wrapper.get('img').attributes('src')).toBe('blob://preview-1');
+        expect(createObjectURL).toHaveBeenCalledTimes(1);
+        expect(mocks.getFileBlob).toHaveBeenCalledTimes(1);
+
+        visibilityState = 'hidden';
+        document.dispatchEvent(new Event('visibilitychange'));
+        await flushPromises();
+        await nextTick();
+
+        expect(revokeObjectURL).toHaveBeenCalledWith('blob://preview-1');
+        expect(wrapper.find('img').exists()).toBe(false);
+        expect(wrapper.text()).toContain('Loading preview');
+
+        visibilityState = 'visible';
+        document.dispatchEvent(new Event('visibilitychange'));
+        await flushPromises();
+        await nextTick();
+
+        for (const cb of idleCallbacks.values()) {
+            cb({ didTimeout: false, timeRemaining: () => 5 });
+        }
+        idleCallbacks.clear();
+        await flushPromises();
+        await nextTick();
+
+        expect(mocks.getFileBlob).toHaveBeenCalledTimes(2);
+        expect(createObjectURL).toHaveBeenCalledTimes(2);
+        expect(wrapper.get('img').attributes('src')).toBe('blob://preview-2');
+
+        wrapper.unmount();
     });
 
     it('falls back to setTimeout scheduling when requestIdleCallback is missing', async () => {
