@@ -614,25 +614,24 @@ Migrate the existing hard-coded `46px` offset to a shared CSS variable or measur
 
 A phone does not have enough horizontal room for branding, sidebar, actions, several tabs, and a new-tab button in one row.
 
-Use two compact rows:
+Use one compact chrome row plus a fullscreen switcher:
 
 ```txt
-Row 1, 48px: [menu] [brand] ........ [theme] [notifications/more]
-Row 2, 36-40px: [ horizontally scrolling 32px tabs ] [+]
+Row 1, 48px: [menu] [active title…………] [+] [②] [theme] [notifications/more]
+Switcher: search + list rows (icon/title/status/close) + New tab / Done
 ```
 
 Rules:
 
-- The tab itself remains 32px high.
-- The second row must not exceed 40px unless safe-area requirements force it.
+- Do not keep a permanent horizontal tab strip on mobile.
+- The active title and tab-count control both open the switcher.
 - The split action is hidden because the mobile workspace policy is single-pane.
-- The close target remains at least 24x24 CSS pixels.
-- Horizontal swipe scrolls tabs naturally.
-- Set `touch-action: pan-x` on the strip.
-- Do not begin a reorder from an ordinary swipe.
-- Keep the active tab revealed after orientation changes.
+- Close targets in the switcher remain at least 44×44 CSS pixels on blank/touch.
+- Desktop retains the scrollable strip (`touch-action: pan-x`; no ordinary-swipe reorder).
+- Keep the active title current after orientation changes.
 - Test installed-PWA safe-area insets and the existing bottom navigation together.
 - The mobile input must continue to stay above the bottom navigation and safe area.
+- Edge-swipe adjacent switching is a later enhancement.
 
 ---
 
@@ -701,6 +700,7 @@ shell.tab-visible-in-split
 shell.tab-close
 shell.tab-new
 shell.tab-overflow
+shell.tab-switcher
 shell.tab-status
 shell.split-new
 shell.split-close

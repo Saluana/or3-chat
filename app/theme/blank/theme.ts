@@ -10,6 +10,7 @@ import { chatOverrides, chatCssSelectors } from './styles/chat';
 import { dashboardOverrides, dashboardStyles } from './styles/dashboard';
 import { documentsOverrides, documentsStyles } from './styles/documents';
 import { paletteOverrides, paletteCssSelectors } from './styles/palette';
+import { shellOverrides } from './styles/shell';
 
 export default defineTheme({
     name: 'blank',
@@ -172,6 +173,7 @@ export default defineTheme({
         ...dashboardOverrides,
         ...documentsOverrides,
         ...paletteOverrides,
+        ...shellOverrides,
     },
     cssSelectors: {
         ...sidebarCssSelectors,

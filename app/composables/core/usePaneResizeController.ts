@@ -1,4 +1,4 @@
-import { ref, type Ref } from 'vue';
+import { nextTick, ref, watch, type Ref } from 'vue';
 import {
     useDebounceFn,
     useEventListener,
@@ -22,7 +22,7 @@ export function usePaneResizeController(options: {
     let pendingDelta = 0;
 
     const recalculate = useDebounceFn((width: number) => {
-        if (width > 0 && options.paneCount() > 1) {
+        if (width > 0) {
             options.recalculateWidths(width);
         }
     }, 100);
@@ -32,6 +32,21 @@ export function usePaneResizeController(options: {
             if (entry) recalculate(entry.contentRect.width);
         });
     }
+
+    // Adding or closing a pane does not resize the container, so its resize
+    // observer will not fire. Reconcile explicitly after the pane DOM updates.
+    watch(
+        options.paneCount,
+        async (paneCount, previousPaneCount) => {
+            if (paneCount === previousPaneCount) return;
+            await nextTick();
+            const containerWidth = paneContainerRef.value?.clientWidth ?? 0;
+            if (containerWidth > 0) {
+                options.recalculateWidths(containerWidth);
+            }
+        },
+        { flush: 'post' }
+    );
 
     function flushPendingResize(): void {
         if (paneIndex !== null && pendingDelta !== 0) {
@@ -82,6 +97,11 @@ export function usePaneResizeController(options: {
     useEventListener(
         () => (isResizing.value ? window : null),
         'pointerup',
+        onPaneResizeEnd
+    );
+    useEventListener(
+        () => (isResizing.value ? window : null),
+        'pointercancel',
         onPaneResizeEnd
     );
 

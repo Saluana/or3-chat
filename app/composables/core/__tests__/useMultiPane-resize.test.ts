@@ -90,8 +90,8 @@ describe('useMultiPane - Width Management', () => {
 
         expect(paneWidths.value[0]).toBe(700);
         expect(paneWidths.value[1]).toBe(500);
-        expect(getPaneWidth(0)).toBe('700px');
-        expect(getPaneWidth(1)).toBe('500px');
+        expect(getPaneWidth(0)).toBe(`${(700 / 1200) * 100}%`);
+        expect(getPaneWidth(1)).toBe(`${(500 / 1200) * 100}%`);
     });
 
     it('handleResize respects minimum width constraint', () => {
@@ -128,8 +128,8 @@ describe('useMultiPane - Width Management', () => {
         // Try to grow left pane beyond max (should clamp)
         handleResize(0, 200);
 
-        // Left should be clamped to maxPaneWidth
-        expect(paneWidths.value[0]).toBe(2000);
+        // The adjacent pane reaches its minimum first; total width is preserved.
+        expect(paneWidths.value).toEqual([1920, 280]);
     });
 
     it('persists widths to localStorage', () => {
@@ -166,6 +166,39 @@ describe('useMultiPane - Width Management', () => {
         expect(paneWidths.value[0]).toBe(400);
         expect(paneWidths.value[1]).toBe(400);
         expect(paneWidths.value[2]).toBe(400);
+    });
+
+    it('always renders matching stored widths across the full container', () => {
+        const { addPane, getPaneWidth, paneWidths } = useMultiPane({
+            loadMessagesFor: async () => [],
+        });
+
+        paneWidths.value = [800];
+        addPane();
+
+        const renderedTotal =
+            Number.parseFloat(getPaneWidth(0)) +
+            Number.parseFloat(getPaneWidth(1));
+        expect(renderedTotal).toBeCloseTo(100);
+    });
+
+    it('uses the latest single-pane container size when a split is reopened', async () => {
+        const {
+            addPane,
+            closePane,
+            handleResize,
+            paneWidths,
+            recalculateWidthsForContainer,
+        } = useMultiPane({ loadMessagesFor: async () => [] });
+
+        recalculateWidthsForContainer(1600);
+        addPane();
+        handleResize(0, 200);
+        await closePane(1);
+        recalculateWidthsForContainer(1200);
+        addPane();
+
+        expect(paneWidths.value).toEqual([600, 600]);
     });
 
     it('closes pane and redistributes width to remaining panes', async () => {
@@ -273,6 +306,20 @@ describe('useMultiPane - Width Management', () => {
         expect(paneWidths.value[1]).toBe(920);
     });
 
+    it('preserves total width when the adjacent pane reaches its minimum', () => {
+        const { addPane, handleResize, paneWidths } = useMultiPane({
+            loadMessagesFor: async () => [],
+            minPaneWidth: 280,
+        });
+
+        addPane();
+        paneWidths.value = [300, 300];
+        handleResize(0, 100);
+
+        expect(paneWidths.value).toEqual([320, 280]);
+        expect(paneWidths.value[0]! + paneWidths.value[1]!).toBe(600);
+    });
+
     it('recalculates widths proportionally when container resizes (equal widths)', () => {
         const { addPane, paneWidths, recalculateWidthsForContainer } = useMultiPane({
             loadMessagesFor: async () => [],
@@ -322,16 +369,44 @@ describe('useMultiPane - Width Management', () => {
         expect(paneWidths.value[1]).toBe(280);
     });
 
-    it('does not recalculate widths for single pane', () => {
+    it('fills the container when proportional scaling hits a minimum', () => {
+        const { addPane, paneWidths, recalculateWidthsForContainer } =
+            useMultiPane({
+                loadMessagesFor: async () => [],
+                minPaneWidth: 280,
+            });
+
+        addPane();
+        paneWidths.value = [300, 900];
+        recalculateWidthsForContainer(900);
+
+        expect(paneWidths.value).toEqual([280, 620]);
+    });
+
+    it('fills containers wider than the configured maximums can cover', () => {
+        const { addPane, paneWidths, recalculateWidthsForContainer } =
+            useMultiPane({
+                loadMessagesFor: async () => [],
+                maxPaneWidth: 2000,
+            });
+
+        addPane();
+        paneWidths.value = [1900, 300];
+        recalculateWidthsForContainer(4500);
+
+        expect(paneWidths.value).toEqual([2250, 2250]);
+    });
+
+    it('tracks the container width while a single pane is open', () => {
         const { paneWidths, recalculateWidthsForContainer } = useMultiPane({
             loadMessagesFor: async () => [],
         });
 
-        // Only 1 pane - should not modify widths
         paneWidths.value = [800];
         recalculateWidthsForContainer(1000);
 
-        // Single pane always uses 100%, so array should remain unchanged
-        expect(paneWidths.value).toEqual([800]);
+        // The pane still renders at 100%, but its stored width must stay current
+        // so a newly opened split starts from the real available space.
+        expect(paneWidths.value).toEqual([1000]);
     });
 });

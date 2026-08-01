@@ -14,6 +14,7 @@ import { chatOverrides, chatCssSelectors } from './styles/chat';
 import { dashboardOverrides, dashboardStyles } from './styles/dashboard';
 import { documentsOverrides, documentsStyles } from './styles/documents';
 import { paletteOverrides, paletteCssSelectors } from './styles/palette';
+import { shellOverrides } from './styles/shell';
 
 export default defineTheme({
     name: 'retro',
@@ -209,6 +210,7 @@ export default defineTheme({
         ...dashboardOverrides,
         ...documentsOverrides,
         ...paletteOverrides,
+        ...shellOverrides,
     },
     // CSS Selectors for direct DOM targeting
     // These target elements that can't easily be integrated with the component override system

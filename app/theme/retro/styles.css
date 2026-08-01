@@ -18,6 +18,81 @@
 /* Wrap all retro styles in the theme selector to prevent global leakage */
 [data-theme="retro"] {
 
+	/*
+	 * Workspace chrome: match sidebar chips — subtle surface-variant shadow
+	 * that darkens on hover (not the hard theme-btn offset shadow).
+	 */
+	--or3-workspace-chrome-size: 48px;
+	--or3-workspace-chrome-mobile-size: 52px;
+	--or3-chrome-gap: 6px;
+	--or3-chrome-padding-block: 6px;
+	--or3-chrome-overflow-pad: 3px;
+
+	.workspace-chrome {
+		--or3-workspace-chrome-bg: var(--md-surface);
+		--or3-tab-radius: var(--md-border-radius);
+		--or3-tab-close-radius: var(--md-border-radius);
+		--or3-tab-border: var(--md-border-color);
+		--or3-tab-border-active: var(--md-border-color);
+		--or3-tab-bg: var(--md-surface);
+		--or3-tab-bg-hover: var(--md-surface-hover);
+		--or3-tab-bg-active: color-mix(
+			in srgb,
+			var(--md-primary) 14%,
+			var(--md-surface)
+		);
+		/* Resting: soft filled chip shadow (sidebar). Active: solid filled. */
+		--or3-tab-shadow: 3px 3px 0 0 var(--md-surface-variant);
+		--or3-tab-shadow-hover: 2px 2px 0 0 var(--md-border-color);
+		--or3-tab-shadow-active: 2px 2px 0 0 var(--md-border-color);
+		--or3-tab-menu-shadow: 3px 3px 0 0 var(--md-surface-variant);
+	}
+
+	.workspace-chrome .workspace-tab,
+	.workspace-chrome .workspace-tab-new {
+		transition:
+			background-color 0.15s ease,
+			border-color 0.15s ease,
+			box-shadow 0.15s ease;
+	}
+
+	.workspace-chrome .workspace-tab:hover,
+	.workspace-chrome .workspace-tab-new:hover {
+		box-shadow: var(--or3-tab-shadow-hover);
+	}
+
+	.workspace-chrome .workspace-tab-wrap.is-active .workspace-tab,
+	.workspace-chrome .workspace-tab-wrap.is-active .workspace-tab:hover {
+		/* Opaque hard fill — not the hollow outline look. */
+		box-shadow: 2px 2px 0 0 var(--md-border-color);
+	}
+
+	.workspace-chrome .workspace-tab-wrap.is-visible:not(.is-active)
+		.workspace-tab:hover {
+		box-shadow:
+			var(--or3-tab-shadow-hover),
+			inset 0 -2px 0 color-mix(in srgb, var(--md-primary) 58%, transparent);
+	}
+
+	/* Chrome actions: bordered + flat like the existing header controls. */
+	.workspace-chrome .workspace-chrome-actions .workspace-chrome-action,
+	.workspace-chrome .workspace-chrome-actions .theme-btn {
+		border: var(--md-border-width) solid var(--md-border-color);
+		border-radius: var(--md-border-radius);
+		background: transparent;
+		box-shadow: none;
+	}
+
+	.workspace-chrome .workspace-chrome-actions .workspace-chrome-action:hover,
+	.workspace-chrome .workspace-chrome-actions .theme-btn:hover {
+		background: var(--md-surface-hover);
+		box-shadow: 2px 2px 0 var(--md-border-color);
+	}
+
+	.workspace-tab-new {
+		background: var(--md-surface);
+	}
+
 	/* Screen-reader only helper (follows inclusive components pattern) */
 	.sr-only {
 		position: absolute;

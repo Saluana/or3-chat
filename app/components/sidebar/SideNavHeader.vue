@@ -21,7 +21,7 @@
                             @click="sidebarQuery = ''"
                         />
                         <button
-                            v-else
+                            v-else-if="!isMobile"
                             type="button"
                             class="inline-flex items-center justify-center h-5 px-1.5 rounded-md border border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)] text-[10px] leading-none font-medium text-[color:var(--md-on-surface-variant)] select-none font-[system-ui,ui-sans-serif,sans-serif] transition-colors hover:border-[color:var(--md-primary)] hover:text-[color:var(--md-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--md-primary)]/40"
                             :title="`Search everything (${searchShortcutLabel})`"
@@ -125,6 +125,7 @@ import { useCommandPalette } from '~/composables/search/useCommandPalette';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 import { useIcon } from '~/composables/useIcon';
+import { isMobile } from '~/state/global';
 import SidebarAddToProjectModal from '~/components/sidebar/SidebarAddToProjectModal.vue';
 import SidebarCreateDocumentModal from '~/components/sidebar/SidebarCreateDocumentModal.vue';
 import SidebarCreateProjectModal from '~/components/sidebar/SidebarCreateProjectModal.vue';

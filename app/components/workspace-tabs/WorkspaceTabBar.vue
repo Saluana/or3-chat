@@ -42,13 +42,13 @@
                     :aria-describedby="visibleDescriptionId(tab)"
                     :tabindex="tab.id === activeTabId ? 0 : -1"
                     class="workspace-tab"
-                    :title="tab.cachedTitle || fallbackTitle(tab)"
+                    :title="workspaceTabTitle(tab)"
                     @click="onTabClick($event, tab.id)"
                     @auxclick="onAuxClick($event, tab.id)"
                     @contextmenu.prevent="openContextMenu($event, tab.id)"
                 >
                     <UIcon :name="resourceIcon(tab)" class="workspace-tab-icon" />
-                    <span class="workspace-tab-title">{{ tab.cachedTitle || fallbackTitle(tab) }}</span>
+                    <span class="workspace-tab-title">{{ workspaceTabTitle(tab) }}</span>
                     <span
                         v-if="statusFor(tab.id) !== 'idle'"
                         class="workspace-tab-status"
@@ -69,8 +69,8 @@
                     type="button"
                     data-tab-close
                     class="workspace-tab-close"
-                    :aria-label="`Close ${tab.cachedTitle || fallbackTitle(tab)}`"
-                    :title="`Close ${tab.cachedTitle || fallbackTitle(tab)}`"
+                    :aria-label="`Close ${workspaceTabTitle(tab)}`"
+                    :title="`Close ${workspaceTabTitle(tab)}`"
                     @click.stop="requestClose(tab.id)"
                     @pointerdown.stop
                 >
@@ -78,18 +78,13 @@
                 </button>
             </div>
         </div>
-        <UTooltip :delay-duration="0" text="New tab">
-            <button
-                v-theme="'shell.tab-new'"
-                type="button"
-                class="workspace-tab-new"
-                aria-label="New tab"
-                title="New tab"
-                @click="emit('new-tab')"
-            >
-                <UIcon name="i-lucide-plus" />
-            </button>
-        </UTooltip>
+        <WorkspaceNewTabControl
+            :can-create-document="canCreateDocument"
+            :can-create-workflow="canCreateWorkflow"
+            :can-create-agent="canCreateAgent"
+            @new-tab="emit('new-tab')"
+            @create="emit('create-tab', $event)"
+        />
         <div
             v-if="contextMenu"
             ref="contextMenuElement"
@@ -117,7 +112,15 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch, type ComponentPublicInstance } from 'vue';
 import type { WorkspaceTab, WorkspaceTabStatus } from '~/core/workspace-tabs/types';
+import {
+    workspaceTabFallbackIcon,
+    workspaceTabStatusDescription,
+    workspaceTabTitle,
+} from '~/core/workspace-tabs/display';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import WorkspaceNewTabControl, {
+    type WorkspaceNewTabCreateKind,
+} from './WorkspaceNewTabControl.vue';
 
 const props = withDefaults(
     defineProps<{
@@ -130,6 +133,9 @@ const props = withDefaults(
         canOpenSplit?: boolean;
         canReopenClosed?: boolean;
         copyableTabIds?: ReadonlySet<string>;
+        canCreateDocument?: boolean;
+        canCreateWorkflow?: boolean;
+        canCreateAgent?: boolean;
     }>(),
     {
         mobile: false,
@@ -138,6 +144,9 @@ const props = withDefaults(
         canOpenSplit: true,
         canReopenClosed: false,
         copyableTabIds: () => new Set<string>(),
+        canCreateDocument: false,
+        canCreateWorkflow: false,
+        canCreateAgent: false,
     }
 );
 
@@ -145,6 +154,7 @@ const emit = defineEmits<{
     activate: [tabId: string, reason: 'pointer' | 'keyboard'];
     close: [tabId: string];
     'new-tab': [];
+    'create-tab': [kind: WorkspaceNewTabCreateKind];
     reorder: [tabId: string, destinationIndex: number];
     'open-in-split': [tabId: string];
     'close-other': [tabId: string];
@@ -217,18 +227,8 @@ function setTabElement(
     else tabElements.delete(id);
 }
 
-function fallbackTitle(tab: WorkspaceTab): string {
-    if (tab.resource.kind === 'chat') return tab.resource.threadId ? 'Chat' : 'New chat';
-    if (tab.resource.kind === 'document') return 'Untitled document';
-    return tab.resource.appId;
-}
-
 function resourceIcon(tab: WorkspaceTab): string {
-    const customIcon = props.iconByTabId?.get(tab.id);
-    if (customIcon) return customIcon;
-    if (tab.resource.kind === 'chat') return 'i-lucide-message-circle';
-    if (tab.resource.kind === 'document') return 'i-lucide-file-text';
-    return 'i-lucide-panels-top-left';
+    return props.iconByTabId?.get(tab.id) || workspaceTabFallbackIcon(tab);
 }
 
 function statusFor(tabId: string): WorkspaceTabStatus {
@@ -236,13 +236,7 @@ function statusFor(tabId: string): WorkspaceTabStatus {
 }
 
 function statusDescription(tabId: string): string {
-    const status = statusFor(tabId);
-    if (status === 'idle') return '';
-    if (status === 'attention') return 'Needs attention';
-    if (status === 'streaming') return 'Generating response';
-    if (status === 'saving') return 'Saving';
-    if (status === 'loading') return 'Loading';
-    return 'Error';
+    return workspaceTabStatusDescription(statusFor(tabId));
 }
 
 function visibleDescriptionId(tab: WorkspaceTab): string | undefined {
@@ -640,34 +634,221 @@ watch(
 </script>
 
 <style scoped>
-.workspace-tab-bar-shell { position: relative; display: flex; align-items: center; min-width: 0; flex: 1; }
-.workspace-tab-bar-shell::before, .workspace-tab-bar-shell::after { content: ''; pointer-events: none; position: absolute; z-index: 3; top: 0; bottom: 0; width: 18px; }
-.workspace-tab-bar-shell::before { left: 0; background: linear-gradient(90deg, var(--or3-workspace-chrome-bg, var(--md-surface)), transparent); }
-.workspace-tab-bar-shell::after { right: 40px; background: linear-gradient(270deg, var(--or3-workspace-chrome-bg, var(--md-surface)), transparent); }
-.workspace-tab-bar { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; overflow-x: auto; overflow-y: hidden; padding: 0 8px; scrollbar-width: none; touch-action: pan-x; }
+.workspace-tab-bar-shell {
+    --or3-tab-radius: var(--md-border-radius, 0.5rem);
+    --or3-tab-close-radius: var(--md-border-radius, 0.375rem);
+    --or3-chrome-item-gap: var(--or3-chrome-gap, 6px);
+    --or3-tab-overflow-pad: var(--or3-chrome-overflow-pad, 2px);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--or3-chrome-item-gap);
+    min-width: 0;
+    flex: 1;
+    min-height: calc(32px + (2 * var(--or3-tab-overflow-pad)));
+    overflow: visible;
+}
+.workspace-tab-bar-shell::before {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    z-index: 3;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 18px;
+    background: linear-gradient(
+        90deg,
+        var(--or3-workspace-chrome-bg, var(--md-surface)),
+        transparent
+    );
+}
+.workspace-tab-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--or3-chrome-item-gap);
+    min-width: 0;
+    /* Grow only when tabs need the room; otherwise keep + beside the last tab. */
+    flex: 0 1 auto;
+    max-width: calc(100% - 40px);
+    /* Horizontal scroll clips the other axis — keep shadow/border inside via pad. */
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: var(--or3-tab-overflow-pad) 4px var(--or3-tab-overflow-pad) 8px;
+    scrollbar-width: none;
+    touch-action: pan-x;
+}
 .workspace-tab-bar::-webkit-scrollbar { display: none; }
-.workspace-tab-wrap { position: relative; flex: 0 1 clamp(96px, 15vw, 220px); min-width: 96px; max-width: 220px; height: 32px; transition: transform .14s ease; }
-.workspace-tab { display: flex; align-items: center; gap: 7px; width: 100%; height: 32px; padding: 0 30px 0 10px; border: 1px solid var(--or3-tab-border, var(--md-border-color)); border-radius: 10px; background: var(--or3-tab-bg, var(--md-surface)); color: var(--or3-tab-text, var(--md-on-surface)); text-align: left; transition: background-color .15s ease, border-color .15s ease, opacity .15s ease; }
-.workspace-tab:hover { background: var(--or3-tab-bg-hover, var(--md-surface-hover)); }
-.workspace-tab-wrap.is-active .workspace-tab { border-color: var(--or3-tab-border-active, var(--md-primary)); background: var(--or3-tab-bg-active, color-mix(in srgb, var(--md-primary) 9%, var(--md-surface))); font-weight: 600; }
-.workspace-tab-wrap.is-visible:not(.is-active) .workspace-tab { box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--md-primary) 58%, transparent); }
-.workspace-tab:focus-visible, .workspace-tab-close:focus-visible, .workspace-tab-new:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
-.workspace-tab-icon { flex: none; width: 15px; height: 15px; color: var(--md-primary); }
-.workspace-tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-size: 13px; line-height: 1; }
-.workspace-tab-status { width: 7px; height: 7px; border-radius: 999px; background: var(--or3-tab-attention, var(--md-primary)); flex: none; }
-.workspace-tab-status.is-streaming, .workspace-tab-status.is-loading, .workspace-tab-status.is-saving { animation: workspace-tab-pulse 1s ease-in-out infinite alternate; }
-.workspace-tab-status.is-error { background: var(--md-error, #ba1a1a); }
-.workspace-tab-close { position: absolute; z-index: 1; right: 3px; top: 4px; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; color: var(--md-on-surface-variant); opacity: .68; }
-.workspace-tab-close:hover { opacity: 1; background: color-mix(in srgb, var(--md-on-surface) 9%, transparent); }
-.workspace-tab-close :deep(svg), .workspace-tab-new :deep(svg) { width: 15px; height: 15px; }
-.workspace-tab-wrap.is-dragging { opacity: .82; user-select: none; cursor: grabbing; transition: none; }
-.workspace-tab-wrap.is-drop-target::before { content: ''; position: absolute; z-index: 2; top: 5px; bottom: 5px; left: -4px; width: 2px; border-radius: 2px; background: var(--md-primary); }
-.workspace-tab-new { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin-right: 8px; padding: 0; border: 1px solid var(--or3-tab-border, var(--md-border-color)); border-radius: 10px; color: var(--md-on-surface); }
-.workspace-tab-new:hover { background: var(--or3-tab-bg-hover, var(--md-surface-hover)); }
-.workspace-tab-bar-shell--mobile { gap: 2px; height: 100%; overflow: visible; }
-.workspace-tab-bar-shell--mobile::before { display: none; }
-.workspace-tab-bar-shell--mobile::after { width: 14px; right: 30px; }
-.workspace-tab-bar-shell--mobile .workspace-tab-bar { height: 100%; padding: 0 4px 0 8px; gap: 8px; overflow-y: visible; }
+.workspace-tab-wrap {
+    position: relative;
+    flex: 0 1 clamp(96px, 15vw, 220px);
+    min-width: 96px;
+    max-width: 220px;
+    height: 32px;
+    margin-inline-end: 0;
+    transition: transform 0.14s ease;
+}
+.workspace-tab {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    height: 32px;
+    padding: 0 30px 0 10px;
+    border: var(--md-border-width, 1px) solid
+        var(--or3-tab-border, var(--md-border-color));
+    border-radius: var(--or3-tab-radius);
+    background: var(--or3-tab-bg, var(--md-surface));
+    color: var(--or3-tab-text, var(--md-on-surface));
+    box-shadow: var(--or3-tab-shadow, none);
+    text-align: left;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        opacity 0.15s ease;
+}
+.workspace-tab:hover {
+    background: var(--or3-tab-bg-hover, var(--md-surface-hover));
+    box-shadow: var(
+        --or3-tab-shadow-hover,
+        var(--or3-tab-shadow, none)
+    );
+}
+.workspace-tab-wrap.is-active .workspace-tab {
+    border-color: var(--or3-tab-border-active, var(--md-primary));
+    background: var(
+        --or3-tab-bg-active,
+        color-mix(in srgb, var(--md-primary) 9%, var(--md-surface))
+    );
+    box-shadow: var(--or3-tab-shadow-active, var(--or3-tab-shadow, none));
+    font-weight: 600;
+}
+.workspace-tab-wrap.is-active .workspace-tab:hover {
+    box-shadow: var(--or3-tab-shadow-active, var(--or3-tab-shadow, none));
+}
+.workspace-tab-wrap.is-visible:not(.is-active) .workspace-tab {
+    box-shadow:
+        var(--or3-tab-shadow, none),
+        inset 0 -2px 0 color-mix(in srgb, var(--md-primary) 58%, transparent);
+}
+.workspace-tab:focus-visible,
+.workspace-tab-close:focus-visible,
+:deep(.workspace-tab-new:focus-visible) {
+    outline: var(--md-border-width, 2px) solid var(--md-primary);
+    outline-offset: 2px;
+}
+.workspace-tab-icon {
+    flex: none;
+    width: 15px;
+    height: 15px;
+    color: var(--md-primary);
+}
+.workspace-tab-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 1;
+}
+.workspace-tab-status {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--or3-tab-attention, var(--md-primary));
+    flex: none;
+}
+.workspace-tab-status.is-streaming,
+.workspace-tab-status.is-loading,
+.workspace-tab-status.is-saving {
+    animation: workspace-tab-pulse 1s ease-in-out infinite alternate;
+}
+.workspace-tab-status.is-error {
+    background: var(--md-error, #ba1a1a);
+}
+.workspace-tab-close {
+    position: absolute;
+    z-index: 1;
+    right: 3px;
+    top: 4px;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--or3-tab-close-radius);
+    color: var(--md-on-surface-variant);
+    opacity: 0.68;
+}
+.workspace-tab-close:hover {
+    opacity: 1;
+    background: color-mix(in srgb, var(--md-on-surface) 9%, transparent);
+}
+.workspace-tab-close :deep(svg),
+:deep(.workspace-tab-new svg) {
+    width: 15px;
+    height: 15px;
+}
+.workspace-tab-wrap.is-dragging {
+    opacity: 0.82;
+    user-select: none;
+    cursor: grabbing;
+    transition: none;
+}
+.workspace-tab-wrap.is-drop-target::before {
+    content: '';
+    position: absolute;
+    z-index: 2;
+    top: 5px;
+    bottom: 5px;
+    left: -4px;
+    width: var(--md-border-width, 2px);
+    border-radius: var(--md-border-radius, 2px);
+    background: var(--md-primary);
+}
+:deep(.workspace-tab-new-wrap) {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    padding-block: var(--or3-tab-overflow-pad);
+}
+:deep(.workspace-tab-new) {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin: 0;
+    padding: 0;
+    border: var(--md-border-width, 1px) solid
+        var(--or3-tab-border, var(--md-border-color));
+    border-radius: var(--or3-tab-radius);
+    background: var(--or3-tab-bg, transparent);
+    color: var(--md-on-surface);
+    box-shadow: var(--or3-tab-shadow, none);
+}
+:deep(.workspace-tab-new:hover) {
+    background: var(--or3-tab-bg-hover, var(--md-surface-hover));
+    box-shadow: var(
+        --or3-tab-shadow-hover,
+        var(--or3-tab-shadow, none)
+    );
+}
+.workspace-tab-bar-shell--mobile {
+    gap: 2px;
+    height: 100%;
+    overflow: visible;
+}
+.workspace-tab-bar-shell--mobile::before {
+    display: none;
+}
+.workspace-tab-bar-shell--mobile .workspace-tab-bar {
+    height: 100%;
+    padding: 0 4px 0 8px;
+    gap: 8px;
+    overflow-y: visible;
+}
 .workspace-tab-bar-shell--mobile .workspace-tab-wrap {
     flex: 1 1 auto;
     min-width: min(148px, 62vw);
@@ -680,32 +861,85 @@ watch(
     height: 30px;
     gap: 8px;
     padding: 0 32px 0 12px;
-    border-radius: 9px;
 }
-.workspace-tab-bar-shell--mobile .workspace-tab-title { font-size: 13.5px; letter-spacing: -0.01em; }
+.workspace-tab-bar-shell--mobile .workspace-tab-title {
+    font-size: 13.5px;
+    letter-spacing: -0.01em;
+}
 .workspace-tab-bar-shell--mobile .workspace-tab-close {
     right: 4px;
     top: 4px;
     width: 22px;
     height: 22px;
-    border-radius: 7px;
-    opacity: .55;
+    opacity: 0.55;
 }
 .workspace-tab-bar-shell--mobile .workspace-tab-close:hover,
-.workspace-tab-bar-shell--mobile .workspace-tab-close:focus-visible { opacity: 1; }
-.workspace-tab-bar-shell--mobile .workspace-tab-close :deep(svg) { width: 14px; height: 14px; }
-.workspace-tab-bar-shell--mobile .workspace-tab-new {
+.workspace-tab-bar-shell--mobile .workspace-tab-close:focus-visible {
+    opacity: 1;
+}
+.workspace-tab-bar-shell--mobile .workspace-tab-close :deep(svg) {
+    width: 14px;
+    height: 14px;
+}
+.workspace-tab-bar-shell--mobile :deep(.workspace-tab-new) {
     position: relative;
     width: 28px;
     height: 28px;
     margin-right: 6px;
-    border-radius: 9px;
 }
-.workspace-tab-bar-shell--mobile .workspace-tab-new :deep(svg) { width: 15px; height: 15px; }
-.workspace-tab-context { position: fixed; z-index: 100; display: grid; min-width: 160px; padding: 4px; border: 1px solid var(--md-border-color); border-radius: 8px; background: var(--md-surface); box-shadow: 0 8px 24px color-mix(in srgb, #000 18%, transparent); }
-.workspace-tab-context button { min-height: 28px; padding: 0 8px; border-radius: 5px; text-align: left; font-size: 13px; }
-.workspace-tab-context button:hover { background: var(--md-surface-hover); }
-@keyframes workspace-tab-pulse { to { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .workspace-tab, .workspace-tab-wrap, .workspace-tab-status { transition: none; animation: none; } }
-@media (forced-colors: active) { .workspace-tab-wrap.is-active .workspace-tab { outline: 2px solid Highlight; outline-offset: -2px; } .workspace-tab-wrap.is-visible:not(.is-active) .workspace-tab { text-decoration: underline; } }
+.workspace-tab-bar-shell--mobile :deep(.workspace-tab-new svg) {
+    width: 15px;
+    height: 15px;
+}
+.workspace-tab-context {
+    position: fixed;
+    z-index: 100;
+    display: grid;
+    min-width: 160px;
+    padding: 4px;
+    border: var(--md-border-width, 1px) solid var(--md-border-color);
+    border-radius: var(--md-border-radius, 0.5rem);
+    background: var(--md-surface);
+    color: var(--md-on-surface);
+    box-shadow: var(
+        --or3-tab-menu-shadow,
+        0 8px 24px color-mix(in srgb, var(--md-on-surface) 18%, transparent)
+    );
+}
+.workspace-tab-context button {
+    min-height: 28px;
+    padding: 0 8px;
+    border-radius: var(--md-border-radius, 0.375rem);
+    color: inherit;
+    text-align: left;
+    font-size: 13px;
+}
+.workspace-tab-context button:hover {
+    background: var(--md-surface-hover);
+}
+.workspace-tab-context button:disabled {
+    opacity: 0.45;
+}
+@keyframes workspace-tab-pulse {
+    to {
+        opacity: 0.35;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .workspace-tab,
+    .workspace-tab-wrap,
+    .workspace-tab-status {
+        transition: none;
+        animation: none;
+    }
+}
+@media (forced-colors: active) {
+    .workspace-tab-wrap.is-active .workspace-tab {
+        outline: 2px solid Highlight;
+        outline-offset: -2px;
+    }
+    .workspace-tab-wrap.is-visible:not(.is-active) .workspace-tab {
+        text-decoration: underline;
+    }
+}
 </style>

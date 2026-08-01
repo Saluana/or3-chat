@@ -12,6 +12,9 @@ export default <IconMap>{
     'shell.back': 'tabler:arrow-left',
     'shell.expand': 'tabler:folder-open',
     'shell.collapse': 'tabler:folder',
+    'shell.tab.new': 'tabler:plus',
+    'shell.tabs': 'tabler:copy',
+    'shell.tabs.search': 'tabler:search',
 
     // Chat Interface
     'chat.send': 'tabler:arrow-up',

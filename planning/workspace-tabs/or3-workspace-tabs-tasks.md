@@ -532,25 +532,23 @@ Rules:
 
 ## Phase 6 — Mobile chrome
 
-### 6.1 Implement compact two-row layout — P0
+### 6.1 Implement compact mobile chrome — P0
 
-- [x] Top app row around 48px.
-- [x] Tab row no more than 40px.
-- [x] Visual tabs remain 32px.
-- [x] Menu and brand on left.
-- [x] Core actions on right.
-- [x] Tabs horizontally scroll.
-- [x] New-tab button remains reachable.
-- [x] Split controls hidden.
+- [x] Single safe-area-aware chrome row around 48px.
+- [x] Active title chip on the left (opens switcher).
+- [x] New-tab and tab-count controls reachable in the same row.
+- [x] Core actions remain on the right.
+- [x] Split controls hidden on mobile.
+- [x] Fullscreen Nuxt UI tab switcher for search/switch/close.
+- [x] Desktop keeps the horizontal strip.
 - [x] Respect safe-area top inset.
-- [x] Avoid extra whitespace between rows.
+- [ ] Edge-swipe adjacent tab switching (deferred).
 
 ### 6.2 Touch behavior — P0
 
-- [x] Set appropriate `touch-action`.
-- [x] Ordinary horizontal swipe scrolls.
+- [x] Desktop strip keeps `touch-action: pan-x`.
 - [x] Vertical page/content gestures remain unaffected.
-- [x] Close button does not accidentally activate the tab.
+- [x] Switcher close does not accidentally activate the tab.
 - [x] Tap activation is immediate.
 - [x] No 300ms-style delayed interaction.
 - [x] Do not implement direct mobile drag reorder yet.
@@ -572,8 +570,8 @@ Verify:
 - [ ] No page-level horizontal overflow.
 - [ ] Chat input remains visible.
 - [ ] Bottom navigation does not cover content.
-- [ ] Tab strip does not cover message content.
-- [ ] Active tab stays visible after rotation.
+- [ ] Tab switcher does not cover message content when dismissed.
+- [ ] Active title stays current after rotation.
 
 ---
 
@@ -767,6 +765,7 @@ Actions:
 - [x] `shell.tab-close`
 - [x] `shell.tab-new`
 - [x] `shell.tab-overflow`
+- [x] `shell.tab-switcher`
 - [x] `shell.split-new`
 - [x] `shell.split-close`
 

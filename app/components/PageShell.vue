@@ -50,7 +50,11 @@
                 :mobile="isMobile"
                 @activate="onWorkspaceTabActivate"
                 @close="onWorkspaceTabClose"
+                :can-create-document="documentsEnabled"
+                :can-create-workflow="canCreateWorkflowTab"
+                :can-create-agent="canCreateAgentTab"
                 @new-tab="onWorkspaceNewTab"
+                @create-tab="onWorkspaceCreateTab"
                 @reorder="onWorkspaceTabReorder"
                 @open-in-split="openWorkspaceTabInSplit($event)"
                 @close-other="closeOtherWorkspaceTabs($event)"
@@ -107,14 +111,18 @@
                             @click="workspaceTabs.closeSplit()"
                         />
                     </UTooltip>
-                    <UTooltip :delay-duration="0" text="Toggle theme">
+                    <UTooltip
+                        v-if="!isMobile"
+                        :delay-duration="0"
+                        text="Toggle theme"
+                    >
                         <UButton
                             v-bind="themeToggleButtonProps"
                             class="workspace-chrome-action"
                             :square="true"
                             :aria-label="themeAriaLabel"
                             :title="themeAriaLabel"
-                            :icon="useIcon(themeName === 'dark' ? 'shell.theme.light' : 'shell.theme.dark').value"
+                            :icon="themeToggleIcon"
                             @click="toggleTheme"
                         />
                     </UTooltip>
@@ -128,8 +136,8 @@
                         tooltip-side="bottom"
                     />
                     <UDropdownMenu
-                        v-if="headerActionMenuItems.length"
-                        :items="headerActionMenuItems"
+                        v-if="chromeOverflowMenuItems?.length"
+                        :items="chromeOverflowMenuItems"
                         :content="{ align: 'end' }"
                     >
                         <UTooltip :delay-duration="0" text="More actions">
@@ -195,7 +203,11 @@
                     </UTooltip>
                 </div>
                 <div class="h-full flex items-center justify-center px-4 gap-2">
-                    <UTooltip :delay-duration="0" text="Toggle theme">
+                    <UTooltip
+                        v-if="!isMobile"
+                        :delay-duration="0"
+                        text="Toggle theme"
+                    >
                         <UButton
                             v-bind="themeToggleButtonProps"
                             :square="true"
@@ -376,7 +388,14 @@ import { useWorkspaceTabHost } from '~/composables/core/useWorkspaceTabHost';
 import { useWorkspaceTabs } from '~/composables/core/useWorkspaceTabs';
 import { useWorkspaceTabMetadata } from '~/composables/core/useWorkspaceTabMetadata';
 import WorkspaceChrome from '~/components/workspace-tabs/WorkspaceChrome.vue';
+import type { WorkspaceNewTabCreateKind } from '~/components/workspace-tabs/WorkspaceNewTabControl.vue';
 import { usePaneApps } from '~/composables/core/usePaneApps';
+import {
+    EXTERNAL_AGENT_LAUNCHER_REF,
+    EXTERNAL_AGENT_PANE_APP_ID,
+} from '~/core/external-agents/refs';
+import { useExternalAgentRuntime } from '~/core/external-agents/runtime';
+import { useWorkflowsCrud } from '~/plugins/workflows/composables/useWorkflows';
 import {
     getActiveWorkspaceId,
     getDb,
@@ -485,6 +504,27 @@ const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
 const workspaceTabsEnabled = computed(
     () => or3Config.features.workspaceTabs.enabled
 );
+const canCreateWorkflowTab = computed(
+    () =>
+        or3Config.features.workflows.enabled &&
+        or3Config.features.workflows.editor
+);
+const externalAgentRuntime = useExternalAgentRuntime();
+const canCreateAgentTab = computed(() => {
+    const snapshot = externalAgentRuntime.snapshot.value;
+    if (!snapshot) return false;
+    if (
+        snapshot.connectionState !== 'online' &&
+        snapshot.connectionState !== 'degraded'
+    ) {
+        return false;
+    }
+    return (
+        externalAgentRuntime.controller
+            ?.availableRunnerOptions()
+            .some((runner) => runner.available) ?? false
+    );
+});
 // Pane and tab IDs are runtime UUIDs. Render the deterministic legacy chrome
 // until hydration finishes, then mount the workspace chrome with client IDs.
 // This avoids server/client attribute mismatches without making IDs global.
@@ -1029,6 +1069,82 @@ function closeWorkspaceTabsToRight(tabId: string): void {
 
 function onWorkspaceNewTab(): void {
     void workspaceTabs.newTab();
+}
+
+function getPanePluginPostsApi(): PanePluginApi['posts'] | null {
+    return (
+        (globalThis as { __or3PanePluginApi?: PanePluginApi }).__or3PanePluginApi
+            ?.posts ?? null
+    );
+}
+
+async function onWorkspaceCreateTab(
+    kind: WorkspaceNewTabCreateKind
+): Promise<void> {
+    if (kind === 'chat') {
+        onWorkspaceNewTab();
+        return;
+    }
+    if (kind === 'document') {
+        await onNewDocument();
+        return;
+    }
+    if (kind === 'workflow') {
+        if (!canCreateWorkflowTab.value) {
+            toast.add({
+                title: 'Workflows disabled',
+                description: 'This deployment has workflow editing turned off.',
+                color: 'warning',
+            });
+            return;
+        }
+        const posts = getPanePluginPostsApi();
+        if (!posts) {
+            toast.add({
+                title: 'Could not create workflow',
+                description: 'The workspace posts API is not ready yet.',
+                color: 'warning',
+            });
+            return;
+        }
+        const { createWorkflow } = useWorkflowsCrud(posts);
+        const result = await createWorkflow('Untitled Workflow');
+        if (!result.ok) {
+            toast.add({
+                title: 'Workflow creation failed',
+                description: result.error,
+                color: 'error',
+            });
+            return;
+        }
+        await workspaceTabs.openResource(
+            {
+                kind: 'app',
+                appId: 'or3-workflows',
+                recordId: result.id,
+            },
+            { allowDuplicate: true }
+        );
+        return;
+    }
+    if (kind === 'agent') {
+        if (!canCreateAgentTab.value) {
+            toast.add({
+                title: 'Agent host unavailable',
+                description: 'Connect a trusted external agent host first.',
+                color: 'warning',
+            });
+            return;
+        }
+        await workspaceTabs.openResource(
+            {
+                kind: 'app',
+                appId: EXTERNAL_AGENT_PANE_APP_ID,
+                recordId: EXTERNAL_AGENT_LAUNCHER_REF,
+            },
+            { allowDuplicate: true }
+        );
+    }
 }
 
 function onWorkspaceTabReorder(tabId: string, destinationIndex: number): void {
@@ -1618,6 +1734,11 @@ if (process.client) {
 const themeAriaLabel = computed(() =>
     themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
 );
+const themeLightIcon = useIcon('shell.theme.light');
+const themeDarkIcon = useIcon('shell.theme.dark');
+const themeToggleIcon = computed(() =>
+    themeName.value === 'dark' ? themeLightIcon.value : themeDarkIcon.value
+);
 
 // --------------- Command palette ---------------
 // PageShell is the single host: it owns the navigation context the palette
@@ -1774,6 +1895,19 @@ const headerActionMenuItems = computed(() =>
         onSelect: () => void handleHeaderAction(entry),
     }))
 );
+/** Mobile moves theme into overflow so the chrome row stays usable. */
+const chromeOverflowMenuItems = computed(() => {
+    const items = [...headerActionMenuItems.value];
+    if (isMobile.value) {
+        items.unshift({
+            label: themeAriaLabel.value,
+            icon: themeToggleIcon.value,
+            disabled: false,
+            onSelect: () => void toggleTheme(),
+        });
+    }
+    return items;
+});
 
 async function handleHeaderAction(entry: HeaderActionEntry) {
     if (entry.disabled) return;
@@ -1798,8 +1932,8 @@ const paneChromeClearanceStyle = computed(() => {
     return {
         '--or3-workspace-chrome-height': workspaceTabsChromeVisible.value
             ? isMobile.value
-                ? 'calc(88px + env(safe-area-inset-top))'
-                : '44px'
+                ? 'calc(var(--or3-workspace-chrome-mobile-size, 52px) + env(safe-area-inset-top))'
+                : 'var(--or3-workspace-chrome-size, 48px)'
             : '46px',
         '--or3-pane-chrome-top-clearance': hasOverlayChrome ? '46px' : '0px',
         '--or3-pane-chrome-left-clearance': hasOverlayChrome ? '56px' : '0px',

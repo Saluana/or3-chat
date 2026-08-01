@@ -89,6 +89,8 @@ export interface DashboardPluginPage {
     component: Component | (() => Promise<{ default?: Component } | Component>);
     /** Optional access gate policy for this page. */
     access?: PluginGatePolicy;
+    /** Whether this page is currently available in the active client. */
+    isAvailable?: () => boolean;
 }
 
 type DashboardGlobals = typeof globalThis & {
@@ -323,6 +325,7 @@ function isDashboardPluginAllowed(plugin: DashboardPlugin): boolean {
 }
 
 function isDashboardPageAllowed(pluginId: string, page: DashboardPluginPage): boolean {
+    if (page.isAvailable && !page.isAvailable()) return false;
     const pluginPolicy = getDashboardPluginAccessPolicy(pluginId);
     const policy = mergePluginGatePolicy(pluginPolicy ?? {}, page.access ?? {});
     const ownerPluginId =

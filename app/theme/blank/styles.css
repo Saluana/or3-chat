@@ -4,8 +4,18 @@
     --chat-composer-border-radius: 28px;
 
     /* Workspace tabs: quiet chips that match blank's borderless shell. */
+    --or3-workspace-chrome-size: 44px;
+    --or3-workspace-chrome-mobile-size: 48px;
+    --or3-chrome-gap: 4px;
+    --or3-chrome-padding-block: 4px;
+    --or3-chrome-overflow-pad: 0px;
+
     .workspace-chrome {
         --or3-workspace-chrome-bg: var(--md-surface);
+        --or3-tab-radius: 10px;
+        --or3-tab-close-radius: 6px;
+        --or3-tab-shadow: none;
+        --or3-tab-shadow-active: none;
         --or3-tab-border: color-mix(
             in srgb,
             var(--md-border-color) 72%,
@@ -19,18 +29,33 @@
         --or3-tab-bg-hover: var(--md-surface-hover);
         --or3-tab-bg-active: color-mix(
             in srgb,
-            #2583f7 10%,
+            var(--md-primary) 10%,
             var(--md-surface)
         );
         --or3-tab-border-active: color-mix(
             in srgb,
-            #2583f7 42%,
+            var(--md-primary) 42%,
             transparent
         );
         box-shadow: none;
     }
 
-    .workspace-tab-wrap.is-active .workspace-tab {
+    .workspace-tab-wrap.is-active .workspace-tab,
+    .workspace-tab-wrap.is-visible:not(.is-active) .workspace-tab {
+        box-shadow: none;
+    }
+
+    .workspace-tab-wrap.is-visible:not(.is-active) .workspace-tab {
+        box-shadow: inset 0 -2px 0
+            color-mix(in srgb, var(--md-primary) 45%, transparent);
+    }
+
+    .workspace-chrome:not(.workspace-chrome--mobile) .workspace-chrome-actions
+        .workspace-chrome-action,
+    .workspace-chrome:not(.workspace-chrome--mobile) .workspace-chrome-actions
+        .theme-btn {
+        border: 0;
+        background: transparent;
         box-shadow: none;
     }
 
@@ -49,95 +74,46 @@
         color: var(--md-on-surface);
     }
 
-    /* Mobile: soft pills, one quiet divider, readable titles. */
-    .workspace-chrome.workspace-chrome--mobile .workspace-chrome-tabs-row {
-        border-top-color: color-mix(
-            in srgb,
-            var(--md-border-color) 40%,
-            transparent
-        );
-    }
-
-    .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-bar-shell--mobile
-        .workspace-tab-bar {
-        padding-inline: 10px 2px;
-        gap: 8px;
-    }
-
-    .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-bar-shell--mobile
-        .workspace-tab-wrap {
-        min-width: min(168px, 68vw);
-        max-width: min(78vw, 300px);
-        height: 30px;
-    }
-
-    .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-bar-shell--mobile
-        .workspace-tab {
-        border-color: transparent;
+    /* Mobile: blank softens chrome chips into pills. */
+    .workspace-chrome.workspace-chrome--mobile .workspace-chrome-active-title {
+        border: 0;
         border-radius: 999px;
         background: color-mix(
             in srgb,
-            var(--md-surface-variant) 38%,
+            var(--md-surface-variant) 34%,
             var(--md-surface)
         );
-        padding-inline: 14px 34px;
-        box-shadow: none;
     }
 
     .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-bar-shell--mobile
-        .workspace-tab-wrap.is-active
-        .workspace-tab {
-        border-color: transparent;
-        background: color-mix(in srgb, #2583f7 12%, var(--md-surface));
-        box-shadow: inset 0 0 0 1px
-            color-mix(in srgb, #2583f7 22%, transparent);
-        font-weight: 600;
-    }
-
+        .workspace-chrome-active-title:hover,
     .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-bar-shell--mobile
-        .workspace-tab-close {
-        right: 4px;
-        top: 4px;
-        border-radius: 999px;
-        opacity: 0.5;
-    }
-
-    .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-bar-shell--mobile
-        .workspace-tab-close:hover,
-    .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-bar-shell--mobile
-        .workspace-tab-close:focus-visible {
-        opacity: 1;
-        background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
-    }
-
-    .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-bar-shell--mobile
-        .workspace-tab-new {
-        border-radius: 999px;
-        border-color: transparent;
+        .workspace-chrome-active-title:focus-visible {
         background: color-mix(
             in srgb,
-            var(--md-surface-variant) 38%,
+            var(--md-primary) 10%,
             var(--md-surface)
         );
-        margin-right: 8px;
     }
 
-    .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-bar-shell--mobile
-        .workspace-tab-new:hover,
-    .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-bar-shell--mobile
-        .workspace-tab-new:focus-visible {
-        background: color-mix(in srgb, #2583f7 10%, var(--md-surface));
-        color: var(--md-on-surface);
+    .workspace-chrome.workspace-chrome--mobile .workspace-chrome-action {
+        border: 0;
+        background: transparent;
+    }
+
+    .workspace-tab-switcher-search-input,
+    .workspace-tab-switcher-sort-trigger,
+    .workspace-tab-switcher-action {
+        border-radius: 999px;
+    }
+
+    .workspace-tab-switcher-card {
+        border-radius: 1.15rem;
+    }
+
+    .workspace-tab-switcher-icon-wrap {
+        border: 0;
+        border-radius: 0.85rem;
     }
 
     /* ── Base reset: borderless, shadowless ── */
@@ -743,87 +719,46 @@
     }
 
     /*
-     * Workspace tab strip: paint compact controls that fit the 40px row, then
-     * expand the hit region to Apple's 44×44pt minimum with ::before pads.
+     * Mobile workspace chrome: keep the single header row compact while the
+     * Nuxt UI buttons still meet the 44px touch floor from app.config.
      */
     html[data-theme="blank"] .workspace-chrome.workspace-chrome--mobile
-        :is(.workspace-tab, .workspace-tab-close, .workspace-tab-new) {
-        position: relative;
-        font-size: 14px !important;
-        line-height: 1.2;
+        .workspace-chrome-active-title {
+        min-height: var(--blank-mobile-control-min) !important;
+        min-width: 0 !important;
+        font-size: var(--blank-mobile-label-text) !important;
         padding-block: 0 !important;
         touch-action: manipulation;
     }
 
     html[data-theme="blank"] .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab {
-        height: 30px !important;
-        min-height: 30px !important;
-        min-width: 0 !important;
+        .workspace-chrome-active-label {
+        font-size: var(--blank-mobile-label-text) !important;
     }
 
-    html[data-theme="blank"] .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab::before {
-        content: '';
-        position: absolute;
-        inset-block: -7px;
-        inset-inline: 0;
+    html[data-theme="blank"] .workspace-tab-switcher-option {
+        min-height: 4.5rem !important;
+        font-size: var(--blank-mobile-control-text) !important;
+        padding-block: 0.85rem !important;
     }
 
-    html[data-theme="blank"] .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-title {
-        font-size: 14px !important;
-        line-height: 1.2;
+    html[data-theme="blank"] .workspace-tab-switcher-option-title {
+        font-size: var(--blank-mobile-control-text) !important;
     }
 
-    html[data-theme="blank"] .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-close {
-        width: 22px !important;
-        height: 22px !important;
-        min-width: 22px !important;
-        min-height: 22px !important;
-        z-index: 2;
+    html[data-theme="blank"] .workspace-tab-switcher-option-kind,
+    html[data-theme="blank"] .workspace-tab-switcher-option-opened {
+        font-size: var(--blank-mobile-supporting-text) !important;
     }
 
-    html[data-theme="blank"] .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-close::before {
-        content: '';
-        position: absolute;
-        inset: -11px;
+    html[data-theme="blank"] .workspace-tab-switcher-action {
+        min-height: var(--blank-mobile-control-min) !important;
+        border-radius: 999px !important;
     }
 
-    html[data-theme="blank"] .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-new {
-        width: 28px !important;
-        height: 28px !important;
-        min-width: 28px !important;
-        min-height: 28px !important;
-        padding: 0 !important;
-    }
-
-    html[data-theme="blank"] .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-new::before {
-        content: '';
-        position: absolute;
-        inset: -8px;
-    }
-
-    html[data-theme="blank"] .workspace-chrome.workspace-chrome--mobile
-        :is(.workspace-tab-close, .workspace-tab-new) .iconify {
-        width: 15px !important;
-        height: 15px !important;
-        min-width: 15px;
-        min-height: 15px;
-        font-size: 15px !important;
-    }
-
-    html[data-theme="blank"] .workspace-chrome.workspace-chrome--mobile
-        .workspace-tab-icon.iconify {
-        width: 15px !important;
-        height: 15px !important;
-        min-width: 15px;
-        min-height: 15px;
-        font-size: 15px !important;
+    html[data-theme="blank"] .workspace-tab-switcher-search-input {
+        min-height: var(--blank-mobile-control-min) !important;
+        border-radius: 999px !important;
     }
 
     /* Chat settings use a full-width row as the hit region, not the switch. */

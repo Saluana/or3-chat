@@ -317,10 +317,95 @@ export function useMultiPane(
     // -------- Width Management Functions --------
 
     /**
-     * Clamp width to min/max constraints
+     * Fit pane widths to the available space while preserving their relative
+     * proportions. The configured maximum is relaxed only when every pane
+     * would need to exceed it to fill the container.
      */
-    function clampWidth(width: number): number {
-        return Math.max(minPaneWidth, Math.min(maxPaneWidth, width));
+    function fitWidthsToContainer(
+        sourceWidths: number[],
+        paneCount: number,
+        containerWidth: number
+    ): number[] {
+        if (
+            paneCount <= 0 ||
+            !Number.isFinite(containerWidth) ||
+            containerWidth <= 0
+        ) {
+            return [];
+        }
+
+        const targetWidth = Math.round(containerWidth);
+        if (targetWidth < minPaneWidth * paneCount) {
+            return new Array<number>(paneCount).fill(minPaneWidth);
+        }
+
+        const weights =
+            sourceWidths.length === paneCount &&
+            sourceWidths.every((width) => Number.isFinite(width) && width > 0)
+                ? sourceWidths
+                : new Array<number>(paneCount).fill(1);
+        const effectiveMaxWidth = Math.max(
+            maxPaneWidth,
+            Math.ceil(targetWidth / paneCount)
+        );
+        const fitted = new Array<number>(paneCount).fill(0);
+        const remainingIndexes = Array.from(
+            { length: paneCount },
+            (_, index) => index
+        );
+        let remainingWidth = targetWidth;
+
+        while (remainingIndexes.length > 0) {
+            const remainingWeight = remainingIndexes.reduce(
+                (total, index) => total + (weights[index] ?? 1),
+                0
+            );
+            const constrainedIndex = remainingIndexes.find((index) => {
+                const share =
+                    (remainingWidth * (weights[index] ?? 1)) / remainingWeight;
+                return share < minPaneWidth || share > effectiveMaxWidth;
+            });
+
+            if (constrainedIndex === undefined) {
+                for (const index of remainingIndexes) {
+                    fitted[index] =
+                        (remainingWidth * (weights[index] ?? 1)) /
+                        remainingWeight;
+                }
+                break;
+            }
+
+            const share =
+                (remainingWidth * (weights[constrainedIndex] ?? 1)) /
+                remainingWeight;
+            const constrainedWidth =
+                share < minPaneWidth ? minPaneWidth : effectiveMaxWidth;
+            fitted[constrainedIndex] = constrainedWidth;
+            remainingWidth -= constrainedWidth;
+            remainingIndexes.splice(
+                remainingIndexes.indexOf(constrainedIndex),
+                1
+            );
+        }
+
+        const rounded = fitted.map((width) => Math.floor(width));
+        let roundingDrift =
+            targetWidth - rounded.reduce((total, width) => total + width, 0);
+        const roundingOrder = fitted
+            .map((width, index) => ({
+                index,
+                fraction: width - rounded[index]!,
+            }))
+            .sort((a, b) => b.fraction - a.fraction);
+        for (const { index } of roundingOrder) {
+            if (roundingDrift <= 0) break;
+            if ((rounded[index] ?? effectiveMaxWidth) < effectiveMaxWidth) {
+                rounded[index]! += 1;
+                roundingDrift -= 1;
+            }
+        }
+
+        return rounded;
     }
 
     // restoreWidths removed - useLocalStorage handles restoration automatically
@@ -357,13 +442,26 @@ export function useMultiPane(
             normalizeStoredWidths(paneCount);
         }
 
-        // Stored widths match current pane count
+        // Treat stored pixel widths as proportional weights. Percentages keep
+        // the rendered panes flush with the container even before a resize
+        // observer has reconciled stale persisted values.
         if (
             paneWidths.value.length === paneCount &&
             index >= 0 &&
             index < paneWidths.value.length
         ) {
-            return `${paneWidths.value[index]}px`;
+            const totalWidth = paneWidths.value.reduce(
+                (total, width) => total + width,
+                0
+            );
+            const paneWidth = paneWidths.value[index];
+            if (
+                typeof paneWidth === 'number' &&
+                Number.isFinite(totalWidth) &&
+                totalWidth > 0
+            ) {
+                return `${(paneWidth / totalWidth) * 100}%`;
+            }
         }
 
         // Mismatch or no stored widths - fall back to equal distribution
@@ -393,40 +491,13 @@ export function useMultiPane(
      */
     function recalculateWidthsForContainer(newContainerWidth: number) {
         const paneCount = panes.value.length;
-        if (paneCount <= 1) return; // Single pane is always 100%
-
-        if (
-            paneWidths.value.length !== paneCount ||
-            paneWidths.value.reduce((sum, w) => sum + w, 0) <= 0
-        ) {
-            // Mismatch or invalid - initialize equal widths
-            const equalWidth = Math.floor(newContainerWidth / paneCount);
-            paneWidths.value = new Array<number>(paneCount).fill(
-                clampWidth(equalWidth)
-            );
-            return;
-        }
-
-        const currentTotal = paneWidths.value.reduce((sum, w) => sum + w, 0);
-
-        // Scale proportionally
-        const scale = newContainerWidth / currentTotal;
-        const scaled = paneWidths.value.map((w) =>
-            clampWidth(Math.round(w * scale))
+        if (paneCount <= 0) return;
+        const fitted = fitWidthsToContainer(
+            paneWidths.value,
+            paneCount,
+            newContainerWidth
         );
-
-        // Correct rounding drift on last pane
-        const newTotal = scaled.reduce((sum, w) => sum + w, 0);
-        const drift = newContainerWidth - newTotal;
-        if (drift !== 0 && scaled.length > 0) {
-            const lastIdx = scaled.length - 1;
-            const lastVal = scaled[lastIdx];
-            if (lastVal !== undefined) {
-                scaled[lastIdx] = clampWidth(lastVal + drift);
-            }
-        }
-
-        paneWidths.value = scaled;
+        if (fitted.length === paneCount) paneWidths.value = fitted;
     }
 
     /**
@@ -435,7 +506,11 @@ export function useMultiPane(
      */
     function handleResize(paneIndex: number, deltaX: number, persist = false) {
         // Guard against invalid index
-        if (paneIndex < 0 || paneIndex >= panes.value.length - 1) {
+        if (
+            paneIndex < 0 ||
+            paneIndex >= panes.value.length - 1 ||
+            !Number.isFinite(deltaX)
+        ) {
             if (import.meta.dev) {
                 console.warn(
                     '[useMultiPane] Invalid pane index for resize:',
@@ -460,16 +535,35 @@ export function useMultiPane(
         const nextWidth = paneWidths.value[paneIndex + 1];
 
         // Defensive: verify values are valid numbers
-        if (typeof currentWidth !== 'number' || typeof nextWidth !== 'number') {
+        if (
+            typeof currentWidth !== 'number' ||
+            typeof nextWidth !== 'number' ||
+            !Number.isFinite(currentWidth) ||
+            !Number.isFinite(nextWidth) ||
+            currentWidth <= 0 ||
+            nextWidth <= 0
+        ) {
             return;
         }
 
-        const newCurrentWidth = clampWidth(currentWidth + deltaX);
-        const actualDelta = newCurrentWidth - currentWidth;
-        const newNextWidth = clampWidth(nextWidth - actualDelta);
+        const pairWidth = currentWidth + nextWidth;
+        const effectiveMaxWidth = Math.max(maxPaneWidth, pairWidth / 2);
+        const minimumCurrentWidth = Math.max(
+            minPaneWidth,
+            pairWidth - effectiveMaxWidth
+        );
+        const maximumCurrentWidth = Math.min(
+            effectiveMaxWidth,
+            pairWidth - minPaneWidth
+        );
 
-        // Only update if both constraints satisfied
-        if (newCurrentWidth >= minPaneWidth && newNextWidth >= minPaneWidth) {
+        if (minimumCurrentWidth <= maximumCurrentWidth) {
+            const newCurrentWidth = Math.max(
+                minimumCurrentWidth,
+                Math.min(maximumCurrentWidth, currentWidth + deltaX)
+            );
+            const newNextWidth = pairWidth - newCurrentWidth;
+
             // Use immutable update for proper reactivity
             const updated = [...paneWidths.value];
             updated[paneIndex] = newCurrentWidth;
@@ -620,17 +714,13 @@ export function useMultiPane(
             paneWidths.value.length > 0 &&
             paneWidths.value.length === panes.value.length
         ) {
-            // Take space proportionally from existing panes
             const totalWidth = paneWidths.value.reduce((sum, w) => sum + w, 0);
-            const newPaneWidth = clampWidth(
-                totalWidth / (panes.value.length + 1)
+            const newPaneWeight = totalWidth / panes.value.length;
+            paneWidths.value = fitWidthsToContainer(
+                [...paneWidths.value, newPaneWeight],
+                panes.value.length + 1,
+                totalWidth
             );
-            const reductionPerPane = newPaneWidth / panes.value.length;
-
-            paneWidths.value = paneWidths.value.map((w) =>
-                clampWidth(w - reductionPerPane)
-            );
-            paneWidths.value.push(newPaneWidth);
             persistWidths();
         }
 
@@ -681,18 +771,19 @@ export function useMultiPane(
                 paneWidths.value.length > closingIndex &&
                 paneWidths.value.length === panes.value.length
             ) {
-                const removedWidth = paneWidths.value[closingIndex];
-                if (removedWidth !== undefined) {
-                    paneWidths.value.splice(closingIndex, 1);
-                    if (paneWidths.value.length > 0) {
-                        const additionPerPane =
-                            removedWidth / paneWidths.value.length;
-                        paneWidths.value = paneWidths.value.map((width) =>
-                            clampWidth(width + additionPerPane)
-                        );
-                    }
-                    persistWidths();
-                }
+                const totalWidth = paneWidths.value.reduce(
+                    (sum, width) => sum + width,
+                    0
+                );
+                const remainingWidths = paneWidths.value.filter(
+                    (_, index) => index !== closingIndex
+                );
+                paneWidths.value = fitWidthsToContainer(
+                    remainingWidths,
+                    panes.value.length - 1,
+                    totalWidth
+                );
+                persistWidths();
             }
 
             const wasActive = closingIndex === activePaneIndex.value;

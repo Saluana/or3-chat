@@ -10,6 +10,9 @@ export const DEFAULT_ICONS = {
     'shell.back': 'pixelarticons:arrow-left',
     'shell.expand': 'i-lucide:folder-open',
     'shell.collapse': 'i-lucide:folder',
+    'shell.tab.new': 'i-lucide:plus',
+    'shell.tabs': 'i-lucide:copy',
+    'shell.tabs.search': 'i-lucide:search',
 
     // Chat Interface
     'chat.send': 'pixelarticons:arrow-up',

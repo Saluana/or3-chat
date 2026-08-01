@@ -103,6 +103,26 @@ describe('dashboard plugin registry', () => {
         expect(pages.length).toBe(2);
     });
 
+    it('hides pages that are unavailable at runtime', async () => {
+        const available = ref(false);
+        registerDashboardPlugin({
+            id: 'test:availability',
+            icon: 'i',
+            label: 'Availability',
+        });
+        registerDashboardPluginPage('test:availability', {
+            id: 'conditional',
+            title: 'Conditional',
+            component: { render: () => null },
+            isAvailable: () => available.value,
+        });
+
+        expect(listDashboardPluginPages('test:availability')).toEqual([]);
+        available.value = true;
+        await flush();
+        expect(listDashboardPluginPages('test:availability')).toHaveLength(1);
+    });
+
     it('page re-registration replaces previous definition', async () => {
         registerDashboardPlugin({ id: 'test:modify', icon: 'i', label: 'Mod' });
         registerDashboardPluginPage('test:modify', {

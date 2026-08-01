@@ -1,7 +1,7 @@
 <template>
     <div
         v-if="fatal"
-        class="fatal-error-boundary p-4 md:p-6 text-center flex flex-col items-center gap-3"
+        class="fatal-error-boundary p-4 md:p-6 text-center flex flex-col items-center gap-3 text-[var(--md-on-surface,#0d0d0d)]"
     >
         <h2 class="font-semibold text-lg">Something went wrong</h2>
         <p class="text-sm opacity-80 max-w-md">
@@ -35,46 +35,51 @@
 </template>
 <script setup lang="ts">
 import { ref, computed, onErrorCaptured } from 'vue';
-import { err, reportError } from '~/utils/errors';
+import { reportError } from '~/utils/errors';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const fatal = ref<any | null>(null);
 const detailsOpen = ref(false);
 
+// Resolve at setup time — never inside a computed (invalid composable usage).
+const reloadButtonOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'shell',
+    identifier: 'error.reload',
+    isNuxtUI: true,
+});
+const detailsButtonOverrides = useThemeOverrides({
+    component: 'button',
+    context: 'shell',
+    identifier: 'error.details',
+    isNuxtUI: true,
+});
+
 const reloadButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'shell',
-        identifier: 'error.reload',
-        isNuxtUI: true,
-    });
-    const overridesValue = (overrides.value as Record<string, any>) || {};
+    const overridesValue = (reloadButtonOverrides.value as Record<string, unknown>) || {};
     const { class: overrideClass = '', ...rest } = overridesValue;
     return {
+        // Hard fallbacks: this surface must stay readable even when the theme
+        // graph is the thing that just crashed.
         size: 'sm' as const,
-        variant: 'basic' as const,
+        variant: 'solid' as const,
         color: 'primary' as const,
         ...rest,
-        class: ['fatal-error-btn', overrideClass]
+        class: ['fatal-error-btn', 'fatal-error-btn--reload', overrideClass]
             .filter(Boolean)
             .join(' '),
     };
 });
 
 const detailsButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'shell',
-        identifier: 'error.details',
-        isNuxtUI: true,
-    });
-    const overridesValue = (overrides.value as Record<string, any>) || {};
+    const overridesValue = (detailsButtonOverrides.value as Record<string, unknown>) || {};
     const { class: overrideClass = '', ...rest } = overridesValue;
     return {
         size: 'sm' as const,
-        variant: 'subtle' as const,
+        variant: 'soft' as const,
+        color: 'neutral' as const,
         ...rest,
-        class: ['fatal-error-btn', overrideClass]
+        class: ['fatal-error-btn', 'fatal-error-btn--details', overrideClass]
             .filter(Boolean)
             .join(' '),
     };
@@ -97,3 +102,21 @@ onErrorCaptured((e) => {
     return false;
 });
 </script>
+
+<style scoped>
+.fatal-error-btn--reload {
+    color: var(--md-on-primary, #fff) !important;
+    background: var(--md-primary, #0d0d0d) !important;
+}
+.fatal-error-btn--reload:hover {
+    background: var(--md-primary-hover, #1a1a1a) !important;
+}
+.fatal-error-btn--details {
+    color: var(--md-on-surface, #0d0d0d) !important;
+    background: color-mix(
+        in srgb,
+        var(--md-surface-variant, #f5f5f5) 85%,
+        transparent
+    ) !important;
+}
+</style>

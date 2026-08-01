@@ -157,7 +157,10 @@ import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { isMobile } from '~/state/global';
-import { projectProfileItems } from '~/core/workspace-profiles/projection';
+import {
+    listWorkspaceProfiles,
+    projectProfileItems,
+} from '~/core/workspace-profiles';
 
 const props = defineProps<{
     showModal: boolean;
@@ -213,6 +216,7 @@ const coreItems: DashboardPlugin[] = [
                     'Choose how navigation, dashboard tools, commands, and initial panes are arranged.',
                 icon: 'i-lucide-panels-top-left',
                 component: () => import('./WorkspaceProfileSettings.vue'),
+                isAvailable: () => listWorkspaceProfiles().length > 1,
             },
         ],
     },

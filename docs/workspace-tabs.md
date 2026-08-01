@@ -33,15 +33,15 @@ Custom pane apps become `{ kind: 'app' }` resources. Record-less app instances r
 
 When tabs are enabled, labelled plugin header actions live under the chrome’s **More actions** menu so they cannot compress or overlap the tab strip. Header-action handlers receive the existing route/mobile context plus `activeTab`, `activePane`, `tabCount`, `paneCount`, and `visibleTabIds`.
 
-Theme overrides use the `shell` context. Workspace identifiers are `shell.workspace-chrome`, `shell.tab`, `shell.tab-active`, `shell.tab-close`, `shell.tab-new`, `shell.tab-overflow`, `shell.split-new`, and `shell.split-close`; tab styling also exposes the semantic CSS variables `--or3-workspace-chrome-bg`, `--or3-tab-bg`, `--or3-tab-bg-active`, `--or3-tab-border`, and `--or3-tab-border-active`.
+Theme overrides use the `shell` context. Workspace identifiers are `shell.workspace-chrome`, `shell.tab`, `shell.tab-active`, `shell.tab-close`, `shell.tab-new`, `shell.tab-overflow`, `shell.tab-switcher`, `shell.tab-switcher-new`, `shell.tab-switcher-done`, `shell.split-new`, and `shell.split-close`. Tab chrome (desktop strip + mobile) exposes `--or3-workspace-chrome-bg`, `--or3-tab-bg`, `--or3-tab-bg-hover`, `--or3-tab-bg-active`, `--or3-tab-border`, `--or3-tab-border-active`, `--or3-tab-radius`, `--or3-tab-shadow`, and `--or3-tab-shadow-active`, and falls back to `--md-border-width` / `--md-border-radius` / `--md-surface*`. Icon tokens include `shell.tab.new`, `shell.tabs`, and `shell.tabs.search`.
 
 ## User behavior
 
-- **New tab** opens an ephemeral blank chat in the active pane.
+- **New tab** (click) opens an ephemeral blank chat in the active pane. **Right-click** the `+` control for New chat, New document (when enabled), New workflow (when the editor is enabled), and New agent session (when an external agent host is connected with a ready runner).
 - **New split** adds a viewport and a blank tab; **Close split** hides its tab but keeps it open.
 - **Close tab** removes the tab and offers Undo. The recently-closed stack is capped at ten tabs.
-- Keyboard controls on the strip: Left/Right, Home/End, Delete, and the keyboard context-menu key (or Shift+F10).
-- Mobile keeps a single visible pane, with a safe-area-aware two-row chrome and horizontally scrollable tabs.
+- Keyboard controls on the desktop strip: Left/Right, Home/End, Delete, and the keyboard context-menu key (or Shift+F10).
+- Mobile keeps a single visible pane and a safe-area-aware one-row chrome: active title, new-tab, and a tab-count control that opens the fullscreen tab switcher (search, sort, switch, close, reopen closed). Edge-swipe adjacent switching is deferred.
 
 ## Rollout
 
