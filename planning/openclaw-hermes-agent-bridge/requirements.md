@@ -2,121 +2,118 @@
 
 ## Introduction
 
-OR3 Chat needs a simple way for a user to connect an agent runtime that is already running on another machine, beginning with OpenClaw and later Hermes. The connection must use the runtime's messaging/channel surface rather than make the OR3 browser a privileged Gateway client. The result is an Agents experience that receives streamed replies, compact tool progress, runtime-owned commands, and supported approval/cancel controls without requiring the user to expose a Gateway URL or paste a long-lived Gateway token into OR3.
+OR3 Chat shall connect directly to compatible agent services in the existing Agents section, beginning with OpenClaw and then Hermes. The integration shall reuse the existing External Agents controller and UI while providing streamed output, runtime-owned slash commands, approvals, cancellation, and a URL-plus-token connection flow without requiring `or3-intern`.
 
 ## Context
 
-OR3 Chat is a Nuxt 4/Bun application with workspace-scoped Dexie data, a typed Activity registry, and a mature `app/core/external-agents` controller currently coupled to the `@or3/intern-client` HTTP contract. Its existing OR3 Connect device-code flow securely pairs computers but provisions a Cloudflare tunnel and an `or3-intern` environment, so it cannot be reused as-is. OpenClaw channels normalize inbound traffic, route replies deterministically, and provide channel-specific streaming previews; Hermes has the same adapter-to-session-to-agent shape and an experimental outbound Relay connector with negotiated capabilities. Sources: [OpenClaw Discord](https://docs.openclaw.ai/channels/discord), [OpenClaw Telegram](https://docs.openclaw.ai/channels/telegram), [OpenClaw channel plugins](https://docs.openclaw.ai/plugins/sdk-channel-plugins), [Hermes messaging](https://hermes-agent.nousresearch.com/docs/user-guide/messaging/), and [Hermes gateway internals](https://hermes-agent.nousresearch.com/docs/developer-guide/gateway-internals/).
+OR3 Chat is a Nuxt 4/Bun application whose `app/core/external-agents` subsystem already defines `ExternalAgentClient`, stores trusted hosts and credentials, persists session references, projects streamed events, and renders approvals and cancellation. The remaining bootstrap in `app/plugins/external-agents.client.ts` is hardcoded to `@or3/intern-client`. Hermes already exposes authenticated session and Runs APIs with reconnectable SSE, stop, approval, and capability endpoints. OpenClaw exposes authenticated OpenResponses SSE and Gateway approval events, but needs a small plugin compatibility surface to present the same Runs API used by Hermes. Sources: [Hermes API Server](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server/), [OpenClaw OpenResponses API](https://docs.openclaw.ai/gateway/openresponses-http-api), [OpenClaw Gateway protocol](https://docs.openclaw.ai/gateway/protocol), and [OpenClaw approval forwarding](https://docs.openclaw.ai/tools/exec-approvals-advanced).
 
 ## Assumptions
 
-- The feature is available only for deployments that opt into an OR3 Agent Relay endpoint; static/local-only builds remain unchanged.
-- OR3 operates or the self-hoster deploys the stateful relay endpoint. Agent runtimes make the outbound connection, so their local Gateway does not need a public listener or tunnel.
-- OpenClaw support ships as a separately installable `@or3/openclaw-channel` package. Hermes support will use its Relay connector contract rather than a browser-facing API token.
-- The first release supports text, streamed reply/progress, session history, runtime commands conveyed as text, cancellation when advertised, and approval decisions when advertised. Attachments, reactions, voice, and runtime configuration are deferred.
-- OR3 owns its rendered delivery projection and connection metadata; each runtime remains authoritative for execution, tool policy, command authorization, and its native session state.
-- One enrolled runtime connection belongs to one OR3 workspace. A user may enroll multiple connections and selectively make one active in Agents.
+- The user's browser can reach the configured service URL through loopback, LAN, Tailscale, or HTTPS, and the runtime is configured to allow the OR3 origin when browser CORS applies.
+- A connection uses the existing OR3 credential vault and consists of a service URL plus bearer token. OAuth, device pairing, tunneling, and a hosted relay are not required.
+- The shared non-intern driver is named `runs`; OpenClaw and Hermes are runtime identities discovered through capabilities, not separate OR3 client implementations.
+- Existing host records without a driver remain `intern` records. No database migration or server-side persistence is needed.
+- Commands are ordinary user input beginning with `/` and are forwarded unchanged. The runtime remains authoritative for parsing and authorization.
+- Attachments, artifacts, and runtime configuration remain capability-gated and are not prerequisites for the first OpenClaw or Hermes release.
 
 ## Out of Scope
 
-- Direct browser-to-OpenClaw Gateway connections, Gateway device-key storage, and Gateway administration.
-- Starting, supervising, updating, or configuring OpenClaw, Hermes, models, or provider CLIs from OR3.
-- Replacing, removing, or changing the current `or3-intern` External Agents transport.
-- A universal abstraction for every runtime before OpenClaw is qualified.
-- Platform-specific messaging features such as Discord buttons, Telegram reactions, file upload, voice, and arbitrary native channel actions.
-- Persisting raw runtime logs, credentials, command arguments, or provider configuration in OR3.
+- A hosted OR3 relay, connector enrollment service, new database tables, or new long-lived OR3 server process.
+- A second Agents controller, transcript store, Activity source, or runtime-specific Agents UI.
+- Starting, installing, updating, or administering OpenClaw or Hermes from OR3.
+- Browser-side OpenClaw Gateway device identity and pairing support.
+- Normalizing every runtime command into OR3-owned commands.
+- Voice, reactions, native Discord/Telegram affordances, and arbitrary runtime administration.
 
 ## Requirements
 
-### R1: Low-friction connection enrollment
+### R1: Direct, low-friction connection
 
-**User Story:** As an OR3 workspace member, I want to connect my OpenClaw installation with one short-lived code and a documented CLI command, so that I do not have to expose or manually configure my Gateway in the browser.
-
-**Acceptance Criteria:**
-
-- R1.AC1: WHEN an authorized workspace member starts enrollment THEN OR3 SHALL create a single-use code that expires within 10 minutes and identifies the target workspace without exposing its internal ID.
-- R1.AC2: WHEN an OpenClaw channel presents a valid unused code THEN OR3 SHALL require the workspace member to approve the named runtime connection before granting a scoped connection credential.
-- R1.AC3: IF a code is expired, already consumed, malformed, or exceeds five failed redemption attempts THEN OR3 SHALL reject enrollment without disclosing workspace or account information.
-- R1.AC4: WHILE a connection credential is active THEN the runtime SHALL initiate an outbound TLS connection to the Agent Relay and OR3 SHALL NOT require an inbound Gateway URL from the user.
-- R1.AC5: WHEN OR3 is in static/local-only mode or no Agent Relay is configured THEN Agents SHALL explain that remote agent connections are unavailable and SHALL NOT show an unusable enrollment flow.
-
-### R2: Runtime-specific connectors with one shared contract
-
-**User Story:** As the product team, I want OpenClaw and Hermes to use one versioned OR3 bridge protocol, so that adding Hermes does not duplicate enrollment, browser projection, reliability, or security code.
+**User Story:** As an OR3 user, I want to connect an existing agent service with its URL and token, so that I can start using it without deploying OR3 infrastructure.
 
 **Acceptance Criteria:**
 
-- R2.AC1: WHEN a connector joins the relay THEN it SHALL identify its runtime kind, protocol version, stable instance ID, and capability descriptor before receiving work.
-- R2.AC2: IF a connector's protocol major version or required capability schema is unsupported THEN the relay SHALL fail closed and report an actionable compatibility error without accepting turns.
-- R2.AC3: WHEN OpenClaw is connected THEN the `@or3/openclaw-channel` package SHALL translate OR3 bridge messages to and from OpenClaw's supported channel inbound/outbound lifecycle rather than reimplement model execution.
-- R2.AC4: WHEN Hermes support is added THEN its Relay-connector adapter SHALL translate the Hermes Relay descriptor, inbound, follow-up, and interrupt semantics to the same OR3 bridge contract.
-- R2.AC5: WHILE a runtime capability is not advertised THEN OR3 SHALL hide or disable the corresponding UI control and SHALL NOT attempt a best-effort fallback.
+- R1.AC1: WHEN a user adds an agent service THEN OR3 SHALL request only a display name, service URL, and bearer token, with the name optional.
+- R1.AC2: WHEN valid connection details are submitted THEN OR3 SHALL verify health and capabilities before saving the host.
+- R1.AC3: IF the service is unreachable, unauthorized, CORS-blocked, or incompatible THEN OR3 SHALL reject the connection and display a redacted actionable error.
+- R1.AC4: WHEN the connection is saved THEN OR3 SHALL store the token through the existing External Agents credential vault and SHALL NOT place it in a URL, workspace transcript, Activity event, or ordinary host persistence.
 
-### R3: Session routing and runtime-owned commands
+### R2: One shared Runs driver
 
-**User Story:** As an agent user, I want each OR3 Agent conversation to retain its intended runtime context and commands, so that an instruction, `/command`, or cancellation affects only that conversation.
-
-**Acceptance Criteria:**
-
-- R3.AC1: WHEN OR3 creates a conversation THEN it SHALL issue an opaque bridge session key scoped to the enrolled connection and active workspace.
-- R3.AC2: WHEN a user sends text beginning with `/` THEN OR3 SHALL forward it unchanged as an ordinary inbound message and the runtime SHALL remain responsible for parsing and authorizing the command.
-- R3.AC3: WHEN a runtime acknowledges a submitted turn THEN OR3 SHALL record the runtime turn ID and display the user message as accepted; IF the runtime rejects it THEN OR3 SHALL display a retryable error and SHALL NOT invent a running turn.
-- R3.AC4: WHEN the connector reconnects THEN it SHALL resume each active bridge session from the last acknowledged delivery cursor and SHALL NOT create a replacement runtime session merely because the network reconnects.
-- R3.AC5: IF a bridge session belongs to another workspace or another enrolled connection THEN the relay SHALL reject access before forwarding the message to a runtime.
-
-### R4: Streamed reply and tool-progress projection
-
-**User Story:** As an agent user, I want to see useful live progress and the final response in OR3, so that long-running tool calls feel responsive without exposing sensitive runtime details.
+**User Story:** As a maintainer, I want OpenClaw and Hermes to use one OR3 driver, so that runtime support does not duplicate the Agents integration.
 
 **Acceptance Criteria:**
 
-- R4.AC1: WHEN a connector emits a streamed reply THEN it SHALL include a stable event ID, connection ID, session ID, turn ID, monotonic sequence, timestamp, and a typed event kind.
-- R4.AC2: WHEN OR3 receives text deltas THEN it SHALL update one live assistant segment in sequence order and replace it with the terminal message when the runtime confirms completion.
-- R4.AC3: WHEN a connector advertises tool progress THEN OR3 SHALL render compact title/status updates by default and SHALL omit raw command arguments, environment paths, credentials, and unbounded output.
-- R4.AC4: IF an event is duplicated, arrives after a terminal state, or is older than the stored cursor THEN OR3 SHALL ignore it without altering the rendered terminal result.
-- R4.AC5: WHEN a runtime does not advertise streaming or tool progress THEN OR3 SHALL show normal pending and final states without synthesizing token streaming.
+- R2.AC1: WHEN a non-intern service is connected THEN OR3 SHALL access it through one `runs` implementation of `ExternalAgentClient`.
+- R2.AC2: WHEN the service exposes `/v1/capabilities` THEN the driver SHALL use advertised session, streaming, stop, approval, and attachment features rather than runtime-name checks.
+- R2.AC3: IF a persisted host has no driver field THEN OR3 SHALL load it as `intern` without changing its credential or session references.
+- R2.AC4: WHEN a driver is selected THEN the External Agents client factory SHALL resolve it from a small driver registry and SHALL NOT import runtime-specific behavior into the controller or UI.
 
-### R5: Delivery, recovery, and truthful history
+### R3: Sessions and runtime-owned commands
 
-**User Story:** As an agent user, I want conversations to survive a browser reload or a connector restart, so that I can distinguish a recovered delivery from a newly executed turn.
-
-**Acceptance Criteria:**
-
-- R5.AC1: WHEN a runtime event is accepted by the relay THEN OR3 SHALL durably record the bounded display projection before exposing it to the browser.
-- R5.AC2: WHEN an unacknowledged event is redelivered after reconnect THEN OR3 SHALL deduplicate it by its stable delivery/event identity.
-- R5.AC3: IF a connector cannot establish or resume a connection THEN OR3 SHALL mark the connection offline, preserve prior history, and reject new turns with a retryable offline state rather than silently queueing execution.
-- R5.AC4: WHEN a connector explicitly reports a possibly duplicated recovered final delivery THEN OR3 SHALL surface that recovery state to the user.
-- R5.AC5: WHILE a turn is active THEN the relay SHALL retain only a bounded live preview and compact lifecycle events; final messages and terminal state SHALL remain available through the workspace's normal retention policy.
-
-### R6: Safe controls and connection visibility
-
-**User Story:** As an agent user, I want a clear connection status and only the controls my runtime can honor, so that I understand when OR3 can safely act on a remote session.
+**User Story:** As an agent user, I want OR3 conversations and slash commands to remain attached to the correct runtime session, so that context and control are predictable.
 
 **Acceptance Criteria:**
 
-- R6.AC1: WHEN an enrolled connector reports health and capabilities THEN Agents SHALL show its name, runtime kind, connection state, last successful connection time, and supported controls.
-- R6.AC2: WHEN a selected session has advertised cancellation support THEN OR3 SHALL offer Cancel; IF cancellation fails or is not acknowledged THEN OR3 SHALL retain the prior running state and display a retryable error.
-- R6.AC3: WHEN a selected session has advertised approval-decision support THEN OR3 SHALL render Approve and Deny only for the runtime's pending approval identifier and SHALL retain the pending state until the runtime acknowledges a decision.
-- R6.AC4: WHEN a workspace member disconnects or revokes a connection THEN the relay SHALL revoke its credential, close active sockets, prevent new work, and preserve the OR3 display history.
+- R3.AC1: WHEN OR3 creates or resumes a conversation THEN the Runs driver SHALL associate the existing OR3 session reference with the runtime session identifier.
+- R3.AC2: WHEN user input begins with `/` THEN OR3 SHALL submit it unchanged through the same turn-start operation used for ordinary messages.
+- R3.AC3: WHEN OR3 reconnects or reloads a known session THEN the driver SHALL retrieve available runtime session, turn, and message history without creating a replacement session.
+- R3.AC4: IF the runtime cannot provide a history operation THEN its capability response SHALL mark that operation unavailable and OR3 SHALL preserve its existing local projection without inventing remote history.
 
-### R7: Security and data minimization
+### R4: Streamed replies and progress
 
-**User Story:** As a workspace owner, I want the bridge to grant minimal, revocable access, so that connecting an agent does not expose Gateway credentials or allow a runtime to access unrelated workspaces.
-
-**Acceptance Criteria:**
-
-- R7.AC1: WHEN OR3 issues a connector credential THEN it SHALL be connection-scoped, revocable, stored only as a domain-separated hash server-side, and never appear in a URL, conversation, Activity event, or browser workspace storage.
-- R7.AC2: WHEN connector frames are received THEN the relay SHALL enforce a maximum frame size, validate the versioned schema, rate-limit enrollment and turn submission, and close invalid connections.
-- R7.AC3: WHEN the relay persists an event THEN it SHALL redact or reject credential-like fields and SHALL bound all text, metadata, and tool-output fields before storage.
-- R7.AC4: IF an unauthorized OR3 user, connector, or workspace attempts to read or mutate a bridge resource THEN the server SHALL enforce the existing workspace authorization boundary and return a non-secret error.
-- R7.AC5: WHILE a runtime executes a tool or command THEN its own policy remains authoritative; OR3 SHALL NOT bypass, broaden, or emulate runtime authorization.
-
-### R8: Hermes-ready, deletion-friendly rollout
-
-**User Story:** As the product team, I want OpenClaw to prove the bridge before Hermes is enabled, so that the shared protocol is useful without committing to unsupported abstraction or runtime behavior.
+**User Story:** As an agent user, I want live text and tool progress in the existing Agents transcript, so that long-running work remains understandable.
 
 **Acceptance Criteria:**
 
-- R8.AC1: BEFORE the OpenClaw package is published THEN the bridge protocol SHALL have fixture-based contract tests for enrollment, capabilities, turn lifecycle, reconnect replay, cancel, approval, and malformed frames.
-- R8.AC2: WHEN OpenClaw is initially released THEN the only runtime-specific production component SHALL be its channel package; the OR3 relay, enrollment, projection, and browser client SHALL be runtime-neutral.
-- R8.AC3: BEFORE Hermes is enabled THEN its documented Relay connector contract SHALL be qualified against the same fixture suite and capability mapping; IF its experimental protocol cannot meet the contract THEN Hermes support SHALL remain disabled rather than use an undocumented compatibility shim.
+- R4.AC1: WHEN a run starts THEN the Runs driver SHALL consume its SSE event stream and translate supported events into the existing `ExternalRemoteStreamEvent` model.
+- R4.AC2: WHEN text deltas arrive THEN the existing event store SHALL update one live assistant projection and preserve terminal-event precedence.
+- R4.AC3: WHEN tool lifecycle events arrive THEN OR3 SHALL render the existing compact tool projection and SHALL NOT expose unbounded raw command output or credentials.
+- R4.AC4: IF the stream disconnects THEN the driver SHALL resume from the runtime's supported event cursor or reconcile with run status; it SHALL NOT restart the run automatically.
+- R4.AC5: IF an event is duplicated or arrives after a terminal event THEN the existing deduplication and terminal-state rules SHALL prevent duplicate or regressed UI state.
+
+### R5: Truthful lifecycle and history
+
+**User Story:** As an agent user, I want the existing Agents history to remain accurate across reloads and failures, so that I can distinguish completed, cancelled, failed, and still-running work.
+
+**Acceptance Criteria:**
+
+- R5.AC1: WHEN a run reaches a terminal state THEN the driver SHALL map it to exactly one existing external-agent status: `succeeded`, `failed`, or `cancelled`.
+- R5.AC2: WHEN OR3 reloads THEN existing host records, credential references, session references, and locally projected events SHALL remain usable without a new persistence subsystem.
+- R5.AC3: IF a runtime is offline THEN OR3 SHALL preserve prior history and reject new work with a retryable connection error rather than silently queueing it.
+- R5.AC4: WHEN a runtime reports a running or waiting state after reconnect THEN OR3 SHALL display that state without claiming the run completed.
+
+### R6: Approvals and cancellation
+
+**User Story:** As an agent user, I want to approve, deny, or stop runtime work from the existing Agents controls, so that dangerous or unwanted actions remain under my control.
+
+**Acceptance Criteria:**
+
+- R6.AC1: WHEN an SSE stream reports an approval request THEN the driver SHALL project its stable approval identifier and allowed decisions into the existing approval card.
+- R6.AC2: WHEN the user approves or rejects a request THEN the driver SHALL call the runtime's run-approval operation and SHALL retain the pending state until the runtime acknowledges the decision.
+- R6.AC3: WHEN the user cancels an active run THEN the driver SHALL call the runtime's stop operation and SHALL retain the running state until cancellation is acknowledged or reconciled.
+- R6.AC4: IF approval or stop is not advertised THEN OR3 SHALL hide or disable the corresponding control and SHALL NOT synthesize success.
+- R6.AC5: WHEN OpenClaw requests an exec or plugin approval THEN the OpenClaw compatibility plugin SHALL expose it through the same Runs approval event and decision shape used by Hermes.
+
+### R7: Security and bounded compatibility
+
+**User Story:** As a user, I want OR3 to treat my agent credential and streamed data carefully, so that direct connectivity does not leak privileged access.
+
+**Acceptance Criteria:**
+
+- R7.AC1: WHEN the Runs driver sends a request THEN it SHALL use bearer authentication in a header and SHALL use `cache: "no-store"` for authenticated reads.
+- R7.AC2: WHEN an HTTP or SSE error is shown to the user THEN OR3 SHALL redact tokens, authorization headers, URLs containing credentials, and raw runtime payloads.
+- R7.AC3: IF a runtime returns an unknown event THEN the driver SHALL ignore it or retain it only as bounded diagnostic metadata and SHALL continue processing known events.
+- R7.AC4: WHILE a runtime executes a command or tool THEN its native policy and approval system SHALL remain authoritative; OR3 SHALL NOT weaken or bypass it.
+
+### R8: Minimal OpenClaw-first, Hermes-ready delivery
+
+**User Story:** As a maintainer, I want to prove the shared path with OpenClaw and then enable Hermes without rewriting OR3, so that the integration remains small and deletion-friendly.
+
+**Acceptance Criteria:**
+
+- R8.AC1: BEFORE OpenClaw support is enabled THEN one fixture suite SHALL cover capabilities, sessions, run start, streaming, commands, approval, stop, terminal states, malformed events, and reconnect behavior for the Runs driver.
+- R8.AC2: WHEN OpenClaw support ships THEN its only runtime-specific production code SHALL be the small compatibility plugin that presents the shared Runs/session surface.
+- R8.AC3: WHEN Hermes support is enabled THEN it SHALL use the same Runs driver against Hermes's native API and SHALL NOT add a Hermes-specific controller, store, or UI path.
+- R8.AC4: BEFORE completion THEN existing `or3-intern` External Agents tests, targeted Runs driver tests, relevant component tests, and the OR3 Chat type-check SHALL pass.

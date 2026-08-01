@@ -1,208 +1,151 @@
 # Tasks
 
-## 1. Lock the deployment and trust boundary
+## 1. Add the minimal driver seam
 
-- [ ] 1.1 Define the supported Agent Relay deployment targets and health contract.
-      Requirements: R1.AC4, R1.AC5, R5.AC3, R7.AC4
-      Done when: the relay URL, TLS requirement, control-plane authentication, health response, and static-build feature gate are documented and accepted; no UI assumes a relay exists.
+- [ ] 1.1 Add `ExternalAgentDriver = "intern" | "runs"` and an optional driver field to `ExternalAgentHost`.
+      Requirements: R2.AC1, R2.AC3, R2.AC4, R5.AC2
+      Done when: type tests compile and existing host fixtures remain valid without a driver field.
 
-- [ ] 1.2 Define the enrollment code format, expiry, attempt limit, approval state machine, and revocation semantics.
-      Requirements: R1.AC1, R1.AC2, R1.AC3, R6.AC4, R7.AC1
-      Done when: a state-transition table covers pending, approved, consumed, revoked, expired, and rejected paths, including concurrent redemption and approval.
+- [ ] 1.2 Update External Agents persistence parsing and serialization so missing means `intern` and unknown driver values fail safely.
+      Requirements: R2.AC3, R5.AC2, R7.AC2
+      Done when: focused persistence tests cover legacy, `intern`, `runs`, and malformed records without a data migration.
 
-- [ ] 1.3 Define the v1 capability matrix and explicitly mark deferred features.
-      Requirements: R2.AC5, R4.AC5, R6.AC2, R6.AC3, R8.AC2
-      Done when: OpenClaw v1 capabilities, unavailable control behavior, and deferred attachments/reactions/voice/configuration are represented as a checked-in compatibility fixture.
+- [ ] 1.3 Extract the current Intern factory unchanged and replace the fixed bootstrap with a two-entry driver registry.
+      Requirements: R2.AC1, R2.AC4, R8.AC4
+      Done when: existing Intern controller and component tests pass through the registry with no behavior change.
 
-- [ ] 1.4 Write the user-facing connection copy and exact OpenClaw setup command.
-      Requirements: R1.AC1, R1.AC2, R1.AC4
-      Done when: the flow explains code expiry, approval, outbound connection, online status, and revocation without asking for a Gateway URL or long-lived token.
+- [ ] 1.4 Add bounded connection detection using `/v1/capabilities` followed by the existing Intern verification path.
+      Requirements: R1.AC1, R1.AC2, R1.AC3, R2.AC2
+      Done when: a valid Runs service and an existing Intern host select the correct driver, while ambiguous or unauthorized endpoints return a redacted error.
 
-## 2. Create the shared Agent Bridge protocol
+## 2. Implement the shared Runs client
 
-- [ ] 2.1 Scaffold `packages/agent-bridge-protocol` as a framework-free workspace package with Bun build/test scripts.
-      Requirements: R2.AC1, R2.AC4, R8.AC1, R8.AC2
-      Done when: OR3 Chat, a Node connector package, and a future Hermes adapter can import the package without Nuxt/OpenClaw/Hermes dependencies.
+- [ ] 2.1 Add typed capability, session, run, and event DTOs beside the External Agents client adapter; do not create a new protocol package.
+      Requirements: R2.AC1, R2.AC2, R7.AC3, R8.AC1
+      Done when: runtime-neutral fixtures validate the minimum Sessions/Runs surface and reject missing required identities or terminal states.
 
-- [ ] 2.2 Implement validated v1 hello, enrollment, capability, heartbeat, resume, acknowledgement, result, and error envelopes.
-      Requirements: R1.AC2, R2.AC1, R2.AC2, R5.AC2, R7.AC2
-      Done when: malformed and unknown-major envelopes fail with safe typed errors; bounded extension fields remain available for additive compatible data.
+- [ ] 2.2 Implement authenticated no-store transport, health, capabilities, and a synthesized runner descriptor.
+      Requirements: R1.AC2, R1.AC3, R1.AC4, R2.AC2, R7.AC1, R7.AC2
+      Done when: unit tests cover success, 401, unreachable service, malformed JSON, abort, and redacted errors.
 
-- [ ] 2.3 Implement turn, cancel, approval, and typed event envelopes with stable IDs and monotonic sequence rules.
-      Requirements: R3.AC1, R3.AC2, R3.AC3, R4.AC1, R6.AC2, R6.AC3
-      Done when: protocol tests reject missing identity/cursor fields and accept only the documented v1 event kinds.
+- [ ] 2.3 Map session create/list/get and message history into the existing `ExternalRemoteSession` and `ExternalRemoteTurn` shapes.
+      Requirements: R3.AC1, R3.AC3, R3.AC4, R5.AC2
+      Done when: controller hydration tests can create, reopen, and list a Runs-backed session without replacing its runtime ID.
 
-- [ ] 2.4 Add protocol-level payload limits and secret-like field redaction helpers.
-      Requirements: R4.AC3, R5.AC5, R7.AC2, R7.AC3
-      Done when: oversized text/metadata fails before storage; fixtures prove known credential fields and oversized tool output cannot enter a projection payload.
+- [ ] 2.4 Map run start and status into `startTurn()` and `getTurn()`, forwarding input—including slash commands—unchanged.
+      Requirements: R3.AC1, R3.AC2, R5.AC1, R5.AC4
+      Done when: fixtures prove ordinary text and `/command` use identical request construction and terminal statuses map exactly once.
 
-- [ ] 2.5 Freeze runtime-neutral JSON fixtures for happy path, replay, gap, capability loss, cancel, approval, malformed frame, and recovered delivery.
-      Requirements: R2.AC2, R4.AC4, R5.AC2, R5.AC4, R8.AC1
-      Done when: every fixture validates in both directions and is used by the relay, OpenClaw, and future Hermes test suites.
+- [ ] 2.5 Implement incremental SSE parsing and pure event translation for text, tool progress, approvals, terminal completion, failure, and cancellation.
+      Requirements: R4.AC1, R4.AC2, R4.AC3, R4.AC5, R5.AC1, R6.AC1, R7.AC3
+      Done when: chunk-boundary, duplicate, unknown-event, redaction, and terminal-precedence fixtures pass through the existing event store.
 
-## 3. Implement relay persistence and control-plane contracts
+- [ ] 2.6 Implement cursor resume or status reconciliation without automatic run resubmission.
+      Requirements: R4.AC4, R4.AC5, R5.AC3, R5.AC4
+      Done when: a forced stream disconnect resumes or reconciles one run and never produces a second run-start request.
 
-- [ ] 3.1 Define `AgentBridgeStore` and register it through the existing server registry convention.
-      Requirements: R1.AC1, R5.AC1, R6.AC4, R7.AC1, R7.AC4
-      Done when: the interface exposes only enrollment, connection, projection, cursor, and revocation operations; it contains no tunnel or `or3-intern` fields.
+- [ ] 2.7 Implement approval and stop operations with capability checks and acknowledged state transitions.
+      Requirements: R6.AC2, R6.AC3, R6.AC4, R7.AC4
+      Done when: approve, reject, stop, unsupported, rejected, and network-failure cases preserve canonical controller state.
 
-- [ ] 3.2 Implement enrollment and connection persistence with atomic code consumption and credential-hash storage.
-      Requirements: R1.AC1, R1.AC2, R1.AC3, R6.AC4, R7.AC1
-      Done when: concurrent redemption produces one approved connection at most, raw code/credential values are never persisted, and revocation prevents reuse.
+- [ ] 2.8 Capability-gate attachment and artifact operations without adding compatibility fallbacks.
+      Requirements: R2.AC2, R3.AC4, R6.AC4
+      Done when: supported operations use advertised endpoints and unsupported controls are absent rather than failing after user interaction.
 
-- [ ] 3.3 Implement session, turn, event, and live-preview projection persistence with the required uniqueness constraints.
-      Requirements: R3.AC1, R4.AC2, R4.AC4, R5.AC1, R5.AC5
-      Done when: `eventId` and `(turnId, sequence)` deduplicate replay, live preview remains one bounded row per active turn, and terminal projection can be queried in transcript order.
+## 3. Reuse the existing Agents connection and UI
 
-- [ ] 3.4 Add an SQLite store implementation and its focused contract suite.
-      Requirements: R1.AC1, R3.AC5, R5.AC1, R5.AC2, R7.AC4
-      Done when: atomic enrollment, workspace isolation, cursor persistence, projection-before-ack behavior, and revocation pass against SQLite.
+- [ ] 3.1 Update trusted-host enrollment to persist the detected driver while reusing the current URL, token, credential-vault, verification, and cleanup flow.
+      Requirements: R1.AC1, R1.AC2, R1.AC3, R1.AC4, R2.AC3
+      Done when: adding, reconnecting, switching, and forgetting both driver kinds use the existing controller paths and never persist a raw token.
 
-- [ ] 3.5 Add a Convex store implementation and run the same contract suite.
-      Requirements: R1.AC1, R3.AC5, R5.AC1, R5.AC2, R7.AC4
-      Done when: Convex passes the identical contract cases without a provider-specific alternate behavior.
+- [ ] 3.2 Replace `or3-intern`-specific connection and error copy with `agent service` wording where the action now supports both drivers.
+      Requirements: R1.AC1, R1.AC3, R5.AC3, R8.AC3
+      Done when: connection, launcher, reconnect, and forget-host screens are accurate for Intern, OpenClaw, and Hermes without separate runtime pages.
 
-## 4. Implement the stateful OR3 Agent Relay
+- [ ] 3.3 Surface detected runtime product and capability summary using the existing host/session presentation.
+      Requirements: R2.AC2, R4.AC3, R6.AC4
+      Done when: the UI can label OpenClaw or Hermes from capabilities and only shows approval, stop, attachment, or artifact controls when supported.
 
-- [ ] 4.1 Scaffold the relay service with TLS-only WebSocket upgrade, health endpoint, connector authentication, and explicit configuration.
-      Requirements: R1.AC4, R1.AC5, R7.AC1, R7.AC2
-      Done when: an unauthenticated, non-TLS, or disabled connection cannot reach routing code and health reports whether the service is ready for enrollments.
+- [ ] 3.4 Extend controller and component tests for a Runs-backed host without duplicating the Intern fixture suite.
+      Requirements: R1-R7
+      Done when: one shared scenario covers connect, session, stream, `/command`, approval, stop, offline reload, reconnect, and forget-host behavior.
 
-- [ ] 4.2 Implement authenticated socket registration keyed by connection ID, runtime kind, and stable instance ID.
-      Requirements: R2.AC1, R3.AC5, R6.AC1, R7.AC1
-      Done when: one active socket can represent a connection, a duplicate instance is handled deterministically, and connection presence updates last-seen state.
+## 4. Build the small OpenClaw compatibility plugin
 
-- [ ] 4.3 Implement frame validation, rate limits, heartbeat deadlines, safe close reasons, and abuse counters.
-      Requirements: R2.AC2, R7.AC2, R7.AC3
-      Done when: bad frames are not forwarded/stored, safe diagnostics omit payloads, and reconnect after a valid close remains possible.
+- [ ] 4.1 Scaffold one installable OpenClaw plugin package with a pinned compatibility range and only the routes/lifecycle hooks required by the shared Sessions/Runs surface.
+      Requirements: R2.AC1, R6.AC5, R8.AC2
+      Done when: the package loads in a disposable Gateway and contains no relay client, database, enrollment service, or model execution code.
 
-- [ ] 4.4 Implement cursor resume, store-before-ack, duplicate suppression, sequence-gap detection, and recovered-delivery metadata.
-      Requirements: R3.AC4, R4.AC4, R5.AC1, R5.AC2, R5.AC4
-      Done when: a fake connector can reconnect and replay any suffix without duplicate UI projection; a gap causes an explicit resume request rather than reordered output.
+- [ ] 4.2 Expose health, `/v1/capabilities`, session create/list/get/history, run create/status, and run SSE routes using deterministic OpenClaw session keys.
+      Requirements: R2.AC2, R3.AC1, R3.AC3, R4.AC1, R5.AC4
+      Done when: the shared Runs client fixtures pass against the plugin for connection, session continuity, streaming, and terminal status.
 
-- [ ] 4.5 Implement relay control operations for turn submit, cancellation, approval resolution, and connection revocation.
-      Requirements: R3.AC2, R3.AC3, R6.AC2, R6.AC3, R6.AC4
-      Done when: control messages require a live matching connection and return acknowledged/rejected results; revocation terminates existing sockets and blocks future work.
+- [ ] 4.3 Submit run input through OpenClaw's normal channel/Gateway message lifecycle and preserve slash commands unchanged.
+      Requirements: R3.AC2, R7.AC4
+      Done when: ordinary prompts and representative owner-authorized commands reach the same OpenClaw session and remain subject to native command policy.
 
-## 5. Add OR3 Chat server APIs and browser projection
+- [ ] 4.4 Translate text deltas, preview/final delivery, compact tool progress, failures, and cancellation into the shared event shape.
+      Requirements: R4.AC1, R4.AC2, R4.AC3, R4.AC4, R5.AC1, R6.AC3
+      Done when: the plugin passes shared sequencing, disconnect, terminal, and stop fixtures without emitting raw unbounded tool output.
 
-- [ ] 5.1 Add SSR enrollment create, approve, status, connection list, and revoke endpoints behind `can()` and no-store responses.
-      Requirements: R1.AC1, R1.AC2, R1.AC3, R6.AC1, R6.AC4, R7.AC4
-      Done when: API tests cover unauthenticated, cross-workspace, rate-limited, expired, approved, and revoked requests without leaking secrets.
+- [ ] 4.5 Translate OpenClaw exec/plugin approval requests and decisions into the shared run-approval shape.
+      Requirements: R6.AC1, R6.AC2, R6.AC5, R7.AC4
+      Done when: an actual pending OpenClaw approval appears in the existing OR3 approval card and approve/deny resumes or rejects the native operation.
 
-- [ ] 5.2 Add SSR session list/detail, turn submit, cancel, and approval endpoints that call the relay control plane.
-      Requirements: R3.AC1, R3.AC2, R3.AC3, R5.AC3, R6.AC2, R6.AC3
-      Done when: each route is workspace-scoped, rejects offline or unsupported controls honestly, and returns a typed retryable error rather than queuing hidden execution.
+- [ ] 4.6 Add a pinned disposable-Gateway smoke test and minimal install/configuration documentation.
+      Requirements: R1.AC1, R1.AC2, R8.AC1, R8.AC2
+      Done when: a clean Gateway can install the plugin, print the URL/token guidance, and complete stream, command, approval, and stop smoke cases.
 
-- [ ] 5.3 Add a browser-safe projection subscription endpoint with cursor resume and bounded payloads.
-      Requirements: R4.AC1, R4.AC2, R4.AC4, R5.AC2, R5.AC5
-      Done when: the subscriber receives only authorized projection updates, can resume after reload, and cannot request unbounded raw runtime logs.
+## 5. Qualify Hermes through the same driver
 
-- [ ] 5.4 Implement `app/core/agent-channels` DTOs, store client, snapshot publisher, and `AgentChannelController`.
-      Requirements: R3.AC3, R4.AC2, R4.AC4, R5.AC3, R6.AC1
-      Done when: controller tests prove workspace changes abort stale requests, preview replacement is monotonic, terminal states win, and connection states are derived from server data.
+- [ ] 5.1 Capture Hermes `/v1/capabilities`, Sessions API, Runs API, SSE, stop, and approval fixtures from a pinned release.
+      Requirements: R2.AC2, R3.AC3, R4.AC1, R6.AC1, R8.AC1, R8.AC3
+      Done when: fixtures identify any schema differences without adding Hermes branches to the controller or UI.
 
-- [ ] 5.5 Register a separate Agent Channel Activity source using the existing owned registry and HMR cleanup pattern.
-      Requirements: R4.AC3, R5.AC4, R6.AC1, R6.AC3
-      Done when: Activity lists only actionable supported controls, maps stable bridge IDs to source/run/event IDs, and reconnect replay never duplicates terminal rows.
+- [ ] 5.2 Run the shared Runs client contract suite against a configured Hermes API server and fix only runtime-neutral mapping gaps.
+      Requirements: R2.AC1, R3-R7, R8.AC3
+      Done when: connect, sessions, stream, `/command`, approval, stop, reconnect, and terminal status pass using the same production client used by OpenClaw.
 
-## 6. Build the OR3 Agents UI integration
+- [ ] 5.3 Add concise Hermes setup guidance for enabling the API server, bearer key, host binding, and explicit OR3 CORS origin.
+      Requirements: R1.AC1, R1.AC3, R1.AC4, R7.AC1, R8.AC3
+      Done when: a user can obtain the URL and token needed by the unchanged Agents connection form without installing an OR3 Hermes package.
 
-- [ ] 6.1 Add a primary **Connect OpenClaw** enrollment panel and a relay-unavailable static fallback to Agents.
-      Requirements: R1.AC1, R1.AC2, R1.AC4, R1.AC5
-      Done when: a user can copy the exact command/code, observe expiry/pending/approved/offline state, and never sees a Gateway URL or connector credential.
+## 6. Final verification and simplification
 
-- [ ] 6.2 Add connection inventory cards with runtime kind, capability summary, last-seen state, reconnect guidance, and revoke confirmation.
-      Requirements: R2.AC5, R5.AC3, R6.AC1, R6.AC4
-      Done when: unavailable features are visibly unavailable, offline history remains openable, and revoke requires intentional confirmation.
+- [ ] 6.1 Run focused External Agents unit/controller/component tests and the shared Runs fixture suite.
+      Requirements: R8.AC1, R8.AC4
+      Done when: all affected Vitest projects pass and failures are classified as introduced or pre-existing.
 
-- [ ] 6.3 Add the Agent Channel session pane and bounded transcript projection.
-      Requirements: R3.AC1, R3.AC3, R4.AC2, R5.AC1, R5.AC5
-      Done when: accepted user messages, one live assistant segment, terminal answers, compact tool entries, terminal errors, and recovered-delivery labels render in order after refresh.
+- [ ] 6.2 Run the OpenClaw disposable-Gateway smoke test and Hermes API contract test against their pinned versions.
+      Requirements: R6.AC5, R8.AC2, R8.AC3, R8.AC4
+      Done when: both runtimes prove the four required behaviors through the same OR3 driver.
 
-- [ ] 6.4 Add capability-gated cancel and approval cards with acknowledged state transitions.
-      Requirements: R6.AC2, R6.AC3, R7.AC5
-      Done when: controls are absent without capability support; failed actions retain the canonical prior state; no UI path sends a synthetic command override.
+- [ ] 6.3 Run `bun run type-check` and inspect the complete diff.
+      Requirements: R2.AC3, R7.AC2, R8.AC4
+      Done when: type-check passes and the diff contains no hosted relay, new persistence subsystem, duplicate controller/UI, or unused compatibility abstraction.
 
-- [ ] 6.5 Add focused component and visual regression coverage without modifying existing `or3-intern` Agents behavior.
-      Requirements: R4.AC3, R4.AC5, R5.AC3, R6.AC1
-      Done when: tests cover progress redaction, offline recovery, disabled controls, and the existing external-agent visual suite still passes unchanged.
-
-## 7. Implement and qualify `@or3/openclaw-channel`
-
-- [ ] 7.1 Scaffold the package manifest, OpenClaw channel metadata, setup entry, runtime entry, and exact peer/version policy.
-      Requirements: R1.AC2, R2.AC1, R2.AC3, R8.AC2
-      Done when: the documented install-plus-add command can configure the channel, and a future catalog entry could discover its setup-safe metadata without importing a listener or agent runtime code.
-
-- [ ] 7.2 Implement enrollment configuration, safe local credential storage, relay dial-out, heartbeat, and reconnect/resume.
-      Requirements: R1.AC3, R1.AC4, R3.AC4, R5.AC2, R7.AC1, R7.AC2
-      Done when: a connector uses only its scoped credential, no secret appears in command output/logging, and restart resumes its prior connection without user re-enrollment.
-
-- [ ] 7.3 Map bridge session/turn messages into OpenClaw's channel inbound lifecycle with stable `or3:<connection>:<session>` conversation grammar.
-      Requirements: R2.AC3, R3.AC1, R3.AC2, R3.AC5, R7.AC5
-      Done when: text and slash commands reach the selected OpenClaw session unchanged and all execution/command authorization remains inside OpenClaw.
-
-- [ ] 7.4 Map OpenClaw delivery, preview edits, final messages, tool progress, failures, and cancellation into bridge events.
-      Requirements: R4.AC1, R4.AC2, R4.AC3, R4.AC5, R5.AC4, R6.AC2
-      Done when: event fixtures prove stable sequencing and final state; raw command detail is omitted by default; media is rejected as unsupported in v1.
-
-- [ ] 7.5 Implement advertised capability and approval-decision mapping without guessing unsupported OpenClaw behavior.
-      Requirements: R2.AC5, R6.AC2, R6.AC3, R7.AC5
-      Done when: the plugin's descriptor only exposes qualified controls, and an approval/cancel request is acknowledged or rejected by OpenClaw rather than locally simulated.
-
-- [ ] 7.6 Run package unit/contract tests and a disposable Gateway smoke test against the pinned OpenClaw release.
-      Requirements: R2.AC2, R2.AC3, R4.AC4, R8.AC1, R8.AC2
-      Done when: channel discovery, enrollment, command pass-through, stream/final delivery, replay, cancel, malformed data, and restart are qualified before publishing.
-
-## 8. Operate and release the OpenClaw integration
-
-- [ ] 8.1 Add deployment, self-hosting, enrollment, revoke, recovery, and compatibility documentation.
-      Requirements: R1.AC4, R1.AC5, R5.AC3, R6.AC4, R7.AC1
-      Done when: docs clearly distinguish OR3 Agent Relay from `or3-intern` and from a direct OpenClaw Gateway connection.
-
-- [ ] 8.2 Add relay metrics/logs containing only safe connection, protocol, replay, and action outcome metadata.
-      Requirements: R5.AC3, R7.AC2, R7.AC3
-      Done when: operators can diagnose offline/replay/protocol failures without message bodies, command text, or credentials in telemetry.
-
-- [ ] 8.3 Add an opt-in live qualification lane and release gates for the relay and OpenClaw channel package.
-      Requirements: R2.AC2, R5.AC2, R8.AC1, R8.AC2
-      Done when: the normal unit suite remains offline/deterministic, while publishing requires a named real-Gateway smoke workflow and exact package version checks.
-
-## 9. Qualify Hermes without duplicating the bridge
-
-- [ ] 9.1 Capture the Hermes Relay connector descriptor/inbound/follow-up/interrupt wire fixtures for a pinned Hermes release.
-      Requirements: R2.AC1, R2.AC4, R8.AC3
-      Done when: fixtures identify all session, capability, stream, cancel, approval, and reconnect facts required by v1 without relying on undocumented fields.
-
-- [ ] 9.2 Implement a Hermes Relay-to-Agent-Bridge adapter in the relay service behind a disabled feature flag.
-      Requirements: R2.AC4, R3.AC1, R3.AC2, R4.AC1, R6.AC2
-      Done when: the adapter imports only the shared bridge protocol and does not modify enrollment, browser controller, persistence, or OpenClaw code.
-
-- [ ] 9.3 Run the shared protocol, relay, and browser fixture suites through the Hermes adapter and record the compatibility matrix.
-      Requirements: R2.AC2, R2.AC5, R4.AC5, R6.AC3, R8.AC3
-      Done when: each capability is marked supported/unsupported with evidence; missing behavior keeps the Hermes enrollment action disabled.
-
-- [ ] 9.4 Publish Hermes setup and operational guidance only after the feature flag passes qualification.
-      Requirements: R1.AC4, R5.AC3, R8.AC3
-      Done when: Hermes users receive the same code/approval/outbound-connection experience as OpenClaw without a separate OR3 UI path.
+- [ ] 6.4 Perform a simplification pass and remove runtime-name branches, duplicate fixtures, unused DTO fields, and unsupported speculative options.
+      Requirements: R2.AC4, R7.AC3, R8.AC2, R8.AC3
+      Done when: OpenClaw-specific code is confined to its plugin, Hermes has no OR3-specific client, and OR3 Chat has exactly the `intern` and `runs` drivers.
 
 ## Traceability Matrix
 
 | Requirement | Design component | Tasks |
 | --- | --- | --- |
-| R1 | Enrollment service, SSR API, relay | 1.1-1.4, 3.1-3.2, 4.1, 5.1, 6.1, 7.1-7.2, 8.1, 9.4 |
-| R2 | Bridge protocol, OpenClaw channel, Hermes adapter | 1.3, 2.1-2.5, 4.2-4.3, 7.1, 7.3, 7.5-7.6, 9.1-9.3 |
-| R3 | Relay control plane, session projection, controller | 2.3, 3.3, 4.2, 4.4-4.5, 5.2, 5.4, 6.3-6.4, 7.3, 9.2 |
-| R4 | Event protocol, projection store, Agent session pane | 1.3, 2.3-2.5, 3.3, 4.4, 5.3-5.5, 6.3, 6.5, 7.4, 9.2-9.3 |
-| R5 | Relay resume, projection store, subscription | 2.2, 2.5, 3.3-3.5, 4.4, 5.2-5.4, 6.2-6.3, 7.2, 7.4, 8.2-8.3 |
-| R6 | Capability descriptor, controller, UI controls | 1.3, 2.3, 3.1-3.2, 4.2, 4.5, 5.1-5.2, 5.4-5.5, 6.2, 6.4-6.5, 7.4-7.5, 9.2-9.3 |
-| R7 | Enrollment/store, relay validation, server authorization | 2.2-2.4, 3.1-3.5, 4.1-4.3, 5.1-5.3, 6.4, 7.2-7.5, 8.1-8.2 |
-| R8 | Fixtures, version gates, capability matrix | 1.3, 2.1-2.5, 7.1, 7.6, 8.3, 9.1-9.4 |
+| R1 | Existing enrollment, credential vault, Runs transport | 1.4, 2.2, 3.1-3.2, 4.6, 5.3 |
+| R2 | Driver discriminator, registry, Runs client | 1.1-1.4, 2.1-2.2, 2.8, 3.1, 3.3, 4.1-4.2, 5.1-5.2, 6.3-6.4 |
+| R3 | Runs sessions/history mapping, runtime command path | 2.3-2.4, 2.8, 3.4, 4.2-4.3, 5.1-5.2 |
+| R4 | Runs SSE translator, existing event store | 2.5-2.6, 3.3-3.4, 4.2, 4.4, 5.1-5.2 |
+| R5 | Existing persistence, run reconciliation | 1.1-1.2, 2.3-2.6, 3.2, 3.4, 4.2, 4.4, 5.2 |
+| R6 | Existing approval/cancel UI, Runs controls | 2.5, 2.7-2.8, 3.3-3.4, 4.1, 4.4-4.5, 5.1-5.2, 6.2 |
+| R7 | Credential vault, redaction, capability boundary | 1.2, 2.1-2.2, 2.5, 2.7, 3.4, 4.3-4.5, 5.2-5.3, 6.3-6.4 |
+| R8 | Shared fixtures, runtime qualification, final checks | 1.1-1.3, 2.1, 3.2-3.4, 4.1, 4.6, 5.1-5.3, 6.1-6.4 |
 
 ## Definition of Done
 
-- All R1-R8 acceptance criteria pass through deterministic protocol, store, relay, API, controller, and UI tests.
-- The OpenClaw channel passes its pinned-version Gateway smoke test and its documented install-plus-add flow imports setup metadata safely before runtime activation.
-- A user can complete code creation, approval, outbound connection, stream/progress/final delivery, browser reload, connector reconnect, cancel or approval when advertised, and revoke without exposing a Gateway URL or long-lived Gateway credential.
-- Static/local-only OR3 remains unchanged, `or3-intern` External Agents regression tests pass, and the traceability matrix has no gaps.
-- Hermes remains disabled until it passes the same shared fixture suite against a pinned Relay connector contract.
+- Every R1-R8 acceptance criterion passes and the traceability matrix has no gaps.
+- A user can connect OpenClaw with a URL and token, stream a response, send a slash command, approve or deny a native request, and stop a run in the existing Agents UI.
+- The same production Runs client completes those behaviors against Hermes's native API without a Hermes-specific controller, store, UI, or plugin.
+- Existing Intern hosts load without migration and the current `or3-intern` Agents behavior remains green.
+- Targeted tests, pinned runtime contract/smoke tests, and `bun run type-check` pass.
+- The final diff contains no hosted relay, new OR3 server service, new persistence layer, second Agents controller, or speculative generic framework.
