@@ -32,14 +32,45 @@ export type ExtensionInstallOptions = {
     kind: ExtensionKind;
     file: File;
     force?: boolean;
+    workspaceId?: string;
     onSuccess?: () => Promise<void>;
 };
+
+export type ExtensionInstallResult =
+    | {
+          readonly ok: true;
+          readonly manifest: ExtensionItem;
+          readonly restartRequired: true;
+      }
+    | {
+          readonly ok: true;
+          readonly kind: 'v2-candidate';
+          readonly workspaceId: string;
+          readonly status: 'candidate-stored';
+          readonly packageDigest: string;
+          readonly restartRequired: false;
+      };
+
+type V2CandidateBlockedInstallResult = {
+    readonly ok: false;
+    readonly kind: 'v2-candidate';
+    readonly status: 'blocked';
+    readonly stage: string;
+    readonly codes: readonly string[];
+};
+
+function acceptedInstallResult(
+    result: ExtensionInstallResult | V2CandidateBlockedInstallResult
+): ExtensionInstallResult {
+    if (result.ok) return result;
+    throw new Error(result.codes.join(', ') || `V2 candidate blocked during ${result.stage}`);
+}
 
 /**
  * Install an extension (plugin or theme) from a .zip file.
  * Handles duplicate detection and retry with force flag.
  */
-export async function installExtension(options: ExtensionInstallOptions): Promise<boolean> {
+export async function installExtension(options: ExtensionInstallOptions): Promise<ExtensionInstallResult | false> {
     const { file, force = false, onSuccess } = options;
     const formData = new FormData();
     formData.append('file', file);
@@ -47,15 +78,20 @@ export async function installExtension(options: ExtensionInstallOptions): Promis
     if (force) {
         formData.append('force', 'true');
     }
+    if (options.workspaceId) {
+        formData.append('workspaceId', options.workspaceId);
+    }
 
     try {
-        await $fetch('/api/admin/extensions/install', {
+        const result = acceptedInstallResult(await $fetch<
+            ExtensionInstallResult | V2CandidateBlockedInstallResult
+        >('/api/admin/extensions/install', {
             method: 'POST',
             body: formData,
             headers: ADMIN_HEADERS,
-        });
+        }));
         if (onSuccess) await onSuccess();
-        return true;
+        return result;
     } catch (error: unknown) {
         const message = parseErrorMessage(error, '');
         
@@ -81,6 +117,7 @@ export type ExtensionUrlInstallOptions = {
     kind: ExtensionKind;
     url: string;
     force?: boolean;
+    workspaceId?: string;
     onSuccess?: () => Promise<void>;
 };
 
@@ -88,17 +125,26 @@ export type ExtensionUrlInstallOptions = {
  * Install an extension (plugin or theme) from a remote URL.
  * The server fetches the ZIP and runs the same install pipeline.
  */
-export async function installExtensionFromUrl(options: ExtensionUrlInstallOptions): Promise<boolean> {
+export async function installExtensionFromUrl(
+    options: ExtensionUrlInstallOptions
+): Promise<ExtensionInstallResult | false> {
     const { url, force = false, onSuccess } = options;
 
     try {
-        await $fetch('/api/admin/extensions/install', {
+        const result = acceptedInstallResult(await $fetch<
+            ExtensionInstallResult | V2CandidateBlockedInstallResult
+        >('/api/admin/extensions/install', {
             method: 'POST',
-            body: { url, force, expectedKind: options.kind },
+            body: {
+                url,
+                force,
+                expectedKind: options.kind,
+                ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
+            },
             headers: ADMIN_HEADERS,
-        });
+        }));
         if (onSuccess) await onSuccess();
-        return true;
+        return result;
     } catch (error: unknown) {
         const message = parseErrorMessage(error, '');
 

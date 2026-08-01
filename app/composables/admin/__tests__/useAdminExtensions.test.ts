@@ -82,6 +82,45 @@ describe('useAdminExtensions', () => {
                 installExtension({ kind: 'plugin', file: mockFile })
             ).resolves.toBe(false);
         });
+
+        it('preserves a V2 candidate result instead of treating it as a legacy install', async () => {
+            const candidate = {
+                ok: true as const,
+                kind: 'v2-candidate' as const,
+                workspaceId: 'ws-1',
+                status: 'candidate-stored' as const,
+                packageDigest: `sha256-${'a'.repeat(64)}`,
+                restartRequired: false as const,
+            };
+            const mockFetch = vi.fn().mockResolvedValue(candidate);
+            globalThis.$fetch = mockFetch as unknown as typeof $fetch;
+            const mockFile = new File([''], 'package.zip');
+
+            await expect(
+                installExtension({
+                    kind: 'plugin',
+                    file: mockFile,
+                    workspaceId: 'ws-1',
+                })
+            ).resolves.toEqual(candidate);
+            const [, options] = mockFetch.mock.calls[0] as [string, { body: FormData }];
+            expect(options.body.get('workspaceId')).toBe('ws-1');
+        });
+
+        it('surfaces a blocked V2 candidate as an install failure', async () => {
+            const mockFetch = vi.fn().mockResolvedValue({
+                ok: false,
+                kind: 'v2-candidate',
+                status: 'blocked',
+                stage: 'loader',
+                codes: ['trusted-host-ui-abi-unproven'],
+            });
+            globalThis.$fetch = mockFetch as unknown as typeof $fetch;
+
+            await expect(
+                installExtension({ kind: 'plugin', file: new File([''], 'package.zip') })
+            ).rejects.toThrow('trusted-host-ui-abi-unproven');
+        });
     });
 
     describe('uninstallExtension', () => {

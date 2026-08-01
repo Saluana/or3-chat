@@ -8,7 +8,10 @@ import { requirePluginAccess } from '../../../utils/plugins/access/require-plugi
 import { requireCan } from '../../../auth/can';
 import { isNonCorePluginDiscoveryDisabled } from '../../../../shared/plugins/safe-mode';
 import { resolvePluginRoutePermission } from '../../../../shared/plugins/route-permissions';
+import { createModuleV2RuntimePolicy } from '../../../../shared/plugins/module-v2-runtime-policy';
 import { PluginPackageRouteCatalog } from '../../../admin/plugins/package-route-catalog';
+import { getEnabledPlugins } from '../../../admin/plugins/workspace-plugin-store';
+import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 import {
     ServerModuleResolver,
     ServerModuleResolverError,
@@ -81,6 +84,13 @@ export default defineEventHandler(async (event) => {
     const method = getMethod(event).toUpperCase();
 
     const v2Enabled = moduleLoaderV2Enabled(runtimeConfig);
+    const v2Policy = createModuleV2RuntimePolicy({
+        enabled: v2Enabled,
+        ssrHost: true,
+        workspaceIds:
+            (runtimeConfig.admin as { pluginModuleLoaderV2WorkspaceIds?: string[] } | undefined)
+                ?.pluginModuleLoaderV2WorkspaceIds ?? [],
+    });
     const packageCatalog = v2Enabled
         ? await packageRouteCatalog.readSelected(pluginId)
         : { status: 'inactive' as const, pluginId };
@@ -205,10 +215,21 @@ export default defineEventHandler(async (event) => {
         },
     });
 
+    if (!v2Policy(session.workspace?.id).allowed) {
+        throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });
+    }
+    const workspaceId = session.workspace?.id;
+    if (
+        !workspaceId ||
+        !(await getEnabledPlugins(getWorkspaceSettingsStore(event), workspaceId)).includes(pluginId)
+    ) {
+        throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });
+    }
+
     const workspacePermission = resolvePluginRoutePermission(method, route.permission);
     requireCan(session, workspacePermission, {
         kind: 'workspace',
-        id: session.workspace?.id,
+        id: workspaceId,
     });
 
     // Request context is host-created and never captured by the module cache.

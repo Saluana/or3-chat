@@ -76,4 +76,11 @@ export class PluginPackageRouteCatalog {
             routes: Object.freeze(routes),
         });
     }
+
+    async listSelected(): Promise<readonly SelectedPackageRouteCatalog[]> {
+        const pluginIds = await this.pointers.listPluginIds();
+        return Object.freeze(
+            await Promise.all(pluginIds.map((pluginId) => this.readSelected(pluginId)))
+        );
+    }
 }

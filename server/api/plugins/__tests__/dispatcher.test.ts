@@ -51,6 +51,31 @@ vi.mock('../../../auth/can', () => ({
     requireCan: requireCanMock as any,
 }));
 
+const readSelectedPackageMock = vi.fn();
+vi.mock('../../../admin/plugins/package-route-catalog', () => ({
+    PluginPackageRouteCatalog: class {
+        readSelected = readSelectedPackageMock;
+    },
+}));
+
+const getEnabledPluginsMock = vi.fn();
+vi.mock('../../../admin/plugins/workspace-plugin-store', () => ({
+    getEnabledPlugins: getEnabledPluginsMock as any,
+}));
+
+vi.mock('../../../admin/stores/registry', () => ({
+    getWorkspaceSettingsStore: vi.fn(() => ({ id: 'settings-store' })),
+}));
+
+const resolvePackageHandlerMock = vi.fn();
+vi.mock('../../../admin/plugins/server-module-resolver', () => ({
+    ServerModuleResolver: class {
+        createAuthorizedContext = vi.fn((value) => value);
+        resolveHandler = resolvePackageHandlerMock;
+    },
+    ServerModuleResolverError: class ServerModuleResolverError extends Error {},
+}));
+
 function makeEvent(): H3Event {
     return { context: {}, node: { req: { headers: {} } } } as H3Event;
 }
@@ -74,6 +99,12 @@ describe('plugin route dispatcher', () => {
         });
         isSsrAuthEnabledMock.mockReset().mockReturnValue(true);
         listInstalledExtensionsMock.mockReset();
+        readSelectedPackageMock.mockReset().mockResolvedValue({
+            status: 'inactive',
+            pluginId: 'plugin.a',
+        });
+        getEnabledPluginsMock.mockReset().mockResolvedValue([]);
+        resolvePackageHandlerMock.mockReset();
         requirePluginAccessMock.mockReset().mockResolvedValue({
             session: {
                 authenticated: true,
@@ -226,6 +257,82 @@ describe('plugin route dispatcher', () => {
         ) => Promise<any>;
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    it('dispatches a selected V2 server route only when enabled in the request workspace', async () => {
+        useRuntimeConfigMock.mockReturnValue({
+            admin: {
+                pluginRouteDispatcherEnabled: true,
+                pluginModuleLoaderV2Enabled: true,
+                pluginModuleLoaderV2WorkspaceIds: ['ws-1'],
+                disableNonCorePlugins: false,
+            },
+        } as any);
+        readSelectedPackageMock.mockResolvedValue({
+            status: 'ready',
+            pluginId: 'plugin.a',
+            packageDigest: `sha256-${'a'.repeat(64)}`,
+            manifest: { access: null },
+            routes: [
+                {
+                    method: 'GET',
+                    path: 'health',
+                    handler: 'server/health.mjs',
+                },
+            ],
+        });
+        getEnabledPluginsMock.mockResolvedValue(['plugin.a']);
+        resolvePackageHandlerMock.mockResolvedValue({
+            handler: async () => ({ ok: true, source: 'package-v2' }),
+        });
+
+        const handler = (await import('../[pluginId]/[...path]')).default as (
+            event: H3Event
+        ) => Promise<any>;
+
+        await expect(handler(makeEvent())).resolves.toEqual({
+            ok: true,
+            source: 'package-v2',
+        });
+        expect(resolvePackageHandlerMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                pluginId: 'plugin.a',
+                packageDigest: `sha256-${'a'.repeat(64)}`,
+                handlerPath: 'server/health.mjs',
+            })
+        );
+    });
+
+    it('does not resolve a selected V2 server handler while disabled in the workspace', async () => {
+        useRuntimeConfigMock.mockReturnValue({
+            admin: {
+                pluginRouteDispatcherEnabled: true,
+                pluginModuleLoaderV2Enabled: true,
+                pluginModuleLoaderV2WorkspaceIds: ['ws-1'],
+                disableNonCorePlugins: false,
+            },
+        } as any);
+        readSelectedPackageMock.mockResolvedValue({
+            status: 'ready',
+            pluginId: 'plugin.a',
+            packageDigest: `sha256-${'a'.repeat(64)}`,
+            manifest: { access: null },
+            routes: [
+                {
+                    method: 'GET',
+                    path: 'health',
+                    handler: 'server/health.mjs',
+                },
+            ],
+        });
+        getEnabledPluginsMock.mockResolvedValue([]);
+
+        const handler = (await import('../[pluginId]/[...path]')).default as (
+            event: H3Event
+        ) => Promise<any>;
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 404 });
+        expect(resolvePackageHandlerMock).not.toHaveBeenCalled();
     });
 
     it('does not inspect or import plugin handlers in pre-discovery safe mode', async () => {

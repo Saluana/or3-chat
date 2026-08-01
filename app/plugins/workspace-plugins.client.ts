@@ -109,7 +109,11 @@ export default defineNuxtPlugin(() => {
         const enabledSet = new Set(
             manifest.enabledPluginIds.filter((pluginId) => {
                 const runtime = manifest.runtime[pluginId];
-                return runtime?.loadAllowed !== false;
+                return (
+                    runtime?.loadAllowed !== false &&
+                    runtime?.descriptorStatus === 'ready' &&
+                    runtime.descriptor.manifestVersion === 1
+                );
             })
         );
 

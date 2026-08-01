@@ -506,6 +506,15 @@ export interface Or3CloudConfig {
         pluginModuleLoaderV2Enabled?: boolean;
 
         /**
+         * Optional workspace allowlist for digest-addressed V2 packages. This
+         * is independent from the bundled V1 manager canary. An empty list
+         * selects every workspace when the module loader is enabled.
+         * @env OR3_PLUGIN_MODULE_LOADER_V2_WORKSPACE_IDS
+         * @default []
+         */
+        pluginModuleLoaderV2WorkspaceIds?: string[];
+
+        /**
          * Enables isolated-client / isolated-server plugin runtimes.
          * Startup-only; when false, isolated descriptors are blocked before
          * import and never silently downgraded to trusted-host.

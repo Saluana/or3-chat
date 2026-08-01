@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
     ExtensionAlreadyInstalledError,
     installExtensionFromZip,
+    stageV2PluginPackageFromZip,
 } from '../install';
 import { EXTENSIONS_BASE_DIR } from '../paths';
 import {
@@ -86,6 +87,45 @@ describe('installExtensionFromZip', () => {
         await expect(
             fs.access(join(EXTENSIONS_BASE_DIR, 'plugins', 'test-plugin'))
         ).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+
+    it('stages a V2 package outside the legacy extension inventory', async () => {
+        const zip = makeZip({
+            'package/or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-v2-package',
+                name: 'Test V2 Package',
+                version: '2.0.0',
+                capabilities: [],
+                manifestVersion: 2,
+                engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
+                runtime: {
+                    server: {
+                        entry: 'server.mjs',
+                        routes: [],
+                    },
+                },
+                requestedGrants: [],
+                features: { required: [], optional: [] },
+                dependencies: { required: [], optional: [] },
+                trust: 'trusted-host',
+                settings: { version: 1 },
+                stateCompatibility: {
+                    version: 1,
+                    reads: { minimum: 1, maximum: 1 },
+                    rollback: 'safe',
+                },
+            }),
+            'package/server.mjs': 'export default () => ({ ok: true });',
+        });
+
+        const staged = await stageV2PluginPackageFromZip(zip);
+        expect(staged.manifest.id).toBe('test-v2-package');
+        await expect(fs.access(join(staged.sourceRoot, 'server.mjs'))).resolves.toBeUndefined();
+        await expect(
+            fs.access(join(EXTENSIONS_BASE_DIR, 'plugins', 'test-v2-package'))
+        ).rejects.toMatchObject({ code: 'ENOENT' });
+        await staged.cleanup();
     });
 
     it('rejects unsafe manifest ids', async () => {

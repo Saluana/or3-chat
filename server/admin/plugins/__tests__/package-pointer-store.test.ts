@@ -132,6 +132,15 @@ describe('atomic plugin package pointers', () => {
         expect(JSON.parse(text)).toEqual(pointer(1, first));
     });
 
+    it('lists only regular valid pointer identities for runtime discovery', async () => {
+        const { root, pointers, first } = await setup();
+        await pointers.writePointer('alpha', pointer(1, first));
+        writeFileSync(resolve(root, '.active', 'invalid id.json'), '{}');
+        writeFileSync(resolve(root, '.active', 'beta.tmp'), '{}');
+
+        await expect(pointers.listPluginIds()).resolves.toEqual(['alpha']);
+    });
+
     it('rejects stale or skipped pointer revisions without replacing current', async () => {
         const { pointers, first, second } = await setup();
         await pointers.writePointer('alpha', pointer(1, first));

@@ -198,6 +198,28 @@ export class PluginPackagePointerStore {
         return this.#readPersistedPointer(pluginId);
     }
 
+    /** Lists only regular, syntactically valid pointer files. Each selection is
+     * still validated through readStartupSelection before it can execute code. */
+    async listPluginIds(): Promise<readonly string[]> {
+        let entries;
+        try {
+            entries = await fs.readdir(this.#activeRoot, { withFileTypes: true });
+        } catch (error) {
+            const code = error && typeof error === 'object' && 'code' in error
+                ? (error as { code?: string }).code
+                : undefined;
+            if (code === 'ENOENT') return Object.freeze([]);
+            throw error;
+        }
+        return Object.freeze(
+            entries
+                .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+                .map((entry) => entry.name.slice(0, -'.json'.length))
+                .filter(validPluginId)
+                .sort()
+        );
+    }
+
     async #readPersistedPointer(pluginId: string): Promise<PluginPackagePointer | null> {
         const path = this.pointerPath(pluginId);
         let handle;

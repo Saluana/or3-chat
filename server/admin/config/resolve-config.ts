@@ -409,6 +409,12 @@ export function buildOr3CloudConfigFromEnv(
                 env.OR3_PLUGIN_MODULE_LOADER_V2_ENABLED,
                 false,
             ),
+            pluginModuleLoaderV2WorkspaceIds:
+                env.OR3_PLUGIN_MODULE_LOADER_V2_WORKSPACE_IDS
+                    ? env.OR3_PLUGIN_MODULE_LOADER_V2_WORKSPACE_IDS.split(',')
+                          .map((workspaceId) => workspaceId.trim())
+                          .filter(Boolean)
+                    : [],
             pluginIsolationEnabled: envBool(
                 env.OR3_PLUGIN_ISOLATION_ENABLED,
                 false,

@@ -352,6 +352,8 @@ const adminConfig = {
     hookEngineV2Enabled: or3CloudConfig.admin?.hookEngineV2Enabled === true,
     pluginModuleLoaderV2Enabled:
         or3CloudConfig.admin?.pluginModuleLoaderV2Enabled === true,
+    pluginModuleLoaderV2WorkspaceIds:
+        or3CloudConfig.admin?.pluginModuleLoaderV2WorkspaceIds ?? [],
     pluginIsolationEnabled:
         or3CloudConfig.admin?.pluginIsolationEnabled === true,
     pluginZipInstallEnabled:
@@ -637,6 +639,8 @@ export default defineNuxtConfig({
                 hookEngineV2Enabled: adminConfig.hookEngineV2Enabled,
                 pluginModuleLoaderV2Enabled:
                     adminConfig.pluginModuleLoaderV2Enabled,
+                pluginModuleLoaderV2WorkspaceIds:
+                    adminConfig.pluginModuleLoaderV2WorkspaceIds,
                 pluginIsolationEnabled: adminConfig.pluginIsolationEnabled,
                 pluginRouteDispatcherEnabled:
                     adminConfig.pluginRouteDispatcherEnabled,

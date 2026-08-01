@@ -571,6 +571,22 @@ describe('buildOr3CloudConfigFromEnv', () => {
         ).toBe(true);
     });
 
+    it('parses a package-loader canary independently from the bundled V1 manager', () => {
+        const configured = buildOr3CloudConfigFromEnv({
+            OR3_PLUGIN_RUNTIME_V2_WORKSPACE_IDS: 'v1-manager-workspace',
+            OR3_PLUGIN_MODULE_LOADER_V2_WORKSPACE_IDS:
+                'package-workspace-a, package-workspace-b',
+        });
+
+        expect(configured.admin?.pluginRuntimeV2WorkspaceIds).toEqual([
+            'v1-manager-workspace',
+        ]);
+        expect(configured.admin?.pluginModuleLoaderV2WorkspaceIds).toEqual([
+            'package-workspace-a',
+            'package-workspace-b',
+        ]);
+    });
+
     it('parses the startup-only plugin isolation flag', () => {
         expect(
             buildOr3CloudConfigFromEnv({}).admin?.pluginIsolationEnabled,

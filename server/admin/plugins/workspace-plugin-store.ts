@@ -279,6 +279,17 @@ export async function getPluginGrantReview(
     requestedGrants: readonly string[]
 ): Promise<PluginGrantReviewSnapshot> {
     const requested = normalizeGrantIds(requestedGrants);
+    if (requested.length === 0) {
+        return {
+            requestedGrants: Object.freeze([]),
+            approvedGrants: Object.freeze([]),
+            revision: createReviewedPluginGrantsRevision({
+                requestedGrants: [],
+                approvedGrants: [],
+            }),
+            status: 'current',
+        };
+    }
     const raw = await store.get(workspaceId, `plugins.grants.${pluginId}`);
     if (!raw) return emptyGrantReview(requested, 'unreviewed');
     const parsed = PersistedPluginGrantReviewSchema.safeParse(safeJsonParse(raw));

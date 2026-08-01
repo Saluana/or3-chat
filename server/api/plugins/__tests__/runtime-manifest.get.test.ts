@@ -27,8 +27,19 @@ vi.mock('../../../admin/stores/registry', () => ({
 }));
 
 const getEnabledPluginsMock = vi.fn();
+const getPluginGrantReviewMock = vi.fn();
 vi.mock('../../../admin/plugins/workspace-plugin-store', () => ({
     getEnabledPlugins: getEnabledPluginsMock as any,
+    getPluginGrantReview: getPluginGrantReviewMock as any,
+    getPluginSettings: vi.fn(async () => ({})),
+    readPluginAccessPolicy: vi.fn(() => null),
+}));
+
+const listSelectedPackagesMock = vi.fn();
+vi.mock('../../../admin/plugins/package-route-catalog', () => ({
+    PluginPackageRouteCatalog: class {
+        listSelected = listSelectedPackagesMock;
+    },
 }));
 
 const checkPluginAccessMock = vi.fn();
@@ -73,6 +84,13 @@ describe('GET /api/plugins/runtime-manifest', () => {
         listInstalledExtensionsMock.mockReset().mockResolvedValue([]);
         getWorkspaceSettingsStoreMock.mockReset().mockReturnValue({ id: 'store' });
         getEnabledPluginsMock.mockReset().mockResolvedValue([]);
+        getPluginGrantReviewMock.mockReset().mockResolvedValue({
+            requestedGrants: [],
+            approvedGrants: [],
+            revision: `sha256-${'b'.repeat(64)}`,
+            status: 'current',
+        });
+        listSelectedPackagesMock.mockReset().mockResolvedValue([]);
         checkPluginAccessMock.mockReset().mockResolvedValue({
             session: { authenticated: true },
             decision: { allowed: true, reasons: [], effectivePolicy: defaultEffectivePolicy },
@@ -246,6 +264,284 @@ describe('GET /api/plugins/runtime-manifest', () => {
         expect(result.runtime.alpha.loadAllowed).toBe(false);
         expect(result.runtime.alpha.loadDeniedReason).toBe('insufficient-role');
         expect(result.runtime.alpha.descriptorStatus).toBe('ready');
+    });
+
+    it('publishes a selected server-only V2 package without changing the V1 lane', async () => {
+        useRuntimeConfigMock.mockReturnValue({
+            admin: {
+                pluginRuntimeLoaderEnabled: true,
+                pluginModuleLoaderV2Enabled: true,
+                pluginModuleLoaderV2WorkspaceIds: ['ws-1'],
+                disableNonCorePlugins: false,
+            },
+        } as any);
+        listSelectedPackagesMock.mockResolvedValue([
+            {
+                status: 'ready',
+                pluginId: 'package-alpha',
+                packageDigest: `sha256-${'a'.repeat(64)}`,
+                routes: [{ method: 'GET', path: 'health', handler: 'server/health.mjs' }],
+                manifest: {
+                    kind: 'plugin',
+                    id: 'package-alpha',
+                    name: 'Package Alpha',
+                    version: '1.0.0',
+                    capabilities: [],
+                    manifestVersion: 2,
+                    engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
+                    runtime: {
+                        server: {
+                            entry: 'server/index.mjs',
+                            routes: [{ method: 'GET', path: 'health', handler: 'server/health.mjs' }],
+                        },
+                    },
+                    requestedGrants: [],
+                    features: { required: [], optional: [] },
+                    dependencies: { required: [], optional: [] },
+                    trust: 'trusted-host',
+                    settings: { version: 1 },
+                    stateCompatibility: {
+                        version: 1,
+                        reads: { minimum: 1, maximum: 1 },
+                        rollback: 'safe',
+                    },
+                },
+            },
+        ]);
+        getEnabledPluginsMock.mockResolvedValue(['package-alpha']);
+
+        const handler = (await import('../runtime-manifest.get')).default as (
+            event: H3Event
+        ) => Promise<any>;
+        const result = await handler(makeEvent());
+
+        expect(result.enabledPluginIds).toEqual(['package-alpha']);
+        expect(result.runtime['package-alpha']).toMatchObject({
+            lifecycleCoverage: 'managed-v2',
+            descriptorStatus: 'ready',
+            descriptor: {
+                manifestVersion: 2,
+                source: 'package',
+                artifact: {
+                    kind: 'package-v2',
+                    packageDigest: `sha256-${'a'.repeat(64)}`,
+                },
+            },
+        });
+    });
+
+    it('reports a selected V2 package as blocked while the module-loader gate is off', async () => {
+        listSelectedPackagesMock.mockResolvedValue([
+            {
+                status: 'ready',
+                pluginId: 'package-alpha',
+                packageDigest: `sha256-${'a'.repeat(64)}`,
+                routes: [],
+                manifest: {
+                    kind: 'plugin',
+                    id: 'package-alpha',
+                    name: 'Package Alpha',
+                    version: '1.0.0',
+                    capabilities: [],
+                    manifestVersion: 2,
+                    engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
+                    runtime: { server: { entry: 'server/index.mjs', routes: [] } },
+                    requestedGrants: [],
+                    features: { required: [], optional: [] },
+                    dependencies: { required: [], optional: [] },
+                    trust: 'trusted-host',
+                    settings: { version: 1 },
+                    stateCompatibility: {
+                        version: 1,
+                        reads: { minimum: 1, maximum: 1 },
+                        rollback: 'safe',
+                    },
+                },
+            },
+        ]);
+        getEnabledPluginsMock.mockResolvedValue(['package-alpha']);
+
+        const handler = (await import('../runtime-manifest.get')).default as (
+            event: H3Event
+        ) => Promise<any>;
+        const result = await handler(makeEvent());
+
+        expect(result.enabledPluginIds).toEqual([]);
+        expect(result.runtime['package-alpha']).toMatchObject({
+            descriptorStatus: 'blocked',
+            blockCode: 'module-loader-disabled',
+            loadAllowed: false,
+        });
+    });
+
+    it('binds selected direct V2 dependencies into the descriptor key', async () => {
+        useRuntimeConfigMock.mockReturnValue({
+            admin: {
+                pluginRuntimeLoaderEnabled: true,
+                pluginModuleLoaderV2Enabled: true,
+                pluginModuleLoaderV2WorkspaceIds: ['ws-1'],
+                disableNonCorePlugins: false,
+            },
+        } as any);
+        type DependencySet = {
+            required: Array<{ id: string; range: string; features: string[] }>;
+            optional: Array<{ id: string; range: string; features: string[] }>;
+        };
+        const serverOnlyManifest = (
+            id: string,
+            dependencies: DependencySet = { required: [], optional: [] }
+        ) => ({
+            kind: 'plugin' as const,
+            id,
+            name: id,
+            version: '1.0.0',
+            capabilities: [],
+            manifestVersion: 2 as const,
+            engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
+            runtime: {
+                server: {
+                    entry: 'server/index.mjs',
+                    routes: [],
+                },
+            },
+            requestedGrants: [],
+            features: { required: [], optional: [] },
+            dependencies,
+            trust: 'trusted-host' as const,
+            settings: { version: 1 },
+            stateCompatibility: {
+                version: 1,
+                reads: { minimum: 1, maximum: 1 },
+                rollback: 'safe' as const,
+            },
+        });
+        const dependencyDigest = `sha256-${'d'.repeat(64)}`;
+        listSelectedPackagesMock.mockResolvedValue([
+            {
+                status: 'ready',
+                pluginId: 'dependency',
+                packageDigest: dependencyDigest,
+                routes: [],
+                manifest: serverOnlyManifest('dependency'),
+            },
+            {
+                status: 'ready',
+                pluginId: 'dependent',
+                packageDigest: `sha256-${'e'.repeat(64)}`,
+                routes: [],
+                manifest: serverOnlyManifest('dependent', {
+                    required: [
+                        { id: 'dependency', range: '^1.0.0', features: [] },
+                    ],
+                    optional: [],
+                }),
+            },
+        ]);
+        getEnabledPluginsMock.mockResolvedValue(['dependency', 'dependent']);
+
+        const handler = (await import('../runtime-manifest.get')).default as (
+            event: H3Event
+        ) => Promise<any>;
+        const result = await handler(makeEvent());
+
+        expect(result.enabledPluginIds).toEqual(['dependency', 'dependent']);
+        expect(result.runtime.dependent.descriptor.resolvedDependencyKeys).toEqual([
+            dependencyDigest,
+        ]);
+    });
+
+    it('blocks selected V2 dependency cycles before issuing descriptors', async () => {
+        useRuntimeConfigMock.mockReturnValue({
+            admin: {
+                pluginRuntimeLoaderEnabled: true,
+                pluginModuleLoaderV2Enabled: true,
+                pluginModuleLoaderV2WorkspaceIds: ['ws-1'],
+                disableNonCorePlugins: false,
+            },
+        } as any);
+        const manifest = (id: string, dependencyId: string) => ({
+            kind: 'plugin' as const,
+            id,
+            name: id,
+            version: '1.0.0',
+            capabilities: [],
+            manifestVersion: 2 as const,
+            engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
+            runtime: { server: { entry: 'server/index.mjs', routes: [] } },
+            requestedGrants: [],
+            features: { required: [], optional: [] },
+            dependencies: {
+                required: [{ id: dependencyId, range: '^1.0.0', features: [] }],
+                optional: [],
+            },
+            trust: 'trusted-host' as const,
+            settings: { version: 1 },
+            stateCompatibility: {
+                version: 1,
+                reads: { minimum: 1, maximum: 1 },
+                rollback: 'safe' as const,
+            },
+        });
+        listSelectedPackagesMock.mockResolvedValue([
+            {
+                status: 'ready',
+                pluginId: 'alpha',
+                packageDigest: `sha256-${'a'.repeat(64)}`,
+                routes: [],
+                manifest: manifest('alpha', 'beta'),
+            },
+            {
+                status: 'ready',
+                pluginId: 'beta',
+                packageDigest: `sha256-${'b'.repeat(64)}`,
+                routes: [],
+                manifest: manifest('beta', 'alpha'),
+            },
+        ]);
+        getEnabledPluginsMock.mockResolvedValue(['alpha', 'beta']);
+
+        const handler = (await import('../runtime-manifest.get')).default as (
+            event: H3Event
+        ) => Promise<any>;
+        const result = await handler(makeEvent());
+
+        expect(result.enabledPluginIds).toEqual([]);
+        expect(result.runtime.alpha).toMatchObject({
+            descriptorStatus: 'blocked',
+            blockCode: 'package-dependency-blocked',
+        });
+        expect(result.runtime.beta).toMatchObject({
+            descriptorStatus: 'blocked',
+            blockCode: 'package-dependency-blocked',
+        });
+    });
+
+    it('leaves legacy-directory V2 artifacts inert and explicit', async () => {
+        listInstalledExtensionsMock.mockResolvedValue([
+            {
+                kind: 'plugin',
+                id: 'legacy-v2',
+                name: 'Legacy V2',
+                version: '1.0.0',
+                capabilities: [],
+                manifestVersion: 2,
+                runtime: { server: { entry: 'server.mjs', routes: [] } },
+                path: '/tmp/legacy-v2',
+            },
+        ]);
+        getEnabledPluginsMock.mockResolvedValue(['legacy-v2']);
+
+        const handler = (await import('../runtime-manifest.get')).default as (
+            event: H3Event
+        ) => Promise<any>;
+        const result = await handler(makeEvent());
+
+        expect(result.enabledPluginIds).toEqual([]);
+        expect(result.runtime['legacy-v2']).toMatchObject({
+            descriptorStatus: 'blocked',
+            blockCode: 'legacy-v2-reinstall-required',
+            loadAllowed: false,
+        });
     });
 
     it('normalizes policy and legacy capability revisions into descriptor identity', async () => {

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "plugin-v2-artifact",
+    "requiredSections": [
+      "Architecture",
+      "Changes",
+      "Permissions",
+      "Validation",
+      "Artifact or installation",
+      "Rollback",
+      "Remaining risks"
+    ]
+  },
+  {
+    "id": "theme-package",
+    "requiredSections": [
+      "Architecture",
+      "Changes",
+      "Permissions",
+      "Validation",
+      "Artifact or installation",
+      "Rollback",
+      "Remaining risks"
+    ]
+  }
+]

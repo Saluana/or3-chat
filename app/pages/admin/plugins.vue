@@ -278,9 +278,22 @@ const rebuildRequired = ref(false);
 async function installPluginFromUrl(url: string) {
     urlInstalling.value = true;
     try {
-        const installed = await installFromUrl('plugin', url, refresh);
+        const installed = await installFromUrl(
+            'plugin',
+            url,
+            refresh,
+            selectedWorkspaceId.value || undefined
+        );
         if (!installed) return;
         showUrlModal.value = false;
+        if ('kind' in installed && installed.kind === 'v2-candidate') {
+            toast.add({
+                title: 'V2 candidate prepared',
+                description: `Digest ${installed.packageDigest} is inactive. Run its canary, promote it, then activate it for this workspace.`,
+                color: 'info',
+            });
+            return;
+        }
         rebuildRequired.value = true;
         toast.add({
             title: 'Plugin installed',
@@ -372,8 +385,20 @@ async function togglePlugin(pluginId: string) {
 }
 
 async function installPlugin() {
-    const installed = await install('plugin', refresh);
+    const installed = await install(
+        'plugin',
+        refresh,
+        selectedWorkspaceId.value || undefined
+    );
     if (!installed) return;
+    if ('kind' in installed && installed.kind === 'v2-candidate') {
+        toast.add({
+            title: 'V2 candidate prepared',
+            description: `Digest ${installed.packageDigest} is inactive. Run its canary, promote it, then activate it for this workspace.`,
+            color: 'info',
+        });
+        return;
+    }
     rebuildRequired.value = true;
     toast.add({
         title: 'Plugin installed',

@@ -1,0 +1,42 @@
+[
+  {
+    "id": "setup-local",
+    "prompt": "Set up OR3 locally with no account, sync, or server storage.",
+    "expected": { "surface": "setup", "primarySkill": "or3-setup" }
+  },
+  {
+    "id": "setup-repair",
+    "prompt": "My OR3 Cloud configuration is invalid after changing the SQLite path. Help repair it.",
+    "expected": { "surface": "setup", "primarySkill": "or3-setup" }
+  },
+  {
+    "id": "theme-density",
+    "prompt": "Make the sidebar more compact and adjust dark-mode spacing.",
+    "expected": { "surface": "theme", "primarySkill": "or3-theme-development" }
+  },
+  {
+    "id": "theme-branding",
+    "prompt": "Create a brand theme with new typography, icons, and a light and dark palette.",
+    "expected": { "surface": "theme", "primarySkill": "or3-theme-development" }
+  },
+  {
+    "id": "plugin-pane",
+    "prompt": "Add a weather pane with a command that opens it.",
+    "expected": { "surface": "plugin", "primarySkill": "or3-plugin-development" }
+  },
+  {
+    "id": "plugin-action",
+    "prompt": "Add a message action that saves an assistant response to my notes service.",
+    "expected": { "surface": "plugin", "primarySkill": "or3-plugin-development" }
+  },
+  {
+    "id": "core-hook",
+    "prompt": "Expose a public hook that can filter a document export before download.",
+    "expected": { "surface": "core", "primarySkill": "or3-core-development" }
+  },
+  {
+    "id": "provider-out-of-scope",
+    "prompt": "Implement a new S3-compatible storage provider.",
+    "expected": { "surface": "provider", "primarySkill": null }
+  }
+]

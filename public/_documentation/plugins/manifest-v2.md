@@ -2,10 +2,11 @@
 
 V2 packages ship `or3.manifest.json` with `manifestVersion: 2`.
 
-Manifest parsing, packing, immutable storage, and promotion primitives are
-available. The standard extension install endpoint and production workspace
-client do not yet form an end-to-end V2 activation path; see
-[Plugin Runtime V2 Overview](./runtime-v2-overview).
+The owner-only standard extension install endpoint dispatches a V2 ZIP to the
+immutable candidate store. After a canary and explicit promotion, an enabled
+server-only package can run authorized routes in an SSR deployment. Client-entry
+packages remain intentionally blocked until the host UI ABI qualification is
+complete; see [Plugin Runtime V2 Overview](./runtime-v2-overview).
 
 Required concepts:
 
@@ -27,7 +28,7 @@ Canonical package digests use the server package-tree hasher (`OR3_PLUGIN_PACKAG
 
 ## Server route authorization
 
-For a selected V2 package, the host checks the workspace enabled list, merges
+For a promoted and selected V2 package, the host checks the workspace enabled list, merges
 the manifest `access` policy with workspace overrides, resolves entitlements,
 and applies the route permission before importing or invoking its handler.
 Package assets use the same enabled-list and access-policy boundary.
@@ -52,3 +53,12 @@ export default defineEventHandler((event) => {
 This context is created per request and is not captured in the digest-keyed
 module cache. It is available on the selected-package V2 dispatcher; legacy V1
 route modules should continue to use the normal host session helpers.
+
+## V1 coexistence
+
+V1 stays on its existing bundled extension lane. A V2 upload is rejected when
+its ID belongs to a V1 plugin in `extensions/plugins`; rename the V2 package or
+perform a future explicit migration. An older V2 archive already present in the
+legacy extension directory is inert and reported as
+`legacy-v2-reinstall-required`; re-upload it through the candidate flow. OR3
+does not move or delete that legacy artifact automatically.

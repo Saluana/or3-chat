@@ -1,11 +1,27 @@
 import { type Ref, type ComputedRef } from 'vue';
-import { installExtension, installExtensionFromUrl, uninstallExtension, useFileInput, type ExtensionKind } from './useAdminExtensions';
+import {
+    installExtension,
+    installExtensionFromUrl,
+    uninstallExtension,
+    useFileInput,
+    type ExtensionInstallResult,
+    type ExtensionKind,
+} from './useAdminExtensions';
 
 export type ExtensionManagement = {
     fileInput: Ref<HTMLInputElement | null>;
     triggerFileInput: () => void;
-    install: (kind: ExtensionKind, onSuccess?: () => Promise<void>) => Promise<boolean>;
-    installFromUrl: (kind: ExtensionKind, url: string, onSuccess?: () => Promise<void>) => Promise<boolean>;
+    install: (
+        kind: ExtensionKind,
+        onSuccess?: () => Promise<void>,
+        workspaceId?: string
+    ) => Promise<ExtensionInstallResult | false>;
+    installFromUrl: (
+        kind: ExtensionKind,
+        url: string,
+        onSuccess?: () => Promise<void>,
+        workspaceId?: string
+    ) => Promise<ExtensionInstallResult | false>;
     uninstall: (id: string, kind: ExtensionKind, onSuccess?: () => Promise<void>) => Promise<void>;
 };
 
@@ -18,21 +34,36 @@ export function useExtensionManagement(
 ): ExtensionManagement {
     const { fileInput, triggerFileInput } = useFileInput();
 
-    async function install(kind: ExtensionKind, onSuccess?: () => Promise<void>) {
+    async function install(
+        kind: ExtensionKind,
+        onSuccess?: () => Promise<void>,
+        workspaceId?: string
+    ) {
         if (!isOwner.value) return false;
         const file = fileInput.value?.files?.[0];
         if (!file) return false;
-        return await installExtension({ kind, file, onSuccess });
+        return await installExtension({
+            kind,
+            file,
+            onSuccess,
+            ...(workspaceId ? { workspaceId } : {}),
+        });
     }
 
     async function installFromUrl(
         kind: ExtensionKind,
         url: string,
-        onSuccess?: () => Promise<void>
+        onSuccess?: () => Promise<void>,
+        workspaceId?: string
     ) {
         if (!isOwner.value) return false;
         if (!url.trim()) return false;
-        return await installExtensionFromUrl({ kind, url: url.trim(), onSuccess });
+        return await installExtensionFromUrl({
+            kind,
+            url: url.trim(),
+            onSuccess,
+            ...(workspaceId ? { workspaceId } : {}),
+        });
     }
 
     async function uninstall(

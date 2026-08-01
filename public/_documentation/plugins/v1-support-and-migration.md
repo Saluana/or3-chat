@@ -9,9 +9,15 @@ V1 plugin authoring remains supported through the entire Plugin Runtime V2 line.
 1. `bun run plugin-runtime:cli -- create --id <id> --dir <path>`
 2. Depend on `@or3/plugin-sdk` and call `defineOr3Plugin()`
 3. `validate` / `test` / `pack` via `plugin-runtime:cli`
-4. Pack and inspect the digest-addressed package in the compatibility harness.
-   Keep the V1 plugin in place: production candidate installation/promotion and
-   SDK activation are not yet connected end to end.
+4. Upload the ZIP as a V2 candidate, run its server canary, promote it, and
+   enable it only in the V2 package canary workspace. The initial production
+   profile is server-only; V2 client entries stay blocked pending the separate
+   host-UI ABI qualification.
+
+V1 and V2 cannot own the same plugin ID at once. Keep the existing V1 plugin
+running while you validate a differently named V2 package, or wait for an
+explicit migration operation. OR3 never silently converts, moves, or deletes a
+V1 extension.
 
 ## Import map
 

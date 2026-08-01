@@ -1,5 +1,5 @@
 import type {
-    BundledV1PluginDescriptor,
+    PluginDescriptor,
     PluginLifecycleCoverage,
 } from './runtime-descriptor';
 
@@ -17,17 +17,38 @@ interface PluginRuntimeManifestEntryBase extends LegacyPluginRuntimeManifestEntr
     lifecycleCoverage: PluginLifecycleCoverage;
 }
 
+export type PluginRuntimeManifestBlockCode =
+    | 'legacy-v2-reinstall-required'
+    | 'module-loader-disabled'
+    | 'module-loader-static-host'
+    | 'module-loader-outside-canary'
+    | 'package-pointer-unavailable'
+    | 'package-manifest-invalid'
+    | 'package-policy-denied'
+    | 'package-grants-unreviewed'
+    | 'package-dependency-blocked'
+    | 'package-trust-unsupported'
+    | 'trusted-host-ui-abi-unproven';
+
 export type PluginRuntimeManifestEntry = PluginRuntimeManifestEntryBase &
     (
         | {
               descriptorStatus: 'ready';
-              descriptor: BundledV1PluginDescriptor;
+              descriptor: PluginDescriptor;
               rebuildRequiredReason?: never;
+              blockCode?: never;
           }
         | {
               descriptorStatus: 'rebuild-required';
               descriptor?: never;
               rebuildRequiredReason: 'not-in-host-build' | 'entrypoint-mismatch';
+              blockCode?: never;
+          }
+        | {
+              descriptorStatus: 'blocked';
+              descriptor?: never;
+              rebuildRequiredReason?: never;
+              blockCode: PluginRuntimeManifestBlockCode;
           }
     );
 

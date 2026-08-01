@@ -220,6 +220,131 @@ async function extractManifestFromZip(buffer: Buffer): Promise<{
     };
 }
 
+/** Reads only the validated manifest so callers can select the correct
+ * installation lane before any extension directory is modified. */
+export async function inspectExtensionArchive(buffer: Buffer): Promise<Or3ExtensionManifest> {
+    return (await extractManifestFromZip(buffer)).manifest;
+}
+
+export interface StagedV2PluginPackage {
+    readonly manifest: Extract<Or3ExtensionManifest, { manifestVersion: 2 }>;
+    readonly sourceRoot: string;
+    cleanup(): Promise<void>;
+}
+
+/**
+ * Extracts a V2 plugin into a private staging directory for immutable package
+ * verification. It intentionally never writes `extensions/plugins/<id>`.
+ */
+export async function stageV2PluginPackageFromZip(
+    buffer: Buffer,
+    limits: ExtensionInstallLimits = DEFAULT_LIMITS
+): Promise<StagedV2PluginPackage> {
+    await ensureExtensionsDirs();
+    if (buffer.byteLength > limits.maxZipBytes) {
+        throw new Error('Zip exceeds maximum allowed size');
+    }
+    const { manifest, prefix } = await extractManifestFromZip(buffer);
+    if (
+        manifest.kind !== 'plugin' ||
+        !('manifestVersion' in manifest) ||
+        manifest.manifestVersion !== 2
+    ) {
+        throw new Error('Manifest V2 plugin package required');
+    }
+
+    const stagingToken = `${manifest.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const sourceRoot = join(EXTENSIONS_BASE_DIR, '.tmp', `v2-stage-${stagingToken}`);
+    await fs.mkdir(sourceRoot, { recursive: true, mode: 0o700 });
+
+    try {
+        let fileCount = 0;
+        let totalBytes = 0;
+        const seenPaths = new Set<string>();
+        let extractionError: Error | null = null;
+        const shouldWrite = (entryKey: string): string | null => {
+            if (entryKey.endsWith('/')) return null;
+            if (prefix && !entryKey.startsWith(prefix)) return null;
+            const relative = prefix ? entryKey.slice(prefix.length) : entryKey;
+            ensureSafePath(relative);
+            const normalizedRel = normalize(relative);
+            ensureSafePath(normalizedRel);
+            if (seenPaths.has(normalizedRel)) throw new Error('Duplicate archive entry');
+            const extension = extname(normalizedRel).toLowerCase();
+            if (extension) {
+                if (!limits.allowedExtensions.includes(extension)) {
+                    throw new Error(`Extension type not allowed: ${extension}`);
+                }
+            } else {
+                const base = normalizedRel.split('/').pop()?.toLowerCase() ?? '';
+                if (!['readme', 'license', 'notice', 'changelog'].includes(base)) {
+                    throw new Error('Extension type not allowed');
+                }
+            }
+            seenPaths.add(normalizedRel);
+            return normalizedRel;
+        };
+
+        const unzipper = new Unzip((file) => {
+            if (typeof file.name !== 'string') return;
+            const writeRel = extractionError === null
+                ? shouldWrite(normalizeEntryKey(file.name))
+                : null;
+            if (!writeRel) {
+                file.ondata = (error) => {
+                    if (!extractionError && error) {
+                        extractionError = error instanceof Error ? error : new Error(String(error));
+                    }
+                };
+                file.start();
+                return;
+            }
+            fileCount += 1;
+            if (fileCount > limits.maxFiles) {
+                extractionError = new Error('Too many files in extension');
+            }
+            const filePath = join(sourceRoot, writeRel);
+            const resolvedPath = resolve(sourceRoot, writeRel);
+            if (!resolvedPath.startsWith(`${sourceRoot}${sep}`)) {
+                extractionError = new Error('Invalid archive path');
+            }
+            mkdirSync(dirname(filePath), { recursive: true, mode: 0o700 });
+            file.ondata = (error, data) => {
+                if (extractionError) return;
+                if (error) {
+                    extractionError = error instanceof Error ? error : new Error(String(error));
+                    return;
+                }
+                if (data.length) {
+                    if (totalBytes + data.length > limits.maxTotalBytes) {
+                        extractionError = new Error('Extension exceeds unpacked size limit');
+                        return;
+                    }
+                    totalBytes += data.length;
+                    appendFileSync(filePath, Buffer.from(data));
+                }
+            };
+            file.start();
+        });
+        unzipper.register(UnzipInflate);
+        try {
+            unzipper.push(new Uint8Array(buffer), true);
+        } catch (error) {
+            extractionError = error instanceof Error ? error : new Error(String(error));
+        }
+        if (extractionError) throw extractionError;
+        await fs.access(join(sourceRoot, 'or3.manifest.json'));
+        return Object.freeze({
+            manifest,
+            sourceRoot,
+            cleanup: () => fs.rm(sourceRoot, { recursive: true, force: true }),
+        });
+    } catch (error) {
+        await fs.rm(sourceRoot, { recursive: true, force: true });
+        throw error;
+    }
+}
+
 /**
  * Purpose:
  * Orchestrates the full extension installation process from a Buffer.

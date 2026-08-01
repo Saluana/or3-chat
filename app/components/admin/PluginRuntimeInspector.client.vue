@@ -65,6 +65,13 @@
                 }}
             </UBadge>
             <UBadge
+                v-if="pluginModuleLoaderV2Enabled"
+                color="neutral"
+                variant="subtle"
+            >
+                V2 package canaries: {{ moduleLoaderV2WorkspaceLabel }}
+            </UBadge>
+            <UBadge
                 :color="hookEngineVersion === 'v2' ? 'success' : 'neutral'"
                 variant="subtle"
             >
@@ -93,11 +100,11 @@
                 :color="managerV2Enabled ? 'success' : 'neutral'"
                 variant="subtle"
             >
-                V2 startup selector:
+                V1 manager selector:
                 {{ managerV2Enabled ? 'enabled' : 'disabled' }}
             </UBadge>
             <UBadge v-if="managerV2Enabled" color="neutral" variant="subtle">
-                Workspace canaries: {{ managerV2WorkspaceLabel }}
+                V1 manager canaries: {{ managerV2WorkspaceLabel }}
             </UBadge>
             <UBadge color="neutral" variant="subtle">
                 V2 contribution surfaces: {{ contributionSurfaceLabel }}
@@ -364,6 +371,16 @@ const moduleLoaderV2Status = resolveModuleLoaderV2Status({
     mode: ssrAuthEnabled ? 'ssr' : 'static',
     safeMode: safeModeEnabled,
 });
+const moduleLoaderV2WorkspaceIds = [
+    ...((
+        runtimeConfig.public as {
+            admin?: { pluginModuleLoaderV2WorkspaceIds?: string[] };
+        }
+    ).admin?.pluginModuleLoaderV2WorkspaceIds ?? []),
+];
+const moduleLoaderV2WorkspaceLabel = moduleLoaderV2WorkspaceIds.length
+    ? moduleLoaderV2WorkspaceIds.join(', ')
+    : 'all workspaces when enabled';
 const hookEngineVersion =
     (globalThis as { __NUXT_HOOKS_VERSION__?: 'v1' | 'v2' })
         .__NUXT_HOOKS_VERSION__ ?? (hookEngineV2Enabled ? 'v2' : 'v1');

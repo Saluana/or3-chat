@@ -1,0 +1,19 @@
+{
+  "name": "@or3/skills",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "bun@1.3.14",
+  "scripts": {
+    "validate": "bun run scripts/validate-skills.ts",
+    "context": "bun run scripts/detect-or3-context.ts",
+    "check:drift": "bun run scripts/check-doc-drift.ts",
+    "eval": "bun run scripts/run-evals.ts",
+    "test": "bun test tests",
+    "test:all": "bun run validate && bun run check:drift && bun run eval && bun run test"
+  }
+}

@@ -35,6 +35,11 @@ export interface CandidateLoaderPreflightResult {
     readonly codes: readonly string[];
 }
 
+export interface CandidateIdentityPreflightResult {
+    readonly status: 'eligible' | 'blocked';
+    readonly codes: readonly string[];
+}
+
 export interface PreparePluginPackageCandidateInput {
     readonly pluginId: string;
     readonly sourceRoot: string;
@@ -49,6 +54,10 @@ export interface PreparePluginPackageCandidateInput {
         readonly sourceRoot: string;
         readonly verification: VerifiedPackageTree;
     }) => CandidateLoaderPreflightResult | Promise<CandidateLoaderPreflightResult>;
+    /** Checks host inventory before any immutable bytes or pointer state change. */
+    readonly identityPreflight?: () =>
+        | CandidateIdentityPreflightResult
+        | Promise<CandidateIdentityPreflightResult>;
     readonly now?: () => number;
 }
 
@@ -139,6 +148,12 @@ export class PluginPackageCandidateService {
         input: PreparePluginPackageCandidateInput
     ): Promise<PreparePluginPackageCandidateResult> {
         return this.packages.runPluginOperation(input.pluginId, async () => {
+            if (input.identityPreflight) {
+                const identity = await input.identityPreflight();
+                if (identity.status === 'blocked') {
+                    return blocked('manifest', identity.codes);
+                }
+            }
             let verification: VerifiedPackageTree;
             try {
                 verification = await verifyPackageTree(input.sourceRoot, {

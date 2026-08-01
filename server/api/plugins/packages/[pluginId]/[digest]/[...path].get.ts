@@ -22,6 +22,7 @@ import { getEnabledPlugins } from '../../../../../admin/plugins/workspace-plugin
 import { getWorkspaceSettingsStore } from '../../../../../admin/stores/registry';
 import { isSsrAuthEnabled } from '../../../../../utils/auth/is-ssr-auth-enabled';
 import { requirePluginAccess } from '../../../../../utils/plugins/access/require-plugin-access';
+import { createModuleV2RuntimePolicy } from '../../../../../../shared/plugins/module-v2-runtime-policy';
 
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event)) {
@@ -31,6 +32,7 @@ export default defineEventHandler(async (event) => {
     const admin = runtimeConfig.admin as {
         disableNonCorePlugins?: boolean;
         pluginModuleLoaderV2Enabled?: boolean;
+        pluginModuleLoaderV2WorkspaceIds?: string[];
     } | undefined;
     if (
         admin?.pluginModuleLoaderV2Enabled !== true ||
@@ -49,6 +51,11 @@ export default defineEventHandler(async (event) => {
     const packages = new ImmutablePluginPackageStore();
     const pointers = new PluginPackagePointerStore(undefined, packages);
     const reader = new PluginPackageAssetReader(packages, pointers);
+    const v2Policy = createModuleV2RuntimePolicy({
+        enabled: admin?.pluginModuleLoaderV2Enabled === true,
+        ssrHost: true,
+        workspaceIds: admin?.pluginModuleLoaderV2WorkspaceIds ?? [],
+    });
     const selectedPackage = await new PluginPackageRouteCatalog(
         packages,
         pointers
@@ -71,6 +78,9 @@ export default defineEventHandler(async (event) => {
                 const workspaceId = session.workspace?.id;
                 if (!workspaceId) {
                     throw createError({ statusCode: 403, statusMessage: 'Forbidden' });
+                }
+                if (!v2Policy(workspaceId).allowed) {
+                    throw createError({ statusCode: 404, statusMessage: 'Not Found' });
                 }
                 const enabled = await getEnabledPlugins(
                     getWorkspaceSettingsStore(event),

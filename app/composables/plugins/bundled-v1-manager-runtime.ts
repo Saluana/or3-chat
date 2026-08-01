@@ -78,7 +78,11 @@ function desiredStateFromManifest(
     const descriptors: BundledV1PluginDescriptor[] = [];
     for (const pluginId of manifest.enabledPluginIds) {
         const runtime = manifest.runtime[pluginId];
-        if (runtime?.loadAllowed !== false && runtime?.descriptorStatus === 'ready') {
+        if (
+            runtime?.loadAllowed !== false &&
+            runtime?.descriptorStatus === 'ready' &&
+            runtime.descriptor.manifestVersion === 1
+        ) {
             descriptors.push(runtime.descriptor);
         }
     }

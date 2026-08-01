@@ -205,4 +205,30 @@ describe('V2 package candidate preparation', () => {
         });
         expect(readFileSync(pointerPath, 'utf8')).toBe(before);
     });
+
+    it('checks cross-lane identity before writing package bytes or pointers', async () => {
+        const { root, service } = await setup();
+        const pointerPath = resolve(root, '.active', 'alpha.json');
+        const before = readFileSync(pointerPath, 'utf8');
+        const candidateSource = source('2.0.0');
+        const candidateDigest = (await verifyPackageTree(candidateSource)).digest;
+
+        const result = await service.prepare({
+            ...baseInput(candidateSource),
+            identityPreflight: () => ({
+                status: 'blocked' as const,
+                codes: ['plugin-id-conflicts-with-legacy-extension'],
+            }),
+        });
+
+        expect(result).toMatchObject({
+            status: 'blocked',
+            stage: 'manifest',
+            codes: ['plugin-id-conflicts-with-legacy-extension'],
+        });
+        expect(readFileSync(pointerPath, 'utf8')).toBe(before);
+        expect(() =>
+            readFileSync(resolve(root, '.store', 'alpha', candidateDigest, 'client.mjs'))
+        ).toThrow();
+    });
 });
