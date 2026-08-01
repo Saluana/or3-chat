@@ -5,7 +5,7 @@ import { resolveAdminWorkspaceTarget } from '../../../../../admin/workspace-targ
 import { getWorkspaceSettingsStore } from '../../../../../admin/stores/registry';
 import {
     getPluginSettings,
-    setPluginSettings,
+    replacePluginSettings,
 } from '../../../../../admin/plugins/workspace-plugin-store';
 import { PluginSettingsMigrationService } from '../../../../../admin/plugins/settings-migration';
 import { ImmutablePluginPackageStore } from '../../../../../admin/plugins/package-store';
@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
     const context = await requireAdminApiContext(event, {
         ownerOnly: true,
         mutation: true,
-        allowWorkspaceAdmin: true,
+        superAdminOnly: true,
     });
     const pluginId = getRouterParam(event, 'pluginId');
     const body = BodySchema.safeParse(await readBody(event));
@@ -61,7 +61,7 @@ export default defineEventHandler(async (event) => {
             ) as CandidateStateValue,
         restoreState: async (snapshot) => {
             if (!isStateSnapshot(snapshot)) throw new Error('Invalid settings snapshot');
-            await setPluginSettings(store, workspaceId, pluginId, snapshot.settings);
+            await replacePluginSettings(store, workspaceId, pluginId, snapshot.settings);
             await store.set(
                 workspaceId,
                 `plugins.stateVersion.${pluginId}`,

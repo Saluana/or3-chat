@@ -65,6 +65,17 @@ const UrlBodySchema = z.object({
     workspaceId: z.string().min(1).optional(),
 });
 
+class PluginIdOwnedByV2PackageError extends Error {
+    constructor(pluginId: string) {
+        super(`Plugin id is already owned by a V2 package: ${pluginId}`);
+        this.name = 'PluginIdOwnedByV2PackageError';
+    }
+}
+
+function canUseV2PackageIdentity(pluginId: string): boolean {
+    return /^[a-z0-9][a-z0-9._-]*$/.test(pluginId) && !pluginId.includes('..');
+}
+
 async function readZipPayload(event: H3Event) {
     const contentType = getRequestHeader(event, 'content-type') || '';
     if (contentType.includes('multipart/form-data')) {
@@ -264,8 +275,7 @@ export default defineEventHandler(async (event) => {
                         const legacyConflict = (await listInstalledExtensions()).some(
                             (extension) =>
                                 extension.kind === 'plugin' &&
-                                extension.id === staged.manifest.id &&
-                                !('manifestVersion' in extension && extension.manifestVersion === 2)
+                                extension.id === staged.manifest.id
                         );
                         return legacyConflict
                             ? {
@@ -318,12 +328,34 @@ export default defineEventHandler(async (event) => {
                 await staged.cleanup();
             }
         }
-        const manifest = await installExtensionFromZip(
-            payload.buffer,
-            payload.force,
-            limits,
-            payload.expectedKind
-        );
+        const manifest =
+            inspected.kind === 'plugin' && canUseV2PackageIdentity(inspected.id)
+                ? await (async () => {
+                      const packages = new ImmutablePluginPackageStore();
+                      const pointers = new PluginPackagePointerStore(undefined, packages);
+                      return packages.runPluginOperation(inspected.id, async () => {
+                          const pointer = await pointers.readPointer(inspected.id);
+                          if (pointer?.current || pointer?.candidate || pointer?.previous) {
+                              throw new PluginIdOwnedByV2PackageError(inspected.id);
+                          }
+                          const installed = await installExtensionFromZip(
+                              payload.buffer,
+                              payload.force,
+                              limits,
+                              payload.expectedKind
+                          );
+                          // Keep the legacy inventory read inside the shared package
+                          // lease coherent with V2's identity preflight.
+                          invalidateExtensionsCache();
+                          return installed;
+                      });
+                  })()
+                : await installExtensionFromZip(
+                      payload.buffer,
+                      payload.force,
+                      limits,
+                      payload.expectedKind
+                  );
         invalidateExtensionsCache();
         await event.context.adminHooks?.doAction('admin.plugin:action:installed', {
             id: manifest.id,
@@ -338,6 +370,12 @@ export default defineEventHandler(async (event) => {
         };
     } catch (error) {
         if (error instanceof ExtensionAlreadyInstalledError) {
+            throw createError({
+                statusCode: 409,
+                statusMessage: error.message,
+            });
+        }
+        if (error instanceof PluginIdOwnedByV2PackageError) {
             throw createError({
                 statusCode: 409,
                 statusMessage: error.message,

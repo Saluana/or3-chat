@@ -82,4 +82,22 @@ describe('NotificationBell', () => {
         expect(tooltip.attributes('data-tooltip')).toBe('Notifications (99+ unread)');
         expect(wrapper.text()).toContain('99+');
     });
+
+    it('uses the compact icon size when placed in workspace chrome', () => {
+        const wrapper = mount(NotificationBell, {
+            props: { compact: true },
+            global: {
+                stubs: {
+                    UPopover: UPopoverStub,
+                    UTooltip: UTooltipStub,
+                    UButton: UButtonStub,
+                    UIcon: UIconStub,
+                    NotificationsNotificationPanel: true,
+                },
+            },
+        });
+
+        expect(wrapper.find('.icon').classes()).toContain('h-5');
+        expect(wrapper.find('.icon').classes()).toContain('w-5');
+    });
 });

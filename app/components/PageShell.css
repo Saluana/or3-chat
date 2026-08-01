@@ -22,3 +22,16 @@
     z-index: 100;
     transition: opacity 0.2s ease;
 }
+
+.workspace-chrome-action {
+    flex: none;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0;
+}
+
+.workspace-chrome-action :deep(svg) {
+    width: 20px;
+    height: 20px;
+}

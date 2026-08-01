@@ -49,11 +49,7 @@ describe('admin route policy contracts', () => {
             'server/api/admin/plugins/workspace-settings.get.ts',
             'server/api/admin/plugins/workspace-settings.post.ts',
             'server/api/admin/plugins/workspace-enable.post.ts',
-            'server/api/admin/plugins/packages/[pluginId]/canary.post.ts',
-            'server/api/admin/plugins/packages/[pluginId]/uninstall.post.ts',
             'server/api/admin/plugins/packages/[pluginId]/delete-data.post.ts',
-            'server/api/admin/plugins/packages/[pluginId]/promote.post.ts',
-            'server/api/admin/plugins/packages/[pluginId]/rollback.post.ts',
             'server/api/admin/workspace/members/upsert.post.ts',
             'server/api/admin/workspace/members/set-role.post.ts',
             'server/api/admin/workspace/members/remove.post.ts',
@@ -66,6 +62,22 @@ describe('admin route policy contracts', () => {
         for (const file of files) {
             const source = await read(file);
             expect(source).toContain('allowWorkspaceAdmin: true');
+        }
+    });
+
+    it('enforces super-admin policy on deployment-wide package operations', async () => {
+        const files = [
+            'server/api/admin/plugins/packages/[pluginId]/canary.post.ts',
+            'server/api/admin/plugins/packages/[pluginId]/status.get.ts',
+            'server/api/admin/plugins/packages/[pluginId]/uninstall.post.ts',
+            'server/api/admin/plugins/packages/[pluginId]/promote.post.ts',
+            'server/api/admin/plugins/packages/[pluginId]/rollback.post.ts',
+        ] as const;
+
+        for (const file of files) {
+            const source = await read(file);
+            expect(source).toContain('superAdminOnly: true');
+            expect(source).not.toContain('allowWorkspaceAdmin: true');
         }
     });
 

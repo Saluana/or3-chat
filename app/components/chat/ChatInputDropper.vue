@@ -376,6 +376,7 @@ import {
     type RegisterSendResult,
     type SendResult,
 } from '~/utils/chat/types';
+import { useWorkspaceTabDrafts } from '~/composables/core/useWorkspaceTabDrafts';
 
 const OpenRouterKeyModal = defineAsyncComponent(
     () => import('~/components/chat/OpenRouterKeyModal.vue')
@@ -387,6 +388,7 @@ const props = defineProps<{
     threadId?: string;
     streaming?: boolean; // assistant response streaming
     paneId?: string; // provided by ChatContainer so the bridge can key this input
+    tabId?: string; // owns ephemeral composer state across pane switches
 }>();
 
 const iconLoading = useIcon('ui.loading');
@@ -487,6 +489,7 @@ onMounted(async () => {
             },
             onUpdate: ({ editor: ed }) => {
                 promptText.value = ed.getText();
+                if (!restoringDraft.value) scheduleDraftCapture(props.tabId);
                 autoResize();
             },
             onPaste: (event) => {
@@ -494,18 +497,23 @@ onMounted(async () => {
             },
             content: '',
         });
+        await restoreDraft(props.tabId);
     } catch (err) {
         // Silently handle TipTap init failure
     }
 });
 
 onBeforeUnmount(() => {
+    clearDraftCaptureTimer();
+    if (props.tabId) captureDraft(props.tabId);
+    else releaseAll();
     try {
         editor.value?.destroy();
     } catch (err) {
         // Silently handle TipTap destroy error
     }
-    releaseAll();
+    // With tabs, the draft store owns blob URLs until send/discard/Undo expiry.
+    // The legacy host has no draft owner, so it still releases them on unmount.
 });
 
 const showModelCatalog = ref(false);
@@ -625,6 +633,7 @@ const {
     removeTextBlock,
     clearAll,
     releaseAll,
+    replaceDraft,
     handlePaste,
     openFileDialog,
 } = useChatInputAttachments({
@@ -632,17 +641,96 @@ const {
     onImageAdd: (attachment) => emit('image-add', attachment),
     onImageRemove: (index) => emit('image-remove', index),
 });
+const imageSettings = ref<ImageSettings>({
+    quality: 'medium',
+    numResults: 2,
+    size: '1024x1024',
+});
+const tabDrafts = useWorkspaceTabDrafts();
+const restoringDraft = ref(false);
+let draftCaptureTimer: ReturnType<typeof setTimeout> | undefined;
+
+function clearDraftCaptureTimer(): void {
+    if (draftCaptureTimer) clearTimeout(draftCaptureTimer);
+    draftCaptureTimer = undefined;
+}
+
+function scheduleDraftCapture(tabId = props.tabId): void {
+    if (!tabId || restoringDraft.value) return;
+    clearDraftCaptureTimer();
+    draftCaptureTimer = setTimeout(() => {
+        draftCaptureTimer = undefined;
+        captureDraft(tabId);
+    }, 120);
+}
+
+function captureDraft(tabId = props.tabId): void {
+    if (!tabId || restoringDraft.value) return;
+    tabDrafts.write(tabId, {
+        version: 1,
+        text: promptText.value,
+        editorJson: editor.value?.getJSON() as Record<string, unknown> | undefined,
+        attachments: attachments.value,
+        largeTextBlocks: largeTextBlocks.value,
+        composer: {
+            model: selectedModel.value,
+            webSearchEnabled: webSearchEnabled.value,
+            thinkingEnabled: thinkingEnabled.value,
+            reasoningEffort: reasoningEffort.value,
+            imageSettings: { ...imageSettings.value },
+        },
+        updatedAt: Date.now(),
+    });
+}
+
+async function restoreDraft(tabId = props.tabId): Promise<void> {
+    if (!tabId) return;
+    const draft = tabDrafts.read(tabId);
+    restoringDraft.value = true;
+    try {
+        promptText.value = draft?.text ?? '';
+        replaceDraft(draft?.attachments ?? [], draft?.largeTextBlocks ?? []);
+        editor.value?.commands.setContent(
+            draft?.editorJson ?? draft?.text ?? '',
+            { emitUpdate: false }
+        );
+        if (draft?.composer) {
+            selectedModel.value = draft.composer.model;
+            webSearchEnabled.value = draft.composer.webSearchEnabled;
+            thinkingEnabled.value = draft.composer.thinkingEnabled;
+            reasoningEffort.value = draft.composer.reasoningEffort;
+            imageSettings.value = { ...draft.composer.imageSettings };
+        }
+    } finally {
+        await nextTick();
+        restoringDraft.value = false;
+        autoResize();
+    }
+}
+
+watch(
+    () => props.tabId,
+    async (next, previous) => {
+        clearDraftCaptureTimer();
+        if (previous) captureDraft(previous);
+        await restoreDraft(next);
+    }
+);
+
+watch([attachments, largeTextBlocks], () => scheduleDraftCapture(props.tabId), {
+    deep: true,
+});
+watch(
+    [selectedModel, webSearchEnabled, thinkingEnabled, reasoningEffort, imageSettings],
+    () => scheduleDraftCapture(props.tabId),
+    { deep: true }
+);
 
 const { imageAttachments, pdfAttachments } =
     useChatAttachmentDisplay(uploadedImages);
 
 // hiddenFileInput removed
 // hiddenFileInputListener removed
-const imageSettings = ref<ImageSettings>({
-    quality: 'medium',
-    numResults: 2,
-    size: '1024x1024',
-});
 const showSettingsDropdown = ref(false);
 
 const autoResize = async () => {
@@ -828,6 +916,8 @@ const handleSend = async (): Promise<SendResult> => {
             };
         }
         if (!hasDurableSendAcceptance(acceptance)) return acceptance;
+        clearDraftCaptureTimer();
+        tabDrafts.discard(props.tabId);
         // Reset local state and editor content so placeholder shows again
         promptText.value = '';
         try {

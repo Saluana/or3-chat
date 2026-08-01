@@ -673,6 +673,9 @@ export default defineNuxtConfig({
                 dashboard: {
                     enabled: or3Config.features.dashboard.enabled,
                 },
+                workspaceTabs: {
+                    enabled: or3Config.features.workspaceTabs.enabled,
+                },
             },
             // Base OR3 config for client/runtime access (avoid importing config.or3 in app runtime)
             or3: {

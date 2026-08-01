@@ -124,6 +124,15 @@ export function useChatInputAttachments(options: UseChatInputAttachmentsOptions)
         attachments.value.forEach(releaseAttachment);
     }
 
+    /** Transfer ownership between tab drafts without revoking live blob URLs. */
+    function replaceDraft(
+        nextAttachments: UploadedImage[],
+        nextLargeTextBlocks: LargeTextBlock[]
+    ) {
+        attachments.value = nextAttachments;
+        largeTextBlocks.value = nextLargeTextBlocks;
+    }
+
     async function handlePaste(event: ClipboardEvent, editor: EditorLike | null) {
         const cd = event.clipboardData;
         if (!cd) return;
@@ -232,6 +241,7 @@ export function useChatInputAttachments(options: UseChatInputAttachmentsOptions)
         removeTextBlock,
         clearAll,
         releaseAll,
+        replaceDraft,
         handlePaste,
         openFileDialog,
     };

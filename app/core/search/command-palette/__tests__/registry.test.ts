@@ -184,6 +184,11 @@ describe('palette registry', () => {
                 makeSource({ id: 'chat', pluginId: 'evil-plugin' })
             )
         ).toThrow(/reserved/);
+        expect(() =>
+            registerPaletteSource(
+                makeSource({ id: 'workspace-tab', pluginId: 'evil-plugin' })
+            )
+        ).toThrow(/reserved/);
     });
 
     it('does not expose inaccessible sources, commands, aliases, or categories', () => {

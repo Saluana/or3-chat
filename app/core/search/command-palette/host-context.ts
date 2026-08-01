@@ -9,6 +9,8 @@ import {
     setPendingPaletteImageSelection,
 } from './image-selection';
 import { requestPaletteProjectReveal } from './project-reveal';
+import type { WorkspaceResource } from '~/core/workspace-tabs/types';
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 import type {
     PaletteActionErrorCode,
     PaletteActionResult,
@@ -25,6 +27,15 @@ export interface PaletteHostContextDeps {
     }) => void | Promise<void>;
     setDashboardOpen?: (open: boolean) => void;
     canOpenNewPane?: () => boolean;
+    /**
+     * Workspace tabs own resource activation when enabled. Keeping this
+     * optional preserves the palette's legacy multi-pane host contract.
+     */
+    openWorkspaceResource?: (
+        resource: WorkspaceResource,
+        options: { target: 'active' | 'split' }
+    ) => Promise<string | null>;
+    activateWorkspaceTab?: (tabId: string) => Promise<boolean>;
     getMultiPaneApi?: typeof getGlobalMultiPaneApi;
     getDashboardNavigation?: () => {
         openPlugin: (pluginId: string) => Promise<DashboardNavigationResult>;
@@ -75,6 +86,32 @@ export function createPaletteHostContext(
             };
         });
 
+    async function openWorkspaceResource(
+        resource: WorkspaceResource,
+        destination: 'active' | 'new-pane'
+    ): Promise<PaletteActionResult | null> {
+        if (!deps.openWorkspaceResource) return null;
+        try {
+            const tabId = await deps.openWorkspaceResource(resource, {
+                target: destination === 'new-pane' ? 'split' : 'active',
+            });
+            return tabId
+                ? { ok: true }
+                : failure(
+                      'disabled',
+                      destination === 'new-pane'
+                          ? 'Pane capacity reached'
+                          : 'Unable to open resource'
+                  );
+        } catch (error) {
+            return failure(
+                'navigation-failed',
+                error instanceof Error ? error.message : 'Failed to open resource',
+                error
+            );
+        }
+    }
+
     return {
         canOpenNewPane() {
             if (deps.canOpenNewPane) return deps.canOpenNewPane();
@@ -82,6 +119,11 @@ export function createPaletteHostContext(
         },
 
         async openChat(threadId, destination) {
+            const tabResult = await openWorkspaceResource(
+                { kind: 'chat', threadId },
+                destination
+            );
+            if (tabResult) return tabResult;
             const api = getMultiPane();
             if (!api) {
                 return failure('navigation-failed', 'Multi-pane host unavailable');
@@ -108,6 +150,11 @@ export function createPaletteHostContext(
         },
 
         async openDocument(documentId, destination) {
+            const tabResult = await openWorkspaceResource(
+                { kind: 'document', documentId },
+                destination
+            );
+            if (tabResult) return tabResult;
             const api = getMultiPane();
             if (!api) {
                 return failure('navigation-failed', 'Multi-pane host unavailable');
@@ -146,6 +193,16 @@ export function createPaletteHostContext(
         },
 
         async openPaneApp(appId, recordId, destination) {
+            const tabResult = await openWorkspaceResource(
+                {
+                    kind: 'app',
+                    appId,
+                    recordId,
+                    instanceKey: recordId ? undefined : createRuntimeUuid(),
+                },
+                destination
+            );
+            if (tabResult) return tabResult;
             const api = getMultiPane();
             if (!api) {
                 return failure('navigation-failed', 'Multi-pane host unavailable');
@@ -168,6 +225,26 @@ export function createPaletteHostContext(
                     error instanceof Error
                         ? error.message
                         : 'Failed to open pane app',
+                    error
+                );
+            }
+        },
+
+        async openWorkspaceTab(tabId) {
+            if (!deps.activateWorkspaceTab) {
+                return failure(
+                    'navigation-failed',
+                    'Workspace tab host unavailable'
+                );
+            }
+            try {
+                return (await deps.activateWorkspaceTab(tabId))
+                    ? { ok: true }
+                    : failure('not-found', 'This tab is no longer open');
+            } catch (error) {
+                return failure(
+                    'navigation-failed',
+                    error instanceof Error ? error.message : 'Failed to open tab',
                     error
                 );
             }

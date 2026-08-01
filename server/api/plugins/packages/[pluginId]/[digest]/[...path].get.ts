@@ -13,6 +13,7 @@ import {
 } from '../../../../../admin/plugins/package-store';
 import { PluginPackagePointerStore } from '../../../../../admin/plugins/package-pointer-store';
 import { PluginPackageRouteCatalog } from '../../../../../admin/plugins/package-route-catalog';
+import { evaluateSelectedPackageRuntimeEligibility } from '../../../../../admin/plugins/package-runtime-eligibility';
 import {
     PluginPackageAssetError,
     PluginPackageAssetReader,
@@ -56,10 +57,16 @@ export default defineEventHandler(async (event) => {
         ssrHost: true,
         workspaceIds: admin?.pluginModuleLoaderV2WorkspaceIds ?? [],
     });
-    const selectedPackage = await new PluginPackageRouteCatalog(
+    const catalog = new PluginPackageRouteCatalog(
         packages,
         pointers
-    ).readSelected(pluginId);
+    );
+    const selectedPackage = await catalog.readSelected(pluginId);
+    if (selectedPackage.status !== 'ready' || !selectedPackage.manifest.runtime.client) {
+        // No V2 client ABI is currently approved. Keep the digest route closed
+        // for server-only packages rather than exposing arbitrary package files.
+        throw createError({ statusCode: 404, statusMessage: 'Not Found' });
+    }
 
     try {
         const asset = await serveAuthorizedPluginPackageAsset(
@@ -69,10 +76,7 @@ export default defineEventHandler(async (event) => {
                     pluginId,
                     action: `package-asset:${digest}`,
                     extension: {
-                        access:
-                            selectedPackage.status === 'ready'
-                                ? (selectedPackage.manifest.access ?? null)
-                                : null,
+                        access: selectedPackage.manifest.access ?? null,
                     },
                 });
                 const workspaceId = session.workspace?.id;
@@ -82,12 +86,23 @@ export default defineEventHandler(async (event) => {
                 if (!v2Policy(workspaceId).allowed) {
                     throw createError({ statusCode: 404, statusMessage: 'Not Found' });
                 }
-                const enabled = await getEnabledPlugins(
-                    getWorkspaceSettingsStore(event),
-                    workspaceId
-                );
+                const settingsStore = getWorkspaceSettingsStore(event);
+                const enabled = await getEnabledPlugins(settingsStore, workspaceId);
                 if (!enabled.includes(pluginId)) {
                     throw createError({ statusCode: 403, statusMessage: 'Forbidden' });
+                }
+                const eligibility = (await evaluateSelectedPackageRuntimeEligibility({
+                    event,
+                    workspaceId,
+                    settingsStore,
+                    selectedPackages: (await catalog.listSelected()).filter(
+                        (entry): entry is Extract<typeof entry, { status: 'ready' }> =>
+                            entry.status === 'ready'
+                    ),
+                    packageRuntimeDecision: v2Policy(workspaceId),
+                })).find((entry) => entry.catalog.pluginId === pluginId);
+                if (eligibility?.status !== 'ready') {
+                    throw createError({ statusCode: 404, statusMessage: 'Not Found' });
                 }
                 requireCan(session, 'workspace.read', {
                     kind: 'workspace',

@@ -43,6 +43,7 @@ describe('palette domain type contracts', () => {
             | 'system-prompt'
             | 'dashboard'
             | 'image'
+            | 'workspace-tab'
             | 'command'
         >();
     });

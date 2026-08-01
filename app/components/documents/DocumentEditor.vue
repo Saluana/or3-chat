@@ -3,6 +3,8 @@
         <LazyEditorHost
             class="document-editor-shell__host"
             :document-id="documentId"
+            :pane-id="paneId"
+            :tab-id="tabId"
             @error="handleError"
         />
     </div>
@@ -12,7 +14,11 @@
 import LazyEditorHost from './LazyEditorHost.vue';
 import { reportError } from '~/utils/errors';
 
-const props = defineProps<{ documentId: string }>();
+const props = defineProps<{
+    documentId: string;
+    paneId?: string;
+    tabId?: string;
+}>();
 
 function handleError(error: Error) {
     reportError(error, {

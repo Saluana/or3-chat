@@ -15,6 +15,8 @@ import { getEnabledPlugins } from '../../admin/plugins/workspace-plugin-store';
 import { getWorkspaceSettingsStore } from '../../admin/stores/registry';
 import { resolveAdminWorkspaceTarget } from '../../admin/workspace-target';
 import { isSuperAdmin } from '../../admin/context';
+import { ImmutablePluginPackageStore } from '../../admin/plugins/package-store';
+import { PluginPackagePointerStore } from '../../admin/plugins/package-pointer-store';
 
 /**
  * GET /api/admin/plugins-page
@@ -40,21 +42,50 @@ export default defineEventHandler(async (event) => {
     );
     
     const settingsStore = getWorkspaceSettingsStore(event);
+    const canManageSitePlugins = isSuperAdmin(context);
     
     // Parallel fetch instead of sequential
     const [extensions, enabledPlugins] = await Promise.all([
         listInstalledExtensions(),
         getEnabledPlugins(settingsStore, workspaceId)
     ]);
+    const packagePlugins = canManageSitePlugins
+        ? await (async () => {
+              const packages = new ImmutablePluginPackageStore();
+              const pointers = new PluginPackagePointerStore(undefined, packages);
+              const pluginIds = await pointers.listPluginIds();
+              return await Promise.all(pluginIds.map(async (pluginId) => {
+                  const [pointer, startup] = await Promise.all([
+                      pointers.readPointer(pluginId).catch(() => null),
+                      pointers.readStartupSelection(pluginId).catch(() => null),
+                  ]);
+                  return {
+                      pluginId,
+                      pointer,
+                      workspaceEnabled: enabledPlugins.includes(pluginId),
+                      startup: {
+                          status: startup?.status ?? 'blocked',
+                          selectedSlot: startup?.selectedSlot ?? null,
+                          selectedDigest: startup?.selected?.packageDigest ?? null,
+                          issueCodes: startup?.issues.map((issue) => issue.code) ?? [
+                              'pointer-unavailable',
+                          ],
+                      },
+                  };
+              }));
+          })()
+        : [];
     
     return {
         plugins: extensions.filter(i => i.kind === 'plugin'),
         role: isSuperAdmin(context) ? 'owner' : context.session?.role,
+        canManageSitePlugins,
         workspaceId,
         workspaceName:
             context.session?.workspace?.id === workspaceId
                 ? context.session.workspace.name
                 : undefined,
         enabledPlugins,
+        packagePlugins,
     };
 });

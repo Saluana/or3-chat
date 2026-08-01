@@ -141,6 +141,17 @@ describe('extension manifest version dispatch', () => {
         ['invalid plugin version', { version: 'next' }],
         ['no runtime entrypoint', { runtime: {} }],
         [
+            'server entrypoint without a route',
+            {
+                runtime: {
+                    server: {
+                        entry: 'dist/server.mjs',
+                        routes: [],
+                    },
+                },
+            },
+        ],
+        [
             'source runtime entrypoint',
             {
                 runtime: {

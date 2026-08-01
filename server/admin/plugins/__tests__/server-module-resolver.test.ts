@@ -11,6 +11,7 @@ import {
 import {
     ServerModuleResolver,
     ServerModuleResolverError,
+    verifyPackageServerRouteHandlers,
 } from '../server-module-resolver';
 
 async function setupPackage(handlerSource: string) {
@@ -209,5 +210,29 @@ describe('ServerModuleResolver', () => {
                 handlerPath: 'server/health.get.ts',
             })
         ).rejects.toBeInstanceOf(ServerModuleResolverError);
+    });
+
+    it('preflights every candidate route with production handler validation', async () => {
+        const { packageRoot } = await setupPackage(
+            'export default async () => ({ ok: true });\n'
+        );
+        const importModule = vi.fn(async () => ({ default: async () => ({ ok: true }) }));
+
+        await verifyPackageServerRouteHandlers({
+            packageRoot,
+            routes: [{ handler: 'server/health.get.mjs' }],
+            importModule,
+        });
+        expect(importModule).toHaveBeenCalledWith(
+            pathToFileURL(resolve(packageRoot, 'server/health.get.mjs')).href
+        );
+
+        await expect(
+            verifyPackageServerRouteHandlers({
+                packageRoot,
+                routes: [{ handler: 'server/health.get.mjs' }],
+                importModule: async () => ({ default: {} }),
+            })
+        ).rejects.toMatchObject({ code: 'handler-not-function' });
     });
 });

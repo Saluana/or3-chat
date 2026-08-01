@@ -26,7 +26,7 @@
             />
         </template>
         <div
-            class="flex-1 h-dvh w-full relative"
+            class="flex-1 h-dvh w-full relative flex flex-col"
             :class="legacyCompatClasses.height"
             :style="paneChromeClearanceStyle"
             :data-workspace-profile="resolvedProfile.id"
@@ -37,7 +37,116 @@
                 resolvedProfile.workspace.mobilePolicy
             "
         >
+            <WorkspaceChrome
+                v-if="workspaceTabsChromeVisible"
+                :tabs="workspaceTabs.tabs.value"
+                :active-tab-id="workspaceTabs.activeTabId.value"
+                :visible-tab-ids="workspaceTabs.visibleTabIds.value"
+                :status-by-tab-id="workspaceTabs.statusByTabId.value"
+                :icon-by-tab-id="workspaceTabIcons"
+                :can-open-split="canAddPane"
+                :can-reopen-closed="workspaceTabs.state.value.recentlyClosed.length > 0"
+                :copyable-tab-ids="workspaceCopyableTabIds"
+                :mobile="isMobile"
+                @activate="onWorkspaceTabActivate"
+                @close="onWorkspaceTabClose"
+                @new-tab="onWorkspaceNewTab"
+                @reorder="onWorkspaceTabReorder"
+                @open-in-split="openWorkspaceTabInSplit($event)"
+                @close-other="closeOtherWorkspaceTabs($event)"
+                @close-right="closeWorkspaceTabsToRight($event)"
+                @reopen-closed="workspaceTabs.reopenClosedTab()"
+                @copy-link="copyWorkspaceTabLink($event)"
+            >
+                <template #sidebar>
+                    <UTooltip :delay-duration="0" text="Open sidebar">
+                        <UButton
+                            v-theme="'shell.split-new'"
+                            v-bind="sidebarToggleButtonProps"
+                            :square="true"
+                            aria-label="Open sidebar"
+                            title="Open sidebar"
+                            :icon="useIcon('shell.sidebar.toggle.right').value"
+                            @click="openMobileSidebar"
+                        />
+                    </UTooltip>
+                </template>
+                <template #brand>
+                    <span class="px-1 text-sm font-semibold truncate">OR3</span>
+                </template>
+                <template #actions>
+                    <UTooltip
+                        v-if="!isMobile"
+                        :delay-duration="0"
+                        :text="newSplitTooltip"
+                    >
+                        <UButton
+                            v-theme="'shell.split-new'"
+                            v-bind="newPaneButtonProps"
+                            class="workspace-chrome-action"
+                            :square="true"
+                            :disabled="!canAddPane"
+                            aria-label="New split"
+                            title="New split"
+                            :icon="useIcon('shell.pane.add').value"
+                            @click="workspaceTabs.newSplit()"
+                        />
+                    </UTooltip>
+                    <UTooltip
+                        v-if="!isMobile && workspaceTabs.canCloseSplit.value"
+                        :delay-duration="0"
+                        text="Close split"
+                    >
+                        <UButton
+                            v-bind="paneCloseButtonProps"
+                            class="workspace-chrome-action"
+                            :square="true"
+                            aria-label="Close split"
+                            title="Close split"
+                            :icon="useIcon('shell.pane.close').value"
+                            @click="workspaceTabs.closeSplit()"
+                        />
+                    </UTooltip>
+                    <UTooltip :delay-duration="0" text="Toggle theme">
+                        <UButton
+                            v-bind="themeToggleButtonProps"
+                            class="workspace-chrome-action"
+                            :square="true"
+                            :aria-label="themeAriaLabel"
+                            :title="themeAriaLabel"
+                            :icon="useIcon(themeName === 'dark' ? 'shell.theme.light' : 'shell.theme.dark').value"
+                            @click="toggleTheme"
+                        />
+                    </UTooltip>
+                    <NotificationsNotificationBell
+                        v-if="showNotificationBell"
+                        :button-props="notificationButtonProps"
+                        button-class="workspace-chrome-action"
+                        compact
+                        popover-side="bottom"
+                        popover-align="end"
+                        tooltip-side="bottom"
+                    />
+                    <UDropdownMenu
+                        v-if="headerActionMenuItems.length"
+                        :items="headerActionMenuItems"
+                        :content="{ align: 'end' }"
+                    >
+                        <UTooltip :delay-duration="0" text="More actions">
+                            <UButton
+                                v-bind="headerActionButtonProps"
+                                class="workspace-chrome-action"
+                                :square="true"
+                                aria-label="More actions"
+                                title="More actions"
+                                icon="i-lucide-ellipsis"
+                            />
+                        </UTooltip>
+                    </UDropdownMenu>
+                </template>
+            </WorkspaceChrome>
             <div
+                v-if="!workspaceTabsChromeVisible"
                 id="top-nav"
                 :class="{
                     'border-(--md-inverse-surface) border-b-[var(--md-border-width)] bg-(--md-surface-variant)/20 backdrop-blur-sm':
@@ -161,8 +270,12 @@
             <div
                 ref="paneContainerRef"
                 :class="[
-                    showTopOffset ? 'pt-[46px]' : 'pt-0',
-                    ' h-full flex flex-row gap-0 items-stretch w-full pane-container',
+                    workspaceTabsChromeVisible
+                        ? 'pt-0 flex-1 min-h-0'
+                        : showTopOffset
+                          ? 'pt-[46px] h-full'
+                          : 'pt-0 h-full',
+                    'flex flex-row gap-0 items-stretch w-full pane-container',
                 ]"
             >
                 <div
@@ -186,11 +299,14 @@
                         panes.length === 1 ? 'min-w-0' : '',
                     ]"
                     tabindex="0"
-                    @focus="setActive(i)"
-                    @click="setActive(i)"
+                    :id="workspaceTabsChromeVisible ? `workspace-pane-${tabIdForPane(pane.id)}` : undefined"
+                    :role="workspaceTabsChromeVisible && i === activePaneIndex ? 'tabpanel' : 'region'"
+                    :aria-labelledby="workspaceTabsChromeVisible ? `workspace-tab-${tabIdForPane(pane.id)}` : undefined"
+                    @focus="onPaneFocused(i)"
+                    @click="onPaneFocused(i)"
                 >
                     <div
-                        v-if="panes.length > 1 && !isMobile"
+                        v-if="!workspaceTabsChromeVisible && panes.length > 1 && !isMobile"
                         class="absolute top-1 right-1 z-30"
                     >
                         <UTooltip :delay-duration="0" text="Close window">
@@ -206,6 +322,7 @@
                     </div>
 
                     <component
+                        :ref="(instance: any) => setPaneComponentRef(pane.id, instance)"
                         :is="resolvePaneComponent(pane)"
                         v-bind="buildPaneProps(pane, i)"
                         class="flex-1 min-h-0"
@@ -213,6 +330,9 @@
                             pane.mode === 'chat'
                                 ? (id: string) => onInternalThreadCreated(id, i)
                                 : undefined
+                        "
+                        @tab-status="
+                            (status: WorkspaceTabStatus) => onPaneTabStatus(pane.id, status)
                         "
                     />
 
@@ -252,14 +372,30 @@
 // Props allow initializing with a thread OR a document and choosing default mode.
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
 import { useMultiPane, type PaneState } from '~/composables/core/useMultiPane';
+import { useWorkspaceTabHost } from '~/composables/core/useWorkspaceTabHost';
+import { useWorkspaceTabs } from '~/composables/core/useWorkspaceTabs';
+import { useWorkspaceTabMetadata } from '~/composables/core/useWorkspaceTabMetadata';
+import WorkspaceChrome from '~/components/workspace-tabs/WorkspaceChrome.vue';
 import { usePaneApps } from '~/composables/core/usePaneApps';
-import { getDb } from '~/db/client';
+import {
+    getActiveWorkspaceId,
+    getDb,
+    subscribeActiveWorkspaceDb,
+} from '~/db/client';
 import { useHookEffect } from '~/composables/core/useHookEffect';
 import {
     flush as flushDocument,
     newDocument as createNewDoc,
 } from '~/composables/documents/useDocumentsStore';
-import { captureDocumentEditor } from '~/composables/documents/useDocumentEditorSessions';
+import {
+    captureDocumentEditor,
+    getDocumentEditorSession,
+    waitForDocumentEditorSession,
+} from '~/composables/documents/useDocumentEditorSessions';
+import {
+    clearPanePendingPromptAfter,
+} from '~/composables/core/usePanePrompt';
+import { useWorkspaceTabDrafts } from '~/composables/core/useWorkspaceTabDrafts';
 import { usePaneDocuments } from '~/composables/documents/usePaneDocuments';
 import { useHeaderActions, type HeaderActionEntry } from '#imports';
 import type {
@@ -301,12 +437,17 @@ import {
 } from '~/composables/search/useCommandPalette';
 import { createPaletteHostContext } from '~/core/search/command-palette/host-context';
 import { registerCorePaletteSources } from '~/core/search/command-palette/sources/register-core';
+import { setWorkspaceTabPaletteProvider } from '~/core/search/command-palette/sources/workspace-tab-source';
 import {
     useSystemPromptsModal,
     type SystemPromptsModalMode,
 } from '~/composables/chat/useSystemPromptsModal';
 import { useWorkspaceProfiles } from '~/composables/workspace-profiles/useWorkspaceProfiles';
 import type { WorkspaceProfileInitialPane } from '~/core/workspace-profiles';
+import type {
+    WorkspaceResource,
+    WorkspaceTabStatus,
+} from '~/core/workspace-tabs/types';
 
 const legacyCompatClasses = {
     height: `h-[${'100dvh'}]`,
@@ -341,16 +482,40 @@ const showNotificationBell = computed(
 );
 const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
+const workspaceTabsEnabled = computed(
+    () => or3Config.features.workspaceTabs.enabled
+);
+// Pane and tab IDs are runtime UUIDs. Render the deterministic legacy chrome
+// until hydration finishes, then mount the workspace chrome with client IDs.
+// This avoids server/client attribute mismatches without making IDs global.
+const workspaceTabsHydrated = ref(false);
+const workspaceTabsChromeVisible = computed(
+    () => workspaceTabsEnabled.value && workspaceTabsHydrated.value
+);
 const minPaneWidth = 280;
 const { isMobile } = useResponsiveState();
 const {
     resolvedProfile,
+    pending: workspaceProfilePending,
     initialPaneRequest,
     acknowledgeInitialPanes,
 } = useWorkspaceProfiles();
 const profilePaneLimit = computed(
     () => resolvedProfile.value.workspace.desktopPaneLimit
 );
+const multiPane = useMultiPane({
+    initialThreadId: props.initialThreadId,
+    maxPanes: profilePaneLimit,
+    onFlushDocument: async (id) => {
+        await captureDocumentEditor(id);
+        await flushDocument(id);
+    },
+    minPaneWidth: 280,
+    maxPaneWidth: 2000,
+    allowMultiplePanes: computed(
+        () => !isMobile.value && profilePaneLimit.value > 1
+    ),
+});
 
 // ---------------- Multi-pane ----------------
 const {
@@ -374,19 +539,223 @@ const {
     persistPaneWidths,
     recalculateWidthsForContainer,
     paneWidths,
-} = useMultiPane({
-    initialThreadId: props.initialThreadId,
-    maxPanes: profilePaneLimit,
-    onFlushDocument: async (id) => {
-        await captureDocumentEditor(id);
-        await flushDocument(id);
+} = multiPane;
+
+const paneComponentRefs = new Map<string, any>();
+const workspaceTabDrafts = useWorkspaceTabDrafts();
+const workspaceTabHost = useWorkspaceTabHost(multiPane);
+const workspaceTabs = useWorkspaceTabs({
+    host: workspaceTabHost,
+    paneLimit: profilePaneLimit,
+    isMobile,
+    workspaceId: () => (process.client ? getActiveWorkspaceId() : null),
+    profileId: () => resolvedProfile.value.id,
+    async captureOutgoing(tabId, paneId) {
+        const tab = workspaceTabs.state.value.tabs.find((entry) => entry.id === tabId);
+        if (!tab) return;
+        if (tab.resource.kind === 'document') {
+            const session = getDocumentEditorSession({ paneId, tabId });
+            if (!session) return;
+            workspaceTabs.updateRuntime(tabId, { status: 'saving' });
+            try {
+                session.captureContent();
+                await session.ensureLocalDurability();
+                workspaceTabs.updateRuntime(tabId, {
+                    status: 'idle',
+                    viewState: {
+                        ...workspaceTabs.state.value.runtime.get(tabId)?.viewState,
+                        document: session.captureViewState(),
+                    },
+                });
+            } catch (error) {
+                workspaceTabs.updateRuntime(tabId, {
+                    status: 'error',
+                    errorMessage:
+                        error instanceof Error
+                            ? error.message
+                            : 'Document changes could not be saved locally',
+                });
+                throw error;
+            }
+            return;
+        }
+        const view = paneComponentRefs.get(paneId)?.captureViewState?.();
+        if (view) {
+            workspaceTabs.updateRuntime(tabId, {
+                viewState: {
+                    ...workspaceTabs.state.value.runtime.get(tabId)?.viewState,
+                    chatScroll: view.scroll,
+                },
+            });
+        }
     },
-    minPaneWidth: 280,
-    maxPaneWidth: 2000,
-    allowMultiplePanes: computed(
-        () => !isMobile.value && profilePaneLimit.value > 1
-    ),
+    async restoreIncoming(tabId, paneId) {
+        const tab = workspaceTabs.state.value.tabs.find((entry) => entry.id === tabId);
+        const viewState = workspaceTabs.state.value.runtime.get(tabId)?.viewState;
+        if (!tab || !viewState) return;
+        if (tab.resource.kind === 'document' && viewState.document) {
+            const session = await waitForDocumentEditorSession({ paneId, tabId });
+            await session?.restoreViewState(viewState.document);
+            return;
+        }
+        await paneComponentRefs.get(paneId)?.restoreViewState?.({
+            scroll: viewState.chatScroll,
+        });
+    },
+    async filterRestoredTabs(tabs) {
+        const threadIds = tabs.flatMap((tab) =>
+            tab.resource.kind === 'chat' && tab.resource.threadId
+                ? [tab.resource.threadId]
+                : []
+        );
+        const documentIds = tabs.flatMap((tab) =>
+            tab.resource.kind === 'document' ? [tab.resource.documentId] : []
+        );
+        const db = getDb();
+        const [threads, documents] = await Promise.all([
+            threadIds.length ? db.threads.bulkGet(threadIds) : Promise.resolve([]),
+            documentIds.length ? db.posts.bulkGet(documentIds) : Promise.resolve([]),
+        ]);
+        const availableThreads = new Set(
+            threads.flatMap((thread) =>
+                thread && !thread.deleted ? [thread.id] : []
+            )
+        );
+        const availableDocuments = new Set(
+            documents.flatMap((document) =>
+                document &&
+                !document.deleted &&
+                document.postType === 'doc'
+                    ? [document.id]
+                    : []
+            )
+        );
+        return tabs
+            .filter((tab) => {
+                if (tab.resource.kind === 'chat') {
+                    return !tab.resource.threadId || availableThreads.has(tab.resource.threadId);
+                }
+                if (tab.resource.kind === 'document') {
+                    return availableDocuments.has(tab.resource.documentId);
+                }
+                // App availability can be asynchronous during plugin boot. Keep
+                // its descriptor and let the existing unknown-app fallback show
+                // rather than silently losing a local session entry.
+                return true;
+            })
+            .map((tab) => tab.id);
+    },
+    onError(error, context) {
+        console.error(`[workspace-tabs] ${context.action} failed`, error);
+        toast.add({
+            title: 'Tab switch failed',
+            description: 'Your current content remains open. Please try again.',
+            color: 'error',
+        });
+    },
 });
+const workspaceScopeId = ref<string | null>(
+    process.client ? getActiveWorkspaceId() : null
+);
+let activeWorkspaceTabsScope = '';
+const disposeWorkspaceScopeSubscription = process.client
+    ? subscribeActiveWorkspaceDb(({ newWorkspaceId }) => {
+          workspaceScopeId.value = newWorkspaceId;
+          if (workspaceTabsReady.value && workspaceTabsEnabled.value) {
+              requestWorkspaceTabsScope(
+                  newWorkspaceId,
+                  resolvedProfile.value.id
+              );
+          }
+      })
+    : () => undefined;
+
+function requestWorkspaceTabsScope(
+    workspaceId: string | null,
+    profileId: string
+): void {
+    const scope = `${workspaceId ?? 'local'}\0${profileId}`;
+    if (scope === activeWorkspaceTabsScope) return;
+    activeWorkspaceTabsScope = scope;
+    void workspaceTabs
+        .switchScope(workspaceId, profileId)
+        .then((switched) => {
+            if (!switched || scope !== activeWorkspaceTabsScope) return;
+            hasSyncedInitial.value = true;
+            updateUrl(true);
+        })
+        .catch((error) => {
+            if (scope === activeWorkspaceTabsScope) {
+                activeWorkspaceTabsScope = '';
+            }
+            console.error('[workspace-tabs] Scope switch failed', error);
+            toast.add({
+                title: 'Workspace tabs could not be restored',
+                description: 'Reload the workspace before continuing.',
+                color: 'warning',
+            });
+        });
+}
+
+watch(
+    [workspaceScopeId, () => resolvedProfile.value.id, workspaceProfilePending],
+    ([workspaceId, profileId, profilePending]) => {
+        if (
+            !workspaceTabsReady.value ||
+            !workspaceTabsEnabled.value ||
+            profilePending
+        ) {
+            return;
+        }
+        requestWorkspaceTabsScope(workspaceId, profileId);
+    }
+);
+const workspaceTabMetadata = useWorkspaceTabMetadata();
+const workspaceTabIcons = computed(
+    () =>
+        new Map(
+            [...workspaceTabMetadata.metadata].map(([tabId, metadata]) => [
+                tabId,
+                metadata.icon,
+            ])
+        )
+);
+
+async function refreshWorkspaceTabMetadata(): Promise<void> {
+    if (!workspaceTabsEnabled.value) return;
+    try {
+        await workspaceTabMetadata.refresh(workspaceTabs.tabs.value);
+        for (const tab of workspaceTabs.tabs.value) {
+            workspaceTabs.updateCachedTitle(
+                tab.id,
+                workspaceTabMetadata.titleFor(tab).title
+            );
+        }
+    } catch (error) {
+        console.warn('[workspace-tabs] Failed to refresh tab titles', error);
+    }
+}
+
+watch(
+    () => workspaceTabs.tabs.value.map((tab) => `${tab.id}:${tab.cachedTitle}`),
+    () => void refreshWorkspaceTabMetadata(),
+    { immediate: true }
+);
+useHookEffect('db.threads.create:action:after', () =>
+    void refreshWorkspaceTabMetadata()
+);
+useHookEffect('db.threads.upsert:action:after', () =>
+    void refreshWorkspaceTabMetadata()
+);
+useHookEffect('db.threads.delete:action:soft:after', () =>
+    void refreshWorkspaceTabMetadata()
+);
+useHookEffect('db.threads.delete:action:hard:after', () =>
+    void refreshWorkspaceTabMetadata()
+);
+useHookEffect('db.documents.update:action:after', () =>
+    void refreshWorkspaceTabMetadata()
+);
 
 const themePlugin = useNuxtApp().$theme as ThemePlugin | undefined;
 const {
@@ -532,12 +901,19 @@ function buildPaneProps(
             messageHistory: pane.messages,
             threadId: pane.threadId,
             paneId: pane.id,
+            tabId: tabIdForPane(pane.id),
         };
     }
 
     // Built-in: doc
     if (pane.mode === 'doc') {
-        return pane.documentId ? { documentId: pane.documentId } : {};
+        return pane.documentId
+            ? {
+                  documentId: pane.documentId,
+                  paneId: pane.id,
+                  tabId: tabIdForPane(pane.id),
+              }
+            : {};
     }
 
     // Custom pane app - provide generic contract
@@ -558,11 +934,171 @@ function buildPaneProps(
     }
     return {
         paneId: pane.id,
+        tabId: tabIdForPane(pane.id),
         recordId: pane.documentId ?? null,
         postType: app?.postType ?? pane.mode,
         postApi: panePluginApi?.posts ?? null,
     };
 }
+
+function tabIdForPane(paneId: string): string {
+    return workspaceTabs.state.value.paneBindings.get(paneId) ?? paneId;
+}
+
+function setPaneComponentRef(paneId: string, instance: unknown): void {
+    if (instance) paneComponentRefs.set(paneId, instance);
+    else paneComponentRefs.delete(paneId);
+}
+
+function onPaneFocused(index: number): void {
+    setActive(index);
+    if (!workspaceTabsEnabled.value) return;
+    const pane = panes.value[index];
+    const tabId = pane && workspaceTabs.state.value.paneBindings.get(pane.id);
+    if (tabId) void workspaceTabs.activateTab(tabId, 'pointer');
+}
+
+function onWorkspaceTabActivate(
+    tabId: string,
+    reason: 'pointer' | 'keyboard'
+): void {
+    void workspaceTabs.activateTab(tabId, reason);
+}
+
+function onWorkspaceTabClose(tabId: string): void {
+    void workspaceTabs.closeTab(tabId).then((closed) => {
+        if (!closed) return;
+        clearPanePendingPromptAfter(tabId, 6000);
+        workspaceTabDrafts.discardAfter(tabId, 6000);
+        toast.add({
+            id: 'workspace-tab-closed',
+            title: 'Tab closed',
+            duration: 6000,
+            actions: [
+                {
+                    label: 'Undo',
+                    size: 'sm',
+                    onClick: () => void workspaceTabs.reopenClosedTab(),
+                },
+            ],
+        });
+    });
+}
+
+async function closeWorkspaceTabs(tabIds: readonly string[]): Promise<void> {
+    let closedCount = 0;
+    for (const tabId of tabIds) {
+        if (await workspaceTabs.closeTab(tabId)) {
+            clearPanePendingPromptAfter(tabId, 6000);
+            workspaceTabDrafts.discardAfter(tabId, 6000);
+            closedCount++;
+        }
+    }
+    if (closedCount) {
+        toast.add({
+            id: 'workspace-tabs-closed',
+            title: closedCount === 1 ? 'Tab closed' : `${closedCount} tabs closed`,
+            duration: 6000,
+            actions: [
+                {
+                    label: 'Undo',
+                    size: 'sm',
+                    onClick: () => void workspaceTabs.reopenClosedTab(),
+                },
+            ],
+        });
+    }
+}
+
+function closeOtherWorkspaceTabs(tabId: string): void {
+    void closeWorkspaceTabs(
+        workspaceTabs.tabs.value
+            .filter((tab) => tab.id !== tabId)
+            .map((tab) => tab.id)
+    );
+}
+
+function closeWorkspaceTabsToRight(tabId: string): void {
+    const index = workspaceTabs.tabs.value.findIndex((tab) => tab.id === tabId);
+    if (index >= 0) {
+        void closeWorkspaceTabs(
+            workspaceTabs.tabs.value.slice(index + 1).map((tab) => tab.id)
+        );
+    }
+}
+
+function onWorkspaceNewTab(): void {
+    void workspaceTabs.newTab();
+}
+
+function onWorkspaceTabReorder(tabId: string, destinationIndex: number): void {
+    workspaceTabs.reorderTab(tabId, destinationIndex);
+}
+
+function activateRelativeWorkspaceTab(direction: 1 | -1): void {
+    const tabs = workspaceTabs.tabs.value;
+    const current = tabs.findIndex(
+        (tab) => tab.id === workspaceTabs.activeTabId.value
+    );
+    if (!tabs.length || current < 0) return;
+    const next = tabs[(current + direction + tabs.length) % tabs.length];
+    if (next) void workspaceTabs.activateTab(next.id, 'command');
+}
+
+function openWorkspaceTabInSplit(tabId: string): void {
+    const tab = workspaceTabs.state.value.tabs.find((entry) => entry.id === tabId);
+    if (tab) void workspaceTabs.openInSplit(tab.resource, { allowDuplicate: true });
+}
+
+const workspaceCopyableTabIds = computed(
+    () =>
+        new Set(
+            workspaceTabs.tabs.value.flatMap((tab) =>
+                (tab.resource.kind === 'chat' && tab.resource.threadId) ||
+                tab.resource.kind === 'document'
+                    ? [tab.id]
+                    : []
+            )
+        )
+);
+
+async function copyWorkspaceTabLink(tabId: string): Promise<void> {
+    const tab = workspaceTabs.tabs.value.find((entry) => entry.id === tabId);
+    if (!tab || !import.meta.client) return;
+    const path =
+        tab.resource.kind === 'chat' && tab.resource.threadId
+            ? `/chat/${tab.resource.threadId}`
+            : tab.resource.kind === 'document'
+              ? `/docs/${tab.resource.documentId}`
+              : null;
+    if (!path) return;
+    try {
+        if (!navigator.clipboard?.writeText) {
+            throw new Error('Clipboard API is unavailable');
+        }
+        await navigator.clipboard.writeText(
+            new URL(path, window.location.origin).href
+        );
+        toast.add({ title: 'Link copied', duration: 2500 });
+    } catch {
+        toast.add({
+            title: 'Could not copy link',
+            description: 'Your browser did not allow clipboard access.',
+            color: 'warning',
+        });
+    }
+}
+
+function onPaneTabStatus(paneId: string, status: WorkspaceTabStatus): void {
+    if (!workspaceTabsEnabled.value) return;
+    const tabId = workspaceTabs.state.value.paneBindings.get(paneId);
+    if (tabId) workspaceTabs.updateRuntime(tabId, { status });
+}
+
+const newSplitTooltip = computed(() => {
+    if (!canAddPane.value) return newWindowTooltip.value.replace('window', 'split');
+    return 'New split';
+});
 
 // Active thread convenience (first pane for sidebar highlight)
 const activeChatThreadId = computed(() => {
@@ -574,7 +1110,51 @@ const activeChatThreadId = computed(() => {
 
 let validateToken = 0;
 const shellMounted = ref(false);
+const workspaceTabsReady = ref(false);
 let applyingInitialPaneToken: number | null = null;
+
+function resourceForPane(pane: PaneState) {
+    if (pane.mode === 'chat') {
+        return { kind: 'chat' as const, threadId: pane.threadId || null };
+    }
+    if (pane.mode === 'doc') {
+        return pane.documentId
+            ? { kind: 'document' as const, documentId: pane.documentId }
+            : null;
+    }
+    return {
+        kind: 'app' as const,
+        appId: pane.mode,
+        recordId: pane.documentId,
+        // A record-less app is still a valid temporary instance in the tab
+        // session, keyed to the stable runtime pane until it creates a record.
+        instanceKey: pane.documentId ? undefined : pane.id,
+    };
+}
+
+function reconcileWorkspaceTabsWithPanes(): void {
+    if (!workspaceTabsEnabled.value) return;
+    for (const pane of panes.value) {
+        const resource = resourceForPane(pane);
+        if (resource) workspaceTabs.reconcilePaneResource(pane.id, resource);
+    }
+}
+
+watch(
+    () =>
+        panes.value.map((pane) =>
+            [pane.id, pane.mode, pane.threadId, pane.documentId ?? ''].join(':')
+        ),
+    () => {
+        if (!workspaceTabsReady.value || !workspaceTabsEnabled.value) return;
+        const currentPaneIds = new Set(panes.value.map((pane) => pane.id));
+        for (const paneId of workspaceTabs.state.value.paneBindings.keys()) {
+            if (!currentPaneIds.has(paneId)) workspaceTabs.paneClosedExternally(paneId);
+        }
+        reconcileWorkspaceTabsWithPanes();
+    },
+    { flush: 'post' }
+);
 
 async function validateThread(id: string): Promise<ValidationStatus> {
     return validateDbRecordWithRetry({
@@ -594,7 +1174,7 @@ async function validateDocument(id: string): Promise<ValidationStatus> {
     });
 }
 
-async function initInitial() {
+async function initInitial(preserveWorkspaceRestore = false) {
     if (!process.client) {
         hasSyncedInitial.value = true;
         return;
@@ -623,12 +1203,19 @@ async function initInitial() {
                 }
             }
         }
-        try {
-            await setPaneThread(0, props.initialThreadId);
-        } finally {
-            pane.validating = false;
+        if (workspaceTabsEnabled.value) {
+            await workspaceTabs.openResource({
+                kind: 'chat',
+                threadId: props.initialThreadId,
+            });
+        } else {
+            try {
+                await setPaneThread(0, props.initialThreadId);
+            } finally {
+                pane.validating = false;
+            }
+            pane.mode = 'chat';
         }
-        pane.mode = 'chat';
         hasSyncedInitial.value = true;
         updateUrl(true);
         return;
@@ -657,10 +1244,22 @@ async function initInitial() {
                 }
             }
         }
-        pane.mode = 'doc';
-        pane.documentId = props.initialDocumentId;
-        pane.threadId = '';
-        pane.validating = false;
+        if (workspaceTabsEnabled.value) {
+            await workspaceTabs.openResource({
+                kind: 'document',
+                documentId: props.initialDocumentId,
+            });
+        } else {
+            pane.mode = 'doc';
+            pane.documentId = props.initialDocumentId;
+            pane.threadId = '';
+            pane.validating = false;
+        }
+        hasSyncedInitial.value = true;
+        updateUrl(true);
+        return;
+    }
+    if (workspaceTabsEnabled.value && preserveWorkspaceRestore) {
         hasSyncedInitial.value = true;
         updateUrl(true);
         return;
@@ -705,6 +1304,26 @@ async function configureProfilePane(
     await setPaneApp(index, pane.id, { recordId: pane.recordId });
 }
 
+function resourceForProfilePane(
+    pane: WorkspaceProfileInitialPane,
+    index: number
+): WorkspaceResource | null {
+    if (pane.id === 'chat') {
+        return { kind: 'chat', threadId: pane.recordId ?? null };
+    }
+    if (pane.id === 'doc') {
+        return pane.recordId
+            ? { kind: 'document', documentId: pane.recordId }
+            : null;
+    }
+    return {
+        kind: 'app',
+        appId: pane.id,
+        recordId: pane.recordId,
+        instanceKey: pane.recordId ? undefined : `profile-${index}-${pane.id}`,
+    };
+}
+
 async function applyInitialPaneRequest(): Promise<void> {
     const request = initialPaneRequest.value;
     if (
@@ -741,6 +1360,24 @@ async function applyInitialPaneRequest(): Promise<void> {
             0,
             resolvedProfile.value.workspace.desktopPaneLimit
         );
+        if (workspaceTabsEnabled.value && isMobile.value) {
+            const first = requestedPanes[0];
+            if (first) {
+                await configureProfilePane(0, first);
+                reconcileWorkspaceTabsWithPanes();
+            }
+            for (const [index, pane] of requestedPanes.slice(1).entries()) {
+                const resource = resourceForProfilePane(pane, index + 1);
+                if (!resource) continue;
+                const tabId = await workspaceTabs.openResource(resource, {
+                    target: 'background',
+                });
+                if (tabId) workspaceTabs.reorderTab(tabId, index + 1);
+            }
+            setActive(0);
+            await acknowledgeInitialPanes(request.token);
+            return;
+        }
         if (requestedPanes[0]) {
             await configureProfilePane(0, requestedPanes[0]);
         }
@@ -851,20 +1488,46 @@ async function onNewDocument(initial?: { title?: string }) {
         });
         return;
     }
-    const doc = await newDocumentInActive(initial);
-    if (doc) updateUrl();
+    if (workspaceTabsEnabled.value) {
+        try {
+            const doc = await createNewDoc(initial);
+            await workspaceTabs.openResource({
+                kind: 'document',
+                documentId: doc.id,
+            });
+        } catch (error) {
+            console.error('[workspace-tabs] Failed to create document', error);
+            toast.add({
+                title: 'Document creation failed',
+                description: 'No tab was opened. Please try again.',
+                color: 'error',
+            });
+        }
+    } else {
+        const doc = await newDocumentInActive(initial);
+        if (doc) updateUrl();
+    }
     closeSidebarIfMobile();
 }
 async function onDocumentSelected(id: string) {
     if (!documentsEnabled.value) return;
-    await selectDocumentInActive(id);
-    updateUrl();
+    if (workspaceTabsEnabled.value) {
+        await workspaceTabs.openResource({ kind: 'document', documentId: id });
+    } else {
+        await selectDocumentInActive(id);
+        updateUrl();
+    }
     closeSidebarIfMobile();
 }
 
 // Sidebar chat selection always puts pane in chat mode
 function onSidebarSelected(id: string) {
     if (!id) return;
+    if (workspaceTabsEnabled.value) {
+        void workspaceTabs.openResource({ kind: 'chat', threadId: id });
+        closeSidebarIfMobile();
+        return;
+    }
     const target = activePaneIndex.value;
     setPaneThread(target, id);
     const pane = panes.value[target];
@@ -881,6 +1544,14 @@ function onInternalThreadCreated(id: string, paneIndex?: number) {
         typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
     const pane = panes.value[idx];
     if (!pane) return;
+    if (workspaceTabsEnabled.value) {
+        const tabId = workspaceTabs.state.value.paneBindings.get(pane.id);
+        if (tabId) workspaceTabs.promoteBlankChat(tabId, id);
+        else workspaceTabs.reconcilePaneResource(pane.id, {
+            kind: 'chat',
+            threadId: id,
+        });
+    }
     pane.mode = 'chat';
     pane.documentId = undefined;
     if (pane.threadId !== id) setPaneThread(idx, id);
@@ -888,6 +1559,11 @@ function onInternalThreadCreated(id: string, paneIndex?: number) {
     closeSidebarIfMobile();
 }
 function onNewChat() {
+    if (workspaceTabsEnabled.value) {
+        void workspaceTabs.newTab();
+        closeSidebarIfMobile();
+        return;
+    }
     const pane = panes.value[activePaneIndex.value];
     if (pane) {
         pane.mode = 'chat';
@@ -950,6 +1626,7 @@ const dashboardNavigation = useDashboardNavigation();
 const {
     open: openCommandPalette,
     close: closeCommandPalette,
+    getCoordinator: getPaletteCoordinator,
 } = useCommandPalette();
 const {
     isOpen: systemPromptsModalOpen,
@@ -958,6 +1635,17 @@ const {
     notifySelected: notifySystemPromptSelected,
 } = useSystemPromptsModal();
 let disposePaletteHostContext: (() => void) | null = null;
+let disposeWorkspaceTabPaletteProvider: (() => void) | null = null;
+
+watch(
+    () =>
+        workspaceTabs.tabs.value.map(
+            (tab) => `${tab.id}:${tab.cachedTitle}:${tab.lastActivatedAt}`
+        ),
+    () => {
+        void getPaletteCoordinator()?.refreshSources(['workspace-tab']);
+    }
+);
 
 async function openSystemPromptsFromPalette(options: {
     mode: SystemPromptsModalMode;
@@ -998,6 +1686,10 @@ async function openNewProjectModal() {
 }
 
 onMounted(() => {
+    disposeWorkspaceTabPaletteProvider?.();
+    disposeWorkspaceTabPaletteProvider = setWorkspaceTabPaletteProvider(
+        () => workspaceTabs.tabs.value
+    );
     disposePaletteHostContext?.();
     disposePaletteHostContext = setPaletteHostContext(
         createPaletteHostContext({
@@ -1007,6 +1699,14 @@ onMounted(() => {
             openImageLibraryPage,
             setDashboardOpen,
             canOpenNewPane: () => canAddPane.value,
+            ...(workspaceTabsEnabled.value
+                ? {
+                      openWorkspaceResource: (resource: WorkspaceResource, options: { target: 'active' | 'split' }) =>
+                          workspaceTabs.openResource(resource, options),
+                      activateWorkspaceTab: (tabId: string) =>
+                          workspaceTabs.activateTab(tabId, 'command'),
+                  }
+                : {}),
             getDashboardNavigation: () => dashboardNavigation,
             openSystemPrompts: openSystemPromptsFromPalette,
         })
@@ -1017,6 +1717,7 @@ onMounted(() => {
             isFeatureEnabled: (feature) => {
                 if (feature === 'documents') return documentsEnabled.value;
                 if (feature === 'dashboard') return dashboardEnabled.value;
+                if (feature === 'workspaceTabs') return workspaceTabsEnabled.value;
                 return true;
             },
             toggleTheme,
@@ -1029,6 +1730,13 @@ onMounted(() => {
             newChat: onNewChat,
             newDocument: () => onNewDocument(),
             newProject: openNewProjectModal,
+            newTab: onWorkspaceNewTab,
+            closeTab: () => onWorkspaceTabClose(workspaceTabs.activeTabId.value),
+            reopenClosedTab: () => void workspaceTabs.reopenClosedTab(),
+            nextTab: () => activateRelativeWorkspaceTab(1),
+            previousTab: () => activateRelativeWorkspaceTab(-1),
+            newSplit: () => void workspaceTabs.newSplit(),
+            closeSplit: () => void workspaceTabs.closeSplit(),
             openSystemPrompts: () =>
                 openSystemPromptsFromPalette({ mode: 'home' }),
             newSystemPrompt: () =>
@@ -1039,22 +1747,38 @@ onMounted(() => {
 
 onUnmounted(() => {
     closeCommandPalette();
+    disposeWorkspaceScopeSubscription();
     disposePaletteHostContext?.();
     disposePaletteHostContext = null;
+    disposeWorkspaceTabPaletteProvider?.();
+    disposeWorkspaceTabPaletteProvider = null;
 });
 
-const headerActions = useHeaderActions(() => ({
+const getHeaderActionContext = () => ({
     route,
     isMobile: isMobile.value,
-}));
+    activeTab: workspaceTabs.state.value.tabs.find(
+        (tab) => tab.id === workspaceTabs.activeTabId.value
+    ),
+    activePane: panes.value[activePaneIndex.value] ?? null,
+    tabCount: workspaceTabs.tabs.value.length,
+    paneCount: panes.value.length,
+    visibleTabIds: workspaceTabs.visibleTabIds.value,
+});
+const headerActions = useHeaderActions(getHeaderActionContext);
+const headerActionMenuItems = computed(() =>
+    headerActions.value.map((entry) => ({
+        label: entry.action.label || entry.action.tooltip || entry.action.id,
+        icon: entry.action.icon,
+        disabled: entry.disabled,
+        onSelect: () => void handleHeaderAction(entry),
+    }))
+);
 
 async function handleHeaderAction(entry: HeaderActionEntry) {
     if (entry.disabled) return;
     try {
-        await entry.action.handler({
-            route,
-            isMobile: isMobile.value,
-        });
+        await entry.action.handler(getHeaderActionContext());
     } catch (error) {
         console.error(
             `[PageShell] header action "${entry.action.id}" failed`,
@@ -1062,10 +1786,21 @@ async function handleHeaderAction(entry: HeaderActionEntry) {
         );
     }
 }
-const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
+const showTopOffset = computed(
+    () =>
+        workspaceTabsEnabled.value ||
+        panes.value.length > 1 ||
+        isMobile.value
+);
 const paneChromeClearanceStyle = computed(() => {
-    const hasOverlayChrome = !showTopOffset.value;
+    const hasOverlayChrome =
+        !workspaceTabsChromeVisible.value && !showTopOffset.value;
     return {
+        '--or3-workspace-chrome-height': workspaceTabsChromeVisible.value
+            ? isMobile.value
+                ? 'calc(88px + env(safe-area-inset-top))'
+                : '44px'
+            : '46px',
         '--or3-pane-chrome-top-clearance': hasOverlayChrome ? '46px' : '0px',
         '--or3-pane-chrome-left-clearance': hasOverlayChrome ? '56px' : '0px',
         '--or3-pane-chrome-right-clearance': hasOverlayChrome
@@ -1140,6 +1875,14 @@ function resetPaneToBlank(paneIndex: number) {
 function handleThreadDeletion(payload: DbDeletePayload<ThreadEntity>) {
     const deletedId = payload?.id ?? payload?.entity?.id;
     if (!deletedId) return;
+    if (workspaceTabsEnabled.value) {
+        for (const tab of workspaceTabs.state.value.tabs) {
+            if (tab.resource.kind === 'chat' && tab.resource.threadId === deletedId) {
+                void workspaceTabs.closeTab(tab.id);
+            }
+        }
+        return;
+    }
     panes.value.forEach((p, i) => {
         if (p.mode === 'chat' && p.threadId === deletedId) resetPaneToBlank(i);
     });
@@ -1147,6 +1890,17 @@ function handleThreadDeletion(payload: DbDeletePayload<ThreadEntity>) {
 function handleDocumentDeletion(payload: DbDeletePayload<DocumentEntity>) {
     const deletedId = payload?.id ?? payload?.entity?.id;
     if (!deletedId) return;
+    if (workspaceTabsEnabled.value) {
+        for (const tab of workspaceTabs.state.value.tabs) {
+            if (
+                tab.resource.kind === 'document' &&
+                tab.resource.documentId === deletedId
+            ) {
+                void workspaceTabs.closeTab(tab.id);
+            }
+        }
+        return;
+    }
     panes.value.forEach((p, i) => {
         if (p.mode === 'doc' && p.documentId === deletedId) resetPaneToBlank(i);
     });
@@ -1170,11 +1924,23 @@ useHookEffect('db.documents.delete:action:hard:after', handleDocumentDeletion, {
 
 // --------------- Mount ---------------
 onMounted(async () => {
-    await initInitial();
+    let restoredWorkspaceTabs = false;
+    if (workspaceTabsEnabled.value) {
+        restoredWorkspaceTabs = await workspaceTabs.restore();
+    }
+    await initInitial(restoredWorkspaceTabs);
     syncTheme();
     ensureAtLeastOne();
     shellMounted.value = true;
     await applyInitialPaneRequest();
+    if (workspaceTabsEnabled.value) {
+        if (!props.initialThreadId && !props.initialDocumentId && !restoredWorkspaceTabs) {
+            reconcileWorkspaceTabsWithPanes();
+        }
+        activeWorkspaceTabsScope = `${workspaceScopeId.value ?? 'local'}\0${resolvedProfile.value.id}`;
+        workspaceTabsReady.value = true;
+    }
+    workspaceTabsHydrated.value = true;
 
     // Expose sidebar layout API globally for plugins
     const sidebarLayoutApi: SidebarLayoutApi = {

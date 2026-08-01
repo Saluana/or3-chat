@@ -37,6 +37,34 @@ const global = {
 };
 
 describe('document editor behavior', () => {
+    it('reports inspector tab changes for workspace view-state capture', async () => {
+        const wrapper = mount(DocumentInspector, {
+            props: {
+                editor: null,
+                documentId: 'document-1',
+                createCheckpoint: vi.fn(),
+                outline: [],
+                activeOutlineId: undefined,
+                stats: {
+                    words: 0,
+                    characters: 0,
+                    blocks: 0,
+                    readingMinutes: 0,
+                    serializedBytes: 0,
+                },
+                pluginPanels: [],
+                initialTab: 'outline',
+            },
+            global,
+        });
+
+        await wrapper.setProps({ initialTab: 'history' });
+
+        expect(wrapper.emitted('update:active-tab')).toContainEqual([
+            'history',
+        ]);
+    });
+
     it('renders its outline as an accessible hierarchy and selects headings', async () => {
         const outline = [
             { id: 'intro', level: 1 as const, text: 'Intro', position: 0 },

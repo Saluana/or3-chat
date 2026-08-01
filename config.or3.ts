@@ -31,6 +31,7 @@ export const APP_VERSION = '0.1.0';
  *   OR3_MENTIONS_DOCUMENTS         - Enable document mentions
  *   OR3_MENTIONS_CONVERSATIONS     - Enable chat mentions
  *   OR3_DASHBOARD_ENABLED          - Enable dashboard
+ *   OR3_WORKSPACE_TABS_ENABLED     - Enable workspace tabs
  *
  * - Limits:
  *   OR3_MAX_FILE_SIZE_BYTES        - Max upload size in bytes (default: 20MB)
@@ -78,6 +79,9 @@ export const or3Config = defineOr3Config({
         },
         dashboard: {
             enabled: process.env.OR3_DASHBOARD_ENABLED !== 'false',
+        },
+        workspaceTabs: {
+            enabled: process.env.OR3_WORKSPACE_TABS_ENABLED !== 'false',
         },
     },
 

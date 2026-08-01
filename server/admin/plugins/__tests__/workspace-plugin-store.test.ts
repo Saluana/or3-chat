@@ -7,6 +7,7 @@ import {
     getPluginAccessPolicySnapshot,
     getPluginGrantReview,
     getPluginSettings,
+    replacePluginSettings,
     setPluginAccessPolicy,
     setPluginEnabled,
     setPluginGrantReview,
@@ -70,6 +71,21 @@ describe('workspace plugin store', () => {
             enabled: true,
             nested: { keep: 1 },
             access: { authRequired: true },
+        });
+    });
+
+    it('replaces settings exactly for lifecycle rollback', async () => {
+        const { store } = createStore();
+        await setPluginSettings(store, 'ws-1', 'plugin.a', {
+            preserved: true,
+            removedDuringMigration: 'old',
+        });
+        await replacePluginSettings(store, 'ws-1', 'plugin.a', {
+            restored: true,
+        });
+
+        expect(await getPluginSettings(store, 'ws-1', 'plugin.a')).toEqual({
+            restored: true,
         });
     });
 

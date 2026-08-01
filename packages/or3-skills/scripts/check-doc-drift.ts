@@ -11,8 +11,13 @@ interface PackageJson {
 const DOCUMENT_ASSERTIONS = [
   {
     path: 'public/_documentation/plugins/runtime-v2-overview.md',
-    text: 'not yet perform the immutable V2 candidate/promotion workflow',
-    code: 'v2-activation-status-changed',
+    text: 'The initial supported profile is `trusted-host`, server routes only',
+    code: 'v2-server-only-activation-contract-changed',
+  },
+  {
+    path: 'public/_documentation/plugins/runtime-v2-overview.md',
+    text: 'trusted-host-ui-abi-unproven',
+    code: 'v2-client-abi-gate-changed',
   },
   {
     path: 'public/_documentation/plugins/manifest-v2.md',

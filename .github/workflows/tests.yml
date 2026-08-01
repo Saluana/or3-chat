@@ -9,6 +9,7 @@ on:
       - 'app/**'
       - 'server/**'
       - 'shared/**'
+      - 'packages/or3-skills/**'
       - 'tests/**'
       - 'scripts/**'
       - 'vitest.config.ts'
@@ -21,6 +22,7 @@ on:
       - 'app/**'
       - 'server/**'
       - 'shared/**'
+      - 'packages/or3-skills/**'
       - 'tests/**'
       - 'scripts/**'
       - 'vitest.config.ts'
@@ -42,6 +44,8 @@ jobs:
       - run: bun run test
       - run: bun run test:scripts
       - run: bun run test:release-policy
+      - run: bun run test:all
+        working-directory: packages/or3-skills
 
   full:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

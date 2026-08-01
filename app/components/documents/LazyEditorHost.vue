@@ -5,6 +5,8 @@
                 <DocumentEditorRoot
                     :key="renderKey"
                     :document-id="documentId"
+                    :pane-id="paneId"
+                    :tab-id="tabId"
                 />
             </template>
             <template #fallback>
@@ -87,7 +89,11 @@ import {
 import DocumentEditorRoot from './DocumentEditorRoot.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
-const props = defineProps<{ documentId: string }>();
+const props = defineProps<{
+    documentId: string;
+    paneId?: string;
+    tabId?: string;
+}>();
 const emit = defineEmits<{ error: [error: Error] }>();
 
 const showErrorMessage = ref(false);
@@ -156,14 +162,14 @@ onBeforeUnmount(() => {
     clearErrorTimeout();
 });
 
-// Reset error timeout if documentId changes
+// The editor root owns normal in-place document switching. Keep keyed
+// remounting reserved for an explicit fatal-error retry.
 watch(
     () => props.documentId,
     () => {
         showErrorMessage.value = false;
         clearErrorTimeout();
         startErrorTimeout();
-        renderKey.value += 1;
     }
 );
 

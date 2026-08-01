@@ -1,8 +1,21 @@
-import { computed, reactive, type ComputedRef } from 'vue';
+import {
+    computed,
+    reactive,
+    toValue,
+    type ComputedRef,
+    type MaybeRefOrGetter,
+} from 'vue';
 import { useHooks } from '~/core/hooks/useHooks';
 
 // In-memory map: paneId -> pending prompt id (applied on first thread creation)
 const pendingByPane: Record<string, string | null> = reactive({});
+const expiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function cancelExpiry(paneId: string): void {
+    const timer = expiryTimers.get(paneId);
+    if (timer) clearTimeout(timer);
+    expiryTimers.delete(paneId);
+}
 
 /**
  * Flag to ensure hook handler is registered only once globally.
@@ -80,6 +93,7 @@ export function setupPanePromptCleanup() {
  * ```
  */
 export function setPanePendingPrompt(paneId: string, promptId: string | null) {
+    cancelExpiry(paneId);
     pendingByPane[paneId] = promptId;
 }
 
@@ -106,13 +120,18 @@ export function setPanePendingPrompt(paneId: string, promptId: string | null) {
 export function getPanePendingPrompt(
     paneId: string
 ): string | null | undefined {
+    cancelExpiry(paneId);
     return pendingByPane[paneId];
 }
 
 export function usePanePendingPrompt(
-    paneId: string
+    paneId: MaybeRefOrGetter<string | undefined>
 ): ComputedRef<string | null | undefined> {
-    return computed(() => pendingByPane[paneId]);
+    return computed(() => {
+        const id = toValue(paneId);
+        if (id) cancelExpiry(id);
+        return id ? pendingByPane[id] : undefined;
+    });
 }
 
 /**
@@ -136,7 +155,21 @@ export function usePanePendingPrompt(
  * ```
  */
 export function clearPanePendingPrompt(paneId: string) {
+    cancelExpiry(paneId);
     delete pendingByPane[paneId];
+}
+
+/** Preserve a closed tab's pending prompt for the same Undo window as its draft. */
+export function clearPanePendingPromptAfter(
+    paneId: string,
+    delayMs = 6_000
+): void {
+    if (!(paneId in pendingByPane)) return;
+    cancelExpiry(paneId);
+    expiryTimers.set(
+        paneId,
+        setTimeout(() => clearPanePendingPrompt(paneId), Math.max(0, delayMs))
+    );
 }
 
 // Debug helper

@@ -193,6 +193,16 @@ async function dispatch(
             return host.openDashboard(target.pluginId, target.pageId);
         case 'image':
             return host.openImage(target.hash);
+        case 'workspace-tab':
+            return host.openWorkspaceTab
+                ? host.openWorkspaceTab(target.tabId)
+                : {
+                      ok: false,
+                      error: {
+                          code: 'navigation-failed',
+                          message: 'Workspace tab host unavailable',
+                      },
+                  };
         case 'command':
             return host.executeCommand(target.commandId);
         default: {

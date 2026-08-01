@@ -158,14 +158,16 @@ const props = defineProps<{
     initialTab?: string;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
     close: [];
     'outline-select': [item: DocumentOutlineItem];
     restore: [revision: CompleteDocumentRevision];
+    'update:active-tab': [tab: string];
 }>();
 
 const activeTab = ref(props.initialTab || 'outline');
 watch(() => props.initialTab, (tab) => { if (tab) activeTab.value = tab; });
+watch(activeTab, (tab) => emit('update:active-tab', tab));
 const tabs = computed(() => [
     { value: 'outline', label: 'Outline', icon: icons.outline },
     { value: 'history', label: 'History', icon: icons.history },

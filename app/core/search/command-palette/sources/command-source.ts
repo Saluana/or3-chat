@@ -129,6 +129,13 @@ export function createDefaultCoreCommandSpecs(deps: {
     newProject?: () => Promise<void> | void;
     openSystemPrompts?: () => Promise<void> | void;
     newSystemPrompt?: () => Promise<void> | void;
+    newTab?: () => Promise<void> | void;
+    closeTab?: () => Promise<void> | void;
+    reopenClosedTab?: () => Promise<void> | void;
+    nextTab?: () => Promise<void> | void;
+    previousTab?: () => Promise<void> | void;
+    newSplit?: () => Promise<void> | void;
+    closeSplit?: () => Promise<void> | void;
 }): CoreCommandSpec[] {
     const enabled = deps.isFeatureEnabled ?? (() => true);
     const wrap =
@@ -251,6 +258,76 @@ export function createDefaultCoreCommandSpecs(deps: {
             icon: 'i-lucide-sun-moon',
             order: 80,
             handler: wrap(deps.toggleTheme),
+        },
+        {
+            id: 'workspace-new-tab',
+            label: 'New tab',
+            description: 'Open a new blank chat tab',
+            keywords: ['workspace', 'chat'],
+            icon: 'i-lucide-panel-top-open',
+            order: 90,
+            enabled: enabled('workspaceTabs'),
+            handler: wrap(deps.newTab),
+        },
+        {
+            id: 'workspace-close-tab',
+            label: 'Close tab',
+            description: 'Close the active workspace tab',
+            keywords: ['workspace'],
+            icon: 'i-lucide-x',
+            order: 91,
+            enabled: enabled('workspaceTabs'),
+            handler: wrap(deps.closeTab),
+        },
+        {
+            id: 'workspace-reopen-tab',
+            label: 'Reopen closed tab',
+            description: 'Restore the most recently closed workspace tab',
+            keywords: ['workspace', 'undo'],
+            icon: 'i-lucide-rotate-ccw',
+            order: 92,
+            enabled: enabled('workspaceTabs'),
+            handler: wrap(deps.reopenClosedTab),
+        },
+        {
+            id: 'workspace-next-tab',
+            label: 'Next tab',
+            description: 'Activate the next workspace tab',
+            keywords: ['workspace'],
+            icon: 'i-lucide-arrow-right',
+            order: 93,
+            enabled: enabled('workspaceTabs'),
+            handler: wrap(deps.nextTab),
+        },
+        {
+            id: 'workspace-previous-tab',
+            label: 'Previous tab',
+            description: 'Activate the previous workspace tab',
+            keywords: ['workspace'],
+            icon: 'i-lucide-arrow-left',
+            order: 94,
+            enabled: enabled('workspaceTabs'),
+            handler: wrap(deps.previousTab),
+        },
+        {
+            id: 'workspace-new-split',
+            label: 'New split',
+            description: 'Open a new visible workspace split',
+            keywords: ['workspace', 'pane'],
+            icon: 'i-lucide-columns-2',
+            order: 95,
+            enabled: enabled('workspaceTabs'),
+            handler: wrap(deps.newSplit),
+        },
+        {
+            id: 'workspace-close-split',
+            label: 'Close split',
+            description: 'Close the active workspace split',
+            keywords: ['workspace', 'pane'],
+            icon: 'i-lucide-panel-right-close',
+            order: 96,
+            enabled: enabled('workspaceTabs'),
+            handler: wrap(deps.closeSplit),
         },
     ];
 }

@@ -116,6 +116,12 @@ export interface Or3Config {
             /** Enable/disable the dashboard */
             enabled?: boolean;
         };
+
+        /** Local workspace tab session and tab chrome. */
+        workspaceTabs?: {
+            /** Enable/disable workspace tabs while the legacy chrome remains available. */
+            enabled?: boolean;
+        };
     };
 
     /**
@@ -226,6 +232,9 @@ export interface ResolvedOr3Config {
             conversations: boolean;
         };
         dashboard: {
+            enabled: boolean;
+        };
+        workspaceTabs: {
             enabled: boolean;
         };
     };

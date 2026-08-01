@@ -19,7 +19,7 @@
                 :estimate-height="80"
                 :overscan="5500"
                 :prefetch-overscan="5500"
-                :content-key="props.threadId ?? 'new-thread'"
+                :content-key="props.tabId ?? props.threadId ?? 'new-thread'"
                 mutation-mode="append-prepend"
                 :maintain-bottom="!anyEditing"
                 :bottom-threshold="5"
@@ -104,6 +104,7 @@
                     :container-width="containerWidth"
                     :thread-id="currentThreadId"
                     :pane-id="paneId"
+                    :tab-id="tabId"
                     @send="onSend"
                     @model-change="onModelChange"
                     @stop-stream="onStopStream"
@@ -146,7 +147,7 @@ import type {
     RegisterSendResult,
     SendResult,
 } from '~/utils/chat/types';
-import { Or3Scroll } from 'or3-scroll';
+import { Or3Scroll, type Or3ScrollViewState } from 'or3-scroll';
 import 'or3-scroll/style.css';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
@@ -173,6 +174,10 @@ import type {
 } from '../../../types/chat-internal';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import type { UiWorkflowState } from '~/utils/chat/workflow-types';
+import type {
+    WorkspaceTabScrollState,
+    WorkspaceTabStatus,
+} from '~/core/workspace-tabs/types';
 // Removed onMounted/watchEffect (unused)
 
 // Debug utilities removed per request.
@@ -231,12 +236,14 @@ const props = defineProps<{
     threadId?: string;
     messageHistory?: ChatMessageType[];
     paneId?: string; // forwarded so ChatInputDropper can register with bridge
+    tabId?: string; // owns draft and scroll mementos, distinct from paneId
 }>();
 
 const emit = defineEmits<{
     (e: 'thread-selected', id: string): void;
     (e: 'reached-top'): void;
     (e: 'reached-bottom'): void;
+    (e: 'tab-status', status: WorkspaceTabStatus): void;
 }>();
 
 // ── First-run welcome card ──────────────────────────────────────────────
@@ -288,13 +295,12 @@ setupPanePromptCleanup();
 // Initialize chat composable and make it refresh when threadId changes
 // Initialized defensively (HMR can briefly leave it null in re-eval window)
 // If pane has a pending prompt selection (chosen before thread exists) seed it
-if (props.paneId) {
-    const pre = getPanePendingPrompt(props.paneId);
+const promptOwnerId = computed(() => props.tabId ?? props.paneId);
+if (promptOwnerId.value) {
+    const pre = getPanePendingPrompt(promptOwnerId.value);
     if (pre) pendingPromptId.value = pre;
 }
-const panePendingPrompt = props.paneId
-    ? usePanePendingPrompt(props.paneId)
-    : null;
+const panePendingPrompt = usePanePendingPrompt(promptOwnerId);
 const chat = shallowRef<ChatInstance>(
     useChat(
         props.messageHistory,
@@ -364,7 +370,7 @@ watch(
         if (!prev && id) {
             emit('thread-selected', id);
             // Clear pending prompt (and pane-level cached) since it's applied
-            if (props.paneId) clearPanePendingPrompt(props.paneId);
+            if (promptOwnerId.value) clearPanePendingPrompt(promptOwnerId.value);
             pendingPromptId.value = null;
         }
     }
@@ -376,6 +382,10 @@ watch(
 const messages = computed<UiChatMessage[]>(
     () => chat.value?.messages?.value || []
 );
+// Declare before every computed/watch that can run eagerly during setup.
+// Vue evaluates immediate effects synchronously, so this must not sit below
+// `workflowRunning` (which reads it during the first render).
+const workflowStates = reactive(new Map<string, UiWorkflowState>());
 
 const loading = computed(() => chat.value?.loading?.value || false);
 const backgroundJobId = computed(() =>
@@ -397,6 +407,13 @@ const workflowRunning = computed(() => {
 });
 const streamingActive = computed(
     () => loading.value || workflowRunning.value || backgroundStreaming.value
+);
+watch(
+    [() => props.tabId, streamingActive],
+    ([tabId, streaming]) => {
+        if (tabId) emit('tab-status', streaming ? 'streaming' : 'idle');
+    },
+    { immediate: true }
 );
 const inputLoading = computed(
     () => loading.value || backgroundStreaming.value
@@ -470,8 +487,6 @@ function isUiWorkflowState(v: unknown): v is UiWorkflowState {
     if (typeof r.nodeStates !== 'object' || r.nodeStates === null) return false;
     return true;
 }
-
-const workflowStates = reactive(new Map<string, UiWorkflowState>());
 
 // Seed workflow state map from loaded messages so reloads show correct status
 watch(
@@ -599,6 +614,8 @@ onBeforeUnmount(() => mediaPrefetch.dispose());
 // Ref is now the VirtualMessageList component instance, not a raw element
 type ScrollApi = {
     scrollToBottom?: (opts?: { smooth?: boolean }) => void;
+    captureScrollState?: () => Or3ScrollViewState;
+    restoreScrollState?: (state?: Or3ScrollViewState) => Promise<void>;
     refreshMeasurements?: () => void;
 };
 const scroller = ref<ScrollApi | null>(null);
@@ -625,6 +642,7 @@ const atBottom = ref(true);
 const stick = ref(true);
 const distanceFromBottom = ref(0);
 const isScrollable = ref(false);
+const lastScrollTop = ref(0);
 const iconScrollToBottom = useIcon('chat.scrollToBottom');
 
 const scrollToBottomOverrides = useThemeOverrides({
@@ -664,6 +682,7 @@ function onScroll(payload: {
     clientHeight: number;
     isAtBottom: boolean;
 }) {
+    lastScrollTop.value = payload.scrollTop;
     atBottom.value = payload.isAtBottom;
     distanceFromBottom.value =
         payload.scrollHeight - payload.scrollTop - payload.clientHeight;
@@ -678,6 +697,54 @@ function onScroll(payload: {
 
     // We can emit scroll state if parent needs it, but here we ARE the parent.
     // Logic that depended on 'scroll-state' event can now use local refs directly.
+}
+
+function captureViewState() {
+    const scrollState = scroller.value?.captureScrollState?.();
+    return {
+        scroll: {
+            version: 1 as const,
+            contentKey:
+                scrollState?.contentKey !== undefined
+                    ? String(scrollState.contentKey)
+                    : props.tabId ?? props.threadId,
+            mode:
+                scrollState?.mode ??
+                (atBottom.value ? ('bottom' as const) : ('anchor' as const)),
+            anchors: scrollState?.anchors?.map((anchor) => ({
+                key: String(anchor.key),
+                withinItem: anchor.withinItem,
+                fallbackIndex: anchor.index,
+            })),
+            scrollTop: scrollState?.scrollTop ?? lastScrollTop.value,
+        } satisfies WorkspaceTabScrollState,
+    };
+}
+
+async function restoreViewState(saved?: ReturnType<typeof captureViewState>) {
+    if (!saved?.scroll) return;
+    await nextTick();
+    if (saved.scroll.mode === 'bottom') {
+        scroller.value?.scrollToBottom?.({ smooth: false });
+        return;
+    }
+    if (scroller.value?.restoreScrollState) {
+        await scroller.value.restoreScrollState({
+            version: 1,
+            contentKey: saved.scroll.contentKey,
+            mode: saved.scroll.mode,
+            anchors: saved.scroll.anchors?.map((anchor) => ({
+                key: anchor.key,
+                withinItem: anchor.withinItem,
+                index: anchor.fallbackIndex,
+            })),
+            scrollTop: saved.scroll.scrollTop,
+        });
+        return;
+    }
+    // Compatibility fallback for a host that still provides an older scroll API.
+    const root = (scroller.value as { $el?: HTMLElement } | null)?.$el;
+    if (root) root.scrollTop = Math.max(0, saved.scroll.scrollTop);
 }
 
 // (8.4) Auto-scroll already consolidated; tail growth handled via version watcher
@@ -897,19 +964,17 @@ function onEdited(payload: { id: string; content: string }) {
 function onPendingPromptSelected(promptId: string | null) {
     if (pendingPromptId.value === promptId) return;
     pendingPromptId.value = promptId;
-    // Store pane-level until thread creation
-    if (props.paneId) {
-        setPanePendingPrompt(props.paneId, promptId);
+    // Store tab-level until thread creation. Legacy panes use the pane ID.
+    if (promptOwnerId.value) {
+        setPanePendingPrompt(promptOwnerId.value, promptId);
     }
     // Update in place — never call useChat() outside setup (inject warning).
     chat.value?.setPendingPrompt?.(promptId);
 }
 
-if (panePendingPrompt) {
-    watch(panePendingPrompt, (promptId) => {
-        onPendingPromptSelected(promptId ?? null);
-    });
-}
+watch(panePendingPrompt, (promptId) => {
+    onPendingPromptSelected(promptId ?? null);
+});
 
 function onStopStream() {
     try {
@@ -992,6 +1057,8 @@ onBeforeUnmount(() => {
         chat.value?.dispose?.();
     } catch {}
 });
+
+defineExpose({ captureViewState, restoreViewState });
 </script>
 
 <style>

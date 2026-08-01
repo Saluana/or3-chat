@@ -55,9 +55,9 @@ export function usePageShellTheme(themePlugin: ThemePlugin | undefined) {
     });
     const paneCloseButtonProps = button('shell.pane-close', {
         ...base,
-        size: 'xs',
+        size: 'sm',
         ui: {
-            base: 'theme-btn bg-[var(--md-surface-variant)]/60',
+            base: 'theme-btn',
         },
     });
 

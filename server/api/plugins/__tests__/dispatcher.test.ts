@@ -52,10 +52,18 @@ vi.mock('../../../auth/can', () => ({
 }));
 
 const readSelectedPackageMock = vi.fn();
+const listSelectedPackagesMock = vi.fn();
 vi.mock('../../../admin/plugins/package-route-catalog', () => ({
     PluginPackageRouteCatalog: class {
         readSelected = readSelectedPackageMock;
+        listSelected = listSelectedPackagesMock;
     },
+}));
+
+const evaluateSelectedPackageRuntimeEligibilityMock = vi.fn();
+vi.mock('../../../admin/plugins/package-runtime-eligibility', () => ({
+    evaluateSelectedPackageRuntimeEligibility:
+        evaluateSelectedPackageRuntimeEligibilityMock as any,
 }));
 
 const getEnabledPluginsMock = vi.fn();
@@ -103,6 +111,8 @@ describe('plugin route dispatcher', () => {
             status: 'inactive',
             pluginId: 'plugin.a',
         });
+        listSelectedPackagesMock.mockReset().mockResolvedValue([]);
+        evaluateSelectedPackageRuntimeEligibilityMock.mockReset().mockResolvedValue([]);
         getEnabledPluginsMock.mockReset().mockResolvedValue([]);
         resolvePackageHandlerMock.mockReset();
         requirePluginAccessMock.mockReset().mockResolvedValue({
@@ -245,6 +255,34 @@ describe('plugin route dispatcher', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 404 });
     });
 
+    it('never falls back to the V1 dispatcher for a legacy V2 archive', async () => {
+        listInstalledExtensionsMock.mockResolvedValue([
+            {
+                manifestVersion: 2,
+                kind: 'plugin',
+                id: 'plugin.a',
+                name: 'Plugin A',
+                version: '2.0.0',
+                capabilities: [],
+                path: pluginDir,
+                runtime: {
+                    server: {
+                        routes: [
+                            { method: 'GET', path: 'health', handler: 'server/health.get.mjs' },
+                        ],
+                    },
+                },
+            },
+        ]);
+
+        const handler = (await import('../[pluginId]/[...path]')).default as (
+            event: H3Event
+        ) => Promise<any>;
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 404 });
+        expect(requirePluginAccessMock).not.toHaveBeenCalled();
+    });
+
     it('returns 404 when dispatcher disabled', async () => {
         useRuntimeConfigMock.mockReturnValue({
             admin: {
@@ -268,7 +306,7 @@ describe('plugin route dispatcher', () => {
                 disableNonCorePlugins: false,
             },
         } as any);
-        readSelectedPackageMock.mockResolvedValue({
+        const selected = {
             status: 'ready',
             pluginId: 'plugin.a',
             packageDigest: `sha256-${'a'.repeat(64)}`,
@@ -280,7 +318,15 @@ describe('plugin route dispatcher', () => {
                     handler: 'server/health.mjs',
                 },
             ],
-        });
+        };
+        readSelectedPackageMock.mockResolvedValue(selected);
+        listSelectedPackagesMock.mockResolvedValue([selected]);
+        evaluateSelectedPackageRuntimeEligibilityMock.mockResolvedValue([
+            {
+                catalog: { pluginId: 'plugin.a' },
+                status: 'ready',
+            },
+        ]);
         getEnabledPluginsMock.mockResolvedValue(['plugin.a']);
         resolvePackageHandlerMock.mockResolvedValue({
             handler: async () => ({ ok: true, source: 'package-v2' }),
@@ -326,6 +372,41 @@ describe('plugin route dispatcher', () => {
             ],
         });
         getEnabledPluginsMock.mockResolvedValue([]);
+
+        const handler = (await import('../[pluginId]/[...path]')).default as (
+            event: H3Event
+        ) => Promise<any>;
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 404 });
+        expect(resolvePackageHandlerMock).not.toHaveBeenCalled();
+    });
+
+    it('does not resolve a selected V2 route when package readiness is blocked', async () => {
+        useRuntimeConfigMock.mockReturnValue({
+            admin: {
+                pluginRouteDispatcherEnabled: true,
+                pluginModuleLoaderV2Enabled: true,
+                pluginModuleLoaderV2WorkspaceIds: ['ws-1'],
+                disableNonCorePlugins: false,
+            },
+        } as any);
+        const selected = {
+            status: 'ready' as const,
+            pluginId: 'plugin.a',
+            packageDigest: `sha256-${'a'.repeat(64)}`,
+            manifest: { access: null },
+            routes: [{ method: 'GET' as const, path: 'health', handler: 'server/health.mjs' }],
+        };
+        readSelectedPackageMock.mockResolvedValue(selected);
+        listSelectedPackagesMock.mockResolvedValue([selected]);
+        getEnabledPluginsMock.mockResolvedValue(['plugin.a']);
+        evaluateSelectedPackageRuntimeEligibilityMock.mockResolvedValue([
+            {
+                catalog: { pluginId: 'plugin.a' },
+                status: 'blocked',
+                blockCode: 'package-grants-unreviewed',
+            },
+        ]);
 
         const handler = (await import('../[pluginId]/[...path]')).default as (
             event: H3Event

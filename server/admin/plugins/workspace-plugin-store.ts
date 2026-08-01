@@ -207,6 +207,25 @@ export async function setPluginSettings(
     );
 }
 
+/** Replaces settings exactly. Lifecycle rollback uses this instead of the
+ * normal merge-oriented editor update so deleted keys are restored too. */
+export async function replacePluginSettings(
+    store: WorkspaceSettingsStore,
+    workspaceId: string,
+    pluginId: string,
+    settings: Record<string, unknown>
+): Promise<void> {
+    const parsed = SettingsSchema.safeParse(settings);
+    if (!parsed.success) {
+        throw new Error('Invalid settings');
+    }
+    await store.set(
+        workspaceId,
+        `plugins.settings.${pluginId}`,
+        JSON.stringify(parsed.data)
+    );
+}
+
 export function readPluginAccessPolicy(
     settings: Record<string, unknown>
 ): PluginGatePolicy | null {

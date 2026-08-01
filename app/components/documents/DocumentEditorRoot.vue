@@ -1,6 +1,6 @@
 <template>
-    <div v-theme="'document.editor'" class="document-editor-root" data-context="document">
-        <header v-theme="'document.header'" class="editor-topbar">
+    <div ref="rootElement" v-theme="'document.editor'" class="document-editor-root" data-context="document">
+        <header v-if="!isMobile" v-theme="'document.header'" class="editor-topbar">
             <div class="document-identity">
                 <UIcon :name="icons.document" />
                 <span class="topbar-title">{{ titleDraft || 'Untitled' }}</span>
@@ -12,8 +12,15 @@
             </div>
         </header>
 
-        <div v-theme="'document.toolbar'" class="editor-toolbar document-editor-toolbar" role="toolbar" aria-label="Document formatting">
+        <div
+            v-theme="'document.toolbar'"
+            class="editor-toolbar document-editor-toolbar"
+            :class="{ 'editor-toolbar--mobile': isMobile }"
+            role="toolbar"
+            aria-label="Document formatting"
+        >
             <USelect
+                v-if="!isMobile"
                 :model-value="activeBlock"
                 :items="blockTypeItems"
                 value-key="value"
@@ -29,13 +36,15 @@
                 aria-label="Text style"
                 @update:model-value="setBlockType"
             />
-            <span class="toolbar-separator" />
-            <ToolbarButton v-for="button in formatButtons" :key="button.id" v-bind="button" :active="button.active?.()" @activate="button.run" />
-            <span class="toolbar-separator toolbar-secondary" />
-            <ToolbarButton v-for="button in insertButtons" :key="button.id" v-bind="button" class="toolbar-secondary" :active="button.active?.()" @activate="button.run" />
-            <span class="toolbar-spacer" />
-            <ToolbarButton :icon="icons.undo" label="Undo (⌘Z)" @activate="editor?.chain().focus().undo().run()" />
-            <ToolbarButton :icon="icons.redo" label="Redo (⇧⌘Z)" @activate="editor?.chain().focus().redo().run()" />
+            <span v-if="!isMobile" class="toolbar-separator" />
+            <ToolbarButton v-for="button in visibleFormatButtons" :key="button.id" v-bind="button" :active="button.active?.()" @activate="button.run" />
+            <span v-if="!isMobile" class="toolbar-separator toolbar-secondary" />
+            <template v-if="!isMobile">
+                <ToolbarButton v-for="button in insertButtons" :key="button.id" v-bind="button" class="toolbar-secondary" :active="button.active?.()" @activate="button.run" />
+            </template>
+            <span v-if="!isMobile" class="toolbar-spacer" />
+            <ToolbarButton v-if="!isMobile" :icon="icons.undo" label="Undo (⌘Z)" @activate="editor?.chain().focus().undo().run()" />
+            <ToolbarButton v-if="!isMobile" :icon="icons.redo" label="Redo (⇧⌘Z)" @activate="editor?.chain().focus().redo().run()" />
             <UDropdownMenu v-model:open="overflowOpen" :items="toolbarOverflowItems" :content="{ align: 'end' }">
                 <UButton v-theme="'document.toolbar-more'" :icon="icons.more" color="neutral" variant="ghost" size="sm" square class="more-button" aria-label="More editor tools" :aria-expanded="overflowOpen" />
             </UDropdownMenu>
@@ -62,7 +71,7 @@
         </Transition>
 
         <div class="editor-layout">
-            <main class="editor-scroll" @mousedown="focusCanvas">
+            <main ref="editorScroll" class="editor-scroll" @mousedown="focusCanvas">
                 <article v-theme="'document.canvas'" class="document-canvas">
                     <UTextarea id="document-title" :model-value="titleDraft" name="document-title" class="document-title-field" :rows="1" :maxrows="3" autoresize variant="none" maxlength="300" placeholder="Untitled" aria-label="Document title" @update:model-value="onTitleInput" />
                     <p class="document-byline">
@@ -126,7 +135,7 @@
                 <div v-if="inspectorOpen" class="inspector-backdrop" @click="inspectorOpen = false" />
             </Transition>
             <Transition name="document-inspector">
-                <DocumentInspector v-if="inspectorOpen" :editor="editor" :document-id="documentId" :create-checkpoint="createManualCheckpoint" :outline="outline" :active-outline-id="activeOutlineId" :stats="stats" :saved-at="state.record?.updated_at" :plugin-panels="inspectorPanels" :initial-tab="inspectorTab" @close="inspectorOpen = false" @outline-select="scrollTo" @restore="restoreRevision" />
+                <DocumentInspector v-if="inspectorOpen" :editor="editor" :document-id="documentId" :create-checkpoint="createManualCheckpoint" :outline="outline" :active-outline-id="activeOutlineId" :stats="stats" :saved-at="state.record?.updated_at" :plugin-panels="inspectorPanels" :initial-tab="inspectorTab" @update:active-tab="inspectorTab = $event" @close="inspectorOpen = false" @outline-select="scrollTo" @restore="restoreRevision" />
             </Transition>
         </div>
 
@@ -175,6 +184,7 @@
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRef, watch } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import { Editor, EditorContent, type JSONContent } from '@tiptap/vue-3';
+import { Selection } from '@tiptap/pm/state';
 import { BubbleMenu } from '@tiptap/vue-3/menus';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions/placeholder';
@@ -189,7 +199,11 @@ import AutocompleteState from '~/plugins/EditorAutocomplete/state';
 import { Or3DocumentImage } from '~/extensions/or3-document-image';
 import { DocumentAiHunks } from '~/plugins/DocumentAiHunks/TiptapExtension';
 import { flush, loadDocument, setDocumentContent, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
-import { registerDocumentEditorSession } from '~/composables/documents/useDocumentEditorSessions';
+import {
+    registerDocumentEditorSession,
+    type DocumentEditorFocusedRegion,
+    type DocumentEditorViewState,
+} from '~/composables/documents/useDocumentEditorSessions';
 import { useDocumentInsights } from '~/composables/documents/useDocumentInsights';
 import {
     useDocumentAiAgent,
@@ -217,7 +231,11 @@ import {
     type DocumentToolbarItem,
 } from '~/core/documents/editor-toolbar';
 
-const props = defineProps<{ documentId: string }>();
+const props = defineProps<{
+    documentId: string;
+    paneId?: string;
+    tabId?: string;
+}>();
 const DocumentAiPanel = defineAsyncComponent(() => import('./DocumentAiPanel.vue'));
 const icons = reactive({
     document: useIcon('editor.document'),
@@ -252,6 +270,8 @@ const icons = reactive({
 const documentId = toRef(props, 'documentId');
 const hooks = useHooks();
 const editor = shallowRef<Editor | null>(null);
+const rootElement = ref<HTMLElement>();
+const editorScroll = ref<HTMLElement>();
 const state = computed(() => useDocumentState(props.documentId));
 const titleDraft = ref('');
 const capturedContent = ref<TipTapDocument>({
@@ -290,13 +310,15 @@ let revisionTimer: ReturnType<typeof setTimeout> | undefined;
 let unregisterSession: (() => void) | undefined;
 let lastAutomaticRevisionAt = 0;
 let inspectorDefaultApplied = false;
+let suppressFindAutofocus = false;
+let loadedDocumentId: string | undefined;
 
 const pluginButtons = useEditorToolbarButtons(editor);
 const inspectorPanels = useEditorInspectorPanels();
 const documentAiActions = useDocumentAiActions();
 const { outline, activeOutlineId, stats, scrollTo, setSerializedSize, refresh } = useDocumentInsights(editor);
 
-async function captureCurrent(flushNow = false) {
+function captureContent(id = props.documentId): void {
     const current = editor.value;
     if (!current || current.isDestroyed) return;
     if (captureTimer) clearTimeout(captureTimer);
@@ -304,8 +326,18 @@ async function captureCurrent(flushNow = false) {
     const json = current.getJSON();
     capturedContent.value = json;
     setSerializedSize(new TextEncoder().encode(JSON.stringify(json)).byteLength);
-    setDocumentContent(props.documentId, json);
-    if (flushNow) await flush(props.documentId);
+    setDocumentContent(id, json);
+}
+
+async function ensureLocalDurability(id = props.documentId): Promise<void> {
+    captureContent(id);
+    await flush(id);
+    const currentState = useDocumentState(id);
+    if (currentState.status === 'error') {
+        throw currentState.lastError instanceof Error
+            ? currentState.lastError
+            : new Error('Document could not be saved locally.');
+    }
 }
 
 const ai = useDocumentAiAgent({
@@ -313,7 +345,7 @@ const ai = useDocumentAiAgent({
     documentId,
     title: titleDraft,
     contentVersion,
-    persistCurrent: () => captureCurrent(true),
+    persistCurrent: () => ensureLocalDurability(),
 });
 
 const aiPanelState = computed(() => ({
@@ -349,7 +381,9 @@ function normalizedContent(value: unknown): TipTapDocument {
 function scheduleCapture() {
     if (captureTimer) clearTimeout(captureTimer);
     captureTimer = setTimeout(() => {
-        void captureCurrent(true);
+        void ensureLocalDurability().catch((caught) => {
+            console.error('[DocumentEditor] Scheduled save failed', caught);
+        });
     }, 750);
 }
 
@@ -359,10 +393,24 @@ function scheduleAutomaticRevision() {
     const earliest = lastAutomaticRevisionAt ? Math.max(30_000, lastAutomaticRevisionAt + fiveMinutes - Date.now()) : 30_000;
     revisionTimer = setTimeout(async () => {
         const current = editor.value;
+        const revisionDocumentId = props.documentId;
         if (!current || didUnmount) return;
-        await captureCurrent(true);
+        try {
+            await ensureLocalDurability(revisionDocumentId);
+        } catch (caught) {
+            console.error('[DocumentEditor] Checkpoint save failed', caught);
+            return;
+        }
+        if (
+            didUnmount ||
+            props.documentId !== revisionDocumentId ||
+            editor.value !== current ||
+            current.isDestroyed
+        ) {
+            return;
+        }
         const created = await createDocumentRevision({
-            documentId: props.documentId,
+            documentId: revisionDocumentId,
             title: titleDraft.value,
             content: current.getJSON(),
             source: 'auto',
@@ -424,9 +472,9 @@ async function insertFiles(files: File[]) {
     }
 }
 
-async function makeEditor() {
+async function makeEditor(id: string) {
     const loaded = await loadEditorExtensions(listEditorNodes(), listEditorMarks(), listEditorExtensions());
-    if (didUnmount) return;
+    if (didUnmount || props.documentId !== id) return;
     editor.value?.destroy();
     editor.value = new Editor({
         extensions: [
@@ -491,25 +539,177 @@ async function makeEditor() {
     refresh();
 }
 
+function focusedDocumentRegion(): DocumentEditorFocusedRegion | undefined {
+    if (typeof document === 'undefined') return undefined;
+    const active = document.activeElement;
+    const root = rootElement.value;
+    if (!(active instanceof HTMLElement) || !root?.contains(active)) {
+        return undefined;
+    }
+    if (active.closest('.document-title-field')) return 'title';
+    if (active.closest('.document-inspector')) return 'inspector';
+    if (active.closest('.document-content')) return 'content';
+    return undefined;
+}
+
+function contentRevisionFor(current: Editor): number {
+    const serialized = JSON.stringify(current.getJSON());
+    let hash = 2166136261;
+    for (let index = 0; index < serialized.length; index += 1) {
+        hash ^= serialized.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+}
+
+function captureDocumentViewState(id: string): DocumentEditorViewState {
+    const current = editor.value;
+    return {
+        version: 1,
+        documentId: id,
+        contentRevision:
+            current && !current.isDestroyed
+                ? contentRevisionFor(current)
+                : undefined,
+        scrollTop: editorScroll.value?.scrollTop ?? 0,
+        selectionJson:
+            current && !current.isDestroyed
+                ? current.state.selection.toJSON()
+                : undefined,
+        inspectorOpen: inspectorOpen.value,
+        inspectorTab: inspectorTab.value,
+        findOpen: findOpen.value,
+        focusedRegion: focusedDocumentRegion(),
+    };
+}
+
+function restoreEditorSelection(saved: DocumentEditorViewState): void {
+    const current = editor.value;
+    if (!current || current.isDestroyed || !saved.selectionJson) return;
+
+    const currentRevision = contentRevisionFor(current);
+    if (
+        saved.contentRevision !== undefined &&
+        saved.contentRevision !== currentRevision
+    ) {
+        return;
+    }
+
+    try {
+        const selection = Selection.fromJSON(
+            current.state.doc,
+            saved.selectionJson
+        );
+        current.view.dispatch(current.state.tr.setSelection(selection));
+    } catch {
+        // The document changed or the saved selection is no longer legal.
+        // Scroll/UI restoration remains useful and tab activation must continue.
+    }
+}
+
+async function restoreDocumentViewState(
+    id: string,
+    saved: DocumentEditorViewState,
+    options?: { focus?: boolean }
+): Promise<void> {
+    if (
+        saved.version !== 1 ||
+        saved.documentId !== id ||
+        props.documentId !== id
+    ) {
+        return;
+    }
+
+    suppressFindAutofocus = true;
+    inspectorTab.value = saved.inspectorTab ?? 'outline';
+    inspectorOpen.value = Boolean(saved.inspectorOpen);
+    findOpen.value = Boolean(saved.findOpen);
+    await nextTick();
+    suppressFindAutofocus = false;
+
+    if (props.documentId !== id) return;
+    if (editorScroll.value) {
+        editorScroll.value.scrollTop = Math.max(0, saved.scrollTop);
+    }
+    restoreEditorSelection(saved);
+    if (!options?.focus || props.documentId !== id) return;
+
+    if (saved.focusedRegion === 'title') {
+        rootElement.value
+            ?.querySelector<HTMLTextAreaElement>(
+                '.document-title-field textarea'
+            )
+            ?.focus();
+    } else if (saved.focusedRegion === 'inspector') {
+        rootElement.value
+            ?.querySelector<HTMLElement>(
+                '.document-inspector button, .document-inspector [tabindex]'
+            )
+            ?.focus();
+    } else {
+        editor.value?.commands.focus();
+    }
+}
+
+function registerActiveSession(id: string): void {
+    unregisterSession?.();
+    unregisterSession = registerDocumentEditorSession({
+        documentId: id,
+        paneId: props.paneId,
+        tabId: props.tabId,
+        captureContent: () => captureContent(id),
+        ensureLocalDurability: () => ensureLocalDurability(id),
+        captureViewState: () => captureDocumentViewState(id),
+        restoreViewState: (saved, options) =>
+            restoreDocumentViewState(id, saved, options),
+    });
+}
+
 async function loadActiveDocument(id: string) {
     await loadDocument(id);
     if (didUnmount || props.documentId !== id) return;
     titleDraft.value = state.value.record?.title ?? '';
     capturedContent.value = normalizedContent(state.value.record?.content);
     contentVersion.value = 0;
-    await makeEditor();
-    unregisterSession?.();
-    unregisterSession = registerDocumentEditorSession(id, {
-        capture: () => captureCurrent(false),
-    });
+    await makeEditor(id);
+    if (didUnmount || props.documentId !== id) return;
+    loadedDocumentId = id;
+    registerActiveSession(id);
 }
 
 watch(documentId, async (id, previous) => {
-    if (previous && editor.value) await captureCurrent(true);
-    if (isMobile.value) inspectorOpen.value = false;
+    if (previous && editor.value) {
+        void ensureLocalDurability(previous).catch((caught) => {
+            console.error('[DocumentEditor] Failed to save before switch', caught);
+        });
+    }
+    if (revisionTimer) clearTimeout(revisionTimer);
+    revisionTimer = undefined;
+    lastAutomaticRevisionAt = 0;
+    inspectorOpen.value = responsiveHydrated.value && !isMobile.value;
+    inspectorTab.value = 'outline';
+    findOpen.value = false;
+    findQuery.value = '';
+    replaceQuery.value = '';
+    findIndex.value = -1;
+    slashOpen.value = false;
+    overflowOpen.value = false;
     ai.reset();
     await loadActiveDocument(id);
 });
+
+watch(
+    [() => props.paneId, () => props.tabId],
+    () => {
+        if (
+            loadedDocumentId === props.documentId &&
+            editor.value &&
+            !editor.value.isDestroyed
+        ) {
+            registerActiveSession(props.documentId);
+        }
+    }
+);
 
 watch(
     responsiveHydrated,
@@ -535,7 +735,7 @@ watch(
 );
 
 watch(findOpen, async (open) => {
-    if (open) {
+    if (open && !suppressFindAutofocus) {
         await nextTick();
         findInput.value?.inputRef?.focus();
     }
@@ -554,7 +754,9 @@ onBeforeUnmount(() => {
     unregisterSession?.();
     if (captureTimer) clearTimeout(captureTimer);
     if (revisionTimer) clearTimeout(revisionTimer);
-    const pending = captureCurrent(true);
+    const pending = ensureLocalDurability().catch((caught) => {
+        console.error('[DocumentEditor] Failed to save during teardown', caught);
+    });
     editor.value?.destroy();
     void pending;
 });
@@ -640,6 +842,9 @@ const formatButtons = computed<DocumentToolbarItem[]>(() => [
         run: editLink,
     },
 ]);
+const visibleFormatButtons = computed(() =>
+    isMobile.value ? formatButtons.value.slice(0, 3) : formatButtons.value
+);
 const insertButtons = computed<DocumentToolbarItem[]>(() => [
     {
         id: 'bullet',
@@ -703,22 +908,51 @@ const overflowButtons = computed<DocumentToolbarItem[]>(() => [
         run: () => imageInput.value?.click(),
     },
 ]);
-const toolbarOverflowItems = computed(() => [
-    overflowButtons.value.map((button) => ({
+const toolbarOverflowItems = computed(() => {
+    const mobileButtons = isMobile.value
+        ? [
+              ...formatButtons.value.slice(3),
+              ...insertButtons.value,
+              ...overflowButtons.value,
+              {
+                  id: 'undo',
+                  icon: icons.undo,
+                  label: 'Undo (⌘Z)',
+                  run: () => editor.value?.chain().focus().undo().run(),
+              },
+              {
+                  id: 'redo',
+                  icon: icons.redo,
+                  label: 'Redo (⇧⌘Z)',
+                  run: () => editor.value?.chain().focus().redo().run(),
+              },
+          ]
+        : overflowButtons.value;
+    const actionItems = mobileButtons.map((button) => ({
         label: button.label,
         icon: button.icon || icons.plugin,
         onSelect: () => button.run(),
-    })),
-    ...(pluginButtons.value.length
-        ? [
-              pluginButtons.value.map((button) => ({
-                  label: button.tooltip || button.id,
-                  icon: button.icon || icons.plugin,
-                  onSelect: () => handlePluginButton(button),
-              })),
-          ]
-        : []),
-]);
+    }));
+    const textStyleItems = isMobile.value
+        ? DOCUMENT_BLOCK_TYPE_ITEMS.map((item) => ({
+              label: item.label,
+              onSelect: () => setBlockType(item.value),
+          }))
+        : [];
+    return [
+        ...(textStyleItems.length ? [textStyleItems] : []),
+        actionItems,
+        ...(pluginButtons.value.length
+            ? [
+                  pluginButtons.value.map((button) => ({
+                      label: button.tooltip || button.id,
+                      icon: button.icon || icons.plugin,
+                      onSelect: () => handlePluginButton(button),
+                  })),
+              ]
+            : []),
+    ];
+});
 
 function handlePluginButton(button: EditorToolbarButton) {
     if (editor.value) void button.onClick(editor.value);
@@ -977,7 +1211,7 @@ async function restoreRevision(revision: CompleteDocumentRevision) {
         emitUpdate: true,
         errorOnInvalidContent: true,
     });
-    await captureCurrent(true);
+    await ensureLocalDurability();
 }
 
 async function createManualCheckpoint() {

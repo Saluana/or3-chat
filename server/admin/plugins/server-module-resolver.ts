@@ -69,6 +69,12 @@ type CachedModule = {
     readonly handler: RuntimePluginRouteHandler;
 };
 
+export interface ImportedPackageServerHandler {
+    readonly handlerPath: string;
+    readonly moduleUrl: string;
+    readonly handler: RuntimePluginRouteHandler;
+}
+
 function normalizeHandlerPath(handlerPath: string): string {
     if (
         handlerPath.length === 0 ||
@@ -99,6 +105,78 @@ function isInside(root: string, candidate: string): boolean {
 
 function cacheKeyString(key: ServerModuleCacheKey): string {
     return `${key.pluginId}\0${key.packageDigest}\0${key.handlerPath}`;
+}
+
+/**
+ * Imports a package route with the same path and export validation used by
+ * the selected-runtime resolver. Candidate canaries use this without needing
+ * to make a candidate globally selected first.
+ */
+export async function importPackageServerHandler(input: {
+    readonly packageRoot: string;
+    readonly handlerPath: string;
+    readonly importModule?: (moduleUrl: string) => Promise<unknown>;
+}): Promise<ImportedPackageServerHandler> {
+    const handlerPath = normalizeHandlerPath(input.handlerPath);
+    const modulePath = resolve(input.packageRoot, handlerPath);
+    if (!isInside(input.packageRoot, modulePath)) {
+        throw new ServerModuleResolverError(
+            'invalid-handler-path',
+            'Server handler escaped its package root'
+        );
+    }
+    const handlerExtension = extname(modulePath).toLowerCase();
+    if (['.ts', '.tsx', '.mts', '.cts'].includes(handlerExtension)) {
+        throw new ServerModuleResolverError(
+            'handler-not-javascript',
+            'Plugin route handlers must be precompiled JavaScript files'
+        );
+    }
+
+    const moduleUrl = pathToFileURL(modulePath).href;
+    const importModule =
+        input.importModule ??
+        ((url: string) => import(/* @vite-ignore */ url) as Promise<unknown>);
+    let namespace: { default?: unknown; handler?: unknown };
+    try {
+        namespace = (await importModule(moduleUrl)) as {
+            default?: unknown;
+            handler?: unknown;
+        };
+    } catch (error) {
+        throw new ServerModuleResolverError(
+            'handler-import-failed',
+            'Failed to load plugin route handler',
+            error
+        );
+    }
+
+    const handler = namespace.default ?? namespace.handler;
+    if (typeof handler !== 'function') {
+        throw new ServerModuleResolverError(
+            'handler-not-function',
+            'Plugin route handler is not a function'
+        );
+    }
+    return Object.freeze({
+        handlerPath,
+        moduleUrl,
+        handler: handler as RuntimePluginRouteHandler,
+    });
+}
+
+export async function verifyPackageServerRouteHandlers(input: {
+    readonly packageRoot: string;
+    readonly routes: readonly { readonly handler: string }[];
+    readonly importModule?: (moduleUrl: string) => Promise<unknown>;
+}): Promise<void> {
+    for (const route of input.routes) {
+        await importPackageServerHandler({
+            packageRoot: input.packageRoot,
+            handlerPath: route.handler,
+            importModule: input.importModule,
+        });
+    }
 }
 
 /**
@@ -181,53 +259,20 @@ export class ServerModuleResolver {
             );
         }
 
-        const packageRoot = this.#packages.packagePath(key.pluginId, key.packageDigest);
-        const modulePath = resolve(packageRoot, handlerPath);
-        if (!isInside(packageRoot, modulePath)) {
-            throw new ServerModuleResolverError(
-                'invalid-handler-path',
-                'Server handler escaped its package root'
-            );
-        }
-        const handlerExtension = extname(modulePath).toLowerCase();
-        if (['.ts', '.tsx', '.mts', '.cts'].includes(handlerExtension)) {
-            throw new ServerModuleResolverError(
-                'handler-not-javascript',
-                'Plugin route handlers must be precompiled JavaScript files'
-            );
-        }
-
-        const moduleUrl = pathToFileURL(modulePath).href;
-        let namespace: { default?: unknown; handler?: unknown };
-        try {
-            namespace = (await this.#importModule(moduleUrl)) as {
-                default?: unknown;
-                handler?: unknown;
-            };
-        } catch (error) {
-            throw new ServerModuleResolverError(
-                'handler-import-failed',
-                'Failed to load plugin route handler',
-                error
-            );
-        }
-
-        const handler = namespace.default ?? namespace.handler;
-        if (typeof handler !== 'function') {
-            throw new ServerModuleResolverError(
-                'handler-not-function',
-                'Plugin route handler is not a function'
-            );
-        }
+        const imported = await importPackageServerHandler({
+            packageRoot: this.#packages.packagePath(key.pluginId, key.packageDigest),
+            handlerPath,
+            importModule: this.#importModule,
+        });
 
         const record: CachedModule = Object.freeze({
-            moduleUrl,
-            handler: handler as RuntimePluginRouteHandler,
+            moduleUrl: imported.moduleUrl,
+            handler: imported.handler,
         });
         this.#cache.set(cacheId, record);
         return Object.freeze({
             key: normalizedKey,
-            moduleUrl,
+            moduleUrl: record.moduleUrl,
             handler: record.handler,
             cacheHit: false,
         });

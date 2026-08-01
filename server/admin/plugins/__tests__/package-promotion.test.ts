@@ -9,6 +9,11 @@ import { PluginPackagePromotionService } from '../package-promotion';
 import { PluginPackagePointerStore, type PluginPackagePointer } from '../package-pointer-store';
 import { ImmutablePluginPackageStore } from '../package-store';
 
+const currentGrantReview = () => ({
+    status: 'current' as const,
+    revision: 'grant-review-1',
+});
+
 function source(version: string): string {
     const root = mkdtempSync(resolve(tmpdir(), 'or3-promote-source-'));
     writeFileSync(
@@ -56,15 +61,17 @@ async function setup(stateCompatibility: {
     const canary = new PluginPackageCandidateCanaryService(packages, pointers, root);
     await canary.run({
         pluginId: 'alpha',
+        workspaceId: 'workspace-1',
         packageDigest: candidate.digest,
         clientId: 'designated-client-1',
         snapshotState: () => ({ settings: { count: 1 } }),
+        readGrantReview: currentGrantReview,
         serverDryRun: () => ({ status: 'passed' }),
         clientHiddenPrepare: () => ({ status: 'passed' }),
         now: () => 100,
     });
     const service = new PluginPackagePromotionService(packages, pointers, canary);
-    return { packages, pointers, service, current, candidate };
+    return { packages, pointers, canary, service, current, candidate };
 }
 
 describe('PluginPackagePromotionService', () => {
@@ -72,9 +79,11 @@ describe('PluginPackagePromotionService', () => {
         const { service, pointers, current, candidate } = await setup();
         const result = await service.promote({
             pluginId: 'alpha',
+            workspaceId: 'workspace-1',
             expectedCandidateDigest: candidate.digest,
             storedStateVersion: 1,
             snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview,
             restoreState: vi.fn(),
             now: () => 200,
         });
@@ -103,9 +112,11 @@ describe('PluginPackagePromotionService', () => {
         const restoreState = vi.fn(async () => undefined);
         const result = await service.promote({
             pluginId: 'alpha',
+            workspaceId: 'workspace-1',
             expectedCandidateDigest: candidate.digest,
             storedStateVersion: 1,
             snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview,
             restoreState,
             faultBeforePointerSwap: async () => {
                 throw new Error('forced-pre-swap-failure');
@@ -122,6 +133,99 @@ describe('PluginPackagePromotionService', () => {
         expect(pointer?.candidate?.packageDigest).toBe(candidate.digest);
     });
 
+    it('rejects stale canary evidence when the workspace state changes', async () => {
+        const { service, pointers, current, candidate } = await setup();
+        const result = await service.promote({
+            pluginId: 'alpha',
+            workspaceId: 'workspace-1',
+            expectedCandidateDigest: candidate.digest,
+            storedStateVersion: 1,
+            snapshotState: () => ({ settings: { count: 2 } }),
+            readGrantReview: currentGrantReview,
+            restoreState: vi.fn(),
+        });
+
+        expect(result).toMatchObject({
+            status: 'blocked',
+            stage: 'canary-evidence',
+            code: 'canary-evidence-invalid',
+        });
+        expect((await pointers.readPointer('alpha'))?.current?.packageDigest).toBe(current.digest);
+    });
+
+    it('rejects canary evidence when the reviewed grants revision changes', async () => {
+        const { service, pointers, current, candidate } = await setup();
+        const result = await service.promote({
+            pluginId: 'alpha',
+            workspaceId: 'workspace-1',
+            expectedCandidateDigest: candidate.digest,
+            storedStateVersion: 1,
+            snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: () => ({
+                status: 'current',
+                revision: 'grant-review-2',
+            }),
+            restoreState: vi.fn(),
+        });
+
+        expect(result).toMatchObject({
+            status: 'blocked',
+            stage: 'canary-evidence',
+            code: 'canary-evidence-invalid',
+        });
+        expect((await pointers.readPointer('alpha'))?.current?.packageDigest).toBe(current.digest);
+    });
+
+    it('blocks malformed canary evidence instead of throwing during promotion', async () => {
+        const { service, pointers, canary, current, candidate } = await setup();
+        writeFileSync(
+            canary.evidencePath('alpha', candidate.digest, 'workspace-1'),
+            JSON.stringify({ schemaVersion: 2, pluginId: 'alpha' })
+        );
+
+        await expect(
+            service.promote({
+                pluginId: 'alpha',
+                workspaceId: 'workspace-1',
+                expectedCandidateDigest: candidate.digest,
+                storedStateVersion: 1,
+                snapshotState: () => ({ settings: { count: 1 } }),
+                readGrantReview: currentGrantReview,
+                restoreState: vi.fn(),
+            })
+        ).resolves.toMatchObject({
+            status: 'blocked',
+            stage: 'canary-evidence',
+            code: 'canary-evidence-invalid',
+        });
+        expect((await pointers.readPointer('alpha'))?.current?.packageDigest).toBe(
+            current.digest
+        );
+    });
+
+    it('keeps migrated state when a pointer write reports after rename', async () => {
+        const { service, pointers, candidate } = await setup();
+        const restoreState = vi.fn(async () => undefined);
+        const result = await service.promote({
+            pluginId: 'alpha',
+            workspaceId: 'workspace-1',
+            expectedCandidateDigest: candidate.digest,
+            storedStateVersion: 1,
+            snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview,
+            restoreState,
+            pointerWriteOptions: {
+                fault: (step) => {
+                    if (step === 'after-rename') throw new Error('forced-after-rename-failure');
+                },
+            },
+        });
+
+        expect(result).toMatchObject({ status: 'promoted' });
+        expect(restoreState).not.toHaveBeenCalled();
+        expect((await pointers.readPointer('alpha'))?.current?.packageDigest).toBe(candidate.digest);
+    });
+
     it('blocks incompatible rollback before mutating the pointer', async () => {
         const { service, pointers, candidate } = await setup({
             version: 2,
@@ -130,9 +234,11 @@ describe('PluginPackagePromotionService', () => {
         });
         await service.promote({
             pluginId: 'alpha',
+            workspaceId: 'workspace-1',
             expectedCandidateDigest: candidate.digest,
             storedStateVersion: 2,
-            snapshotState: () => ({ settings: {} }),
+            snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: currentGrantReview,
             restoreState: vi.fn(),
             now: () => 200,
         });

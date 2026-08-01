@@ -97,6 +97,8 @@
 }
 
 @container (max-width: 719px) {
+.editor-toolbar--mobile { min-height: 3.15rem; overflow: visible; padding-inline: 0.45rem; }
+.editor-toolbar--mobile .more-button { margin-inline-start: auto; }
 .editor-topbar { grid-template-columns: minmax(0, 1fr) auto; padding-inline: 0.65rem; }
 .save-state { display: none; }
 .toolbar-secondary, .toolbar-separator.toolbar-secondary { display: none; }

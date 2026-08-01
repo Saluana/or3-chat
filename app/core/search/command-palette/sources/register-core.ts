@@ -18,6 +18,7 @@ import { createImagePaletteSource } from './image-source';
 import { createPluginPostPaletteSource } from './plugin-post-source';
 import { createProjectPaletteSource } from './project-source';
 import { createPromptPaletteSource } from './prompt-source';
+import { createWorkspaceTabPaletteSource } from './workspace-tab-source';
 
 let registered = false;
 const handles: RegistrationHandle[] = [];
@@ -45,6 +46,9 @@ export function registerCorePaletteSources(options?: {
     if (isFeatureEnabled('dashboard')) {
         handles.push(registerPaletteSource(createImagePaletteSource()));
         handles.push(registerPaletteSource(createDashboardPaletteSource()));
+    }
+    if (isFeatureEnabled('workspaceTabs')) {
+        handles.push(registerPaletteSource(createWorkspaceTabPaletteSource()));
     }
 
     // Materialize any already-registered plugin post-source definitions.

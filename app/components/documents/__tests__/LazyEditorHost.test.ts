@@ -7,8 +7,8 @@ import LazyEditorHost from '../LazyEditorHost.vue';
 vi.mock('../DocumentEditorRoot.vue', () => ({
     default: {
         name: 'DocumentEditorRoot',
-        template: '<div>Mock Editor</div>',
-        props: ['documentId'],
+        template: '<div class="mock-editor" :data-document-id="documentId" :data-pane-id="paneId" :data-tab-id="tabId">Mock Editor</div>',
+        props: ['documentId', 'paneId', 'tabId'],
     },
 }));
 
@@ -91,6 +91,40 @@ describe('LazyEditorHost - memory leaks', () => {
 
         // Component should still work correctly after prop change
         expect(wrapper.exists()).toBe(true);
+
+        wrapper.unmount();
+    });
+
+    it('switches documents in place and forwards workspace session identity', async () => {
+        const wrapper = mount(LazyEditorHost, {
+            props: {
+                documentId: 'doc1',
+                paneId: 'pane-a',
+                tabId: 'tab-a',
+            },
+            global: {
+                stubs: {
+                    Suspense: SuspenseStub,
+                },
+            },
+        });
+
+        const initialEditorElement = wrapper.get('.mock-editor').element;
+        expect(wrapper.get('.mock-editor').attributes()).toMatchObject({
+            'data-document-id': 'doc1',
+            'data-pane-id': 'pane-a',
+            'data-tab-id': 'tab-a',
+        });
+
+        await wrapper.setProps({ documentId: 'doc2', tabId: 'tab-b' });
+
+        const updatedEditor = wrapper.get('.mock-editor');
+        expect(updatedEditor.element).toBe(initialEditorElement);
+        expect(updatedEditor.attributes()).toMatchObject({
+            'data-document-id': 'doc2',
+            'data-pane-id': 'pane-a',
+            'data-tab-id': 'tab-b',
+        });
 
         wrapper.unmount();
     });

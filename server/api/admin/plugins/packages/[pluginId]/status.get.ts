@@ -11,7 +11,7 @@ import { PluginPackagePointerStore } from '../../../../../admin/plugins/package-
 export default defineEventHandler(async (event) => {
     const context = await requireAdminApiContext(event, {
         ownerOnly: true,
-        allowWorkspaceAdmin: true,
+        superAdminOnly: true,
     });
     const pluginId = getRouterParam(event, 'pluginId');
     if (!pluginId) {

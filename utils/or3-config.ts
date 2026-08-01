@@ -48,6 +48,9 @@ export const DEFAULT_OR3_CONFIG: ResolvedOr3Config = {
         dashboard: {
             enabled: true,
         },
+        workspaceTabs: {
+            enabled: true,
+        },
     },
     limits: {
         maxFileSizeBytes: DEFAULT_MAX_FILE_SIZE_BYTES,
@@ -148,6 +151,16 @@ const or3ConfigSchema = z
                     .transform((val) => ({
                         enabled: val?.enabled ?? DEFAULT_OR3_CONFIG.features.dashboard.enabled,
                     })),
+                workspaceTabs: z
+                    .object({
+                        enabled: z.boolean().optional(),
+                    })
+                    .optional()
+                    .transform((val) => ({
+                        enabled:
+                            val?.enabled ??
+                            DEFAULT_OR3_CONFIG.features.workspaceTabs.enabled,
+                    })),
             })
             .optional()
             .transform((val) => ({
@@ -156,6 +169,9 @@ const or3ConfigSchema = z
                 backup: val?.backup ?? DEFAULT_OR3_CONFIG.features.backup,
                 mentions: val?.mentions ?? DEFAULT_OR3_CONFIG.features.mentions,
                 dashboard: val?.dashboard ?? DEFAULT_OR3_CONFIG.features.dashboard,
+                workspaceTabs:
+                    val?.workspaceTabs ??
+                    DEFAULT_OR3_CONFIG.features.workspaceTabs,
             })),
         limits: z
             .object({

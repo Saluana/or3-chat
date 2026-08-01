@@ -101,8 +101,13 @@ describe('installExtensionFromZip', () => {
                 engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
                 runtime: {
                     server: {
-                        entry: 'server.mjs',
-                        routes: [],
+                        routes: [
+                            {
+                                method: 'GET',
+                                path: 'health',
+                                handler: 'server.mjs',
+                            },
+                        ],
                     },
                 },
                 requestedGrants: [],
@@ -126,6 +131,43 @@ describe('installExtensionFromZip', () => {
             fs.access(join(EXTENSIONS_BASE_DIR, 'plugins', 'test-v2-package'))
         ).rejects.toMatchObject({ code: 'ENOENT' });
         await staged.cleanup();
+    });
+
+    it('rejects files outside a nested V2 package root', async () => {
+        const zip = makeZip({
+            'package/or3.manifest.json': JSON.stringify({
+                kind: 'plugin',
+                id: 'test-v2-package',
+                name: 'Test V2 Package',
+                version: '2.0.0',
+                capabilities: [],
+                manifestVersion: 2,
+                engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
+                runtime: {
+                    server: {
+                        routes: [
+                            { method: 'GET', path: 'health', handler: 'server.mjs' },
+                        ],
+                    },
+                },
+                requestedGrants: [],
+                features: { required: [], optional: [] },
+                dependencies: { required: [], optional: [] },
+                trust: 'trusted-host',
+                settings: { version: 1 },
+                stateCompatibility: {
+                    version: 1,
+                    reads: { minimum: 1, maximum: 1 },
+                    rollback: 'safe',
+                },
+            }),
+            'package/server.mjs': 'export default () => ({ ok: true });',
+            'unrelated.txt': 'must not be silently decompressed',
+        });
+
+        await expect(stageV2PluginPackageFromZip(zip)).rejects.toThrow(
+            'Archive contains files outside the package root'
+        );
     });
 
     it('rejects unsafe manifest ids', async () => {

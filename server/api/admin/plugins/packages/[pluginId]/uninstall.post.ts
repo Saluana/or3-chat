@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
     const context = await requireAdminApiContext(event, {
         ownerOnly: true,
         mutation: true,
-        allowWorkspaceAdmin: true,
+        superAdminOnly: true,
     });
     const pluginId = getRouterParam(event, 'pluginId');
     const body = BodySchema.safeParse(await readBody(event));

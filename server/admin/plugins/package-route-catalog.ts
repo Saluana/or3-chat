@@ -26,6 +26,11 @@ export type SelectedPackageRouteCatalog =
     | {
           readonly status: 'inactive';
           readonly pluginId: string;
+      }
+    | {
+          readonly status: 'blocked';
+          readonly pluginId: string;
+          readonly blockCode: 'package-pointer-unavailable' | 'package-manifest-invalid';
       };
 
 /**
@@ -45,20 +50,49 @@ export class PluginPackageRouteCatalog {
     }
 
     async readSelected(pluginId: string): Promise<SelectedPackageRouteCatalog> {
-        const selection = await this.pointers.readStartupSelection(pluginId);
+        let selection: Awaited<ReturnType<PluginPackagePointerStore['readStartupSelection']>>;
+        try {
+            selection = await this.pointers.readStartupSelection(pluginId);
+        } catch {
+            return Object.freeze({
+                status: 'blocked',
+                pluginId,
+                blockCode: 'package-pointer-unavailable',
+            });
+        }
+        if (selection.status === 'blocked') {
+            return Object.freeze({
+                status: 'blocked',
+                pluginId,
+                blockCode: 'package-pointer-unavailable',
+            });
+        }
         if (!selection.selected) {
             return Object.freeze({ status: 'inactive', pluginId });
         }
-        const packageRoot = this.packages.packagePath(
-            pluginId,
-            selection.selected.packageDigest
-        );
-        const raw = JSON.parse(
-            await fs.readFile(resolve(packageRoot, 'or3.manifest.json'), 'utf8')
-        ) as unknown;
-        const parsed = Or3ExtensionManifestV2Schema.safeParse(raw);
+        let parsed: ReturnType<typeof Or3ExtensionManifestV2Schema.safeParse>;
+        try {
+            const packageRoot = this.packages.packagePath(
+                pluginId,
+                selection.selected.packageDigest
+            );
+            const raw = JSON.parse(
+                await fs.readFile(resolve(packageRoot, 'or3.manifest.json'), 'utf8')
+            ) as unknown;
+            parsed = Or3ExtensionManifestV2Schema.safeParse(raw);
+        } catch {
+            return Object.freeze({
+                status: 'blocked',
+                pluginId,
+                blockCode: 'package-manifest-invalid',
+            });
+        }
         if (!parsed.success) {
-            return Object.freeze({ status: 'inactive', pluginId });
+            return Object.freeze({
+                status: 'blocked',
+                pluginId,
+                blockCode: 'package-manifest-invalid',
+            });
         }
         const routes = (parsed.data.runtime.server?.routes ?? []).map((route) =>
             Object.freeze({

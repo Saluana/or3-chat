@@ -39,19 +39,20 @@
                         Add or uninstall site-wide; activate per workspace.
                     </p>
                 </div>
-                <div class="flex flex-wrap items-center gap-2">
+                <div v-if="canManageSitePlugins" class="flex flex-wrap items-center gap-2">
                      <!-- Input hidden mostly, custom button triggers it -->
                     <input
                         ref="fileInput"
                         type="file"
                         accept=".zip"
                         class="hidden"
+                        :disabled="fileInstalling"
                         @change="installPlugin"
                     />
-                    <UButton size="sm" :disabled="!isOwner" @click="showUrlModal = true" icon="i-heroicons-link">
+                    <UButton size="sm" :disabled="urlInstalling || fileInstalling" @click="showUrlModal = true" icon="i-heroicons-link">
                         Add from URL
                     </UButton>
-                    <UButton size="sm"  :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
+                    <UButton size="sm" :disabled="fileInstalling || urlInstalling" :loading="fileInstalling" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
                         Add from .zip
                     </UButton>
                 </div>
@@ -114,7 +115,7 @@
                             size="sm"
                             color="error"
                             variant="ghost"
-                            :disabled="!isOwner"
+                            :disabled="!canManageSitePlugins"
                             @click="uninstallPlugin(plugin.id)"
                         >
                             Uninstall
@@ -202,6 +203,88 @@
             </div>
         </div>
 
+        <div
+            v-if="canManageSitePlugins && v2Packages.length > 0"
+            class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]"
+        >
+            <div class="mb-4">
+                <h3 class="text-lg font-medium">Managed V2 packages</h3>
+                <p class="text-xs opacity-70">
+                    Deployment-wide candidate, promotion, rollback, and removal controls. Activation remains per workspace.
+                </p>
+            </div>
+            <div class="space-y-3">
+                <div
+                    v-for="packagePlugin in v2Packages"
+                    :key="packagePlugin.pluginId"
+                    class="p-3 rounded border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)]"
+                >
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <div class="font-semibold">{{ packagePlugin.pluginId }}</div>
+                            <div class="mt-1 text-xs font-mono opacity-70">
+                                current: {{ packagePlugin.pointer?.current?.packageDigest ?? 'none' }}
+                            </div>
+                            <div v-if="packagePlugin.pointer?.candidate" class="text-xs font-mono opacity-70">
+                                candidate: {{ packagePlugin.pointer.candidate.packageDigest }}
+                            </div>
+                            <div v-if="packagePlugin.startup.issueCodes.length" class="mt-1 text-xs text-[var(--md-sys-color-error,#b91c1c)]">
+                                {{ packagePlugin.startup.issueCodes.join(', ') }}
+                            </div>
+                        </div>
+                        <UBadge :color="enabledSet.has(packagePlugin.pluginId) ? 'success' : 'neutral'" variant="subtle">
+                            {{ enabledSet.has(packagePlugin.pluginId) ? 'Active in workspace' : packagePlugin.startup.status }}
+                        </UBadge>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2 border-t border-[var(--md-outline-variant)]/50 pt-3">
+                        <UButton
+                            size="xs"
+                            :disabled="!packagePlugin.pointer?.candidate || v2ActionLoading[packagePlugin.pluginId]"
+                            :loading="v2ActionLoading[packagePlugin.pluginId]"
+                            @click="runV2Canary(packagePlugin.pluginId)"
+                        >
+                            Run canary
+                        </UButton>
+                        <UButton
+                            size="xs"
+                            color="primary"
+                            :disabled="!packagePlugin.pointer?.candidate || v2ActionLoading[packagePlugin.pluginId]"
+                            :loading="v2ActionLoading[packagePlugin.pluginId]"
+                            @click="promoteV2Candidate(packagePlugin.pluginId, packagePlugin.pointer?.candidate?.packageDigest)"
+                        >
+                            Promote
+                        </UButton>
+                        <UButton
+                            size="xs"
+                            :disabled="!packagePlugin.pointer?.previous || v2ActionLoading[packagePlugin.pluginId]"
+                            :loading="v2ActionLoading[packagePlugin.pluginId]"
+                            @click="rollbackV2Package(packagePlugin.pluginId)"
+                        >
+                            Roll back
+                        </UButton>
+                        <UButton
+                            size="xs"
+                            :color="enabledSet.has(packagePlugin.pluginId) ? 'neutral' : 'primary'"
+                            :disabled="!packagePlugin.pointer?.current || toggleLoading[packagePlugin.pluginId]"
+                            :loading="toggleLoading[packagePlugin.pluginId]"
+                            @click="togglePlugin(packagePlugin.pluginId)"
+                        >
+                            {{ enabledSet.has(packagePlugin.pluginId) ? 'Deactivate workspace' : 'Activate workspace' }}
+                        </UButton>
+                        <UButton
+                            size="xs"
+                            color="error"
+                            variant="ghost"
+                            :disabled="v2ActionLoading[packagePlugin.pluginId]"
+                            @click="uninstallV2Package(packagePlugin.pluginId)"
+                        >
+                            Uninstall package
+                        </UButton>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <details class="rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
             <summary class="cursor-pointer px-4 py-3 text-sm font-medium">
                 Advanced runtime diagnostics
@@ -217,6 +300,7 @@
 import { ADMIN_HEADERS, type ExtensionItem } from '~/composables/admin/useAdminExtensions';
 import { useAdminSession } from '~/composables/admin/useAdminData';
 import { useExtensionManagement } from '~/composables/admin/useExtensionManagement';
+import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
 import { requestWorkspacePluginReconcile } from '~/composables/plugins/bundled-v1-manager-runtime';
 import {
@@ -234,6 +318,22 @@ definePageMeta({
     middleware: ['admin-auth'],
 });
 
+type ManagedV2Package = {
+    pluginId: string;
+    pointer: {
+        current: { packageDigest: string } | null;
+        candidate: { packageDigest: string } | null;
+        previous: { packageDigest: string } | null;
+    } | null;
+    workspaceEnabled: boolean;
+    startup: {
+        status: string;
+        selectedSlot: string | null;
+        selectedDigest: string | null;
+        issueCodes: string[];
+    };
+};
+
 const { selectedWorkspaceId, showWorkspaceSelector, onWorkspaceSelected } =
     useAdminWorkspaceGate(async () => {
         await refreshPage();
@@ -247,9 +347,11 @@ const {
 } = useFetch<{
     plugins: ExtensionItem[];
     role?: string;
+    canManageSitePlugins: boolean;
     workspaceId: string;
     workspaceName?: string;
     enabledPlugins: string[];
+    packagePlugins: ManagedV2Package[];
 }>('/api/admin/plugins-page', {
     query: computed(() => ({
         workspaceId: selectedWorkspaceId.value || undefined,
@@ -260,22 +362,27 @@ const {
     dedupe: 'defer',
 });
 const isOwner = computed(() => pageData.value?.role === 'owner');
+const canManageSitePlugins = computed(() => pageData.value?.canManageSitePlugins === true);
 const { selectedWorkspace } = useAdminWorkspaceContext();
 const workspaceContextName = computed(
     () => selectedWorkspace.value?.name || pageData.value?.workspaceName
 );
 
 // 4. Extension Management
-const { fileInput, triggerFileInput, install, installFromUrl, uninstall } = useExtensionManagement(isOwner);
+const { fileInput, triggerFileInput, install, installFromUrl, uninstall } = useExtensionManagement(
+    canManageSitePlugins
+);
 const runtimeConfig = useRuntimeConfig();
 
 // URL import state
 const showUrlModal = ref(false);
 const urlInstalling = ref(false);
+const fileInstalling = ref(false);
 const toast = useToast();
 const rebuildRequired = ref(false);
 
 async function installPluginFromUrl(url: string) {
+    if (!canManageSitePlugins.value) return;
     urlInstalling.value = true;
     try {
         const installed = await installFromUrl(
@@ -318,6 +425,7 @@ const pending = computed(() => status.value === 'pending');
 const plugins = computed(
     () => pageData.value?.plugins ?? []
 );
+const v2Packages = computed(() => pageData.value?.packagePlugins ?? []);
 
 const enabledSet = ref<Set<string>>(new Set());
 const settingsByPlugin = reactive<Record<string, string>>({});
@@ -328,6 +436,8 @@ const accessByPlugin = reactive<
     >
 >({});
 const toggleLoading = reactive<Record<string, boolean>>({});
+const v2ActionLoading = reactive<Record<string, boolean>>({});
+const { confirm } = useConfirmDialog();
 
 function getAccessEditor(pluginId: string) {
     if (!accessByPlugin[pluginId]) {
@@ -385,31 +495,105 @@ async function togglePlugin(pluginId: string) {
 }
 
 async function installPlugin() {
-    const installed = await install(
-        'plugin',
-        refresh,
-        selectedWorkspaceId.value || undefined
-    );
-    if (!installed) return;
-    if ('kind' in installed && installed.kind === 'v2-candidate') {
+    if (!canManageSitePlugins.value || fileInstalling.value) return;
+    fileInstalling.value = true;
+    try {
+        const installed = await install(
+            'plugin',
+            refresh,
+            selectedWorkspaceId.value || undefined
+        );
+        if (!installed) return;
+        if ('kind' in installed && installed.kind === 'v2-candidate') {
+            toast.add({
+                title: 'V2 candidate prepared',
+                description: `Digest ${installed.packageDigest} is inactive. Run its canary, promote it, then activate it for this workspace.`,
+                color: 'info',
+            });
+            return;
+        }
+        rebuildRequired.value = true;
         toast.add({
-            title: 'V2 candidate prepared',
-            description: `Digest ${installed.packageDigest} is inactive. Run its canary, promote it, then activate it for this workspace.`,
+            title: 'Plugin installed',
+            description:
+                'The plugin has been installed. Rebuild + Restart is required before new client runtime modules can load in production.',
             color: 'info',
         });
-        return;
+    } catch (error: unknown) {
+        const message = parseErrorMessage(error, 'Failed to install plugin');
+        toast.add({ title: 'Error', description: message, color: 'error' });
+    } finally {
+        fileInstalling.value = false;
+        if (fileInput.value) fileInput.value.value = '';
     }
-    rebuildRequired.value = true;
-    toast.add({
-        title: 'Plugin installed',
-        description:
-            'The plugin has been installed. Rebuild + Restart is required before new client runtime modules can load in production.',
-        color: 'info',
-    });
 }
 
 async function uninstallPlugin(pluginId: string) {
+    if (!canManageSitePlugins.value) return;
     await uninstall(pluginId, 'plugin', refresh);
+}
+
+async function runV2PackageAction(
+    pluginId: string,
+    action: 'canary' | 'promote' | 'rollback' | 'uninstall',
+    body: Record<string, unknown> = {}
+) {
+    if (!canManageSitePlugins.value || v2ActionLoading[pluginId]) return;
+    v2ActionLoading[pluginId] = true;
+    try {
+        const result = await $fetch<{ ok: boolean; code?: string }>(
+            `/api/admin/plugins/packages/${encodeURIComponent(pluginId)}/${action}`,
+            {
+                method: 'POST',
+                body: {
+                    workspaceId: selectedWorkspaceId.value,
+                    ...body,
+                },
+                headers: ADMIN_HEADERS,
+            }
+        );
+        if (!result.ok) {
+            throw new Error(result.code ?? `V2 package ${action} was blocked`);
+        }
+        await refresh();
+        requestWorkspacePluginReconcile('manifest-revision-change');
+        toast.add({
+            title: `V2 package ${action} complete`,
+            color: 'success',
+        });
+    } catch (error: unknown) {
+        toast.add({
+            title: 'V2 package action failed',
+            description: parseErrorMessage(error, `Failed to ${action} V2 package`),
+            color: 'error',
+        });
+    } finally {
+        v2ActionLoading[pluginId] = false;
+    }
+}
+
+async function runV2Canary(pluginId: string) {
+    await runV2PackageAction(pluginId, 'canary');
+}
+
+async function promoteV2Candidate(pluginId: string, candidateDigest?: string) {
+    if (!candidateDigest) return;
+    await runV2PackageAction(pluginId, 'promote', { candidateDigest });
+}
+
+async function rollbackV2Package(pluginId: string) {
+    await runV2PackageAction(pluginId, 'rollback');
+}
+
+async function uninstallV2Package(pluginId: string) {
+    const confirmed = await confirm({
+        title: 'Uninstall V2 package',
+        message: `Remove the global V2 package pointer for "${pluginId}"? Package bytes and workspace data are retained.`,
+        danger: true,
+        confirmText: 'Uninstall package',
+    });
+    if (!confirmed) return;
+    await runV2PackageAction(pluginId, 'uninstall');
 }
 
 async function loadSettings(pluginId: string) {

@@ -40,6 +40,68 @@ describe('createPaletteHostContext', () => {
         expect(setPaneThread).toHaveBeenCalledWith(1, 't2');
     });
 
+    it('routes resource results through the workspace tab host when supplied', async () => {
+        const openWorkspaceResource = vi.fn(async () => 'tab-1');
+        const host = createPaletteHostContext({
+            openWorkspaceResource,
+            getMultiPaneApi: () => undefined,
+            getDashboardNavigation: () => ({
+                openPlugin: vi.fn(),
+                openPage: vi.fn(),
+            }),
+        });
+
+        await expect(host.openChat('chat-1', 'active')).resolves.toEqual({ ok: true });
+        await expect(host.openDocument('doc-1', 'new-pane')).resolves.toEqual({ ok: true });
+        await expect(
+            host.openPaneApp('example:app', 'record-1', 'active')
+        ).resolves.toEqual({ ok: true });
+        expect(openWorkspaceResource).toHaveBeenNthCalledWith(
+            1,
+            { kind: 'chat', threadId: 'chat-1' },
+            { target: 'active' }
+        );
+        expect(openWorkspaceResource).toHaveBeenNthCalledWith(
+            2,
+            { kind: 'document', documentId: 'doc-1' },
+            { target: 'split' }
+        );
+        expect(openWorkspaceResource).toHaveBeenNthCalledWith(
+            3,
+            {
+                kind: 'app',
+                appId: 'example:app',
+                recordId: 'record-1',
+                instanceKey: undefined,
+            },
+            { target: 'active' }
+        );
+    });
+
+    it('gives record-less pane apps a valid tab instance identity', async () => {
+        const openWorkspaceResource = vi.fn(async () => 'tab-app');
+        const host = createPaletteHostContext({
+            openWorkspaceResource,
+            getMultiPaneApi: () => undefined,
+            getDashboardNavigation: () => ({
+                openPlugin: vi.fn(),
+                openPage: vi.fn(),
+            }),
+        });
+
+        await expect(
+            host.openPaneApp('example:app', undefined, 'active')
+        ).resolves.toEqual({ ok: true });
+        expect(openWorkspaceResource).toHaveBeenCalledWith(
+            expect.objectContaining({
+                kind: 'app',
+                appId: 'example:app',
+                instanceKey: expect.any(String),
+            }),
+            { target: 'active' }
+        );
+    });
+
     it('reveals projects and selects images via pending state', async () => {
         __resetPaletteProjectRevealForTests();
         __resetPaletteImageSelectionForTests();

@@ -47,10 +47,10 @@ features: {
 }
 ```
 
-- [ ] Add typed config and default.
-- [ ] Keep the legacy top chrome available while development is incomplete.
-- [ ] Add a clear removal milestone: one stable release after default enablement.
-- [ ] Do not fork chat/document business logic between flag paths.
+- [x] Add typed config and default.
+- [x] Keep the legacy top chrome available while development is incomplete.
+- [x] Add a clear removal milestone: one stable release after default enablement.
+- [x] Do not fork chat/document business logic between flag paths.
 
 **Acceptance**
 
@@ -59,11 +59,11 @@ features: {
 
 ### 0.3 Lock vocabulary — P0
 
-- [ ] Use `tab` for an open resource.
-- [ ] Use `pane` or `split` for a visible viewport.
-- [ ] Change the existing “New window” tooltip to “New split” when tabs are enabled.
-- [ ] Label the tab-strip plus button “New tab.”
-- [ ] Add terminology to developer documentation.
+- [x] Use `tab` for an open resource.
+- [x] Use `pane` or `split` for a visible viewport.
+- [x] Change the existing “New window” tooltip to “New split” when tabs are enabled.
+- [x] Label the tab-strip plus button “New tab.”
+- [x] Add terminology to developer documentation.
 
 ---
 
@@ -77,14 +77,14 @@ Add:
 app/core/workspace-tabs/types.ts
 ```
 
-- [ ] Define `WorkspaceResource`.
-- [ ] Define `WorkspaceTab`.
-- [ ] Define `WorkspaceTabRuntime`.
-- [ ] Define `WorkspaceTabsState`.
-- [ ] Define `ClosedTabSnapshot`.
-- [ ] Define `WorkspaceTabsSnapshotV1`.
-- [ ] Keep messages, document content, and large editor state out of these types.
-- [ ] Document which fields are persistent and transient.
+- [x] Define `WorkspaceResource`.
+- [x] Define `WorkspaceTab`.
+- [x] Define `WorkspaceTabRuntime`.
+- [x] Define `WorkspaceTabsState`.
+- [x] Define `ClosedTabSnapshot`.
+- [x] Define `WorkspaceTabsSnapshotV1`.
+- [x] Keep messages, document content, and large editor state out of these types.
+- [x] Document which fields are persistent and transient.
 
 ### 1.2 Add canonical resource keys — P0
 
@@ -94,16 +94,16 @@ Add:
 app/core/workspace-tabs/resource-key.ts
 ```
 
-- [ ] Implement keys for chat, document, app record, app instance, and blank chat.
-- [ ] Add `allowDuplicate` support through instance keys.
-- [ ] Make a blank-chat key stable by tab ID.
-- [ ] Add tests for malformed IDs and missing app record IDs.
+- [x] Implement keys for chat, document, app record, app instance, and blank chat.
+- [x] Add `allowDuplicate` support through instance keys.
+- [x] Make a blank-chat key stable by tab ID.
+- [x] Add tests for malformed IDs and missing app record IDs.
 
 **Acceptance**
 
-- [ ] Sidebar opening the same chat twice focuses one tab by default.
-- [ ] Explicit duplicate requests remain possible.
-- [ ] Blank chat promotion does not change the tab ID.
+- [x] Sidebar opening the same chat twice focuses one tab by default.
+- [x] Explicit duplicate requests remain possible.
+- [x] Blank chat promotion does not change the tab ID.
 
 ### 1.3 Implement pure transitions — P0
 
@@ -115,57 +115,57 @@ app/composables/core/workspace-tab-transitions.ts
 
 Implement pure, deterministic operations:
 
-- [ ] `createInitialState()`
-- [ ] `openTab()`
-- [ ] `activateTab()`
-- [ ] `bindTabToPane()`
-- [ ] `unbindPane()`
-- [ ] `closeTab()`
-- [ ] `closeSplit()`
-- [ ] `reorderTab()`
-- [ ] `promoteBlankChat()`
-- [ ] `markResourceDeleted()`
-- [ ] `restoreSnapshot()`
-- [ ] `reconcilePaneResource()`
+- [x] `createInitialState()`
+- [x] `openTab()`
+- [x] `activateTab()`
+- [x] `bindTabToPane()`
+- [x] `unbindPane()`
+- [x] `closeTab()`
+- [x] `closeSplit()`
+- [x] `reorderTab()`
+- [x] `promoteBlankChat()`
+- [x] `markResourceDeleted()`
+- [x] `restoreSnapshot()`
+- [x] `reconcilePaneResource()`
 
 Enforce invariants after every development/test transition:
 
-- [ ] Unique tab IDs.
-- [ ] Valid active tab.
-- [ ] Valid pane bindings.
-- [ ] One pane per tab.
-- [ ] One tab per pane.
-- [ ] Workspace never empty.
-- [ ] Active tab matches active pane binding.
+- [x] Unique tab IDs.
+- [x] Valid active tab.
+- [x] Valid pane bindings.
+- [x] One pane per tab.
+- [x] One tab per pane.
+- [x] Workspace never empty.
+- [x] Active tab matches active pane binding.
 
 **Acceptance**
 
-- [ ] Transition tests do not require Vue or IndexedDB.
-- [ ] Invalid input produces a safe fallback rather than a half-valid state.
+- [x] Transition tests do not require Vue or IndexedDB.
+- [x] Invalid input produces a safe fallback rather than a half-valid state.
 
 ### 1.4 Unit-test the state machine — P0
 
 Create focused tests for:
 
-- [ ] Initial blank tab.
-- [ ] Untouched blank reuse.
-- [ ] Open new resource after active tab.
-- [ ] Dedupe existing resource.
-- [ ] Explicit duplicate.
-- [ ] Activate hidden tab.
-- [ ] Activate tab visible in another pane.
-- [ ] Close hidden tab.
-- [ ] Close visible tab and use hidden replacement.
-- [ ] Close visible tab and collapse extra pane.
-- [ ] Close last tab and create blank fallback.
-- [ ] Close split while preserving tab.
-- [ ] Reorder tabs.
-- [ ] Promote blank chat.
-- [ ] Delete active resource.
-- [ ] Delete hidden resource.
-- [ ] Restore invalid snapshot.
-- [ ] Restore with a lower pane limit.
-- [ ] Mobile restore with one visible pane.
+- [x] Initial blank tab.
+- [x] Untouched blank reuse.
+- [x] Open new resource after active tab.
+- [x] Dedupe existing resource.
+- [x] Explicit duplicate.
+- [x] Activate hidden tab.
+- [x] Activate tab visible in another pane.
+- [x] Close hidden tab.
+- [x] Close visible tab and use hidden replacement.
+- [x] Close visible tab and collapse extra pane.
+- [x] Close last tab and create blank fallback.
+- [x] Close split while preserving tab.
+- [x] Reorder tabs.
+- [x] Promote blank chat.
+- [x] Delete active resource.
+- [x] Delete hidden resource.
+- [x] Restore invalid snapshot.
+- [x] Restore with a lower pane limit.
+- [x] Mobile restore with one visible pane.
 
 ---
 
@@ -179,14 +179,14 @@ Add:
 app/core/workspace-tabs/snapshot-schema.ts
 ```
 
-- [ ] Validate with the project’s existing schema approach.
-- [ ] Set `schemaVersion: 1`.
-- [ ] Clamp string lengths and array sizes.
-- [ ] Reject duplicate tab IDs.
-- [ ] Reject pane bindings to missing tabs.
-- [ ] Ignore unknown fields.
-- [ ] Safely ignore unsupported future versions.
-- [ ] Add migration entry point even though v1 has no migration yet.
+- [x] Validate with the project’s existing schema approach.
+- [x] Set `schemaVersion: 1`.
+- [x] Clamp string lengths and array sizes.
+- [x] Reject duplicate tab IDs.
+- [x] Reject pane bindings to missing tabs.
+- [x] Ignore unknown fields.
+- [x] Safely ignore unsupported future versions.
+- [x] Add migration entry point even though v1 has no migration yet.
 
 ### 2.2 Add local persistence — P0
 
@@ -196,20 +196,20 @@ Add:
 app/composables/core/useWorkspaceTabPersistence.ts
 ```
 
-- [ ] Scope the key by workspace/local deployment and profile ID.
-- [ ] Persist:
-  - [ ] Ordered tab descriptors.
-  - [ ] Cached titles.
-  - [ ] Active tab.
-  - [ ] Visible tab IDs in pane order.
-  - [ ] Active visible index.
-- [ ] Do not persist runtime pane UUIDs.
-- [ ] Debounce writes.
-- [ ] Flush on `pagehide`.
-- [ ] Restore before opening non-route background tabs.
-- [ ] Make the direct route override stored active state.
-- [ ] Drop deleted/inaccessible resources.
-- [ ] Keep pane widths in the existing storage path.
+- [x] Scope the key by workspace/local deployment and profile ID.
+- [x] Persist:
+  - [x] Ordered tab descriptors.
+  - [x] Cached titles.
+  - [x] Active tab.
+  - [x] Visible tab IDs in pane order.
+  - [x] Active visible index.
+- [x] Do not persist runtime pane UUIDs.
+- [x] Debounce writes.
+- [x] Flush on `pagehide`.
+- [x] Restore before opening non-route background tabs.
+- [x] Make the direct route override stored active state.
+- [x] Drop deleted/inaccessible resources.
+- [x] Keep pane widths in the existing storage path.
 
 **Acceptance**
 
@@ -225,25 +225,25 @@ Add:
 app/composables/core/useWorkspaceTabMetadata.ts
 ```
 
-- [ ] Batch-load thread titles.
-- [ ] Batch-load document titles.
-- [ ] Use custom pane-app label/icon.
-- [ ] Use cached title for immediate paint.
-- [ ] Listen to existing DB update/delete hooks or a small number of live queries.
-- [ ] Update title after chat title generation.
-- [ ] Avoid one live query per tab.
-- [ ] Provide full title separately from truncated display title.
-- [ ] Add fallback titles.
+- [x] Batch-load thread titles.
+- [x] Batch-load document titles.
+- [x] Use custom pane-app label/icon.
+- [x] Use cached title for immediate paint.
+- [x] Listen to existing DB update/delete hooks or a small number of live queries.
+- [x] Update title after chat title generation.
+- [x] Avoid one live query per tab.
+- [x] Provide full title separately from truncated display title.
+- [x] Add fallback titles.
 
 ### 2.4 Add runtime status metadata — P1
 
-- [ ] Track chat loading/streaming.
+- [x] Track chat loading/streaming.
 - [ ] Track hidden completion/attention.
-- [ ] Track document saving.
-- [ ] Track document save errors.
-- [ ] Clear attention on activation.
-- [ ] Include status in accessible label.
-- [ ] Ensure status updates do not rebuild all pane components.
+- [x] Track document saving.
+- [x] Track document save errors.
+- [x] Clear attention on activation.
+- [x] Include status in accessible label.
+- [x] Ensure status updates do not rebuild all pane components.
 
 ---
 
@@ -259,21 +259,21 @@ app/composables/core/useWorkspaceTabs.ts
 
 Responsibilities:
 
-- [ ] Own reactive tab state.
-- [ ] Call pure transitions.
-- [ ] Coordinate persistence.
-- [ ] Expose:
-  - [ ] `openResource`
-  - [ ] `newTab`
-  - [ ] `activateTab`
-  - [ ] `closeTab`
-  - [ ] `reopenClosedTab`
-  - [ ] `reorderTab`
-  - [ ] `newSplit`
-  - [ ] `closeSplit`
-  - [ ] `openInSplit`
-- [ ] Do not load messages or flush documents directly.
-- [ ] Delegate pane work to the host adapter.
+- [x] Own reactive tab state.
+- [x] Call pure transitions.
+- [x] Coordinate persistence.
+- [x] Expose:
+  - [x] `openResource`
+  - [x] `newTab`
+  - [x] `activateTab`
+  - [x] `closeTab`
+  - [x] `reopenClosedTab`
+  - [x] `reorderTab`
+  - [x] `newSplit`
+  - [x] `closeSplit`
+  - [x] `openInSplit`
+- [x] Do not load messages or flush documents directly.
+- [x] Delegate pane work to the host adapter.
 
 ### 3.2 Create the tab host adapter — P0
 
@@ -283,24 +283,24 @@ Add:
 app/composables/core/useWorkspaceTabHost.ts
 ```
 
-- [ ] Map runtime pane IDs to indexes safely.
-- [ ] Focus an existing pane.
-- [ ] Add a pane through `useMultiPane`.
-- [ ] Close a pane through `useMultiPane`.
-- [ ] Bind chat resource.
-- [ ] Bind document resource.
-- [ ] Bind custom pane app.
-- [ ] Capture outgoing view state.
-- [ ] Update the URL after successful/optimistic binding.
-- [ ] Return structured errors for toast/reporting.
+- [x] Map runtime pane IDs to indexes safely.
+- [x] Focus an existing pane.
+- [x] Add a pane through `useMultiPane`.
+- [x] Close a pane through `useMultiPane`.
+- [x] Bind chat resource.
+- [x] Bind document resource.
+- [x] Bind custom pane app.
+- [x] Capture outgoing view state.
+- [x] Update the URL after successful/optimistic binding.
+- [x] Return structured errors for toast/reporting.
 
 ### 3.3 Add per-pane activation generations — P0
 
-- [ ] Maintain a generation counter by pane ID.
-- [ ] Increment before each activation.
-- [ ] Check after every awaited operation.
-- [ ] Ignore late chat load, document flush, and app initialization.
-- [ ] Add rapid-switch tests with deliberately delayed promises.
+- [x] Maintain a generation counter by pane ID.
+- [x] Increment before each activation.
+- [x] Check after every awaited operation.
+- [x] Ignore late chat load, document flush, and app initialization.
+- [x] Add rapid-switch tests with deliberately delayed promises.
 
 **Acceptance**
 
@@ -312,30 +312,30 @@ app/composables/core/useWorkspaceTabHost.ts
 
 The existing public API can remain index-based, but tab orchestration should use stable IDs.
 
-- [ ] Add internal helpers to find pane index by pane ID.
-- [ ] Add `activePaneId` computed value or equivalent.
-- [ ] Avoid storing pane indexes in persisted tab state.
-- [ ] Test index shifts after closing a pane to the left of the active pane.
+- [x] Add internal helpers to find pane index by pane ID.
+- [x] Add `activePaneId` computed value or equivalent.
+- [x] Avoid storing pane indexes in persisted tab state.
+- [x] Test index shifts after closing a pane to the left of the active pane.
 
 ### 3.5 Integrate workspace-profile initial panes — P0
 
-- [ ] Convert initial pane descriptors into tabs.
-- [ ] Bind as many as the desktop pane limit allows.
-- [ ] On mobile, create all tabs but bind one.
-- [ ] Preserve route-initialized resource priority.
-- [ ] Lowering the pane limit closes splits but not tabs.
-- [ ] Raising the limit does not create surprise splits.
+- [x] Convert initial pane descriptors into tabs.
+- [x] Bind as many as the desktop pane limit allows.
+- [x] On mobile, create all tabs but bind one.
+- [x] Preserve route-initialized resource priority.
+- [x] Lowering the pane limit closes splits but not tabs.
+- [x] Raising the limit does not create surprise splits.
 
 ### 3.6 Reconcile direct plugin pane mutations — P0
 
-- [ ] Watch pane resource identity.
-- [ ] Detect changes that did not originate from the tab layer.
-- [ ] Find/create the matching tab.
-- [ ] Bind it to that pane.
-- [ ] Allow duplicate instance when a plugin explicitly places the same resource in two panes.
-- [ ] Preserve existing pane hooks.
-- [ ] Add development diagnostics.
-- [ ] Add custom pane-app compatibility tests.
+- [x] Watch pane resource identity.
+- [x] Detect changes that did not originate from the tab layer.
+- [x] Find/create the matching tab.
+- [x] Bind it to that pane.
+- [x] Allow duplicate instance when a plugin explicitly places the same resource in two panes.
+- [x] Preserve existing pane hooks.
+- [x] Add development diagnostics.
+- [x] Add custom pane-app compatibility tests.
 
 ---
 
@@ -352,10 +352,10 @@ ChatInputDropper.vue
 DocumentEditor.vue
 ```
 
-- [ ] Add `tabId` or `viewStateKey` prop.
-- [ ] Keep existing `paneId` for pane/plugin APIs.
-- [ ] Do not substitute tab ID for pane ID in existing bridges.
-- [ ] Document the distinction.
+- [x] Add `tabId` or `viewStateKey` prop.
+- [x] Keep existing `paneId` for pane/plugin APIs.
+- [x] Do not substitute tab ID for pane ID in existing bridges.
+- [x] Document the distinction.
 
 ### 4.2 Add tab-keyed chat drafts — P0
 
@@ -367,22 +367,22 @@ app/composables/core/useWorkspaceTabDrafts.ts
 
 Capture:
 
-- [ ] Plain composer text.
-- [ ] TipTap JSON.
-- [ ] Pending prompt ID.
-- [ ] Safe attachment state that can remain in memory.
-- [ ] Relevant composer settings that are currently pane-local.
+- [x] Plain composer text.
+- [x] TipTap JSON.
+- [x] Pending prompt ID.
+- [x] Safe attachment state that can remain in memory.
+- [x] Relevant composer settings that are currently pane-local.
 
 Integrate:
 
-- [ ] Restore on tab activation.
-- [ ] Capture on deactivation.
-- [ ] Capture on component unmount.
-- [ ] Debounce live changes.
-- [ ] Clear only after durable send acceptance.
-- [ ] Transfer state when blank tab becomes a real thread.
-- [ ] Preserve state through Undo close.
-- [ ] Release blob URLs when the draft is permanently discarded.
+- [x] Restore on tab activation.
+- [x] Capture on deactivation.
+- [x] Capture on component unmount.
+- [x] Debounce live changes.
+- [x] Clear only after durable send acceptance.
+- [x] Transfer state when blank tab becomes a real thread.
+- [x] Preserve state through Undo close.
+- [x] Release blob URLs when the draft is permanently discarded.
 
 **Acceptance**
 
@@ -394,37 +394,37 @@ Integrate:
 
 ### 4.3 Add chat scroll capture/restore — P0
 
-- [ ] Add a public capture API to `ChatContainer`/`Or3Scroll`.
-- [ ] Store bottom-pinned state.
-- [ ] Store anchor message ID and offset.
-- [ ] Store fallback absolute offset.
-- [ ] Restore after content-key/thread switch.
-- [ ] Handle prepended history.
-- [ ] Handle streaming message growth.
-- [ ] Do not force bottom when the user had scrolled up.
+- [x] Add a public capture API to `ChatContainer`/`Or3Scroll`.
+- [x] Store bottom-pinned state.
+- [x] Store anchor message ID and offset.
+- [x] Store fallback absolute offset.
+- [x] Restore after content-key/thread switch.
+- [x] Handle prepended history.
+- [x] Handle streaming message growth.
+- [x] Do not force bottom when the user had scrolled up.
 
 ### 4.4 Harden document switching — P0
 
-- [ ] Capture active editor before unbinding.
-- [ ] Flush local document state.
-- [ ] Do not block visual activation longer than necessary.
+- [x] Capture active editor before unbinding.
+- [x] Flush local document state.
+- [x] Do not block visual activation longer than necessary.
 - [ ] On close-tab flush failure:
-  - [ ] Keep the tab open.
-  - [ ] Mark error.
-  - [ ] Show actionable toast.
+  - [x] Keep the tab open.
+  - [x] Mark error.
+  - [x] Show actionable toast.
 - [ ] On ordinary switch flush failure:
-  - [ ] Preserve captured local state.
-  - [ ] Mark error.
-  - [ ] Avoid data loss.
-- [ ] Test slow and rejected flushes.
+  - [x] Preserve captured local state.
+  - [x] Mark error.
+  - [x] Avoid data loss.
+- [x] Test slow and rejected flushes.
 
 ### 4.5 Add document view-state adapter — P1
 
-- [ ] Capture scroll position.
-- [ ] Capture selection/caret when technically stable.
-- [ ] Restore only after editor readiness.
-- [ ] Do not persist editor internals in the tab manifest.
-- [ ] Add regression tests for switching two documents repeatedly.
+- [x] Capture scroll position.
+- [x] Capture selection/caret when technically stable.
+- [x] Restore only after editor readiness.
+- [x] Do not persist editor internals in the tab manifest.
+- [x] Add regression tests for switching two documents repeatedly.
 
 ### 4.6 Verify background AI lifecycle — P0
 
@@ -454,19 +454,19 @@ WorkspaceChrome
   WorkspaceChromeActions
 ```
 
-- [ ] Keep `PageShell` responsible for orchestration only.
-- [ ] Move sidebar-toggle rendering into the chrome component.
-- [ ] Move theme, notifications, split, and header actions.
-- [ ] Keep handlers passed as explicit props/events.
-- [ ] Add stable test IDs.
-- [ ] Do not move business data into the component.
+- [x] Keep `PageShell` responsible for orchestration only.
+- [x] Move sidebar-toggle rendering into the chrome component.
+- [x] Move theme, notifications, split, and header actions.
+- [x] Keep handlers passed as explicit props/events.
+- [x] Add stable test IDs.
+- [x] Do not move business data into the component.
 
 ### 5.2 Replace hard-coded top offsets — P0
 
-- [ ] Introduce `--or3-workspace-chrome-height`.
-- [ ] Align with the measured sidebar header height where practical.
-- [ ] Replace `46px` padding/clearance duplication.
-- [ ] Keep a safe fallback token.
+- [x] Introduce `--or3-workspace-chrome-height`.
+- [x] Align with the measured sidebar header height where practical.
+- [x] Replace `46px` padding/clearance duplication.
+- [x] Keep a safe fallback token.
 - [ ] Test expanded and collapsed sidebar.
 - [ ] Test sidebar resizing during tab overflow.
 - [ ] Verify no first-paint layout jump.
@@ -480,53 +480,53 @@ WorkspaceTabBar.vue
 WorkspaceTab.vue
 ```
 
-- [ ] One row only.
-- [ ] Visual tab height <= 32px.
-- [ ] `min-width: 96px`.
-- [ ] Preferred width around 168px.
-- [ ] Maximum width around 220px.
-- [ ] Ellipsis long titles.
-- [ ] Full-title tooltip.
-- [ ] Type icon.
-- [ ] Status indicator.
-- [ ] Reserved close-button geometry.
-- [ ] Active style.
-- [ ] Secondary visible-in-split style.
-- [ ] Hover style.
-- [ ] Focus-visible style.
-- [ ] New-tab button at end.
-- [ ] Horizontal overflow.
-- [ ] Leading/trailing fades.
-- [ ] Active auto-reveal.
-- [ ] Reduced-motion support.
+- [x] One row only.
+- [x] Visual tab height <= 32px.
+- [x] `min-width: 96px`.
+- [x] Preferred width around 168px.
+- [x] Maximum width around 220px.
+- [x] Ellipsis long titles.
+- [x] Full-title tooltip.
+- [x] Type icon.
+- [x] Status indicator.
+- [x] Reserved close-button geometry.
+- [x] Active style.
+- [x] Secondary visible-in-split style.
+- [x] Hover style.
+- [x] Focus-visible style.
+- [x] New-tab button at end.
+- [x] Horizontal overflow.
+- [x] Leading/trailing fades.
+- [x] Active auto-reveal.
+- [x] Reduced-motion support.
 
 ### 5.4 Build the right-side action cluster — P0
 
 Order:
 
-- [ ] New split.
-- [ ] Close active split when applicable or place it in split menu.
-- [ ] Theme toggle.
-- [ ] Notifications.
-- [ ] Compact plugin actions.
-- [ ] More overflow.
+- [x] New split.
+- [x] Close active split when applicable or place it in split menu.
+- [x] Theme toggle.
+- [x] Notifications.
+- [x] Compact plugin actions.
+- [x] More overflow.
 
 Rules:
 
-- [ ] Fixed right side.
-- [ ] Never overlaps tabs.
-- [ ] Never shrinks below target size.
-- [ ] Disabled split state keeps existing tooltip.
-- [ ] Mobile hides split controls.
-- [ ] Labelled plugin actions default to overflow.
-- [ ] Existing header-action handler/error behavior remains.
+- [x] Fixed right side.
+- [x] Never overlaps tabs.
+- [x] Never shrinks below target size.
+- [x] Disabled split state keeps existing tooltip.
+- [x] Mobile hides split controls.
+- [x] Labelled plugin actions default to overflow.
+- [x] Existing header-action handler/error behavior remains.
 
 ### 5.5 Remove pane close overlay — P1
 
-- [ ] Move active split closure to the right action cluster/menu.
-- [ ] Remove the current top-right pane overlay.
-- [ ] Keep a clear visible indication of the focused split.
-- [ ] Ensure users can close a split by keyboard and screen reader.
+- [x] Move active split closure to the right action cluster/menu.
+- [x] Remove the current top-right pane overlay.
+- [x] Keep a clear visible indication of the focused split.
+- [x] Ensure users can close a split by keyboard and screen reader.
 
 ---
 
@@ -534,26 +534,26 @@ Rules:
 
 ### 6.1 Implement compact two-row layout — P0
 
-- [ ] Top app row around 48px.
-- [ ] Tab row no more than 40px.
-- [ ] Visual tabs remain 32px.
-- [ ] Menu and brand on left.
-- [ ] Core actions on right.
-- [ ] Tabs horizontally scroll.
-- [ ] New-tab button remains reachable.
-- [ ] Split controls hidden.
-- [ ] Respect safe-area top inset.
-- [ ] Avoid extra whitespace between rows.
+- [x] Top app row around 48px.
+- [x] Tab row no more than 40px.
+- [x] Visual tabs remain 32px.
+- [x] Menu and brand on left.
+- [x] Core actions on right.
+- [x] Tabs horizontally scroll.
+- [x] New-tab button remains reachable.
+- [x] Split controls hidden.
+- [x] Respect safe-area top inset.
+- [x] Avoid extra whitespace between rows.
 
 ### 6.2 Touch behavior — P0
 
-- [ ] Set appropriate `touch-action`.
-- [ ] Ordinary horizontal swipe scrolls.
-- [ ] Vertical page/content gestures remain unaffected.
-- [ ] Close button does not accidentally activate the tab.
-- [ ] Tap activation is immediate.
-- [ ] No 300ms-style delayed interaction.
-- [ ] Do not implement direct mobile drag reorder yet.
+- [x] Set appropriate `touch-action`.
+- [x] Ordinary horizontal swipe scrolls.
+- [x] Vertical page/content gestures remain unaffected.
+- [x] Close button does not accidentally activate the tab.
+- [x] Tap activation is immediate.
+- [x] No 300ms-style delayed interaction.
+- [x] Do not implement direct mobile drag reorder yet.
 
 ### 6.3 Mobile viewport tests — P0
 
@@ -581,38 +581,38 @@ Verify:
 
 ### 7.1 Implement tab semantics — P0
 
-- [ ] `role="tablist"`.
-- [ ] `role="tab"`.
-- [ ] `aria-selected`.
-- [ ] `aria-controls`.
-- [ ] Roving tabindex.
-- [ ] Focused content `role="tabpanel"`.
-- [ ] Labelled secondary split regions.
-- [ ] Accessible close labels.
-- [ ] Status in accessible names/descriptions.
+- [x] `role="tablist"`.
+- [x] `role="tab"`.
+- [x] `aria-selected`.
+- [x] `aria-controls`.
+- [x] Roving tabindex.
+- [x] Focused content `role="tabpanel"`.
+- [x] Labelled secondary split regions.
+- [x] Accessible close labels.
+- [x] Status in accessible names/descriptions.
 
 ### 7.2 Keyboard behavior — P0
 
-- [ ] Left/Right.
-- [ ] Home/End.
-- [ ] Enter/Space when required.
-- [ ] Delete closes when focus is on tab.
-- [ ] Context-menu equivalent for close.
-- [ ] Focus adjacent tab after close.
-- [ ] Escape closes menus, not tabs.
-- [ ] Do not intercept arrow keys outside the tab strip.
-- [ ] Do not globally steal browser `Ctrl/Cmd+W` or `Ctrl+Tab` in v1.
-- [ ] Add tab commands to the command palette.
+- [x] Left/Right.
+- [x] Home/End.
+- [x] Enter/Space when required.
+- [x] Delete closes when focus is on tab.
+- [x] Context-menu equivalent for close.
+- [x] Focus adjacent tab after close.
+- [x] Escape closes menus, not tabs.
+- [x] Do not intercept arrow keys outside the tab strip.
+- [x] Do not globally steal browser `Ctrl/Cmd+W` or `Ctrl+Tab` in v1.
+- [x] Add tab commands to the command palette.
 
 ### 7.3 Target sizes and high contrast — P0
 
-- [ ] Close target >= 24x24 CSS px.
-- [ ] New-tab target >= 24x24.
-- [ ] All right-side actions >= 24x24.
-- [ ] Focus ring passes light/dark.
-- [ ] Forced-colors retains selected/focused state.
-- [ ] Active state is not color-only.
-- [ ] Reduced-motion disables reorder/scroll animations.
+- [x] Close target >= 24x24 CSS px.
+- [x] New-tab target >= 24x24.
+- [x] All right-side actions >= 24x24.
+- [x] Focus ring passes light/dark.
+- [x] Forced-colors retains selected/focused state.
+- [x] Active state is not color-only.
+- [x] Reduced-motion disables reorder/scroll animations.
 
 ### 7.4 Screen-reader audit — P1
 
@@ -634,33 +634,33 @@ Test:
 
 ### 8.1 Sidebar chats and documents — P0
 
-- [ ] Route all selections through `openResource`.
-- [ ] Focus existing canonical tab.
-- [ ] Reuse untouched blank tab.
-- [ ] Open new tab otherwise.
-- [ ] Keep sidebar active highlight aligned to focused pane.
-- [ ] Close mobile sidebar after selection.
+- [x] Route all selections through `openResource`.
+- [x] Focus existing canonical tab.
+- [x] Reuse untouched blank tab.
+- [x] Open new tab otherwise.
+- [x] Keep sidebar active highlight aligned to focused pane.
+- [x] Close mobile sidebar after selection.
 
 ### 8.2 New chat and new document — P0
 
-- [ ] New chat uses new-tab semantics.
-- [ ] New document creates the document once and opens its tab.
-- [ ] Existing disabled-feature toasts remain.
-- [ ] Creation failures do not leave ghost tabs.
+- [x] New chat uses new-tab semantics.
+- [x] New document creates the document once and opens its tab.
+- [x] Existing disabled-feature toasts remain.
+- [x] Creation failures do not leave ghost tabs.
 
 ### 8.3 Command palette — P0
 
-- [ ] Add commands:
-  - [ ] New tab.
-  - [ ] Close tab.
-  - [ ] Reopen closed tab.
-  - [ ] Next tab.
-  - [ ] Previous tab.
-  - [ ] New split.
-  - [ ] Close split.
-- [ ] Add an “Open tabs” search source.
-- [ ] Selecting a listed tab focuses its existing split or opens it in active pane.
-- [ ] Reuse existing palette host context rather than a second global command system.
+- [x] Add commands:
+  - [x] New tab.
+  - [x] Close tab.
+  - [x] Reopen closed tab.
+  - [x] Next tab.
+  - [x] Previous tab.
+  - [x] New split.
+  - [x] Close split.
+- [x] Add an “Open tabs” search source.
+- [x] Selecting a listed tab focuses its existing split or opens it in active pane.
+- [x] Reuse existing palette host context rather than a second global command system.
 
 ### 8.4 Notifications — P0
 
@@ -671,20 +671,20 @@ Test:
 
 ### 8.5 Projects and plugin launchers — P0
 
-- [ ] Project tree resource selections use `openResource`.
-- [ ] Custom pane apps create tabs with app metadata.
-- [ ] Existing plugin-created panes reconcile.
-- [ ] Test at least one example pane plugin.
+- [x] Project tree resource selections use `openResource`.
+- [x] Custom pane apps create tabs with app metadata.
+- [x] Existing plugin-created panes reconcile.
+- [x] Test at least one example pane plugin.
 
 ### 8.6 Direct routes — P0
 
-- [ ] `/chat`.
-- [ ] `/chat/:id`.
-- [ ] `/docs`.
-- [ ] `/docs/:id`.
-- [ ] Route resource becomes active after restore.
-- [ ] Missing/deleted route behavior remains.
-- [ ] Tab activation uses replace-state, not push-state.
+- [x] `/chat`.
+- [x] `/chat/:id`.
+- [x] `/docs`.
+- [x] `/docs/:id`.
+- [x] Route resource becomes active after restore.
+- [x] Missing/deleted route behavior remains.
+- [x] Tab activation uses replace-state, not push-state.
 
 ---
 
@@ -692,48 +692,48 @@ Test:
 
 ### 9.1 Undo and recently closed — P1
 
-- [ ] Bounded stack of 10.
-- [ ] Preserve order index.
-- [ ] Preserve transient draft/view state while retained.
-- [ ] Undo toast.
-- [ ] Reopen command.
-- [ ] Context-menu action.
-- [ ] Release retained resources when evicted.
+- [x] Bounded stack of 10.
+- [x] Preserve order index.
+- [x] Preserve transient draft/view state while retained.
+- [x] Undo toast.
+- [x] Reopen command.
+- [x] Context-menu action.
+- [x] Release retained resources when evicted.
 
 ### 9.2 Context menu — P1
 
 Actions:
 
-- [ ] Close tab.
-- [ ] Close other tabs.
-- [ ] Close tabs to the right.
-- [ ] Reopen closed tab.
-- [ ] Open in split.
-- [ ] Copy resource link where a stable route exists.
-- [ ] Move left/right for mobile accessibility.
-- [ ] Disable invalid actions.
-- [ ] Keyboard-openable menu.
+- [x] Close tab.
+- [x] Close other tabs.
+- [x] Close tabs to the right.
+- [x] Reopen closed tab.
+- [x] Open in split.
+- [x] Copy resource link where a stable route exists.
+- [x] Move left/right for mobile accessibility.
+- [x] Disable invalid actions.
+- [x] Keyboard-openable menu.
 
 ### 9.3 Middle-click close — P1
 
-- [ ] Desktop `auxclick` closes.
-- [ ] Prevent accidental content activation.
-- [ ] Undo remains available.
-- [ ] Do not apply on touch.
+- [x] Desktop `auxclick` closes.
+- [x] Prevent accidental content activation.
+- [x] Undo remains available.
+- [x] Do not apply on touch.
 
 ### 9.4 Desktop drag reorder — P1
 
-- [ ] Pointer Events.
-- [ ] Movement threshold.
-- [ ] Pointer capture.
-- [ ] `requestAnimationFrame`.
-- [ ] Transform-only movement.
-- [ ] Edge auto-scroll.
-- [ ] Cancel on Escape.
-- [ ] Restore on pointer cancellation.
-- [ ] Commit once on drop.
-- [ ] No content remount.
-- [ ] Keyboard alternative.
+- [x] Pointer Events.
+- [x] Movement threshold.
+- [x] Pointer capture.
+- [x] `requestAnimationFrame`.
+- [x] Transform-only movement.
+- [x] Edge auto-scroll.
+- [x] Cancel on Escape.
+- [x] Restore on pointer cancellation.
+- [x] Commit once on drop.
+- [x] No content remount.
+- [x] Keyboard alternative.
 
 ### 9.5 Open-tabs overflow control — P1
 
@@ -749,42 +749,42 @@ Actions:
 
 ### 10.1 Add semantic theme tokens — P0
 
-- [ ] Workspace chrome background.
-- [ ] Tab backgrounds.
-- [ ] Active border.
-- [ ] Hover state.
-- [ ] Text states.
-- [ ] Attention/error.
-- [ ] Close/new controls.
-- [ ] Dark-theme fallbacks.
-- [ ] Blank-theme coverage.
+- [x] Workspace chrome background.
+- [x] Tab backgrounds.
+- [x] Active border.
+- [x] Hover state.
+- [x] Text states.
+- [x] Attention/error.
+- [x] Close/new controls.
+- [x] Dark-theme fallbacks.
+- [x] Blank-theme coverage.
 
 ### 10.2 Add theme override identifiers — P0
 
-- [ ] `shell.workspace-chrome`
-- [ ] `shell.tab`
-- [ ] `shell.tab-active`
-- [ ] `shell.tab-close`
-- [ ] `shell.tab-new`
-- [ ] `shell.tab-overflow`
-- [ ] `shell.split-new`
-- [ ] `shell.split-close`
+- [x] `shell.workspace-chrome`
+- [x] `shell.tab`
+- [x] `shell.tab-active`
+- [x] `shell.tab-close`
+- [x] `shell.tab-new`
+- [x] `shell.tab-overflow`
+- [x] `shell.split-new`
+- [x] `shell.split-close`
 
 ### 10.3 Extend header-action context — P1
 
 Add optional values without breaking existing handlers:
 
-- [ ] Active tab.
-- [ ] Active pane.
-- [ ] Tab count.
-- [ ] Pane count.
-- [ ] Visible-tab IDs.
+- [x] Active tab.
+- [x] Active pane.
+- [x] Tab count.
+- [x] Pane count.
+- [x] Visible-tab IDs.
 
 ### 10.4 Avoid premature public tab hooks — P0
 
-- [ ] Keep tab lifecycle internal for v1.
-- [ ] Document that existing pane hooks still fire.
-- [ ] Collect actual plugin use cases before stabilizing `ui.tab.*` hooks.
+- [x] Keep tab lifecycle internal for v1.
+- [x] Document that existing pane hooks still fire.
+- [x] Collect actual plugin use cases before stabilizing `ui.tab.*` hooks.
 
 ---
 
@@ -792,15 +792,15 @@ Add optional values without breaking existing handlers:
 
 ### 11.1 Component and composable tests — P0
 
-- [ ] Tab bar rendering.
-- [ ] Tab host adapter.
-- [ ] Metadata resolver.
-- [ ] Persistence.
-- [ ] Draft store.
-- [ ] Route reconciliation.
-- [ ] Plugin reconciliation.
-- [ ] Activation generations.
-- [ ] Accessibility interaction.
+- [x] Tab bar rendering.
+- [x] Tab host adapter.
+- [x] Metadata resolver.
+- [x] Persistence.
+- [x] Draft store.
+- [x] Route reconciliation.
+- [x] Plugin reconciliation.
+- [x] Activation generations.
+- [x] Accessibility interaction.
 
 ### 11.2 E2E desktop suite — P0
 
@@ -850,8 +850,8 @@ Capture:
 
 ### 11.5 Performance instrumentation — P0
 
-- [ ] Add development `performance.mark`/`measure`.
-- [ ] Measure open, activate, bind, close, restore, reorder.
+- [x] Add development `performance.mark`/`measure`.
+- [x] Measure open, activate, bind, close, restore, reorder.
 - [ ] Attach measurements to performance test output.
 - [ ] Verify no long task from tab activation.
 - [ ] Verify no tab-caused CLS.
@@ -876,30 +876,30 @@ Capture:
 
 Document:
 
-- [ ] Tab vs pane concepts.
-- [ ] `openResource`.
-- [ ] New tab host responsibilities.
-- [ ] Persistence schema.
-- [ ] Custom pane-app behavior.
-- [ ] Header-action overflow.
-- [ ] Theme identifiers.
-- [ ] Compatibility/reconciliation behavior.
-- [ ] Non-goals.
+- [x] Tab vs pane concepts.
+- [x] `openResource`.
+- [x] New tab host responsibilities.
+- [x] Persistence schema.
+- [x] Custom pane-app behavior.
+- [x] Header-action overflow.
+- [x] Theme identifiers.
+- [x] Compatibility/reconciliation behavior.
+- [x] Non-goals.
 
 ### 12.2 User-facing notes — P1
 
 Document:
 
-- [ ] New tab.
-- [ ] New split.
-- [ ] Close tab vs close split.
-- [ ] Reopen closed.
-- [ ] Keyboard controls.
-- [ ] Mobile tab scrolling.
+- [x] New tab.
+- [x] New split.
+- [x] Close tab vs close split.
+- [x] Reopen closed.
+- [x] Keyboard controls.
+- [x] Mobile tab scrolling.
 
 ### 12.3 Staged enablement — P0
 
-- [ ] Enable in local/dev first.
+- [x] Enable in local/dev first.
 - [ ] Run all suites.
 - [ ] Enable for preview deployment.
 - [ ] Collect activation timing and error telemetry where permitted.

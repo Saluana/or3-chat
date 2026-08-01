@@ -57,9 +57,11 @@ function input(
 ): RunPluginCandidateCanaryInput {
     return {
         pluginId: 'alpha',
+        workspaceId: 'workspace-1',
         packageDigest: candidate.digest,
         clientId: 'designated-client-1',
         snapshotState: () => state,
+        readGrantReview: () => ({ status: 'current', revision: 'grant-review-1' }),
         serverDryRun: () => ({ status: 'passed' }),
         clientHiddenPrepare: () => ({ status: 'passed' }),
         now: () => 100,
@@ -85,6 +87,7 @@ describe('candidate server/client canary', () => {
                 canPublish: false,
                 clientId: 'designated-client-1',
                 packageDigest: candidate.digest,
+                workspaceId: 'workspace-1',
             });
             return { status: 'passed' as const };
         });
@@ -103,11 +106,12 @@ describe('candidate server/client canary', () => {
                 manifestDigest: candidate.verification.manifestDigest,
                 pointerRevision: 1,
                 clientId: 'designated-client-1',
+                grantReviewRevision: 'grant-review-1',
                 completedAt: 100,
             },
         });
         const evidence = JSON.parse(readFileSync(
-            service.evidencePath('alpha', candidate.digest),
+            service.evidencePath('alpha', candidate.digest, 'workspace-1'),
             'utf8'
         ));
         expect(evidence.packageDigest).toBe(candidate.digest);
@@ -138,7 +142,9 @@ describe('candidate server/client canary', () => {
             });
             expect(readFileSync(pointerPath, 'utf8')).toBe(before);
             expect(state).toEqual({ count: 1 });
-            expect(() => readFileSync(service.evidencePath('alpha', candidate.digest))).toThrow();
+            expect(() => readFileSync(
+                service.evidencePath('alpha', candidate.digest, 'workspace-1')
+            )).toThrow();
         }
     );
 

@@ -131,9 +131,11 @@ describe('package install→promote→disable→rollback E2E', () => {
         const canary = new PluginPackageCandidateCanaryService(packages, pointers, root);
         const canaryResult = await canary.run({
             pluginId: 'alpha',
+            workspaceId: 'ws-1',
             packageDigest: prepared.stored.digest,
             clientId: 'client-a',
             snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: () => grantReview,
             serverDryRun: () => ({ status: 'passed' }),
             clientHiddenPrepare: () => ({ status: 'passed' }),
             now: () => 20,
@@ -143,9 +145,11 @@ describe('package install→promote→disable→rollback E2E', () => {
         const promotion = new PluginPackagePromotionService(packages, pointers, canary);
         const promoted = await promotion.promote({
             pluginId: 'alpha',
+            workspaceId: 'ws-1',
             expectedCandidateDigest: prepared.stored.digest,
             storedStateVersion: 1,
             snapshotState: () => ({ settings: { count: 1 } }),
+            readGrantReview: () => grantReview,
             restoreState: vi.fn(),
             now: () => 30,
         });

@@ -244,6 +244,45 @@ describe('ChatContainer', () => {
         expect(wrapper.exists()).toBe(true);
     });
 
+    it('initializes workflow state before immediate streaming effects run', () => {
+        useChatMock.mockImplementationOnce(() =>
+            makeChatInstance({
+                messages: {
+                    value: [
+                        {
+                            id: 'workflow-message',
+                            role: 'assistant',
+                            text: 'Running workflow',
+                            workflowState: {
+                                workflowId: 'workflow-1',
+                                workflowName: 'Example workflow',
+                                executionState: 'running',
+                                executionOrder: [],
+                                currentNodeId: null,
+                                nodeStates: {},
+                            },
+                        },
+                    ],
+                },
+            })
+        );
+
+        expect(() =>
+            mount(ChatContainer, {
+                props: defaultProps,
+                global: {
+                    mocks: { $theme: createThemeMock() },
+                    stubs: {
+                        LazyChatMessage,
+                        LazyChatInputDropper,
+                        ClientOnly: { template: '<div><slot /></div>' },
+                        UButton: true,
+                    },
+                },
+            })
+        ).not.toThrow();
+    });
+
     it('calls scrollToBottom when button is clicked', async () => {
         const wrapper = mount(ChatContainer, {
             props: defaultProps,

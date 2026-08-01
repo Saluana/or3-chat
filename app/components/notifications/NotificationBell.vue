@@ -14,7 +14,10 @@
             >
                 <template #default>
                     <span class="flex flex-col items-center gap-1 w-full relative">
-                        <UIcon :name="iconBell" class="h-[24px] w-[24px]" />
+                        <UIcon
+                            :name="iconBell"
+                            :class="compact ? 'h-5 w-5' : 'h-[24px] w-[24px]'"
+                        />
                         <span
                             v-if="unreadCount > 0"
                             class="absolute -top-1 -right-1 bg-[var(--md-error)] text-[var(--md-on-error)] rounded-[var(--md-border-radius)] min-w-[16px] h-[16px] flex items-center justify-center text-[10px] font-bold px-1 notification-badge"
@@ -47,6 +50,7 @@ const props = withDefaults(
         tooltipSide?: 'left' | 'right' | 'top' | 'bottom';
         buttonProps?: Record<string, unknown>;
         buttonClass?: string;
+        compact?: boolean;
     }>(),
     {
         popoverSide: 'right',
@@ -54,6 +58,7 @@ const props = withDefaults(
         tooltipSide: 'right',
         buttonProps: undefined,
         buttonClass: undefined,
+        compact: false,
     }
 );
 

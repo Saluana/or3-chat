@@ -82,6 +82,33 @@ describe('executePaletteAction', () => {
         if (!result.ok) expect(result.error.code).toBe('not-found');
     });
 
+    it('activates an exact workspace tab when the host supports tabs', async () => {
+        const openWorkspaceTab = vi.fn(async () => ({ ok: true as const }));
+        const host = {
+            openChat: vi.fn(),
+            openDocument: vi.fn(),
+            openPaneApp: vi.fn(),
+            revealProject: vi.fn(),
+            openSystemPrompts: vi.fn(),
+            openDashboard: vi.fn(),
+            openImage: vi.fn(),
+            openWorkspaceTab,
+            executeCommand: vi.fn(),
+            canOpenNewPane: () => true,
+        } satisfies PaletteHostContext;
+        await expect(
+            executePaletteAction({
+                host,
+                action: {
+                    id: 'workspace-tab:open:tab-a',
+                    label: 'Open tab',
+                    target: { kind: 'workspace-tab', tabId: 'tab-a' },
+                },
+            })
+        ).resolves.toEqual({ ok: true });
+        expect(openWorkspaceTab).toHaveBeenCalledWith('tab-a');
+    });
+
     it('rejects disabled actions', async () => {
         const host = {
             openChat: vi.fn(),

@@ -73,6 +73,7 @@ const RESERVED_SOURCE_IDS = new Set([
     'project',
     'image',
     'dashboard',
+    'workspace-tab',
 ]);
 const RESERVED_COMMAND_IDS = new Set([
     'new-chat',
@@ -83,6 +84,13 @@ const RESERVED_COMMAND_IDS = new Set([
     'open-theme-settings',
     'open-ai-settings',
     'toggle-theme',
+    'workspace-new-tab',
+    'workspace-close-tab',
+    'workspace-reopen-tab',
+    'workspace-next-tab',
+    'workspace-previous-tab',
+    'workspace-new-split',
+    'workspace-close-split',
 ]);
 
 function getState(): RegistryState {

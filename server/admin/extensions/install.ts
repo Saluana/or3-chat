@@ -264,7 +264,9 @@ export async function stageV2PluginPackageFromZip(
         let extractionError: Error | null = null;
         const shouldWrite = (entryKey: string): string | null => {
             if (entryKey.endsWith('/')) return null;
-            if (prefix && !entryKey.startsWith(prefix)) return null;
+            if (prefix && !entryKey.startsWith(prefix)) {
+                throw new Error('Archive contains files outside the package root');
+            }
             const relative = prefix ? entryKey.slice(prefix.length) : entryKey;
             ensureSafePath(relative);
             const normalizedRel = normalize(relative);
@@ -411,7 +413,9 @@ export async function installExtensionFromZip(
 
         const shouldWrite = (entryKey: string): string | null => {
             if (entryKey.endsWith('/')) return null;
-            if (prefix && !entryKey.startsWith(prefix)) return null;
+            if (prefix && !entryKey.startsWith(prefix)) {
+                throw new Error('Archive contains files outside the package root');
+            }
             const relative = prefix ? entryKey.slice(prefix.length) : entryKey;
             ensureSafePath(relative);
             const normalizedRel = normalize(relative);

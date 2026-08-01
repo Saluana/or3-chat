@@ -239,4 +239,22 @@ describe('palette source adapters', () => {
             ])
         );
     });
+
+    it('includes workspace commands only when workspace tabs are enabled', () => {
+        const disabled = createDefaultCoreCommandSpecs({
+            isFeatureEnabled: (feature) => feature !== 'workspaceTabs',
+        });
+        expect(
+            disabled.find((entry) => entry.id === 'workspace-new-tab')?.enabled
+        ).toBe(false);
+
+        const enabled = createDefaultCoreCommandSpecs({
+            isFeatureEnabled: () => true,
+            newTab: () => undefined,
+        });
+        expect(enabled.find((entry) => entry.id === 'workspace-new-tab')).toMatchObject({
+            enabled: true,
+            label: 'New tab',
+        });
+    });
 });

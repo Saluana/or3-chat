@@ -15,6 +15,7 @@ export type PaletteCategoryId =
     | 'image'
     | 'setting'
     | 'dashboard'
+    | 'tab'
     | (string & {});
 
 export interface PaletteCategory {
@@ -60,6 +61,7 @@ export type PaletteActionTarget =
       }
     | { kind: 'dashboard'; pluginId: string; pageId?: string }
     | { kind: 'image'; hash: string }
+    | { kind: 'workspace-tab'; tabId: string }
     | {
           kind: 'command';
           commandId: string;
@@ -256,6 +258,7 @@ export interface PaletteHostContext {
         pageId?: string
     ): Promise<PaletteActionResult>;
     openImage(hash: string): Promise<PaletteActionResult>;
+    openWorkspaceTab?(tabId: string): Promise<PaletteActionResult>;
     executeCommand(commandId: string): Promise<PaletteActionResult>;
     canOpenNewPane(): boolean;
 }
@@ -356,6 +359,13 @@ export const CORE_PALETTE_CATEGORIES: readonly PaletteCategory[] = [
         aliases: ['dashboard'],
         icon: 'i-lucide-layout-dashboard',
         order: 80,
+    },
+    {
+        id: 'tab',
+        label: 'Open tabs',
+        aliases: ['tab', 'tabs'],
+        icon: 'i-lucide-panels-top-left',
+        order: 15,
     },
 ] as const;
 

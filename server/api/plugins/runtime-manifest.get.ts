@@ -7,7 +7,6 @@ import { listInstalledExtensions } from '../../admin/extensions/extension-manage
 import { getWorkspaceSettingsStore } from '../../admin/stores/registry';
 import {
     getEnabledPlugins,
-    getPluginGrantReview,
     getPluginSettings,
     readPluginAccessPolicy,
 } from '../../admin/plugins/workspace-plugin-store';
@@ -30,9 +29,8 @@ import {
 } from '../../admin/plugins/plugin-revisions';
 import { PluginPackageRouteCatalog } from '../../admin/plugins/package-route-catalog';
 import { createModuleV2RuntimePolicy } from '../../../shared/plugins/module-v2-runtime-policy';
-import { verifyPluginV2Compatibility } from '../../../shared/plugins/v2-compatibility';
-import { resolvePluginV2DependencyGraph } from '../../../shared/plugins/v2-dependency-graph';
 import type { Or3ExtensionManifestV2 } from '../../admin/extensions/types';
+import { evaluateSelectedPackageRuntimeEligibility } from '../../admin/plugins/package-runtime-eligibility';
 import { OR3_PLUGIN_V2_HOST_CAPABILITIES } from '../../admin/plugins/v2-host-capabilities';
 
 export type { PluginRuntimeManifestResponse } from '../../../shared/plugins/runtime-manifest';
@@ -128,10 +126,15 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
         (catalog): catalog is Extract<typeof catalog, { status: 'ready' }> =>
             catalog.status === 'ready'
     );
+    const blockedPackageCatalogs = selectedPackageCatalogs.filter(
+        (catalog): catalog is Extract<typeof catalog, { status: 'blocked' }> =>
+            catalog.status === 'blocked'
+    );
     const installedPluginIds = Array.from(
         new Set([
             ...installedPlugins.map((plugin) => plugin.id),
             ...selectedPackages.map((catalog) => catalog.pluginId),
+            ...blockedPackageCatalogs.map((catalog) => catalog.pluginId),
         ])
     ).sort((a, b) => a.localeCompare(b));
     const installedSet = new Set(installedPluginIds);
@@ -260,170 +263,52 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
     }
 
     const packageRuntimeDecision = packagePolicy(workspaceId);
-    const availableDependencies = selectedPackages.map((catalog) => ({
-        id: catalog.pluginId,
-        version: catalog.manifest.version,
-        features: [
-            ...catalog.manifest.features.required,
-            ...catalog.manifest.features.optional,
-        ],
-    }));
+    for (const catalog of blockedPackageCatalogs) {
+        runtime[catalog.pluginId] = {
+            hasServerRoutes: false,
+            loadAllowed: false,
+            loadDeniedReason: catalog.blockCode,
+            lifecycleCoverage: 'managed-v2',
+            descriptorStatus: 'blocked',
+            blockCode: catalog.blockCode,
+        };
+    }
+
     const selectedPackageById = new Map(
         selectedPackages.map((catalog) => [catalog.pluginId, catalog] as const)
     );
-    // Compatibility verifies host APIs/features. The graph additionally makes
-    // the selected package set atomic: cycles and transitive blocked required
-    // dependencies cannot leak into a descriptor key.
-    const dependencyGraph = resolvePluginV2DependencyGraph(
-        selectedPackages.map((catalog) => ({
-            id: catalog.pluginId,
-            version: catalog.manifest.version,
-            dependencies: catalog.manifest.dependencies,
-        }))
-    );
+    const packageEligibility = await evaluateSelectedPackageRuntimeEligibility({
+        event,
+        workspaceId,
+        settingsStore,
+        selectedPackages,
+        packageRuntimeDecision,
+    });
     const resolvedPackages = await Promise.all(
-        selectedPackages.map(async (catalog) => {
+        packageEligibility.map(async (eligibility) => {
+            const { catalog, access } = eligibility;
             const manifest = catalog.manifest;
-            const configured = configuredEnabled.includes(catalog.pluginId);
-            let loadAllowed = false;
-            let loadDeniedReason: string | undefined = configured
-                ? undefined
-                : 'plugin-disabled';
-            let effectivePolicy = mergePluginGatePolicy(manifest.access, null);
-
-            if (configured) {
-                const access = await checkPluginAccess(event, {
-                    pluginId: catalog.pluginId,
-                    action: 'runtime.load',
-                    extension: { access: manifest.access ?? null },
-                });
-                loadAllowed = access.decision.allowed;
-                effectivePolicy = access.decision.effectivePolicy;
-                if (!loadAllowed) {
-                    loadDeniedReason = access.decision.reasons[0] ?? 'forbidden';
-                }
-            } else {
-                try {
-                    const settings = await getPluginSettings(
-                        settingsStore,
-                        workspaceId,
-                        catalog.pluginId
-                    );
-                    effectivePolicy = mergePluginGatePolicy(
-                        manifest.access,
-                        readPluginAccessPolicy(settings)
-                    );
-                } catch {
-                    // Disabled packages retain their conservative manifest policy.
-                }
-            }
-
             const base = {
                 clientEntry: manifest.runtime.client?.entry,
                 hasServerRoutes: Boolean(manifest.runtime.server?.routes?.length),
-                loadAllowed,
-                loadDeniedReason,
+                loadAllowed: eligibility.status === 'ready',
+                loadDeniedReason:
+                    eligibility.status === 'ready'
+                        ? undefined
+                        : access.allowed
+                          ? eligibility.blockCode
+                          : access.reasons[0] ?? eligibility.blockCode,
                 lifecycleCoverage: 'managed-v2' as const,
             };
-            if (!packageRuntimeDecision.allowed) {
-                return {
-                    id: catalog.pluginId,
-                    loadAllowed: false,
-                    entry: {
-                        ...base,
-                        loadAllowed: false,
-                        loadDeniedReason: packageRuntimeDecision.code,
-                        descriptorStatus: 'blocked' as const,
-                        blockCode: packageRuntimeDecision.code,
-                    },
-                };
-            }
-            if (!loadAllowed) {
+            if (eligibility.status === 'blocked') {
+                const blockCode = eligibility.blockCode ?? 'package-dependency-blocked';
                 return {
                     id: catalog.pluginId,
                     loadAllowed: false,
                     entry: {
                         ...base,
                         descriptorStatus: 'blocked' as const,
-                        blockCode: 'package-policy-denied' as const,
-                    },
-                };
-            }
-
-            const dependencyResolution = dependencyGraph.resolutions[catalog.pluginId];
-            if (!dependencyResolution || dependencyGraph.blocked[catalog.pluginId]) {
-                return {
-                    id: catalog.pluginId,
-                    loadAllowed: false,
-                    entry: {
-                        ...base,
-                        loadAllowed: false,
-                        loadDeniedReason: 'package-dependency-blocked',
-                        descriptorStatus: 'blocked' as const,
-                        blockCode: 'package-dependency-blocked' as const,
-                    },
-                };
-            }
-
-            const review = await getPluginGrantReview(
-                settingsStore,
-                workspaceId,
-                catalog.pluginId,
-                manifest.requestedGrants
-            );
-            if (review.status !== 'current') {
-                return {
-                    id: catalog.pluginId,
-                    loadAllowed: false,
-                    entry: {
-                        ...base,
-                        loadAllowed: false,
-                        loadDeniedReason: 'package-grants-unreviewed',
-                        descriptorStatus: 'blocked' as const,
-                        blockCode: 'package-grants-unreviewed' as const,
-                    },
-                };
-            }
-            const compatibility = verifyPluginV2Compatibility({
-                manifest,
-                host: OR3_PLUGIN_V2_HOST_CAPABILITIES,
-                dependencies: availableDependencies.filter(
-                    (dependency) => dependency.id !== catalog.pluginId
-                ),
-            });
-            if (compatibility.status === 'blocked') {
-                const dependencyBlocked = compatibility.reasons.some((reason) =>
-                    reason.code.includes('dependency')
-                );
-                return {
-                    id: catalog.pluginId,
-                    loadAllowed: false,
-                    entry: {
-                        ...base,
-                        loadAllowed: false,
-                        loadDeniedReason: dependencyBlocked
-                            ? 'package-dependency-blocked'
-                            : 'package-trust-unsupported',
-                        descriptorStatus: 'blocked' as const,
-                        blockCode: dependencyBlocked
-                            ? ('package-dependency-blocked' as const)
-                            : ('package-trust-unsupported' as const),
-                    },
-                };
-            }
-            // The production host-ABI gate remains intentionally closed. A
-            // server-only V2 package can be selected now; client UI waits for
-            // the dedicated ESM/Vue/SDK/CSP qualification release.
-            if (manifest.runtime.client) {
-                return {
-                    id: catalog.pluginId,
-                    loadAllowed: false,
-                    entry: {
-                        ...base,
-                        loadAllowed: false,
-                        loadDeniedReason: 'trusted-host-ui-abi-unproven',
-                        descriptorStatus: 'blocked' as const,
-                        blockCode: 'trusted-host-ui-abi-unproven' as const,
+                        blockCode,
                     },
                 };
             }
@@ -436,15 +321,13 @@ export default defineEventHandler(async (event): Promise<PluginRuntimeManifestRe
                 source: 'package',
                 trust: manifest.trust,
                 workspaceId,
-                policyRevision: createPluginPolicyRevision(effectivePolicy),
-                grantsRevision: review.revision,
-                // Package digests are immutable content identities. Including
-                // every resolved direct dependency makes a dependent descriptor
-                // change whenever a selected dependency is promoted.
-                resolvedDependencyKeys: [
-                    ...dependencyResolution.required,
-                    ...dependencyResolution.optionalAvailable,
-                ].map((dependencyId) => selectedPackageById.get(dependencyId)!.packageDigest),
+                policyRevision: createPluginPolicyRevision(access.effectivePolicy),
+                grantsRevision: eligibility.grantsRevision,
+                // A descriptor only includes dependencies that passed the same
+                // workspace/request readiness gate as the package itself.
+                resolvedDependencyKeys: eligibility.resolvedDependencyIds.map(
+                    (dependencyId) => selectedPackageById.get(dependencyId)!.packageDigest
+                ),
                 artifact: {
                     kind: 'package-v2',
                     packageDigest: catalog.packageDigest,

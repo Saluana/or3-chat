@@ -43,10 +43,12 @@ portable public-SDK boundary.
 
 Choose **V2** for a public-SDK package or a validation/packaging artifact. V2
 code imports only `@or3/plugin-sdk` and documented subpaths, never `~/`,
-`~~/`, `#imports`, Nuxt auto-imports, or application internals. The normal
-production workspace does not yet activate V2 packages end-to-end. Package and
-inspect the artifact, but report it as unactivated unless the checkout proves a
-supported activation path.
+`~~/`, `#imports`, Nuxt auto-imports, or application internals. The currently
+supported V2 production path is reviewed `trusted-host` server routes: package,
+canary, promote, enable the workspace, then serve authorized SSR requests.
+Client-entry packages remain blocked by the host ABI gate. Package and inspect
+the artifact, and report the exact activation path rather than claiming browser
+activation or isolation.
 
 ## Workflow
 

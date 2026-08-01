@@ -33,5 +33,5 @@ flowchart TD
 - Require an explicit completion report that includes rollback and only genuine
   remaining risks.
 
-The detailed product exploration is retained in the repository-level
-[`planning/skills_v1`](../../../planning/skills_v1/) documents.
+The detailed product exploration remains in the source repository's planning
+materials; this portable package intentionally does not link outside its root.

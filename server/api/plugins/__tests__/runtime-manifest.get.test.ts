@@ -450,6 +450,108 @@ describe('GET /api/plugins/runtime-manifest', () => {
         ]);
     });
 
+    it('blocks dependents when a required package fails this workspace readiness gate', async () => {
+        useRuntimeConfigMock.mockReturnValue({
+            admin: {
+                pluginRuntimeLoaderEnabled: true,
+                pluginModuleLoaderV2Enabled: true,
+                pluginModuleLoaderV2WorkspaceIds: ['ws-1'],
+                disableNonCorePlugins: false,
+            },
+        } as any);
+        const manifest = (id: string, required: string[] = []) => ({
+            kind: 'plugin' as const,
+            id,
+            name: id,
+            version: '1.0.0',
+            capabilities: [],
+            manifestVersion: 2 as const,
+            engines: { or3: '^0.3.0', pluginApi: '^2.0.0' },
+            runtime: {
+                server: {
+                    routes: [{ method: 'GET' as const, path: 'health', handler: 'server/health.mjs' }],
+                },
+            },
+            requestedGrants: [],
+            features: { required: [], optional: [] },
+            dependencies: {
+                required: required.map((id) => ({ id, range: '^1.0.0', features: [] })),
+                optional: [],
+            },
+            trust: 'trusted-host' as const,
+            settings: { version: 1 },
+            stateCompatibility: {
+                version: 1,
+                reads: { minimum: 1, maximum: 1 },
+                rollback: 'safe' as const,
+            },
+        });
+        listSelectedPackagesMock.mockResolvedValue([
+            {
+                status: 'ready',
+                pluginId: 'dependency',
+                packageDigest: `sha256-${'d'.repeat(64)}`,
+                routes: [],
+                manifest: manifest('dependency'),
+            },
+            {
+                status: 'ready',
+                pluginId: 'dependent',
+                packageDigest: `sha256-${'e'.repeat(64)}`,
+                routes: [],
+                manifest: manifest('dependent', ['dependency']),
+            },
+        ]);
+        getEnabledPluginsMock.mockResolvedValue(['dependency', 'dependent']);
+        checkPluginAccessMock.mockImplementation(async (
+            _event: unknown,
+            input: { pluginId: string }
+        ) => ({
+            session: { authenticated: true },
+            decision: {
+                allowed: input.pluginId !== 'dependency',
+                reasons: input.pluginId === 'dependency' ? ['plugin-disabled'] : [],
+                effectivePolicy: defaultEffectivePolicy,
+            },
+        }));
+
+        const handler = (await import('../runtime-manifest.get')).default as (
+            event: H3Event
+        ) => Promise<any>;
+        const result = await handler(makeEvent());
+
+        expect(result.enabledPluginIds).toEqual([]);
+        expect(result.runtime.dependency).toMatchObject({
+            descriptorStatus: 'blocked',
+            blockCode: 'package-policy-denied',
+        });
+        expect(result.runtime.dependent).toMatchObject({
+            descriptorStatus: 'blocked',
+            blockCode: 'package-dependency-blocked',
+        });
+    });
+
+    it('preserves blocked pointer selections as explicit runtime entries', async () => {
+        listSelectedPackagesMock.mockResolvedValue([
+            {
+                status: 'blocked',
+                pluginId: 'corrupt-package',
+                blockCode: 'package-pointer-unavailable',
+            },
+        ]);
+
+        const handler = (await import('../runtime-manifest.get')).default as (
+            event: H3Event
+        ) => Promise<any>;
+        const result = await handler(makeEvent());
+
+        expect(result.installedPluginIds).toContain('corrupt-package');
+        expect(result.runtime['corrupt-package']).toMatchObject({
+            descriptorStatus: 'blocked',
+            blockCode: 'package-pointer-unavailable',
+        });
+    });
+
     it('blocks selected V2 dependency cycles before issuing descriptors', async () => {
         useRuntimeConfigMock.mockReturnValue({
             admin: {

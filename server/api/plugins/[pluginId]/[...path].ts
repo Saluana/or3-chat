@@ -10,6 +10,7 @@ import { isNonCorePluginDiscoveryDisabled } from '../../../../shared/plugins/saf
 import { resolvePluginRoutePermission } from '../../../../shared/plugins/route-permissions';
 import { createModuleV2RuntimePolicy } from '../../../../shared/plugins/module-v2-runtime-policy';
 import { PluginPackageRouteCatalog } from '../../../admin/plugins/package-route-catalog';
+import { evaluateSelectedPackageRuntimeEligibility } from '../../../admin/plugins/package-runtime-eligibility';
 import { getEnabledPlugins } from '../../../admin/plugins/workspace-plugin-store';
 import { getWorkspaceSettingsStore } from '../../../admin/stores/registry';
 import {
@@ -95,6 +96,10 @@ export default defineEventHandler(async (event) => {
         ? await packageRouteCatalog.readSelected(pluginId)
         : { status: 'inactive' as const, pluginId };
 
+    if (packageCatalog.status === 'blocked') {
+        throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });
+    }
+
     let route: RuntimeRouteDef | null = null;
     let packageDigest: string | null = null;
 
@@ -111,6 +116,12 @@ export default defineEventHandler(async (event) => {
             (entry) => entry.kind === 'plugin' && entry.id === pluginId
         );
         if (!plugin) {
+            throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });
+        }
+        if (
+            'manifestVersion' in plugin &&
+            (plugin as { manifestVersion?: unknown }).manifestVersion === 2
+        ) {
             throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });
         }
 
@@ -219,10 +230,28 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });
     }
     const workspaceId = session.workspace?.id;
+    const settingsStore = getWorkspaceSettingsStore(event);
     if (
         !workspaceId ||
-        !(await getEnabledPlugins(getWorkspaceSettingsStore(event), workspaceId)).includes(pluginId)
+        !(await getEnabledPlugins(settingsStore, workspaceId)).includes(pluginId)
     ) {
+        throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });
+    }
+
+    const packageEligibility = await evaluateSelectedPackageRuntimeEligibility({
+        event,
+        workspaceId,
+        settingsStore,
+        selectedPackages: (await packageRouteCatalog.listSelected()).filter(
+            (catalog): catalog is Extract<typeof catalog, { status: 'ready' }> =>
+                catalog.status === 'ready'
+        ),
+        packageRuntimeDecision: v2Policy(workspaceId),
+    });
+    const eligibility = packageEligibility.find(
+        (candidate) => candidate.catalog.pluginId === pluginId
+    );
+    if (eligibility?.status !== 'ready') {
         throw createError({ statusCode: 404, statusMessage: 'Plugin not found' });
     }
 

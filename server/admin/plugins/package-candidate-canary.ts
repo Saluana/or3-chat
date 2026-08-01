@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants, promises as fs } from 'node:fs';
 import { resolve } from 'node:path';
+import type { PluginGrantReviewSnapshot } from '../../../shared/plugins/grant-review';
 import type { Sha256 } from '../../../shared/plugins/runtime-descriptor';
 import { EXTENSIONS_BASE_DIR } from '../extensions/paths';
 import { PluginPackagePointerStore } from './package-pointer-store';
@@ -16,6 +17,7 @@ export type CandidateStateValue =
 
 export interface CandidateDryRunContext {
     readonly pluginId: string;
+    readonly workspaceId: string;
     readonly packageDigest: Sha256;
     readonly packagePath: string;
     readonly dryRun: true;
@@ -24,6 +26,7 @@ export interface CandidateDryRunContext {
 
 export interface CandidateClientCanaryContext {
     readonly pluginId: string;
+    readonly workspaceId: string;
     readonly packageDigest: Sha256;
     readonly packagePath: string;
     readonly clientId: string;
@@ -36,14 +39,27 @@ export interface CandidateCanaryStepResult {
     readonly code?: string;
 }
 
-export interface CandidateCanaryEvidence {
-    readonly schemaVersion: 1;
+export interface CandidateCanaryGrantReviewInput {
     readonly pluginId: string;
+    readonly packageDigest: Sha256;
+    readonly manifestDigest: Sha256;
+}
+
+export type CandidateCanaryGrantReview = Pick<
+    PluginGrantReviewSnapshot,
+    'revision' | 'status'
+>;
+
+export interface CandidateCanaryEvidence {
+    readonly schemaVersion: 2;
+    readonly pluginId: string;
+    readonly workspaceId: string;
     readonly packageDigest: Sha256;
     readonly manifestDigest: Sha256;
     readonly pointerRevision: number;
     readonly clientId: string;
     readonly stateSnapshotDigest: Sha256;
+    readonly grantReviewRevision: string;
     readonly server: CandidateCanaryStepResult;
     readonly client: CandidateCanaryStepResult;
     readonly completedAt: number;
@@ -51,9 +67,14 @@ export interface CandidateCanaryEvidence {
 
 export interface RunPluginCandidateCanaryInput {
     readonly pluginId: string;
+    readonly workspaceId: string;
     readonly packageDigest: Sha256;
     readonly clientId: string;
     readonly snapshotState: () => CandidateStateValue | Promise<CandidateStateValue>;
+    /** Reads the review that applies to this exact candidate manifest. */
+    readonly readGrantReview: (
+        input: CandidateCanaryGrantReviewInput
+    ) => CandidateCanaryGrantReview | Promise<CandidateCanaryGrantReview>;
     readonly serverDryRun: (
         context: CandidateDryRunContext
     ) => CandidateCanaryStepResult | Promise<CandidateCanaryStepResult>;
@@ -67,7 +88,7 @@ export type RunPluginCandidateCanaryResult =
     | { readonly status: 'passed'; readonly evidence: CandidateCanaryEvidence }
     | {
           readonly status: 'blocked';
-          readonly stage: 'pointer' | 'state' | 'server-dry-run' | 'client-canary';
+          readonly stage: 'pointer' | 'grants' | 'state' | 'server-dry-run' | 'client-canary';
           readonly code: string;
           readonly currentPointerUnchanged: true;
       };
@@ -106,11 +127,19 @@ function cloneAndFreeze(value: CandidateStateValue): CandidateStateValue {
     return freeze(cloned);
 }
 
-function stateDigest(value: CandidateStateValue): Sha256 {
+export function createCandidateStateSnapshotDigest(value: CandidateStateValue): Sha256 {
     return `sha256-${createHash('sha256')
         .update('OR3_PLUGIN_CANDIDATE_STATE_SNAPSHOT_V1\0')
         .update(canonicalJson(value))
         .digest('hex')}` as Sha256;
+}
+
+function validWorkspaceId(workspaceId: string): boolean {
+    return (
+        workspaceId.trim().length > 0 &&
+        workspaceId.length <= 256 &&
+        !/[\u0000-\u001f\u007f]/.test(workspaceId)
+    );
 }
 
 function validStepResult(value: unknown): value is CandidateCanaryStepResult {
@@ -119,6 +148,18 @@ function validStepResult(value: unknown): value is CandidateCanaryStepResult {
     return (
         (result.status === 'passed' || result.status === 'skipped' || result.status === 'blocked') &&
         (result.code === undefined || (typeof result.code === 'string' && result.code.length > 0))
+    );
+}
+
+function validGrantReview(value: unknown): value is CandidateCanaryGrantReview {
+    if (!value || typeof value !== 'object') return false;
+    const review = value as Partial<CandidateCanaryGrantReview>;
+    return (
+        typeof review.revision === 'string' &&
+        review.revision.length > 0 &&
+        (review.status === 'current' ||
+            review.status === 'unreviewed' ||
+            review.status === 'stale')
     );
 }
 
@@ -154,14 +195,24 @@ export class PluginPackageCandidateCanaryService {
         this.#evidenceRoot = resolve(extensionsRoot, '.state', 'candidate-canary');
     }
 
-    evidencePath(pluginId: string, packageDigest: Sha256): string {
+    evidencePath(pluginId: string, packageDigest: Sha256, workspaceId: string): string {
         // packagePath performs the shared strict plugin/digest validation first.
         this.packages.packagePath(pluginId, packageDigest);
-        return resolve(this.#evidenceRoot, pluginId, `${packageDigest}.json`);
+        if (!validWorkspaceId(workspaceId)) {
+            throw new Error('Invalid workspace id for candidate canary evidence');
+        }
+        const workspaceKey = createHash('sha256')
+            .update('OR3_PLUGIN_CANDIDATE_CANARY_WORKSPACE_V1\0')
+            .update(workspaceId)
+            .digest('hex');
+        return resolve(this.#evidenceRoot, pluginId, `${packageDigest}.${workspaceKey}.json`);
     }
 
     run(input: RunPluginCandidateCanaryInput): Promise<RunPluginCandidateCanaryResult> {
         return this.packages.runPluginOperation(input.pluginId, async () => {
+            if (!validWorkspaceId(input.workspaceId)) {
+                return blocked('state', 'workspace-id-invalid');
+            }
             if (
                 input.clientId.trim().length === 0 ||
                 input.clientId.length > 256 ||
@@ -191,6 +242,25 @@ export class PluginPackageCandidateCanaryService {
                 return blocked('pointer', 'candidate-manifest-mismatch');
             }
 
+            let grantReview: CandidateCanaryGrantReview;
+            try {
+                grantReview = await input.readGrantReview(
+                    Object.freeze({
+                        pluginId: input.pluginId,
+                        packageDigest: input.packageDigest,
+                        manifestDigest: verification.manifestDigest,
+                    })
+                );
+            } catch {
+                return blocked('grants', 'grant-review-unavailable');
+            }
+            if (!validGrantReview(grantReview)) {
+                return blocked('grants', 'grant-review-invalid');
+            }
+            if (grantReview.status !== 'current') {
+                return blocked('grants', `grant-review-${grantReview.status}`);
+            }
+
             let state: CandidateStateValue;
             try {
                 state = cloneAndFreeze(await input.snapshotState());
@@ -203,6 +273,7 @@ export class PluginPackageCandidateCanaryService {
             try {
                 server = await input.serverDryRun(Object.freeze({
                     pluginId: input.pluginId,
+                    workspaceId: input.workspaceId,
                     packageDigest: input.packageDigest,
                     packagePath: this.packages.packagePath(input.pluginId, input.packageDigest),
                     dryRun: true,
@@ -220,6 +291,7 @@ export class PluginPackageCandidateCanaryService {
             try {
                 client = await input.clientHiddenPrepare(Object.freeze({
                     pluginId: input.pluginId,
+                    workspaceId: input.workspaceId,
                     packageDigest: input.packageDigest,
                     packagePath: this.packages.packagePath(input.pluginId, input.packageDigest),
                     clientId: input.clientId,
@@ -235,18 +307,24 @@ export class PluginPackageCandidateCanaryService {
             }
 
             const evidence: CandidateCanaryEvidence = Object.freeze({
-                schemaVersion: 1,
+                schemaVersion: 2,
                 pluginId: input.pluginId,
+                workspaceId: input.workspaceId,
                 packageDigest: input.packageDigest,
                 manifestDigest: verification.manifestDigest,
                 pointerRevision: pointer.revision,
                 clientId: input.clientId,
-                stateSnapshotDigest: stateDigest(state),
+                stateSnapshotDigest: createCandidateStateSnapshotDigest(state),
+                grantReviewRevision: grantReview.revision,
                 server: Object.freeze({ ...server }),
                 client: Object.freeze({ ...client }),
                 completedAt: (input.now ?? Date.now)(),
             });
-            const path = this.evidencePath(input.pluginId, input.packageDigest);
+            const path = this.evidencePath(
+                input.pluginId,
+                input.packageDigest,
+                input.workspaceId
+            );
             const directory = resolve(path, '..');
             await fs.mkdir(directory, { recursive: true, mode: 0o700 });
             const temporary = resolve(directory, `.${input.packageDigest}.${randomUUID()}.tmp`);

@@ -64,9 +64,10 @@ export interface UseMultiPaneOptions {
 export interface UseMultiPaneApi {
     panes: Ref<PaneState[]>;
     activePaneIndex: Ref<number>;
+    activePaneId: ComputedRef<string | null>;
     canAddPane: ComputedRef<boolean>;
     newWindowTooltip: ComputedRef<string>;
-    addPane: () => void;
+    addPane: () => string | null;
     closePane: (index: number) => Promise<void> | void;
     setActive: (index: number) => void;
     focusPrev: (current: number) => void;
@@ -84,6 +85,8 @@ export interface UseMultiPaneApi {
         opts?: { recordId?: string }
     ) => Promise<void>;
     updatePane: (index: number, updates: Partial<PaneState>) => void;
+    getPaneIndexById: (paneId: string) => number;
+    getPaneById: (paneId: string) => PaneState | undefined;
     getPaneWidth: (index: number) => string;
     handleResize: (
         paneIndex: number,
@@ -255,6 +258,9 @@ export function useMultiPane(
 
     const panes = ref<PaneState[]>([createEmptyPane(initialThreadId)]);
     const activePaneIndex = ref(0);
+    const activePaneId = computed(
+        () => panes.value[activePaneIndex.value]?.id ?? null
+    );
     const hooks = useHooks();
     const threadLoadGenerations = new Map<string, number>();
     const closingPaneIds = new Set<string>();
@@ -605,8 +611,8 @@ export function useMultiPane(
         });
     }
 
-    function addPane() {
-        if (!canAddPane.value) return;
+    function addPane(): string | null {
+        if (!canAddPane.value) return null;
         const pane = createEmptyPane();
 
         // Adjust widths for new pane
@@ -641,6 +647,7 @@ export function useMultiPane(
             index: newIndex,
             previousIndex: prevIndex === newIndex ? undefined : prevIndex,
         });
+        return pane.id;
     }
 
     async function closePane(i: number) {
@@ -950,9 +957,19 @@ export function useMultiPane(
         }
     }
 
+    function getPaneIndexById(paneId: string): number {
+        return panes.value.findIndex((pane) => pane.id === paneId);
+    }
+
+    function getPaneById(paneId: string): PaneState | undefined {
+        const index = getPaneIndexById(paneId);
+        return index >= 0 ? panes.value[index] : undefined;
+    }
+
     const api: UseMultiPaneApi = {
         panes,
         activePaneIndex,
+        activePaneId,
         canAddPane,
         newWindowTooltip,
         addPane,
@@ -966,6 +983,8 @@ export function useMultiPane(
         newPaneForApp,
         setPaneApp,
         updatePane,
+        getPaneIndexById,
+        getPaneById,
         getPaneWidth,
         handleResize,
         persistPaneWidths: persistWidths,

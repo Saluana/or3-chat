@@ -130,10 +130,10 @@ const V2RuntimeServerSchema = z
     })
     .strict()
     .superRefine((value, ctx) => {
-        if (!value.entry && value.routes.length === 0) {
+        if (value.routes.length === 0) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: 'V2 server runtime must declare an entrypoint or route',
+                message: 'V2 server runtime must declare at least one route',
             });
         }
         const seen = new Set<string>();

@@ -31,6 +31,9 @@ const FALLBACK_OR3_CONFIG: ResolvedOr3Config = {
         dashboard: {
             enabled: true,
         },
+        workspaceTabs: {
+            enabled: true,
+        },
     },
     limits: {
         maxFileSizeBytes: 20 * 1024 * 1024,
@@ -160,6 +163,10 @@ export function useOr3Config(): Readonly<ResolvedOr3Config> {
                 ...FALLBACK_OR3_CONFIG.features.dashboard,
                 ...(publicConfig.features?.dashboard ?? {}),
             },
+            workspaceTabs: {
+                ...FALLBACK_OR3_CONFIG.features.workspaceTabs,
+                ...(publicConfig.features?.workspaceTabs ?? {}),
+            },
         },
     };
 }
@@ -179,7 +186,13 @@ export function useOr3Config(): Readonly<ResolvedOr3Config> {
  * ```
  */
 export function isFeatureEnabled(
-    feature: 'workflows' | 'documents' | 'backup' | 'mentions' | 'dashboard'
+    feature:
+        | 'workflows'
+        | 'documents'
+        | 'backup'
+        | 'mentions'
+        | 'dashboard'
+        | 'workspaceTabs'
 ): boolean {
     return useOr3Config().features[feature].enabled;
 }
