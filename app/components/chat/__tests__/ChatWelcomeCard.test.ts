@@ -6,14 +6,16 @@ import ChatWelcomeCard from '../ChatWelcomeCard.vue';
 const startLogin = vi.fn();
 const persistUserApiKey = vi.fn();
 const toastAdd = vi.fn();
+const runtimeConfig = ref({
+    public: {
+        branding: { appName: 'OR3' },
+        ssrAuthEnabled: false,
+    },
+});
 
 vi.mock('#imports', () => ({
     useToast: () => ({ add: toastAdd }),
-    useRuntimeConfig: () => ({
-        public: {
-            branding: { appName: 'OR3' },
-        },
-    }),
+    useRuntimeConfig: () => runtimeConfig.value,
 }));
 
 vi.mock('~/composables/useIcon', () => ({
@@ -51,6 +53,12 @@ const UInputStub = {
 describe('ChatWelcomeCard a11y', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        runtimeConfig.value = {
+            public: {
+                branding: { appName: 'OR3' },
+                ssrAuthEnabled: false,
+            },
+        };
     });
 
     function mountCard() {
@@ -98,6 +106,23 @@ describe('ChatWelcomeCard a11y', () => {
                 .some((btn) => btn.attributes('aria-label') === 'Dismiss welcome')
         ).toBe(true);
 
+        wrapper.unmount();
+    });
+
+    it('describes the self-hosted workspace in cloud mode', async () => {
+        runtimeConfig.value = {
+            public: {
+                branding: { appName: 'OR3' },
+                ssrAuthEnabled: true,
+            },
+        };
+
+        const wrapper = mountCard();
+        await flushPromises();
+
+        expect(wrapper.get('#chat-welcome-description').text()).toContain(
+            'connected to this self-hosted workspace'
+        );
         wrapper.unmount();
     });
 

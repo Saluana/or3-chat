@@ -103,6 +103,44 @@ async function authenticate() {
     };
 }
 
+async function verifyAdminDashboard() {
+    const env = parseEnv(await readFile(resolve('.env'), 'utf8'));
+    const username = env.OR3_ADMIN_USERNAME;
+    const password = env.OR3_ADMIN_PASSWORD;
+    if (!username || !password) {
+        throw new Error('Admin dashboard credentials are missing from .env.');
+    }
+
+    const signIn = await fetch(new URL('/api/admin/auth/login', baseUrl), {
+        method: 'POST',
+        headers: {
+            accept: 'application/json',
+            'content-type': 'application/json',
+            origin: baseUrl,
+        },
+        body: JSON.stringify({ username, password }),
+    });
+    await expectOk(signIn);
+    const setCookies =
+        typeof signIn.headers.getSetCookie === 'function'
+            ? signIn.headers.getSetCookie()
+            : [signIn.headers.get('set-cookie')].filter(Boolean);
+    const cookie = setCookies
+        .map((value) => value.split(';', 1)[0])
+        .join('; ');
+    if (!cookie) throw new Error('Admin sign-in did not set a cookie.');
+
+    const dashboard = await expectOk(
+        await fetch(new URL('/admin', baseUrl), {
+            headers: { cookie },
+        })
+    );
+    const page = await dashboard.text();
+    if (!page.includes('Admin')) {
+        throw new Error('Admin dashboard did not render after sign-in.');
+    }
+}
+
 async function verifySync(cookie, workspaceId) {
     const pull = await jsonRequest('/api/sync/pull', {
         cookie,
@@ -115,6 +153,17 @@ async function verifySync(cookie, workspaceId) {
     });
     if (!Array.isArray(pull.changes) || typeof pull.nextCursor !== 'number') {
         throw new Error('SQLite sync pull returned an invalid response.');
+    }
+}
+
+async function verifyCloudMode() {
+    const response = await expectOk(await fetch(new URL('/', baseUrl)));
+    const page = await response.text();
+    if (!page.includes('ssrAuthEnabled:true')) {
+        throw new Error('Rendered application did not enable cloud mode.');
+    }
+    if (!page.includes('authProvider:"basic-auth"')) {
+        throw new Error('Rendered application did not select basic authentication.');
     }
 }
 
@@ -200,6 +249,8 @@ async function verifyFixture(cookie, workspaceId) {
 }
 
 const { cookie, workspaceId } = await authenticate();
+await verifyCloudMode();
+await verifyAdminDashboard();
 await verifySync(cookie, workspaceId);
 if (phase === 'write') {
     await writeFixture(cookie, workspaceId);

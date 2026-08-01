@@ -26,8 +26,9 @@
  * @see core/auth/useUserApiKey for reactive key state
  */
 import { ref } from 'vue';
-import { useRuntimeConfig } from '#imports';
+import { useRuntimeConfig, useToast } from '#imports';
 import { kv } from '~/db';
+import { useSessionContext } from '~/composables/auth/useSessionContext';
 
 function base64urlencode(str: ArrayBuffer) {
     return btoa(String.fromCharCode(...new Uint8Array(str)))
@@ -65,6 +66,29 @@ export function useOpenRouterAuth() {
 
     const startLogin = async () => {
         if (isLoggingIn.value) return;
+        const rc = useRuntimeConfig();
+        if (rc.public?.ssrAuthEnabled === true) {
+            const { data, refresh } = useSessionContext();
+            let authenticated = data.value?.session?.authenticated === true;
+            if (!authenticated) {
+                try {
+                    authenticated =
+                        (await refresh())?.session?.authenticated === true;
+                } catch {
+                    authenticated = false;
+                }
+            }
+            if (!authenticated) {
+                useToast().add({
+                    title: 'Sign in required',
+                    description:
+                        'Sign in to this workspace before connecting OpenRouter.',
+                    color: 'warning',
+                    duration: 5000,
+                });
+                return;
+            }
+        }
         isLoggingIn.value = true;
         const codeVerifier = Array.from(
             crypto.getRandomValues(new Uint8Array(64))
@@ -109,7 +133,6 @@ export function useOpenRouterAuth() {
         sessionStorage.setItem('openrouter_state', state);
         localStorage.setItem('openrouter_state', state);
 
-        const rc = useRuntimeConfig();
         // default callback to current origin + known path when not provided
         const redirectUri = rc.public.openRouterRedirectUri;
         const callbackUrl =

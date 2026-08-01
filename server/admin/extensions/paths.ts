@@ -11,7 +11,8 @@
  * - Bootstrap necessary directories (`plugins`, `themes`, `temp`, etc.).
  *
  * Constraints:
- * - Directories are created relative to the process current working directory.
+ * - Directories default to the process current working directory.
+ * - Deployments may set `OR3_EXTENSIONS_ROOT` to use persistent storage.
  */
 import { promises as fs } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -20,7 +21,11 @@ import type { ExtensionKind } from './types';
 /**
  * The absolute path to the root `extensions/` directory on the server.
  */
-export const EXTENSIONS_BASE_DIR = resolve(process.cwd(), 'extensions');
+const configuredExtensionsRoot = process.env.OR3_EXTENSIONS_ROOT?.trim();
+
+export const EXTENSIONS_BASE_DIR = configuredExtensionsRoot
+    ? resolve(configuredExtensionsRoot)
+    : resolve(process.cwd(), 'extensions');
 
 /**
  * Purpose:

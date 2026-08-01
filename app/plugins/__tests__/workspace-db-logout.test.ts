@@ -13,7 +13,10 @@ vi.mock('~/composables/auth/confirmClientSignedOut', () => ({
 
 const sessionState = {
     value: {
-        session: null as null | { authenticated: boolean; workspace?: { id?: string } },
+        session: null as null | {
+            authenticated: boolean;
+            workspace?: { id?: string };
+        },
     },
 };
 
@@ -60,19 +63,33 @@ describe('workspace logout cleanup plugin', () => {
         logoutCleanup.mockClear();
         confirmClientSignedOut.mockReset().mockResolvedValue(false);
         sessionState.value.session = null;
-        (globalThis as typeof globalThis & {
-            defineNuxtPlugin?: (plugin: () => unknown) => unknown;
-            useRuntimeConfig?: () => { public: { ssrAuthEnabled: boolean } };
-            useNuxtApp?: () => { provide: (key: string, value: unknown) => void };
-        }).defineNuxtPlugin = (plugin) => plugin();
-        (globalThis as typeof globalThis & {
-            useRuntimeConfig?: () => { public: { ssrAuthEnabled: boolean } };
-        }).useRuntimeConfig = () => ({
+        (
+            globalThis as typeof globalThis & {
+                defineNuxtPlugin?: (plugin: () => unknown) => unknown;
+                useRuntimeConfig?: () => {
+                    public: { ssrAuthEnabled: boolean };
+                };
+                useNuxtApp?: () => {
+                    provide: (key: string, value: unknown) => void;
+                };
+            }
+        ).defineNuxtPlugin = (plugin) => plugin();
+        (
+            globalThis as typeof globalThis & {
+                useRuntimeConfig?: () => {
+                    public: { ssrAuthEnabled: boolean };
+                };
+            }
+        ).useRuntimeConfig = () => ({
             public: { ssrAuthEnabled: true },
         });
-        (globalThis as typeof globalThis & {
-            useNuxtApp?: () => { provide: (key: string, value: unknown) => void };
-        }).useNuxtApp = () => ({
+        (
+            globalThis as typeof globalThis & {
+                useNuxtApp?: () => {
+                    provide: (key: string, value: unknown) => void;
+                };
+            }
+        ).useNuxtApp = () => ({
             provide: vi.fn(),
         });
     });
@@ -92,10 +109,24 @@ describe('workspace logout cleanup plugin', () => {
         await vi.waitFor(() => {
             expect(logoutCleanup).toHaveBeenCalledTimes(1);
         });
-        expect(logoutCleanup).toHaveBeenCalledWith(
-            expect.anything(),
-            { preserveExternalAgentCredentials: true }
-        );
+        expect(logoutCleanup).toHaveBeenCalledWith(expect.anything(), {
+            preserveExternalAgentCredentials: true,
+        });
+    });
+
+    it('keeps PKCE markers while OpenRouter is returning to the callback page', async () => {
+        window.history.replaceState({}, '', '/openrouter-callback');
+        confirmClientSignedOut.mockResolvedValue(true);
+
+        await import('~/plugins/00-workspace-db.client');
+
+        await vi.waitFor(() => {
+            expect(logoutCleanup).toHaveBeenCalledWith(expect.anything(), {
+                preserveExternalAgentCredentials: true,
+                preserveOpenRouterPkce: true,
+            });
+        });
+        window.history.replaceState({}, '', '/');
     });
 
     it('does not clear workspace DBs when session is authenticated', async () => {

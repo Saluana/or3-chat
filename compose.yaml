@@ -3,6 +3,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SSR_AUTH_ENABLED: ${SSR_AUTH_ENABLED:-false}
+        AUTH_PROVIDER: ${AUTH_PROVIDER:-clerk}
+        OR3_GUEST_ACCESS_ENABLED: ${OR3_GUEST_ACCESS_ENABLED:-false}
+        OR3_SYNC_ENABLED: ${OR3_SYNC_ENABLED:-false}
+        OR3_SYNC_PROVIDER: ${OR3_SYNC_PROVIDER:-convex}
+        OR3_STORAGE_ENABLED: ${OR3_STORAGE_ENABLED:-false}
+        NUXT_PUBLIC_STORAGE_PROVIDER: ${NUXT_PUBLIC_STORAGE_PROVIDER:-convex}
     env_file:
       - path: .env
         required: false
@@ -12,6 +20,8 @@ services:
       OR3_BASIC_AUTH_DB_PATH: /data/auth.sqlite
       OR3_SQLITE_DB_PATH: /data/sync.sqlite
       OR3_STORAGE_FS_ROOT: /data/storage
+      OR3_EXTENSIONS_ROOT: /data/extensions
+      OR3_ADMIN_DATA_DIR: /data/admin
     ports:
       - "127.0.0.1:${OR3_PORT:-3000}:3000"
     volumes:

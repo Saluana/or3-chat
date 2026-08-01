@@ -37,6 +37,7 @@
 </template>
 
 <script setup lang="ts">
+import { useToast } from '#imports';
 import { reportError, err } from '~/utils/errors';
 import { kv } from '~/db';
 import { state } from '~/state/global';
@@ -52,7 +53,7 @@ const redirecting = ref(false);
 const errorMessage = ref('');
 const title = computed(() =>
     errorMessage.value
-        ? 'Login completed with warnings'
+        ? 'OpenRouter connection not completed'
         : ready.value
         ? 'Login complete'
         : 'Completing login…'
@@ -96,6 +97,7 @@ async function goHome() {
     try {
         await router.replace('/');
         log("router.replace('/') resolved");
+        return;
     } catch (e: any) {
         // intentionally ignored: navigation fallback
     }
@@ -106,15 +108,6 @@ async function goHome() {
     } catch (e: any) {
         // intentionally ignored: navigation fallback
     }
-    // Last-chance fallback on browsers that ignore replace
-    setTimeout(() => {
-        try {
-            log("Attempting final window.location.assign('/')");
-            window.location.assign('/');
-        } catch (e: any) {
-            // intentionally ignored: navigation fallback
-        }
-    }, 150);
 }
 
 onMounted(async () => {
@@ -149,17 +142,20 @@ onMounted(async () => {
     });
 
     if (!code || !verifier) {
+        const missing = !code ? 'code' : 'verifier';
         reportError(
-            err('ERR_AUTH', 'Missing code or verifier', {
+            err('ERR_AUTH', `Missing ${missing}`, {
                 severity: 'warn',
-                tags: { domain: 'auth', page: 'openrouter-callback' },
+                tags: { domain: 'auth', page: 'openrouter-callback', missing },
             }),
             { toast: true }
         );
         loading.value = false;
         ready.value = true;
         errorMessage.value =
-            'Missing code or verifier. Tap Continue to return.';
+            missing === 'code'
+                ? 'OpenRouter did not return an authorization code. Start the connection again.'
+                : 'This connection was started in a different browser or address. Start it again from this address.';
         return;
     }
     if (savedState && state !== savedState) {
@@ -254,23 +250,15 @@ onMounted(async () => {
         await new Promise((r) => setTimeout(r, 10));
         loading.value = false;
         ready.value = true;
+        useToast().add({
+            title: 'OpenRouter connected',
+            description: 'Your API key was saved. You can start chatting now.',
+            color: 'primary',
+            duration: 4000,
+        });
         log('ready to redirect');
         setTimeout(() => {
-            log("auto: router.replace('/')");
-            router.replace('/').catch((e: any) => {
-                log('auto: router.replace failed', (e && e.message) || e);
-            });
-            setTimeout(() => {
-                try {
-                    log("auto: window.location.replace('/')");
-                    window.location.replace('/');
-                } catch (e: any) {
-                    log(
-                        'auto: window.location.replace failed',
-                        (e && e.message) || e
-                    );
-                }
-            }, 250);
+            void goHome();
         }, 50);
         return true;
     };

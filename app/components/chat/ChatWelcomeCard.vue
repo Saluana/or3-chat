@@ -29,9 +29,7 @@
             :id="descriptionId"
             class="mt-2 text-sm text-[var(--md-on-surface-variant)]"
         >
-            {{ siteName }} is local-first: your conversations stay on this
-            device. To start chatting, connect your OpenRouter account — it
-            takes about 10 seconds.
+            {{ welcomeDescription }}
         </p>
         <UButton
             block
@@ -110,6 +108,11 @@ const iconClose = useIcon('ui.close');
 const runtimeConfig = useRuntimeConfig();
 const siteName = computed(
     () => runtimeConfig.public?.branding?.appName ?? 'OR3'
+);
+const welcomeDescription = computed(() =>
+    runtimeConfig.public?.ssrAuthEnabled === true
+        ? `${siteName.value} is connected to this self-hosted workspace. To start chatting, connect your OpenRouter account — it takes about 10 seconds.`
+        : `${siteName.value} is local-first: your conversations stay on this device. To start chatting, connect your OpenRouter account — it takes about 10 seconds.`
 );
 
 const titleId = 'chat-welcome-title';

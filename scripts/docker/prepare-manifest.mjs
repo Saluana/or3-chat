@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const qualifiedVersions = {
     '@or3/intern-client': '0.1.1',
-    'or3-provider-basic-auth': '0.0.4',
+    'or3-provider-basic-auth': '0.0.5',
     'or3-provider-clerk': '0.0.4',
     'or3-provider-convex': '0.0.4',
     'or3-provider-fs': '0.0.4',

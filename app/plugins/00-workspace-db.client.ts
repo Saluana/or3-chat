@@ -29,9 +29,19 @@ export default defineNuxtPlugin(async () => {
 
     await refresh();
     if (await shouldRunLogoutCleanup(data.value?.session?.authenticated)) {
+        const cleanupOptions: {
+            preserveExternalAgentCredentials: boolean;
+            preserveOpenRouterPkce?: boolean;
+        } = { preserveExternalAgentCredentials: true };
+        // This page must retain the verifier created before the redirect, even
+        // when the workspace session is unauthenticated. It is cleared as soon
+        // as the OpenRouter exchange completes.
+        if (window.location.pathname === '/openrouter-callback') {
+            cleanupOptions.preserveOpenRouterPkce = true;
+        }
         await logoutCleanup(
             nuxtApp as Parameters<typeof logoutCleanup>[0],
-            { preserveExternalAgentCredentials: true }
+            cleanupOptions
         );
     }
 

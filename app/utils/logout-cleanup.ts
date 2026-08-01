@@ -36,6 +36,11 @@ interface LogoutCleanupOptions {
      * An explicit authenticated -> signed-out transition still clears them.
      */
     preserveExternalAgentCredentials?: boolean;
+    /**
+     * Keep the short-lived PKCE markers while the OpenRouter callback is
+     * exchanging its authorization code. The callback clears them itself.
+     */
+    preserveOpenRouterPkce?: boolean;
 }
 
 /**
@@ -73,25 +78,31 @@ export async function logoutCleanup(
     if (typeof localStorage !== 'undefined') {
         const keys = [
             'openrouter_api_key',
-            'openrouter_state',
-            'openrouter_code_verifier',
-            'openrouter_code_method',
             'or3:server-route-available',
             'or3:background-streaming-available',
             'or3.tools.enabled',
             'last_selected_model',
         ];
+        if (!options.preserveOpenRouterPkce) {
+            keys.push(
+                'openrouter_state',
+                'openrouter_code_verifier',
+                'openrouter_code_method',
+            );
+        }
         if (!options.preserveExternalAgentCredentials) {
             keys.push('or3.external-agents.credentials.v1');
         }
         keys.forEach((key) => localStorage.removeItem(key));
     }
     if (typeof sessionStorage !== 'undefined') {
-        [
-            'openrouter_state',
-            'openrouter_code_verifier',
-            'openrouter_code_method',
-        ].forEach((key) => sessionStorage.removeItem(key));
+        if (!options.preserveOpenRouterPkce) {
+            [
+                'openrouter_state',
+                'openrouter_code_verifier',
+                'openrouter_code_method',
+            ].forEach((key) => sessionStorage.removeItem(key));
+        }
     }
 
     // Clear cached workspace list

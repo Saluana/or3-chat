@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { EXTENSIONS_BASE_DIR } from './paths';
 
 const APP_THEME_ROOT = resolve(process.cwd(), 'app', 'theme');
 const EXTENSION_THEME_MARKER = '.or3-extension-theme';
@@ -84,7 +85,7 @@ export async function syncInstalledThemeToApp(
 
 export async function removeSyncedThemeFromApp(themeId: string): Promise<void> {
     const targetDir = resolveThemeTargetDir(themeId);
-    const sourceDir = resolve(process.cwd(), 'extensions', 'themes', themeId);
+    const sourceDir = resolve(EXTENSIONS_BASE_DIR, 'themes', themeId);
     const managedTarget = await isManagedTarget(targetDir, sourceDir);
     if (!managedTarget) {
         return;
