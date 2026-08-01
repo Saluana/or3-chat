@@ -1,1 +1,0 @@
-export default async () => ({ ok: true, source: "escaped" });
