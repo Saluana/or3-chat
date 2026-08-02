@@ -1,4 +1,5 @@
 import type {
+  ExternalAgentCommandChoice,
   ExternalAgentApproval,
   ExternalAgentArtifact,
   ExternalAgentRunStatus,
@@ -55,6 +56,7 @@ const ALLOWED_PRESENTATION_KEYS = new Set([
   "item_type",
   "stream_kind",
   "delta",
+  "choices",
 ]);
 
 function record(value: unknown): Record<string, unknown> {
@@ -102,6 +104,18 @@ export function sanitizeExternalAgentPayload(
   for (const [key, candidate] of Object.entries(input)) {
     if (FORBIDDEN_KEY.test(key) || !ALLOWED_PRESENTATION_KEYS.has(key))
       continue;
+    if (key === "choices" && Array.isArray(candidate)) {
+      output.choices = candidate
+        .slice(0, 24)
+        .map((value) => {
+          const choice = record(value);
+          const label = cleanString(choice.label, 120);
+          const command = cleanString(choice.command, 500);
+          return label && command ? Object.freeze({ label, command }) : null;
+        })
+        .filter(Boolean);
+      continue;
+    }
     if (key === "files" && Array.isArray(candidate)) {
       output.files = candidate
         .slice(0, 50)
@@ -270,6 +284,7 @@ export interface AgentConversationTurn {
   readonly assistantMessage?: UiChatMessage;
   readonly approvals: readonly ExternalAgentApproval[];
   readonly artifacts: readonly AgentArtifactPresentation[];
+  readonly commandChoices: readonly ExternalAgentCommandChoice[];
   readonly error?: ExternalAgentPresentationError;
 }
 
@@ -600,6 +615,18 @@ function projectTurn(
           error: error?.message,
         }
       : undefined;
+  const commandChoices = events
+    .filter((event) => event.payload.rawType === "command.choices")
+    .flatMap((event) =>
+      (Array.isArray(event.payload.choices) ? event.payload.choices : [])
+        .map((value) => {
+          const choice = record(value);
+          const label = cleanString(choice.label, 120);
+          const command = cleanString(choice.command, 500);
+          return label && command ? { label, command } : null;
+        })
+        .filter((value): value is ExternalAgentCommandChoice => Boolean(value)),
+    );
   return Object.freeze({
     id: turn.id,
     sequence: turn.sequence,
@@ -615,6 +642,7 @@ function projectTurn(
         ...artifact,
         preview: cleanString(artifact.content, 600),
       })),
+    commandChoices: Object.freeze(commandChoices),
     error,
   });
 }

@@ -33,7 +33,7 @@
       <div class="mt-5 flex flex-wrap gap-2">
         <UButton
           v-if="launcherRecovery.kind === 'connect'"
-          icon="i-lucide-copy"
+          :icon="iconCopy"
           @click="copyConnectCommand"
         >
           {{ connectCommandCopied ? "Copied" : "Copy Connect command" }}
@@ -46,9 +46,7 @@
             launcherRecovery.kind === 'authenticate'
           "
           :icon="
-            launcherRecovery.kind === 'reconnect'
-              ? 'i-lucide-plug-zap'
-              : 'i-lucide-refresh-cw'
+            launcherRecovery.kind === 'reconnect' ? iconConnect : iconRefresh
           "
           :loading="recoveryPending"
           @click="retryConnection"
@@ -64,7 +62,7 @@
             launcherRecovery.kind === 'unlock' ||
             launcherRecovery.kind === 'credential'
           "
-          icon="i-lucide-key-round"
+          :icon="iconKey"
           @click="openConnectionSettings"
         >
           {{
@@ -77,7 +75,7 @@
           v-if="launcherRecovery.kind !== 'connecting'"
           color="neutral"
           variant="ghost"
-          icon="i-lucide-settings-2"
+          :icon="iconSettings"
           @click="openConnectionSettings"
         >
           Connection settings
@@ -92,8 +90,8 @@
           Advanced: connect by URL and token
         </summary>
         <p class="mt-2 leading-relaxed">
-          Engineers can add an existing or3-intern endpoint directly in
-          Connection settings.
+          Add an existing agent service by URL and token in Connection
+          settings. OR3 detects the connection type automatically.
         </p>
       </details>
 
@@ -111,6 +109,8 @@
         ref="composer"
         v-model="instruction"
         :loading="launching"
+        :attachments-enabled="attachmentsEnabled"
+        :commands="selectedOption?.runner.commands ?? []"
         placeholder="Describe the change, investigation, or review…"
         @send="launch"
       >
@@ -166,6 +166,7 @@ import {
 import { presentExternalAgentError } from "~/core/external-agents/presentation";
 import { useExternalAgentRuntime } from "~/core/external-agents/runtime";
 import { useActiveSidebarPage } from "~/composables/sidebar/useActiveSidebarPage";
+import { useIcon } from "~/composables/useIcon";
 
 const CONNECT_COMMAND = "npx @or3/connect";
 
@@ -182,6 +183,17 @@ const emit = defineEmits<{
 
 const runtime = useExternalAgentRuntime();
 const { setActivePage } = useActiveSidebarPage();
+const iconCopy = useIcon("ui.copy");
+const iconConnect = useIcon("external-agent.connect");
+const iconRefresh = useIcon("ui.refresh");
+const iconKey = useIcon("external-agent.key");
+const iconSettings = useIcon("ui.settings");
+const iconInstall = useIcon("external-agent.install");
+const iconLock = useIcon("ui.lock");
+const iconLoading = useIcon("ui.loading");
+const iconServerOff = useIcon("external-agent.server.off");
+const iconLogin = useIcon("ui.login");
+const iconPackage = useIcon("external-agent.package");
 const composer = ref<{
   clearAttachments: (
     expected?: readonly ExternalAgentUploadAttachment[],
@@ -210,6 +222,17 @@ const availableOptions = computed(() =>
 );
 const selectedOption = computed(() =>
   options.value.find((option) => option.runner.id === runnerId.value),
+);
+const attachmentsEnabled = computed(
+  () => {
+    const host = runtime.snapshot.value?.hosts.find(
+      (candidate) => candidate.id === runtime.snapshot.value?.activeHostId,
+    );
+    return (
+      host?.driver !== "runs" ||
+      selectedOption.value?.runner.chat_capabilities?.attachments === true
+    );
+  },
 );
 const availableRunnerIds = computed(() =>
   availableOptions.value.map((option) => option.runner.id).join("\u0000"),
@@ -244,7 +267,7 @@ const launcherRecovery = computed(() => {
   if (!current?.hosts.length || !current.activeHostId) {
     return {
       kind: "connect" as const,
-      icon: "i-lucide-monitor-up",
+      icon: iconInstall.value,
       title: "Connect your computer",
       description:
         "Run one command on the computer that should run agents, then enter the code it shows.",
@@ -253,7 +276,7 @@ const launcherRecovery = computed(() => {
   if (controller?.pinCredentialStatus.locked) {
     return {
       kind: "unlock" as const,
-      icon: "i-lucide-lock-keyhole",
+      icon: iconLock.value,
       title: "Unlock the saved token",
       description:
         "Enter your device PIN in Connection settings to use this trusted computer.",
@@ -262,7 +285,7 @@ const launcherRecovery = computed(() => {
   if (current.connectionState === "connecting") {
     return {
       kind: "connecting" as const,
-      icon: "i-lucide-loader-circle",
+      icon: iconLoading.value,
       title: "Connecting to your computer",
       description: "OR3 is checking the host and discovering its agents.",
     };
@@ -274,7 +297,7 @@ const launcherRecovery = computed(() => {
   ) {
     return {
       kind: "credential" as const,
-      icon: "i-lucide-key-round",
+      icon: iconKey.value,
       title: "Enter the access token again",
       description:
         "This trusted host used a session-only token, so OR3 forgot it when the page reloaded.",
@@ -286,7 +309,7 @@ const launcherRecovery = computed(() => {
   ) {
     return {
       kind: "reconnect" as const,
-      icon: "i-lucide-server-off",
+      icon: iconServerOff.value,
       title: "Your computer is offline",
       description:
         current.connectionError ||
@@ -297,7 +320,7 @@ const launcherRecovery = computed(() => {
   if (issue?.usability.code === "authentication_required") {
     return {
       kind: "authenticate" as const,
-      icon: "i-lucide-log-in",
+      icon: iconLogin.value,
       title: `Sign in to ${issue.runner.display_name}`,
       description: `${issue.usability.reason}. Sign in on ${current.hosts.find((host) => host.id === current.activeHostId)?.name ?? "the host"}, then refresh agents.`,
     };
@@ -305,14 +328,14 @@ const launcherRecovery = computed(() => {
   if (issue?.usability.code === "provider_unavailable") {
     return {
       kind: "install" as const,
-      icon: "i-lucide-package-plus",
+      icon: iconPackage.value,
       title: `Set up ${issue.runner.display_name}`,
       description: `${issue.usability.reason}. Install or start it on the host, then refresh agents.`,
     };
   }
   return {
     kind: "refresh" as const,
-    icon: "i-lucide-refresh-cw",
+    icon: iconRefresh.value,
     title: current.runners.length
       ? "This agent cannot start a chat"
       : "No agent runner was found",

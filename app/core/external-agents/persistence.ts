@@ -21,14 +21,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseHost(value: unknown): ExternalAgentHost | null {
   if (!isRecord(value)) return null;
-  const { id, name, baseUrl, credentialRef, trustedAt, lastConnectedAt } =
-    value;
+  const {
+    id,
+    name,
+    baseUrl,
+    credentialRef,
+    driver,
+    trustedAt,
+    lastConnectedAt,
+  } = value;
   if (
     typeof id !== "string" ||
     typeof name !== "string" ||
     typeof baseUrl !== "string" ||
     typeof credentialRef !== "string" ||
-    typeof trustedAt !== "string"
+    typeof trustedAt !== "string" ||
+    (driver !== undefined && driver !== "intern" && driver !== "runs")
   ) {
     return null;
   }
@@ -37,6 +45,7 @@ function parseHost(value: unknown): ExternalAgentHost | null {
     name,
     baseUrl,
     credentialRef,
+    driver,
     trustedAt,
     lastConnectedAt:
       typeof lastConnectedAt === "string" ? lastConnectedAt : undefined,

@@ -31,6 +31,49 @@
         @paste="onPaste"
       />
 
+      <UPopover
+        :open="commandSuggestions.length > 0"
+        :dismissible="false"
+        :content="commandPopoverContent"
+        :ui="{ content: 'p-0 bg-transparent border-none shadow-none' }"
+      >
+        <template #content>
+          <div
+            class="flex max-h-[min(28rem,60dvh)] w-[min(30rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] shadow-xl"
+            role="listbox"
+            aria-label="Available agent commands"
+          >
+            <div class="border-b border-[var(--md-outline-variant)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--md-on-surface-variant)]">
+              Agent commands
+            </div>
+            <div class="min-h-0 overflow-y-auto py-1.5">
+              <button
+                v-for="(command, index) in commandSuggestions"
+                :key="command.command"
+                type="button"
+                class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-[var(--md-surface-container-high)]"
+                :class="index === highlightedCommand ? 'bg-[var(--md-surface-container-high)]' : ''"
+                role="option"
+                :aria-selected="index === highlightedCommand"
+                @pointermove="highlightCommandFromPointer(index, $event)"
+                @mousedown.prevent="selectCommand(command)"
+              >
+                <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--md-surface-container-high)] font-mono text-sm font-semibold text-[var(--md-primary)]">/</span>
+                <span class="min-w-0 flex-1">
+                  <code class="block truncate text-sm font-semibold text-[var(--md-on-surface)]">{{ command.command }}</code>
+                  <span v-if="command.description" class="block truncate text-xs text-[var(--md-on-surface-variant)]">{{ command.description }}</span>
+                </span>
+              </button>
+            </div>
+            <div class="hidden items-center gap-4 border-t border-[var(--md-outline-variant)] px-3 py-2 text-[11px] text-[var(--md-on-surface-variant)] md:flex">
+              <span><kbd>↑↓</kbd> navigate</span>
+              <span><kbd>↵</kbd> select</span>
+              <span><kbd>esc</kbd> close</span>
+            </div>
+          </div>
+        </template>
+      </UPopover>
+
       <div
         v-if="attachments.length"
         class="chat-input-attachments flex max-h-28 gap-2 overflow-x-auto pb-0.5"
@@ -77,7 +120,7 @@
             :aria-label="`Remove ${attachment.name}`"
             @click="removeAttachment(attachment.id)"
           >
-            <UIcon name="i-lucide-x" class="size-3.5" />
+            <UIcon :name="iconClose" class="size-3.5" />
           </UButton>
         </article>
       </div>
@@ -88,7 +131,10 @@
         <div
           class="chat-input-bottom-controls-left flex min-w-0 flex-1 items-center gap-2"
         >
-          <div class="chat-input-attachment-btn relative shrink-0">
+          <div
+            v-if="attachmentsEnabled"
+            class="chat-input-attachment-btn relative shrink-0"
+          >
             <UButton
               v-bind="attachButtonProps"
               type="button"
@@ -96,7 +142,7 @@
               :disabled="disabled || loading"
               @click="openFilePicker"
             >
-              <UIcon name="i-lucide-paperclip" class="size-4" />
+              <UIcon :name="iconAttach" class="size-4" />
             </UButton>
           </div>
           <slot name="leading" />
@@ -110,7 +156,7 @@
                 aria-label="Agent settings"
                 :disabled="settingsDisabled"
               >
-                <UIcon name="i-lucide-sliders-horizontal" class="size-4" />
+                <UIcon :name="iconSettings" class="size-4" />
               </UButton>
               <template #content>
                 <div
@@ -132,7 +178,7 @@
             aria-label="Stop agent"
             @click="$emit('stop')"
           >
-            <UIcon name="i-lucide-square" class="size-4" />
+            <UIcon :name="iconStop" class="size-4" />
           </UButton>
           <UButton
             v-else
@@ -145,13 +191,14 @@
               disabled || loading || (!modelValue.trim() && !attachments.length)
             "
           >
-            <UIcon name="i-lucide-arrow-up" class="size-4" />
+            <UIcon :name="iconSend" class="size-4" />
           </UButton>
         </div>
       </div>
     </div>
 
     <input
+      v-if="attachmentsEnabled"
       ref="fileInput"
       type="file"
       class="sr-only"
@@ -162,7 +209,7 @@
     />
 
     <div
-      v-if="isDragging"
+      v-if="attachmentsEnabled && isDragging"
       :class="[
         'chat-input-drag-and-drop-overlay pointer-events-none absolute inset-0 z-50 grid place-items-center bg-[var(--md-primary-container)]/90',
         dragOverlayProps?.class,
@@ -171,7 +218,7 @@
       :data-theme-matches="dragOverlayProps?.['data-theme-matches']"
     >
       <div class="text-center text-[var(--md-on-primary-container)]">
-        <UIcon name="i-lucide-file-up" class="mx-auto mb-2 size-8" />
+        <UIcon :name="iconDrop" class="mx-auto mb-2 size-8" />
         <p class="text-sm font-medium">Drop files to attach</p>
       </div>
     </div>
@@ -179,13 +226,15 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useToast } from "#imports";
 import ChatComposerShell from "~/components/chat/ChatComposerShell.vue";
 import { useChatInputTheme } from "~/composables/chat/useChatInputTheme";
+import { useIcon } from "~/composables/useIcon";
 import { useOr3Config } from "~/composables/useOr3Config";
 import type {
   ExternalAgentAttachmentKind,
+  ExternalAgentCommand,
   ExternalAgentUploadAttachment,
 } from "~/core/external-agents/types";
 
@@ -200,14 +249,18 @@ const props = withDefaults(
     loading?: boolean;
     disabled?: boolean;
     settingsDisabled?: boolean;
+    attachmentsEnabled?: boolean;
     placeholder?: string;
+    commands?: readonly ExternalAgentCommand[];
   }>(),
   {
     running: false,
     loading: false,
     disabled: false,
     settingsDisabled: false,
+    attachmentsEnabled: true,
     placeholder: "Ask the agent to do something…",
+    commands: () => [],
   },
 );
 
@@ -221,8 +274,36 @@ const input = ref<HTMLTextAreaElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const attachments = ref<ComposerAttachment[]>([]);
 const isDragging = ref(false);
+const highlightedCommand = ref(0);
+const commandSuggestionsDismissed = ref(false);
 const dragDepth = ref(0);
-const closeIcon = ref("i-lucide-x");
+let commandFocusTimer: ReturnType<typeof setTimeout> | undefined;
+const commandPopoverContent = computed(() => ({
+  side: "top" as const,
+  align: "start" as const,
+  sideOffset: 8,
+  updatePositionStrategy: "always" as const,
+  reference: {
+    getBoundingClientRect: () =>
+      input.value?.getBoundingClientRect() ?? new DOMRect(0, 0, 0, 0),
+    contextElement: input.value ?? undefined,
+  } as any,
+  trapFocus: false as any,
+  openAutoFocus: false as any,
+  closeAutoFocus: false as any,
+  onOpenAutoFocus: (event: Event) => event.preventDefault(),
+}));
+const iconClose = useIcon("ui.close");
+const iconAttach = useIcon("chat.attach");
+const iconSettings = useIcon("chat.model.settings");
+const iconStop = useIcon("chat.stop");
+const iconSend = useIcon("chat.send");
+const iconDrop = useIcon("external-agent.drop");
+const iconFile = useIcon("external-agent.file");
+const iconFileText = useIcon("external-agent.file.text");
+const iconFileAudio = useIcon("external-agent.file.audio");
+const iconFileVideo = useIcon("external-agent.file.video");
+const iconFilePdf = useIcon("external-agent.file.pdf");
 const {
   sendButtonProps,
   stopButtonProps,
@@ -230,7 +311,7 @@ const {
   settingsButtonProps,
   mainContainerProps,
   dragOverlayProps,
-} = useChatInputTheme(closeIcon);
+} = useChatInputTheme(iconClose);
 const config = useOr3Config();
 const toast = useToast();
 
@@ -251,9 +332,58 @@ function submit() {
 }
 
 function onKeydown(event: KeyboardEvent) {
+  if (commandSuggestions.value.length) {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      highlightedCommand.value =
+        (highlightedCommand.value + direction + commandSuggestions.value.length) %
+        commandSuggestions.value.length;
+      return;
+    }
+    if (event.key === "Escape") {
+      commandSuggestionsDismissed.value = true;
+      return;
+    }
+    if (event.key === "Enter" || event.key === "Tab") {
+      event.preventDefault();
+      selectCommand(commandSuggestions.value[Math.max(0, highlightedCommand.value)]!);
+      return;
+    }
+  }
   if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
   event.preventDefault();
   submit();
+}
+
+const commandSuggestions = computed(() => {
+  const value = props.modelValue;
+  if (commandSuggestionsDismissed.value || !value.startsWith("/") || /\s/u.test(value)) return [];
+  const query = value.slice(1).toLowerCase();
+  return props.commands
+    .filter(
+      (command) =>
+        command.name.toLowerCase().includes(query) ||
+        command.description.toLowerCase().includes(query),
+    )
+    .slice(0, 10);
+});
+
+function selectCommand(command: ExternalAgentCommand) {
+  emit(
+    "update:modelValue",
+    `${command.command}${command.accepts_args ? " " : ""}`,
+  );
+  highlightedCommand.value = 0;
+  void nextTick(() => {
+    resizeInput();
+    focus();
+  });
+}
+
+function highlightCommandFromPointer(index: number, event: PointerEvent) {
+  if (!event.movementX && !event.movementY) return;
+  highlightedCommand.value = index;
 }
 
 function resizeInput() {
@@ -264,6 +394,7 @@ function resizeInput() {
 }
 
 function onInput(event: Event) {
+  commandSuggestionsDismissed.value = false;
   emit("update:modelValue", (event.target as HTMLTextAreaElement).value);
   resizeInput();
 }
@@ -276,6 +407,7 @@ function focusFromContainer(event: MouseEvent) {
 }
 
 function openFilePicker() {
+  if (!props.attachmentsEnabled) return;
   fileInput.value?.click();
 }
 
@@ -313,6 +445,7 @@ function releasePreview(attachment: ComposerAttachment) {
 }
 
 function addFiles(files: FileList | readonly File[]) {
+  if (!props.attachmentsEnabled) return;
   const available = config.limits.maxFilesPerMessage - attachments.value.length;
   if (available <= 0) {
     toast.add({
@@ -364,6 +497,7 @@ function onFileInput(event: Event) {
 }
 
 function onPaste(event: ClipboardEvent) {
+  if (!props.attachmentsEnabled) return;
   const files = event.clipboardData?.files;
   if (!files?.length) return;
   event.preventDefault();
@@ -371,6 +505,7 @@ function onPaste(event: ClipboardEvent) {
 }
 
 function onDragEnter(event: DragEvent) {
+  if (!props.attachmentsEnabled) return;
   if (!event.dataTransfer?.types.includes("Files")) return;
   dragDepth.value += 1;
   isDragging.value = true;
@@ -416,11 +551,11 @@ function clearAttachments(
 }
 
 function attachmentIcon(attachment: ComposerAttachment): string {
-  if (attachment.kind === "audio") return "i-lucide-file-audio";
-  if (attachment.kind === "video") return "i-lucide-file-video";
-  if (attachment.kind === "text") return "i-lucide-file-text";
-  if (attachment.mimeType === "application/pdf") return "i-lucide-file-type-2";
-  return "i-lucide-file";
+  if (attachment.kind === "audio") return iconFileAudio.value;
+  if (attachment.kind === "video") return iconFileVideo.value;
+  if (attachment.kind === "text") return iconFileText.value;
+  if (attachment.mimeType === "application/pdf") return iconFilePdf.value;
+  return iconFile.value;
 }
 
 function formatFileSize(size = 0): string {
@@ -435,10 +570,24 @@ function focus() {
 
 watch(
   () => props.modelValue,
-  () => void nextTick(resizeInput),
+  () => {
+    highlightedCommand.value = 0;
+    void nextTick(resizeInput);
+  },
+);
+watch(
+  () => commandSuggestions.value.length > 0,
+  (open, wasOpen) => {
+    if (!open || wasOpen) return;
+    clearTimeout(commandFocusTimer);
+    commandFocusTimer = setTimeout(() => input.value?.focus(), 0);
+  },
 );
 onMounted(resizeInput);
-onBeforeUnmount(clearAttachments);
+onBeforeUnmount(() => {
+  clearTimeout(commandFocusTimer);
+  clearAttachments();
+});
 
 defineExpose({ focus, clearAttachments });
 </script>

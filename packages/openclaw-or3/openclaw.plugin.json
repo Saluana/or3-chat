@@ -1,0 +1,31 @@
+{
+  "id": "or3-runs",
+  "name": "OR3 Runs",
+  "description": "Expose OpenClaw to OR3 Chat through a minimal authenticated Sessions/Runs API.",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "minLength": 1,
+        "default": "main"
+      },
+      "token": {
+        "type": "string",
+        "minLength": 16
+      },
+      "allowedOrigins": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uniqueItems": true
+      }
+    }
+  }
+}

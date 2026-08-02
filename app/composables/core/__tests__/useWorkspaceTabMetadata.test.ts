@@ -64,6 +64,18 @@ describe('useWorkspaceTabMetadata', () => {
                 lastActivatedAt: 1,
                 ephemeral: false,
             },
+            {
+                id: 'tab-dynamic-app',
+                resource: {
+                    kind: 'app' as const,
+                    appId: 'kanban',
+                    instanceKey: 'agent-session',
+                },
+                cachedTitle: 'OpenClaw · Investigate streaming',
+                createdAt: 1,
+                lastActivatedAt: 1,
+                ephemeral: false,
+            },
         ];
 
         await metadata.refresh(tabs);
@@ -75,5 +87,8 @@ describe('useWorkspaceTabMetadata', () => {
             title: 'Kanban',
             icon: 'i-lucide-kanban',
         });
+        expect(metadata.titleFor(tabs[3]!).title).toBe(
+            'OpenClaw · Investigate streaming'
+        );
     });
 });

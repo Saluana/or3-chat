@@ -15,7 +15,7 @@
           variant="ghost"
           color="neutral"
           size="sm"
-          icon="i-lucide-chevron-left"
+          :icon="iconChevronLeft"
           @click="setActivePage('sidebar-home')"
         >
           Home
@@ -28,7 +28,7 @@
               color="neutral"
               size="sm"
               square
-              icon="i-lucide-settings-2"
+              :icon="iconSettings"
               aria-label="Connection settings"
               @click="showConnections = true"
             />
@@ -38,7 +38,7 @@
               class="agent-new-button whitespace-nowrap"
               size="sm"
               variant="soft"
-              icon="i-lucide-bot"
+              :icon="iconBot"
               aria-label="New agent"
               @click="openLauncher"
             >
@@ -52,7 +52,7 @@
 
       <UInput
         v-model="query"
-        icon="i-lucide-search"
+        :icon="iconSearch"
         placeholder="Search agent sessions"
         aria-label="Search agent sessions"
         class="agent-sidebar-search w-full"
@@ -93,7 +93,7 @@
         v-if="!history.length"
         title="No agent sessions yet"
         description="Start with an instruction. Tools, approvals, and results will appear in the conversation."
-        icon="i-lucide-bot"
+        :icon="iconBot"
       >
         <template #actions>
           <UButton size="sm" @click="openLauncher">New agent</UButton>
@@ -114,7 +114,7 @@
       >
         <div>
           <UIcon
-            name="i-lucide-search-x"
+            :name="iconSearchEmpty"
             class="mx-auto mb-2 size-6 text-[var(--md-on-surface-variant)]"
           />
           <p class="text-sm font-medium">No matching sessions</p>
@@ -155,22 +155,22 @@
               <span class="mt-1 grid size-4 shrink-0 place-items-center">
                 <UIcon
                   v-if="item.status === 'running' || item.status === 'queued'"
-                  name="i-lucide-loader-circle"
+                  :name="iconLoading"
                   class="size-3.5 animate-spin"
                 />
                 <UIcon
                   v-else-if="item.pendingApprovalCount"
-                  name="i-lucide-shield-alert"
+                  :name="iconShieldAlert"
                   class="size-3.5 text-[var(--md-extended-color-warning-color)]"
                 />
                 <UIcon
                   v-else-if="item.status === 'failed'"
-                  name="i-lucide-circle-alert"
+                  :name="iconWarning"
                   class="size-3.5 text-[var(--md-error)]"
                 />
                 <UIcon
                   v-else
-                  name="i-lucide-bot"
+                  :name="iconBot"
                   class="size-3.5 text-[var(--md-on-surface-variant)]"
                 />
               </span>
@@ -239,7 +239,7 @@
     <UModal
       v-model:open="showConnections"
       title="Agent connections"
-      description="Manage trusted or3-intern hosts and credentials."
+      description="Manage trusted agent services and credentials."
       :ui="{
         overlay: 'bg-black/35 backdrop-blur-[3px]',
         content:
@@ -254,7 +254,7 @@
           <span
             class="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
           >
-            <UIcon name="i-lucide-network" class="size-4" />
+            <UIcon :name="iconNetwork" class="size-4" />
           </span>
           <span class="truncate text-base font-semibold sm:text-lg">
             Agent connections
@@ -295,7 +295,7 @@
                 variant="outline"
                 color="neutral"
                 square
-                icon="i-lucide-plus"
+                :icon="iconPlus"
                 aria-label="Add a trusted host"
                 @click="focusAddHost"
               />
@@ -349,7 +349,7 @@
               <span
                 class="mx-auto grid size-9 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
               >
-                <UIcon name="i-lucide-server-cog" class="size-4" />
+                <UIcon :name="iconServer" class="size-4" />
               </span>
               <p class="mt-2 text-sm font-medium">No hosts yet</p>
               <p
@@ -364,7 +364,7 @@
             >
               <div class="flex items-start gap-2">
                 <UIcon
-                  name="i-lucide-shield-check"
+                  :name="iconShieldCheck"
                   class="mt-0.5 size-4 shrink-0 text-[var(--md-primary)]"
                 />
                 <p
@@ -398,8 +398,8 @@
                   <UIcon
                     :name="
                       connected
-                        ? 'i-lucide-circle-check'
-                        : 'i-lucide-server-off'
+                        ? iconCheck
+                        : iconServerOff
                     "
                     class="size-5"
                   />
@@ -423,6 +423,11 @@
                     class="mt-0.5 truncate text-xs text-[var(--md-on-surface-variant)]"
                   >
                     {{ activeHost.baseUrl }}
+                  </p>
+                  <p
+                    class="mt-1 text-[11px] text-[var(--md-on-surface-variant)]"
+                  >
+                    {{ activeRuntimeLabel }} · {{ activeDriverLabel }}
                   </p>
                   <p
                     v-if="
@@ -467,10 +472,10 @@
                       variant="soft"
                       :icon="
                         connected
-                          ? 'i-lucide-refresh-cw'
+                          ? iconRefresh
                           : activeHostNeedsCredential
-                            ? 'i-lucide-key-round'
-                            : 'i-lucide-plug-zap'
+                            ? iconKey
+                            : iconConnect
                       "
                       :loading="hostActionPending"
                       @click="
@@ -497,7 +502,7 @@
                       size="sm"
                       variant="ghost"
                       color="neutral"
-                      icon="i-lucide-unplug"
+                      :icon="iconDisconnect"
                       aria-label="Go offline for now"
                       @click="goOfflineForNow"
                     >
@@ -513,7 +518,7 @@
                       size="sm"
                       variant="ghost"
                       color="error"
-                      icon="i-lucide-trash-2"
+                      :icon="iconTrash"
                       :loading="hostActionPending"
                       @click="requestCloudComputerRemoval"
                     >
@@ -533,7 +538,7 @@
                       variant="ghost"
                       color="neutral"
                       square
-                      icon="i-lucide-lock"
+                      :icon="iconLock"
                       aria-label="Lock saved token"
                       @click="lockSavedCredentials"
                     />
@@ -580,7 +585,7 @@
                   <UButton
                     size="sm"
                     color="error"
-                    icon="i-lucide-trash-2"
+                    :icon="iconTrash"
                     :loading="hostActionPending"
                     @click="removeCloudComputer"
                   >
@@ -597,7 +602,7 @@
                   <span
                     class="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
                   >
-                    <UIcon name="i-lucide-lock-keyhole" class="size-4" />
+                    <UIcon :name="iconLock" class="size-4" />
                   </span>
                   <div>
                     <p class="text-sm font-semibold">Unlock saved token</p>
@@ -619,11 +624,11 @@
                     autocomplete="current-password"
                     placeholder="Enter device PIN"
                     aria-label="Device PIN"
-                    icon="i-lucide-key-round"
+                    :icon="iconKey"
                     @keyup.enter="unlockAndReconnect"
                   />
                   <UButton
-                    icon="i-lucide-unlock"
+                    :icon="iconUnlock"
                     :loading="hostActionPending"
                     @click="unlockAndReconnect"
                   >
@@ -651,7 +656,7 @@
                   <span
                     class="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
                   >
-                    <UIcon name="i-lucide-key-round" class="size-4" />
+                    <UIcon :name="iconKey" class="size-4" />
                   </span>
                   <div>
                     <p class="text-sm font-semibold">
@@ -676,7 +681,7 @@
                     autocomplete="off"
                     placeholder="Access token"
                     aria-label="Token for selected host"
-                    icon="i-lucide-key-round"
+                    :icon="iconKey"
                     required
                   />
                   <div v-if="pinCredentialStatus.supported">
@@ -726,7 +731,7 @@
                     <UButton
                       class="ml-auto"
                       type="submit"
-                      icon="i-lucide-plug-zap"
+                      :icon="iconConnect"
                       :loading="hostActionPending"
                       :disabled="!reauthToken.trim()"
                     >
@@ -745,7 +750,7 @@
                 <span
                   class="grid size-9 shrink-0 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
                 >
-                  <UIcon name="i-lucide-monitor-up" class="size-4" />
+                  <UIcon :name="iconInstall" class="size-4" />
                 </span>
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
@@ -772,7 +777,7 @@
                 </code>
                 <UButton
                   size="sm"
-                  icon="i-lucide-copy"
+                  :icon="iconCopy"
                   @click="copyConnectCommand"
                 >
                   {{ connectCommandCopied ? "Copied" : "Copy command" }}
@@ -799,7 +804,7 @@
                 class="cursor-pointer list-none rounded-[var(--md-border-radius)] font-medium focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
               >
                 <span class="flex items-center gap-2 text-sm">
-                  <UIcon name="i-lucide-chevron-right" class="size-4 transition-transform group-open:rotate-90" />
+                  <UIcon :name="iconChevronRight" class="size-4 transition-transform group-open:rotate-90" />
                   Advanced: add another host by URL and token
                 </span>
               </summary>
@@ -809,8 +814,8 @@
                 @submit.prevent="addHost"
               >
                 <p class="mb-4 text-xs text-[var(--md-on-surface-variant)]">
-                  For engineers connecting an existing or3-intern endpoint
-                  directly.
+                  Connect an existing agent service directly. OR3 detects the
+                  supported protocol automatically.
                 </p>
                 <div class="grid gap-3 sm:grid-cols-2">
                 <label class="space-y-1.5">
@@ -820,7 +825,7 @@
                     class="w-full"
                     placeholder="Host name"
                     aria-label="Host name"
-                    icon="i-lucide-tag"
+                    :icon="iconTag"
                   />
                 </label>
                 <label class="space-y-1.5">
@@ -831,7 +836,7 @@
                     type="url"
                     placeholder="http://127.0.0.1:9100"
                     aria-label="Host URL"
-                    icon="i-lucide-link"
+                    :icon="iconLink"
                     required
                   />
                 </label>
@@ -844,7 +849,7 @@
                     autocomplete="off"
                     placeholder="Access token"
                     aria-label="Access token"
-                    icon="i-lucide-key-round"
+                    :icon="iconKey"
                     required
                   />
                 </label>
@@ -874,7 +879,7 @@
                 >
                   <div class="mb-3 flex items-start gap-2">
                     <UIcon
-                      name="i-lucide-shield-alert"
+                      :name="iconShieldAlert"
                       class="mt-0.5 size-4 shrink-0 text-[var(--md-extended-color-warning-color)]"
                     />
                     <p
@@ -896,7 +901,7 @@
                       autocomplete="new-password"
                       placeholder="PIN (6+ digits)"
                       aria-label="Credential PIN"
-                      icon="i-lucide-lock-keyhole"
+                      :icon="iconLock"
                     />
                     <UInput
                       v-model="credentialPinConfirmation"
@@ -905,7 +910,7 @@
                       autocomplete="new-password"
                       placeholder="Confirm PIN"
                       aria-label="Confirm credential PIN"
-                      icon="i-lucide-check"
+                      :icon="iconCheck"
                     />
                   </div>
                 </div>
@@ -937,7 +942,7 @@
                 <UButton
                   type="submit"
                   class="justify-center sm:min-w-36"
-                  icon="i-lucide-plug-zap"
+                  :icon="iconConnect"
                   :loading="hostActionPending"
                 >
                   Save and connect
@@ -973,6 +978,7 @@ import {
 import { runnerUsability } from "~/core/external-agents/launcher";
 import { useExternalAgentRuntime } from "~/core/external-agents/runtime";
 import { useActiveSidebarPage } from "~/composables/sidebar/useActiveSidebarPage";
+import { useIcon } from "~/composables/useIcon";
 import { useThemeResolver } from "~/composables/useThemeResolver";
 import { getGlobalMultiPaneApi } from "~/utils/multiPaneApi";
 import {
@@ -996,6 +1002,33 @@ interface HistoryItem {
   timeGroup: TimeGroup;
   timeLabel: string;
 }
+
+const iconChevronLeft = useIcon("ui.chevron.left");
+const iconChevronRight = useIcon("ui.chevron.right");
+const iconSettings = useIcon("ui.settings");
+const iconBot = useIcon("external-agent.bot");
+const iconSearch = useIcon("ui.search");
+const iconSearchEmpty = useIcon("external-agent.search.empty");
+const iconLoading = useIcon("ui.loading");
+const iconShieldAlert = useIcon("external-agent.shield.alert");
+const iconShieldCheck = useIcon("external-agent.shield.check");
+const iconWarning = useIcon("ui.warning");
+const iconNetwork = useIcon("external-agent.network");
+const iconPlus = useIcon("ui.plus");
+const iconServer = useIcon("external-agent.server");
+const iconServerOff = useIcon("external-agent.server.off");
+const iconCheck = useIcon("ui.check");
+const iconRefresh = useIcon("ui.refresh");
+const iconKey = useIcon("external-agent.key");
+const iconConnect = useIcon("external-agent.connect");
+const iconDisconnect = useIcon("external-agent.disconnect");
+const iconTrash = useIcon("ui.trash");
+const iconLock = useIcon("ui.lock");
+const iconUnlock = useIcon("ui.unlock");
+const iconInstall = useIcon("external-agent.install");
+const iconCopy = useIcon("ui.copy");
+const iconTag = useIcon("external-agent.tag");
+const iconLink = useIcon("external-agent.link");
 
 const CONNECT_COMMAND = "npx @or3/connect";
 const runtime = useExternalAgentRuntime();
@@ -1055,7 +1088,7 @@ const hostItems = computed(() =>
   (snapshot.value?.hosts ?? []).map((host) => ({
     value: host.id,
     label: host.name,
-    description: host.baseUrl,
+    description: `${host.driver === "runs" ? "Agent service" : "OR3 Intern"} · ${host.baseUrl}`,
   })),
 );
 const activeHost = computed(
@@ -1067,6 +1100,20 @@ const activeHost = computed(
 const activeHostIsCloud = computed(
   () => activeHost.value?.id.startsWith("or3-connect:") === true,
 );
+const activeDriverLabel = computed(() =>
+  activeHost.value?.driver === "runs" ? "Sessions + Runs" : "OR3 Intern",
+);
+const activeRuntimeLabel = computed(() => {
+  const displayName = snapshot.value?.capabilities?.runtimeDisplayName;
+  if (typeof displayName === "string" && displayName.trim()) return displayName;
+  const product = snapshot.value?.capabilities?.runtimeProduct;
+  if (typeof product !== "string" || !product.trim()) return "Agent service";
+  return product
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+});
 const activeHostNeedsCredential = computed(
   () =>
     Boolean(activeHost.value) &&

@@ -31,6 +31,7 @@ import type {
   ExternalAgentClient,
   ExternalAgentClientFactory,
   ExternalAgentCredentialVault,
+  ExternalAgentDriverDetector,
   ExternalAgentFollowUpInput,
   ExternalAgentHost,
   ExternalAgentLaunchInput,
@@ -134,6 +135,7 @@ export interface ExternalAgentControllerOptions {
   readonly persistence: ExternalAgentPersistence;
   readonly credentials: ExternalAgentCredentialVault;
   readonly createClient: ExternalAgentClientFactory;
+  readonly detectDriver?: ExternalAgentDriverDetector;
   readonly getWorkspaceScope: () => string | null | undefined;
 }
 
@@ -141,6 +143,7 @@ export class ExternalAgentController {
   readonly #persistence: ExternalAgentPersistence;
   readonly #credentials: ExternalAgentCredentialVault;
   readonly #createClient: ExternalAgentClientFactory;
+  readonly #detectDriver?: ExternalAgentDriverDetector;
   readonly #getWorkspaceScope: () => string | null | undefined;
   readonly #publisher: ExternalAgentSnapshotPublisher;
   readonly #hostRegistry = new ExternalAgentHostRegistry();
@@ -167,6 +170,7 @@ export class ExternalAgentController {
     this.#persistence = options.persistence;
     this.#credentials = options.credentials;
     this.#createClient = options.createClient;
+    this.#detectDriver = options.detectDriver;
     this.#getWorkspaceScope = options.getWorkspaceScope;
     this.#publisher = new ExternalAgentSnapshotPublisher(() =>
       this.#createSnapshot(),
@@ -376,8 +380,8 @@ export class ExternalAgentController {
     const baseUrl = normalizeExternalAgentBaseUrl(input.baseUrl);
     const token = input.token.trim();
     if (!token) throw new Error("An access token is required");
-    const credentialRef = randomId("intern-credential");
-    const temporary: ExternalAgentHost = {
+    const credentialRef = randomId("agent-credential");
+    let temporary: ExternalAgentHost = {
       id: fallbackExternalAgentHostId(baseUrl),
       name: input.name.trim() || fallbackExternalAgentHostId(baseUrl),
       baseUrl,
@@ -398,6 +402,13 @@ export class ExternalAgentController {
     }
     let capabilities: ExternalAgentStoreSnapshot["capabilities"] = null;
     try {
+      const driver = this.#detectDriver
+        ? await this.#detectDriver({
+            baseUrl,
+            resolveCredential: () => this.#credentials.resolve(credentialRef),
+          })
+        : "intern";
+      temporary = { ...temporary, driver };
       const client = this.#createClient({
         host: temporary,
         resolveCredential: () => this.#credentials.resolve(credentialRef),
@@ -1402,7 +1413,7 @@ export class ExternalAgentController {
       (this.#connectionState !== "online" &&
         this.#connectionState !== "degraded")
     ) {
-      throw new Error("Connect a trusted or3-intern host first");
+      throw new Error("Connect a trusted agent service first");
     }
     return this.#client;
   }

@@ -8,7 +8,9 @@ import { createExternalAgentActivitySource } from "~/core/external-agents/activi
 import { registerExternalAgentCommands } from "~/core/external-agents/commands";
 import { ExternalAgentController } from "~/core/external-agents/controller";
 import { getExternalAgentCredentialVault } from "~/core/external-agents/credentials";
+import { createExternalAgentDriverDetector } from "~/core/external-agents/driver-detection";
 import { createWorkspaceExternalAgentPersistence } from "~/core/external-agents/persistence";
+import { createRunsExternalAgentClient } from "~/core/external-agents/runs-client";
 import {
   encodeExternalAgentSessionRef,
   EXTERNAL_AGENT_LAUNCHER_REF,
@@ -23,9 +25,11 @@ import type {
   ExternalAgentAttachment,
   ExternalAgentClient,
   ExternalAgentClientFactory,
+  ExternalAgentDriver,
   ExternalAgentSession,
   ExternalAgentUploadAttachment,
 } from "~/core/external-agents/types";
+import { externalAgentDriver } from "~/core/external-agents/types";
 import { getActiveWorkspaceId, subscribeActiveWorkspaceDb } from "~/db/client";
 import { getGlobalMultiPaneApi } from "~/utils/multiPaneApi";
 
@@ -150,7 +154,7 @@ export function adaptInternClient(client: InternClient): ExternalAgentClient {
   };
 }
 
-const createClient: ExternalAgentClientFactory = ({
+export const createInternExternalAgentClient: ExternalAgentClientFactory = ({
   host,
   resolveCredential,
 }) => {
@@ -199,6 +203,21 @@ const createClient: ExternalAgentClientFactory = ({
     }),
   );
 };
+
+const externalAgentClientFactories: Record<
+  ExternalAgentDriver,
+  ExternalAgentClientFactory
+> = {
+  intern: createInternExternalAgentClient,
+  runs: ({ host, resolveCredential }) =>
+    createRunsExternalAgentClient({
+      baseUrl: host.baseUrl,
+      resolveCredential,
+    }),
+};
+
+export const createExternalAgentClient: ExternalAgentClientFactory = (input) =>
+  externalAgentClientFactories[externalAgentDriver(input.host)](input);
 
 export function runExternalAgentBackground(
   task: () => Promise<unknown>,
@@ -343,7 +362,8 @@ export default defineNuxtPlugin((nuxtApp) => {
   const controller = new ExternalAgentController({
     persistence: createWorkspaceExternalAgentPersistence(),
     credentials: getExternalAgentCredentialVault(),
-    createClient,
+    createClient: createExternalAgentClient,
+    detectDriver: createExternalAgentDriverDetector(),
     getWorkspaceScope: () => getActiveWorkspaceId() ?? "local",
   });
   setExternalAgentController(controller);

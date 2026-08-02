@@ -259,9 +259,42 @@ describe("ExternalAgentController", () => {
 
     const serialized = JSON.stringify(saved.state);
     expect(serialized).not.toContain("or3-super-secret-token");
-    expect(saved.state.hosts[0]?.credentialRef).toMatch(/^intern-credential-/);
+    expect(saved.state.hosts[0]?.credentialRef).toMatch(/^agent-credential-/);
     expect(controller.snapshot.connectionState).toBe("online");
     expect(client.readiness).not.toHaveBeenCalled();
+  });
+
+  it("detects and persists a Runs host before constructing its client", async () => {
+    const saved = persistence();
+    const secrets = vault();
+    const client = fakeClient();
+    const detectDriver = vi.fn(async () => "runs" as const);
+    const createClient = vi.fn(() => client);
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: secrets,
+      createClient,
+      detectDriver,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await controller.addTrustedHost({
+      name: "Hermes",
+      baseUrl: "http://127.0.0.1:8642",
+      token: "hermes-secret",
+    });
+
+    expect(detectDriver).toHaveBeenCalledOnce();
+    expect(createClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: expect.objectContaining({ driver: "runs" }),
+      }),
+    );
+    expect(saved.state.hosts[0]).toEqual(
+      expect.objectContaining({ name: "Hermes", driver: "runs" }),
+    );
+    expect(JSON.stringify(saved.state)).not.toContain("hermes-secret");
   });
 
   it("restores cloud computers without replacing the user's active host", async () => {
@@ -447,7 +480,7 @@ describe("ExternalAgentController", () => {
     });
 
     expect(secrets.putPersistent).toHaveBeenCalledWith(
-      expect.stringMatching(/^intern-credential-/),
+      expect.stringMatching(/^agent-credential-/),
       "remember-me",
       "482915",
     );
@@ -1498,6 +1531,7 @@ describe("ExternalAgentController", () => {
       { timeout: 3_000 },
     );
     expect(client.getTurn).toHaveBeenCalledTimes(3);
+    expect(client.startTurn).toHaveBeenCalledTimes(1);
   });
 
   it("persists a failed session when its first turn cannot start", async () => {

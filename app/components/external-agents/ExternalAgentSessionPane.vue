@@ -11,7 +11,7 @@
           <div
             class="mb-5 grid size-14 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)]"
           >
-            <UIcon name="i-lucide-bot" class="size-7" />
+            <UIcon :name="iconBot" class="size-7" />
           </div>
           <h1 class="text-2xl font-semibold">What should the agent do?</h1>
           <p class="mt-2 max-w-xl text-sm text-[var(--md-on-surface-variant)]">
@@ -41,7 +41,7 @@
         <span
           class="grid size-11 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
         >
-          <UIcon name="i-lucide-lock-keyhole" class="size-5" />
+          <UIcon :name="iconLock" class="size-5" />
         </span>
         <h1 class="mt-4 text-lg font-semibold">Unlock this conversation</h1>
         <p
@@ -57,7 +57,7 @@
           autocomplete="current-password"
           placeholder="Enter device PIN"
           aria-label="Conversation PIN"
-          icon="i-lucide-key-round"
+          :icon="iconKey"
           autofocus
           :disabled="unlockPending"
         />
@@ -71,7 +71,7 @@
         <UButton
           class="mt-4 w-full justify-center"
           type="submit"
-          icon="i-lucide-unlock"
+          :icon="iconUnlock"
           :loading="unlockPending"
           :disabled="!unlockPin.trim()"
         >
@@ -88,7 +88,7 @@
       class="grid min-h-0 flex-1 place-items-center text-sm text-[var(--md-on-surface-variant)]"
     >
       <div class="flex items-center gap-2">
-        <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
+        <UIcon :name="iconLoading" class="size-4 animate-spin" />
         Loading conversation…
       </div>
     </div>
@@ -118,7 +118,7 @@
         </p>
         <div class="mt-5 flex flex-wrap gap-2">
           <UButton
-            icon="i-lucide-refresh-cw"
+            :icon="iconRefresh"
             :loading="loading"
             @click="retryConversationLoad"
           >
@@ -128,7 +128,7 @@
             v-if="loadErrorCategory === 'offline'"
             color="neutral"
             variant="soft"
-            icon="i-lucide-plug-zap"
+            :icon="iconConnect"
             :loading="recoveryPending"
             @click="reconnectConversation"
           >
@@ -141,7 +141,7 @@
             "
             color="neutral"
             variant="soft"
-            icon="i-lucide-settings-2"
+            :icon="iconSettings"
             @click="openConnectionSettings"
           >
             Open connection settings
@@ -151,72 +151,6 @@
     </div>
 
     <template v-else-if="session && projection">
-      <header
-        class="pane-chrome-clearance-header z-10 shrink-0 border-b border-[var(--md-outline-variant)] bg-[var(--md-surface)]/95 backdrop-blur"
-      >
-        <div class="min-w-0 flex-1">
-          <div class="flex min-w-0 items-center gap-2">
-            <h1 class="truncate text-sm font-semibold">{{ session.title }}</h1>
-            <span
-              class="hidden truncate text-xs text-[var(--md-on-surface-variant)] sm:inline"
-            >
-              {{ sessionConfigurationLabel }}
-            </span>
-          </div>
-          <p
-            v-if="connectionWarning"
-            class="truncate text-xs text-[var(--md-error)]"
-          >
-            {{ connectionWarning }}
-          </p>
-        </div>
-        <UBadge :color="statusColor" variant="soft">
-          {{ statusLabel }}
-        </UBadge>
-        <UButton
-          v-if="canCancel"
-          size="sm"
-          color="error"
-          variant="ghost"
-          icon="i-lucide-square"
-          aria-label="Stop agent"
-          :loading="pendingAction === 'cancel'"
-          :disabled="Boolean(pendingAction)"
-          @click="cancel"
-        />
-        <UPopover>
-          <UButton
-            size="sm"
-            color="neutral"
-            variant="ghost"
-            icon="i-lucide-ellipsis"
-            aria-label="Conversation options"
-          />
-          <template #content>
-            <div class="w-72 space-y-2 p-3">
-              <p class="text-xs text-[var(--md-on-surface-variant)]">
-                Agent activity is summarized here. Operational details remain
-                available for troubleshooting.
-              </p>
-              <details v-if="projection.diagnostics.length">
-                <summary class="cursor-pointer text-xs font-medium">
-                  Technical details
-                </summary>
-                <ol class="mt-2 max-h-56 space-y-2 overflow-y-auto">
-                  <li
-                    v-for="entry in projection.diagnostics"
-                    :key="entry.id"
-                    class="text-xs text-[var(--md-on-surface-variant)]"
-                  >
-                    {{ entry.summary }}
-                  </li>
-                </ol>
-              </details>
-            </div>
-          </template>
-        </UPopover>
-      </header>
-
       <div
         v-if="!projection.turns.length"
         class="grid min-h-0 flex-1 place-items-center text-sm text-[var(--md-on-surface-variant)]"
@@ -271,13 +205,31 @@
               </div>
 
               <div
+                v-if="turn.commandChoices.length"
+                class="mx-2 mb-4 flex flex-wrap gap-2 sm:mx-5"
+                aria-label="Command options"
+              >
+                <UButton
+                  v-for="choice in turn.commandChoices"
+                  :key="choice.command"
+                  size="sm"
+                  color="neutral"
+                  variant="soft"
+                  :disabled="Boolean(pendingAction) || projection.isRunning"
+                  @click="sendCommandChoice(choice.command)"
+                >
+                  {{ choice.label }}
+                </UButton>
+              </div>
+
+              <div
                 v-for="approval in turn.approvals"
                 :key="approval.id"
                 class="mx-2 mb-4 rounded-[var(--md-border-radius)] border border-[var(--md-extended-color-warning-color)]/60 bg-[var(--md-surface-container-low)] p-3 sm:mx-5"
               >
                 <div class="flex items-start gap-3">
                   <UIcon
-                    name="i-lucide-shield-alert"
+                    :name="iconShieldAlert"
                     class="mt-0.5 size-5 shrink-0"
                   />
                   <div class="min-w-0 flex-1">
@@ -342,9 +294,7 @@
                   <div class="flex items-center gap-2">
                     <UIcon
                       :name="
-                        artifact.kind === 'diff'
-                          ? 'i-lucide-file-diff'
-                          : 'i-lucide-file'
+                        artifact.kind === 'diff' ? iconFileDiff : iconFile
                       "
                       class="size-4 shrink-0"
                     />
@@ -365,7 +315,7 @@
                       v-if="artifact.content"
                       size="xs"
                       variant="ghost"
-                      icon="i-lucide-copy"
+                      :icon="iconCopy"
                       @click="copyArtifact(artifact.content)"
                     >
                       Copy
@@ -427,6 +377,8 @@
             :loading="pendingAction === 'follow-up'"
             :disabled="!connected || (!canFollowUp && !projection.isRunning)"
             :settings-disabled="!connected"
+            :attachments-enabled="attachmentsEnabled"
+            :commands="followUpRunnerOption?.runner.commands ?? []"
             :placeholder="
               projection.isRunning
                 ? 'The agent is working…'
@@ -436,6 +388,18 @@
             @stop="cancel"
           >
             <template #leading>
+              <UButton
+                v-if="canCancel && !projection.isRunning"
+                type="button"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                :icon="iconStop"
+                aria-label="Stop agent"
+                :loading="pendingAction === 'cancel'"
+                :disabled="Boolean(pendingAction)"
+                @click="cancel"
+              />
               <span class="text-xs text-[var(--md-on-surface-variant)]">
                 {{ composerHint }}
               </span>
@@ -501,15 +465,34 @@ import {
 } from "~/core/external-agents/refs";
 import { useExternalAgentRuntime } from "~/core/external-agents/runtime";
 import { useActiveSidebarPage } from "~/composables/sidebar/useActiveSidebarPage";
+import { useIcon } from "~/composables/useIcon";
 import { getGlobalMultiPaneApi } from "~/utils/multiPaneApi";
 
 const props = defineProps<{
   paneId: string;
   recordId?: string | null;
 }>();
+const emit = defineEmits<{
+  "tab-title": [title: string];
+}>();
 
 const runtime = useExternalAgentRuntime();
 const { setActivePage } = useActiveSidebarPage();
+const iconBot = useIcon("external-agent.bot");
+const iconLock = useIcon("ui.lock");
+const iconKey = useIcon("external-agent.key");
+const iconUnlock = useIcon("ui.unlock");
+const iconLoading = useIcon("ui.loading");
+const iconRefresh = useIcon("ui.refresh");
+const iconConnect = useIcon("external-agent.connect");
+const iconSettings = useIcon("ui.settings");
+const iconStop = useIcon("chat.stop");
+const iconShieldAlert = useIcon("external-agent.shield.alert");
+const iconFile = useIcon("external-agent.file");
+const iconFileDiff = useIcon("external-agent.file.diff");
+const iconCopy = useIcon("ui.copy");
+const iconServerOff = useIcon("external-agent.server.off");
+const iconLinkOff = useIcon("external-agent.link.off");
 const snapshot = runtime.snapshot;
 const loading = ref(false);
 const loadInFlight = ref(false);
@@ -626,19 +609,6 @@ const canDecideApproval = computed(() =>
 const canFollowUp = computed(() =>
   Boolean(session.value && runtime.controller?.canFollowUp(session.value)),
 );
-const statusColor = computed(() => {
-  if (session.value?.status === "failed") return "error";
-  if (session.value?.status === "waiting_approval") return "warning";
-  if (session.value?.status === "succeeded") return "success";
-  return "neutral";
-});
-const statusLabel = computed(() =>
-  session.value?.status === "waiting_approval"
-    ? "needs approval"
-    : session.value?.status === "succeeded"
-      ? "completed"
-      : (session.value?.status ?? "queued").replace("_", " "),
-);
 const runnerLabel = computed(
   () =>
     snapshot.value?.runners.find(
@@ -654,6 +624,11 @@ const followUpRunnerOption = computed(() =>
   runnerOptions.value.find(
     (option) => option.runner.id === session.value?.runnerId,
   ),
+);
+const attachmentsEnabled = computed(
+  () =>
+    targetHost.value?.driver !== "runs" ||
+    followUpRunnerOption.value?.runner.chat_capabilities?.attachments === true,
 );
 const followUpIsolationItems = computed(() =>
   (followUpRunnerOption.value?.isolations ?? []).filter((item) =>
@@ -685,70 +660,46 @@ const followUpReasoningLabel = computed(() => {
     ? "Extra high reasoning"
     : `${value.charAt(0).toUpperCase()}${value.slice(1)} reasoning`;
 });
-const sessionConfigurationLabel = computed(() => {
-  const latest = session.value?.turns.at(-1);
-  const modelId = latest?.model ?? session.value?.model;
-  const runner = followUpRunnerOption.value?.runner;
-  const model = runner?.models?.find((candidate) => candidate.id === modelId);
-  const modelLabel =
-    typeof model?.display_name === "string" && model.display_name.trim()
-      ? model.display_name.trim()
-      : modelId;
-  const thinking =
-    latest?.thinking_level ?? session.value?.thinkingLevel ?? undefined;
-  const reasoningLabel = thinking
-    ? thinking.toLowerCase() === "xhigh"
-      ? "Extra high reasoning"
-      : `${thinking.charAt(0).toUpperCase()}${thinking.slice(1)} reasoning`
-    : undefined;
-  return [runnerLabel.value, modelLabel, reasoningLabel]
-    .filter(Boolean)
-    .join(" · ");
-});
 const loadRecovery = computed(() => {
   switch (loadErrorCategory.value) {
     case "offline":
       return {
-        icon: "i-lucide-server-off",
+        icon: iconServerOff.value,
         title: "Conversation temporarily offline",
         guidance:
           "Reconnect the host here, then retry. This conversation link will stay open.",
       };
     case "credential":
       return {
-        icon: "i-lucide-key-round",
+        icon: iconKey.value,
         title: "This host needs its access token",
         guidance:
           "Update the selected trusted host in Connection settings, then retry here.",
       };
     case "stale_host":
       return {
-        icon: "i-lucide-link-2-off",
+        icon: iconLinkOff.value,
         title: "The saved host changed",
         guidance:
           "Choose or repair the trusted host in Connection settings. The conversation reference is preserved.",
       };
     default:
       return {
-        icon: "i-lucide-refresh-cw",
+        icon: iconRefresh.value,
         title: "Conversation unavailable",
         guidance:
           "This may be temporary. Retry without leaving or losing the conversation link.",
       };
   }
 });
-const connectionWarning = computed(() => {
-  if (
-    session.value?.streamState === "disconnected" &&
-    session.value?.status !== "succeeded" &&
-    session.value?.status !== "failed" &&
-    session.value?.status !== "cancelled" &&
-    session.value?.status !== "waiting_approval"
-  )
-    return "Live updates paused";
-  if (!connected.value) return "Host disconnected";
-  return null;
-});
+const tabTitle = computed(() =>
+  isLauncher.value
+    ? "New agent"
+    : session.value
+      ? `${runnerLabel.value} · ${session.value.title}`
+      : "Agent conversation",
+);
+watch(tabTitle, (title) => emit("tab-title", title), { immediate: true });
 const composerHint = computed(() => {
   if (!connected.value) return "Reconnect the host to continue";
   if (session.value?.status === "waiting_approval")
@@ -904,6 +855,8 @@ async function cancel() {
   pendingAction.value = "cancel";
   try {
     await runtime.controller.cancel(session.value.remoteSessionId);
+  } catch {
+    // The controller records and renders the actionable session error.
   } finally {
     pendingAction.value = null;
   }
@@ -918,6 +871,8 @@ async function decide(decision: "approve" | "deny", approvalId: string) {
       decision,
       approvalId,
     );
+  } catch {
+    // The controller records and renders the actionable session error.
   } finally {
     pendingAction.value = null;
   }
@@ -971,6 +926,12 @@ async function followUp(
   } finally {
     pendingAction.value = null;
   }
+}
+
+async function sendCommandChoice(command: string) {
+  if (pendingAction.value || projection.value?.isRunning) return;
+  followUpText.value = command;
+  await followUp();
 }
 
 async function retryTurn(message?: string) {

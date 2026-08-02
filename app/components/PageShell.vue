@@ -346,6 +346,9 @@
                         @tab-status="
                             (status: WorkspaceTabStatus) => onPaneTabStatus(pane.id, status)
                         "
+                        @tab-title="
+                            (title: string) => onPaneTabTitle(pane.id, title)
+                        "
                     />
 
                     <!-- Resize handle (only between panes, not after the last one) -->
@@ -1209,6 +1212,12 @@ function onPaneTabStatus(paneId: string, status: WorkspaceTabStatus): void {
     if (!workspaceTabsEnabled.value) return;
     const tabId = workspaceTabs.state.value.paneBindings.get(paneId);
     if (tabId) workspaceTabs.updateRuntime(tabId, { status });
+}
+
+function onPaneTabTitle(paneId: string, title: string): void {
+    if (!workspaceTabsEnabled.value) return;
+    const tabId = workspaceTabs.state.value.paneBindings.get(paneId);
+    if (tabId) workspaceTabs.updateCachedTitle(tabId, title);
 }
 
 const newSplitTooltip = computed(() => {

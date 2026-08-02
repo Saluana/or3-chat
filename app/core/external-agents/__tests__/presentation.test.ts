@@ -381,6 +381,28 @@ describe("external agent presentation", () => {
     expect(JSON.stringify(payload)).not.toContain("provider.example");
   });
 
+  it("preserves bounded command choices through the event sanitizer", () => {
+    const payload = sanitizeExternalAgentPayload(
+      {
+        choices: [
+          { label: "OpenAI (2)", command: "/models openai", token: "secret" },
+          { label: "GPT-5", command: "/model openai/gpt-5" },
+          { label: "Invalid" },
+        ],
+      },
+      "command.choices",
+    );
+
+    expect(payload).toEqual({
+      choices: [
+        { label: "OpenAI (2)", command: "/models openai" },
+        { label: "GPT-5", command: "/model openai/gpt-5" },
+      ],
+      rawType: "command.choices",
+    });
+    expect(JSON.stringify(payload)).not.toContain("secret");
+  });
+
   it("maps raw provider errors to concise, actionable messages", () => {
     const error = presentExternalAgentError(
       `POST https://provider.example failed: 402 insufficient credits

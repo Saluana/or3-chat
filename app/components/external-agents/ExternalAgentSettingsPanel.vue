@@ -20,7 +20,7 @@
           v-if="runnerLocked"
           class="inline-flex items-center gap-1 font-normal text-[var(--md-on-surface-variant)]"
         >
-          <UIcon name="i-lucide-lock" class="size-3" />
+          <UIcon :name="iconLock" class="size-3" />
           Fixed for this session
         </span>
       </span>
@@ -36,8 +36,11 @@
       />
     </label>
 
-    <div class="grid gap-3 sm:grid-cols-2">
-      <label class="block space-y-1.5">
+    <div
+      v-if="selectedOption?.showMode || selectedOption?.showIsolation"
+      class="grid gap-3 sm:grid-cols-2"
+    >
+      <label v-if="selectedOption?.showMode" class="block space-y-1.5">
         <span class="text-xs font-semibold">Mode</span>
         <USelectMenu
           :model-value="mode"
@@ -49,7 +52,7 @@
           @update:model-value="$emit('update:mode', String($event ?? ''))"
         />
       </label>
-      <label class="block space-y-1.5">
+      <label v-if="selectedOption?.showIsolation" class="block space-y-1.5">
         <span class="text-xs font-semibold">Isolation</span>
         <USelectMenu
           :model-value="isolation"
@@ -63,7 +66,7 @@
       </label>
     </div>
 
-    <label class="block space-y-1.5">
+    <label v-if="selectedOption?.showWorkspace" class="block space-y-1.5">
       <span class="text-xs font-semibold">Workspace root</span>
       <UInput
         v-if="selectedOption?.customCwd"
@@ -141,6 +144,9 @@ import {
   resolveExternalAgentModelReasoning,
 } from "~/core/external-agents/launcher";
 import type { ExternalAgentRunner } from "~/core/external-agents/types";
+import { useIcon } from "~/composables/useIcon";
+
+const iconLock = useIcon("ui.lock");
 
 const HOST_DEFAULT_MODEL_VALUE = "host_default";
 const MODEL_DEFAULT_REASONING_VALUE = "model_default";

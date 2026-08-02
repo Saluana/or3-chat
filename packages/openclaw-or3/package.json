@@ -1,0 +1,25 @@
+{
+  "name": "@or3/openclaw",
+  "version": "0.1.0",
+  "description": "Minimal Sessions/Runs bridge from OR3 Chat to OpenClaw",
+  "type": "module",
+  "license": "GPL-3.0",
+  "files": [
+    "index.js",
+    "src/bridge.js",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./bridge": "./src/bridge.js"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.7.1-2 <2026.8.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ]
+  }
+}

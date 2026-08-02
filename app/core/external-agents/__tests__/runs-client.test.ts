@@ -1,0 +1,463 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  createRunsExternalAgentClient,
+  RunsClientError,
+  type RunsFetch,
+} from "../runs-client";
+import { ExternalAgentController } from "../controller";
+import type {
+  ExternalAgentCredentialVault,
+  ExternalAgentPersistence,
+  ExternalAgentPersistenceSnapshot,
+} from "../types";
+
+// Captured from Hermes Agent v0.16.0 (tag v2026.6.5). The tests below keep
+// Hermes's native field names so the production client remains runtime-neutral.
+const capabilities = {
+  object: "hermes.api_server.capabilities",
+  platform: "hermes-agent",
+  model: "hermes-agent",
+  features: {
+    session_resources: true,
+    run_events_sse: true,
+    run_stop: true,
+    run_approval_response: true,
+    tool_progress_events: true,
+  },
+  endpoints: {
+    sessions: { method: "GET", path: "/api/sessions" },
+    session_messages: {
+      method: "GET",
+      path: "/api/sessions/{session_id}/messages",
+    },
+    run_events: { method: "GET", path: "/v1/runs/{run_id}/events" },
+    run_stop: { method: "POST", path: "/v1/runs/{run_id}/stop" },
+    run_approval: {
+      method: "POST",
+      path: "/v1/runs/{run_id}/approval",
+    },
+  },
+};
+
+function json(value: unknown, status = 200): Response {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function sse(chunks: readonly string[]): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+
+function pathOf(input: RequestInfo | URL): string {
+  return new URL(String(input)).pathname;
+}
+
+function clientWith(fetch: RunsFetch) {
+  return createRunsExternalAgentClient({
+    baseUrl: "http://127.0.0.1:8642",
+    resolveCredential: async () => "hermes-secret",
+    fetch,
+  });
+}
+
+function controllerPersistence(): ExternalAgentPersistence {
+  let saved: ExternalAgentPersistenceSnapshot = {
+    hosts: [],
+    activeHostId: null,
+    sessionRefs: [],
+  };
+  return {
+    bind: (workspaceId) => ({
+      workspaceId,
+      load: async () => structuredClone(saved),
+      save: async (snapshot) => {
+        saved = structuredClone(snapshot);
+      },
+    }),
+  };
+}
+
+function controllerVault(): ExternalAgentCredentialVault {
+  const values = new Map<string, string>();
+  return {
+    put: async (reference, secret) => void values.set(reference, secret),
+    resolve: async (reference) => values.get(reference) ?? null,
+    remove: async (reference) => void values.delete(reference),
+  };
+}
+
+async function waitUntil(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error("Timed out waiting for controller state");
+}
+
+describe("RunsExternalAgentClient", () => {
+  it("authenticates health and synthesizes a usable capability-backed runner", async () => {
+    const fetch = vi.fn<RunsFetch>(async (input, init) => {
+      expect(new Headers(init?.headers).get("Authorization")).toBe(
+        "Bearer hermes-secret",
+      );
+      expect(init?.cache).toBe("no-store");
+      return pathOf(input) === "/health"
+        ? json({ status: "ok", platform: "hermes-agent" })
+        : json(capabilities);
+    });
+    const client = clientWith(fetch);
+
+    await expect(client.health()).resolves.toMatchObject({
+      status: "ok",
+      runtimeAvailable: true,
+    });
+    await expect(client.capabilities()).resolves.toMatchObject({
+      execAvailable: true,
+      runtimeProduct: "hermes-agent",
+      approvalBroker: { enabled: true, available: true },
+    });
+    await expect(client.listRunners()).resolves.toMatchObject({
+      default_runner: "agent",
+      runners: [
+        {
+          id: "agent",
+          display_name: "Hermes Agent",
+          status: "available",
+          auth_status: "ready",
+        },
+      ],
+    });
+  });
+
+  it("maps sessions and reconstructs turns from message history", async () => {
+    const fetch = vi.fn<RunsFetch>(async (input, init) => {
+      const path = pathOf(input);
+      if (path === "/api/sessions" && init?.method === "POST") {
+        return json({
+          object: "hermes.session",
+          session: {
+            id: "or3:workspace:session-1",
+            model: "hermes-agent",
+            started_at: 1_750_000_000,
+            last_active: 1_750_000_010,
+          },
+        });
+      }
+      if (path.endsWith("/messages")) {
+        return json({
+          object: "list",
+          data: [
+            {
+              id: "message-user-1",
+              role: "user",
+              content: "hello",
+              timestamp: 1_750_000_001,
+            },
+            {
+              id: "message-assistant-1",
+              role: "assistant",
+              content: "hi there",
+              timestamp: 1_750_000_002,
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+    const session = await client.createSession({
+      app_session_key: "or3:workspace:session-1",
+      runner_id: "agent",
+    });
+
+    expect(session).toMatchObject({
+      id: "or3:workspace:session-1",
+      app_session_key: "or3:workspace:session-1",
+      runner_id: "agent",
+      model: "hermes-agent",
+    });
+    await expect(client.listTurns(session.id)).resolves.toEqual({
+      turns: [
+        expect.objectContaining({
+          id: "message-user-1",
+          session_id: session.id,
+          sequence: 1,
+          status: "succeeded",
+          user_message: "hello",
+          final_text: "hi there",
+        }),
+      ],
+    });
+    await expect(
+      client.listTurnEvents(session.id, "message-user-1"),
+    ).resolves.toEqual({
+      events: expect.arrayContaining([
+        expect.objectContaining({ type: "text_delta", text: "hi there" }),
+        expect.objectContaining({
+          type: "turn.completed",
+          payload: { status: "completed" },
+        }),
+      ]),
+    });
+  });
+
+  it("forwards slash commands unchanged and translates chunked run events", async () => {
+    const requestBodies: unknown[] = [];
+    const fetch = vi.fn<RunsFetch>(async (input, init) => {
+      const path = pathOf(input);
+      if (path === "/v1/runs" && init?.method === "POST") {
+        requestBodies.push(JSON.parse(String(init.body)));
+        return json({ run_id: "run-1", status: "started" }, 202);
+      }
+      if (path === "/v1/runs/run-1/events") {
+        return sse([
+          'data: {"event":"message.',
+          'delta","delta":"hel","timestamp":1750000001}\n\n',
+          'data: {"event":"tool.started","tool":"terminal","preview":"Working"}\n\n',
+          'data: {"event":"approval.request","command":"git push","choices":["once","deny"]}\n\n',
+          'data: {"event":"approval.responded","choice":"once"}\n\n',
+          'data: {"event":"run.completed","output":"hello"}\n\n',
+        ]);
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+    const attachments = await client.stageFiles([
+      {
+        id: "attachment-1",
+        kind: "image",
+        name: "example.png",
+        mimeType: "image/png",
+        data: new Blob([Uint8Array.from([1, 2, 3])], { type: "image/png" }),
+      },
+    ]);
+    const started = await client.startTurn("session-1", {
+      user_message: "/model anthropic/claude",
+      attachments,
+    });
+    const streamed = [];
+    for await (const event of client.streamTurn("session-1", started.turn_id)) {
+      streamed.push(event.json);
+    }
+
+    expect(requestBodies).toEqual([
+      expect.objectContaining({
+        input: "/model anthropic/claude",
+        session_id: "session-1",
+        attachments: [
+          {
+            fileName: "example.png",
+            mimeType: "image/png",
+            content: "AQID",
+          },
+        ],
+      }),
+    ]);
+    expect(streamed).toEqual([
+      expect.objectContaining({ type: "text_delta", text: "hel", seq: 1 }),
+      expect.objectContaining({ type: "tool.started", seq: 2 }),
+      expect.objectContaining({
+        type: "approval.request",
+        seq: 3,
+        payload: expect.objectContaining({
+          approval_id: "run-1",
+          command: "git push",
+        }),
+      }),
+      expect.objectContaining({
+        type: "approval.resolved",
+        seq: 4,
+        payload: expect.objectContaining({ decision: "approve" }),
+      }),
+      expect.objectContaining({
+        type: "turn.completed",
+        seq: 5,
+        payload: { status: "completed" },
+      }),
+    ]);
+  });
+
+  it("uses native approval and stop operations and capability checks", async () => {
+    const requests: Array<{ path: string; body: unknown }> = [];
+    const fetch = vi.fn<RunsFetch>(async (input, init) => {
+      const path = pathOf(input);
+      if (path === "/v1/capabilities") return json(capabilities);
+      requests.push({
+        path,
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      });
+      return json({ status: "ok" });
+    });
+    const client = clientWith(fetch);
+
+    await client.decideTurn("session-1", "run-1", "approve", {
+      allow_session: true,
+    });
+    await client.decideTurn("session-1", "run-1", "reject");
+    await client.abortTurn("session-1", "run-1");
+
+    expect(requests).toEqual([
+      { path: "/v1/runs/run-1/approval", body: { choice: "session" } },
+      { path: "/v1/runs/run-1/approval", body: { choice: "deny" } },
+      { path: "/v1/runs/run-1/stop", body: {} },
+    ]);
+  });
+
+  it("drives streaming and approval resume through the existing controller", async () => {
+    const encoder = new TextEncoder();
+    let eventController: ReadableStreamDefaultController<Uint8Array> | null =
+      null;
+    let approved = false;
+    const runInputs: unknown[] = [];
+    const fetch = vi.fn<RunsFetch>(async (input, init) => {
+      const path = pathOf(input);
+      if (path === "/health") return json({ status: "ok" });
+      if (path === "/v1/capabilities") return json(capabilities);
+      if (path === "/api/sessions" && init?.method !== "POST") {
+        return json({ data: [] });
+      }
+      if (path === "/api/sessions" && init?.method === "POST") {
+        return json({
+          session: {
+            id: "session-controller",
+            started_at: 1_750_000_000,
+            last_active: 1_750_000_000,
+          },
+        });
+      }
+      if (path === "/v1/runs" && init?.method === "POST") {
+        runInputs.push(JSON.parse(String(init.body)));
+        return json({ run_id: "run-controller", status: "started" }, 202);
+      }
+      if (path === "/v1/runs/run-controller/events") {
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              eventController = controller;
+              controller.enqueue(
+                encoder.encode(
+                  'data: {"event":"message.delta","delta":"Checking"}\n\n' +
+                    'data: {"event":"approval.request","command":"git push","reason":"Publish changes"}\n\n',
+                ),
+              );
+            },
+          }),
+          { headers: { "Content-Type": "text/event-stream" } },
+        );
+      }
+      if (path === "/v1/runs/run-controller/approval") {
+        approved = true;
+        eventController?.enqueue(
+          encoder.encode(
+            'data: {"event":"approval.responded","choice":"once"}\n\n' +
+              'data: {"event":"run.completed","output":"Published"}\n\n',
+          ),
+        );
+        eventController?.close();
+        await Promise.resolve();
+        await Promise.resolve();
+        return json({ status: "ok" });
+      }
+      if (path === "/v1/runs/run-controller") {
+        return json({
+          status: approved ? "completed" : "running",
+          output: approved ? "Published" : undefined,
+          updated_at: 1_750_000_010,
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const controller = new ExternalAgentController({
+      persistence: controllerPersistence(),
+      credentials: controllerVault(),
+      detectDriver: async () => "runs",
+      createClient: ({ host, resolveCredential }) =>
+        createRunsExternalAgentClient({
+          baseUrl: host.baseUrl,
+          resolveCredential,
+          fetch,
+        }),
+      getWorkspaceScope: () => "workspace-controller",
+    });
+    await controller.initialize();
+    const host = await controller.addTrustedHost({
+      name: "Hermes",
+      baseUrl: "http://127.0.0.1:8642",
+      token: "secret",
+    });
+    const session = await controller.launch({
+      runnerId: "agent",
+      instruction: "/model anthropic/claude",
+      mode: "review",
+      isolation: "host_readonly",
+    });
+
+    await waitUntil(
+      () =>
+        controller.getSession(session.remoteSessionId, host.id)?.status ===
+        "waiting_approval",
+    );
+    const waiting = controller.getSession(session.remoteSessionId, host.id)!;
+    expect(waiting.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "message", text: "Checking" }),
+      ]),
+    );
+    expect(waiting.approvals).toEqual([
+      expect.objectContaining({
+        id: "run-controller",
+        status: "pending",
+        description: "Publish changes",
+      }),
+    ]);
+
+    await controller.decideApproval(
+      session.remoteSessionId,
+      "approve",
+      "run-controller",
+    );
+    await waitUntil(
+      () =>
+        controller.getSession(session.remoteSessionId, host.id)?.status ===
+        "succeeded",
+    );
+    const completed = controller.getSession(session.remoteSessionId, host.id)!;
+    expect(completed.output).toContain("Published");
+    expect(completed.approvals[0]?.status).toBe("approved");
+    expect(runInputs).toEqual([
+      expect.objectContaining({ input: "/model anthropic/claude" }),
+    ]);
+    controller.dispose();
+  });
+
+  it("redacts arbitrary failed response bodies", async () => {
+    const fetch = vi.fn<RunsFetch>(async () =>
+      json(
+        {
+          error: {
+            message:
+              "Authorization Bearer top-secret failed at https://private.test",
+          },
+        },
+        401,
+      ),
+    );
+    const client = clientWith(fetch);
+
+    const error = await client.health().catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(RunsClientError);
+    expect(String(error)).not.toContain("top-secret");
+    expect(String(error)).not.toContain("private.test");
+  });
+});
