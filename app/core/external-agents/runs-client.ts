@@ -22,6 +22,7 @@ const MAX_SSE_BUFFER_BYTES = 1024 * 1024;
 const MAX_RUN_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const MAX_RUN_ATTACHMENT_COUNT = 10;
 const RUNNER_ID = "agent";
+const REASONING_LEVELS = ["minimal", "low", "medium", "high", "xhigh"];
 
 type JsonRecord = Record<string, unknown>;
 
@@ -170,6 +171,68 @@ function featureSet(raw: JsonRecord): RunsFeatureSet {
       hasEndpoint("run_approval"),
     attachments: features.inline_attachments === true,
   };
+}
+
+function advertisedEndpoint(raw: JsonRecord, name: string): string | undefined {
+  const path = stringValue(record(record(raw.endpoints)[name]).path);
+  return path?.startsWith("/") && !path.startsWith("//") ? path : undefined;
+}
+
+function modelOptions(
+  raw: JsonRecord,
+  fallbackModel?: string,
+): Array<Readonly<Record<string, unknown>>> {
+  const providers = Array.isArray(raw.providers)
+    ? raw.providers.map(record)
+    : [];
+  const currentProvider = stringValue(raw.provider);
+  const defaultModel = stringValue(raw.model) ?? fallbackModel;
+  const available = providers
+    .filter(
+      (candidate) =>
+        candidate.authenticated === true ||
+        candidate.is_current === true ||
+        stringValue(candidate.slug ?? candidate.id) === currentProvider,
+    )
+    .sort((left, right) => {
+      const current = (candidate: JsonRecord) =>
+        candidate.is_current === true ||
+        stringValue(candidate.slug ?? candidate.id) === currentProvider;
+      return Number(current(right)) - Number(current(left));
+    });
+  const seen = new Set<string>();
+  return available.flatMap((provider) => {
+    const providerId = stringValue(provider.slug ?? provider.id);
+    if (!providerId) return [];
+    const providerName = stringValue(provider.name) ?? providerId;
+    const capabilities = record(provider.capabilities);
+    const isCurrent =
+      provider.is_current === true || providerId === currentProvider;
+    return (Array.isArray(provider.models) ? provider.models : []).flatMap(
+      (candidate) => {
+        const item = record(candidate);
+        const id =
+          typeof candidate === "string"
+            ? stringValue(candidate)
+            : stringValue(item.id ?? item.model);
+        if (!id || seen.has(id)) return [];
+        seen.add(id);
+        const capability = record(capabilities[id]);
+        return [
+          {
+            id,
+            display_name: stringValue(item.name ?? item.display_name) ?? id,
+            provider: providerId,
+            provider_name: providerName,
+            default: isCurrent && id === defaultModel,
+            ...(capability.reasoning === true
+              ? { reasoning: REASONING_LEVELS }
+              : {}),
+          },
+        ];
+      },
+    );
+  });
 }
 
 function arrayBufferBase64(buffer: ArrayBuffer): string {
@@ -481,6 +544,7 @@ class RunsExternalAgentClient implements ExternalAgentClient {
   readonly #historyEvents = new Map<string, ExternalRemoteEvent[]>();
   readonly #nextTurnSequence = new Map<string, number>();
   readonly #stagedAttachments = new Map<string, StagedRunAttachment>();
+  readonly #modelProviders = new Map<string, string>();
   #rawCapabilities: JsonRecord | null = null;
 
   constructor(options: CreateRunsExternalAgentClientOptions) {
@@ -618,10 +682,25 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       "Agent service";
     const productName =
       stringValue(raw.display_name ?? raw.name) ?? displayName(product);
-    const models = (Array.isArray(raw.models) ? raw.models : [])
+    let models = (Array.isArray(raw.models) ? raw.models : [])
       .map((value) => record(value))
       .filter((value) => stringValue(value.id));
     const model = stringValue(raw.model);
+    const modelOptionsPath = advertisedEndpoint(raw, "model_options");
+    if (modelOptionsPath) {
+      const discovered = await this.#json(modelOptionsPath, {
+        signal: options?.signal,
+      })
+        .then((value) => modelOptions(value, model))
+        .catch(() => []);
+      if (discovered.length) models = discovered;
+    }
+    this.#modelProviders.clear();
+    for (const candidate of models) {
+      const id = stringValue(candidate.id);
+      const provider = stringValue(candidate.provider);
+      if (id && provider) this.#modelProviders.set(id, provider);
+    }
     const commands: ExternalAgentCommand[] = (
       Array.isArray(raw.commands) ? raw.commands : []
     ).flatMap((value) => {
@@ -697,6 +776,9 @@ class RunsExternalAgentClient implements ExternalAgentClient {
         id: input.app_session_key,
         source: "api_server",
         model: input.model,
+        provider: input.model
+          ? this.#modelProviders.get(input.model)
+          : undefined,
       }),
       signal: options?.signal,
     });
@@ -895,6 +977,9 @@ class RunsExternalAgentClient implements ExternalAgentClient {
           input: input.user_message,
           session_id: sessionId,
           model: input.model,
+          provider: input.model
+            ? this.#modelProviders.get(input.model)
+            : undefined,
           model_options: input.thinking_level
             ? { reasoning_effort: input.thinking_level }
             : undefined,

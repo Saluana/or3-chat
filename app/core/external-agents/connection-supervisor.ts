@@ -81,6 +81,7 @@ export class ExternalAgentConnectionSupervisor {
     input.session.streamState = "connecting";
     input.publishSession();
 
+    let ownsActionError = false;
     const reconcileDisconnectedStream = async () => {
       let delayMs = 0;
       while (streamIsCurrent()) {
@@ -92,12 +93,19 @@ export class ExternalAgentConnectionSupervisor {
         if (!streamIsCurrent()) return;
         try {
           await input.refresh();
+          if (ownsActionError) {
+            input.session.actionError = undefined;
+            ownsActionError = false;
+          }
         } catch (error) {
           if (controller.signal.aborted) return;
           if (input.isStaleError(error)) {
             finish();
             return;
           }
+          input.session.actionError = input.presentError(error);
+          ownsActionError = true;
+          input.publishSession();
         }
         if (shouldPauseStream(input.session.status)) {
           input.session.streamState = "idle";
@@ -141,7 +149,6 @@ export class ExternalAgentConnectionSupervisor {
         )
           return;
         input.session.streamState = "disconnected";
-        input.session.actionError = input.presentError(error);
         input.publishSession();
         await reconcileDisconnectedStream();
       } finally {

@@ -110,6 +110,10 @@
       Requirements: R1.AC1, R1.AC3, R1.AC4, R7.AC1, R8.AC3
       Done when: a user can obtain the URL and token needed by the unchanged Agents connection form without installing an OR3 Hermes package.
 
+- [x] 5.4 Read the current provider's model catalog from the capability-advertised model-options endpoint and reconcile recoverable stream failures without a false host error.
+      Requirements: R2.AC2, R4.AC4, R5.AC3, R8.AC3
+      Done when: Hermes models and supported reasoning levels populate the shared picker, provider selection reaches Runs requests, and successful polling recovery clears stream-only failures.
+
 ## 6. Final verification and simplification
 
 - [x] 6.1 Run focused External Agents unit/controller/component tests and the shared Runs fixture suite.

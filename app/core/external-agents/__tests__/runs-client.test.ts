@@ -140,6 +140,118 @@ describe("RunsExternalAgentClient", () => {
     });
   });
 
+  it("discovers the current provider's models from its advertised endpoint", async () => {
+    const requests: Array<{ path: string; body?: unknown }> = [];
+    const fetch = vi.fn<RunsFetch>(async (input, init) => {
+      const path = pathOf(input);
+      requests.push({
+        path,
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      });
+      if (path === "/v1/capabilities") {
+        return json({
+          ...capabilities,
+          model: "vendor/reasoning-model",
+          endpoints: {
+            ...capabilities.endpoints,
+            model_options: { method: "GET", path: "/api/model/options" },
+          },
+        });
+      }
+      if (path === "/api/model/options") {
+        return json({
+          provider: "portal",
+          model: "vendor/reasoning-model",
+          providers: [
+            {
+              slug: "portal",
+              name: "Portal",
+              authenticated: true,
+              is_current: true,
+              models: ["vendor/reasoning-model", "vendor/fast-model"],
+              capabilities: {
+                "vendor/reasoning-model": { reasoning: true },
+                "vendor/fast-model": { reasoning: false },
+              },
+            },
+            {
+              slug: "second-provider",
+              name: "Second Provider",
+              authenticated: true,
+              models: ["second/model"],
+              capabilities: { "second/model": { reasoning: true } },
+            },
+          ],
+        });
+      }
+      if (path === "/api/sessions" && init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        return json({
+          session: {
+            id: body.id,
+            model: body.model,
+            started_at: 1_750_000_000,
+          },
+        });
+      }
+      if (path === "/v1/runs") {
+        return json({ run_id: "run-model", status: "started" }, 202);
+      }
+      if (path === "/v1/runs/run-model/events") {
+        return sse(['data: {"event":"run.completed","output":"done"}\n\n']);
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+
+    await expect(client.listRunners()).resolves.toMatchObject({
+      runners: [
+        {
+          models: [
+            {
+              id: "vendor/reasoning-model",
+              provider: "portal",
+              provider_name: "Portal",
+              default: true,
+              reasoning: ["minimal", "low", "medium", "high", "xhigh"],
+            },
+            { id: "vendor/fast-model", provider: "portal" },
+            {
+              id: "second/model",
+              provider: "second-provider",
+              provider_name: "Second Provider",
+            },
+          ],
+        },
+      ],
+    });
+    await client.createSession({
+      app_session_key: "session-1",
+      runner_id: "agent",
+      model: "second/model",
+    });
+    await client.startTurn("session-1", {
+      user_message: "hello",
+      model: "second/model",
+      thinking_level: "high",
+    });
+    expect(requests).toContainEqual({
+      path: "/api/sessions",
+      body: expect.objectContaining({
+        model: "second/model",
+        provider: "second-provider",
+      }),
+    });
+    expect(requests).toContainEqual({
+      path: "/v1/runs",
+      body: expect.objectContaining({
+        model: "second/model",
+        provider: "second-provider",
+        model_options: { reasoning_effort: "high" },
+      }),
+    });
+  });
+
   it("maps sessions and reconstructs turns from message history", async () => {
     const fetch = vi.fn<RunsFetch>(async (input, init) => {
       const path = pathOf(input);

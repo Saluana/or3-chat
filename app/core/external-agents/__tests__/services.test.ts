@@ -298,6 +298,36 @@ describe("ExternalAgentTurnCommandService", () => {
 });
 
 describe("ExternalAgentConnectionSupervisor", () => {
+  it("reconciles a broken stream without showing an error when the run completed", async () => {
+    const client = {
+      async *streamTurn() {
+        throw new TypeError("network connection closed");
+      },
+    } as unknown as ExternalAgentClient;
+    const supervisor = new ExternalAgentConnectionSupervisor();
+    const current = session();
+    const publishSession = vi.fn();
+    supervisor.startTurnStream({
+      client,
+      session: current,
+      turnId: "turn-1",
+      afterSeq: 0,
+      isCurrent: () => true,
+      refresh: async () => {
+        current.status = "succeeded";
+      },
+      ingest: vi.fn(),
+      publishSession,
+      persist: vi.fn(async () => undefined),
+      isStaleError: () => false,
+      presentError: () => "The agent host is unavailable.",
+    });
+
+    await vi.waitFor(() => expect(current.streamState).toBe("idle"));
+    expect(current.actionError).toBeUndefined();
+    expect(publishSession).toHaveBeenCalled();
+  });
+
   it("aborts host discovery and active streams together", async () => {
     let streamSignal: AbortSignal | undefined;
     const client = {
