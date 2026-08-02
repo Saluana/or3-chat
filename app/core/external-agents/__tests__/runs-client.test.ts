@@ -252,6 +252,59 @@ describe("RunsExternalAgentClient", () => {
     });
   });
 
+  it("handles fallback control commands locally without starting generation", async () => {
+    const requests: string[] = [];
+    const fetch = vi.fn<RunsFetch>(async (input) => {
+      const path = pathOf(input);
+      requests.push(path);
+      if (path === "/v1/capabilities") {
+        return json({
+          ...capabilities,
+          endpoints: {
+            ...capabilities.endpoints,
+            model_options: { method: "GET", path: "/api/model/options" },
+          },
+        });
+      }
+      if (path === "/api/model/options") {
+        return json({
+          provider: "portal",
+          model: "vendor/model",
+          providers: [
+            {
+              slug: "portal",
+              name: "Portal",
+              authenticated: true,
+              models: ["vendor/model"],
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+    await client.listRunners();
+    const started = await client.startTurn("session-local", {
+      user_message: "/models",
+    });
+    const events = [];
+    for await (const event of client.streamTurn(
+      "session-local",
+      started.turn_id,
+    )) {
+      events.push(event.json);
+    }
+
+    expect(started.status).toBe("completed");
+    expect(requests).toEqual(["/v1/capabilities", "/api/model/options"]);
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: "turn.completed",
+        payload: { status: "completed" },
+      }),
+    ]);
+  });
+
   it("maps sessions and reconstructs turns from message history", async () => {
     const fetch = vi.fn<RunsFetch>(async (input, init) => {
       const path = pathOf(input);
@@ -322,6 +375,70 @@ describe("RunsExternalAgentClient", () => {
         }),
       ]),
     });
+  });
+
+  it("keeps a user-only history turn active instead of inventing success", async () => {
+    const fetch = vi.fn<RunsFetch>(async (input) => {
+      const path = pathOf(input);
+      if (path.endsWith("/messages")) {
+        return json({
+          data: [
+            {
+              id: "message-user-active",
+              role: "user",
+              content: "still working",
+              timestamp: 1_750_000_001,
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+
+    await expect(client.listTurns("session-active")).resolves.toEqual({
+      turns: [
+        expect.objectContaining({
+          id: "message-user-active",
+          status: "running",
+          completed_at: undefined,
+        }),
+      ],
+    });
+    await expect(
+      client.listTurnEvents("session-active", "message-user-active"),
+    ).resolves.toEqual({ events: [] });
+  });
+
+  it("parses CRLF frames split across chunks and a final unterminated frame", async () => {
+    const fetch = vi.fn<RunsFetch>(async (input, init) => {
+      const path = pathOf(input);
+      if (path === "/v1/runs" && init?.method === "POST") {
+        return json({ run_id: "run-crlf", status: "started" }, 202);
+      }
+      if (path === "/v1/runs/run-crlf/events") {
+        return sse([
+          'data: {"event":"message.delta","delta":"one"}\r',
+          '\n\r\ndata: {"event":"message.delta","delta":"two"}',
+        ]);
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+    const started = await client.startTurn("session-crlf", {
+      user_message: "stream",
+    });
+    const events = [];
+    for await (const event of client.streamTurn(
+      "session-crlf",
+      started.turn_id,
+    )) {
+      events.push(event.json);
+    }
+    expect(events).toEqual([
+      expect.objectContaining({ text: "one" }),
+      expect.objectContaining({ text: "two" }),
+    ]);
   });
 
   it("forwards slash commands unchanged and translates chunked run events", async () => {
@@ -510,7 +627,7 @@ describe("RunsExternalAgentClient", () => {
     });
     const session = await controller.launch({
       runnerId: "agent",
-      instruction: "/model anthropic/claude",
+      instruction: "Publish the changes",
       mode: "review",
       isolation: "host_readonly",
     });
@@ -548,7 +665,7 @@ describe("RunsExternalAgentClient", () => {
     expect(completed.output).toContain("Published");
     expect(completed.approvals[0]?.status).toBe("approved");
     expect(runInputs).toEqual([
-      expect.objectContaining({ input: "/model anthropic/claude" }),
+      expect.objectContaining({ input: "Publish the changes" }),
     ]);
     controller.dispose();
   });

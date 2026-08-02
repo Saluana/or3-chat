@@ -200,6 +200,19 @@ function modelOptions(
         stringValue(candidate.slug ?? candidate.id) === currentProvider;
       return Number(current(right)) - Number(current(left));
     });
+  const idCounts = new Map<string, number>();
+  for (const provider of available) {
+    for (const candidate of Array.isArray(provider.models)
+      ? provider.models
+      : []) {
+      const item = record(candidate);
+      const id =
+        typeof candidate === "string"
+          ? stringValue(candidate)
+          : stringValue(item.id ?? item.model);
+      if (id) idCounts.set(id, (idCounts.get(id) ?? 0) + 1);
+    }
+  }
   const seen = new Set<string>();
   return available.flatMap((provider) => {
     const providerId = stringValue(provider.slug ?? provider.id);
@@ -215,12 +228,18 @@ function modelOptions(
           typeof candidate === "string"
             ? stringValue(candidate)
             : stringValue(item.id ?? item.model);
-        if (!id || seen.has(id)) return [];
-        seen.add(id);
+        if (!id) return [];
+        const selectionId =
+          (idCounts.get(id) ?? 0) > 1 && !id.startsWith(`${providerId}/`)
+            ? `${providerId}/${id}`
+            : id;
+        if (seen.has(selectionId)) return [];
+        seen.add(selectionId);
         const capability = record(capabilities[id]);
         return [
           {
-            id,
+            id: selectionId,
+            model: id,
             display_name: stringValue(item.name ?? item.display_name) ?? id,
             provider: providerId,
             provider_name: providerName,
@@ -492,23 +511,21 @@ async function* parseSseJson(
   try {
     while (true) {
       const { done, value } = await reader.read();
-      buffer += decoder
-        .decode(value, { stream: !done })
-        .replaceAll("\r\n", "\n");
+      buffer += decoder.decode(value, { stream: !done });
       if (buffer.length > MAX_SSE_BUFFER_BYTES) {
         throw new RunsClientError("Agent event stream exceeded its size limit");
       }
-      let boundary = buffer.indexOf("\n\n");
-      while (boundary >= 0) {
-        const frame = buffer.slice(0, boundary);
-        buffer = buffer.slice(boundary + 2);
+      let boundary = /\r?\n\r?\n/u.exec(buffer);
+      while (boundary?.index !== undefined) {
+        const frame = buffer.slice(0, boundary.index);
+        buffer = buffer.slice(boundary.index + boundary[0].length);
         const eventName = frame
-          .split("\n")
+          .split(/\r?\n/u)
           .find((line) => line.startsWith("event:"))
           ?.slice(6)
           .trim();
         const data = frame
-          .split("\n")
+          .split(/\r?\n/u)
           .filter((line) => line.startsWith("data:"))
           .map((line) => line.slice(5).trimStart())
           .join("\n");
@@ -525,9 +542,23 @@ async function* parseSseJson(
           if (eventName && !item.event) item.event = eventName;
           if (Object.keys(item).length) yield item;
         }
-        boundary = buffer.indexOf("\n\n");
+        boundary = /\r?\n\r?\n/u.exec(buffer);
       }
-      if (done) break;
+      if (done) {
+        const frame = buffer.trim();
+        if (frame) {
+          const data = frame
+            .split(/\r?\n/u)
+            .filter((line) => line.startsWith("data:"))
+            .map((line) => line.slice(5).trimStart())
+            .join("\n");
+          if (data && data !== "[DONE]") {
+            const item = record(JSON.parse(data));
+            if (Object.keys(item).length) yield item;
+          }
+        }
+        break;
+      }
     }
   } finally {
     reader.releaseLock();
@@ -542,9 +573,12 @@ class RunsExternalAgentClient implements ExternalAgentClient {
   readonly #runStreams = new Map<string, RunStreamState>();
   readonly #historyTurns = new Map<string, ExternalRemoteTurn[]>();
   readonly #historyEvents = new Map<string, ExternalRemoteEvent[]>();
+  readonly #localTurns = new Map<string, ExternalRemoteTurn>();
   readonly #nextTurnSequence = new Map<string, number>();
   readonly #stagedAttachments = new Map<string, StagedRunAttachment>();
   readonly #modelProviders = new Map<string, string>();
+  readonly #modelNames = new Map<string, string>();
+  #usesLocalCommands = false;
   #rawCapabilities: JsonRecord | null = null;
 
   constructor(options: CreateRunsExternalAgentClientOptions) {
@@ -696,10 +730,13 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       if (discovered.length) models = discovered;
     }
     this.#modelProviders.clear();
+    this.#modelNames.clear();
     for (const candidate of models) {
       const id = stringValue(candidate.id);
       const provider = stringValue(candidate.provider);
       if (id && provider) this.#modelProviders.set(id, provider);
+      const modelName = stringValue(candidate.model);
+      if (id && modelName) this.#modelNames.set(id, modelName);
     }
     const commands: ExternalAgentCommand[] = (
       Array.isArray(raw.commands) ? raw.commands : []
@@ -721,6 +758,41 @@ class RunsExternalAgentClient implements ExternalAgentClient {
         },
       ];
     });
+    this.#usesLocalCommands = commands.length === 0;
+    if (!commands.length) {
+      commands.push(
+        {
+          name: "help",
+          command: "/help",
+          description: "Show available agent commands.",
+          accepts_args: false,
+        },
+        {
+          name: "commands",
+          command: "/commands",
+          description: "List available agent commands.",
+          accepts_args: false,
+        },
+        {
+          name: "models",
+          command: "/models",
+          description: "Browse available model providers.",
+          accepts_args: true,
+        },
+        {
+          name: "model",
+          command: "/model",
+          description: "Show or select the session model.",
+          accepts_args: true,
+        },
+        {
+          name: "think",
+          command: "/think",
+          description: "Set the reasoning level.",
+          accepts_args: true,
+        },
+      );
+    }
     return {
       default_runner: RUNNER_ID,
       runners: [
@@ -775,7 +847,9 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       body: JSON.stringify({
         id: input.app_session_key,
         source: "api_server",
-        model: input.model,
+        model: input.model
+          ? (this.#modelNames.get(input.model) ?? input.model)
+          : undefined,
         provider: input.model
           ? this.#modelProviders.get(input.model)
           : undefined,
@@ -845,6 +919,9 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       if (!current) return;
       const sequence = turns.length + 1;
       const finalText = current.assistant.join("\n").trim();
+      const hasTerminalEvidence = Boolean(
+        finalText || current.toolEvents.length,
+      );
       const completedAt =
         current.toolEvents
           .map((event) => timestamp(event.timestamp, current!.requestedAt))
@@ -853,10 +930,10 @@ class RunsExternalAgentClient implements ExternalAgentClient {
         id: current.id,
         session_id: sessionId,
         sequence,
-        status: "succeeded",
+        status: hasTerminalEvidence ? "succeeded" : "running",
         continuation_mode: "replay",
         requested_at: current.requestedAt,
-        completed_at: completedAt,
+        completed_at: hasTerminalEvidence ? completedAt : undefined,
         user_message: current.userMessage,
         final_text: finalText || undefined,
       };
@@ -884,6 +961,7 @@ class RunsExternalAgentClient implements ExternalAgentClient {
           payload: { name, status: "completed" },
         });
       }
+      if (hasTerminalEvidence) {
       events.push({
         id: ++eventSequence,
         turn_id: turn.id,
@@ -892,6 +970,7 @@ class RunsExternalAgentClient implements ExternalAgentClient {
         type: "turn.completed",
         payload: { status: "completed" },
       });
+      }
       this.#historyEvents.set(turn.id, events);
       turns.push(turn);
       current = undefined;
@@ -941,7 +1020,10 @@ class RunsExternalAgentClient implements ExternalAgentClient {
           throw error;
       }
     }
-    const turns = [...history, ...live]
+    const local = [...this.#localTurns.values()].filter(
+      (turn) => turn.session_id === sessionId,
+    );
+    const turns = [...history, ...live, ...local]
       .sort((left, right) => left.sequence - right.sequence)
       .slice(-(input.limit ?? 50));
     return { turns };
@@ -958,6 +1040,20 @@ class RunsExternalAgentClient implements ExternalAgentClient {
     status: string;
   }> {
     const nextSequence = (this.#nextTurnSequence.get(sessionId) ?? 0) + 1;
+    const localTurn = this.#createLocalCommandTurn(
+      sessionId,
+      input,
+      nextSequence,
+    );
+    if (localTurn) {
+      this.#nextTurnSequence.set(sessionId, nextSequence);
+      return {
+        session_id: sessionId,
+        turn_id: localTurn.id,
+        job_id: localTurn.id,
+        status: "completed",
+      };
+    }
     const attachmentIds =
       input.attachments?.map((attachment) => attachment.id) ?? [];
     const attachments = attachmentIds.map((id) => {
@@ -976,7 +1072,9 @@ class RunsExternalAgentClient implements ExternalAgentClient {
         body: JSON.stringify({
           input: input.user_message,
           session_id: sessionId,
-          model: input.model,
+          model: input.model
+            ? (this.#modelNames.get(input.model) ?? input.model)
+            : undefined,
           provider: input.model
             ? this.#modelProviders.get(input.model)
             : undefined,
@@ -1061,6 +1159,8 @@ class RunsExternalAgentClient implements ExternalAgentClient {
     turnId: string,
     options?: { signal?: AbortSignal },
   ): Promise<ExternalRemoteTurn> {
+    const localTurn = this.#localTurns.get(turnId);
+    if (localTurn) return localTurn;
     const metadata = this.#runMetadata.get(turnId);
     if (metadata) {
       const raw = await this.#json(`/v1/runs/${encodePath(turnId)}`, {
@@ -1073,6 +1173,82 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       (await this.#history(sessionId, options?.signal));
     const turn = history.find((candidate) => candidate.id === turnId);
     if (!turn) throw new RunsClientError(`Agent turn was not found`, 404);
+    return turn;
+  }
+
+  #createLocalCommandTurn(
+    sessionId: string,
+    input: ExternalAgentStartTurnInput,
+    sequence: number,
+  ): ExternalRemoteTurn | null {
+    if (!this.#usesLocalCommands || input.attachments?.length) return null;
+    const match =
+      /^\/(help|commands|models?|think|thinking|t)(?:\s+(.+?))?\s*$/iu.exec(
+        input.user_message,
+      );
+    if (!match) return null;
+    const name = match[1]!.toLowerCase();
+    const argument = match[2]?.trim();
+    const id = `local-command-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const now = Date.now() / 1000;
+    let model = input.model;
+    let thinkingLevel = input.thinking_level;
+    let finalText: string | undefined;
+    if (name === "model" && argument) {
+      const known =
+        this.#modelProviders.has(argument) || this.#modelNames.has(argument);
+      if (known) {
+        model = argument;
+        finalText = `Model set to ${this.#modelNames.get(argument) ?? argument}.`;
+      } else {
+        finalText = `Unknown model: ${argument}`;
+      }
+    } else if (["think", "thinking", "t"].includes(name) && argument) {
+      thinkingLevel = argument;
+      finalText = `Reasoning set to ${argument}.`;
+    }
+    const turn: ExternalRemoteTurn = {
+      id,
+      session_id: sessionId,
+      sequence,
+      status: "succeeded",
+      continuation_mode: "replay",
+      requested_at: now,
+      completed_at: now,
+      user_message: input.user_message,
+      final_text: finalText,
+      model,
+      thinking_level: thinkingLevel,
+    };
+    const state = this.#streamState(id);
+    if (finalText) {
+      state.events.push({
+        id: ++state.nextSequence,
+        turn_id: id,
+        seq: state.nextSequence,
+        ts: now,
+        type: "text_delta",
+        text: finalText,
+        payload: { delta: finalText },
+      });
+    }
+    state.events.push({
+      id: ++state.nextSequence,
+      turn_id: id,
+      seq: state.nextSequence,
+      ts: now,
+      type: "turn.completed",
+      payload: { status: "completed" },
+    });
+    state.started = true;
+    state.done = true;
+    this.#localTurns.set(id, turn);
+    while (this.#localTurns.size > 100) {
+      const oldest = this.#localTurns.keys().next().value;
+      if (typeof oldest !== "string") break;
+      this.#localTurns.delete(oldest);
+      this.#runStreams.delete(oldest);
+    }
     return turn;
   }
 
@@ -1162,9 +1338,14 @@ class RunsExternalAgentClient implements ExternalAgentClient {
     this.#ensureRunPump(metadata);
     const state = this.#streamState(turnId);
     let afterSeq = input.afterSeq ?? 0;
+    let eventIndex = state.events.findIndex(
+      (candidate) => candidate.seq > afterSeq,
+    );
+    if (eventIndex < 0) eventIndex = state.events.length;
     while (!input.signal?.aborted) {
-      const event = state.events.find((candidate) => candidate.seq > afterSeq);
+      const event = state.events[eventIndex];
       if (event) {
+        eventIndex += 1;
         afterSeq = event.seq;
         yield {
           event: "message",

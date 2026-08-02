@@ -82,6 +82,23 @@ describe("external agent presentation", () => {
     expect(projection.turns[0]?.assistantMessage?.pending).toBe(true);
   });
 
+  it("unlocks the composer when the latest turn is terminal", () => {
+    const projection = projectExternalAgentConversation(
+      session({
+        turns: [
+          {
+            ...session().turns[0]!,
+            status: "succeeded",
+            completed_at: 1_753_611_201_000,
+          },
+        ],
+      }),
+    );
+
+    expect(projection.status).toBe("succeeded");
+    expect(projection.isRunning).toBe(false);
+  });
+
   it("treats a provider whole-message delta as a snapshot instead of duplicating text", () => {
     const finalText = "Here’s the concise answer.";
     const projection = projectExternalAgentConversation(
@@ -193,9 +210,7 @@ describe("external agent presentation", () => {
         }),
       },
     ]);
-    expect(
-      projection.turns[0]?.assistantMessage?.toolCalls,
-    ).toHaveLength(1);
+    expect(projection.turns[0]?.assistantMessage?.toolCalls).toHaveLength(1);
   });
 
   it("preserves text and tool calls in their original event order", () => {

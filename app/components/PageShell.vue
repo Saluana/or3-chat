@@ -1261,7 +1261,13 @@ function reconcileWorkspaceTabsWithPanes(): void {
     if (!workspaceTabsEnabled.value) return;
     for (const pane of panes.value) {
         const resource = resourceForPane(pane);
-        if (resource) workspaceTabs.reconcilePaneResource(pane.id, resource);
+        if (resource) {
+            workspaceTabs.reconcilePaneResource(pane.id, resource, {
+                replaceCurrent:
+                    resource.kind === 'app' &&
+                    getPaneApp(resource.appId)?.replaceRecordInCurrentTab === true,
+            });
+        }
     }
 }
 

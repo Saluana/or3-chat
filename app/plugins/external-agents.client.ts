@@ -422,6 +422,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     label: "External agent",
     icon: "lucide:bot",
     order: 82,
+    replaceRecordInCurrentTab: true,
     component: () =>
       import("~/components/external-agents/ExternalAgentSessionPane.vue"),
   });

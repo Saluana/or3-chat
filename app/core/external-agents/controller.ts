@@ -116,6 +116,7 @@ function sessionFromRemote(
     runnerId: remote.runner_id,
     model: remote.model ?? ref?.model,
     thinkingLevel: ref?.thinkingLevel,
+    activeTurnId: ref?.activeTurnId,
     mode: remote.mode,
     isolation: remote.isolation,
     cwd: remote.cwd,
@@ -473,8 +474,7 @@ export class ExternalAgentController {
     const baseUrl = normalizeExternalAgentBaseUrl(input.baseUrl);
     const id = `or3-connect:${environmentId}`;
     const previous =
-      this.#hostRegistry.find(id) ??
-      this.#hostRegistry.findByEndpoint(baseUrl);
+      this.#hostRegistry.find(id) ?? this.#hostRegistry.findByEndpoint(baseUrl);
     const previousWasActive = previous?.id === this.#activeHostId;
     const credentialRef =
       previous?.credentialRef ?? `or3-connect-credential:${environmentId}`;
@@ -496,10 +496,7 @@ export class ExternalAgentController {
       ),
       host,
     ];
-    if (
-      previous &&
-      previous.credentialRef !== credentialRef
-    ) {
+    if (previous && previous.credentialRef !== credentialRef) {
       await this.#credentials.remove(previous.credentialRef);
       this.#assertWorkspaceLease(lease);
     }
@@ -969,10 +966,13 @@ export class ExternalAgentController {
   }
 
   canCancel(session: ExternalAgentSession): boolean {
+    const latestStatus = session.turns.at(-1)?.status;
     return (
       this.#canActOnSession(session) &&
       this.#runnerChatCapability(session, "cancel") &&
       Boolean(session.activeTurnId) &&
+      !isTerminal(session.status) &&
+      !isTerminal(mapExternalAgentStatus(latestStatus, session.status)) &&
       (session.status === "queued" ||
         session.status === "running" ||
         session.status === "waiting_approval")
@@ -1002,9 +1002,13 @@ export class ExternalAgentController {
   }
 
   canFollowUp(session: ExternalAgentSession): boolean {
+    const latestStatus = mapExternalAgentStatus(
+      session.turns.at(-1)?.status,
+      session.status,
+    );
     if (
       !this.#canActOnSession(session) ||
-      !isTerminal(session.status) ||
+      (!isTerminal(session.status) && !isTerminal(latestStatus)) ||
       !session.turns.length
     ) {
       return false;
@@ -1353,9 +1357,9 @@ export class ExternalAgentController {
     if (hostId) {
       return this.#sessions.get(hostId, remoteSessionId);
     }
-    return this.#sessions.values().find(
-      (session) => session.remoteSessionId === remoteSessionId,
-    );
+    return this.#sessions
+      .values()
+      .find((session) => session.remoteSessionId === remoteSessionId);
   }
 
   async ensureSession(
@@ -1672,7 +1676,7 @@ export class ExternalAgentController {
       session.activeTurnId === latest.id &&
       isTerminal(session.status) &&
       !isTerminal(nextStatus);
-    session.activeTurnId = latest.id;
+    session.activeTurnId = isTerminal(nextStatus) ? undefined : latest.id;
     if (!preserveTerminal) session.status = nextStatus;
     if (latest.model !== undefined) session.model = latest.model;
     if (latest.thinking_level !== undefined) {

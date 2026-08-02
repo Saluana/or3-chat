@@ -63,9 +63,12 @@ export default {
         rejectReady = reject;
       });
       const rejectConnection = (error) => {
-        if (settled) return;
+        if (!settled) {
         settled = true;
         rejectReady(error);
+        }
+        eventReady = undefined;
+        eventClient = undefined;
       };
       eventClient = new GatewayClient({
         url: `${gatewayConfig.tls?.enabled === true ? "wss" : "ws"}://127.0.0.1:${gatewayPort}`,

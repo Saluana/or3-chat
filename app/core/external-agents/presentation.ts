@@ -309,13 +309,7 @@ function appendDelta(current: string, delta: string): string {
   return `${current}${delta}`;
 }
 
-type OperationKind =
-  | "tests"
-  | "search"
-  | "read"
-  | "edit"
-  | "command"
-  | "other";
+type OperationKind = "tests" | "search" | "read" | "edit" | "command" | "other";
 
 function operationHint(event: ExternalAgentTimelineEvent): string {
   return [
@@ -475,8 +469,7 @@ function assistantPresentation(
       label,
       status,
       args:
-        detail &&
-        (kind === "command" || kind === "read" || kind === "edit")
+        detail && (kind === "command" || kind === "read" || kind === "edit")
           ? detail
           : existingCall?.args,
       result:
@@ -512,9 +505,7 @@ function assistantPresentation(
   const finalText = cleanString(turn.final_text);
   const streamedText = parts
     .filter(
-      (
-        part,
-      ): part is Extract<UiChatMessagePart, { type: "text" }> =>
+      (part): part is Extract<UiChatMessagePart, { type: "text" }> =>
         part.type === "text",
     )
     .map((part) => part.text)
@@ -524,9 +515,7 @@ function assistantPresentation(
       const lastText = [...parts]
         .reverse()
         .find(
-          (
-            part,
-          ): part is Extract<UiChatMessagePart, { type: "text" }> =>
+          (part): part is Extract<UiChatMessagePart, { type: "text" }> =>
             part.type === "text",
         );
       if (lastText) lastText.text += finalText.slice(streamedText.length);
@@ -541,18 +530,14 @@ function assistantPresentation(
 
   const text = parts
     .filter(
-      (
-        part,
-      ): part is Extract<UiChatMessagePart, { type: "text" }> =>
+      (part): part is Extract<UiChatMessagePart, { type: "text" }> =>
         part.type === "text",
     )
     .map((part) => part.text)
     .join("");
   const tools = parts
     .filter(
-      (
-        part,
-      ): part is Extract<UiChatMessagePart, { type: "tool" }> =>
+      (part): part is Extract<UiChatMessagePart, { type: "tool" }> =>
         part.type === "tool",
     )
     .map((part) => part.toolCall);
@@ -683,6 +668,13 @@ export function projectExternalAgentConversation(
         left.requested_at - right.requested_at,
     )
     .map((turn) => projectTurn(session, turn));
+  const latestStatus = turns.at(-1)?.status;
+  const effectiveStatus =
+    session.status === "succeeded" ||
+    session.status === "failed" ||
+    session.status === "cancelled"
+      ? session.status
+      : (latestStatus ?? session.status);
   const diagnostics = session.events.slice(-MAX_DIAGNOSTICS).map((event) => ({
     id: event.id,
     occurredAt: event.occurredAt,
@@ -698,12 +690,12 @@ export function projectExternalAgentConversation(
   }));
   return Object.freeze({
     title: session.title,
-    status: session.status,
+    status: effectiveStatus,
     turns: Object.freeze(turns),
     pendingApprovalCount: session.approvals.filter(
       (approval) => approval.status === "pending",
     ).length,
-    isRunning: session.status === "queued" || session.status === "running",
+    isRunning: effectiveStatus === "queued" || effectiveStatus === "running",
     diagnostics: Object.freeze(diagnostics),
   });
 }

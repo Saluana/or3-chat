@@ -55,6 +55,8 @@ export interface PaneAppDef {
     pluginId?: string;
     /** Optional access policy for this pane app. */
     access?: PluginGatePolicy;
+    /** Replace this app's record in the current workspace tab. */
+    replaceRecordInCurrentTab?: boolean;
 }
 
 // RegisteredPaneApp is exactly PaneAppDef, but semantically represents a validated/normalized entry
@@ -88,6 +90,7 @@ const PaneAppDefSchema = z.object({
     createInitialRecord: z.function().optional(),
     pluginId: z.string().optional(),
     access: z.unknown().optional(),
+    replaceRecordInCurrentTab: z.boolean().optional(),
 });
 
 type OwnedPaneApp = {

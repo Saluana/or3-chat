@@ -9,10 +9,12 @@ relay, account, database, or second credential.
 ```bash
 openclaw plugins install ./packages/openclaw-or3
 openclaw plugins enable or3-runs
-openclaw config set plugins.allow '["or3-runs"]'
 openclaw config set plugins.entries.or3-runs.config.allowedOrigins '["http://localhost:3000"]'
 openclaw gateway restart
 ```
+
+If `plugins.allow` is configured, add `or3-runs` to its existing array. Do not
+replace the array, because doing so disables every plugin ID you omit.
 
 After this package is published, the first command can instead be
 `openclaw plugins install npm:@or3/openclaw@0.1.0 --pin`.

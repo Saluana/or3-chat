@@ -236,6 +236,7 @@ export interface ExternalAgentSessionRef {
   readonly preview?: string;
   readonly model?: string;
   readonly thinkingLevel?: string;
+  readonly activeTurnId?: string;
 }
 
 export interface ExternalAgentPersistenceSnapshot {

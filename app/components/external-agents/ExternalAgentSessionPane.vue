@@ -205,12 +205,12 @@
               </div>
 
               <div
-                v-if="turn.commandChoices.length"
+                v-if="commandChoicesForTurn(turn).length"
                 class="mx-2 mb-4 flex flex-wrap gap-2 sm:mx-5"
                 aria-label="Command options"
               >
                 <UButton
-                  v-for="choice in turn.commandChoices"
+                  v-for="choice in commandChoicesForTurn(turn)"
                   :key="choice.command"
                   size="sm"
                   color="neutral"
@@ -293,9 +293,7 @@
                 >
                   <div class="flex items-center gap-2">
                     <UIcon
-                      :name="
-                        artifact.kind === 'diff' ? iconFileDiff : iconFile
-                      "
+                      :name="artifact.kind === 'diff' ? iconFileDiff : iconFile"
                       class="size-4 shrink-0"
                     />
                     <strong class="min-w-0 flex-1 truncate text-sm">
@@ -463,6 +461,7 @@ import {
   EXTERNAL_AGENT_PANE_APP_ID,
   EXTERNAL_AGENTS_SIDEBAR_PAGE_ID,
 } from "~/core/external-agents/refs";
+import type { AgentConversationTurn } from "~/core/external-agents/presentation";
 import { useExternalAgentRuntime } from "~/core/external-agents/runtime";
 import { useActiveSidebarPage } from "~/composables/sidebar/useActiveSidebarPage";
 import { useIcon } from "~/composables/useIcon";
@@ -593,6 +592,103 @@ const projection = computed(() =>
 const conversationTurns = computed(() =>
   projection.value ? [...projection.value.turns] : [],
 );
+function commandChoicesForTurn(turn: AgentConversationTurn) {
+  if (turn.commandChoices.length) return turn.commandChoices;
+  const input = turn.userMessage?.text.trim() ?? "";
+  if (/^\/(?:help|commands)\s*$/iu.test(input)) {
+    return (followUpRunnerOption.value?.runner.commands ?? []).map(
+      (command) => ({
+        label: command.command,
+        command: command.command,
+      }),
+    );
+  }
+  if (/^\/(?:think|thinking|t)\s*$/iu.test(input)) {
+    const models = followUpRunnerOption.value?.runner.models ?? [];
+    const selected = models.find(
+      (candidate) => candidate.id === followUpModel.value,
+    );
+    const levels = Array.isArray(selected?.reasoning)
+      ? selected.reasoning
+      : ["minimal", "low", "medium", "high", "xhigh"];
+    return levels.flatMap((level) =>
+      typeof level === "string"
+        ? [{ label: level, command: `/think ${level}` }]
+        : [],
+    );
+  }
+  const bareCommand = /^\/([^\s]+)\s*$/u.exec(input)?.[1]?.toLowerCase();
+  const argumentChoices = bareCommand
+    ? followUpRunnerOption.value?.runner.commands?.find(
+        (command) => command.name.toLowerCase() === bareCommand,
+      )?.args?.[0]?.choices
+    : undefined;
+  if (argumentChoices?.length) {
+    return argumentChoices.map((choice) => ({
+      label: choice.label,
+      command: `/${bareCommand} ${choice.value}`,
+    }));
+  }
+  const match =
+    /^\/(?:model|models)(?:\s+([^\s]+)(?:\s+page=(\d+))?)?\s*$/iu.exec(input);
+  if (!match) return [];
+  const models = followUpRunnerOption.value?.runner.models ?? [];
+  const provider = match[1]?.toLowerCase();
+  if (provider) {
+    const providerModels = models.flatMap((candidate) => {
+      const id = typeof candidate.id === "string" ? candidate.id : "";
+      const modelProvider =
+        typeof candidate.provider === "string" ? candidate.provider : "";
+      if (!id || modelProvider.toLowerCase() !== provider) return [];
+      const label =
+        typeof candidate.display_name === "string"
+          ? candidate.display_name
+          : typeof candidate.name === "string"
+            ? candidate.name
+            : id;
+      return [{ label, command: `/model ${id}` }];
+    });
+    const pageSize = 8;
+    const pageCount = Math.max(1, Math.ceil(providerModels.length / pageSize));
+    const page = Math.min(pageCount, Math.max(1, Number(match[2]) || 1));
+    const choices = providerModels.slice(
+      (page - 1) * pageSize,
+      page * pageSize,
+    );
+    if (page > 1) {
+      choices.push({
+        label: "← Previous",
+        command: `/models ${provider} page=${page - 1}`,
+      });
+    }
+    if (page < pageCount) {
+      choices.push({
+        label: "Next →",
+        command: `/models ${provider} page=${page + 1}`,
+      });
+    }
+    choices.push({ label: "← Providers", command: "/models" });
+    return choices;
+  }
+  const providers = new Map<string, { label: string; count: number }>();
+  for (const candidate of models) {
+    const providerId =
+      typeof candidate.provider === "string" ? candidate.provider : "";
+    if (!providerId) continue;
+    const current = providers.get(providerId);
+    providers.set(providerId, {
+      label:
+        typeof candidate.provider_name === "string"
+          ? candidate.provider_name
+          : providerId,
+      count: (current?.count ?? 0) + 1,
+    });
+  }
+  return [...providers].map(([providerId, details]) => ({
+    label: `${details.label} (${details.count})`,
+    command: `/models ${providerId}`,
+  }));
+}
 const connected = computed(
   () =>
     snapshot.value?.connectionState === "online" ||
@@ -902,8 +998,7 @@ async function followUp(
   try {
     await runtime.controller.followUp(session.value.remoteSessionId, {
       instruction:
-        submittedText.trim() ||
-        attachmentOnlyFollowUp(submittedAttachments),
+        submittedText.trim() || attachmentOnlyFollowUp(submittedAttachments),
       cwd: followUpCwd.value || undefined,
       mode: followUpMode.value,
       isolation: followUpIsolation.value,
@@ -923,6 +1018,13 @@ async function followUp(
     }
     await nextTick();
     composer.value?.focus();
+  } catch (cause) {
+    if (session.value) {
+      session.value.actionError = presentExternalAgentError(
+        cause,
+        "The agent could not continue.",
+      ).message;
+    }
   } finally {
     pendingAction.value = null;
   }
@@ -930,6 +1032,12 @@ async function followUp(
 
 async function sendCommandChoice(command: string) {
   if (pendingAction.value || projection.value?.isRunning) return;
+  const model = /^\/model\s+(.+)$/iu.exec(command)?.[1]?.trim();
+  if (model) followUpModel.value = model;
+  const thinking = /^\/(?:think|thinking|t)\s+(.+)$/iu
+    .exec(command)?.[1]
+    ?.trim();
+  if (thinking) followUpThinkingLevel.value = thinking;
   followUpText.value = command;
   await followUp();
 }
@@ -1010,6 +1118,18 @@ watch(followUpMode, () => {
     followUpIsolation.value = followUpIsolationItems.value[0]?.id ?? "";
   }
 });
+watch(
+  () => session.value?.model,
+  (model) => {
+    if (model) followUpModel.value = model;
+  },
+);
+watch(
+  () => session.value?.thinkingLevel,
+  (level) => {
+    if (level) followUpThinkingLevel.value = level;
+  },
+);
 watch([followUpMode, followUpIsolation], () => {
   if (!dangerousFollowUpSelection.value) {
     followUpConfirmDangerous.value = false;

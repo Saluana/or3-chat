@@ -347,7 +347,17 @@ function onKeydown(event: KeyboardEvent) {
     }
     if (event.key === "Enter" || event.key === "Tab") {
       event.preventDefault();
-      selectCommand(commandSuggestions.value[Math.max(0, highlightedCommand.value)]!);
+      const command =
+        commandSuggestions.value[Math.max(0, highlightedCommand.value)]!;
+      if (
+        event.key === "Enter" &&
+        props.modelValue.trim() === command.command
+      ) {
+        commandSuggestionsDismissed.value = true;
+        submit();
+      } else {
+        selectCommand(command);
+      }
       return;
     }
   }

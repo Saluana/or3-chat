@@ -22,9 +22,7 @@ describe("external agent persistence", () => {
     expect(externalAgentDriver(parsed.hosts[0]!)).toBe("intern");
   });
 
-  it.each(["intern", "runs"] as const)(
-    "preserves the %s driver",
-    (driver) => {
+  it.each(["intern", "runs"] as const)("preserves the %s driver", (driver) => {
       const parsed = parseExternalAgentPersistence({
         hosts: [{ ...host, driver }],
         activeHostId: host.id,
@@ -33,8 +31,7 @@ describe("external agent persistence", () => {
 
       expect(parsed.hosts[0]).toEqual({ ...host, driver });
       expect(externalAgentDriver(parsed.hosts[0]!)).toBe(driver);
-    },
-  );
+  });
 
   it("drops hosts with an unknown driver and clears their active reference", () => {
     const parsed = parseExternalAgentPersistence({
@@ -45,5 +42,29 @@ describe("external agent persistence", () => {
 
     expect(parsed.hosts).toEqual([]);
     expect(parsed.activeHostId).toBeNull();
+  });
+
+  it("restores session model, reasoning, and an active turn", () => {
+    const parsed = parseExternalAgentPersistence({
+      hosts: [{ ...host, driver: "runs" }],
+      activeHostId: host.id,
+      sessionRefs: [
+        {
+          hostId: host.id,
+          remoteSessionId: "session-1",
+          model: "openai/gpt-5",
+          thinkingLevel: "high",
+          activeTurnId: "run-1",
+          status: "running",
+        },
+      ],
+    });
+
+    expect(parsed.sessionRefs[0]).toMatchObject({
+      model: "openai/gpt-5",
+      thinkingLevel: "high",
+      activeTurnId: "run-1",
+      status: "running",
+    });
   });
 });

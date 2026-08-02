@@ -7,6 +7,7 @@ import { shouldPauseStream, streamPayload } from "./event-store";
 
 const STREAM_DISCONNECT_RECONCILE_INITIAL_MS = 1_000;
 const STREAM_DISCONNECT_RECONCILE_MAX_MS = 30_000;
+const STREAM_EVENTS_PER_RENDER_YIELD = 8;
 
 function waitForAbortableDelay(
   delayMs: number,
@@ -82,6 +83,7 @@ export class ExternalAgentConnectionSupervisor {
     input.publishSession();
 
     let ownsActionError = false;
+    let eventsSinceRenderYield = 0;
     const reconcileDisconnectedStream = async () => {
       let delayMs = 0;
       while (streamIsCurrent()) {
@@ -139,6 +141,16 @@ export class ExternalAgentConnectionSupervisor {
             streamEvent.event === "done"
           )
             break;
+          if (
+            remote &&
+            ++eventsSinceRenderYield >= STREAM_EVENTS_PER_RENDER_YIELD
+          ) {
+            eventsSinceRenderYield = 0;
+            // A fetch body may expose a large buffered SSE burst at once.
+            // Yielding to a task periodically prevents the async iterator's
+            // microtask chain from starving Vue and the browser paint loop.
+            if (!(await waitForAbortableDelay(0, controller.signal))) return;
+          }
         }
         if (!controller.signal.aborted) await reconcileDisconnectedStream();
       } catch (error) {

@@ -63,6 +63,9 @@ function parseSessionRef(value: unknown): ExternalAgentSessionRef | null {
     status,
     pendingApprovalCount,
     preview,
+    model,
+    thinkingLevel,
+    activeTurnId,
   } = value;
   if (typeof hostId !== "string" || typeof remoteSessionId !== "string") {
     return null;
@@ -88,6 +91,10 @@ function parseSessionRef(value: unknown): ExternalAgentSessionRef | null {
         ? Math.max(0, Math.floor(pendingApprovalCount))
         : undefined,
     preview: typeof preview === "string" ? preview.slice(0, 240) : undefined,
+    model: typeof model === "string" ? model : undefined,
+    thinkingLevel:
+      typeof thinkingLevel === "string" ? thinkingLevel : undefined,
+    activeTurnId: typeof activeTurnId === "string" ? activeTurnId : undefined,
   };
 }
 

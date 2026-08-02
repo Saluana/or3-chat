@@ -5,6 +5,8 @@ const MAX_BODY_BYTES = 32 * 1024 * 1024;
 const MAX_ATTACHMENT_COUNT = 10;
 const MAX_ATTACHMENT_CONTENT_CHARS = Math.ceil((20 * 1024 * 1024 * 4) / 3) + 4;
 const MAX_EVENTS = 2_000;
+const MAX_SESSIONS = 200;
+const MAX_RUNS = 200;
 const MAX_COMMAND_CHOICES = 24;
 const MODEL_PAGE_SIZE = 8;
 const SSE_HEARTBEAT_MS = 15_000;
@@ -405,6 +407,7 @@ export class Or3RunsBridge {
         updatedAt: createdAt,
       };
       this.sessions.set(id, session);
+      this.prune();
     }
     return session;
   }
@@ -426,9 +429,10 @@ export class Or3RunsBridge {
     return session;
   }
 
-  listSessions() {
+  listSessions(limit = 50) {
     return [...this.sessions.values()]
       .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(0, Math.min(Math.max(Number(limit) || 50, 1), MAX_SESSIONS))
       .map(sessionView);
   }
 
@@ -440,8 +444,46 @@ export class Or3RunsBridge {
       return normalizeMessages(
         Array.isArray(result.messages) ? result.messages : [],
       );
-    } catch {
-      return [];
+    } catch (error) {
+      throw Object.assign(
+        new Error("OpenClaw session history is unavailable"),
+        {
+          status: 503,
+          cause: error,
+        },
+      );
+    }
+  }
+
+  prune() {
+    if (this.runs.size > MAX_RUNS) {
+      const removable = [...this.runs.values()]
+        .filter((run) =>
+          ["completed", "failed", "cancelled"].includes(run.status),
+        )
+        .sort((left, right) => left.updatedAt - right.updatedAt);
+      while (this.runs.size > MAX_RUNS && removable.length) {
+        const run = removable.shift();
+        this.runs.delete(run.id);
+        for (const [alias, runId] of this.runAliases) {
+          if (runId === run.id) this.runAliases.delete(alias);
+        }
+      }
+    }
+    if (this.sessions.size > MAX_SESSIONS) {
+      const activeSessionIds = new Set(
+        [...this.runs.values()]
+          .filter(
+            (run) => !["completed", "failed", "cancelled"].includes(run.status),
+          )
+          .map((run) => run.sessionId),
+      );
+      const removable = [...this.sessions.values()]
+        .filter((session) => !activeSessionIds.has(session.id))
+        .sort((left, right) => left.updatedAt - right.updatedAt);
+      while (this.sessions.size > MAX_SESSIONS && removable.length) {
+        this.sessions.delete(removable.shift().id);
+      }
     }
   }
 
@@ -472,6 +514,7 @@ export class Or3RunsBridge {
       commandChoices: this.commandChoices(prompt),
     };
     this.runs.set(run.id, run);
+    this.prune();
     session.updatedAt = createdAt;
     const model = text(requestInput.model);
     const thinkingLevel = text(
@@ -762,7 +805,10 @@ export function createOr3RunsHttpHandler(
       } else if (method === "GET" && path === "/v1/capabilities") {
         sendJson(res, 200, await bridge.capabilities());
       } else if (path === "/api/sessions" && method === "GET") {
-        sendJson(res, 200, { object: "list", data: bridge.listSessions() });
+        sendJson(res, 200, {
+          object: "list",
+          data: bridge.listSessions(url.searchParams.get("limit")),
+        });
       } else if (path === "/api/sessions" && method === "POST") {
         const body = await readJson(req);
         const session = await bridge.createSession(

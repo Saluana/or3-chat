@@ -235,9 +235,15 @@ function approvalFromEvent(
         `${event.turnId}:${event.sequence}`,
     );
   const rawType = String(payload.rawType ?? "").toLowerCase();
-  const decision = String(payload.decision ?? payload.status ?? "").toLowerCase();
+  const decision = String(
+    payload.decision ?? payload.status ?? "",
+  ).toLowerCase();
   let status: ExternalAgentApproval["status"] = "pending";
-  if (rawType.includes("resolved") || rawType.includes("response") || decision) {
+  if (
+    rawType.includes("resolved") ||
+    rawType.includes("response") ||
+    decision
+  ) {
     if (decision.includes("approve") || decision === "allow")
       status = "approved";
     else if (decision.includes("deny") || decision.includes("reject"))
@@ -421,7 +427,8 @@ export class ExternalAgentEventStore {
       .slice(0, MAX_TIMELINE_EVENTS_PER_TURN)
       .sort(
         (left, right) =>
-          left.seq - right.seq || String(left.id).localeCompare(String(right.id)),
+          left.seq - right.seq ||
+          String(left.id).localeCompare(String(right.id)),
       );
   }
 
@@ -526,6 +533,7 @@ export class ExternalAgentEventStore {
         !(input.session.status === "failed" && terminalStatus !== "failed")
       ) {
         input.session.status = terminalStatus;
+        input.session.activeTurnId = undefined;
         input.session.completedAt ??= normalized.occurredAt;
       }
     }
@@ -610,8 +618,7 @@ export class ExternalAgentEventStore {
     const latestTurnId = retainedTurns.at(-1)?.id;
     const turnEvents = index.byTurn.get(normalized.turnId) ?? [];
     const last = turnEvents.at(-1);
-    const appendInOrder =
-      !last || compareTimelineEvents(last, normalized) <= 0;
+    const appendInOrder = !last || compareTimelineEvents(last, normalized) <= 0;
     if (appendInOrder) turnEvents.push(normalized);
     else {
       let low = 0;

@@ -1915,4 +1915,89 @@ describe("External Agents components", () => {
       expect.objectContaining({ instruction: "/verbose on" }),
     );
   });
+
+  it("renders assistant deltas before the turn completes", async () => {
+    const streamingSession: ExternalAgentSession = {
+      ...session,
+      status: "running",
+      approvals: [],
+      artifacts: [],
+      output: undefined,
+      error: undefined,
+      turns: [
+        {
+          id: "turn-1",
+          session_id: "session-1",
+          sequence: 1,
+          status: "running",
+          continuation_mode: "replay",
+          requested_at: Date.now(),
+          user_message: "Stream a response",
+        },
+      ],
+      events: [],
+    };
+    mocks.snapshot.value = snapshot({ sessions: [streamingSession] });
+    const ThemedMessage = defineComponent({
+      props: { message: { type: Object, required: true } },
+      setup(props) {
+        return () =>
+          h(
+            "div",
+            { class: "streaming-test-message" },
+            String((props.message as { text?: string }).text ?? ""),
+          );
+      },
+    });
+    const wrapper = mount(ExternalAgentSessionPane, {
+      props: {
+        paneId: "pane-1",
+        recordId: encodeExternalAgentSessionRef({
+          hostId: "host-1",
+          remoteSessionId: "session-1",
+        }),
+      },
+      global: {
+        ...global,
+        config: {
+          globalProperties: {
+            $theme: {
+              activeComponents: shallowRef({
+                ...CORE_APP_COMPONENT_DEFAULTS,
+                "chat-message": ThemedMessage,
+              }),
+            } as unknown as ThemePlugin,
+          },
+        },
+      },
+    });
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("Partial answer");
+
+    mocks.snapshot.value = snapshot({
+      sessions: [
+        {
+          ...streamingSession,
+          events: [
+            {
+              id: "delta-1",
+              hostId: "host-1",
+              hostGeneration: 1,
+              sessionId: "session-1",
+              turnId: "turn-1",
+              sequence: 1,
+              occurredAt: new Date().toISOString(),
+              type: "message",
+              text: "Partial answer",
+              payload: { rawType: "text_delta" },
+            },
+          ],
+        },
+      ],
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Partial answer");
+    expect(wrapper.text()).toContain("Working — stop to interrupt");
+  });
 });

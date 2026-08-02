@@ -20,7 +20,9 @@
         >
           Home
         </UButton>
-        <div class="agent-sidebar-header-actions flex shrink-0 items-center gap-1">
+        <div
+          class="agent-sidebar-header-actions flex shrink-0 items-center gap-1"
+        >
           <UTooltip text="Connection settings" :delay-duration="0">
             <UButton
               class="agent-sidebar-header-button"
@@ -86,9 +88,7 @@
       </UButton>
     </div>
 
-    <div
-      class="agent-sidebar-history min-h-0 flex-1 overflow-y-auto px-2 pb-4"
-    >
+    <div class="agent-sidebar-history min-h-0 flex-1 overflow-y-auto px-2 pb-4">
       <SidebarEmptyState
         v-if="!history.length"
         title="No agent sessions yet"
@@ -213,10 +213,16 @@
     </div>
 
     <footer
-      class="agent-sidebar-footer flex shrink-0 items-center gap-2 border-t border-[var(--md-outline-variant)] px-3 py-2"
+      class="agent-sidebar-footer shrink-0 border-t border-[var(--md-outline-variant)] px-2 py-1.5"
+    >
+      <UPopover v-model:open="hostSwitcherOpen">
+        <button
+          type="button"
+          class="flex w-full items-center gap-2 rounded-[var(--md-border-radius)] px-2 py-1.5 text-left hover:bg-[var(--md-surface-container)] focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
+          aria-label="Switch agent host"
     >
       <span
-        class="size-2 rounded-full"
+            class="size-2 shrink-0 rounded-full"
         :class="
           connected
             ? 'bg-[var(--md-extended-color-success-color)]'
@@ -234,6 +240,89 @@
       <span v-if="approvalCount" class="text-xs"
         >{{ approvalCount }} waiting</span
       >
+          <UIcon :name="iconChevronRight" class="size-3 rotate-[-90deg]" />
+        </button>
+
+        <template #content>
+          <div class="w-72 p-2" data-testid="agent-host-switcher">
+            <p
+              class="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-[var(--md-on-surface-variant)]"
+            >
+              Agent hosts
+            </p>
+            <button
+              v-for="host in hostItems"
+              :key="host.value"
+              type="button"
+              class="flex w-full items-center gap-2 rounded-[var(--md-border-radius)] px-2 py-2 text-left hover:bg-[var(--md-surface-container)] disabled:opacity-60"
+              :disabled="quickHostPending"
+              @click="quickSwitchHost(host.value)"
+            >
+              <span
+                class="size-2 shrink-0 rounded-full"
+                :class="
+                  host.value === snapshot?.activeHostId && connected
+                    ? 'bg-[var(--md-extended-color-success-color)]'
+                    : 'bg-[var(--md-on-surface-variant)] opacity-45'
+                "
+              />
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-medium">{{
+                  host.label
+                }}</span>
+                <span
+                  class="block truncate text-[11px] text-[var(--md-on-surface-variant)]"
+                  >{{ host.description }}</span
+                >
+              </span>
+              <UIcon
+                v-if="host.value === snapshot?.activeHostId"
+                :name="iconCheck"
+                class="size-4 shrink-0"
+              />
+            </button>
+
+            <form
+              v-if="pinCredentialStatus.locked"
+              class="mt-2 border-t border-[var(--md-outline-variant)] px-2 pt-2"
+              @submit.prevent="quickUnlockHosts"
+            >
+              <label class="text-xs font-medium" for="quick-host-pin">
+                Unlock saved hosts
+              </label>
+              <div class="mt-1 flex gap-1.5">
+                <input
+                  id="quick-host-pin"
+                  v-model="quickUnlockPin"
+                  type="password"
+                  inputmode="numeric"
+                  autocomplete="current-password"
+                  maxlength="6"
+                  class="min-w-0 flex-1 rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-transparent px-2 py-1.5 text-sm"
+                  placeholder="6-digit PIN"
+                />
+                <UButton type="submit" size="xs" :loading="quickHostPending">
+                  Unlock
+                </UButton>
+              </div>
+            </form>
+            <p
+              v-if="quickSwitchError"
+              class="px-2 pt-2 text-xs text-[var(--md-error)]"
+              role="status"
+            >
+              {{ quickSwitchError }}
+            </p>
+            <button
+              type="button"
+              class="mt-2 w-full border-t border-[var(--md-outline-variant)] px-2 pt-2 text-left text-xs font-medium text-[var(--md-primary)]"
+              @click="openConnections"
+            >
+              Manage connections
+            </button>
+          </div>
+        </template>
+      </UPopover>
     </footer>
 
     <UModal
@@ -377,10 +466,7 @@
             </div>
           </aside>
 
-          <div
-            class="min-h-0 overflow-y-auto"
-            :aria-busy="hostActionPending"
-          >
+          <div class="min-h-0 overflow-y-auto" :aria-busy="hostActionPending">
             <section
               v-if="activeHost"
               class="border-b border-[var(--md-outline-variant)] p-4 sm:p-5"
@@ -396,11 +482,7 @@
                   "
                 >
                   <UIcon
-                    :name="
-                      connected
-                        ? iconCheck
-                        : iconServerOff
-                    "
+                    :name="connected ? iconCheck : iconServerOff"
                     class="size-5"
                   />
                 </span>
@@ -449,13 +531,10 @@
                     class="mt-2 text-[11px] leading-relaxed text-[var(--md-on-surface-variant)]"
                   >
                     Going offline closes this browser connection only. The
-                    computer stays linked to this workspace until you remove
-                    it.
+                    computer stays linked to this workspace until you remove it.
                   </p>
                 </div>
-                <div
-                  class="flex shrink-0 flex-wrap gap-1"
-                >
+                <div class="flex shrink-0 flex-wrap gap-1">
                   <UTooltip
                     v-if="!pinCredentialStatus.locked"
                     :text="
@@ -547,10 +626,7 @@
               </div>
 
               <div
-                v-if="
-                  activeHostIsCloud &&
-                  cloudRemovalHostId === activeHost.id
-                "
+                v-if="activeHostIsCloud && cloudRemovalHostId === activeHost.id"
                 class="mt-4 rounded-[var(--md-border-radius)] border border-[var(--md-error)] bg-[color-mix(in_srgb,var(--md-error)_6%,var(--md-surface-container-lowest))] p-4"
                 data-testid="cloud-computer-removal-confirmation"
                 role="alert"
@@ -720,7 +796,9 @@
                       />
                     </div>
                   </div>
-                  <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div
+                    class="flex flex-wrap items-center justify-between gap-2"
+                  >
                     <p
                       v-if="formError"
                       class="text-xs text-[var(--md-error)]"
@@ -754,7 +832,10 @@
                 </span>
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
-                    <h3 id="connect-computer-title" class="text-sm font-semibold">
+                    <h3
+                      id="connect-computer-title"
+                      class="text-sm font-semibold"
+                    >
                       Connect another computer
                     </h3>
                     <span
@@ -775,11 +856,7 @@
                 <code class="min-w-0 flex-1 select-all font-mono text-sm">
                   {{ CONNECT_COMMAND }}
                 </code>
-                <UButton
-                  size="sm"
-                  :icon="iconCopy"
-                  @click="copyConnectCommand"
-                >
+                <UButton size="sm" :icon="iconCopy" @click="copyConnectCommand">
                   {{ connectCommandCopied ? "Copied" : "Copy command" }}
                 </UButton>
               </div>
@@ -804,15 +881,14 @@
                 class="cursor-pointer list-none rounded-[var(--md-border-radius)] font-medium focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
               >
                 <span class="flex items-center gap-2 text-sm">
-                  <UIcon :name="iconChevronRight" class="size-4 transition-transform group-open:rotate-90" />
+                  <UIcon
+                    :name="iconChevronRight"
+                    class="size-4 transition-transform group-open:rotate-90"
+                  />
                   Advanced: add another host by URL and token
                 </span>
               </summary>
-              <form
-                ref="addHostSection"
-                class="mt-4"
-                @submit.prevent="addHost"
-              >
+              <form ref="addHostSection" class="mt-4" @submit.prevent="addHost">
                 <p class="mb-4 text-xs text-[var(--md-on-surface-variant)]">
                   Connect an existing agent service directly. OR3 detects the
                   supported protocol automatically.
@@ -885,7 +961,8 @@
                     <p
                       class="text-[11px] leading-relaxed text-[var(--md-on-surface-variant)]"
                     >
-                      <strong class="font-semibold text-[var(--md-on-surface)]"
+                        <strong
+                          class="font-semibold text-[var(--md-on-surface)]"
                         >Local encrypted storage.</strong
                       >
                       Use a unique PIN. A short or reused PIN may be
@@ -958,13 +1035,7 @@
 </template>
 
 <script setup lang="ts">
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-} from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import type {
   ExternalAgentRunStatus,
   ExternalAgentSessionRef,
@@ -1052,6 +1123,11 @@ const reauthRememberToken = ref(false);
 const reauthPin = ref("");
 const reauthPinConfirmation = ref("");
 const unlockPin = ref("");
+const hostSwitcherOpen = ref(false);
+const quickUnlockPin = ref("");
+const quickSwitchError = ref<string | null>(null);
+const quickHostPending = ref(false);
+const pendingQuickHostId = ref<string | null>(null);
 const credentialStateVersion = ref(0);
 const hostActionPending = ref(false);
 const formError = ref<string | null>(null);
@@ -1080,8 +1156,8 @@ const connected = computed(
     snapshot.value?.connectionState === "degraded",
 );
 const hasAvailableRunner = computed(() =>
-  (snapshot.value?.runners ?? []).some((runner) =>
-    runnerUsability(runner).usable,
+  (snapshot.value?.runners ?? []).some(
+    (runner) => runnerUsability(runner).usable,
   ),
 );
 const hostItems = computed(() =>
@@ -1170,11 +1246,15 @@ const activeRecordId = computed(() => {
     : null;
 });
 const history = computed<HistoryItem[]>(() => {
+  const activeHostId = snapshot.value?.activeHostId;
+  if (!activeHostId) return [];
   const refs = new Map<string, ExternalAgentSessionRef>();
   for (const item of snapshot.value?.sessionRefs ?? []) {
+    if (item.hostId !== activeHostId) continue;
     refs.set(`${item.hostId}:${item.remoteSessionId}`, item);
   }
   for (const session of snapshot.value?.sessions ?? []) {
+    if (session.hostId !== activeHostId) continue;
     refs.set(`${session.hostId}:${session.remoteSessionId}`, {
       hostId: session.hostId,
       remoteSessionId: session.remoteSessionId,
@@ -1425,7 +1505,10 @@ function focusReauthToken() {
       : target?.$el instanceof HTMLElement
         ? target.$el
         : null;
-  (element?.matches("input") ? element : element?.querySelector("input"))?.focus();
+  (element?.matches("input")
+    ? element
+    : element?.querySelector("input")
+  )?.focus();
 }
 
 async function copyConnectCommand() {
@@ -1588,8 +1671,52 @@ async function switchHost(value: string) {
   }
 }
 
+async function quickSwitchHost(hostId: string) {
+  if (!controller) return;
+  quickSwitchError.value = null;
+  pendingQuickHostId.value = hostId;
+  if (pinCredentialStatus.value.locked) return;
+  quickHostPending.value = true;
+  try {
+    const connected = await controller.switchHost(hostId);
+    if (!connected) {
+      quickSwitchError.value =
+        controller.snapshot.connectionError ?? "Host switch failed";
+      return;
+    }
+    pendingQuickHostId.value = null;
+    hostSwitcherOpen.value = false;
+  } catch (cause) {
+    quickSwitchError.value =
+      cause instanceof Error ? cause.message : "Host switch failed";
+  } finally {
+    quickHostPending.value = false;
+  }
+}
+
+async function quickUnlockHosts() {
+  if (!controller) return;
+  quickHostPending.value = true;
+  quickSwitchError.value = null;
+  try {
+    await controller.unlockCredentials(quickUnlockPin.value);
+    credentialStateVersion.value += 1;
+    quickUnlockPin.value = "";
+    const hostId = pendingQuickHostId.value ?? snapshot.value?.activeHostId;
+    if (hostId) await quickSwitchHost(hostId);
+  } catch (cause) {
+    quickSwitchError.value =
+      cause instanceof Error ? cause.message : "Could not unlock saved hosts";
+  } finally {
+    quickHostPending.value = false;
+  }
+}
+
 onMounted(() => {
-  window.addEventListener(EXTERNAL_AGENT_OPEN_CONNECTIONS_EVENT, openConnections);
+  window.addEventListener(
+    EXTERNAL_AGENT_OPEN_CONNECTIONS_EVENT,
+    openConnections,
+  );
 });
 
 onBeforeUnmount(() => {
@@ -1615,11 +1742,7 @@ onBeforeUnmount(() => {
     var(--md-on-surface) 72%,
     var(--md-surface)
   );
-  --agent-sidebar-panel: color-mix(
-    in srgb,
-    var(--md-surface) 76%,
-    transparent
-  );
+  --agent-sidebar-panel: color-mix(in srgb, var(--md-surface) 76%, transparent);
   --agent-sidebar-row-hover: color-mix(
     in srgb,
     var(--md-primary) 9%,
@@ -1660,8 +1783,7 @@ onBeforeUnmount(() => {
 .external-agents-sidebar--textured :deep(.agent-sidebar-header-button) {
   color: var(--md-on-surface) !important;
   background: color-mix(in srgb, var(--md-surface) 72%, transparent) !important;
-  border: 1px solid
-    color-mix(in srgb, var(--md-outline) 30%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--md-outline) 30%, transparent) !important;
 }
 
 .external-agents-sidebar--textured :deep(.agent-sidebar-header-button:hover) {
@@ -1694,11 +1816,7 @@ onBeforeUnmount(() => {
 
 .external-agents-sidebar--textured :deep(.agent-sidebar-search input) {
   color: var(--md-on-surface) !important;
-  background: color-mix(
-    in srgb,
-    var(--md-surface) 82%,
-    transparent
-  ) !important;
+  background: color-mix(in srgb, var(--md-surface) 82%, transparent) !important;
   backdrop-filter: blur(10px);
 }
 
