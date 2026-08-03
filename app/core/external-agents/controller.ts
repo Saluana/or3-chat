@@ -1233,17 +1233,22 @@ export class ExternalAgentController {
     if (!this.canCancel(session) || !session.activeTurnId) {
       throw new Error("This session has no cancellable active turn");
     }
+    // The remote stop can synchronously deliver run.cancelled over SSE. That
+    // terminal event clears session.activeTurnId while this request is still
+    // awaiting its response, so keep the accepted turn id stable for both the
+    // stop and the authoritative status refresh.
+    const turnId = session.activeTurnId;
     const previousStatus = session.status;
     try {
       await this.#commands.cancel(
         client,
         session.remoteSessionId,
-        session.activeTurnId,
+        turnId,
         this.#connections.hostSignal,
       );
       this.#assertSessionGeneration(session);
       session.actionError = undefined;
-      await this.#refreshTurn(session, session.activeTurnId, client, lease);
+      await this.#refreshTurn(session, turnId, client, lease);
     } catch (error) {
       if (this.#isStaleResponseError(error)) throw error;
       session.status = previousStatus;
@@ -1371,17 +1376,24 @@ export class ExternalAgentController {
       requestedHostId,
       remoteSessionId,
     );
-    const existing = this.getSession(remoteSessionId, hostId);
-    if (existing) return existing;
+    let existing = this.getSession(remoteSessionId, hostId);
+    const activeHostReady = () =>
+      hostId === this.#activeHostId &&
+      Boolean(this.#client) &&
+      (this.#connectionState === "online" ||
+        this.#connectionState === "degraded");
     if (
-      hostId !== this.#activeHostId ||
-      !this.#client ||
-      (this.#connectionState !== "online" &&
-        this.#connectionState !== "degraded")
-    ) {
+      existing &&
+      activeHostReady() &&
+      existing.hostGeneration === this.#generation
+    )
+      return existing;
+    if (!activeHostReady()) {
       const connected = await this.switchHost(hostId);
       if (!connected) throw new Error("Could not reconnect session host");
       lease = this.#requireWorkspaceLease();
+      existing = this.getSession(remoteSessionId, hostId);
+      if (existing?.hostGeneration === this.#generation) return existing;
     }
     const client = this.#requireClient();
     const generation = this.#generation;

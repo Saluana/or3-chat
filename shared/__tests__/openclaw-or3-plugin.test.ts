@@ -235,7 +235,7 @@ describe("OpenClaw OR3 Runs plugin", () => {
     );
 
     bridge.handleChatEvent({
-      runId: started.turn_id,
+      runId: "openclaw-run-1",
       sessionKey: bridge.runs.get(started.turn_id)?.sessionKey,
       state: "delta",
       deltaText: "Working ",
@@ -249,6 +249,12 @@ describe("OpenClaw OR3 Runs plugin", () => {
       sessionKey: bridge.runs.get(started.turn_id)?.sessionKey,
       stream: "tool",
       data: { phase: "start", name: "exec", meta: "git push" },
+    });
+    bridge.handleAgentEvent({
+      runId: "internal-openclaw-run-1",
+      sessionKey: bridge.runs.get(started.turn_id)?.sessionKey,
+      stream: "tool",
+      data: { phase: "update", name: "exec", meta: "still running" },
     });
     bridge.handleAgentEvent({
       runId: "internal-openclaw-run-1",
@@ -352,7 +358,7 @@ describe("OpenClaw OR3 Runs plugin", () => {
     await client.abortTurn(session.id, second.turn_id);
     expect(gatewayRequests).toContainEqual({
       method: "chat.abort",
-      params: expect.objectContaining({ runId: second.turn_id }),
+      params: expect.objectContaining({ runId: "openclaw-run-3" }),
     });
   });
 });

@@ -10,6 +10,8 @@ imports and can be extracted without changing their layout.
 - `or3-plugin-development` — build, test, and package V1 or V2 plugins.
 - `or3-theme-development` — change visual surfaces through the theme system.
 - `or3-core-development` — add a public extension contract only when no supported surface fits.
+- `or3-openclaw-setup` — install and connect OpenClaw's OR3 Runs plugin.
+- `or3-hermes-setup` — install and connect Hermes's built-in Runs API server.
 
 Each skill starts from the checkout's `AGENTS.md` and
 `public/_documentation/docmap.json`, then loads only the documentation needed

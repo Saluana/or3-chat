@@ -7,7 +7,7 @@ import { shouldPauseStream, streamPayload } from "./event-store";
 
 const STREAM_DISCONNECT_RECONCILE_INITIAL_MS = 1_000;
 const STREAM_DISCONNECT_RECONCILE_MAX_MS = 30_000;
-const STREAM_EVENTS_PER_RENDER_YIELD = 8;
+const STREAM_EVENTS_PER_PAINT_YIELD = 4;
 
 function waitForAbortableDelay(
   delayMs: number,
@@ -83,7 +83,7 @@ export class ExternalAgentConnectionSupervisor {
     input.publishSession();
 
     let ownsActionError = false;
-    let eventsSinceRenderYield = 0;
+    let eventsSincePaintYield = 0;
     const reconcileDisconnectedStream = async () => {
       let delayMs = 0;
       while (streamIsCurrent()) {
@@ -95,10 +95,6 @@ export class ExternalAgentConnectionSupervisor {
         if (!streamIsCurrent()) return;
         try {
           await input.refresh();
-          if (ownsActionError) {
-            input.session.actionError = undefined;
-            ownsActionError = false;
-          }
         } catch (error) {
           if (controller.signal.aborted) return;
           if (input.isStaleError(error)) {
@@ -110,6 +106,10 @@ export class ExternalAgentConnectionSupervisor {
           input.publishSession();
         }
         if (shouldPauseStream(input.session.status)) {
+          if (ownsActionError) {
+            input.session.actionError = undefined;
+            ownsActionError = false;
+          }
           input.session.streamState = "idle";
           input.publishSession();
           void input.persist().catch(() => undefined);
@@ -143,12 +143,12 @@ export class ExternalAgentConnectionSupervisor {
             break;
           if (
             remote &&
-            ++eventsSinceRenderYield >= STREAM_EVENTS_PER_RENDER_YIELD
+            ++eventsSincePaintYield >= STREAM_EVENTS_PER_PAINT_YIELD
           ) {
-            eventsSinceRenderYield = 0;
-            // A fetch body may expose a large buffered SSE burst at once.
-            // Yielding to a task periodically prevents the async iterator's
-            // microtask chain from starving Vue and the browser paint loop.
+            eventsSincePaintYield = 0;
+            // Browsers may expose many buffered SSE frames in one read. Break
+            // the resulting microtask chain so Vue can render live text and
+            // tool events before the terminal frame is consumed.
             if (!(await waitForAbortableDelay(0, controller.signal))) return;
           }
         }
@@ -161,6 +161,8 @@ export class ExternalAgentConnectionSupervisor {
         )
           return;
         input.session.streamState = "disconnected";
+        input.session.actionError = input.presentError(error);
+        ownsActionError = true;
         input.publishSession();
         await reconcileDisconnectedStream();
       } finally {

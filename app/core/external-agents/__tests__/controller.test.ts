@@ -8,6 +8,7 @@ import type {
   ExternalAgentPinCredentialVault,
   ExternalAgentPersistence,
   ExternalAgentPersistenceSnapshot,
+  ExternalAgentSession,
   ExternalAgentUploadAttachment,
   ExternalRemoteEvent,
   ExternalRemoteStreamEvent,
@@ -760,6 +761,43 @@ describe("ExternalAgentController", () => {
       remoteSession.id,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+  });
+
+  it("switches back to the host that owns an already hydrated session", async () => {
+    const hostB: ExternalAgentHost = {
+      ...host,
+      id: "host-2",
+      name: "Studio Mac",
+      baseUrl: "https://studio.test",
+      credentialRef: "cred-2",
+    };
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host, hostB],
+        activeHostId: hostB.id,
+        sessionRefs: [
+          {
+            hostId: hostB.id,
+            remoteSessionId: remoteSession.id,
+            title: "Studio conversation",
+          },
+        ],
+      }).adapter,
+      credentials: vault({ "cred-1": "one", "cred-2": "two" }),
+      createClient: () => fakeClient(),
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+    expect(controller.getSession(remoteSession.id, hostB.id)).toBeDefined();
+
+    await controller.switchHost(host.id);
+    expect(controller.snapshot.activeHostId).toBe(host.id);
+
+    const restored = await controller.ensureSession(hostB.id, remoteSession.id);
+
+    expect(controller.snapshot.activeHostId).toBe(hostB.id);
+    expect(restored.hostId).toBe(hostB.id);
+    expect(restored.hostGeneration).toBe(controller.snapshot.generation);
   });
 
   it("rebinds historical sessions from an older identity for the same host URL", async () => {
@@ -1768,6 +1806,57 @@ describe("ExternalAgentController", () => {
     ).rejects.toThrow("approval unavailable");
     expect(session.approvals).toEqual(approvalBefore);
     expect(session.actionError).toContain("Remote approve failed");
+  });
+
+  it("keeps the cancellation turn id stable when its SSE event arrives first", async () => {
+    let launchedSession: ExternalAgentSession | undefined;
+    const client = fakeClient({ streamNeverEnds: true });
+    vi.mocked(client.abortTurn).mockImplementation(async () => {
+      vi.mocked(client.getTurn).mockResolvedValueOnce({
+        ...remoteTurn,
+        status: "cancelled",
+        completed_at: 1_750_000_020,
+      });
+      if (launchedSession) {
+        launchedSession.activeTurnId = undefined;
+        launchedSession.status = "cancelled";
+      }
+      return { status: "cancelled" };
+    });
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+    launchedSession = await controller.launch({
+      runnerId: "codex",
+      instruction: "Start a long task",
+      mode: "review",
+      isolation: "host_readonly",
+    });
+
+    await expect(
+      controller.cancel(launchedSession.remoteSessionId),
+    ).resolves.toBeUndefined();
+
+    expect(client.abortTurn).toHaveBeenCalledWith(
+      launchedSession.remoteSessionId,
+      "turn-1",
+      expect.anything(),
+    );
+    expect(client.getTurn).toHaveBeenCalledWith(
+      launchedSession.remoteSessionId,
+      "turn-1",
+      expect.anything(),
+    );
+    expect(launchedSession.status).toBe("cancelled");
+    expect(launchedSession.actionError).toBeUndefined();
   });
 
   it("coalesces provider approval aliases and repeated diffs into one useful item", async () => {

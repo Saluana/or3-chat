@@ -1100,7 +1100,6 @@ class RunsExternalAgentClient implements ExternalAgentClient {
     };
     this.#runMetadata.set(runId, metadata);
     this.#nextTurnSequence.set(sessionId, nextSequence);
-    this.#ensureRunPump(metadata);
     return {
       session_id: sessionId,
       turn_id: runId,
@@ -1289,7 +1288,7 @@ class RunsExternalAgentClient implements ExternalAgentClient {
     state.waiters.clear();
   }
 
-  #ensureRunPump(metadata: RunMetadata): void {
+  #ensureRunPump(metadata: RunMetadata, signal?: AbortSignal): void {
     const state = this.#streamState(metadata.runId);
     if (state.started || state.done) return;
     state.started = true;
@@ -1297,18 +1296,28 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       try {
         const response = await this.#response(
           `/v1/runs/${encodePath(metadata.runId)}/events`,
+          { signal },
         );
         if (!response.body) {
           throw new RunsClientError(
             "Agent service returned an empty event stream",
           );
         }
+        let receivedFrames = 0;
         for await (const raw of parseSseJson(response.body)) {
+          receivedFrames += 1;
           const sequence = ++state.nextSequence;
           const event = normalizeRunEvent(raw, metadata, sequence);
           if (!event) continue;
           state.events.push(event);
           this.#wake(state);
+        }
+        if (!state.events.length) {
+          throw new RunsClientError(
+            receivedFrames
+              ? "Agent event stream returned no supported events"
+              : "Agent event stream closed without events",
+          );
         }
       } catch (error) {
         state.error = error;
@@ -1335,7 +1344,7 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       };
       this.#runMetadata.set(turnId, metadata);
     }
-    this.#ensureRunPump(metadata);
+    this.#ensureRunPump(metadata, input.signal);
     const state = this.#streamState(turnId);
     let afterSeq = input.afterSeq ?? 0;
     let eventIndex = state.events.findIndex(

@@ -7,6 +7,8 @@ const REQUIRED_SKILLS = [
   'or3-plugin-development',
   'or3-theme-development',
   'or3-core-development',
+  'or3-openclaw-setup',
+  'or3-hermes-setup',
 ]
 
 const REQUIRED_SHARED_REFERENCES = [
@@ -16,6 +18,7 @@ const REQUIRED_SHARED_REFERENCES = [
   'quality-gates.md',
   'permissions-and-trust.md',
   'output-format.md',
+  'external-agent-runs.md',
 ]
 
 export const packageRoot = resolve(import.meta.dir, '..')

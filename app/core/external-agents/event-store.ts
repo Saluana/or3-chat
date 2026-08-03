@@ -204,10 +204,12 @@ function normalizeTimelineEvent(
       "error_message",
       "name",
     ]);
-  const stableId =
-    typeof event.id === "number"
-      ? String(event.id)
-      : `${event.turn_id}:${event.seq}`;
+  // Runs-style protocols restart their numeric event sequence for every turn.
+  // Scope every transport id to the turn so a later turn's first deltas are
+  // not mistaken for duplicates from an earlier turn in the same session.
+  const stableId = `${event.turn_id}:${
+    typeof event.id === "number" ? event.id : event.seq
+  }`;
   return Object.freeze({
     id: `${session.hostId}:${session.remoteSessionId}:${stableId}`,
     hostId: session.hostId,

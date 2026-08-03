@@ -441,6 +441,32 @@ describe("RunsExternalAgentClient", () => {
     ]);
   });
 
+  it("rejects an event stream that closes without a supported event", async () => {
+    const fetch = vi.fn<RunsFetch>(async (input, init) => {
+      const path = pathOf(input);
+      if (path === "/v1/runs" && init?.method === "POST") {
+        return json({ run_id: "run-empty", status: "started" }, 202);
+      }
+      if (path === "/v1/runs/run-empty/events") return sse([": closed\n\n"]);
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+    const started = await client.startTurn("session-empty", {
+      user_message: "stream",
+    });
+
+    await expect(
+      (async () => {
+        for await (const _event of client.streamTurn(
+          "session-empty",
+          started.turn_id,
+        )) {
+          // The stream is expected to fail before yielding an event.
+        }
+      })(),
+    ).rejects.toThrow("Agent event stream closed without events");
+  });
+
   it("forwards slash commands unchanged and translates chunked run events", async () => {
     const requestBodies: unknown[] = [];
     const fetch = vi.fn<RunsFetch>(async (input, init) => {

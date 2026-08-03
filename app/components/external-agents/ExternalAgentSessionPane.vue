@@ -166,7 +166,7 @@
           :overscan="5500"
           :prefetch-overscan="5500"
           :content-key="session.remoteSessionId"
-          mutation-mode="append-prepend"
+          mutation-mode="arbitrary"
           maintain-bottom
           :bottom-threshold="5"
           :padding-top="28"
@@ -707,9 +707,12 @@ const canFollowUp = computed(() =>
 );
 const runnerLabel = computed(
   () =>
-    snapshot.value?.runners.find(
-      (runner) => runner.id === session.value?.runnerId,
-    )?.display_name ??
+    (snapshot.value?.activeHostId === session.value?.hostId
+      ? snapshot.value?.runners.find(
+          (runner) => runner.id === session.value?.runnerId,
+        )?.display_name
+      : undefined) ??
+    targetHost.value?.name ??
     session.value?.runnerId ??
     "Agent",
 );
@@ -811,7 +814,7 @@ const composerHint = computed(() => {
     .join(" · ");
 });
 
-async function load(ignoreCredentialLock = false) {
+async function load(ignoreCredentialLock = false, activateHost = false) {
   const controller = runtime.controller;
   const refValue = sessionRef.value;
   if (!controller || !refValue) return;
@@ -820,7 +823,12 @@ async function load(ignoreCredentialLock = false) {
     loading.value = false;
     return;
   }
-  if (session.value) {
+  if (
+    session.value &&
+    (!activateHost ||
+      (snapshot.value?.activeHostId === refValue.hostId &&
+        session.value.hostGeneration === snapshot.value?.generation))
+  ) {
     loadError.value = null;
     loading.value = false;
     return;
@@ -861,7 +869,7 @@ async function load(ignoreCredentialLock = false) {
 }
 
 async function retryConversationLoad() {
-  await load(true);
+  await load(true, true);
 }
 
 async function reconnectConversation() {
@@ -1075,8 +1083,11 @@ async function copyArtifact(content: string) {
 }
 
 watch(
+  () => props.recordId,
+  () => void load(false, true),
+);
+watch(
   () => [
-    props.recordId,
     snapshot.value?.connectionState,
     session.value?.hostId,
     hostCredentialLocked.value,
@@ -1136,6 +1147,6 @@ watch([followUpMode, followUpIsolation], () => {
   }
 });
 onMounted(() => {
-  void load();
+  void load(false, true);
 });
 </script>

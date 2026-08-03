@@ -546,6 +546,7 @@ export class Or3RunsBridge {
       this.runs.delete(run.id);
       throw new Error("OpenClaw did not return a run ID");
     }
+    run.controlRunId = acceptedRunId;
     this.runAliases.set(acceptedRunId, run.id);
     void this.settleRun(run);
     return run;
@@ -583,7 +584,7 @@ export class Or3RunsBridge {
     const payload = object(event);
     const runId = text(payload.runId);
     if (!runId) return;
-    const run = this.runs.get(runId);
+    const run = this.runs.get(this.runAliases.get(runId) ?? runId);
     if (!run || (payload.sessionKey && payload.sessionKey !== run.sessionKey)) {
       return;
     }
@@ -649,6 +650,10 @@ export class Or3RunsBridge {
     }
     if (event.stream === "tool") {
       const phase = text(data.phase);
+      // OpenClaw can emit progress updates between a tool's start and result.
+      // OR3's Runs surface models lifecycle boundaries, so forwarding updates
+      // as new starts would duplicate one invocation in the activity UI.
+      if (phase !== "start" && phase !== "result") return;
       this.append(run, {
         event: phase === "result" ? "tool.completed" : "tool.started",
         tool: text(data.name) ?? "Tool",
@@ -705,7 +710,7 @@ export class Or3RunsBridge {
     try {
       let result;
       do {
-        result = await this.control.wait({ runId: run.id });
+        result = await this.control.wait({ runId: run.controlRunId ?? run.id });
         if (["completed", "failed", "cancelled"].includes(run.status)) return;
       } while (result.status === "timeout");
       if (result.status === "ok") {
@@ -733,7 +738,10 @@ export class Or3RunsBridge {
   async stopRun(runId) {
     const run = this.runs.get(runId);
     if (!run) throw Object.assign(new Error("Run not found"), { status: 404 });
-    const request = { sessionKey: run.sessionKey, runId: run.id };
+    const request = {
+      sessionKey: run.sessionKey,
+      runId: run.controlRunId ?? run.id,
+    };
     await this.control.stop(request);
     this.append(run, { event: "run.cancelled" });
     return run;
