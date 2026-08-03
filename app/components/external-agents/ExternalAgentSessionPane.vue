@@ -466,7 +466,6 @@ import { useExternalAgentRuntime } from "~/core/external-agents/runtime";
 import { useActiveSidebarPage } from "~/composables/sidebar/useActiveSidebarPage";
 import { useIcon } from "~/composables/useIcon";
 import { getGlobalMultiPaneApi } from "~/utils/multiPaneApi";
-import { setExternalAgentPaneRecord } from "~/core/external-agents/pane";
 
 const props = defineProps<{
   paneId: string;
@@ -947,14 +946,12 @@ async function replaceWithSession(next: ExternalAgentSession) {
   const api = getGlobalMultiPaneApi();
   const index = api?.panes.value.findIndex((pane) => pane.id === props.paneId);
   if (!api || index === undefined || index < 0) return;
-  await setExternalAgentPaneRecord(
-    api,
-    index,
-    encodeExternalAgentSessionRef({
+  await api.setPaneApp(index, EXTERNAL_AGENT_PANE_APP_ID, {
+    recordId: encodeExternalAgentSessionRef({
       hostId: next.hostId,
       remoteSessionId: next.remoteSessionId,
     }),
-  );
+  });
 }
 
 async function cancel() {

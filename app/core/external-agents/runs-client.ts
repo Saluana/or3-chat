@@ -1043,12 +1043,10 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       if (!current) return;
       const sequence = turns.length + 1;
       const finalText = current.assistant.join("\n").trim();
-      // Tool records can be persisted while the assistant is still running.
-      // Never turn a tool-only history snapshot into a false success after a
-      // reload; require assistant output or an explicit terminal marker.
-      const hasTerminalEvidence = Boolean(
-        finalText || current.terminalEvidence,
-      );
+      // History can contain partial assistant text while a run is still
+      // active. Only an explicit provider terminal marker can complete a
+      // hydrated turn.
+      const hasTerminalEvidence = current.terminalEvidence;
       const completedAt =
         current.toolEvents
           .map((event) => timestamp(event.timestamp, current!.requestedAt))
@@ -1062,7 +1060,7 @@ class RunsExternalAgentClient implements ExternalAgentClient {
         requested_at: current.requestedAt,
         completed_at: hasTerminalEvidence ? completedAt : undefined,
         user_message: current.userMessage,
-        final_text: finalText || undefined,
+        final_text: hasTerminalEvidence ? finalText || undefined : undefined,
       };
       const events: ExternalRemoteEvent[] = [];
       let eventSequence = 0;

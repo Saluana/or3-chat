@@ -601,6 +601,7 @@ describe("RunsExternalAgentClient", () => {
               id: "message-assistant-1",
               role: "assistant",
               content: "hi there",
+              finished: true,
               timestamp: 1_750_000_002,
             },
           ],
@@ -640,6 +641,53 @@ describe("RunsExternalAgentClient", () => {
         expect.objectContaining({
           type: "turn.completed",
           payload: { status: "completed" },
+        }),
+      ]),
+    });
+  });
+
+  it("keeps partial assistant history active without an explicit terminal marker", async () => {
+    const fetch = vi.fn<RunsFetch>(async (input) => {
+      const path = pathOf(input);
+      if (path.endsWith("/messages")) {
+        return json({
+          data: [
+            {
+              id: "message-user-partial",
+              role: "user",
+              content: "write a response",
+              timestamp: 1_750_000_001,
+            },
+            {
+              id: "message-assistant-partial",
+              role: "assistant",
+              content: "still streaming",
+              timestamp: 1_750_000_002,
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+
+    await expect(client.listTurns("session-partial")).resolves.toEqual({
+      turns: [
+        expect.objectContaining({
+          id: "message-user-partial",
+          status: "running",
+          completed_at: undefined,
+          final_text: undefined,
+        }),
+      ],
+    });
+    await expect(
+      client.listTurnEvents("session-partial", "message-user-partial"),
+    ).resolves.toEqual({
+      events: expect.arrayContaining([
+        expect.objectContaining({
+          type: "text_delta",
+          text: "still streaming",
         }),
       ]),
     });

@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 
 const MAX_BODY_BYTES = 32 * 1024 * 1024;
 const MAX_ATTACHMENT_COUNT = 10;
@@ -242,10 +242,8 @@ async function readJson(req) {
 }
 
 function sessionKey(agentId, sessionId) {
-  const encoded = Buffer.from(sessionId, "utf8")
-    .toString("base64url")
-    .toLowerCase();
-  return `agent:${agentId}:or3:${encoded}`;
+  const digest = createHash("sha256").update(sessionId, "utf8").digest("hex");
+  return `agent:${agentId}:or3:${digest}`;
 }
 
 function sessionView(session) {
@@ -533,6 +531,14 @@ export class Or3RunsBridge {
     this.prune();
     session.updatedAt = createdAt;
     if (await this.handleLocalCommand(run, prompt)) return run;
+    try {
+      run.historyMessageIds = new Set(
+        (await this.messages(resolvedSessionId)).map((message) => message.id),
+      );
+    } catch {
+      // Gateway history is a fallback for runtimes that do not emit final
+      // chat events. A missing snapshot must not prevent a new turn.
+    }
     const model = text(requestInput.model);
     const thinkingLevel = text(
       object(requestInput.model_options).reasoning_effort,
@@ -680,6 +686,20 @@ export class Or3RunsBridge {
     this.append(run, { event: "command.choices", choices: run.commandChoices });
   }
 
+  appendCumulativeOutput(run, cumulative) {
+    if (!cumulative || cumulative === run.output) return;
+    if (cumulative.startsWith(run.output)) {
+      this.append(run, {
+        event: "message.delta",
+        delta: cumulative.slice(run.output.length),
+      });
+      return;
+    }
+    // A runtime can replace an incomplete streamed response with its final
+    // content. The terminal event carries the authoritative replacement.
+    run.output = cumulative;
+  }
+
   handleChatEvent(event) {
     const payload = object(event);
     const runId = text(payload.runId ?? payload.run_id);
@@ -708,18 +728,12 @@ export class Or3RunsBridge {
     const cumulative = contentText(message.content);
     if (state === "delta") {
       const delta = stringValue(payload.deltaText);
-      const next =
-        delta ??
-        (cumulative.startsWith(run.output)
-          ? cumulative.slice(run.output.length)
-          : cumulative);
-      if (next) this.append(run, { event: "message.delta", delta: next });
+      if (delta) this.append(run, { event: "message.delta", delta });
+      else this.appendCumulativeOutput(run, cumulative);
       return;
     }
     if (state === "final") {
-      if (cumulative && !run.output) {
-        this.append(run, { event: "message.delta", delta: cumulative });
-      }
+      this.appendCumulativeOutput(run, cumulative);
       this.appendCommandChoices(run);
       this.append(run, { event: "run.completed", output: run.output });
     } else if (state === "aborted") {
@@ -755,12 +769,8 @@ export class Or3RunsBridge {
     if (event.stream === "assistant") {
       const delta = stringValue(data.delta);
       const cumulative = stringValue(data.text);
-      const next =
-        delta ??
-        (cumulative?.startsWith(run.output)
-          ? cumulative.slice(run.output.length)
-          : cumulative);
-      if (next) this.append(run, { event: "message.delta", delta: next });
+      if (delta) this.append(run, { event: "message.delta", delta });
+      else this.appendCumulativeOutput(run, cumulative);
       return;
     }
     if (event.stream === "tool") {
@@ -829,11 +839,22 @@ export class Or3RunsBridge {
         if (["completed", "failed", "cancelled"].includes(run.status)) return;
       } while (result.status === "timeout");
       if (result.status === "ok") {
-        const messages = await this.messages(run.sessionId);
-        const output = [...messages]
-          .reverse()
-          .find((item) => item.role === "assistant")?.content;
-        if (output && !run.output) run.output = output;
+        const hasActiveSessionPeer = [...this.runs.values()].some(
+          (candidate) =>
+            candidate.id !== run.id &&
+            candidate.sessionId === run.sessionId &&
+            !["completed", "failed", "cancelled"].includes(candidate.status),
+        );
+        if (!run.output && run.historyMessageIds && !hasActiveSessionPeer) {
+          const messages = await this.messages(run.sessionId);
+          const output = [...messages]
+            .reverse()
+            .find(
+              (item) =>
+                item.role === "assistant" && !run.historyMessageIds.has(item.id),
+            )?.content;
+          this.appendCumulativeOutput(run, output);
+        }
         this.appendCommandChoices(run);
         this.append(run, { event: "run.completed", output: run.output });
       } else if (result.status === "error") {
@@ -985,44 +1006,56 @@ export function createOr3RunsHttpHandler(
           res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
           res.setHeader("Connection", "keep-alive");
           res.write("retry: 1000\n\n");
-          for (const event of run.events)
-            res.write(`data: ${JSON.stringify(event)}\n\n`);
-          if (["completed", "failed", "cancelled"].includes(run.status))
+          let closed = false;
+          let replaying = true;
+          let terminalDuringReplay = false;
+          const queued = [];
+          let heartbeat;
+          const close = () => {
+            if (closed) return;
+            closed = true;
+            clearInterval(heartbeat);
+            run.listeners.delete(listener);
             res.end();
-          else {
-            let closed = false;
-            const close = () => {
-              if (closed) return;
-              closed = true;
-              clearInterval(heartbeat);
-              run.listeners.delete(listener);
-              res.end();
-            };
-            const heartbeat = setInterval(
-              () => {
-                if (!closed) res.write(": keepalive\n\n");
-              },
-              SSE_HEARTBEAT_MS,
-            );
-            const listener = (event) => {
-              if (!event) {
-                close();
-              } else if (!closed) {
-                res.write(`data: ${JSON.stringify(event)}\n\n`);
-              }
-            };
-            run.listeners.add(listener);
-            req.once("close", () => {
-              closed = true;
-              clearInterval(heartbeat);
-              run.listeners.delete(listener);
-            });
-            // The run can finish between the replay above and listener
-            // registration. Close immediately in that race instead of
-            // leaving the browser's SSE request open forever.
-            if (["completed", "failed", "cancelled"].includes(run.status)) {
-              close();
+          };
+          const listener = (event) => {
+            if (!event) {
+              if (replaying) terminalDuringReplay = true;
+              else close();
+            } else if (replaying) {
+              queued.push(event);
+            } else if (!closed) {
+              res.write(`data: ${JSON.stringify(event)}\n\n`);
             }
+          };
+          // Subscribe before copying the replay window. Events emitted while
+          // replaying are queued and de-duplicated by their monotonic seq.
+          run.listeners.add(listener);
+          const replay = [...run.events];
+          const replaySequence = replay.at(-1)?.seq ?? 0;
+          for (const event of replay)
+            res.write(`data: ${JSON.stringify(event)}\n\n`);
+          replaying = false;
+          for (const event of queued) {
+            if (event.seq > replaySequence && !closed)
+              res.write(`data: ${JSON.stringify(event)}\n\n`);
+          }
+          heartbeat = setInterval(
+            () => {
+              if (!closed) res.write(": keepalive\n\n");
+            },
+            SSE_HEARTBEAT_MS,
+          );
+          req.once("close", () => {
+            closed = true;
+            clearInterval(heartbeat);
+            run.listeners.delete(listener);
+          });
+          if (
+            terminalDuringReplay ||
+            ["completed", "failed", "cancelled"].includes(run.status)
+          ) {
+            close();
           }
         } else if (method === "POST" && stopMatch) {
           sendJson(

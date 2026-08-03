@@ -18,7 +18,6 @@ import {
   EXTERNAL_AGENT_PANE_APP_ID,
   EXTERNAL_AGENTS_SIDEBAR_PAGE_ID,
 } from "~/core/external-agents/refs";
-import { setExternalAgentPaneRecord } from "~/core/external-agents/pane";
 import {
   setExternalAgentCloudHostRefresh,
   setExternalAgentController,
@@ -464,7 +463,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     });
     const index = api.activePaneIndex.value;
     if (api.panes.value[index]) {
-      await setExternalAgentPaneRecord(api, index, recordId);
+      await api.setPaneApp(index, EXTERNAL_AGENT_PANE_APP_ID, { recordId });
       return;
     }
     await api.newPaneForApp(EXTERNAL_AGENT_PANE_APP_ID, {
@@ -477,7 +476,9 @@ export default defineNuxtPlugin((nuxtApp) => {
     if (!api) throw new Error("Workspace pane host is unavailable");
     const index = api.activePaneIndex.value;
     if (api.panes.value[index]) {
-      await setExternalAgentPaneRecord(api, index, EXTERNAL_AGENT_LAUNCHER_REF);
+      await api.setPaneApp(index, EXTERNAL_AGENT_PANE_APP_ID, {
+        recordId: EXTERNAL_AGENT_LAUNCHER_REF,
+      });
       return;
     }
     await api.newPaneForApp(EXTERNAL_AGENT_PANE_APP_ID, {

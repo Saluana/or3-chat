@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { test } from "node:test";
-import { Or3RunsBridge } from "../src/bridge.js";
+import { Or3RunsBridge, createOr3RunsHttpHandler } from "../src/bridge.js";
 
 function control() {
   const calls = { start: 0, configure: [], decide: [] };
@@ -38,7 +39,7 @@ test("picker commands complete locally instead of starting an agent run", async 
   const runtime = control();
   const bridge = new Or3RunsBridge({ agentId: "main", control: runtime });
   await bridge.capabilities();
-  await bridge.createSession("session-1");
+  const session = await bridge.createSession("session-1");
 
   const providers = await bridge.startRun("session-1", { input: "/models" });
   assert.equal(providers.status, "completed");
@@ -55,8 +56,17 @@ test("picker commands complete locally instead of starting an agent run", async 
   assert.equal(model.status, "completed");
   assert.equal(runtime.calls.start, 0);
   assert.deepEqual(runtime.calls.configure, [
-    { key: "agent:main:or3:c2vzc2lvbi0x", model: "portal/model-b" },
+    { key: session.sessionKey, model: "portal/model-b" },
   ]);
+});
+
+test("uses collision-resistant lowercase session keys", async () => {
+  const bridge = new Or3RunsBridge({ agentId: "main", control: control() });
+  const first = await bridge.createSession("aaa");
+  const second = await bridge.createSession("aaG");
+
+  assert.notEqual(first.sessionKey, second.sessionKey);
+  assert.match(first.sessionKey, /^agent:main:or3:[0-9a-f]{64}$/u);
 });
 
 test("deduplicates concurrent Gateway capability discovery", async () => {
@@ -155,4 +165,119 @@ test("rejects unsupported approval scopes instead of widening them permanently",
   assert.deepEqual(runtime.calls.decide, [
     { method: "exec.approval.resolve", id: "approval-1", decision: "allow-once" },
   ]);
+});
+
+test("reconciles missing final output after partial streamed deltas", () => {
+  const bridge = new Or3RunsBridge({ agentId: "main", control: control() });
+  const run = {
+    id: "run-final",
+    sessionKey: "agent:main:or3:session",
+    status: "running",
+    output: "partial",
+    events: [],
+    nextEventSequence: 1,
+    listeners: new Set(),
+    commandChoices: [],
+  };
+  bridge.runs.set(run.id, run);
+
+  bridge.handleChatEvent({
+    runId: run.id,
+    sessionKey: run.sessionKey,
+    state: "final",
+    message: { content: "partial response" },
+  });
+
+  assert.equal(run.output, "partial response");
+  assert.deepEqual(
+    run.events.map((event) => [event.event, event.delta ?? event.output]),
+    [
+      ["message.delta", " response"],
+      ["run.completed", "partial response"],
+    ],
+  );
+});
+
+test("settles from assistant history created after the run started", async () => {
+  const runtime = control();
+  runtime.wait = async () => ({ status: "ok" });
+  runtime.messages = async () => ({
+    messages: [
+      { id: "before", role: "assistant", content: "previous answer" },
+      { id: "current", role: "assistant", content: "current answer" },
+    ],
+  });
+  const bridge = new Or3RunsBridge({ agentId: "main", control: runtime });
+  const run = {
+    id: "run-history",
+    sessionId: "session-history",
+    status: "running",
+    output: "",
+    events: [],
+    nextEventSequence: 1,
+    listeners: new Set(),
+    commandChoices: [],
+    historyMessageIds: new Set(["before"]),
+  };
+  bridge.runs.set(run.id, run);
+
+  await bridge.settleRun(run);
+
+  assert.equal(run.output, "current answer");
+  assert.deepEqual(
+    run.events.map((event) => [event.event, event.delta ?? event.output]),
+    [
+      ["message.delta", "current answer"],
+      ["run.completed", "current answer"],
+    ],
+  );
+});
+
+test("streams events appended during SSE replay exactly once", async () => {
+  const bridge = new Or3RunsBridge({ agentId: "main", control: control() });
+  const run = {
+    id: "run-sse",
+    status: "running",
+    output: "",
+    events: [],
+    nextEventSequence: 1,
+    listeners: new Set(),
+  };
+  bridge.runs.set(run.id, run);
+  bridge.append(run, { event: "message.delta", delta: "first" });
+
+  const request = new EventEmitter();
+  request.method = "GET";
+  request.url = "/v1/runs/run-sse/events";
+  request.headers = { authorization: "Bearer test-token" };
+  const writes = [];
+  let appended = false;
+  const response = {
+    setHeader() {},
+    write(chunk) {
+      writes.push(chunk);
+      if (!appended && chunk.includes('"seq":1')) {
+        appended = true;
+        bridge.append(run, { event: "message.delta", delta: "second" });
+      }
+    },
+    end() {},
+  };
+
+  await createOr3RunsHttpHandler(bridge, () => ({ token: "test-token" }))(
+    request,
+    response,
+  );
+  request.emit("close");
+
+  const events = writes
+    .filter((chunk) => chunk.startsWith("data: "))
+    .map((chunk) => JSON.parse(chunk.slice(6)));
+  assert.deepEqual(
+    events.map((event) => [event.seq, event.delta]),
+    [
+      [1, "first"],
+      [2, "second"],
+    ],
+  );
 });

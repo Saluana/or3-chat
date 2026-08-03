@@ -423,7 +423,9 @@ describe("External Agents components", () => {
       true,
     );
     expect(wrapper.text()).toContain("Connect another computer");
-    expect(wrapper.text()).toContain("npx @or3/connect");
+    expect(wrapper.text()).toContain(
+      "External-runtime Connect commands will appear after the supporting Connect release is published.",
+    );
     expect(wrapper.text()).toContain(
       "Advanced: add another host by URL and token",
     );
