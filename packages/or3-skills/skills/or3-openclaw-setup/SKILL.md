@@ -21,6 +21,23 @@ OR3 Cloud.
 Use [the shared Runs connection guide](../../shared/external-agent-runs.md)
 for the common OR3-side connection and verification flow.
 
+## Preferred one-command setup
+
+When the user is on macOS or Linux and has OR3 Cloud access, prefer the
+official Connect bootstrap instead of asking them to copy a URL or token:
+
+```sh
+npx @or3/connect openclaw
+```
+
+It detects or offers to install OpenClaw, waits for Gateway/provider readiness,
+installs the pinned OR3 plugin, opens the normal browser approval, configures
+the loopback endpoint, and installs the managed Cloudflare tunnel service.
+The user should approve each displayed mutation. Re-running the command repairs
+an interrupted setup; `status`, `doctor`, and `disconnect` manage it later.
+Use the manual sections below only when the guided command is unavailable or
+the user is intentionally using the Advanced URL-and-token form.
+
 ## Required first steps
 
 1. Read [repository navigation](../../shared/repository-navigation.md), the

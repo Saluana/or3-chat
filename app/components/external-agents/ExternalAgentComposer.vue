@@ -43,7 +43,9 @@
             role="listbox"
             aria-label="Available agent commands"
           >
-            <div class="border-b border-[var(--md-outline-variant)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--md-on-surface-variant)]">
+            <div
+              class="border-b border-[var(--md-outline-variant)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--md-on-surface-variant)]"
+            >
               Agent commands
             </div>
             <div class="min-h-0 overflow-y-auto py-1.5">
@@ -52,20 +54,36 @@
                 :key="command.command"
                 type="button"
                 class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-[var(--md-surface-container-high)]"
-                :class="index === highlightedCommand ? 'bg-[var(--md-surface-container-high)]' : ''"
+                :class="
+                  index === highlightedCommand
+                    ? 'bg-[var(--md-surface-container-high)]'
+                    : ''
+                "
                 role="option"
                 :aria-selected="index === highlightedCommand"
                 @pointermove="highlightCommandFromPointer(index, $event)"
                 @mousedown.prevent="selectCommand(command)"
               >
-                <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--md-surface-container-high)] font-mono text-sm font-semibold text-[var(--md-primary)]">/</span>
+                <span
+                  class="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--md-surface-container-high)] font-mono text-sm font-semibold text-[var(--md-primary)]"
+                  >/</span
+                >
                 <span class="min-w-0 flex-1">
-                  <code class="block truncate text-sm font-semibold text-[var(--md-on-surface)]">{{ command.command }}</code>
-                  <span v-if="command.description" class="block truncate text-xs text-[var(--md-on-surface-variant)]">{{ command.description }}</span>
+                  <code
+                    class="block truncate text-sm font-semibold text-[var(--md-on-surface)]"
+                    >{{ command.command }}</code
+                  >
+                  <span
+                    v-if="command.description"
+                    class="block truncate text-xs text-[var(--md-on-surface-variant)]"
+                    >{{ command.description }}</span
+                  >
                 </span>
               </button>
             </div>
-            <div class="hidden items-center gap-4 border-t border-[var(--md-outline-variant)] px-3 py-2 text-[11px] text-[var(--md-on-surface-variant)] md:flex">
+            <div
+              class="hidden items-center gap-4 border-t border-[var(--md-outline-variant)] px-3 py-2 text-[11px] text-[var(--md-on-surface-variant)] md:flex"
+            >
               <span><kbd>↑↓</kbd> navigate</span>
               <span><kbd>↵</kbd> select</span>
               <span><kbd>esc</kbd> close</span>
@@ -226,7 +244,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useToast } from "#imports";
 import ChatComposerShell from "~/components/chat/ChatComposerShell.vue";
 import { useChatInputTheme } from "~/composables/chat/useChatInputTheme";
@@ -276,8 +301,10 @@ const attachments = ref<ComposerAttachment[]>([]);
 const isDragging = ref(false);
 const highlightedCommand = ref(0);
 const commandSuggestionsDismissed = ref(false);
+const pointerNavigationEnabled = ref(false);
 const dragDepth = ref(0);
 let commandFocusTimer: ReturnType<typeof setTimeout> | undefined;
+let pointerEnableTimer: ReturnType<typeof setTimeout> | undefined;
 const commandPopoverContent = computed(() => ({
   side: "top" as const,
   align: "start" as const,
@@ -337,7 +364,9 @@ function onKeydown(event: KeyboardEvent) {
       event.preventDefault();
       const direction = event.key === "ArrowDown" ? 1 : -1;
       highlightedCommand.value =
-        (highlightedCommand.value + direction + commandSuggestions.value.length) %
+        (highlightedCommand.value +
+          direction +
+          commandSuggestions.value.length) %
         commandSuggestions.value.length;
       return;
     }
@@ -368,7 +397,12 @@ function onKeydown(event: KeyboardEvent) {
 
 const commandSuggestions = computed(() => {
   const value = props.modelValue;
-  if (commandSuggestionsDismissed.value || !value.startsWith("/") || /\s/u.test(value)) return [];
+  if (
+    commandSuggestionsDismissed.value ||
+    !value.startsWith("/") ||
+    /\s/u.test(value)
+  )
+    return [];
   const query = value.slice(1).toLowerCase();
   return props.commands
     .filter(
@@ -378,6 +412,22 @@ const commandSuggestions = computed(() => {
     )
     .slice(0, 10);
 });
+
+watch(
+  () => commandSuggestions.value.length > 0,
+  (open) => {
+    pointerNavigationEnabled.value = false;
+    if (pointerEnableTimer) clearTimeout(pointerEnableTimer);
+    if (open) {
+      // Ignore the synthetic pointer movement caused by opening the menu over
+      // the composer. A real mouse movement can take over afterward.
+      pointerEnableTimer = setTimeout(() => {
+        pointerNavigationEnabled.value = true;
+      }, 0);
+    }
+  },
+  { immediate: true },
+);
 
 function selectCommand(command: ExternalAgentCommand) {
   emit(
@@ -392,6 +442,7 @@ function selectCommand(command: ExternalAgentCommand) {
 }
 
 function highlightCommandFromPointer(index: number, event: PointerEvent) {
+  if (!pointerNavigationEnabled.value) return;
   if (!event.movementX && !event.movementY) return;
   highlightedCommand.value = index;
 }
@@ -596,6 +647,7 @@ watch(
 onMounted(resizeInput);
 onBeforeUnmount(() => {
   clearTimeout(commandFocusTimer);
+  if (pointerEnableTimer) clearTimeout(pointerEnableTimer);
   clearAttachments();
 });
 

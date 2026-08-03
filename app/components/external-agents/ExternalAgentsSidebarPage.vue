@@ -297,9 +297,9 @@
                   type="password"
                   inputmode="numeric"
                   autocomplete="current-password"
-                  maxlength="6"
+                  maxlength="128"
                   class="min-w-0 flex-1 rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-transparent px-2 py-1.5 text-sm"
-                  placeholder="6-digit PIN"
+                  placeholder="PIN"
                 />
                 <UButton type="submit" size="xs" :loading="quickHostPending">
                   Unlock
@@ -845,20 +845,31 @@
                     </span>
                   </div>
                   <p class="mt-0.5 text-xs text-[var(--md-on-surface-variant)]">
-                    Run one command on the computer that should run your agents,
-                    then enter its short code in OR3.
+                    Run the command for the runtime on the computer that should
+                    run your agents. OR3 walks you through the rest.
                   </p>
                 </div>
               </div>
-              <div
-                class="mt-4 flex flex-col gap-3 rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)] p-3 sm:flex-row sm:items-center"
-              >
-                <code class="min-w-0 flex-1 select-all font-mono text-sm">
-                  {{ CONNECT_COMMAND }}
-                </code>
-                <UButton size="sm" :icon="iconCopy" @click="copyConnectCommand">
-                  {{ connectCommandCopied ? "Copied" : "Copy command" }}
-                </UButton>
+              <div class="mt-4 space-y-2">
+                <div
+                  v-for="command in CONNECT_COMMANDS"
+                  :key="command.runtime"
+                  class="flex flex-col gap-2 rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)] p-3 sm:flex-row sm:items-center"
+                >
+                  <span class="w-20 shrink-0 text-xs font-semibold text-[var(--md-on-surface-variant)]">
+                    {{ command.runtime }}
+                  </span>
+                  <code class="min-w-0 flex-1 select-all font-mono text-sm">
+                    {{ command.value }}
+                  </code>
+                  <UButton
+                    size="sm"
+                    :icon="iconCopy"
+                    @click="copyConnectCommand(command.value)"
+                  >
+                    {{ connectCommandCopied === command.value ? "Copied" : "Copy" }}
+                  </UButton>
+                </div>
               </div>
               <p
                 class="mt-2 text-[11px] text-[var(--md-on-surface-variant)]"
@@ -1052,6 +1063,7 @@ import { useActiveSidebarPage } from "~/composables/sidebar/useActiveSidebarPage
 import { useIcon } from "~/composables/useIcon";
 import { useThemeResolver } from "~/composables/useThemeResolver";
 import { getGlobalMultiPaneApi } from "~/utils/multiPaneApi";
+import { setExternalAgentPaneRecord } from "~/core/external-agents/pane";
 import {
   computeTimeGroup,
   formatTimeDisplay,
@@ -1101,7 +1113,10 @@ const iconCopy = useIcon("ui.copy");
 const iconTag = useIcon("external-agent.tag");
 const iconLink = useIcon("external-agent.link");
 
-const CONNECT_COMMAND = "npx @or3/connect";
+const CONNECT_COMMANDS = [
+  { runtime: "OpenClaw", value: "npx @or3/connect openclaw" },
+  { runtime: "Hermes", value: "npx @or3/connect hermes" },
+] as const;
 const runtime = useExternalAgentRuntime();
 const controller = runtime.controller;
 const snapshot = runtime.snapshot;
@@ -1133,7 +1148,7 @@ const hostActionPending = ref(false);
 const formError = ref<string | null>(null);
 const cloudRemovalHostId = ref<string | null>(null);
 const cloudRemovalError = ref<string | null>(null);
-const connectCommandCopied = ref(false);
+const connectCommandCopied = ref<string | null>(null);
 const collapsed = ref(new Set<TimeGroup>());
 const addHostSection = ref<HTMLElement | null>(null);
 const addHostDisclosure = ref<HTMLDetailsElement | null>(null);
@@ -1415,7 +1430,7 @@ async function openRecord(recordId: string) {
   }
   const index = api.activePaneIndex.value;
   if (api.panes.value[index]) {
-    await api.setPaneApp(index, EXTERNAL_AGENT_PANE_APP_ID, { recordId });
+    await setExternalAgentPaneRecord(api, index, recordId);
   } else {
     await api.newPaneForApp(EXTERNAL_AGENT_PANE_APP_ID, {
       initialRecordId: recordId,
@@ -1511,13 +1526,13 @@ function focusReauthToken() {
   )?.focus();
 }
 
-async function copyConnectCommand() {
+async function copyConnectCommand(command: string) {
   formError.value = null;
   try {
-    await navigator.clipboard.writeText(CONNECT_COMMAND);
-    connectCommandCopied.value = true;
+    await navigator.clipboard.writeText(command);
+    connectCommandCopied.value = command;
   } catch {
-    formError.value = `Copy failed. Run “${CONNECT_COMMAND}” in a terminal.`;
+    formError.value = `Copy failed. Run “${command}” in a terminal.`;
   }
 }
 

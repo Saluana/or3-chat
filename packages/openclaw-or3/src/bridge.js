@@ -278,47 +278,62 @@ export class Or3RunsBridge {
     this.runs = new Map();
     this.runAliases = new Map();
     this.discovery = { models: [], commands: [], thinkingLevels: [] };
+    this.discoveryPromise = undefined;
   }
 
   async capabilities() {
-    const [models, commands, agents] = await Promise.all([
-      this.control.models(),
-      this.control.commands({ agentId: this.agentId }),
-      this.control.agents(),
-    ]);
-    this.discovery = normalizeDiscovery(models, commands, agents, this.agentId);
-    return {
-      object: "or3.runs.capabilities",
-      platform: "openclaw",
-      display_name: "OpenClaw",
-      features: {
-        session_resources: true,
-        run_events_sse: true,
-        run_stop: true,
-        run_approval_response: true,
-        tool_progress_events: true,
-        model_selection: this.discovery.models.length > 0,
-        thinking_levels: this.discovery.thinkingLevels.length > 0,
-        commands: this.discovery.commands.length > 0,
-        interactive_commands: true,
-        inline_attachments: true,
-      },
-      models: this.discovery.models,
-      commands: this.discovery.commands,
-      endpoints: {
-        sessions: { method: "GET", path: "/api/sessions" },
-        session_messages: {
-          method: "GET",
-          path: "/api/sessions/{session_id}/messages",
+    if (this.discoveryPromise) return this.discoveryPromise;
+    const request = (async () => {
+      const [models, commands, agents] = await Promise.all([
+        this.control.models(),
+        this.control.commands({ agentId: this.agentId }),
+        this.control.agents(),
+      ]);
+      this.discovery = normalizeDiscovery(
+        models,
+        commands,
+        agents,
+        this.agentId,
+      );
+      return {
+        object: "or3.runs.capabilities",
+        platform: "openclaw",
+        display_name: "OpenClaw",
+        features: {
+          session_resources: true,
+          run_events_sse: true,
+          run_stop: true,
+          run_approval_response: true,
+          tool_progress_events: true,
+          model_selection: this.discovery.models.length > 0,
+          thinking_levels: this.discovery.thinkingLevels.length > 0,
+          commands: this.discovery.commands.length > 0,
+          interactive_commands: true,
+          inline_attachments: true,
         },
-        run_events: { method: "GET", path: "/v1/runs/{run_id}/events" },
-        run_stop: { method: "POST", path: "/v1/runs/{run_id}/stop" },
-        run_approval: {
-          method: "POST",
-          path: "/v1/runs/{run_id}/approval",
+        models: this.discovery.models,
+        commands: this.discovery.commands,
+        endpoints: {
+          sessions: { method: "GET", path: "/api/sessions" },
+          session_messages: {
+            method: "GET",
+            path: "/api/sessions/{session_id}/messages",
+          },
+          run_events: { method: "GET", path: "/v1/runs/{run_id}/events" },
+          run_stop: { method: "POST", path: "/v1/runs/{run_id}/stop" },
+          run_approval: {
+            method: "POST",
+            path: "/v1/runs/{run_id}/approval",
+          },
         },
-      },
-    };
+      };
+    })();
+    this.discoveryPromise = request;
+    try {
+      return await request;
+    } finally {
+      if (this.discoveryPromise === request) this.discoveryPromise = undefined;
+    }
   }
 
   commandChoices(input) {
@@ -509,6 +524,7 @@ export class Or3RunsBridge {
       output: "",
       error: undefined,
       events: [],
+      nextEventSequence: 1,
       listeners: new Set(),
       approval: undefined,
       commandChoices: this.commandChoices(prompt),
@@ -516,6 +532,7 @@ export class Or3RunsBridge {
     this.runs.set(run.id, run);
     this.prune();
     session.updatedAt = createdAt;
+    if (await this.handleLocalCommand(run, prompt)) return run;
     const model = text(requestInput.model);
     const thinkingLevel = text(
       object(requestInput.model_options).reasoning_effort,
@@ -552,9 +569,92 @@ export class Or3RunsBridge {
     return run;
   }
 
+  async handleLocalCommand(run, prompt) {
+    const match = /^\/([^\s]+)(?:\s+(.+?))?\s*$/u.exec(prompt.trim());
+    if (!match) return false;
+    const name = match[1].toLowerCase();
+    const argument = text(match[2]);
+    const choices = this.commandChoices(prompt);
+
+    // Picker commands are UI navigation, not agent turns. Returning their
+    // choices as a completed run prevents a transient "generating" state and
+    // keeps the flow identical to the runtime's Telegram channel.
+    const pickerWithoutChoices =
+      !argument &&
+      ["models", "model", "think", "thinking", "t"].includes(name);
+    if (choices.length > 0 || pickerWithoutChoices) {
+      this.appendCommandChoices(run);
+      if (pickerWithoutChoices) {
+        this.append(run, {
+          event: "message.delta",
+          delta:
+            name === "models" || name === "model"
+              ? "No model choices are available from this agent."
+              : "No reasoning levels are advertised by this agent.",
+        });
+      }
+      this.append(run, { event: "run.completed", output: "" });
+      return true;
+    }
+
+    if (!argument || !["model", "think", "thinking", "t"].includes(name)) {
+      return false;
+    }
+    const value = argument.split(/\s+/u)[0];
+    let message;
+    if (name === "model") {
+      const model = this.discovery.models.find(
+        (entry) => entry.id.toLowerCase() === value.toLowerCase(),
+      );
+      if (!model) return false;
+      try {
+        await this.control.configure({
+          key: run.sessionKey,
+          model: model.id,
+        });
+      } catch (error) {
+        this.append(run, {
+          event: "run.failed",
+          error:
+            error instanceof Error ? error.message : "Model selection failed",
+        });
+        return true;
+      }
+      message = `Model set to ${model.display_name ?? model.id}.`;
+    } else {
+      const level = this.discovery.thinkingLevels.find(
+        (entry) => entry.value.toLowerCase() === value.toLowerCase(),
+      );
+      if (!level) return false;
+      try {
+        await this.control.configure({
+          key: run.sessionKey,
+          thinkingLevel: level.value,
+        });
+      } catch (error) {
+        this.append(run, {
+          event: "run.failed",
+          error:
+            error instanceof Error
+              ? error.message
+              : "Thinking level selection failed",
+        });
+        return true;
+      }
+      message = `Thinking level set to ${level.label ?? level.value}.`;
+    }
+    this.append(run, { event: "message.delta", delta: message });
+    this.append(run, { event: "run.completed", output: message });
+    return true;
+  }
+
   append(run, event) {
     if (["completed", "failed", "cancelled"].includes(run.status)) return;
-    const value = { ...event, timestamp: nowSeconds() };
+    const value = {
+      ...event,
+      seq: run.nextEventSequence++,
+      timestamp: nowSeconds(),
+    };
     run.events.push(value);
     if (run.events.length > MAX_EVENTS) run.events.shift();
     run.updatedAt = value.timestamp;
@@ -582,12 +682,27 @@ export class Or3RunsBridge {
 
   handleChatEvent(event) {
     const payload = object(event);
-    const runId = text(payload.runId);
-    if (!runId) return;
-    const run = this.runs.get(this.runAliases.get(runId) ?? runId);
-    if (!run || (payload.sessionKey && payload.sessionKey !== run.sessionKey)) {
+    const runId = text(payload.runId ?? payload.run_id);
+    const sessionKey = text(payload.sessionKey ?? payload.session_key);
+    let run = runId
+      ? this.runs.get(this.runAliases.get(runId) ?? runId)
+      : undefined;
+    // The Gateway can publish the first chat delta before chat.send resolves
+    // with its accepted run id. Match that early event by its session key so
+    // the initial streamed text is not lost.
+    if (!run && sessionKey) {
+      run = [...this.runs.values()]
+        .reverse()
+        .find(
+          (candidate) =>
+            candidate.sessionKey === sessionKey &&
+            !["completed", "failed", "cancelled"].includes(candidate.status),
+        );
+    }
+    if (!run || (sessionKey && sessionKey !== run.sessionKey)) {
       return;
     }
+    if (runId) this.runAliases.set(runId, run.id);
     const state = text(payload.state);
     const message = object(payload.message);
     const cumulative = contentText(message.content);
@@ -752,12 +867,17 @@ export class Or3RunsBridge {
     if (!run) throw Object.assign(new Error("Run not found"), { status: 404 });
     if (!run.approval)
       throw Object.assign(new Error("No approval is pending"), { status: 409 });
-    const decision =
-      choice === "deny"
-        ? "deny"
-        : choice === "once"
-          ? "allow-once"
-          : "allow-always";
+    const decisions = {
+      deny: "deny",
+      once: "allow-once",
+      always: "allow-always",
+    };
+    if (!Object.hasOwn(decisions, choice)) {
+      throw Object.assign(new Error("Unsupported approval choice"), {
+        status: 400,
+      });
+    }
+    const decision = decisions[choice];
     const method =
       run.approval.kind === "plugin"
         ? "plugin.approval.resolve"
@@ -870,21 +990,39 @@ export function createOr3RunsHttpHandler(
           if (["completed", "failed", "cancelled"].includes(run.status))
             res.end();
           else {
+            let closed = false;
+            const close = () => {
+              if (closed) return;
+              closed = true;
+              clearInterval(heartbeat);
+              run.listeners.delete(listener);
+              res.end();
+            };
             const heartbeat = setInterval(
-              () => res.write(": keepalive\n\n"),
+              () => {
+                if (!closed) res.write(": keepalive\n\n");
+              },
               SSE_HEARTBEAT_MS,
             );
             const listener = (event) => {
               if (!event) {
-                clearInterval(heartbeat);
-                res.end();
-              } else res.write(`data: ${JSON.stringify(event)}\n\n`);
+                close();
+              } else if (!closed) {
+                res.write(`data: ${JSON.stringify(event)}\n\n`);
+              }
             };
             run.listeners.add(listener);
             req.once("close", () => {
+              closed = true;
               clearInterval(heartbeat);
               run.listeners.delete(listener);
             });
+            // The run can finish between the replay above and listener
+            // registration. Close immediately in that race instead of
+            // leaving the browser's SSE request open forever.
+            if (["completed", "failed", "cancelled"].includes(run.status)) {
+              close();
+            }
           }
         } else if (method === "POST" && stopMatch) {
           sendJson(

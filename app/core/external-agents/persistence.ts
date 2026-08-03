@@ -1,5 +1,6 @@
 import { getKvByName, setKvByName } from "~/db/kv";
 import { getDefaultDb, getWorkspaceDb } from "~/db/client";
+import { normalizeExternalAgentBaseUrl } from "./host-registry";
 import type {
   ExternalAgentHost,
   ExternalAgentPersistence,
@@ -27,6 +28,7 @@ function parseHost(value: unknown): ExternalAgentHost | null {
     baseUrl,
     credentialRef,
     driver,
+    runtime,
     trustedAt,
     lastConnectedAt,
   } = value;
@@ -36,16 +38,30 @@ function parseHost(value: unknown): ExternalAgentHost | null {
     typeof baseUrl !== "string" ||
     typeof credentialRef !== "string" ||
     typeof trustedAt !== "string" ||
-    (driver !== undefined && driver !== "intern" && driver !== "runs")
+    (driver !== undefined && driver !== "intern" && driver !== "runs") ||
+    (runtime !== undefined &&
+      runtime !== "intern" &&
+      runtime !== "openclaw" &&
+      runtime !== "hermes") ||
+    (runtime !== undefined &&
+      ((runtime === "intern" && driver !== undefined && driver !== "intern") ||
+        (runtime !== "intern" && driver !== "runs")))
   ) {
+    return null;
+  }
+  let normalizedBaseUrl: string;
+  try {
+    normalizedBaseUrl = normalizeExternalAgentBaseUrl(baseUrl);
+  } catch {
     return null;
   }
   return {
     id,
     name,
-    baseUrl,
+    baseUrl: normalizedBaseUrl,
     credentialRef,
-    driver,
+    ...(driver === undefined ? {} : { driver }),
+    ...(runtime === undefined ? {} : { runtime }),
     trustedAt,
     lastConnectedAt:
       typeof lastConnectedAt === "string" ? lastConnectedAt : undefined,

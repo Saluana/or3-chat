@@ -8,7 +8,7 @@ import {
     hashConnectSecret,
     isLegacyConnectCredentialEnvelope,
 } from '../../../connect/crypto';
-import { noStore } from '../../../connect/helpers';
+import { noStore, normalizeConnectRuntimeMetadata } from '../../../connect/helpers';
 import type { ConnectAccessCredential } from '../../../connect/types';
 
 export default defineEventHandler(async (event) => {
@@ -28,55 +28,90 @@ export default defineEventHandler(async (event) => {
     return {
         workspaceId,
         environments: await Promise.all(
-            environments.map(async (environment) => {
-                const context = {
-                    purpose: 'environment-access' as const,
-                    environmentId: environment.id,
-                    userId,
-                    workspaceId,
-                };
-                const access = decryptConnectCredential<ConnectAccessCredential>(
-                    environment.access_credential_ciphertext,
-                    config.encryptionKey,
-                    context
-                );
-                if (
-                    environment.control_token_hash &&
-                    hashConnectSecret(access.controlToken) !==
-                        environment.control_token_hash
-                ) {
-                    throw createError({
-                        statusCode: 503,
-                        statusMessage:
-                            'A stored computer credential failed validation.',
-                    });
-                }
-                if (
-                    isLegacyConnectCredentialEnvelope(
-                        environment.access_credential_ciphertext
-                    )
-                ) {
-                    await store.rotateEnvironmentCredential(
-                        environment.id,
-                        'access',
-                        environment.access_credential_ciphertext,
-                        encryptConnectCredential(
-                            access,
+            environments
+                .filter((environment) => environment.status === 'active')
+                .map(async (environment) => {
+                    try {
+                        const context = {
+                            purpose: 'environment-access' as const,
+                            environmentId: environment.id,
+                            userId,
+                            workspaceId,
+                        };
+                        const access = decryptConnectCredential<ConnectAccessCredential>(
+                            environment.access_credential_ciphertext,
                             config.encryptionKey,
                             context
-                        ),
-                        Date.now()
-                    );
-                }
-                return {
-                    id: environment.id,
-                    name: environment.name,
-                    hostname: environment.hostname,
-                    status: environment.status,
-                    baseUrl: `https://${environment.hostname}`,
-                    accessToken: access.controlToken,
-                };
-            })
-        ),
+                        );
+                        if (
+                            environment.control_token_hash &&
+                            hashConnectSecret(access.controlToken) !==
+                                environment.control_token_hash
+                        ) {
+                            throw new Error('stored computer credential failed validation');
+                        }
+                        if (
+                            isLegacyConnectCredentialEnvelope(
+                                environment.access_credential_ciphertext
+                            )
+                        ) {
+                            await store.rotateEnvironmentCredential(
+                                environment.id,
+                                'access',
+                                environment.access_credential_ciphertext,
+                                encryptConnectCredential(
+                                    access,
+                                    config.encryptionKey,
+                                    context
+                                ),
+                                Date.now()
+                            );
+                        }
+                        // Treat the durable environment declaration as the
+                        // authority. The encrypted envelope is checked too,
+                        // but must never be allowed to relabel a record when
+                        // an old/corrupt credential contains another runtime.
+                        const environmentBinding =
+                            normalizeConnectRuntimeMetadata({
+                                runtime: environment.runtime,
+                                driver: environment.driver,
+                                basePath: environment.base_path,
+                            });
+                        const accessBinding = normalizeConnectRuntimeMetadata(
+                            access
+                        );
+                        if (
+                            !environmentBinding ||
+                            !accessBinding ||
+                            environmentBinding.runtime !== accessBinding.runtime ||
+                            environmentBinding.driver !== accessBinding.driver ||
+                            environmentBinding.basePath !== accessBinding.basePath
+                        ) {
+                            throw new Error('runtime connection metadata is invalid');
+                        }
+                        const binding = environmentBinding;
+                        return {
+                            id: environment.id,
+                            name: environment.name,
+                            hostname: environment.hostname,
+                            status: environment.status,
+                            baseUrl: `https://${environment.hostname}${binding.basePath}`,
+                            accessToken: access.controlToken,
+                            driver: binding.driver,
+                            runtime: binding.runtime,
+                            basePath: binding.basePath,
+                        };
+                    } catch (error) {
+                        // A damaged or stale record must not hide every other
+                        // connected host. Never log decrypted credentials.
+                        console.warn(
+                            `[connect] skipping malformed environment ${environment.id}: ${
+                                error instanceof Error ? error.message : 'invalid record'
+                            }`
+                        );
+                        return null;
+                    }
+                })
+        ).then((environments) => environments.filter(Boolean)),
     };
 });

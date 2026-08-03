@@ -18,6 +18,10 @@
         "type": "string",
         "minLength": 16
       },
+      "gatewayToken": {
+        "type": "string",
+        "minLength": 16
+      },
       "allowedOrigins": {
         "type": "array",
         "items": {

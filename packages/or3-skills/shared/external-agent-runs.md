@@ -15,8 +15,9 @@ capabilities at `GET /v1/capabilities`. The connection form needs:
 Do not put a token in a URL, chat, commit, shell history, or screenshot. Ask
 before generating or persisting a new credential. Store it in the runtime's
 normal secret/config location; use OR3's **Remember token on this device**
-option only with the user's approval. Tokens never need to be sent to OR3
-Cloud.
+option only with the user's approval. Manual URL-and-token connections keep
+the token in the browser; the guided Connect flow delivers it through OR3
+Cloud's existing encrypted, workspace-scoped credential envelope.
 
 `http://localhost:3000` and `http://127.0.0.1:3000` are different CORS
 origins. Copy the origin from the address bar exactly, including its scheme and

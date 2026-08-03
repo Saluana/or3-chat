@@ -1,7 +1,9 @@
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
 import type {
+    ConnectDriver,
     ConnectHostMetadata,
+    ConnectRuntime,
     StoredConnectHost,
 } from './types';
 
@@ -38,22 +40,67 @@ export function parseConnectHost(value: unknown): ConnectHostMetadata {
     if (!isRecord(value)) {
         throw createError({ statusCode: 400, statusMessage: 'Computer details are required.' });
     }
+    const binding = normalizeConnectRuntimeMetadata({
+        runtime: optionalText(value.runtime, 24),
+        driver: optionalText(value.driver, 16),
+        basePath: optionalText(value.basePath, 8),
+    });
+    if (!binding) {
+        throw createError({ statusCode: 400, statusMessage: 'The runtime connection details are invalid.' });
+    }
+    const normalizedRuntime = binding.runtime;
     const host: ConnectHostMetadata = {
         name: text(value.name, 80),
         platform: text(value.platform, 24),
         architecture: text(value.architecture, 24),
-        internVersion: text(value.internVersion, 40),
+        internVersion: optionalText(value.internVersion, 40),
+        runtime: binding.runtime,
+        runtimeVersion: optionalText(value.runtimeVersion, 80),
+        driver: binding.driver,
+        basePath: binding.basePath,
         hostId: optionalText(value.hostId, 200),
         signingPublicKey: optionalText(value.signingPublicKey, 500),
         noisePublicKey: optionalText(value.noisePublicKey, 500),
     };
-    if (!host.name || !host.platform || !host.architecture || !host.internVersion) {
+    if (!host.name || !host.platform || !host.architecture) {
         throw createError({
             statusCode: 400,
             statusMessage: 'Computer details are incomplete.',
         });
     }
+    if (normalizedRuntime === 'intern' && !host.internVersion) {
+        throw createError({ statusCode: 400, statusMessage: 'Computer details are incomplete.' });
+    }
+    if (normalizedRuntime !== 'intern' && !host.runtimeVersion) {
+        throw createError({ statusCode: 400, statusMessage: 'Runtime version is required.' });
+    }
     return host;
+}
+
+export function normalizeConnectRuntimeMetadata(value: {
+    runtime?: unknown;
+    driver?: unknown;
+    basePath?: unknown;
+}): {
+    runtime: ConnectRuntime;
+    driver: ConnectDriver;
+    basePath: '/' | '/or3/';
+} | null {
+    const runtime = value.runtime === undefined ? 'intern' : value.runtime;
+    if (runtime !== 'intern' && runtime !== 'openclaw' && runtime !== 'hermes') {
+        return null;
+    }
+    const expectedDriver: ConnectDriver = runtime === 'intern' ? 'intern' : 'runs';
+    const expectedBasePath = runtime === 'openclaw' ? '/or3/' : '/';
+    const driver = value.driver === undefined ? expectedDriver : value.driver;
+    const basePath = value.basePath === undefined ? expectedBasePath : value.basePath;
+    if (
+        (driver !== 'intern' && driver !== 'runs') ||
+        (basePath !== '/' && basePath !== '/or3/') ||
+        driver !== expectedDriver ||
+        basePath !== expectedBasePath
+    ) return null;
+    return { runtime, driver, basePath };
 }
 
 export function storeConnectHost(host: ConnectHostMetadata): StoredConnectHost {
@@ -62,6 +109,10 @@ export function storeConnectHost(host: ConnectHostMetadata): StoredConnectHost {
         platform: host.platform,
         architecture: host.architecture,
         intern_version: host.internVersion,
+        runtime: host.runtime,
+        runtime_version: host.runtimeVersion,
+        driver: host.driver,
+        base_path: host.basePath,
         host_id: host.hostId,
         signing_public_key: host.signingPublicKey,
         noise_public_key: host.noisePublicKey,

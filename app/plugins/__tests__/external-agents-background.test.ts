@@ -5,6 +5,7 @@ let runExternalAgentBackground: typeof import("../external-agents.client").runEx
 let adaptInternClient: typeof import("../external-agents.client").adaptInternClient;
 let isCurrentCloudHostWorkspace: typeof import("../external-agents.client").isCurrentCloudHostWorkspace;
 let createCloudHostReconciler: typeof import("../external-agents.client").createCloudHostReconciler;
+let parseCloudHostEnvironments: typeof import("../external-agents.client").parseCloudHostEnvironments;
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -21,6 +22,7 @@ beforeAll(async () => {
     adaptInternClient,
     isCurrentCloudHostWorkspace,
     createCloudHostReconciler,
+    parseCloudHostEnvironments,
   } = await import("../external-agents.client"));
 });
 
@@ -79,6 +81,48 @@ describe("external agent attachment staging", () => {
 });
 
 describe("external agent plugin background startup", () => {
+  it("drops cloud hosts whose runtime mount does not match its protocol", () => {
+    expect(
+      parseCloudHostEnvironments([
+        {
+          id: "openclaw-bad",
+          name: "OpenClaw",
+          baseUrl: "https://runtime.example/",
+          accessToken: "token",
+          driver: "runs",
+          runtime: "openclaw",
+        },
+        {
+          id: "hermes-bad",
+          name: "Hermes",
+          baseUrl: "https://runtime.example/or3/",
+          accessToken: "token",
+          driver: "runs",
+          runtime: "hermes",
+        },
+        {
+          id: "openclaw-good",
+          name: "OpenClaw",
+          baseUrl: "https://runtime.example/or3/",
+          accessToken: "token",
+          driver: "runs",
+          runtime: "openclaw",
+        },
+        {
+          id: "hermes-good",
+          name: "Hermes",
+          baseUrl: "https://runtime.example/",
+          accessToken: "token",
+          driver: "runs",
+          runtime: "hermes",
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({ environmentId: "openclaw-good" }),
+      expect.objectContaining({ environmentId: "hermes-good" }),
+    ]);
+  });
+
   it("drops a cloud-host response after the active workspace changes", () => {
     expect(
       isCurrentCloudHostWorkspace("workspace-a", "workspace-a", "workspace-b"),

@@ -1,8 +1,15 @@
+export type ConnectDriver = 'intern' | 'runs';
+export type ConnectRuntime = 'intern' | 'openclaw' | 'hermes';
+
 export interface ConnectHostMetadata {
     name: string;
     platform: string;
     architecture: string;
-    internVersion: string;
+    internVersion?: string;
+    runtime?: ConnectRuntime;
+    runtimeVersion?: string;
+    driver?: ConnectDriver;
+    basePath?: '/' | '/or3/';
     hostId?: string;
     signingPublicKey?: string;
     noisePublicKey?: string;
@@ -12,7 +19,11 @@ export interface StoredConnectHost {
     name: string;
     platform: string;
     architecture: string;
-    intern_version: string;
+    intern_version?: string;
+    runtime?: ConnectRuntime;
+    runtime_version?: string;
+    driver?: ConnectDriver;
+    base_path?: '/' | '/or3/';
     host_id?: string;
     signing_public_key?: string;
     noise_public_key?: string;
@@ -43,6 +54,9 @@ export interface ConnectEnvironmentRecord {
     name: string;
     platform?: string;
     architecture?: string;
+    driver?: ConnectDriver;
+    runtime?: ConnectRuntime;
+    base_path?: '/' | '/or3/';
     host_id?: string;
     signing_public_key?: string;
     noise_public_key?: string;
@@ -67,6 +81,9 @@ export interface ConnectEnvironmentRecord {
 
 export interface ConnectAccessCredential {
     controlToken: string;
+    driver?: ConnectDriver;
+    runtime?: ConnectRuntime;
+    basePath?: '/' | '/or3/';
 }
 
 export interface ConnectCredential {
@@ -76,6 +93,9 @@ export interface ConnectCredential {
     environmentName: string;
     namespace: string;
     controlToken: string;
+    driver?: ConnectDriver;
+    runtime?: ConnectRuntime;
+    basePath?: '/' | '/or3/';
     tunnel: {
         accountTag: string;
         tunnelId: string;

@@ -9,6 +9,7 @@ import { registerExternalAgentCommands } from "~/core/external-agents/commands";
 import { ExternalAgentController } from "~/core/external-agents/controller";
 import { getExternalAgentCredentialVault } from "~/core/external-agents/credentials";
 import { createExternalAgentDriverDetector } from "~/core/external-agents/driver-detection";
+import { normalizeExternalAgentBaseUrl } from "~/core/external-agents/host-registry";
 import { createWorkspaceExternalAgentPersistence } from "~/core/external-agents/persistence";
 import { createRunsExternalAgentClient } from "~/core/external-agents/runs-client";
 import {
@@ -17,6 +18,7 @@ import {
   EXTERNAL_AGENT_PANE_APP_ID,
   EXTERNAL_AGENTS_SIDEBAR_PAGE_ID,
 } from "~/core/external-agents/refs";
+import { setExternalAgentPaneRecord } from "~/core/external-agents/pane";
 import {
   setExternalAgentCloudHostRefresh,
   setExternalAgentController,
@@ -250,13 +252,31 @@ interface CloudHostEnvironment {
   readonly name: string;
   readonly baseUrl: string;
   readonly token: string;
+  readonly driver?: ExternalAgentDriver;
+  readonly runtime?: "intern" | "openclaw" | "hermes";
 }
 
-function parseCloudHostEnvironments(value: unknown): CloudHostEnvironment[] | null {
+export function parseCloudHostEnvironments(
+  value: unknown,
+): CloudHostEnvironment[] | null {
   if (!Array.isArray(value)) return null;
   const environments: CloudHostEnvironment[] = [];
-  for (const candidate of value) {
-    if (!candidate || typeof candidate !== "object") return null;
+  for (const [index, candidate] of value.entries()) {
+    const candidateId =
+      candidate &&
+      typeof candidate === "object" &&
+      typeof (candidate as Record<string, unknown>).id === "string"
+        ? String((candidate as Record<string, unknown>).id).slice(0, 120)
+        : `record-${index}`;
+    const skip = (reason: string) => {
+      console.warn(
+        `[external-agents] skipping cloud host ${candidateId}: ${reason}`,
+      );
+    };
+    if (!candidate || typeof candidate !== "object") {
+      skip("record is not an object");
+      continue;
+    }
     const record = candidate as Record<string, unknown>;
     if (
       typeof record.id !== "string" ||
@@ -268,13 +288,65 @@ function parseCloudHostEnvironments(value: unknown): CloudHostEnvironment[] | nu
       !record.baseUrl.trim() ||
       !record.accessToken.trim()
     ) {
-      return null;
+      skip("required fields are missing");
+      continue;
+    }
+    if (
+      (record.driver !== undefined &&
+        record.driver !== "intern" &&
+        record.driver !== "runs") ||
+      (record.runtime !== undefined &&
+        record.runtime !== "intern" &&
+        record.runtime !== "openclaw" &&
+        record.runtime !== "hermes")
+    ) {
+      skip("runtime or driver is unsupported");
+      continue;
+    }
+    const driver = record.driver as ExternalAgentDriver | undefined;
+    const runtime = record.runtime as
+      | "intern"
+      | "openclaw"
+      | "hermes"
+      | undefined;
+    let baseUrl: string;
+    try {
+      baseUrl = normalizeExternalAgentBaseUrl(record.baseUrl);
+    } catch {
+      skip("base URL is invalid");
+      continue;
+    }
+    // Runtime metadata is optional for legacy Intern records. If present,
+    // only accept known driver/runtime combinations.
+    if (
+      (runtime && !driver && runtime !== "intern") ||
+      (driver === "runs" && !runtime) ||
+      (runtime === "intern" && driver && driver !== "intern") ||
+      (runtime && runtime !== "intern" && driver && driver !== "runs")
+    ) {
+      skip("runtime and driver metadata do not match");
+      continue;
+    }
+    // The runtime adapter owns a fixed protocol mount. Accepting a valid URL
+    // with the wrong path would create a host that can connect to the tunnel
+    // but can never reach its capabilities endpoint.
+    if (runtime === "openclaw" || runtime === "hermes") {
+      const pathname = new URL(baseUrl).pathname.replace(/\/+$/u, "") || "/";
+      const expectedPath = runtime === "openclaw" ? "/or3" : "/";
+      if (pathname !== expectedPath) {
+        skip(
+          `base URL must use the ${expectedPath === "/" ? "/" : `${expectedPath}/`} runtime path`,
+        );
+        continue;
+      }
     }
     environments.push({
       environmentId: record.id,
       name: record.name,
-      baseUrl: record.baseUrl,
+      baseUrl,
       token: record.accessToken,
+      driver,
+      runtime,
     });
   }
   return environments;
@@ -308,9 +380,7 @@ export function createCloudHostReconciler(input: {
       expectedWorkspaceId?.trim() ||
       input.getActiveWorkspaceId()?.trim() ||
       "local";
-    if (
-      (input.getActiveWorkspaceId()?.trim() || "local") !== workspaceId
-    ) {
+    if ((input.getActiveWorkspaceId()?.trim() || "local") !== workspaceId) {
       return;
     }
 
@@ -394,7 +464,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     });
     const index = api.activePaneIndex.value;
     if (api.panes.value[index]) {
-      await api.setPaneApp(index, EXTERNAL_AGENT_PANE_APP_ID, { recordId });
+      await setExternalAgentPaneRecord(api, index, recordId);
       return;
     }
     await api.newPaneForApp(EXTERNAL_AGENT_PANE_APP_ID, {
@@ -407,9 +477,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     if (!api) throw new Error("Workspace pane host is unavailable");
     const index = api.activePaneIndex.value;
     if (api.panes.value[index]) {
-      await api.setPaneApp(index, EXTERNAL_AGENT_PANE_APP_ID, {
-        recordId: EXTERNAL_AGENT_LAUNCHER_REF,
-      });
+      await setExternalAgentPaneRecord(api, index, EXTERNAL_AGENT_LAUNCHER_REF);
       return;
     }
     await api.newPaneForApp(EXTERNAL_AGENT_PANE_APP_ID, {
@@ -471,9 +539,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     );
   });
   const sessionContext =
-    runtimeConfig.public.ssrAuthEnabled === true
-      ? useSessionContext()
-      : null;
+    runtimeConfig.public.ssrAuthEnabled === true ? useSessionContext() : null;
   const stopAuthSubscription = sessionContext
     ? watch(
         () => ({

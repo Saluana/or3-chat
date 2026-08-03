@@ -452,6 +452,7 @@ import {
     setGlobalSidebarLayoutApi,
     type SidebarLayoutApi,
 } from '~/utils/sidebarLayoutApi';
+import { setGlobalWorkspaceTabsApi } from '~/utils/workspaceTabsApi';
 import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
 import {
     setPaletteHostContext,
@@ -2088,6 +2089,9 @@ onMounted(async () => {
         }
         activeWorkspaceTabsScope = `${workspaceScopeId.value ?? 'local'}\0${resolvedProfile.value.id}`;
         workspaceTabsReady.value = true;
+        setGlobalWorkspaceTabsApi({
+            reconcilePaneResource: workspaceTabs.reconcilePaneResource,
+        });
     }
     workspaceTabsHydrated.value = true;
 
@@ -2108,6 +2112,7 @@ onMounted(async () => {
 onUnmounted(() => {
     // Clean up global API on unmount
     setGlobalSidebarLayoutApi(undefined);
+    setGlobalWorkspaceTabsApi(undefined);
 });
 
 // --------------- Shortcuts ---------------

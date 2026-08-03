@@ -1583,7 +1583,8 @@ describe("External Agents components", () => {
     expect((textarea.element as HTMLTextAreaElement).value).toBe(
       "Keep this newer follow-up draft",
     );
-    expect(errorHandler).toHaveBeenCalledOnce();
+    expect(errorHandler).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("Host unavailable");
   });
 
   it("previews a selected file and sends it through the external-agent controller", async () => {

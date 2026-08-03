@@ -4,18 +4,23 @@ This runbook covers version bumps across the OR3 repositories and the final
 `create-or3-chat` release. npm versions are immutable: once a version exists,
 make another version bump for every correction.
 
-Ordinary branch pushes do not publish packages. Releases are triggered by
-version-matching Git tags (or by an explicitly started `workflow_dispatch`).
+Pushes to `main` run the relevant package qualification jobs, so a normal
+GitHub push validates the release contents without publishing anything.
+Releases are triggered by version-matching Git tags (or by an explicitly
+started `workflow_dispatch`). npm versions are immutable, so publishing every
+branch push would either fail on the existing version or require silently
+inventing versions.
 
 ## Release order
 
 Release only packages that changed. Use this dependency order:
 
 1. Shared clients and independent packages.
-2. Providers.
-3. `or3-workflow-core`.
-4. `or3-workflow-vue` when it depends on a new core version.
-5. `create-or3-chat`, after every version embedded in its template is on npm.
+2. Runtime bridges (`@or3/openclaw`).
+3. Providers.
+4. `or3-workflow-core`.
+5. `or3-workflow-vue` when it depends on a new core version.
+6. `create-or3-chat`, after every version embedded in its template is on npm.
 
 Do not update `first-party-versions.json` to a version that npm does not serve
 yet. The creator generates npm and Bun lockfiles from the registry, so one
@@ -26,6 +31,7 @@ missing version stops the release.
 | npm package | Repository/directory | Release tag |
 |---|---|---|
 | `@or3/intern-client` | `or3-intern/clients/typescript` | `v<version>` in `or3-intern` |
+| `@or3/openclaw` | `or3-chat/packages/openclaw-or3` | `openclaw-v<version>` |
 | `or3-provider-basic-auth` | `or3-provider-basic-auth` | `v<version>` |
 | `or3-provider-clerk` | `or3-provider-clerk` | `v<version>` |
 | `or3-provider-convex` | `or3-provider-convex` | `v<version>` |
@@ -41,6 +47,25 @@ The `or3-intern` tag releases its GitHub binaries, npm bootstrap package, and
 TypeScript client at the same version. Before tagging it, confirm that the
 target version is unused for both npm packages; otherwise the workflow can
 partially publish and then fail on the existing version.
+
+The external-agent Connect changes are in that same coordinated release. The
+published `@or3/connect@0.1.0` predates the `openclaw`/`hermes` router, so verify
+the next release's packed wrapper and downloaded binary before advertising the
+new commands. Do not reuse a version already served by either package.
+
+For the current external-agent work, the first published OpenClaw bridge is
+`@or3/openclaw@0.1.0`, so the next bridge release must bump its package version
+and use `openclaw-v<next-version>`. The public `@or3/connect@0.1.0` predates
+the runtime router; release the next coordinated `or3-intern` version (using a
+version unused by both `@or3/connect` and `@or3/intern-client`) with the `v<version>`
+tag. A tag must point at the commit containing the package version and the
+workflow that publishes it.
+
+The OpenClaw bridge is released independently from the application. Its
+workflow runs the package qualification and publishes only for an exact
+`openclaw-v<version>` tag (or an explicitly approved `workflow_dispatch`).
+Publish it before releasing a Connect CLI version that pins it, then verify the
+exact version with `npm view @or3/openclaw@<version> version`.
 
 ## 1. Bump a package
 
@@ -68,7 +93,8 @@ expects them. Provider runtime source imports OR3 host aliases such as `~/` and
 build because raw `tsc --noEmit` cannot resolve host-app modules outside OR3.
 
 Commit and push the version bump before creating the tag. The tag must point to
-the commit containing both the new version and `.github/workflows/publish.yml`.
+the commit containing both the new version and the workflow that publishes that
+package (for OpenClaw, `.github/workflows/publish-openclaw.yml`).
 
 ## 2. Trigger trusted publishing
 
@@ -94,8 +120,11 @@ The workflows reject mismatched tags.
 
 Trusted publishing uses GitHub's OIDC identity and does not require an
 `NPM_TOKEN`. Each npm package must trust its exact GitHub owner, repository,
-and `publish.yml` workflow, with `npm publish` permission. A package generally
-needs one manual publication before its npm trusted-publisher settings can be
+and publishing workflow filename, with `npm publish` permission. For
+`@or3/openclaw`, the npm Trusted Publisher fields are `Saluana`, `or3-chat`,
+and `publish-openclaw.yml`. For `@or3/connect` and `@or3/intern-client`, use
+`Saluana`, `or3-intern`, and `publish.yml`. A package generally needs one
+manual publication before its npm trusted-publisher settings can be
 configured.
 
 For that first manual publication, package-level

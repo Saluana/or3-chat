@@ -466,6 +466,7 @@ import { useExternalAgentRuntime } from "~/core/external-agents/runtime";
 import { useActiveSidebarPage } from "~/composables/sidebar/useActiveSidebarPage";
 import { useIcon } from "~/composables/useIcon";
 import { getGlobalMultiPaneApi } from "~/utils/multiPaneApi";
+import { setExternalAgentPaneRecord } from "~/core/external-agents/pane";
 
 const props = defineProps<{
   paneId: string;
@@ -946,12 +947,14 @@ async function replaceWithSession(next: ExternalAgentSession) {
   const api = getGlobalMultiPaneApi();
   const index = api?.panes.value.findIndex((pane) => pane.id === props.paneId);
   if (!api || index === undefined || index < 0) return;
-  await api.setPaneApp(index, EXTERNAL_AGENT_PANE_APP_ID, {
-    recordId: encodeExternalAgentSessionRef({
+  await setExternalAgentPaneRecord(
+    api,
+    index,
+    encodeExternalAgentSessionRef({
       hostId: next.hostId,
       remoteSessionId: next.remoteSessionId,
     }),
-  });
+  );
 }
 
 async function cancel() {
@@ -1002,21 +1005,37 @@ async function followUp(
     return;
   const submittedText = followUpText.value;
   const submittedAttachments = [...attachments];
+  const isSlashCommand = /^\/\S+(?:\s|$)/u.test(submittedText.trim());
   pendingAction.value = "follow-up";
   try {
     await runtime.controller.followUp(session.value.remoteSessionId, {
       instruction:
         submittedText.trim() || attachmentOnlyFollowUp(submittedAttachments),
-      cwd: followUpCwd.value || undefined,
+      // Runtime slash commands own their configuration. Re-sending the
+      // composer's previous model/thinking settings here would silently undo
+      // a successful `/model` or `/think` command on the next turn.
       mode: followUpMode.value,
       isolation: followUpIsolation.value,
-      model: followUpModel.value ?? undefined,
-      thinkingLevel: followUpThinkingLevel.value ?? undefined,
-      confirmDangerous: followUpConfirmDangerous.value,
+      ...(isSlashCommand
+        ? {}
+        : {
+            cwd: followUpCwd.value || undefined,
+            model: followUpModel.value ?? undefined,
+            thinkingLevel: followUpThinkingLevel.value ?? undefined,
+            confirmDangerous: followUpConfirmDangerous.value,
+          }),
       ...(submittedAttachments.length
         ? { attachments: submittedAttachments }
         : {}),
     });
+    const selectedModel = /^\/model\s+(.+)$/iu
+      .exec(submittedText.trim())?.[1]
+      ?.trim();
+    if (selectedModel) followUpModel.value = selectedModel;
+    const selectedThinking = /^\/(?:think|thinking|t)\s+(.+)$/iu
+      .exec(submittedText.trim())?.[1]
+      ?.trim();
+    if (selectedThinking) followUpThinkingLevel.value = selectedThinking;
     if (
       followUpText.value === submittedText &&
       (composer.value?.clearAttachments(submittedAttachments) ??

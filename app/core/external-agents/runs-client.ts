@@ -3,6 +3,7 @@ import type {
   ExternalAgentApprovalInput,
   ExternalAgentAttachment,
   ExternalAgentCapabilities,
+  ExternalAgentCommandChoice,
   ExternalAgentClient,
   ExternalAgentCommand,
   ExternalAgentCreateSessionInput,
@@ -21,6 +22,8 @@ const MAX_ERROR_TEXT = 500;
 const MAX_SSE_BUFFER_BYTES = 1024 * 1024;
 const MAX_RUN_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const MAX_RUN_ATTACHMENT_COUNT = 10;
+const MAX_CLIENT_RUNS = 200;
+const MAX_CLIENT_HISTORY_SESSIONS = 100;
 const RUNNER_ID = "agent";
 const REASONING_LEVELS = ["minimal", "low", "medium", "high", "xhigh"];
 
@@ -33,6 +36,8 @@ interface RunsFeatureSet {
   readonly stop: boolean;
   readonly approval: boolean;
   readonly attachments: boolean;
+  readonly modelOptions: boolean;
+  readonly interactiveCommands: boolean;
 }
 
 interface RunMetadata {
@@ -46,9 +51,11 @@ interface RunMetadata {
 interface RunStreamState {
   readonly events: ExternalRemoteEvent[];
   readonly waiters: Set<() => void>;
+  readonly remoteEventKeys: Set<string>;
   nextSequence: number;
   started: boolean;
   done: boolean;
+  terminal: boolean;
   error?: unknown;
 }
 
@@ -131,8 +138,71 @@ function messageContent(value: unknown): string {
     .join("\n");
 }
 
+function hasHistoryTerminalEvidence(message: JsonRecord): boolean {
+  if (
+    message.done === true ||
+    message.finished === true ||
+    message.final === true ||
+    message.is_final === true ||
+    message.terminal === true
+  )
+    return true;
+  const hasTimestamp = (value: unknown) =>
+    value !== undefined && value !== null && value !== "";
+  if (
+    hasTimestamp(message.completed_at) ||
+    hasTimestamp(message.completedAt) ||
+    hasTimestamp(message.finished_at) ||
+    hasTimestamp(message.finishedAt)
+  )
+    return true;
+  const status = stringValue(
+    message.status ?? message.run_status ?? message.turn_status,
+  )?.toLowerCase();
+  if (
+    status &&
+    [
+      "completed",
+      "complete",
+      "succeeded",
+      "success",
+      "failed",
+      "error",
+      "cancelled",
+      "canceled",
+      "interrupted",
+    ].includes(status)
+  )
+    return true;
+  return message.finish_reason !== undefined && message.finish_reason !== null;
+}
+
 function encodePath(value: string): string {
   return encodeURIComponent(value);
+}
+
+function remoteEventKeyFor(raw: JsonRecord): string | undefined {
+  // `seq` and event ids are safe replay cursors. A plain `id` is common on
+  // run envelopes and may simply repeat the run id for every event, so only
+  // use it when it is not one of the enclosing run/session identifiers.
+  for (const key of ["event_id", "eventId", "seq"]) {
+    const value = raw[key];
+    if (
+      (typeof value === "string" && value.trim()) ||
+      (typeof value === "number" && Number.isFinite(value))
+    )
+      return `${key}:${String(value)}`;
+  }
+  const id = raw.id;
+  const runId = raw.run_id ?? raw.runId ?? raw.turn_id ?? raw.turnId;
+  if (
+    ((typeof id === "string" && id.trim()) ||
+      (typeof id === "number" && Number.isFinite(id))) &&
+    String(id) !== String(runId ?? "")
+  ) {
+    return `id:${String(id)}`;
+  }
+  return undefined;
 }
 
 function normalizedBaseUrl(value: string): URL {
@@ -170,6 +240,9 @@ function featureSet(raw: JsonRecord): RunsFeatureSet {
       features.run_approval === true ||
       hasEndpoint("run_approval"),
     attachments: features.inline_attachments === true,
+    modelOptions:
+      features.model_options === true || hasEndpoint("model_options"),
+    interactiveCommands: features.interactive_commands === true,
   };
 }
 
@@ -553,7 +626,15 @@ async function* parseSseJson(
             .map((line) => line.slice(5).trimStart())
             .join("\n");
           if (data && data !== "[DONE]") {
-            const item = record(JSON.parse(data));
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(data);
+            } catch {
+              throw new RunsClientError(
+                "Agent event stream returned malformed JSON",
+              );
+            }
+            const item = record(parsed);
             if (Object.keys(item).length) yield item;
           }
         }
@@ -561,6 +642,7 @@ async function* parseSseJson(
       }
     }
   } finally {
+    await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }
@@ -577,9 +659,13 @@ class RunsExternalAgentClient implements ExternalAgentClient {
   readonly #nextTurnSequence = new Map<string, number>();
   readonly #stagedAttachments = new Map<string, StagedRunAttachment>();
   readonly #modelProviders = new Map<string, string>();
+  readonly #modelProviderNames = new Map<string, string>();
   readonly #modelNames = new Map<string, string>();
-  #usesLocalCommands = false;
+  readonly #modelReasoning = new Map<string, string[]>();
+  #localCommands: ExternalAgentCommand[] = [];
+  #interactiveCommands = false;
   #rawCapabilities: JsonRecord | null = null;
+  #capabilitiesPromise: Promise<JsonRecord> | null = null;
 
   constructor(options: CreateRunsExternalAgentClientOptions) {
     this.#baseUrl = normalizedBaseUrl(options.baseUrl);
@@ -639,9 +725,20 @@ class RunsExternalAgentClient implements ExternalAgentClient {
     }
   }
 
-  async #capabilities(): Promise<JsonRecord> {
-    if (!this.#rawCapabilities) {
-      this.#rawCapabilities = await this.#json("/v1/capabilities");
+  async #capabilities(signal?: AbortSignal): Promise<JsonRecord> {
+    if (this.#rawCapabilities) return this.#rawCapabilities;
+    if (!this.#capabilitiesPromise) {
+      const request = this.#json("/v1/capabilities", { signal });
+      this.#capabilitiesPromise = request;
+      try {
+        this.#rawCapabilities = await request;
+      } finally {
+        if (this.#capabilitiesPromise === request) {
+          this.#capabilitiesPromise = null;
+        }
+      }
+    } else {
+      this.#rawCapabilities = await this.#capabilitiesPromise;
     }
     return this.#rawCapabilities;
   }
@@ -671,13 +768,9 @@ class RunsExternalAgentClient implements ExternalAgentClient {
   async capabilities(options?: {
     signal?: AbortSignal;
   }): Promise<ExternalAgentCapabilities> {
-    if (options?.signal) {
-      this.#rawCapabilities = await this.#json("/v1/capabilities", {
-        signal: options.signal,
-      });
-    }
-    const raw = await this.#capabilities();
+    const raw = await this.#capabilities(options?.signal);
     const features = featureSet(raw);
+    this.#interactiveCommands = features.interactiveCommands;
     const product =
       stringValue(raw.platform ?? raw.product ?? raw.runtime) ??
       "agent-service";
@@ -704,13 +797,9 @@ class RunsExternalAgentClient implements ExternalAgentClient {
     runners: ExternalAgentRunner[];
     default_runner?: string;
   }> {
-    if (options?.signal) {
-      this.#rawCapabilities = await this.#json("/v1/capabilities", {
-        signal: options.signal,
-      });
-    }
-    const raw = await this.#capabilities();
+    const raw = await this.#capabilities(options?.signal);
     const features = featureSet(raw);
+    this.#interactiveCommands = features.interactiveCommands;
     const product =
       stringValue(raw.platform ?? raw.product ?? raw.runtime) ??
       "Agent service";
@@ -720,23 +809,52 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       .map((value) => record(value))
       .filter((value) => stringValue(value.id));
     const model = stringValue(raw.model);
-    const modelOptionsPath = advertisedEndpoint(raw, "model_options");
+    // Hermes exposes its rich provider/model catalog at this stable endpoint.
+    // Older Hermes builds did not include the endpoint in capabilities even
+    // though the route was present, so use the platform-scoped fallback rather
+    // than reducing the picker to the single `/v1/models` alias.
+    const modelOptionsPath =
+      advertisedEndpoint(raw, "model_options") ??
+      (features.modelOptions || product.toLowerCase() === "hermes-agent"
+        ? "/api/model/options"
+        : undefined);
+    let modelCatalogError: string | undefined;
     if (modelOptionsPath) {
-      const discovered = await this.#json(modelOptionsPath, {
-        signal: options?.signal,
-      })
-        .then((value) => modelOptions(value, model))
-        .catch(() => []);
+      let discovered: Array<Readonly<Record<string, unknown>>> = [];
+      try {
+        discovered = modelOptions(
+          await this.#json(modelOptionsPath, { signal: options?.signal }),
+          model,
+        );
+      } catch {
+        // Keep the host usable, but retain a safe diagnostic so an empty
+        // picker is distinguishable from a runtime with no catalog.
+        modelCatalogError = "Model catalog could not be loaded.";
+      }
       if (discovered.length) models = discovered;
     }
     this.#modelProviders.clear();
+    this.#modelProviderNames.clear();
     this.#modelNames.clear();
+    this.#modelReasoning.clear();
     for (const candidate of models) {
       const id = stringValue(candidate.id);
       const provider = stringValue(candidate.provider);
-      if (id && provider) this.#modelProviders.set(id, provider);
+      if (id && provider) {
+        this.#modelProviders.set(id, provider);
+        this.#modelProviderNames.set(
+          provider,
+          stringValue(candidate.provider_name) ?? provider,
+        );
+      }
       const modelName = stringValue(candidate.model);
       if (id && modelName) this.#modelNames.set(id, modelName);
+      const reasoning = Array.isArray(candidate.reasoning)
+        ? candidate.reasoning.filter(
+            (value): value is string => typeof value === "string" && !!value,
+          )
+        : [];
+      if (id && reasoning.length) this.#modelReasoning.set(id, reasoning);
     }
     const commands: ExternalAgentCommand[] = (
       Array.isArray(raw.commands) ? raw.commands : []
@@ -758,7 +876,6 @@ class RunsExternalAgentClient implements ExternalAgentClient {
         },
       ];
     });
-    this.#usesLocalCommands = commands.length === 0;
     if (!commands.length) {
       commands.push(
         {
@@ -793,6 +910,7 @@ class RunsExternalAgentClient implements ExternalAgentClient {
         },
       );
     }
+    this.#localCommands = commands;
     return {
       default_runner: RUNNER_ID,
       runners: [
@@ -832,7 +950,12 @@ class RunsExternalAgentClient implements ExternalAgentClient {
               ? [{ id: model, name: model, default: true }]
               : undefined,
           commands,
-          runtime: { product },
+          runtime: {
+            product,
+            ...(modelCatalogError
+              ? { model_catalog_error: modelCatalogError }
+              : {}),
+          },
         },
       ],
     };
@@ -913,14 +1036,18 @@ class RunsExternalAgentClient implements ExternalAgentClient {
           userMessage: string;
           assistant: string[];
           toolEvents: JsonRecord[];
+          terminalEvidence: boolean;
         }
       | undefined;
     const commit = () => {
       if (!current) return;
       const sequence = turns.length + 1;
       const finalText = current.assistant.join("\n").trim();
+      // Tool records can be persisted while the assistant is still running.
+      // Never turn a tool-only history snapshot into a false success after a
+      // reload; require assistant output or an explicit terminal marker.
       const hasTerminalEvidence = Boolean(
-        finalText || current.toolEvents.length,
+        finalText || current.terminalEvidence,
       );
       const completedAt =
         current.toolEvents
@@ -962,14 +1089,14 @@ class RunsExternalAgentClient implements ExternalAgentClient {
         });
       }
       if (hasTerminalEvidence) {
-      events.push({
-        id: ++eventSequence,
-        turn_id: turn.id,
-        seq: eventSequence,
-        ts: completedAt,
-        type: "turn.completed",
-        payload: { status: "completed" },
-      });
+        events.push({
+          id: ++eventSequence,
+          turn_id: turn.id,
+          seq: eventSequence,
+          ts: completedAt,
+          type: "turn.completed",
+          payload: { status: "completed" },
+        });
       }
       this.#historyEvents.set(turn.id, events);
       turns.push(turn);
@@ -985,10 +1112,12 @@ class RunsExternalAgentClient implements ExternalAgentClient {
           userMessage: messageContent(message.content),
           assistant: [],
           toolEvents: [],
+          terminalEvidence: hasHistoryTerminalEvidence(message),
         };
       } else if (current && role === "assistant") {
         const content = messageContent(message.content);
         if (content) current.assistant.push(content);
+        current.terminalEvidence ||= hasHistoryTerminalEvidence(message);
       } else if (current && role === "tool") {
         current.toolEvents.push(message);
       }
@@ -1128,29 +1257,42 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       );
     }
     const staged: ExternalAgentAttachment[] = [];
-    for (const attachment of attachments) {
-      if (options?.signal?.aborted) throw options.signal.reason;
-      if (attachment.data.size > MAX_RUN_ATTACHMENT_BYTES) {
-        throw new RunsClientError(
-          `${attachment.name} exceeds the 20 MB attachment limit.`,
-        );
+    try {
+      for (const attachment of attachments) {
+        if (options?.signal?.aborted) throw options.signal.reason;
+        if (attachment.data.size > MAX_RUN_ATTACHMENT_BYTES) {
+          throw new RunsClientError(
+            `${attachment.name} exceeds the 20 MB attachment limit.`,
+          );
+        }
+        this.#stagedAttachments.set(attachment.id, {
+          fileName: attachment.name,
+          mimeType: attachment.mimeType || attachment.data.type || undefined,
+          content: await blobBase64(attachment.data),
+        });
+        staged.push({
+          id: attachment.id,
+          source: "local_artifact",
+          kind: attachment.kind,
+          name: attachment.name,
+          mime_type: attachment.mimeType || attachment.data.type || undefined,
+          size_bytes: attachment.data.size,
+          artifact_id: attachment.id,
+        });
       }
-      this.#stagedAttachments.set(attachment.id, {
-        fileName: attachment.name,
-        mimeType: attachment.mimeType || attachment.data.type || undefined,
-        content: await blobBase64(attachment.data),
-      });
-      staged.push({
-        id: attachment.id,
-        source: "local_artifact",
-        kind: attachment.kind,
-        name: attachment.name,
-        mime_type: attachment.mimeType || attachment.data.type || undefined,
-        size_bytes: attachment.data.size,
-        artifact_id: attachment.id,
-      });
+      return staged;
+    } catch (error) {
+      for (const attachment of staged) {
+        this.#stagedAttachments.delete(attachment.id);
+      }
+      throw error;
     }
-    return staged;
+  }
+
+  releaseStagedFiles(attachments: readonly ExternalAgentAttachment[]): void {
+    for (const attachment of attachments) {
+      this.#stagedAttachments.delete(attachment.id);
+    }
   }
 
   async getTurn(
@@ -1180,14 +1322,52 @@ class RunsExternalAgentClient implements ExternalAgentClient {
     input: ExternalAgentStartTurnInput,
     sequence: number,
   ): ExternalRemoteTurn | null {
-    if (!this.#usesLocalCommands || input.attachments?.length) return null;
-    const match =
-      /^\/(help|commands|models?|think|thinking|t)(?:\s+(.+?))?\s*$/iu.exec(
-        input.user_message,
-      );
+    if (input.attachments?.length) return null;
+    const match = /^\/([^\s]+)(?:\s+(.+?))?\s*$/iu.exec(input.user_message);
     if (!match) return null;
     const name = match[1]!.toLowerCase();
     const argument = match[2]?.trim();
+    const choices = this.#localCommandChoices(input.user_message);
+    // These are OR3 picker/control commands. They must remain local even
+    // when the runtime advertises a larger command list; forwarding them as
+    // ordinary prompts makes the runtime start a text-generation turn.
+    const localControlCommand = [
+      "help",
+      "commands",
+      "model",
+      "models",
+      "think",
+      "thinking",
+      "t",
+    ].includes(name);
+    const knownCommand = this.#localCommands.some(
+      (command) =>
+        command.name.toLowerCase() === name ||
+        command.command.toLowerCase() === `/${name}`,
+    );
+    const pickerCommand = choices.length > 0 && !argument;
+    const runtimeControlSelection =
+      this.#interactiveCommands &&
+      Boolean(argument) &&
+      (name === "model" ||
+        name === "think" ||
+        name === "thinking" ||
+        name === "t") &&
+      (name === "model"
+        ? this.#modelProviders.has(argument!) || this.#modelNames.has(argument!)
+        : this.#modelReasoning.size === 0 ||
+          [...this.#modelReasoning.values()].some((levels) =>
+            levels.some(
+              (level) => level.toLowerCase() === argument!.toLowerCase(),
+            ),
+          ));
+    if (
+      !runtimeControlSelection &&
+      !localControlCommand &&
+      (!knownCommand || !pickerCommand)
+    )
+      return null;
+    if (runtimeControlSelection) return null;
     const id = `local-command-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const now = Date.now() / 1000;
     let model = input.model;
@@ -1205,6 +1385,13 @@ class RunsExternalAgentClient implements ExternalAgentClient {
     } else if (["think", "thinking", "t"].includes(name) && argument) {
       thinkingLevel = argument;
       finalText = `Reasoning set to ${argument}.`;
+    } else if (!choices.length) {
+      finalText =
+        name === "models" || name === "model"
+          ? "No model choices are available from this agent."
+          : name === "think" || name === "thinking" || name === "t"
+            ? "No reasoning levels are advertised by this agent."
+            : "No slash-command choices are advertised by this agent.";
     }
     const turn: ExternalRemoteTurn = {
       id,
@@ -1220,6 +1407,16 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       thinking_level: thinkingLevel,
     };
     const state = this.#streamState(id);
+    if (choices.length) {
+      state.events.push({
+        id: ++state.nextSequence,
+        turn_id: id,
+        seq: state.nextSequence,
+        ts: now,
+        type: "command.choices",
+        payload: { rawType: "command.choices", choices },
+      });
+    }
     if (finalText) {
       state.events.push({
         id: ++state.nextSequence,
@@ -1239,8 +1436,9 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       type: "turn.completed",
       payload: { status: "completed" },
     });
-    state.started = true;
+    state.started = false;
     state.done = true;
+    state.terminal = true;
     this.#localTurns.set(id, turn);
     while (this.#localTurns.size > 100) {
       const oldest = this.#localTurns.keys().next().value;
@@ -1249,6 +1447,95 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       this.#runStreams.delete(oldest);
     }
     return turn;
+  }
+
+  #localCommandChoices(input: string): ExternalAgentCommandChoice[] {
+    const match = /^\/([^\s]+)(?:\s+(.+?))?\s*$/iu.exec(input.trim());
+    if (!match) return [];
+    const name = match[1]!.toLowerCase();
+    const argument = match[2]?.trim();
+    if ((name === "models" || name === "model") && !argument) {
+      const providers = new Map<string, number>();
+      for (const provider of this.#modelProviders.values()) {
+        providers.set(provider, (providers.get(provider) ?? 0) + 1);
+      }
+      return [...providers.entries()].slice(0, 24).map(([provider, count]) => ({
+        label: `${this.#modelProviderNames.get(provider) ?? provider} (${count})`,
+        command: `/models ${provider}`,
+      }));
+    }
+    if (name === "models" && argument) {
+      const tokens = argument.split(/\s+/u);
+      const provider = tokens[0]!.toLowerCase();
+      const page = Math.max(
+        1,
+        Number(
+          tokens
+            .find((token) => /^(?:page=)?\d+$/iu.test(token))
+            ?.replace(/^page=/iu, ""),
+        ) || 1,
+      );
+      const models = [...this.#modelProviders.entries()].filter(
+        ([, value]) => value.toLowerCase() === provider,
+      );
+      if (!models.length) return [];
+      const pageSize = 8;
+      const pageCount = Math.max(1, Math.ceil(models.length / pageSize));
+      const safePage = Math.min(page, pageCount);
+      const choices = models
+        .slice((safePage - 1) * pageSize, safePage * pageSize)
+        .map(([id]) => ({
+          label: this.#modelNames.get(id) ?? id,
+          command: `/model ${id}`,
+        }));
+      if (safePage > 1) {
+        choices.push({
+          label: "← Previous",
+          command: `/models ${provider} page=${safePage - 1}`,
+        });
+      }
+      if (safePage < pageCount) {
+        choices.push({
+          label: "Next →",
+          command: `/models ${provider} page=${safePage + 1}`,
+        });
+      }
+      choices.push({ label: "← Providers", command: "/models" });
+      return choices;
+    }
+    if (!argument && ["think", "thinking", "t"].includes(name)) {
+      const defaultModel = [...this.#modelReasoning.keys()][0];
+      const levels =
+        (defaultModel && this.#modelReasoning.get(defaultModel)) ??
+        REASONING_LEVELS;
+      const normalizedLevels = Array.isArray(levels) ? levels : [levels];
+      return normalizedLevels.slice(0, 24).map((level: string) => ({
+        label: level,
+        command: `/think ${level}`,
+      }));
+    }
+    const command = this.#localCommands.find(
+      (entry) =>
+        entry.name.toLowerCase() === name ||
+        entry.command.toLowerCase() === `/${name}`,
+    );
+    const commandChoices = command?.args?.[0]?.choices ?? [];
+    if (!argument && commandChoices.length) {
+      return commandChoices.slice(0, 24).map((choice) => ({
+        label: choice.label ?? choice.value,
+        command: `/${name} ${choice.value}`,
+      }));
+    }
+    if (!argument && (name === "help" || name === "commands")) {
+      return this.#localCommands
+        .filter((command) => command.name !== name)
+        .slice(0, 24)
+        .map((command) => ({
+          label: command.command,
+          command: command.command,
+        }));
+    }
+    return [];
   }
 
   async listTurnEvents(
@@ -1274,13 +1561,51 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       state = {
         events: [],
         waiters: new Set(),
+        remoteEventKeys: new Set(),
         nextSequence: 0,
         started: false,
         done: false,
+        terminal: false,
       };
       this.#runStreams.set(runId, state);
     }
     return state;
+  }
+
+  #pruneRunCaches(): void {
+    if (this.#runMetadata.size > MAX_CLIENT_RUNS) {
+      const removable = [...this.#runMetadata.values()]
+        .filter(
+          (metadata) => this.#runStreams.get(metadata.runId)?.done !== false,
+        )
+        .sort((left, right) => left.requestedAt - right.requestedAt);
+      while (this.#runMetadata.size > MAX_CLIENT_RUNS && removable.length) {
+        const metadata = removable.shift()!;
+        this.#runMetadata.delete(metadata.runId);
+        this.#runStreams.delete(metadata.runId);
+      }
+    }
+    if (this.#historyTurns.size > MAX_CLIENT_HISTORY_SESSIONS) {
+      const removable = [...this.#historyTurns.keys()];
+      while (
+        this.#historyTurns.size > MAX_CLIENT_HISTORY_SESSIONS &&
+        removable.length
+      ) {
+        const sessionId = removable.shift()!;
+        this.#historyTurns.delete(sessionId);
+      }
+    }
+    // History event caches are keyed by turn, not session, so a session id
+    // cannot be inferred from an event's turn id. Retain only turns that are
+    // still represented by a retained session history or a live run.
+    const retainedTurnIds = new Set<string>();
+    for (const turns of this.#historyTurns.values()) {
+      for (const turn of turns) retainedTurnIds.add(turn.id);
+    }
+    for (const runId of this.#runMetadata.keys()) retainedTurnIds.add(runId);
+    for (const turnId of this.#historyEvents.keys()) {
+      if (!retainedTurnIds.has(turnId)) this.#historyEvents.delete(turnId);
+    }
   }
 
   #wake(state: RunStreamState): void {
@@ -1290,7 +1615,15 @@ class RunsExternalAgentClient implements ExternalAgentClient {
 
   #ensureRunPump(metadata: RunMetadata, signal?: AbortSignal): void {
     const state = this.#streamState(metadata.runId);
-    if (state.started || state.done) return;
+    if (state.started) return;
+    if (state.done) {
+      // A server may close an SSE connection without a terminal frame. Keep
+      // the already received events and reopen the endpoint on the next
+      // consumer attempt; terminal runs must remain closed.
+      if (state.terminal) return;
+      state.done = false;
+      state.error = undefined;
+    }
     state.started = true;
     void (async () => {
       try {
@@ -1306,11 +1639,26 @@ class RunsExternalAgentClient implements ExternalAgentClient {
         let receivedFrames = 0;
         for await (const raw of parseSseJson(response.body)) {
           receivedFrames += 1;
-          const sequence = ++state.nextSequence;
+          const remoteEventKey = remoteEventKeyFor(raw);
+          if (remoteEventKey && state.remoteEventKeys.has(remoteEventKey))
+            continue;
+          if (remoteEventKey) state.remoteEventKeys.add(remoteEventKey);
+          const remoteSequence = numberValue(raw.seq);
+          const sequence =
+            remoteSequence !== undefined && remoteSequence > state.nextSequence
+              ? remoteSequence
+              : state.nextSequence + 1;
+          state.nextSequence = sequence;
           const event = normalizeRunEvent(raw, metadata, sequence);
           if (!event) continue;
           state.events.push(event);
+          const terminalEvent =
+            event.type === "turn.completed" || event.type === "failed";
+          if (terminalEvent) {
+            state.terminal = true;
+          }
           this.#wake(state);
+          if (terminalEvent) break;
         }
         if (!state.events.length) {
           throw new RunsClientError(
@@ -1322,6 +1670,7 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       } catch (error) {
         state.error = error;
       } finally {
+        state.started = false;
         state.done = true;
         this.#wake(state);
       }
@@ -1351,38 +1700,42 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       (candidate) => candidate.seq > afterSeq,
     );
     if (eventIndex < 0) eventIndex = state.events.length;
-    while (!input.signal?.aborted) {
-      const event = state.events[eventIndex];
-      if (event) {
-        eventIndex += 1;
-        afterSeq = event.seq;
-        yield {
-          event: "message",
-          id: String(event.seq),
-          cursor: event.seq,
-          json: event,
-        };
-        continue;
-      }
-      if (state.done) {
-        if (state.error) throw state.error;
-        return;
-      }
-      await new Promise<void>((resolve) => {
-        const wake = () => {
-          input.signal?.removeEventListener("abort", wake);
-          resolve();
-        };
-        state.waiters.add(wake);
-        input.signal?.addEventListener("abort", wake, { once: true });
-        if (
-          state.done ||
-          state.events.some((candidate) => candidate.seq > afterSeq)
-        ) {
-          state.waiters.delete(wake);
-          wake();
+    try {
+      while (!input.signal?.aborted) {
+        const event = state.events[eventIndex];
+        if (event) {
+          eventIndex += 1;
+          afterSeq = event.seq;
+          yield {
+            event: "message",
+            id: String(event.seq),
+            cursor: event.seq,
+            json: event,
+          };
+          continue;
         }
-      });
+        if (state.done) {
+          if (state.error) throw state.error;
+          return;
+        }
+        await new Promise<void>((resolve) => {
+          const wake = () => {
+            input.signal?.removeEventListener("abort", wake);
+            resolve();
+          };
+          state.waiters.add(wake);
+          input.signal?.addEventListener("abort", wake, { once: true });
+          if (
+            state.done ||
+            state.events.some((candidate) => candidate.seq > afterSeq)
+          ) {
+            state.waiters.delete(wake);
+            wake();
+          }
+        });
+      }
+    } finally {
+      this.#pruneRunCaches();
     }
   }
 

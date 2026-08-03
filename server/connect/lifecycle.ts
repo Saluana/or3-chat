@@ -196,6 +196,9 @@ export async function reconcileClaimedConnectEnvironment(
                 environmentName: environment.name,
                 namespace: `or3-chat:${workspaceId}:`,
                 controlToken: access.controlToken,
+                driver: access.driver,
+                runtime: access.runtime,
+                basePath: access.basePath,
                 tunnel: {
                     accountTag: tunnel.accountTag,
                     tunnelId: tunnel.tunnelId,

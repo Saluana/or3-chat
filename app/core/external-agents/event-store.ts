@@ -369,14 +369,20 @@ function timelineTerminalStatus(
   if (
     event.type === "error" &&
     rawType !== "runner_output" &&
-    (rawType === "error" ||
+    (rawType === "" ||
+      rawType === "error" ||
       rawType === "failed" ||
       rawType.endsWith(".error") ||
       rawType.endsWith("/error") ||
       rawType.endsWith(".failed") ||
       rawType.endsWith("/failed"))
-  )
-    return "failed";
+  ) {
+    const status = String(
+      event.payload.status ?? event.payload.state ?? "failed",
+    ).toLowerCase();
+    if (["failed", "error", "timed_out", "timeout"].includes(status))
+      return "failed";
+  }
   if (
     event.type !== "status" ||
     ![

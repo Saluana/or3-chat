@@ -28,6 +28,15 @@ prints the sign-in URL for headless systems.
 Remote mode requires an OR3 Cloud account. Offline/local OR3 never requires an
 account and does not contact this control plane.
 
+`OR3_CONNECT_PUBLIC_URL` must be the URL that the connecting computer can open
+in its browser. If OR3 Chat is only running on your computer, do not enable
+remote Connect just to connect a local runtime: leave `OR3_CONNECT_ENABLED`
+false and connect directly to the local agent service. If the runtime is on a
+different computer, first deploy OR3 Chat or expose the local development
+server through a stable HTTPS tunnel; then use that HTTPS address here. A
+`127.0.0.1` or `localhost` value only works when the connecting computer is
+the same computer running OR3 Chat.
+
 ## Server configuration
 
 OR3 Connect uses two independent provider contracts:
@@ -58,6 +67,20 @@ OR3_CONNECT_CLOUDFLARE_ZONE_ID=...
 OR3_CONNECT_CLOUDFLARE_API_TOKEN=...
 OR3_CONNECT_HOSTNAME_SUFFIX=connect.or3.chat
 ```
+
+You do not deploy the OR3 application to Cloudflare for this to work. The OR3
+server calls the Cloudflare API to create and revoke per-computer named
+tunnels, while `cloudflared` runs on the user's connected computer and only
+proxies that computer's loopback service. The Cloudflare credentials below
+belong in the OR3 server's secret environment (or deployment secret manager);
+they are never entered into `npx @or3/connect` and are never sent to a runtime
+host.
+
+The OR3 setup wizard verifies the tunnel and DNS permissions and writes the
+matching `OR3_CONNECT_CLOUDFLARE_VALIDATION_ATTESTATION`. When configuring a
+strict production deployment by hand, preserve that attestation with the
+other server secrets; it is a signed verification result, not a replacement
+for the API token.
 
 `OR3_CONNECT_PROVIDER` is optional and defaults to `OR3_SYNC_PROVIDER`.
 `OR3_CONNECT_RELAY_PROVIDER` defaults to `cloudflare`.

@@ -33,9 +33,33 @@ describe("external agent persistence", () => {
       expect(externalAgentDriver(parsed.hosts[0]!)).toBe(driver);
   });
 
+  it("preserves an external runtime identity alongside its Runs driver", () => {
+    const parsed = parseExternalAgentPersistence({
+      hosts: [{ ...host, driver: "runs", runtime: "hermes" }],
+      activeHostId: host.id,
+      sessionRefs: [],
+    });
+
+    expect(parsed.hosts[0]).toEqual({ ...host, driver: "runs", runtime: "hermes" });
+  });
+
   it("drops hosts with an unknown driver and clears their active reference", () => {
     const parsed = parseExternalAgentPersistence({
       hosts: [{ ...host, driver: "openclaw" }],
+      activeHostId: host.id,
+      sessionRefs: [],
+    });
+
+    expect(parsed.hosts).toEqual([]);
+    expect(parsed.activeHostId).toBeNull();
+  });
+
+  it("drops persisted hosts with unsafe endpoints before connection startup", () => {
+    const parsed = parseExternalAgentPersistence({
+      hosts: [
+        { ...host, baseUrl: "https://agent.test/?token=leaked" },
+        { ...host, id: "host-2", baseUrl: "http://public.example" },
+      ],
       activeHostId: host.id,
       sessionRefs: [],
     });

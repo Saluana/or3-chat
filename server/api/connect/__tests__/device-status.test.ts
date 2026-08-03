@@ -43,6 +43,11 @@ vi.mock('../../../connect/crypto', () => ({
 
 vi.mock('../../../connect/helpers', () => ({
     noStore: vi.fn(),
+    normalizeConnectRuntimeMetadata: () => ({
+        runtime: 'intern',
+        driver: 'intern',
+        basePath: '/',
+    }),
     normalizeUserCode: (value: unknown) =>
         typeof value === 'string' ? value.trim().toUpperCase() : '',
 }));

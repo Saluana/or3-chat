@@ -21,6 +21,7 @@ export interface ExternalAgentHost {
   readonly baseUrl: string;
   readonly credentialRef: string;
   readonly driver?: ExternalAgentDriver;
+  readonly runtime?: "intern" | "openclaw" | "hermes";
   readonly trustedAt: string;
   readonly lastConnectedAt?: string;
 }
@@ -385,6 +386,8 @@ export interface ExternalAgentClient {
     attachments: readonly ExternalAgentUploadAttachment[],
     options?: { signal?: AbortSignal },
   ): Promise<readonly ExternalAgentAttachment[]>;
+  /** Release browser-side staged attachment bytes when a request never starts. */
+  releaseStagedFiles?(attachments: readonly ExternalAgentAttachment[]): void;
   getTurn(
     sessionId: string,
     turnId: string,

@@ -20,6 +20,23 @@ and any models/reasoning options exposed by the installed Hermes runtime.
 Use [the shared Runs connection guide](../../shared/external-agent-runs.md)
 for the common OR3-side connection and verification flow.
 
+## Preferred one-command setup
+
+When the user is on macOS or Linux and has OR3 Cloud access, prefer the
+official Connect bootstrap:
+
+```sh
+npx @or3/connect hermes
+```
+
+It detects or offers to install Hermes, checks provider readiness, configures
+the documented loopback API environment, opens the normal browser approval,
+and installs the managed Cloudflare tunnel service. The user should approve
+each displayed mutation. Re-running the command repairs an interrupted setup;
+`status`, `doctor`, and `disconnect` manage it later. Use the manual sections
+below only when the guided command is unavailable or the user is intentionally
+using the Advanced URL-and-token form.
+
 ## Required first steps
 
 1. Read [repository navigation](../../shared/repository-navigation.md), the
@@ -61,18 +78,7 @@ API_SERVER_CORS_ORIGINS=http://localhost:3000
 ```
 
 Generate the key only after approval, for example with `openssl rand -hex 32`,
-and do not echo it into a transcript. Hermes also supports this nested YAML
-shape in its supported configuration format:
-
-```yaml
-gateway:
-  api_server:
-    enabled: true
-    host: 127.0.0.1
-    port: 8642
-    key: <long-random-secret>
-    cors_origins: http://localhost:3000
-```
+and do not echo it into a transcript.
 
 Prefer the documented environment variables when there is uncertainty about
 configuration precedence. Do **not** rely on `hermes config set

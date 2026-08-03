@@ -106,6 +106,13 @@
         aria-label="External agent model"
         @update:model-value="setModel"
       />
+      <span
+        v-if="modelCatalogError"
+        class="block text-[11px] text-[var(--md-on-surface-variant)]"
+        role="status"
+      >
+        {{ modelCatalogError }}
+      </span>
     </label>
 
     <label v-if="reasoningItems.length" class="block space-y-1.5">
@@ -249,14 +256,15 @@ const modelItems = computed(() => {
       ),
   ];
 });
+const modelCatalogError = computed(() => {
+  const value = selectedOption.value?.runner.runtime?.model_catalog_error;
+  return typeof value === "string" && value.trim() ? value : "";
+});
 const selectedModelValue = computed(
   () => props.model ?? HOST_DEFAULT_MODEL_VALUE,
 );
 const selectedReasoning = computed(() =>
-  resolveExternalAgentModelReasoning(
-    selectedOption.value?.runner,
-    props.model,
-  ),
+  resolveExternalAgentModelReasoning(selectedOption.value?.runner, props.model),
 );
 const reasoningItems = computed(() => {
   const reasoning = selectedReasoning.value;
@@ -272,12 +280,11 @@ const reasoningItems = computed(() => {
     })),
   ];
 });
-const selectedReasoningValue = computed(
-  () =>
-    props.thinkingLevel &&
-    selectedReasoning.value?.values.includes(props.thinkingLevel)
-      ? props.thinkingLevel
-      : MODEL_DEFAULT_REASONING_VALUE,
+const selectedReasoningValue = computed(() =>
+  props.thinkingLevel &&
+  selectedReasoning.value?.values.includes(props.thinkingLevel)
+    ? props.thinkingLevel
+    : MODEL_DEFAULT_REASONING_VALUE,
 );
 const dangerousSelection = computed(() => {
   const option = selectedOption.value;
@@ -325,9 +332,6 @@ function setThinkingLevel(value: string) {
     );
     if (effectiveModel) emit("update:model", effectiveModel);
   }
-  emit(
-    "update:thinkingLevel",
-    thinkingLevel,
-  );
+  emit("update:thinkingLevel", thinkingLevel);
 }
 </script>

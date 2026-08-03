@@ -1,8 +1,8 @@
 # OR3 Runs for OpenClaw
 
 This plugin exposes OpenClaw's normal agent lifecycle to OR3 Chat at the
-Gateway's `/or3/` URL. It uses the Gateway's existing bearer token and adds no
-relay, account, database, or second credential.
+Gateway's `/or3/` URL. It can reuse the Gateway bearer token or use a dedicated
+OR3 bearer token while retaining the Gateway token for internal RPCs.
 
 ## Install
 
@@ -16,7 +16,7 @@ openclaw gateway restart
 If `plugins.allow` is configured, add `or3-runs` to its existing array. Do not
 replace the array, because doing so disables every plugin ID you omit.
 
-After this package is published, the first command can instead be
+For the published release, use the exact pinned package instead:
 `openclaw plugins install npm:@or3/openclaw@0.1.0 --pin`.
 
 In OR3 Chat, open **Agents → Connection settings → Advanced**, then enter:
@@ -27,7 +27,8 @@ In OR3 Chat, open **Agents → Connection settings → Advanced**, then enter:
 OR3 detects OpenClaw automatically. The plugin reuses a string-valued Gateway
 token from `gateway.auth.token` (or `OPENCLAW_GATEWAY_TOKEN`). If the Gateway
 uses a password, CLI-only token, or SecretRef, set the same bearer value at
-`plugins.entries.or3-runs.config.token`.
+`plugins.entries.or3-runs.config.token` and the internal Gateway bearer at
+`plugins.entries.or3-runs.config.gatewayToken`.
 
 The connection uses OpenClaw's configured model catalog and thinking levels,
 and reads the live built-in/plugin/skill command catalog from the Gateway.

@@ -19,6 +19,10 @@ export default {
       typeof api.pluginConfig?.token === "string"
         ? api.pluginConfig.token.trim()
         : "";
+    const configuredGatewayToken =
+      typeof api.pluginConfig?.gatewayToken === "string"
+        ? api.pluginConfig.gatewayToken.trim()
+        : "";
     const pluginOrigins = Array.isArray(api.pluginConfig?.allowedOrigins)
       ? api.pluginConfig.allowedOrigins.filter(
           (value) => typeof value === "string" && value.trim(),
@@ -33,6 +37,11 @@ export default {
           (typeof gatewayToken === "string" ? gatewayToken.trim() : "") ||
           process.env.OPENCLAW_GATEWAY_TOKEN?.trim() ||
           "",
+        gatewayToken:
+          configuredGatewayToken ||
+          (typeof gatewayToken === "string" ? gatewayToken.trim() : "") ||
+          process.env.OPENCLAW_GATEWAY_TOKEN?.trim() ||
+          "",
         allowedOrigins:
           pluginOrigins.length > 0
             ? pluginOrigins
@@ -42,37 +51,63 @@ export default {
     const gatewayRequest = (method, params, scopes, options = {}) =>
       callGatewayFromCli(
         method,
-        { token: resolveAccess().token, expectFinal: false, ...options },
+        { token: resolveAccess().gatewayToken, expectFinal: false, ...options },
         params,
         { expectFinal: false, scopes },
       );
     let bridge;
     let eventClient;
     let eventReady;
+    let eventReadyResolve;
+    let eventReadyReject;
+    let eventConnected = false;
+    let eventStopping = false;
     const ensureEventStream = () => {
+      if (eventClient && eventConnected) return Promise.resolve(eventClient);
       if (eventReady) return eventReady;
+      if (eventStopping)
+        return Promise.reject(new Error("OR3 event stream is stopping"));
+      if (eventClient && !eventConnected) {
+        // A previously connected client can have lost its socket while a new
+        // request is waiting. Stop it before replacing it so reconnect timers
+        // and listeners do not accumulate across failed cycles.
+        const previous = eventClient;
+        eventClient = undefined;
+        try {
+          const stopped = previous.stopAndWait?.() ?? previous.stop?.();
+          if (stopped && typeof stopped.then === "function")
+            stopped.catch(() => undefined);
+        } catch {
+          // The replacement connection is still safe to attempt.
+        }
+      }
       const gatewayConfig = api.runtime.config.current().gateway ?? {};
       const gatewayPort = Number(
         process.env.OPENCLAW_GATEWAY_PORT ?? gatewayConfig.port ?? 18789,
       );
-      let settled = false;
-      let resolveReady;
-      let rejectReady;
       eventReady = new Promise((resolve, reject) => {
-        resolveReady = resolve;
-        rejectReady = reject;
+        eventReadyResolve = resolve;
+        eventReadyReject = reject;
       });
+      let client;
+      let clientEverConnected = false;
       const rejectConnection = (error) => {
-        if (!settled) {
-        settled = true;
-        rejectReady(error);
-        }
+        if (eventClient !== client) return;
+        eventConnected = false;
+        const reject = eventReadyReject;
         eventReady = undefined;
-        eventClient = undefined;
+        eventReadyResolve = undefined;
+        eventReadyReject = undefined;
+        reject?.(error);
+        // A client that has never completed a handshake may be permanently
+        // failed. Drop it so the next request starts a clean connection.
+        // Once connected, GatewayClient owns reconnect/backoff; retaining the
+        // instance lets active runs resume without another API request.
+        if (!clientEverConnected) eventClient = undefined;
       };
-      eventClient = new GatewayClient({
+      client = new GatewayClient({
         url: `${gatewayConfig.tls?.enabled === true ? "wss" : "ws"}://127.0.0.1:${gatewayPort}`,
-        token: resolveAccess().token,
+        token: resolveAccess().gatewayToken,
         deviceIdentity: null,
         clientName: "gateway-client",
         clientDisplayName: "OR3 Runs",
@@ -80,12 +115,19 @@ export default {
         role: "operator",
         scopes: ["operator.admin"],
         onEvent: (event) => {
-          if (event.event === "chat") bridge.handleChatEvent(event.payload);
+          if (eventClient === client && event.event === "chat") {
+            bridge.handleChatEvent(event.payload);
+          }
         },
         onHelloOk: () => {
-          if (settled) return;
-          settled = true;
-          resolveReady();
+          if (eventClient !== client) return;
+          eventConnected = true;
+          clientEverConnected = true;
+          const resolve = eventReadyResolve;
+          eventReady = undefined;
+          eventReadyResolve = undefined;
+          eventReadyReject = undefined;
+          resolve?.(client);
         },
         onConnectError: (error) => {
           api.logger.warn(
@@ -99,15 +141,17 @@ export default {
           );
         },
       });
+      eventClient = client;
+      const ready = eventReady;
       eventClient.start();
-      return eventReady;
+      return ready;
     };
     bridge = new Or3RunsBridge({
       agentId,
       control: {
         start: async (params) => {
-          await ensureEventStream();
-          return eventClient.request("chat.send", params, {
+          const client = await ensureEventStream();
+          return client.request("chat.send", params, {
             expectFinal: false,
           });
         },
@@ -142,8 +186,8 @@ export default {
             "operator.write",
           ]),
         stop: async (params) => {
-          await ensureEventStream();
-          return eventClient.request("chat.abort", params, {
+          const client = await ensureEventStream();
+          return client.request("chat.abort", params, {
             expectFinal: false,
           });
         },
@@ -164,9 +208,16 @@ export default {
       id: "or3-runs-chat-events",
       cleanup: async () => {
         const client = eventClient;
-        eventClient = undefined;
+        eventStopping = true;
+        eventConnected = false;
+        const reject = eventReadyReject;
         eventReady = undefined;
-        await client?.stopAndWait().catch(() => client.stop());
+        eventReadyResolve = undefined;
+        eventReadyReject = undefined;
+        reject?.(new Error("OR3 event stream stopped"));
+        eventClient = undefined;
+        if (!client) return;
+        await client.stopAndWait().catch(() => client.stop());
       },
     });
 

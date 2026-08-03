@@ -423,6 +423,59 @@ describe("ExternalAgentController", () => {
     expect(createClient).toHaveBeenCalledTimes(2);
   });
 
+  it("skips one malformed cloud host without relabelling or deleting healthy hosts", async () => {
+    const cloudA: ExternalAgentHost = {
+      id: "or3-connect:env-a",
+      name: "Cloud A",
+      baseUrl: "https://env-a.connect.or3.test",
+      credentialRef: "cloud-a-credential",
+      driver: "runs",
+      runtime: "hermes",
+      trustedAt: "2026-07-27T00:00:00.000Z",
+    };
+    const saved = persistence({
+      hosts: [host, cloudA],
+      activeHostId: host.id,
+      sessionRefs: [],
+    });
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: vault({
+        "cred-1": "direct-token",
+        "cloud-a-credential": "old-cloud-token",
+      }),
+      createClient: () => fakeClient(),
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await expect(
+      controller.reconcileCloudHosts("workspace-a", [
+        {
+          environmentId: "env-a",
+          name: "Cloud A",
+          baseUrl: "not-a-url",
+          token: "new-cloud-token",
+          driver: "runs",
+          runtime: "hermes",
+        },
+      ]),
+    ).resolves.toBeUndefined();
+
+    expect(controller.snapshot.hosts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: host.id }),
+        expect.objectContaining({
+          id: cloudA.id,
+          driver: "runs",
+          runtime: "hermes",
+          baseUrl: cloudA.baseUrl,
+        }),
+      ]),
+    );
+    expect(controller.snapshot.activeHostId).toBe(host.id);
+  });
+
   it("rejects a cloud inventory that completes after its workspace lease changes", async () => {
     const putStarted = deferred<void>();
     const releasePut = deferred<void>();
@@ -1257,6 +1310,146 @@ describe("ExternalAgentController", () => {
       mode: "safe_edit",
       isolation: "host_workspace_write",
     });
+  });
+
+  it("does not replay model settings while executing a slash command", async () => {
+    const client = fakeClient();
+    client.listRunners = vi.fn(async () => ({
+      runners: [
+        {
+          id: "codex",
+          display_name: "Codex",
+          status: "available",
+          auth_status: "ready",
+          supports: {
+            chat: { chatSelectable: true, chatReplay: true },
+          },
+          models: [{ id: "old-model" }, { id: "new-model" }],
+        },
+      ],
+    }));
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    const launched = await controller.launch({
+      runnerId: "codex",
+      instruction: "Choose a model",
+      mode: "review",
+      isolation: "host_readonly",
+      model: "old-model",
+    });
+    launched.status = "succeeded";
+    launched.activeTurnId = undefined;
+
+    await controller.followUp(launched.remoteSessionId, {
+      instruction: "/model new-model",
+      mode: "review",
+      isolation: "host_readonly",
+      model: "old-model",
+    });
+
+    expect(client.startTurn).toHaveBeenLastCalledWith(
+      launched.remoteSessionId,
+      {
+        user_message: "/model new-model",
+        continuation_mode: "replay",
+        mode: "review",
+        isolation: "host_readonly",
+        cwd: undefined,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(launched.model).toBe("old-model");
+  });
+
+  it("releases the composer immediately when a local slash command completes", async () => {
+    const client = fakeClient();
+    client.listRunners = vi.fn(async () => ({
+      runners: [
+        {
+          id: "codex",
+          display_name: "Codex",
+          status: "available",
+          auth_status: "ready",
+          supports: {
+            chat: { chatSelectable: true, chatReplay: true },
+          },
+          models: [{ id: "old-model" }, { id: "new-model" }],
+        },
+      ],
+    }));
+    client.startTurn = vi.fn(async () => ({
+      session_id: "session-1",
+      turn_id: "local-command-1",
+      status: "completed",
+    }));
+    client.getTurn = vi.fn(async () => ({
+      id: "local-command-1",
+      session_id: "session-1",
+      sequence: 2,
+      status: "completed",
+      continuation_mode: "replay",
+      requested_at: 1_730_000_001_000,
+      completed_at: 1_730_000_001_001,
+      user_message: "/model new-model",
+      final_text: "Model set to new-model.",
+    }));
+    client.listTurnEvents = vi.fn(async () => ({
+      events: [
+        {
+          id: 1,
+          turn_id: "local-command-1",
+          seq: 1,
+          ts: 1_730_000_001_001,
+          type: "turn.completed",
+          payload: { status: "completed" },
+        },
+      ],
+    }));
+    const streamTurn = vi.spyOn(client, "streamTurn");
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    const session = await controller.launch({
+      runnerId: "codex",
+      instruction: "Choose a model",
+      mode: "review",
+      isolation: "host_readonly",
+      model: "old-model",
+    });
+    session.status = "succeeded";
+    session.activeTurnId = undefined;
+
+    await controller.followUp(session.remoteSessionId, {
+      instruction: "/model new-model",
+      mode: "review",
+      isolation: "host_readonly",
+      model: "old-model",
+    });
+
+    expect(controller.snapshot.sessions[0]).toMatchObject({
+      status: "succeeded",
+      activeTurnId: undefined,
+    });
+    expect(streamTurn).not.toHaveBeenCalled();
   });
 
   it("sends an advertised reasoning level with the first turn", async () => {

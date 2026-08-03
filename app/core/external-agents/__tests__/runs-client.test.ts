@@ -252,6 +252,150 @@ describe("RunsExternalAgentClient", () => {
     });
   });
 
+  it("falls back to Hermes's stable model-options route when capabilities omit it", async () => {
+    const requests: string[] = [];
+    const fetch = vi.fn<RunsFetch>(async (input) => {
+      const path = pathOf(input);
+      requests.push(path);
+      if (path === "/v1/capabilities") {
+        // This is the shape returned by older Hermes API servers: Runs is
+        // advertised, but model_options is not yet listed in endpoints.
+        return json({
+          object: "hermes.api_server.capabilities",
+          platform: "hermes-agent",
+          model: "hermes-agent",
+          features: {
+            session_resources: true,
+            run_events_sse: true,
+            run_stop: true,
+          },
+        });
+      }
+      if (path === "/api/model/options") {
+        return json({
+          provider: "portal",
+          model: "portal/model-a",
+          providers: [
+            {
+              slug: "portal",
+              name: "Nous Portal",
+              authenticated: true,
+              is_current: true,
+              models: ["portal/model-a", "portal/model-b"],
+              capabilities: {
+                "portal/model-a": { reasoning: true },
+              },
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+
+    await expect(client.listRunners()).resolves.toMatchObject({
+      runners: [
+        {
+          status: "available",
+          models: [
+            expect.objectContaining({
+              id: "portal/model-a",
+              provider: "portal",
+              default: true,
+            }),
+            expect.objectContaining({ id: "portal/model-b" }),
+          ],
+        },
+      ],
+    });
+    expect(requests).toEqual(["/v1/capabilities", "/api/model/options"]);
+  });
+
+  it("keeps duplicate model ids selectable by provider", async () => {
+    const requests: Array<{ path: string; body?: unknown }> = [];
+    const fetch = vi.fn<RunsFetch>(async (input, init) => {
+      const path = pathOf(input);
+      requests.push({
+        path,
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      });
+      if (path === "/v1/capabilities") {
+        return json({
+          ...capabilities,
+          endpoints: {
+            ...capabilities.endpoints,
+            model_options: { method: "GET", path: "/api/model/options" },
+          },
+        });
+      }
+      if (path === "/api/model/options") {
+        return json({
+          providers: [
+            {
+              slug: "portal",
+              name: "Portal",
+              authenticated: true,
+              models: ["shared-model"],
+            },
+            {
+              slug: "fallback",
+              name: "Fallback",
+              authenticated: true,
+              models: ["shared-model"],
+            },
+          ],
+        });
+      }
+      if (path === "/v1/runs") {
+        return json({ run_id: "run-duplicate-model", status: "started" }, 202);
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+
+    const runners = await client.listRunners();
+    expect(runners.runners[0]?.models).toEqual([
+      expect.objectContaining({
+        id: "portal/shared-model",
+        provider: "portal",
+      }),
+      expect.objectContaining({
+        id: "fallback/shared-model",
+        provider: "fallback",
+      }),
+    ]);
+    await client.startTurn("session-duplicate-model", {
+      user_message: "use fallback",
+      model: "fallback/shared-model",
+    });
+    expect(requests.at(-1)).toEqual({
+      path: "/v1/runs",
+      body: expect.objectContaining({
+        model: "shared-model",
+        provider: "fallback",
+      }),
+    });
+  });
+
+  it("deduplicates concurrent capability discovery", async () => {
+    let capabilityRequests = 0;
+    const fetch = vi.fn<RunsFetch>(async (input) => {
+      if (pathOf(input) !== "/v1/capabilities")
+        throw new Error(`Unexpected request: ${pathOf(input)}`);
+      capabilityRequests += 1;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return json(capabilities);
+    });
+    const client = clientWith(fetch);
+
+    await Promise.all([
+      client.capabilities(),
+      client.listRunners(),
+      client.capabilities(),
+    ]);
+    expect(capabilityRequests).toBe(1);
+  });
+
   it("handles fallback control commands locally without starting generation", async () => {
     const requests: string[] = [];
     const fetch = vi.fn<RunsFetch>(async (input) => {
@@ -299,10 +443,134 @@ describe("RunsExternalAgentClient", () => {
     expect(requests).toEqual(["/v1/capabilities", "/api/model/options"]);
     expect(events).toEqual([
       expect.objectContaining({
+        type: "command.choices",
+        payload: {
+          rawType: "command.choices",
+          choices: [{ label: "Portal (1)", command: "/models portal" }],
+        },
+      }),
+      expect.objectContaining({
         type: "turn.completed",
         payload: { status: "completed" },
       }),
     ]);
+  });
+
+  it("shows model choices locally and applies a selected model without generation", async () => {
+    const requests: Array<{ path: string; method?: string }> = [];
+    const fetch = vi.fn<RunsFetch>(async (input, init) => {
+      const path = pathOf(input);
+      requests.push({ path, method: init?.method });
+      if (path === "/v1/capabilities") {
+        return json({
+          ...capabilities,
+          model: "vendor/model-a",
+          endpoints: {
+            ...capabilities.endpoints,
+            model_options: { method: "GET", path: "/api/model/options" },
+          },
+        });
+      }
+      if (path === "/api/model/options") {
+        return json({
+          provider: "portal",
+          model: "vendor/model-a",
+          providers: [
+            {
+              slug: "portal",
+              name: "Portal",
+              authenticated: true,
+              models: ["vendor/model-a", "vendor/model-b"],
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+    await client.listRunners();
+    const provider = await client.startTurn("session-model", {
+      user_message: "/models",
+    });
+    const providerEvents = [];
+    for await (const event of client.streamTurn(
+      "session-model",
+      provider.turn_id,
+    )) {
+      providerEvents.push(event.json);
+    }
+    expect(providerEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "command.choices" }),
+      ]),
+    );
+
+    const selected = await client.startTurn("session-model", {
+      user_message: "/model vendor/model-b",
+    });
+    expect(selected.status).toBe("completed");
+    expect(requests.map(({ path }) => path)).toEqual([
+      "/v1/capabilities",
+      "/api/model/options",
+    ]);
+  });
+
+  it("forwards advertised interactive model selections to the runtime", async () => {
+    const requests: Array<{ path: string; body?: unknown }> = [];
+    const fetch = vi.fn<RunsFetch>(async (input, init) => {
+      const path = pathOf(input);
+      requests.push({
+        path,
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      });
+      if (path === "/v1/capabilities") {
+        return json({
+          ...capabilities,
+          features: {
+            ...capabilities.features,
+            interactive_commands: true,
+          },
+          model: "vendor/model-a",
+          endpoints: {
+            ...capabilities.endpoints,
+            model_options: { method: "GET", path: "/api/model/options" },
+          },
+        });
+      }
+      if (path === "/api/model/options") {
+        return json({
+          provider: "portal",
+          model: "vendor/model-a",
+          providers: [
+            {
+              slug: "portal",
+              name: "Portal",
+              authenticated: true,
+              models: ["vendor/model-a", "vendor/model-b"],
+            },
+          ],
+        });
+      }
+      if (path === "/v1/runs") {
+        return json(
+          { run_id: "run-interactive-model", status: "started" },
+          202,
+        );
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+    await client.listRunners();
+
+    const selected = await client.startTurn("session-interactive", {
+      user_message: "/model vendor/model-b",
+    });
+
+    expect(selected.status).toBe("queued");
+    expect(requests).toContainEqual({
+      path: "/v1/runs",
+      body: expect.objectContaining({ input: "/model vendor/model-b" }),
+    });
   });
 
   it("maps sessions and reconstructs turns from message history", async () => {
@@ -410,6 +678,89 @@ describe("RunsExternalAgentClient", () => {
     ).resolves.toEqual({ events: [] });
   });
 
+  it("keeps a tool-only history turn active until terminal evidence exists", async () => {
+    const fetch = vi.fn<RunsFetch>(async (input) => {
+      const path = pathOf(input);
+      if (path.endsWith("/messages")) {
+        return json({
+          data: [
+            {
+              id: "message-user-tool",
+              role: "user",
+              content: "run the check",
+              timestamp: 1_750_000_001,
+            },
+            {
+              id: "message-tool",
+              role: "tool",
+              tool_name: "terminal",
+              status: "completed",
+              timestamp: 1_750_000_002,
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+
+    await expect(client.listTurns("session-tool-active")).resolves.toEqual({
+      turns: [
+        expect.objectContaining({
+          id: "message-user-tool",
+          status: "running",
+          completed_at: undefined,
+        }),
+      ],
+    });
+    await expect(
+      client.listTurnEvents("session-tool-active", "message-user-tool"),
+    ).resolves.toEqual({
+      events: expect.arrayContaining([
+        expect.objectContaining({ type: "tool.completed" }),
+      ]),
+    });
+  });
+
+  it("does not treat null completion timestamps as terminal history evidence", async () => {
+    const fetch = vi.fn<RunsFetch>(async (input) => {
+      const path = pathOf(input);
+      if (path.endsWith("/messages")) {
+        return json({
+          data: [
+            {
+              id: "message-user-null-terminal",
+              role: "user",
+              content: "still running",
+              timestamp: 1_750_000_001,
+              completed_at: null,
+            },
+            {
+              id: "message-tool-null-terminal",
+              role: "tool",
+              tool_name: "terminal",
+              status: "running",
+              completed_at: null,
+              timestamp: 1_750_000_002,
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+
+    await expect(client.listTurns("session-null-terminal")).resolves.toEqual({
+      turns: [
+        expect.objectContaining({
+          id: "message-user-null-terminal",
+          status: "running",
+          completed_at: undefined,
+        }),
+      ],
+    });
+  });
+
   it("parses CRLF frames split across chunks and a final unterminated frame", async () => {
     const fetch = vi.fn<RunsFetch>(async (input, init) => {
       const path = pathOf(input);
@@ -441,6 +792,50 @@ describe("RunsExternalAgentClient", () => {
     ]);
   });
 
+  it("reopens an event stream after a non-terminal disconnect", async () => {
+    let eventRequests = 0;
+    const fetch = vi.fn<RunsFetch>(async (input, init) => {
+      const path = pathOf(input);
+      if (path === "/v1/runs" && init?.method === "POST") {
+        return json({ run_id: "run-reconnect", status: "started" }, 202);
+      }
+      if (path === "/v1/runs/run-reconnect/events") {
+        eventRequests += 1;
+        return eventRequests === 1
+          ? sse(['data: {"event":"message.delta","delta":"partial"}\n\n'])
+          : sse(['data: {"event":"run.completed","output":"done"}\n\n']);
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const client = clientWith(fetch);
+    const started = await client.startTurn("session-reconnect", {
+      user_message: "hello",
+    });
+    const first = [];
+    for await (const event of client.streamTurn(
+      "session-reconnect",
+      started.turn_id,
+    )) {
+      first.push(event.json);
+    }
+    const second = [];
+    for await (const event of client.streamTurn(
+      "session-reconnect",
+      started.turn_id,
+      { afterSeq: 1 },
+    )) {
+      second.push(event.json);
+    }
+
+    expect(eventRequests).toBe(2);
+    expect(first).toEqual([
+      expect.objectContaining({ type: "text_delta", text: "partial" }),
+    ]);
+    expect(second).toEqual([
+      expect.objectContaining({ type: "turn.completed" }),
+    ]);
+  });
+
   it("rejects an event stream that closes without a supported event", async () => {
     const fetch = vi.fn<RunsFetch>(async (input, init) => {
       const path = pathOf(input);
@@ -465,6 +860,48 @@ describe("RunsExternalAgentClient", () => {
         }
       })(),
     ).rejects.toThrow("Agent event stream closed without events");
+  });
+
+  it("releases earlier staged files when a later attachment cannot be read", async () => {
+    const fetch = vi.fn<RunsFetch>(async () => {
+      throw new Error("The request should not start");
+    });
+    const client = clientWith(fetch);
+    const unreadable = new Blob(["bad"]);
+    Object.defineProperty(unreadable, "arrayBuffer", {
+      value: () => Promise.reject(new Error("read failed")),
+    });
+
+    await expect(
+      client.stageFiles([
+        {
+          id: "staged-before-failure",
+          kind: "file",
+          name: "ok.txt",
+          data: new Blob(["ok"]),
+        },
+        {
+          id: "staged-failure",
+          kind: "file",
+          name: "bad.txt",
+          data: unreadable,
+        },
+      ]),
+    ).rejects.toThrow("read failed");
+    await expect(
+      client.startTurn("session-attachments", {
+        user_message: "retry",
+        attachments: [
+          {
+            id: "staged-before-failure",
+            source: "local_artifact",
+            kind: "file",
+            name: "ok.txt",
+          },
+        ],
+      }),
+    ).rejects.toThrow("attachment is no longer available");
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("forwards slash commands unchanged and translates chunked run events", async () => {

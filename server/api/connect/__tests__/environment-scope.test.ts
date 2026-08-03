@@ -64,6 +64,11 @@ vi.mock('../../../connect/crypto', () => ({
 
 vi.mock('../../../connect/helpers', () => ({
     noStore: vi.fn(),
+    normalizeConnectRuntimeMetadata: () => ({
+        runtime: 'intern',
+        driver: 'intern',
+        basePath: '/',
+    }),
 }));
 
 const requireSameOriginMutationMock = vi.fn();

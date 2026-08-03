@@ -1,5 +1,6 @@
 import type {
   ExternalAgentApprovalInput,
+  ExternalAgentAttachment,
   ExternalAgentClient,
   ExternalAgentCreateSessionInput,
   ExternalAgentStartTurnInput,
@@ -27,6 +28,13 @@ export class ExternalAgentTurnCommandService {
     return uploads.length
       ? client.stageFiles(uploads, { signal })
       : Promise.resolve([]);
+  }
+
+  releaseFiles(
+    client: ExternalAgentClient,
+    attachments: readonly ExternalAgentAttachment[],
+  ): void {
+    client.releaseStagedFiles?.(attachments);
   }
 
   startTurn(

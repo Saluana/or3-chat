@@ -31,6 +31,8 @@ import type {
   ExternalAgentClient,
   ExternalAgentClientFactory,
   ExternalAgentCredentialVault,
+  ExternalAgentAttachment,
+  ExternalAgentDriver,
   ExternalAgentDriverDetector,
   ExternalAgentFollowUpInput,
   ExternalAgentHost,
@@ -463,6 +465,8 @@ export class ExternalAgentController {
     readonly name: string;
     readonly baseUrl: string;
     readonly token: string;
+    readonly driver?: ExternalAgentDriver;
+    readonly runtime?: "intern" | "openclaw" | "hermes";
     readonly activate?: boolean;
   }): Promise<ExternalAgentHost> {
     const lease = this.#requireWorkspaceLease();
@@ -485,6 +489,8 @@ export class ExternalAgentController {
       name: input.name.trim() || previous?.name || environmentId,
       baseUrl,
       credentialRef,
+      driver: input.driver,
+      runtime: input.runtime,
       trustedAt: previous?.trustedAt ?? nowIso(),
       lastConnectedAt: previous?.lastConnectedAt,
     };
@@ -522,6 +528,8 @@ export class ExternalAgentController {
       readonly name: string;
       readonly baseUrl: string;
       readonly token: string;
+      readonly driver?: ExternalAgentDriver;
+      readonly runtime?: "intern" | "openclaw" | "hermes";
     }[],
   ): Promise<void> {
     const lease = this.#requireWorkspaceLease();
@@ -536,24 +544,79 @@ export class ExternalAgentController {
         throw this.#staleWorkspaceError();
       }
     };
-    const normalized = environments.map((environment) => {
+    const malformedCloudIds = new Set<string>();
+    const normalized: Array<{
+      environmentId: string;
+      name: string;
+      baseUrl: string;
+      token: string;
+      driver?: ExternalAgentDriver;
+      runtime?: "intern" | "openclaw" | "hermes";
+    }> = [];
+    const seenCloudIds = new Set<string>();
+    let malformedCloudCount = 0;
+    for (const environment of environments) {
       const environmentId = environment.environmentId.trim();
-      const token = environment.token.trim();
-      if (!environmentId || !token) {
-        throw new Error("Cloud computer details are incomplete.");
+      try {
+        const token = environment.token.trim();
+        if (!environmentId || !token) {
+          throw new Error("missing environment identity or credential");
+        }
+        if (seenCloudIds.has(environmentId)) {
+          throw new Error("duplicate environment identity");
+        }
+        if (
+          environment.driver !== undefined &&
+          environment.driver !== "intern" &&
+          environment.driver !== "runs"
+        ) {
+          throw new Error("unknown connection driver");
+        }
+        if (
+          environment.runtime !== undefined &&
+          environment.runtime !== "intern" &&
+          environment.runtime !== "openclaw" &&
+          environment.runtime !== "hermes"
+        ) {
+          throw new Error("unknown runtime identity");
+        }
+        if (
+          (environment.runtime === "intern" &&
+            environment.driver === "runs") ||
+          (environment.runtime !== undefined &&
+            environment.runtime !== "intern" &&
+            environment.driver !== "runs")
+        ) {
+          throw new Error("runtime and driver do not match");
+        }
+        const baseUrl = normalizeExternalAgentBaseUrl(environment.baseUrl);
+        if (environment.runtime === "openclaw" && !baseUrl.endsWith("/or3")) {
+          throw new Error("OpenClaw host URL is missing /or3/");
+        }
+        if (
+          environment.runtime === "hermes" &&
+          new URL(baseUrl).pathname !== "/"
+        ) {
+          throw new Error("Hermes host URL must use the root path");
+        }
+        seenCloudIds.add(environmentId);
+        normalized.push({
+          environmentId,
+          name: environment.name.trim() || environmentId,
+          baseUrl,
+          token,
+          driver: environment.driver,
+          runtime: environment.runtime,
+        });
+      } catch (error) {
+        malformedCloudCount += 1;
+        if (environmentId) malformedCloudIds.add(environmentId);
+        console.warn(
+          `[external-agents] skipped malformed cloud host${
+            environmentId ? ` ${environmentId}` : ""
+          }: ${error instanceof Error ? error.message : "invalid record"}`,
+        );
       }
-      return {
-        environmentId,
-        name: environment.name.trim() || environmentId,
-        baseUrl: normalizeExternalAgentBaseUrl(environment.baseUrl),
-        token,
-      };
-    });
-    if (
-      new Set(normalized.map((environment) => environment.environmentId))
-        .size !== normalized.length
-    ) {
-      throw new Error("Cloud computer inventory contains duplicate IDs.");
     }
 
     const previousCloudHosts = this.#hosts.filter((host) =>
@@ -576,13 +639,21 @@ export class ExternalAgentController {
         name: environment.name,
         baseUrl: environment.baseUrl,
         credentialRef,
+        driver: environment.driver,
+        runtime: environment.runtime,
         trustedAt: previous?.trustedAt ?? nowIso(),
         lastConnectedAt: previous?.lastConnectedAt,
       });
     }
     assertCurrent();
 
-    const nextCloudIds = new Set(nextCloudHosts.map((host) => host.id));
+    const retainedMalformedCloudHosts = previousCloudHosts.filter(
+      (host) =>
+        !nextCloudHosts.some((candidate) => candidate.id === host.id) &&
+        malformedCloudIds.has(host.id.slice("or3-connect:".length)),
+    );
+    const cloudHosts = [...nextCloudHosts, ...retainedMalformedCloudHosts];
+    const nextCloudIds = new Set(cloudHosts.map((host) => host.id));
     const missingCloudHosts = previousCloudHosts.filter(
       (host) => !nextCloudIds.has(host.id),
     );
@@ -597,18 +668,22 @@ export class ExternalAgentController {
       nextActiveHostId?.startsWith("or3-connect:") &&
       !nextCloudIds.has(nextActiveHostId)
     ) {
-      nextActiveHostId = nextCloudHosts[0]?.id ?? null;
+      nextActiveHostId = cloudHosts[0]?.id ?? null;
     } else if (!nextActiveHostId) {
-      nextActiveHostId = nextCloudHosts[0]?.id ?? null;
+      nextActiveHostId = cloudHosts[0]?.id ?? null;
     }
-    const nextActiveHost = [...directHosts, ...nextCloudHosts].find(
+    const nextActiveHost = [...directHosts, ...cloudHosts].find(
       (host) => host.id === nextActiveHostId,
     );
     const activeHostChanged = nextActiveHostId !== this.#activeHostId;
     const activeEndpointChanged =
       Boolean(previousActiveHost && nextActiveHost) &&
       previousActiveHost!.baseUrl !== nextActiveHost!.baseUrl;
-    if (activeHostChanged || activeEndpointChanged) {
+    const activeRuntimeChanged =
+      Boolean(previousActiveHost && nextActiveHost) &&
+      (previousActiveHost!.driver !== nextActiveHost!.driver ||
+        previousActiveHost!.runtime !== nextActiveHost!.runtime);
+    if (activeHostChanged || activeEndpointChanged || activeRuntimeChanged) {
       this.#abortActiveWork();
       this.#generation += 1;
       this.#client = null;
@@ -619,8 +694,12 @@ export class ExternalAgentController {
       this.#capabilities = null;
       this.#runners = [];
     }
-    this.#hosts = [...directHosts, ...nextCloudHosts];
+    this.#hosts = [...directHosts, ...cloudHosts];
     this.#activeHostId = nextActiveHostId;
+    if (malformedCloudCount && !normalized.length && !nextActiveHost) {
+      this.#connectionError =
+        "Cloud host details were incomplete, so no new cloud hosts were loaded.";
+    }
     await this.#persist(lease);
     assertCurrent();
 
@@ -633,6 +712,7 @@ export class ExternalAgentController {
       nextActiveHost?.id.startsWith("or3-connect:") &&
       (activeHostChanged ||
         activeEndpointChanged ||
+        activeRuntimeChanged ||
         this.#connectionState === "disconnected" ||
         this.#connectionState === "offline");
     if (shouldReconnectCloudHost && nextActiveHost) {
@@ -1054,40 +1134,42 @@ export class ExternalAgentController {
           this.#connections.hostSignal,
         )
       : [];
-    this.#assertGeneration(hostId, generation);
-    this.#assertWorkspaceLease(lease);
-    const appSessionKey = `${this.#workspaceSessionPrefix(true, lease)}${randomId("session")}`;
-    const remote = await this.#commands.createSession(
-      client,
-      {
-        app_session_key: appSessionKey,
-        runner_id: effectiveInput.runnerId,
-        continuation_mode: effectiveInput.continuationMode ?? "replay",
-        model: effectiveInput.model?.trim() || undefined,
-        mode: effectiveInput.mode,
-        isolation: effectiveInput.isolation,
-        cwd: effectiveInput.cwd?.trim() || undefined,
-      },
-      this.#connections.hostSignal,
-    );
-    this.#assertGeneration(hostId, generation);
-    this.#assertWorkspaceLease(lease);
-    const session = sessionFromRemote(hostId, generation, remote, {
-      hostId,
-      remoteSessionId: remote.id,
-      title: instruction.slice(0, 80),
-      runnerId: effectiveInput.runnerId,
-    });
-    session.model = effectiveInput.model?.trim() || remote.model;
-    session.thinkingLevel =
-      effectiveInput.thinkingLevel?.toLowerCase().trim() || undefined;
-    this.#sessions.set(session);
-    this.#rememberSession(session);
-    await this.#persist(lease);
-    this.#assertWorkspaceLease(lease);
-    this.#emit({ type: "session", session });
-
+    let attachmentsTransferred = false;
+    let session: ExternalAgentSession | undefined;
     try {
+      this.#assertGeneration(hostId, generation);
+      this.#assertWorkspaceLease(lease);
+      const appSessionKey = `${this.#workspaceSessionPrefix(true, lease)}${randomId("session")}`;
+      const remote = await this.#commands.createSession(
+        client,
+        {
+          app_session_key: appSessionKey,
+          runner_id: effectiveInput.runnerId,
+          continuation_mode: effectiveInput.continuationMode ?? "replay",
+          model: effectiveInput.model?.trim() || undefined,
+          mode: effectiveInput.mode,
+          isolation: effectiveInput.isolation,
+          cwd: effectiveInput.cwd?.trim() || undefined,
+        },
+        this.#connections.hostSignal,
+      );
+      this.#assertGeneration(hostId, generation);
+      this.#assertWorkspaceLease(lease);
+      session = sessionFromRemote(hostId, generation, remote, {
+        hostId,
+        remoteSessionId: remote.id,
+        title: instruction.slice(0, 80),
+        runnerId: effectiveInput.runnerId,
+      });
+      session.model = effectiveInput.model?.trim() || remote.model;
+      session.thinkingLevel =
+        effectiveInput.thinkingLevel?.toLowerCase().trim() || undefined;
+      this.#sessions.set(session);
+      this.#rememberSession(session);
+      await this.#persist(lease);
+      this.#assertWorkspaceLease(lease);
+      this.#emit({ type: "session", session });
+
       const started = await this.#commands.startTurn(
         client,
         remote.id,
@@ -1104,29 +1186,38 @@ export class ExternalAgentController {
         },
         this.#connections.hostSignal,
       );
+      attachmentsTransferred = true;
+      this.#commands.releaseFiles(client, attachments);
       this.#assertGeneration(hostId, generation);
       session.activeTurnId = started.turn_id;
-      session.status = mapExternalAgentStatus(started.status, "queued");
+      const startedStatus = mapExternalAgentStatus(started.status, "queued");
+      session.status = startedStatus;
       session.updatedAt = nowIso();
       session.actionError = undefined;
       await this.#refreshTurn(session, started.turn_id, client, lease);
+      this.#finalizeTerminalStart(session, startedStatus);
       this.#emit({ type: "session", session });
-      this.#startStream(session, started.turn_id);
+      if (!isTerminal(session.status)) this.#startStream(session, started.turn_id);
       return session;
     } catch (error) {
+      if (!attachmentsTransferred && attachments.length) {
+        this.#commands.releaseFiles(client, attachments);
+      }
       if (this.#isStaleResponseError(error)) throw error;
       const message = redactErrorMessage(
         error,
         "The remote session was created, but its first turn did not start.",
       );
-      session.status = "failed";
-      session.error = message;
-      session.actionError = message;
-      session.completedAt = nowIso();
-      session.updatedAt = nowIso();
-      this.#rememberSession(session);
-      await this.#persist(lease).catch(() => undefined);
-      this.#emit({ type: "session", session });
+      if (session) {
+        session.status = "failed";
+        session.error = message;
+        session.actionError = message;
+        session.completedAt = nowIso();
+        session.updatedAt = nowIso();
+        this.#rememberSession(session);
+        await this.#persist(lease).catch(() => undefined);
+        this.#emit({ type: "session", session });
+      }
       throw error;
     }
   }
@@ -1140,6 +1231,7 @@ export class ExternalAgentController {
     const client = this.#requireSessionClient(session);
     const text =
       typeof input === "string" ? input.trim() : input.instruction.trim();
+    const isSlashCommand = /^\/\S+(?:\s|$)/u.test(text);
     if (!text) throw new Error("Follow-up instruction is required");
     if (!this.canFollowUp(session)) {
       throw new Error(
@@ -1159,6 +1251,8 @@ export class ExternalAgentController {
             confirmDangerous: input.confirmDangerous,
             attachments: input.attachments,
           };
+    let attachments: readonly ExternalAgentAttachment[] = [];
+    let attachmentsTransferred = false;
     try {
       if (settings) {
         const validation = validateExternalAgentLaunch(this.#runners, {
@@ -1171,7 +1265,7 @@ export class ExternalAgentController {
         settings.thinkingLevel =
           validation.input.thinkingLevel?.toLowerCase().trim() || undefined;
       }
-      const attachments = settings?.attachments?.length
+      attachments = settings?.attachments?.length
         ? await this.#commands.stageFiles(
             client,
             settings.attachments,
@@ -1188,8 +1282,12 @@ export class ExternalAgentController {
           continuation_mode: "replay",
           ...(settings
             ? {
-                model: settings.model,
-                thinking_level: settings.thinkingLevel,
+                ...(isSlashCommand
+                  ? {}
+                  : {
+                      model: settings.model,
+                      thinking_level: settings.thinkingLevel,
+                    }),
                 mode: settings.mode,
                 isolation: settings.isolation,
                 cwd: settings.cwd,
@@ -1198,8 +1296,10 @@ export class ExternalAgentController {
         },
         this.#connections.hostSignal,
       );
+      attachmentsTransferred = true;
+      this.#commands.releaseFiles(client, attachments);
       this.#assertSessionGeneration(session);
-      if (settings) {
+      if (settings && !isSlashCommand) {
         session.model = settings.model;
         session.thinkingLevel = settings.thinkingLevel;
         session.mode = settings.mode;
@@ -1207,15 +1307,20 @@ export class ExternalAgentController {
         session.cwd = settings.cwd;
       }
       session.activeTurnId = started.turn_id;
-      session.status = mapExternalAgentStatus(started.status, "queued");
+      const startedStatus = mapExternalAgentStatus(started.status, "queued");
+      session.status = startedStatus;
       session.actionError = undefined;
       session.error = undefined;
       session.completedAt = undefined;
       session.updatedAt = nowIso();
       await this.#refreshTurn(session, started.turn_id, client, lease);
+      this.#finalizeTerminalStart(session, startedStatus);
       this.#emit({ type: "session", session });
-      this.#startStream(session, started.turn_id);
+      if (!isTerminal(session.status)) this.#startStream(session, started.turn_id);
     } catch (error) {
+      if (!attachmentsTransferred && attachments.length) {
+        this.#commands.releaseFiles(client, attachments);
+      }
       if (this.#isStaleResponseError(error)) throw error;
       session.actionError = redactErrorMessage(
         error,
@@ -1359,12 +1464,11 @@ export class ExternalAgentController {
     remoteSessionId: string,
     hostId = this.#activeHostId ?? undefined,
   ): ExternalAgentSession | undefined {
-    if (hostId) {
-      return this.#sessions.get(hostId, remoteSessionId);
-    }
-    return this.#sessions
-      .values()
-      .find((session) => session.remoteSessionId === remoteSessionId);
+    // A remote session id is only unique within a host. Never fall back to a
+    // different host (or to an inactive host when no host is selected): doing
+    // so can relabel an old session with the active runtime and dispatch an
+    // action to the wrong agent service.
+    return hostId ? this.#sessions.get(hostId, remoteSessionId) : undefined;
   }
 
   async ensureSession(
@@ -1742,6 +1846,10 @@ export class ExternalAgentController {
         this.#sessions.isCurrent(session),
       emit: (event) => this.#emit(event),
     });
+    // Event ingestion can change the canonical turn/session status (including
+    // terminal runtime errors). Keep the lightweight sidebar reference in
+    // sync before a stream completion persists it.
+    this.#rememberSession(session);
   }
 
   #startStream(session: ExternalAgentSession, turnId: string): void {
@@ -1776,6 +1884,23 @@ export class ExternalAgentController {
           "Live updates disconnected. Reconnect to resume.",
         ),
     });
+  }
+
+  /**
+   * A runtime may complete a local command while the start response is being
+   * hydrated. Preserve that terminal result and never hand it to the live
+   * stream supervisor, which would otherwise leave the composer looking busy
+   * until a reconnect.
+   */
+  #finalizeTerminalStart(
+    session: ExternalAgentSession,
+    startedStatus: ReturnType<typeof mapExternalAgentStatus>,
+  ): void {
+    if (!isTerminal(startedStatus)) return;
+    session.status = startedStatus;
+    session.activeTurnId = undefined;
+    session.streamState = "idle";
+    session.completedAt ??= nowIso();
   }
 
   #abortActiveWork(): void {
