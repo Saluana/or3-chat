@@ -28,6 +28,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - run: npm install --ignore-scripts --no-audit --no-fund
+        working-directory: packages/create-or3-chat
       - run: npm run check
         working-directory: packages/create-or3-chat
 
