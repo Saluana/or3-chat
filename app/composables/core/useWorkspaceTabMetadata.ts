@@ -65,7 +65,14 @@ export function useWorkspaceTabMetadata() {
             } else if (tab.resource.kind === 'document') {
                 title = documentTitles.get(tab.resource.documentId)?.trim() || title;
             } else if (tab.resource.kind === 'app') {
-                title = getPaneApp(tab.resource.appId)?.label || title;
+                const appLabel = getPaneApp(tab.resource.appId)?.label;
+                const cachedTitle = tab.cachedTitle?.trim();
+                title =
+                    cachedTitle &&
+                    cachedTitle !== tab.resource.appId &&
+                    cachedTitle !== appLabel
+                        ? cachedTitle
+                        : appLabel || title;
             }
             next.set(tab.id, {
                 title,

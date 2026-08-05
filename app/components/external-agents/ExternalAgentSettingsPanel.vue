@@ -20,7 +20,7 @@
           v-if="runnerLocked"
           class="inline-flex items-center gap-1 font-normal text-[var(--md-on-surface-variant)]"
         >
-          <UIcon name="i-lucide-lock" class="size-3" />
+          <UIcon :name="iconLock" class="size-3" />
           Fixed for this session
         </span>
       </span>
@@ -36,8 +36,11 @@
       />
     </label>
 
-    <div class="grid gap-3 sm:grid-cols-2">
-      <label class="block space-y-1.5">
+    <div
+      v-if="selectedOption?.showMode || selectedOption?.showIsolation"
+      class="grid gap-3 sm:grid-cols-2"
+    >
+      <label v-if="selectedOption?.showMode" class="block space-y-1.5">
         <span class="text-xs font-semibold">Mode</span>
         <USelectMenu
           :model-value="mode"
@@ -49,7 +52,7 @@
           @update:model-value="$emit('update:mode', String($event ?? ''))"
         />
       </label>
-      <label class="block space-y-1.5">
+      <label v-if="selectedOption?.showIsolation" class="block space-y-1.5">
         <span class="text-xs font-semibold">Isolation</span>
         <USelectMenu
           :model-value="isolation"
@@ -63,7 +66,7 @@
       </label>
     </div>
 
-    <label class="block space-y-1.5">
+    <label v-if="selectedOption?.showWorkspace" class="block space-y-1.5">
       <span class="text-xs font-semibold">Workspace root</span>
       <UInput
         v-if="selectedOption?.customCwd"
@@ -103,6 +106,13 @@
         aria-label="External agent model"
         @update:model-value="setModel"
       />
+      <span
+        v-if="modelCatalogError"
+        class="block text-[11px] text-[var(--md-on-surface-variant)]"
+        role="status"
+      >
+        {{ modelCatalogError }}
+      </span>
     </label>
 
     <label v-if="reasoningItems.length" class="block space-y-1.5">
@@ -141,6 +151,9 @@ import {
   resolveExternalAgentModelReasoning,
 } from "~/core/external-agents/launcher";
 import type { ExternalAgentRunner } from "~/core/external-agents/types";
+import { useIcon } from "~/composables/useIcon";
+
+const iconLock = useIcon("ui.lock");
 
 const HOST_DEFAULT_MODEL_VALUE = "host_default";
 const MODEL_DEFAULT_REASONING_VALUE = "model_default";
@@ -243,14 +256,15 @@ const modelItems = computed(() => {
       ),
   ];
 });
+const modelCatalogError = computed(() => {
+  const value = selectedOption.value?.runner.runtime?.model_catalog_error;
+  return typeof value === "string" && value.trim() ? value : "";
+});
 const selectedModelValue = computed(
   () => props.model ?? HOST_DEFAULT_MODEL_VALUE,
 );
 const selectedReasoning = computed(() =>
-  resolveExternalAgentModelReasoning(
-    selectedOption.value?.runner,
-    props.model,
-  ),
+  resolveExternalAgentModelReasoning(selectedOption.value?.runner, props.model),
 );
 const reasoningItems = computed(() => {
   const reasoning = selectedReasoning.value;
@@ -266,12 +280,11 @@ const reasoningItems = computed(() => {
     })),
   ];
 });
-const selectedReasoningValue = computed(
-  () =>
-    props.thinkingLevel &&
-    selectedReasoning.value?.values.includes(props.thinkingLevel)
-      ? props.thinkingLevel
-      : MODEL_DEFAULT_REASONING_VALUE,
+const selectedReasoningValue = computed(() =>
+  props.thinkingLevel &&
+  selectedReasoning.value?.values.includes(props.thinkingLevel)
+    ? props.thinkingLevel
+    : MODEL_DEFAULT_REASONING_VALUE,
 );
 const dangerousSelection = computed(() => {
   const option = selectedOption.value;
@@ -319,9 +332,6 @@ function setThinkingLevel(value: string) {
     );
     if (effectiveModel) emit("update:model", effectiveModel);
   }
-  emit(
-    "update:thinkingLevel",
-    thinkingLevel,
-  );
+  emit("update:thinkingLevel", thinkingLevel);
 }
 </script>

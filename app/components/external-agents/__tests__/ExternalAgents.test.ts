@@ -84,6 +84,10 @@ vi.mock("~/composables/sidebar/useActiveSidebarPage", () => ({
   }),
 }));
 
+vi.mock("~/composables/useIcon", () => ({
+  useIcon: (token: string) => ({ value: token }),
+}));
+
 const session: ExternalAgentSession = {
   hostId: "host-1",
   hostGeneration: 1,
@@ -419,12 +423,57 @@ describe("External Agents components", () => {
       true,
     );
     expect(wrapper.text()).toContain("Connect another computer");
-    expect(wrapper.text()).toContain("npx @or3/connect");
+    expect(wrapper.text()).toContain(
+      "External-runtime Connect commands will appear after the supporting Connect release is published.",
+    );
     expect(wrapper.text()).toContain(
       "Advanced: add another host by URL and token",
     );
     expect(wrapper.text()).toContain("Fix mobile layout");
     expect(wrapper.find("section").classes()).toContain("flex");
+  });
+
+  it("labels a Runs service and hides unsupported attachments", async () => {
+    const value = snapshot({
+      hosts: [
+        {
+          ...snapshot().hosts[0]!,
+          driver: "runs",
+        },
+      ],
+      capabilities: {
+        hostId: "host-1",
+        execAvailable: true,
+        runtimeProduct: "hermes-agent",
+      },
+      runners: [
+        {
+          ...snapshot().runners[0]!,
+          chat_capabilities: {
+            chatSelectable: true,
+            chatReplay: true,
+            attachments: false,
+          },
+        },
+      ],
+    });
+    mocks.snapshot = shallowRef(value);
+    mocks.controller.snapshot = value;
+
+    const sidebar = mount(ExternalAgentsSidebarPage, { global });
+    const launcher = mount(ExternalAgentLauncher, {
+      global: {
+        ...global,
+        stubs: { ...global.stubs, ExternalAgentLauncher: false },
+      },
+    });
+    await flushPromises();
+
+    expect(sidebar.text()).toContain("Hermes Agent · Sessions + Runs");
+    expect(launcher.find('input[type="file"]').exists()).toBe(false);
+    expect(launcher.find('[aria-label="Add attachments"]').exists()).toBe(
+      false,
+    );
   });
 
   it("opens a session in the active pane", async () => {
@@ -726,8 +775,12 @@ describe("External Agents components", () => {
 
     expect(sidebar.text()).toContain("Host could not be reached");
     expect(sidebar.text()).toContain("Host could not be reached");
-    expect(pane.text()).toContain("Host disconnected");
     expect(pane.text()).toContain("Reconnect the host to continue");
+    expect(pane.find("header").exists()).toBe(false);
+    expect(pane.text()).not.toContain("Technical details");
+    expect(pane.emitted("tab-title")?.at(-1)).toEqual([
+      "Codex · Fix mobile layout",
+    ]);
   });
 
   it("retries a historical conversation after reconnect and repairs its stale host reference", async () => {
@@ -739,7 +792,7 @@ describe("External Agents components", () => {
     mocks.controller.snapshot = disconnected;
     mocks.controller.ensureSession
       .mockRejectedValueOnce(
-        new Error("Connect a trusted or3-intern host first"),
+        new Error("Connect a trusted agent service first"),
       )
       .mockResolvedValueOnce(session);
     const wrapper = mount(ExternalAgentSessionPane, {
@@ -968,6 +1021,39 @@ describe("External Agents components", () => {
     expect(mocks.controller.readArtifact).toHaveBeenCalledWith(
       "session-1",
       "artifact-2",
+    );
+  });
+
+  it("contains failed stop and approval actions inside the conversation", async () => {
+    mocks.controller.cancel.mockRejectedValueOnce(new Error("abort failed"));
+    mocks.controller.decideApproval.mockRejectedValueOnce(
+      new Error("approval failed"),
+    );
+    const wrapper = mount(ExternalAgentSessionPane, {
+      props: {
+        paneId: "pane-1",
+        recordId: encodeExternalAgentSessionRef({
+          hostId: "host-1",
+          remoteSessionId: "session-1",
+        }),
+      },
+      global,
+    });
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Stop agent"]').trigger("click");
+    await flushPromises();
+    expect(mocks.controller.cancel).toHaveBeenCalledWith("session-1");
+
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Approve")
+      ?.trigger("click");
+    await flushPromises();
+    expect(mocks.controller.decideApproval).toHaveBeenCalledWith(
+      "session-1",
+      "approve",
+      "approval-1",
     );
   });
 
@@ -1499,7 +1585,8 @@ describe("External Agents components", () => {
     expect((textarea.element as HTMLTextAreaElement).value).toBe(
       "Keep this newer follow-up draft",
     );
-    expect(errorHandler).toHaveBeenCalledOnce();
+    expect(errorHandler).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("Host unavailable");
   });
 
   it("previews a selected file and sends it through the external-agent controller", async () => {
@@ -1673,5 +1760,247 @@ describe("External Agents components", () => {
         thinkingLevel: "high",
       }),
     );
+  });
+
+  it("uses runtime models and commands while hiding unsupported Runs controls", async () => {
+    mocks.snapshot.value = snapshot({
+      hosts: [{ ...snapshot().hosts[0]!, driver: "runs" }],
+      runners: [
+        {
+          id: "agent",
+          display_name: "OpenClaw",
+          status: "available",
+          auth_status: "ready",
+          supports: { chat: { chatSelectable: true } },
+          chat_capabilities: {
+            chatSelectable: true,
+            modeSelection: false,
+            isolationSelection: false,
+            customCwd: false,
+          },
+          models: [
+            {
+              id: "openai/gpt-5",
+              display_name: "GPT-5",
+              provider_name: "OpenAI",
+              reasoning: ["low", "high"],
+            },
+          ],
+          commands: [
+            {
+              name: "help",
+              command: "/help",
+              description: "Show available commands",
+            },
+            {
+              name: "commands",
+              command: "/commands",
+              description: "List all slash commands",
+            },
+            {
+              name: "status",
+              command: "/status",
+              description: "Show current status",
+            },
+          ],
+        },
+      ],
+    });
+    const wrapper = mount(ExternalAgentLauncher, {
+      attachTo: document.body,
+      global: {
+        ...global,
+        stubs: { ...global.stubs, ExternalAgentLauncher: false },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[aria-label="External agent mode"]').exists()).toBe(false);
+    expect(wrapper.find('[aria-label="External agent isolation"]').exists()).toBe(false);
+    expect(wrapper.find('[aria-label="External agent workspace root"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain("GPT-5 · OpenAI");
+
+    const textarea = wrapper.find<HTMLTextAreaElement>(
+      'textarea[aria-label="Message the agent"]',
+    );
+    textarea.element.focus();
+    await textarea.setValue("/");
+    await flushPromises();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement).toBe(textarea.element);
+    const commands = wrapper.find('[aria-label="Available agent commands"]');
+    expect(commands.text()).toContain("/status");
+    const initialOptions = commands.findAll('[role="option"]');
+    await initialOptions[1]!.trigger("pointermove", {
+      movementX: 0,
+      movementY: 0,
+    });
+    expect(initialOptions[0]!.attributes("aria-selected")).toBe("true");
+    expect(initialOptions[1]!.attributes("aria-selected")).toBe("false");
+    await textarea.setValue("/st");
+    expect(document.activeElement).toBe(textarea.element);
+    const filteredCommands = wrapper.find(
+      '[aria-label="Available agent commands"]',
+    );
+    expect(filteredCommands.text()).toContain("/status");
+    const statusOption = filteredCommands
+      .findAll("button")
+      .find((option) => option.text().includes("/status"));
+    expect(statusOption).toBeDefined();
+    await statusOption!.trigger("mousedown");
+    expect(
+      (wrapper.find('textarea[aria-label="Message the agent"]')
+        .element as HTMLTextAreaElement).value,
+    ).toBe("/status");
+    wrapper.unmount();
+  });
+
+  it("renders runtime command choices as follow-up buttons", async () => {
+    const completed: ExternalAgentSession = {
+      ...session,
+      status: "succeeded",
+      activeTurnId: undefined,
+      approvals: [],
+      artifacts: [],
+      turns: [
+        {
+          id: "turn-1",
+          session_id: "session-1",
+          sequence: 1,
+          status: "succeeded",
+          continuation_mode: "replay",
+          requested_at: Date.now() - 1_000,
+          completed_at: Date.now(),
+          user_message: "/verbose",
+          final_text: "Choose verbose output.",
+        },
+      ],
+      events: [
+        {
+          id: "choice-event",
+          hostId: "host-1",
+          hostGeneration: 1,
+          sessionId: "session-1",
+          turnId: "turn-1",
+          sequence: 1,
+          occurredAt: "2026-07-27T00:00:30.000Z",
+          type: "metric",
+          payload: {
+            rawType: "command.choices",
+            choices: [
+              { label: "On", command: "/verbose on" },
+              { label: "Off", command: "/verbose off" },
+            ],
+          },
+        },
+      ],
+    };
+    mocks.snapshot.value = snapshot({ sessions: [completed] });
+    mocks.controller.followUp.mockResolvedValue(completed);
+    const wrapper = mount(ExternalAgentSessionPane, {
+      props: {
+        paneId: "pane-1",
+        recordId: encodeExternalAgentSessionRef({
+          hostId: "host-1",
+          remoteSessionId: "session-1",
+        }),
+      },
+      global,
+    });
+    await flushPromises();
+
+    const options = wrapper.find('[aria-label="Command options"]');
+    expect(options.text()).toContain("On");
+    await options.find("button").trigger("click");
+    await flushPromises();
+    expect(mocks.controller.followUp).toHaveBeenCalledWith(
+      "session-1",
+      expect.objectContaining({ instruction: "/verbose on" }),
+    );
+  });
+
+  it("renders assistant deltas before the turn completes", async () => {
+    const streamingSession: ExternalAgentSession = {
+      ...session,
+      status: "running",
+      approvals: [],
+      artifacts: [],
+      output: undefined,
+      error: undefined,
+      turns: [
+        {
+          id: "turn-1",
+          session_id: "session-1",
+          sequence: 1,
+          status: "running",
+          continuation_mode: "replay",
+          requested_at: Date.now(),
+          user_message: "Stream a response",
+        },
+      ],
+      events: [],
+    };
+    mocks.snapshot.value = snapshot({ sessions: [streamingSession] });
+    const ThemedMessage = defineComponent({
+      props: { message: { type: Object, required: true } },
+      setup(props) {
+        return () =>
+          h(
+            "div",
+            { class: "streaming-test-message" },
+            String((props.message as { text?: string }).text ?? ""),
+          );
+      },
+    });
+    const wrapper = mount(ExternalAgentSessionPane, {
+      props: {
+        paneId: "pane-1",
+        recordId: encodeExternalAgentSessionRef({
+          hostId: "host-1",
+          remoteSessionId: "session-1",
+        }),
+      },
+      global: {
+        ...global,
+        config: {
+          globalProperties: {
+            $theme: {
+              activeComponents: shallowRef({
+                ...CORE_APP_COMPONENT_DEFAULTS,
+                "chat-message": ThemedMessage,
+              }),
+            } as unknown as ThemePlugin,
+          },
+        },
+      },
+    });
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("Partial answer");
+
+    mocks.snapshot.value = snapshot({
+      sessions: [
+        {
+          ...streamingSession,
+          events: [
+            {
+              id: "delta-1",
+              hostId: "host-1",
+              hostGeneration: 1,
+              sessionId: "session-1",
+              turnId: "turn-1",
+              sequence: 1,
+              occurredAt: new Date().toISOString(),
+              type: "message",
+              text: "Partial answer",
+              payload: { rawType: "text_delta" },
+            },
+          ],
+        },
+      ],
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Partial answer");
+    expect(wrapper.text()).toContain("Working — stop to interrupt");
   });
 });

@@ -8,6 +8,7 @@ import type {
   ExternalAgentPinCredentialVault,
   ExternalAgentPersistence,
   ExternalAgentPersistenceSnapshot,
+  ExternalAgentSession,
   ExternalAgentUploadAttachment,
   ExternalRemoteEvent,
   ExternalRemoteStreamEvent,
@@ -259,9 +260,42 @@ describe("ExternalAgentController", () => {
 
     const serialized = JSON.stringify(saved.state);
     expect(serialized).not.toContain("or3-super-secret-token");
-    expect(saved.state.hosts[0]?.credentialRef).toMatch(/^intern-credential-/);
+    expect(saved.state.hosts[0]?.credentialRef).toMatch(/^agent-credential-/);
     expect(controller.snapshot.connectionState).toBe("online");
     expect(client.readiness).not.toHaveBeenCalled();
+  });
+
+  it("detects and persists a Runs host before constructing its client", async () => {
+    const saved = persistence();
+    const secrets = vault();
+    const client = fakeClient();
+    const detectDriver = vi.fn(async () => "runs" as const);
+    const createClient = vi.fn(() => client);
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: secrets,
+      createClient,
+      detectDriver,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await controller.addTrustedHost({
+      name: "Hermes",
+      baseUrl: "http://127.0.0.1:8642",
+      token: "hermes-secret",
+    });
+
+    expect(detectDriver).toHaveBeenCalledOnce();
+    expect(createClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: expect.objectContaining({ driver: "runs" }),
+      }),
+    );
+    expect(saved.state.hosts[0]).toEqual(
+      expect.objectContaining({ name: "Hermes", driver: "runs" }),
+    );
+    expect(JSON.stringify(saved.state)).not.toContain("hermes-secret");
   });
 
   it("restores cloud computers without replacing the user's active host", async () => {
@@ -389,6 +423,59 @@ describe("ExternalAgentController", () => {
     expect(createClient).toHaveBeenCalledTimes(2);
   });
 
+  it("skips one malformed cloud host without relabelling or deleting healthy hosts", async () => {
+    const cloudA: ExternalAgentHost = {
+      id: "or3-connect:env-a",
+      name: "Cloud A",
+      baseUrl: "https://env-a.connect.or3.test",
+      credentialRef: "cloud-a-credential",
+      driver: "runs",
+      runtime: "hermes",
+      trustedAt: "2026-07-27T00:00:00.000Z",
+    };
+    const saved = persistence({
+      hosts: [host, cloudA],
+      activeHostId: host.id,
+      sessionRefs: [],
+    });
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: vault({
+        "cred-1": "direct-token",
+        "cloud-a-credential": "old-cloud-token",
+      }),
+      createClient: () => fakeClient(),
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await expect(
+      controller.reconcileCloudHosts("workspace-a", [
+        {
+          environmentId: "env-a",
+          name: "Cloud A",
+          baseUrl: "not-a-url",
+          token: "new-cloud-token",
+          driver: "runs",
+          runtime: "hermes",
+        },
+      ]),
+    ).resolves.toBeUndefined();
+
+    expect(controller.snapshot.hosts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: host.id }),
+        expect.objectContaining({
+          id: cloudA.id,
+          driver: "runs",
+          runtime: "hermes",
+          baseUrl: cloudA.baseUrl,
+        }),
+      ]),
+    );
+    expect(controller.snapshot.activeHostId).toBe(host.id);
+  });
+
   it("rejects a cloud inventory that completes after its workspace lease changes", async () => {
     const putStarted = deferred<void>();
     const releasePut = deferred<void>();
@@ -447,7 +534,7 @@ describe("ExternalAgentController", () => {
     });
 
     expect(secrets.putPersistent).toHaveBeenCalledWith(
-      expect.stringMatching(/^intern-credential-/),
+      expect.stringMatching(/^agent-credential-/),
       "remember-me",
       "482915",
     );
@@ -727,6 +814,43 @@ describe("ExternalAgentController", () => {
       remoteSession.id,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+  });
+
+  it("switches back to the host that owns an already hydrated session", async () => {
+    const hostB: ExternalAgentHost = {
+      ...host,
+      id: "host-2",
+      name: "Studio Mac",
+      baseUrl: "https://studio.test",
+      credentialRef: "cred-2",
+    };
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host, hostB],
+        activeHostId: hostB.id,
+        sessionRefs: [
+          {
+            hostId: hostB.id,
+            remoteSessionId: remoteSession.id,
+            title: "Studio conversation",
+          },
+        ],
+      }).adapter,
+      credentials: vault({ "cred-1": "one", "cred-2": "two" }),
+      createClient: () => fakeClient(),
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+    expect(controller.getSession(remoteSession.id, hostB.id)).toBeDefined();
+
+    await controller.switchHost(host.id);
+    expect(controller.snapshot.activeHostId).toBe(host.id);
+
+    const restored = await controller.ensureSession(hostB.id, remoteSession.id);
+
+    expect(controller.snapshot.activeHostId).toBe(hostB.id);
+    expect(restored.hostId).toBe(hostB.id);
+    expect(restored.hostGeneration).toBe(controller.snapshot.generation);
   });
 
   it("rebinds historical sessions from an older identity for the same host URL", async () => {
@@ -1188,6 +1312,146 @@ describe("ExternalAgentController", () => {
     });
   });
 
+  it("does not replay model settings while executing a slash command", async () => {
+    const client = fakeClient();
+    client.listRunners = vi.fn(async () => ({
+      runners: [
+        {
+          id: "codex",
+          display_name: "Codex",
+          status: "available",
+          auth_status: "ready",
+          supports: {
+            chat: { chatSelectable: true, chatReplay: true },
+          },
+          models: [{ id: "old-model" }, { id: "new-model" }],
+        },
+      ],
+    }));
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    const launched = await controller.launch({
+      runnerId: "codex",
+      instruction: "Choose a model",
+      mode: "review",
+      isolation: "host_readonly",
+      model: "old-model",
+    });
+    launched.status = "succeeded";
+    launched.activeTurnId = undefined;
+
+    await controller.followUp(launched.remoteSessionId, {
+      instruction: "/model new-model",
+      mode: "review",
+      isolation: "host_readonly",
+      model: "old-model",
+    });
+
+    expect(client.startTurn).toHaveBeenLastCalledWith(
+      launched.remoteSessionId,
+      {
+        user_message: "/model new-model",
+        continuation_mode: "replay",
+        mode: "review",
+        isolation: "host_readonly",
+        cwd: undefined,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(launched.model).toBe("old-model");
+  });
+
+  it("releases the composer immediately when a local slash command completes", async () => {
+    const client = fakeClient();
+    client.listRunners = vi.fn(async () => ({
+      runners: [
+        {
+          id: "codex",
+          display_name: "Codex",
+          status: "available",
+          auth_status: "ready",
+          supports: {
+            chat: { chatSelectable: true, chatReplay: true },
+          },
+          models: [{ id: "old-model" }, { id: "new-model" }],
+        },
+      ],
+    }));
+    client.startTurn = vi.fn(async () => ({
+      session_id: "session-1",
+      turn_id: "local-command-1",
+      status: "completed",
+    }));
+    client.getTurn = vi.fn(async () => ({
+      id: "local-command-1",
+      session_id: "session-1",
+      sequence: 2,
+      status: "completed",
+      continuation_mode: "replay",
+      requested_at: 1_730_000_001_000,
+      completed_at: 1_730_000_001_001,
+      user_message: "/model new-model",
+      final_text: "Model set to new-model.",
+    }));
+    client.listTurnEvents = vi.fn(async () => ({
+      events: [
+        {
+          id: 1,
+          turn_id: "local-command-1",
+          seq: 1,
+          ts: 1_730_000_001_001,
+          type: "turn.completed",
+          payload: { status: "completed" },
+        },
+      ],
+    }));
+    const streamTurn = vi.spyOn(client, "streamTurn");
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    const session = await controller.launch({
+      runnerId: "codex",
+      instruction: "Choose a model",
+      mode: "review",
+      isolation: "host_readonly",
+      model: "old-model",
+    });
+    session.status = "succeeded";
+    session.activeTurnId = undefined;
+
+    await controller.followUp(session.remoteSessionId, {
+      instruction: "/model new-model",
+      mode: "review",
+      isolation: "host_readonly",
+      model: "old-model",
+    });
+
+    expect(controller.snapshot.sessions[0]).toMatchObject({
+      status: "succeeded",
+      activeTurnId: undefined,
+    });
+    expect(streamTurn).not.toHaveBeenCalled();
+  });
+
   it("sends an advertised reasoning level with the first turn", async () => {
     const client = fakeClient();
     client.createSession = vi.fn(async () => ({
@@ -1498,6 +1762,7 @@ describe("ExternalAgentController", () => {
       { timeout: 3_000 },
     );
     expect(client.getTurn).toHaveBeenCalledTimes(3);
+    expect(client.startTurn).toHaveBeenCalledTimes(1);
   });
 
   it("persists a failed session when its first turn cannot start", async () => {
@@ -1734,6 +1999,57 @@ describe("ExternalAgentController", () => {
     ).rejects.toThrow("approval unavailable");
     expect(session.approvals).toEqual(approvalBefore);
     expect(session.actionError).toContain("Remote approve failed");
+  });
+
+  it("keeps the cancellation turn id stable when its SSE event arrives first", async () => {
+    let launchedSession: ExternalAgentSession | undefined;
+    const client = fakeClient({ streamNeverEnds: true });
+    vi.mocked(client.abortTurn).mockImplementation(async () => {
+      vi.mocked(client.getTurn).mockResolvedValueOnce({
+        ...remoteTurn,
+        status: "cancelled",
+        completed_at: 1_750_000_020,
+      });
+      if (launchedSession) {
+        launchedSession.activeTurnId = undefined;
+        launchedSession.status = "cancelled";
+      }
+      return { status: "cancelled" };
+    });
+    const controller = new ExternalAgentController({
+      persistence: persistence({
+        hosts: [host],
+        activeHostId: host.id,
+        sessionRefs: [],
+      }).adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+    launchedSession = await controller.launch({
+      runnerId: "codex",
+      instruction: "Start a long task",
+      mode: "review",
+      isolation: "host_readonly",
+    });
+
+    await expect(
+      controller.cancel(launchedSession.remoteSessionId),
+    ).resolves.toBeUndefined();
+
+    expect(client.abortTurn).toHaveBeenCalledWith(
+      launchedSession.remoteSessionId,
+      "turn-1",
+      expect.anything(),
+    );
+    expect(client.getTurn).toHaveBeenCalledWith(
+      launchedSession.remoteSessionId,
+      "turn-1",
+      expect.anything(),
+    );
+    expect(launchedSession.status).toBe("cancelled");
+    expect(launchedSession.actionError).toBeUndefined();
   });
 
   it("coalesces provider approval aliases and repeated diffs into one useful item", async () => {

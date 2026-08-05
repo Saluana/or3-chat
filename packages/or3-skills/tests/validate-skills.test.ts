@@ -5,7 +5,14 @@ import { resolve } from 'node:path'
 import { packageRoot, validateSkills } from '../scripts/validate-skills'
 
 const temporaryRoots: string[] = []
-const skills = ['or3-setup', 'or3-plugin-development', 'or3-theme-development', 'or3-core-development']
+const skills = [
+  'or3-setup',
+  'or3-plugin-development',
+  'or3-theme-development',
+  'or3-core-development',
+  'or3-openclaw-setup',
+  'or3-hermes-setup',
+]
 const references = [
   'extension-decision-tree.md',
   'repository-navigation.md',
@@ -13,6 +20,7 @@ const references = [
   'quality-gates.md',
   'permissions-and-trust.md',
   'output-format.md',
+  'external-agent-runs.md',
 ]
 
 async function fixturePackage(options: { brokenLink?: boolean; mismatchedName?: boolean } = {}) {

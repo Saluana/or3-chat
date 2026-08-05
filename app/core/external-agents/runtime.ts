@@ -21,39 +21,18 @@ export function setExternalAgentController(
     (scope.__or3ExternalAgentSnapshot = shallowRef(null));
   snapshot.value = controller?.snapshot ?? null;
   if (controller) {
-    let queuedSnapshot: ExternalAgentStoreSnapshot | null = null;
-    let frameId: number | null = null;
-    let microtaskQueued = false;
     let disposed = false;
-    const flush = () => {
-      frameId = null;
-      microtaskQueued = false;
-      if (disposed || !queuedSnapshot) return;
-      snapshot.value = queuedSnapshot;
-      queuedSnapshot = null;
-    };
     const unsubscribe = controller.subscribe((event) => {
-      if (event.type !== "snapshot") return;
-      queuedSnapshot = event.snapshot;
-      if (frameId !== null || microtaskQueued) return;
-      if (typeof globalThis.requestAnimationFrame === "function") {
-        frameId = globalThis.requestAnimationFrame(flush);
-      } else {
-        microtaskQueued = true;
-        queueMicrotask(flush);
-      }
+      if (disposed || event.type !== "snapshot") return;
+      // The controller publisher already coalesces timeline bursts. Applying
+      // its immutable snapshot directly avoids a second animation-frame queue
+      // that can hide every intermediate state when an SSE burst is drained
+      // before the browser gets a chance to paint.
+      snapshot.value = event.snapshot;
     });
     scope.__or3ExternalAgentSnapshotDispose = () => {
       disposed = true;
       unsubscribe();
-      if (
-        frameId !== null &&
-        typeof globalThis.cancelAnimationFrame === "function"
-      ) {
-        globalThis.cancelAnimationFrame(frameId);
-      }
-      frameId = null;
-      queuedSnapshot = null;
     };
   }
 }

@@ -50,6 +50,9 @@ export interface ApproveConnectAuthorizationInput {
         name: string;
         platform: string;
         architecture: string;
+        driver?: import('../types').ConnectDriver;
+        runtime?: import('../types').ConnectRuntime;
+        base_path?: '/' | '/or3/';
         host_id?: string;
         signing_public_key?: string;
         noise_public_key?: string;
@@ -73,6 +76,9 @@ export interface ReserveConnectAuthorizationInput {
         name: string;
         platform: string;
         architecture: string;
+        driver?: import('../types').ConnectDriver;
+        runtime?: import('../types').ConnectRuntime;
+        base_path?: '/' | '/or3/';
         host_id?: string;
         signing_public_key?: string;
         noise_public_key?: string;

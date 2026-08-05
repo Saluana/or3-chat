@@ -1,4 +1,5 @@
 import type {
+  ExternalAgentCommandChoice,
   ExternalAgentApproval,
   ExternalAgentArtifact,
   ExternalAgentRunStatus,
@@ -55,6 +56,7 @@ const ALLOWED_PRESENTATION_KEYS = new Set([
   "item_type",
   "stream_kind",
   "delta",
+  "choices",
 ]);
 
 function record(value: unknown): Record<string, unknown> {
@@ -102,6 +104,18 @@ export function sanitizeExternalAgentPayload(
   for (const [key, candidate] of Object.entries(input)) {
     if (FORBIDDEN_KEY.test(key) || !ALLOWED_PRESENTATION_KEYS.has(key))
       continue;
+    if (key === "choices" && Array.isArray(candidate)) {
+      output.choices = candidate
+        .slice(0, 24)
+        .map((value) => {
+          const choice = record(value);
+          const label = cleanString(choice.label, 120);
+          const command = cleanString(choice.command, 500);
+          return label && command ? Object.freeze({ label, command }) : null;
+        })
+        .filter(Boolean);
+      continue;
+    }
     if (key === "files" && Array.isArray(candidate)) {
       output.files = candidate
         .slice(0, 50)
@@ -270,6 +284,7 @@ export interface AgentConversationTurn {
   readonly assistantMessage?: UiChatMessage;
   readonly approvals: readonly ExternalAgentApproval[];
   readonly artifacts: readonly AgentArtifactPresentation[];
+  readonly commandChoices: readonly ExternalAgentCommandChoice[];
   readonly error?: ExternalAgentPresentationError;
 }
 
@@ -294,13 +309,7 @@ function appendDelta(current: string, delta: string): string {
   return `${current}${delta}`;
 }
 
-type OperationKind =
-  | "tests"
-  | "search"
-  | "read"
-  | "edit"
-  | "command"
-  | "other";
+type OperationKind = "tests" | "search" | "read" | "edit" | "command" | "other";
 
 function operationHint(event: ExternalAgentTimelineEvent): string {
   return [
@@ -460,8 +469,7 @@ function assistantPresentation(
       label,
       status,
       args:
-        detail &&
-        (kind === "command" || kind === "read" || kind === "edit")
+        detail && (kind === "command" || kind === "read" || kind === "edit")
           ? detail
           : existingCall?.args,
       result:
@@ -497,9 +505,7 @@ function assistantPresentation(
   const finalText = cleanString(turn.final_text);
   const streamedText = parts
     .filter(
-      (
-        part,
-      ): part is Extract<UiChatMessagePart, { type: "text" }> =>
+      (part): part is Extract<UiChatMessagePart, { type: "text" }> =>
         part.type === "text",
     )
     .map((part) => part.text)
@@ -509,9 +515,7 @@ function assistantPresentation(
       const lastText = [...parts]
         .reverse()
         .find(
-          (
-            part,
-          ): part is Extract<UiChatMessagePart, { type: "text" }> =>
+          (part): part is Extract<UiChatMessagePart, { type: "text" }> =>
             part.type === "text",
         );
       if (lastText) lastText.text += finalText.slice(streamedText.length);
@@ -526,18 +530,14 @@ function assistantPresentation(
 
   const text = parts
     .filter(
-      (
-        part,
-      ): part is Extract<UiChatMessagePart, { type: "text" }> =>
+      (part): part is Extract<UiChatMessagePart, { type: "text" }> =>
         part.type === "text",
     )
     .map((part) => part.text)
     .join("");
   const tools = parts
     .filter(
-      (
-        part,
-      ): part is Extract<UiChatMessagePart, { type: "tool" }> =>
+      (part): part is Extract<UiChatMessagePart, { type: "tool" }> =>
         part.type === "tool",
     )
     .map((part) => part.toolCall);
@@ -600,6 +600,18 @@ function projectTurn(
           error: error?.message,
         }
       : undefined;
+  const commandChoices = events
+    .filter((event) => event.payload.rawType === "command.choices")
+    .flatMap((event) =>
+      (Array.isArray(event.payload.choices) ? event.payload.choices : [])
+        .map((value) => {
+          const choice = record(value);
+          const label = cleanString(choice.label, 120);
+          const command = cleanString(choice.command, 500);
+          return label && command ? { label, command } : null;
+        })
+        .filter((value): value is ExternalAgentCommandChoice => Boolean(value)),
+    );
   return Object.freeze({
     id: turn.id,
     sequence: turn.sequence,
@@ -615,6 +627,7 @@ function projectTurn(
         ...artifact,
         preview: cleanString(artifact.content, 600),
       })),
+    commandChoices: Object.freeze(commandChoices),
     error,
   });
 }
@@ -655,6 +668,13 @@ export function projectExternalAgentConversation(
         left.requested_at - right.requested_at,
     )
     .map((turn) => projectTurn(session, turn));
+  const latestStatus = turns.at(-1)?.status;
+  const effectiveStatus =
+    session.status === "succeeded" ||
+    session.status === "failed" ||
+    session.status === "cancelled"
+      ? session.status
+      : (latestStatus ?? session.status);
   const diagnostics = session.events.slice(-MAX_DIAGNOSTICS).map((event) => ({
     id: event.id,
     occurredAt: event.occurredAt,
@@ -670,12 +690,12 @@ export function projectExternalAgentConversation(
   }));
   return Object.freeze({
     title: session.title,
-    status: session.status,
+    status: effectiveStatus,
     turns: Object.freeze(turns),
     pendingApprovalCount: session.approvals.filter(
       (approval) => approval.status === "pending",
     ).length,
-    isRunning: session.status === "queued" || session.status === "running",
+    isRunning: effectiveStatus === "queued" || effectiveStatus === "running",
     diagnostics: Object.freeze(diagnostics),
   });
 }

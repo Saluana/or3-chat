@@ -13,13 +13,23 @@ export type ExternalAgentRunStatus =
   | "failed"
   | "cancelled";
 
+export type ExternalAgentDriver = "intern" | "runs";
+
 export interface ExternalAgentHost {
   readonly id: string;
   readonly name: string;
   readonly baseUrl: string;
   readonly credentialRef: string;
+  readonly driver?: ExternalAgentDriver;
+  readonly runtime?: "intern" | "openclaw" | "hermes";
   readonly trustedAt: string;
   readonly lastConnectedAt?: string;
+}
+
+export function externalAgentDriver(
+  host: Pick<ExternalAgentHost, "driver">,
+): ExternalAgentDriver {
+  return host.driver ?? "intern";
 }
 
 export interface ExternalAgentHostHealth {
@@ -53,8 +63,31 @@ export interface ExternalAgentRunner {
   readonly default_isolation?: string;
   readonly default_cwd?: string;
   readonly models?: readonly Readonly<Record<string, unknown>>[];
+  readonly commands?: readonly ExternalAgentCommand[];
   readonly runtime?: Readonly<Record<string, unknown>>;
   readonly [key: string]: unknown;
+}
+
+export interface ExternalAgentCommandChoice {
+  readonly label: string;
+  readonly command: string;
+}
+
+export interface ExternalAgentCommandArgument {
+  readonly name: string;
+  readonly description?: string;
+  readonly required?: boolean;
+  readonly dynamic?: boolean;
+  readonly choices?: readonly Readonly<{ value: string; label: string }>[];
+}
+
+export interface ExternalAgentCommand {
+  readonly name: string;
+  readonly command: string;
+  readonly description: string;
+  readonly category?: string;
+  readonly accepts_args?: boolean;
+  readonly args?: readonly ExternalAgentCommandArgument[];
 }
 
 export interface ExternalAgentModelReasoning {
@@ -204,6 +237,7 @@ export interface ExternalAgentSessionRef {
   readonly preview?: string;
   readonly model?: string;
   readonly thinkingLevel?: string;
+  readonly activeTurnId?: string;
 }
 
 export interface ExternalAgentPersistenceSnapshot {
@@ -352,6 +386,8 @@ export interface ExternalAgentClient {
     attachments: readonly ExternalAgentUploadAttachment[],
     options?: { signal?: AbortSignal },
   ): Promise<readonly ExternalAgentAttachment[]>;
+  /** Release browser-side staged attachment bytes when a request never starts. */
+  releaseStagedFiles?(attachments: readonly ExternalAgentAttachment[]): void;
   getTurn(
     sessionId: string,
     turnId: string,
@@ -394,6 +430,11 @@ export type ExternalAgentClientFactory = (input: {
   host: ExternalAgentHost;
   resolveCredential: () => Promise<string | null>;
 }) => ExternalAgentClient;
+
+export type ExternalAgentDriverDetector = (input: {
+  readonly baseUrl: string;
+  readonly resolveCredential: () => Promise<string | null>;
+}) => Promise<ExternalAgentDriver>;
 
 export interface ExternalAgentLaunchInput {
   readonly runnerId: string;

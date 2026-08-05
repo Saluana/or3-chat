@@ -179,6 +179,60 @@ describe("ExternalAgentEventStore", () => {
     expect(current.status).toBe("waiting_approval");
     expect(emitted).toHaveLength(2);
   });
+
+  it("accepts reused numeric event ids from different turns", () => {
+    const store = new ExternalAgentEventStore();
+    const current = session({
+      activeTurnId: "turn-2",
+      turns: [
+        {
+          id: "turn-1",
+          session_id: "session-1",
+          sequence: 1,
+          status: "succeeded",
+          continuation_mode: "replay",
+          requested_at: 1,
+        },
+        {
+          id: "turn-2",
+          session_id: "session-1",
+          sequence: 2,
+          status: "running",
+          continuation_mode: "replay",
+          requested_at: 2,
+        },
+      ],
+    });
+    const ingest = (
+      remote: Parameters<ExternalAgentEventStore["ingest"]>[0]["remote"],
+    ) =>
+      store.ingest({
+        session: current,
+        remote,
+        isCurrent: () => true,
+        emit: vi.fn(),
+      });
+
+    ingest({
+      id: 1,
+      turn_id: "turn-1",
+      seq: 1,
+      type: "text_delta",
+      text: "first",
+    });
+    ingest({
+      id: 1,
+      turn_id: "turn-2",
+      seq: 1,
+      type: "text_delta",
+      text: "second",
+    });
+
+    expect(current.events.map((event) => [event.turnId, event.text])).toEqual([
+      ["turn-1", "first"],
+      ["turn-2", "second"],
+    ]);
+  });
 });
 
 describe("ExternalAgentSnapshotPublisher", () => {
@@ -298,6 +352,36 @@ describe("ExternalAgentTurnCommandService", () => {
 });
 
 describe("ExternalAgentConnectionSupervisor", () => {
+  it("reconciles a broken stream without showing an error when the run completed", async () => {
+    const client = {
+      async *streamTurn() {
+        throw new TypeError("network connection closed");
+      },
+    } as unknown as ExternalAgentClient;
+    const supervisor = new ExternalAgentConnectionSupervisor();
+    const current = session();
+    const publishSession = vi.fn();
+    supervisor.startTurnStream({
+      client,
+      session: current,
+      turnId: "turn-1",
+      afterSeq: 0,
+      isCurrent: () => true,
+      refresh: async () => {
+        current.status = "succeeded";
+      },
+      ingest: vi.fn(),
+      publishSession,
+      persist: vi.fn(async () => undefined),
+      isStaleError: () => false,
+      presentError: () => "The agent host is unavailable.",
+    });
+
+    await vi.waitFor(() => expect(current.streamState).toBe("idle"));
+    expect(current.actionError).toBeUndefined();
+    expect(publishSession).toHaveBeenCalled();
+  });
+
   it("aborts host discovery and active streams together", async () => {
     let streamSignal: AbortSignal | undefined;
     const client = {

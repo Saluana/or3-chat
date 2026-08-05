@@ -31,6 +31,9 @@ import type {
   ExternalAgentClient,
   ExternalAgentClientFactory,
   ExternalAgentCredentialVault,
+  ExternalAgentAttachment,
+  ExternalAgentDriver,
+  ExternalAgentDriverDetector,
   ExternalAgentFollowUpInput,
   ExternalAgentHost,
   ExternalAgentLaunchInput,
@@ -115,6 +118,7 @@ function sessionFromRemote(
     runnerId: remote.runner_id,
     model: remote.model ?? ref?.model,
     thinkingLevel: ref?.thinkingLevel,
+    activeTurnId: ref?.activeTurnId,
     mode: remote.mode,
     isolation: remote.isolation,
     cwd: remote.cwd,
@@ -134,6 +138,7 @@ export interface ExternalAgentControllerOptions {
   readonly persistence: ExternalAgentPersistence;
   readonly credentials: ExternalAgentCredentialVault;
   readonly createClient: ExternalAgentClientFactory;
+  readonly detectDriver?: ExternalAgentDriverDetector;
   readonly getWorkspaceScope: () => string | null | undefined;
 }
 
@@ -141,6 +146,7 @@ export class ExternalAgentController {
   readonly #persistence: ExternalAgentPersistence;
   readonly #credentials: ExternalAgentCredentialVault;
   readonly #createClient: ExternalAgentClientFactory;
+  readonly #detectDriver?: ExternalAgentDriverDetector;
   readonly #getWorkspaceScope: () => string | null | undefined;
   readonly #publisher: ExternalAgentSnapshotPublisher;
   readonly #hostRegistry = new ExternalAgentHostRegistry();
@@ -167,6 +173,7 @@ export class ExternalAgentController {
     this.#persistence = options.persistence;
     this.#credentials = options.credentials;
     this.#createClient = options.createClient;
+    this.#detectDriver = options.detectDriver;
     this.#getWorkspaceScope = options.getWorkspaceScope;
     this.#publisher = new ExternalAgentSnapshotPublisher(() =>
       this.#createSnapshot(),
@@ -376,8 +383,8 @@ export class ExternalAgentController {
     const baseUrl = normalizeExternalAgentBaseUrl(input.baseUrl);
     const token = input.token.trim();
     if (!token) throw new Error("An access token is required");
-    const credentialRef = randomId("intern-credential");
-    const temporary: ExternalAgentHost = {
+    const credentialRef = randomId("agent-credential");
+    let temporary: ExternalAgentHost = {
       id: fallbackExternalAgentHostId(baseUrl),
       name: input.name.trim() || fallbackExternalAgentHostId(baseUrl),
       baseUrl,
@@ -398,6 +405,13 @@ export class ExternalAgentController {
     }
     let capabilities: ExternalAgentStoreSnapshot["capabilities"] = null;
     try {
+      const driver = this.#detectDriver
+        ? await this.#detectDriver({
+            baseUrl,
+            resolveCredential: () => this.#credentials.resolve(credentialRef),
+          })
+        : "intern";
+      temporary = { ...temporary, driver };
       const client = this.#createClient({
         host: temporary,
         resolveCredential: () => this.#credentials.resolve(credentialRef),
@@ -451,6 +465,8 @@ export class ExternalAgentController {
     readonly name: string;
     readonly baseUrl: string;
     readonly token: string;
+    readonly driver?: ExternalAgentDriver;
+    readonly runtime?: "intern" | "openclaw" | "hermes";
     readonly activate?: boolean;
   }): Promise<ExternalAgentHost> {
     const lease = this.#requireWorkspaceLease();
@@ -462,8 +478,7 @@ export class ExternalAgentController {
     const baseUrl = normalizeExternalAgentBaseUrl(input.baseUrl);
     const id = `or3-connect:${environmentId}`;
     const previous =
-      this.#hostRegistry.find(id) ??
-      this.#hostRegistry.findByEndpoint(baseUrl);
+      this.#hostRegistry.find(id) ?? this.#hostRegistry.findByEndpoint(baseUrl);
     const previousWasActive = previous?.id === this.#activeHostId;
     const credentialRef =
       previous?.credentialRef ?? `or3-connect-credential:${environmentId}`;
@@ -474,6 +489,8 @@ export class ExternalAgentController {
       name: input.name.trim() || previous?.name || environmentId,
       baseUrl,
       credentialRef,
+      driver: input.driver,
+      runtime: input.runtime,
       trustedAt: previous?.trustedAt ?? nowIso(),
       lastConnectedAt: previous?.lastConnectedAt,
     };
@@ -485,10 +502,7 @@ export class ExternalAgentController {
       ),
       host,
     ];
-    if (
-      previous &&
-      previous.credentialRef !== credentialRef
-    ) {
+    if (previous && previous.credentialRef !== credentialRef) {
       await this.#credentials.remove(previous.credentialRef);
       this.#assertWorkspaceLease(lease);
     }
@@ -514,6 +528,8 @@ export class ExternalAgentController {
       readonly name: string;
       readonly baseUrl: string;
       readonly token: string;
+      readonly driver?: ExternalAgentDriver;
+      readonly runtime?: "intern" | "openclaw" | "hermes";
     }[],
   ): Promise<void> {
     const lease = this.#requireWorkspaceLease();
@@ -528,24 +544,79 @@ export class ExternalAgentController {
         throw this.#staleWorkspaceError();
       }
     };
-    const normalized = environments.map((environment) => {
+    const malformedCloudIds = new Set<string>();
+    const normalized: Array<{
+      environmentId: string;
+      name: string;
+      baseUrl: string;
+      token: string;
+      driver?: ExternalAgentDriver;
+      runtime?: "intern" | "openclaw" | "hermes";
+    }> = [];
+    const seenCloudIds = new Set<string>();
+    let malformedCloudCount = 0;
+    for (const environment of environments) {
       const environmentId = environment.environmentId.trim();
-      const token = environment.token.trim();
-      if (!environmentId || !token) {
-        throw new Error("Cloud computer details are incomplete.");
+      try {
+        const token = environment.token.trim();
+        if (!environmentId || !token) {
+          throw new Error("missing environment identity or credential");
+        }
+        if (seenCloudIds.has(environmentId)) {
+          throw new Error("duplicate environment identity");
+        }
+        if (
+          environment.driver !== undefined &&
+          environment.driver !== "intern" &&
+          environment.driver !== "runs"
+        ) {
+          throw new Error("unknown connection driver");
+        }
+        if (
+          environment.runtime !== undefined &&
+          environment.runtime !== "intern" &&
+          environment.runtime !== "openclaw" &&
+          environment.runtime !== "hermes"
+        ) {
+          throw new Error("unknown runtime identity");
+        }
+        if (
+          (environment.runtime === "intern" &&
+            environment.driver === "runs") ||
+          (environment.runtime !== undefined &&
+            environment.runtime !== "intern" &&
+            environment.driver !== "runs")
+        ) {
+          throw new Error("runtime and driver do not match");
+        }
+        const baseUrl = normalizeExternalAgentBaseUrl(environment.baseUrl);
+        if (environment.runtime === "openclaw" && !baseUrl.endsWith("/or3")) {
+          throw new Error("OpenClaw host URL is missing /or3/");
+        }
+        if (
+          environment.runtime === "hermes" &&
+          new URL(baseUrl).pathname !== "/"
+        ) {
+          throw new Error("Hermes host URL must use the root path");
+        }
+        seenCloudIds.add(environmentId);
+        normalized.push({
+          environmentId,
+          name: environment.name.trim() || environmentId,
+          baseUrl,
+          token,
+          driver: environment.driver,
+          runtime: environment.runtime,
+        });
+      } catch (error) {
+        malformedCloudCount += 1;
+        if (environmentId) malformedCloudIds.add(environmentId);
+        console.warn(
+          `[external-agents] skipped malformed cloud host${
+            environmentId ? ` ${environmentId}` : ""
+          }: ${error instanceof Error ? error.message : "invalid record"}`,
+        );
       }
-      return {
-        environmentId,
-        name: environment.name.trim() || environmentId,
-        baseUrl: normalizeExternalAgentBaseUrl(environment.baseUrl),
-        token,
-      };
-    });
-    if (
-      new Set(normalized.map((environment) => environment.environmentId))
-        .size !== normalized.length
-    ) {
-      throw new Error("Cloud computer inventory contains duplicate IDs.");
     }
 
     const previousCloudHosts = this.#hosts.filter((host) =>
@@ -568,13 +639,21 @@ export class ExternalAgentController {
         name: environment.name,
         baseUrl: environment.baseUrl,
         credentialRef,
+        driver: environment.driver,
+        runtime: environment.runtime,
         trustedAt: previous?.trustedAt ?? nowIso(),
         lastConnectedAt: previous?.lastConnectedAt,
       });
     }
     assertCurrent();
 
-    const nextCloudIds = new Set(nextCloudHosts.map((host) => host.id));
+    const retainedMalformedCloudHosts = previousCloudHosts.filter(
+      (host) =>
+        !nextCloudHosts.some((candidate) => candidate.id === host.id) &&
+        malformedCloudIds.has(host.id.slice("or3-connect:".length)),
+    );
+    const cloudHosts = [...nextCloudHosts, ...retainedMalformedCloudHosts];
+    const nextCloudIds = new Set(cloudHosts.map((host) => host.id));
     const missingCloudHosts = previousCloudHosts.filter(
       (host) => !nextCloudIds.has(host.id),
     );
@@ -589,18 +668,22 @@ export class ExternalAgentController {
       nextActiveHostId?.startsWith("or3-connect:") &&
       !nextCloudIds.has(nextActiveHostId)
     ) {
-      nextActiveHostId = nextCloudHosts[0]?.id ?? null;
+      nextActiveHostId = cloudHosts[0]?.id ?? null;
     } else if (!nextActiveHostId) {
-      nextActiveHostId = nextCloudHosts[0]?.id ?? null;
+      nextActiveHostId = cloudHosts[0]?.id ?? null;
     }
-    const nextActiveHost = [...directHosts, ...nextCloudHosts].find(
+    const nextActiveHost = [...directHosts, ...cloudHosts].find(
       (host) => host.id === nextActiveHostId,
     );
     const activeHostChanged = nextActiveHostId !== this.#activeHostId;
     const activeEndpointChanged =
       Boolean(previousActiveHost && nextActiveHost) &&
       previousActiveHost!.baseUrl !== nextActiveHost!.baseUrl;
-    if (activeHostChanged || activeEndpointChanged) {
+    const activeRuntimeChanged =
+      Boolean(previousActiveHost && nextActiveHost) &&
+      (previousActiveHost!.driver !== nextActiveHost!.driver ||
+        previousActiveHost!.runtime !== nextActiveHost!.runtime);
+    if (activeHostChanged || activeEndpointChanged || activeRuntimeChanged) {
       this.#abortActiveWork();
       this.#generation += 1;
       this.#client = null;
@@ -611,8 +694,12 @@ export class ExternalAgentController {
       this.#capabilities = null;
       this.#runners = [];
     }
-    this.#hosts = [...directHosts, ...nextCloudHosts];
+    this.#hosts = [...directHosts, ...cloudHosts];
     this.#activeHostId = nextActiveHostId;
+    if (malformedCloudCount && !normalized.length && !nextActiveHost) {
+      this.#connectionError =
+        "Cloud host details were incomplete, so no new cloud hosts were loaded.";
+    }
     await this.#persist(lease);
     assertCurrent();
 
@@ -625,6 +712,7 @@ export class ExternalAgentController {
       nextActiveHost?.id.startsWith("or3-connect:") &&
       (activeHostChanged ||
         activeEndpointChanged ||
+        activeRuntimeChanged ||
         this.#connectionState === "disconnected" ||
         this.#connectionState === "offline");
     if (shouldReconnectCloudHost && nextActiveHost) {
@@ -958,10 +1046,13 @@ export class ExternalAgentController {
   }
 
   canCancel(session: ExternalAgentSession): boolean {
+    const latestStatus = session.turns.at(-1)?.status;
     return (
       this.#canActOnSession(session) &&
       this.#runnerChatCapability(session, "cancel") &&
       Boolean(session.activeTurnId) &&
+      !isTerminal(session.status) &&
+      !isTerminal(mapExternalAgentStatus(latestStatus, session.status)) &&
       (session.status === "queued" ||
         session.status === "running" ||
         session.status === "waiting_approval")
@@ -991,9 +1082,13 @@ export class ExternalAgentController {
   }
 
   canFollowUp(session: ExternalAgentSession): boolean {
+    const latestStatus = mapExternalAgentStatus(
+      session.turns.at(-1)?.status,
+      session.status,
+    );
     if (
       !this.#canActOnSession(session) ||
-      !isTerminal(session.status) ||
+      (!isTerminal(session.status) && !isTerminal(latestStatus)) ||
       !session.turns.length
     ) {
       return false;
@@ -1039,40 +1134,42 @@ export class ExternalAgentController {
           this.#connections.hostSignal,
         )
       : [];
-    this.#assertGeneration(hostId, generation);
-    this.#assertWorkspaceLease(lease);
-    const appSessionKey = `${this.#workspaceSessionPrefix(true, lease)}${randomId("session")}`;
-    const remote = await this.#commands.createSession(
-      client,
-      {
-        app_session_key: appSessionKey,
-        runner_id: effectiveInput.runnerId,
-        continuation_mode: effectiveInput.continuationMode ?? "replay",
-        model: effectiveInput.model?.trim() || undefined,
-        mode: effectiveInput.mode,
-        isolation: effectiveInput.isolation,
-        cwd: effectiveInput.cwd?.trim() || undefined,
-      },
-      this.#connections.hostSignal,
-    );
-    this.#assertGeneration(hostId, generation);
-    this.#assertWorkspaceLease(lease);
-    const session = sessionFromRemote(hostId, generation, remote, {
-      hostId,
-      remoteSessionId: remote.id,
-      title: instruction.slice(0, 80),
-      runnerId: effectiveInput.runnerId,
-    });
-    session.model = effectiveInput.model?.trim() || remote.model;
-    session.thinkingLevel =
-      effectiveInput.thinkingLevel?.toLowerCase().trim() || undefined;
-    this.#sessions.set(session);
-    this.#rememberSession(session);
-    await this.#persist(lease);
-    this.#assertWorkspaceLease(lease);
-    this.#emit({ type: "session", session });
-
+    let attachmentsTransferred = false;
+    let session: ExternalAgentSession | undefined;
     try {
+      this.#assertGeneration(hostId, generation);
+      this.#assertWorkspaceLease(lease);
+      const appSessionKey = `${this.#workspaceSessionPrefix(true, lease)}${randomId("session")}`;
+      const remote = await this.#commands.createSession(
+        client,
+        {
+          app_session_key: appSessionKey,
+          runner_id: effectiveInput.runnerId,
+          continuation_mode: effectiveInput.continuationMode ?? "replay",
+          model: effectiveInput.model?.trim() || undefined,
+          mode: effectiveInput.mode,
+          isolation: effectiveInput.isolation,
+          cwd: effectiveInput.cwd?.trim() || undefined,
+        },
+        this.#connections.hostSignal,
+      );
+      this.#assertGeneration(hostId, generation);
+      this.#assertWorkspaceLease(lease);
+      session = sessionFromRemote(hostId, generation, remote, {
+        hostId,
+        remoteSessionId: remote.id,
+        title: instruction.slice(0, 80),
+        runnerId: effectiveInput.runnerId,
+      });
+      session.model = effectiveInput.model?.trim() || remote.model;
+      session.thinkingLevel =
+        effectiveInput.thinkingLevel?.toLowerCase().trim() || undefined;
+      this.#sessions.set(session);
+      this.#rememberSession(session);
+      await this.#persist(lease);
+      this.#assertWorkspaceLease(lease);
+      this.#emit({ type: "session", session });
+
       const started = await this.#commands.startTurn(
         client,
         remote.id,
@@ -1089,29 +1186,38 @@ export class ExternalAgentController {
         },
         this.#connections.hostSignal,
       );
+      attachmentsTransferred = true;
+      this.#commands.releaseFiles(client, attachments);
       this.#assertGeneration(hostId, generation);
       session.activeTurnId = started.turn_id;
-      session.status = mapExternalAgentStatus(started.status, "queued");
+      const startedStatus = mapExternalAgentStatus(started.status, "queued");
+      session.status = startedStatus;
       session.updatedAt = nowIso();
       session.actionError = undefined;
       await this.#refreshTurn(session, started.turn_id, client, lease);
+      this.#finalizeTerminalStart(session, startedStatus);
       this.#emit({ type: "session", session });
-      this.#startStream(session, started.turn_id);
+      if (!isTerminal(session.status)) this.#startStream(session, started.turn_id);
       return session;
     } catch (error) {
+      if (!attachmentsTransferred && attachments.length) {
+        this.#commands.releaseFiles(client, attachments);
+      }
       if (this.#isStaleResponseError(error)) throw error;
       const message = redactErrorMessage(
         error,
         "The remote session was created, but its first turn did not start.",
       );
-      session.status = "failed";
-      session.error = message;
-      session.actionError = message;
-      session.completedAt = nowIso();
-      session.updatedAt = nowIso();
-      this.#rememberSession(session);
-      await this.#persist(lease).catch(() => undefined);
-      this.#emit({ type: "session", session });
+      if (session) {
+        session.status = "failed";
+        session.error = message;
+        session.actionError = message;
+        session.completedAt = nowIso();
+        session.updatedAt = nowIso();
+        this.#rememberSession(session);
+        await this.#persist(lease).catch(() => undefined);
+        this.#emit({ type: "session", session });
+      }
       throw error;
     }
   }
@@ -1125,6 +1231,7 @@ export class ExternalAgentController {
     const client = this.#requireSessionClient(session);
     const text =
       typeof input === "string" ? input.trim() : input.instruction.trim();
+    const isSlashCommand = /^\/\S+(?:\s|$)/u.test(text);
     if (!text) throw new Error("Follow-up instruction is required");
     if (!this.canFollowUp(session)) {
       throw new Error(
@@ -1144,6 +1251,8 @@ export class ExternalAgentController {
             confirmDangerous: input.confirmDangerous,
             attachments: input.attachments,
           };
+    let attachments: readonly ExternalAgentAttachment[] = [];
+    let attachmentsTransferred = false;
     try {
       if (settings) {
         const validation = validateExternalAgentLaunch(this.#runners, {
@@ -1156,7 +1265,7 @@ export class ExternalAgentController {
         settings.thinkingLevel =
           validation.input.thinkingLevel?.toLowerCase().trim() || undefined;
       }
-      const attachments = settings?.attachments?.length
+      attachments = settings?.attachments?.length
         ? await this.#commands.stageFiles(
             client,
             settings.attachments,
@@ -1173,8 +1282,12 @@ export class ExternalAgentController {
           continuation_mode: "replay",
           ...(settings
             ? {
-                model: settings.model,
-                thinking_level: settings.thinkingLevel,
+                ...(isSlashCommand
+                  ? {}
+                  : {
+                      model: settings.model,
+                      thinking_level: settings.thinkingLevel,
+                    }),
                 mode: settings.mode,
                 isolation: settings.isolation,
                 cwd: settings.cwd,
@@ -1183,8 +1296,10 @@ export class ExternalAgentController {
         },
         this.#connections.hostSignal,
       );
+      attachmentsTransferred = true;
+      this.#commands.releaseFiles(client, attachments);
       this.#assertSessionGeneration(session);
-      if (settings) {
+      if (settings && !isSlashCommand) {
         session.model = settings.model;
         session.thinkingLevel = settings.thinkingLevel;
         session.mode = settings.mode;
@@ -1192,15 +1307,20 @@ export class ExternalAgentController {
         session.cwd = settings.cwd;
       }
       session.activeTurnId = started.turn_id;
-      session.status = mapExternalAgentStatus(started.status, "queued");
+      const startedStatus = mapExternalAgentStatus(started.status, "queued");
+      session.status = startedStatus;
       session.actionError = undefined;
       session.error = undefined;
       session.completedAt = undefined;
       session.updatedAt = nowIso();
       await this.#refreshTurn(session, started.turn_id, client, lease);
+      this.#finalizeTerminalStart(session, startedStatus);
       this.#emit({ type: "session", session });
-      this.#startStream(session, started.turn_id);
+      if (!isTerminal(session.status)) this.#startStream(session, started.turn_id);
     } catch (error) {
+      if (!attachmentsTransferred && attachments.length) {
+        this.#commands.releaseFiles(client, attachments);
+      }
       if (this.#isStaleResponseError(error)) throw error;
       session.actionError = redactErrorMessage(
         error,
@@ -1218,17 +1338,22 @@ export class ExternalAgentController {
     if (!this.canCancel(session) || !session.activeTurnId) {
       throw new Error("This session has no cancellable active turn");
     }
+    // The remote stop can synchronously deliver run.cancelled over SSE. That
+    // terminal event clears session.activeTurnId while this request is still
+    // awaiting its response, so keep the accepted turn id stable for both the
+    // stop and the authoritative status refresh.
+    const turnId = session.activeTurnId;
     const previousStatus = session.status;
     try {
       await this.#commands.cancel(
         client,
         session.remoteSessionId,
-        session.activeTurnId,
+        turnId,
         this.#connections.hostSignal,
       );
       this.#assertSessionGeneration(session);
       session.actionError = undefined;
-      await this.#refreshTurn(session, session.activeTurnId, client, lease);
+      await this.#refreshTurn(session, turnId, client, lease);
     } catch (error) {
       if (this.#isStaleResponseError(error)) throw error;
       session.status = previousStatus;
@@ -1339,12 +1464,11 @@ export class ExternalAgentController {
     remoteSessionId: string,
     hostId = this.#activeHostId ?? undefined,
   ): ExternalAgentSession | undefined {
-    if (hostId) {
-      return this.#sessions.get(hostId, remoteSessionId);
-    }
-    return this.#sessions.values().find(
-      (session) => session.remoteSessionId === remoteSessionId,
-    );
+    // A remote session id is only unique within a host. Never fall back to a
+    // different host (or to an inactive host when no host is selected): doing
+    // so can relabel an old session with the active runtime and dispatch an
+    // action to the wrong agent service.
+    return hostId ? this.#sessions.get(hostId, remoteSessionId) : undefined;
   }
 
   async ensureSession(
@@ -1356,17 +1480,24 @@ export class ExternalAgentController {
       requestedHostId,
       remoteSessionId,
     );
-    const existing = this.getSession(remoteSessionId, hostId);
-    if (existing) return existing;
+    let existing = this.getSession(remoteSessionId, hostId);
+    const activeHostReady = () =>
+      hostId === this.#activeHostId &&
+      Boolean(this.#client) &&
+      (this.#connectionState === "online" ||
+        this.#connectionState === "degraded");
     if (
-      hostId !== this.#activeHostId ||
-      !this.#client ||
-      (this.#connectionState !== "online" &&
-        this.#connectionState !== "degraded")
-    ) {
+      existing &&
+      activeHostReady() &&
+      existing.hostGeneration === this.#generation
+    )
+      return existing;
+    if (!activeHostReady()) {
       const connected = await this.switchHost(hostId);
       if (!connected) throw new Error("Could not reconnect session host");
       lease = this.#requireWorkspaceLease();
+      existing = this.getSession(remoteSessionId, hostId);
+      if (existing?.hostGeneration === this.#generation) return existing;
     }
     const client = this.#requireClient();
     const generation = this.#generation;
@@ -1402,7 +1533,7 @@ export class ExternalAgentController {
       (this.#connectionState !== "online" &&
         this.#connectionState !== "degraded")
     ) {
-      throw new Error("Connect a trusted or3-intern host first");
+      throw new Error("Connect a trusted agent service first");
     }
     return this.#client;
   }
@@ -1661,7 +1792,7 @@ export class ExternalAgentController {
       session.activeTurnId === latest.id &&
       isTerminal(session.status) &&
       !isTerminal(nextStatus);
-    session.activeTurnId = latest.id;
+    session.activeTurnId = isTerminal(nextStatus) ? undefined : latest.id;
     if (!preserveTerminal) session.status = nextStatus;
     if (latest.model !== undefined) session.model = latest.model;
     if (latest.thinking_level !== undefined) {
@@ -1715,6 +1846,10 @@ export class ExternalAgentController {
         this.#sessions.isCurrent(session),
       emit: (event) => this.#emit(event),
     });
+    // Event ingestion can change the canonical turn/session status (including
+    // terminal runtime errors). Keep the lightweight sidebar reference in
+    // sync before a stream completion persists it.
+    this.#rememberSession(session);
   }
 
   #startStream(session: ExternalAgentSession, turnId: string): void {
@@ -1749,6 +1884,23 @@ export class ExternalAgentController {
           "Live updates disconnected. Reconnect to resume.",
         ),
     });
+  }
+
+  /**
+   * A runtime may complete a local command while the start response is being
+   * hydrated. Preserve that terminal result and never hand it to the live
+   * stream supervisor, which would otherwise leave the composer looking busy
+   * until a reconnect.
+   */
+  #finalizeTerminalStart(
+    session: ExternalAgentSession,
+    startedStatus: ReturnType<typeof mapExternalAgentStatus>,
+  ): void {
+    if (!isTerminal(startedStatus)) return;
+    session.status = startedStatus;
+    session.activeTurnId = undefined;
+    session.streamState = "idle";
+    session.completedAt ??= nowIso();
   }
 
   #abortActiveWork(): void {

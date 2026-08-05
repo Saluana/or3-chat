@@ -96,12 +96,20 @@ export default defineEventHandler(async (event) => {
                 name: name || authorization.host.name,
                 platform: authorization.host.platform,
                 architecture: authorization.host.architecture,
+                driver: authorization.host.driver,
+                runtime: authorization.host.runtime,
+                base_path: authorization.host.base_path,
                 host_id: authorization.host.host_id,
                 signing_public_key: authorization.host.signing_public_key,
                 noise_public_key: authorization.host.noise_public_key,
                 control_token_hash: hashConnectSecret(controlToken),
                 access_credential_ciphertext: encryptConnectCredential(
-                    { controlToken },
+                    {
+                        controlToken,
+                        driver: authorization.host.driver,
+                        runtime: authorization.host.runtime,
+                        basePath: authorization.host.base_path,
+                    },
                     config.encryptionKey,
                     {
                         purpose: 'environment-access',

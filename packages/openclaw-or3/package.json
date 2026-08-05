@@ -1,0 +1,38 @@
+{
+  "name": "@or3/openclaw",
+  "version": "0.1.0",
+  "description": "Minimal Sessions/Runs bridge from OR3 Chat to OpenClaw",
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Saluana/or3-chat.git",
+    "directory": "packages/openclaw-or3"
+  },
+  "bugs": {
+    "url": "https://github.com/Saluana/or3-chat/issues"
+  },
+  "homepage": "https://github.com/Saluana/or3-chat/tree/main/packages/openclaw-or3",
+  "files": [
+    "index.js",
+    "src/bridge.js",
+    "openclaw.plugin.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./bridge": "./src/bridge.js"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.7.1-2 <2026.8.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ]
+  }
+}

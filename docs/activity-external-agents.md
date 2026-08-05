@@ -23,9 +23,10 @@ together; direct run references can still open in the shared pane system.
 
 ## External-agent security boundary
 
-OR3 Chat never starts a provider CLI. A trusted `or3-intern` host owns runner
-discovery, authentication checks, allowed roots, flags, sandbox/permission
-policy, session state, approvals, artifacts, and cancellation.
+OR3 Chat never starts a provider CLI. A trusted agent service owns runner
+discovery, authentication checks, sandbox/permission policy, session state,
+approvals, artifacts, and cancellation. Existing `or3-intern` hosts use the
+Intern protocol; OpenClaw and Hermes use the smaller Sessions/Runs protocol.
 
 The framework-free `@or3/intern-client` package is the protocol boundary for
 both Nuxt clients. It:
@@ -119,9 +120,53 @@ Do not import a feature's editor or page component merely to read lifecycle
 state. Expose a framework-free read boundary first; this is why Document AI is
 not an initial Activity source.
 
-## Adding a runner
+## Connecting OpenClaw or Hermes
 
-Runner support belongs in `or3-intern`, not OR3 Chat:
+Both services use the existing **Agents → Connection settings → Advanced**
+form. OR3 detects the protocol from `/v1/capabilities`; the user supplies only
+a URL and bearer token.
+
+For OpenClaw, install `@or3/openclaw`, restart the Gateway, and connect to its
+`/or3/` URL with the existing Gateway bearer token. Package-specific commands
+and browser-origin configuration are documented in
+`packages/openclaw-or3/README.md`.
+
+Hermes needs no OR3 plugin. Enable its API server in `~/.hermes/.env`:
+
+```dotenv
+API_SERVER_ENABLED=true
+API_SERVER_KEY=replace-with-a-long-random-value
+API_SERVER_CORS_ORIGINS=http://localhost:3000
+```
+
+Run `hermes gateway`, then connect OR3 to `http://127.0.0.1:8642/` with the
+value of `API_SERVER_KEY`. Change the CORS origin to OR3's exact browser origin;
+when binding beyond loopback, use a trusted private network or HTTPS.
+
+Streaming, slash commands, approvals, and stop requests all travel through the
+same Runs client. Each runtime remains responsible for command authorization
+and approval policy. Attachment controls appear only when a Runs service
+advertises inline attachment support; OpenClaw does, while unsupported runtimes
+keep the control hidden.
+
+Runs capability discovery may also advertise a model catalog, per-model
+thinking levels, and a command catalog. OR3 reuses the existing model/reasoning
+picker, fills slash-command suggestions from that catalog, and renders bounded
+command-choice buttons returned by the runtime. Mode, isolation, workspace,
+and other settings stay hidden unless the selected runner explicitly supports
+them.
+
+The OpenClaw bridge canonicalizes its session keys the same way as the Gateway,
+connects its correlated chat event stream before `chat.send`, and registers the
+pending run before dispatch. This keeps assistant deltas incremental and avoids
+losing the first streamed events. SSE connections emit keepalives during quiet
+tool work, and the bridge repeats bounded `agent.wait` calls plus a final
+history reconciliation so long runs do not silently disappear after a polling
+timeout.
+
+## Adding an Intern runner
+
+Provider-specific Intern runner support belongs in `or3-intern`, not OR3 Chat:
 
 1. implement discovery and execution in the service;
 2. advertise runner, model, mode, isolation, approval, and cancellation

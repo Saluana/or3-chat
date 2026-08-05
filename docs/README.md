@@ -35,8 +35,9 @@ Welcome to the OR3 Chat system documentation. This guide covers plugin developme
 
 ## Releases and Operations
 
+-   **[Installation and operations](installation.md)** - Local, Docker, and public VPS setup with Caddy
 -   **[Package upgrades and releases](releasing.md)** - Versioning, trusted publishing, registry verification, and creator release order
--   **[Publish and deploy to a VPS](publish-and-vps.md)** - First publication and single-server Docker deployment
+-   **[Publish and deploy to a VPS](publish-and-vps.md)** - Creator publishing and release workflow
 
 ## Architecture
 

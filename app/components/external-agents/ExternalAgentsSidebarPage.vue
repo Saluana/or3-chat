@@ -15,12 +15,14 @@
           variant="ghost"
           color="neutral"
           size="sm"
-          icon="i-lucide-chevron-left"
+          :icon="iconChevronLeft"
           @click="setActivePage('sidebar-home')"
         >
           Home
         </UButton>
-        <div class="agent-sidebar-header-actions flex shrink-0 items-center gap-1">
+        <div
+          class="agent-sidebar-header-actions flex shrink-0 items-center gap-1"
+        >
           <UTooltip text="Connection settings" :delay-duration="0">
             <UButton
               class="agent-sidebar-header-button"
@@ -28,7 +30,7 @@
               color="neutral"
               size="sm"
               square
-              icon="i-lucide-settings-2"
+              :icon="iconSettings"
               aria-label="Connection settings"
               @click="showConnections = true"
             />
@@ -38,7 +40,7 @@
               class="agent-new-button whitespace-nowrap"
               size="sm"
               variant="soft"
-              icon="i-lucide-bot"
+              :icon="iconBot"
               aria-label="New agent"
               @click="openLauncher"
             >
@@ -52,7 +54,7 @@
 
       <UInput
         v-model="query"
-        icon="i-lucide-search"
+        :icon="iconSearch"
         placeholder="Search agent sessions"
         aria-label="Search agent sessions"
         class="agent-sidebar-search w-full"
@@ -86,14 +88,12 @@
       </UButton>
     </div>
 
-    <div
-      class="agent-sidebar-history min-h-0 flex-1 overflow-y-auto px-2 pb-4"
-    >
+    <div class="agent-sidebar-history min-h-0 flex-1 overflow-y-auto px-2 pb-4">
       <SidebarEmptyState
         v-if="!history.length"
         title="No agent sessions yet"
         description="Start with an instruction. Tools, approvals, and results will appear in the conversation."
-        icon="i-lucide-bot"
+        :icon="iconBot"
       >
         <template #actions>
           <UButton size="sm" @click="openLauncher">New agent</UButton>
@@ -114,7 +114,7 @@
       >
         <div>
           <UIcon
-            name="i-lucide-search-x"
+            :name="iconSearchEmpty"
             class="mx-auto mb-2 size-6 text-[var(--md-on-surface-variant)]"
           />
           <p class="text-sm font-medium">No matching sessions</p>
@@ -155,22 +155,22 @@
               <span class="mt-1 grid size-4 shrink-0 place-items-center">
                 <UIcon
                   v-if="item.status === 'running' || item.status === 'queued'"
-                  name="i-lucide-loader-circle"
+                  :name="iconLoading"
                   class="size-3.5 animate-spin"
                 />
                 <UIcon
                   v-else-if="item.pendingApprovalCount"
-                  name="i-lucide-shield-alert"
+                  :name="iconShieldAlert"
                   class="size-3.5 text-[var(--md-extended-color-warning-color)]"
                 />
                 <UIcon
                   v-else-if="item.status === 'failed'"
-                  name="i-lucide-circle-alert"
+                  :name="iconWarning"
                   class="size-3.5 text-[var(--md-error)]"
                 />
                 <UIcon
                   v-else
-                  name="i-lucide-bot"
+                  :name="iconBot"
                   class="size-3.5 text-[var(--md-on-surface-variant)]"
                 />
               </span>
@@ -213,10 +213,16 @@
     </div>
 
     <footer
-      class="agent-sidebar-footer flex shrink-0 items-center gap-2 border-t border-[var(--md-outline-variant)] px-3 py-2"
+      class="agent-sidebar-footer shrink-0 border-t border-[var(--md-outline-variant)] px-2 py-1.5"
+    >
+      <UPopover v-model:open="hostSwitcherOpen">
+        <button
+          type="button"
+          class="flex w-full items-center gap-2 rounded-[var(--md-border-radius)] px-2 py-1.5 text-left hover:bg-[var(--md-surface-container)] focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
+          aria-label="Switch agent host"
     >
       <span
-        class="size-2 rounded-full"
+            class="size-2 shrink-0 rounded-full"
         :class="
           connected
             ? 'bg-[var(--md-extended-color-success-color)]'
@@ -234,12 +240,95 @@
       <span v-if="approvalCount" class="text-xs"
         >{{ approvalCount }} waiting</span
       >
+          <UIcon :name="iconChevronRight" class="size-3 rotate-[-90deg]" />
+        </button>
+
+        <template #content>
+          <div class="w-72 p-2" data-testid="agent-host-switcher">
+            <p
+              class="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-[var(--md-on-surface-variant)]"
+            >
+              Agent hosts
+            </p>
+            <button
+              v-for="host in hostItems"
+              :key="host.value"
+              type="button"
+              class="flex w-full items-center gap-2 rounded-[var(--md-border-radius)] px-2 py-2 text-left hover:bg-[var(--md-surface-container)] disabled:opacity-60"
+              :disabled="quickHostPending"
+              @click="quickSwitchHost(host.value)"
+            >
+              <span
+                class="size-2 shrink-0 rounded-full"
+                :class="
+                  host.value === snapshot?.activeHostId && connected
+                    ? 'bg-[var(--md-extended-color-success-color)]'
+                    : 'bg-[var(--md-on-surface-variant)] opacity-45'
+                "
+              />
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-medium">{{
+                  host.label
+                }}</span>
+                <span
+                  class="block truncate text-[11px] text-[var(--md-on-surface-variant)]"
+                  >{{ host.description }}</span
+                >
+              </span>
+              <UIcon
+                v-if="host.value === snapshot?.activeHostId"
+                :name="iconCheck"
+                class="size-4 shrink-0"
+              />
+            </button>
+
+            <form
+              v-if="pinCredentialStatus.locked"
+              class="mt-2 border-t border-[var(--md-outline-variant)] px-2 pt-2"
+              @submit.prevent="quickUnlockHosts"
+            >
+              <label class="text-xs font-medium" for="quick-host-pin">
+                Unlock saved hosts
+              </label>
+              <div class="mt-1 flex gap-1.5">
+                <input
+                  id="quick-host-pin"
+                  v-model="quickUnlockPin"
+                  type="password"
+                  inputmode="numeric"
+                  autocomplete="current-password"
+                  maxlength="6"
+                  class="min-w-0 flex-1 rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-transparent px-2 py-1.5 text-sm"
+                  placeholder="6-digit PIN"
+                />
+                <UButton type="submit" size="xs" :loading="quickHostPending">
+                  Unlock
+                </UButton>
+              </div>
+            </form>
+            <p
+              v-if="quickSwitchError"
+              class="px-2 pt-2 text-xs text-[var(--md-error)]"
+              role="status"
+            >
+              {{ quickSwitchError }}
+            </p>
+            <button
+              type="button"
+              class="mt-2 w-full border-t border-[var(--md-outline-variant)] px-2 pt-2 text-left text-xs font-medium text-[var(--md-primary)]"
+              @click="openConnections"
+            >
+              Manage connections
+            </button>
+          </div>
+        </template>
+      </UPopover>
     </footer>
 
     <UModal
       v-model:open="showConnections"
       title="Agent connections"
-      description="Manage trusted or3-intern hosts and credentials."
+      description="Manage trusted agent services and credentials."
       :ui="{
         overlay: 'bg-black/35 backdrop-blur-[3px]',
         content:
@@ -254,7 +343,7 @@
           <span
             class="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
           >
-            <UIcon name="i-lucide-network" class="size-4" />
+            <UIcon :name="iconNetwork" class="size-4" />
           </span>
           <span class="truncate text-base font-semibold sm:text-lg">
             Agent connections
@@ -295,7 +384,7 @@
                 variant="outline"
                 color="neutral"
                 square
-                icon="i-lucide-plus"
+                :icon="iconPlus"
                 aria-label="Add a trusted host"
                 @click="focusAddHost"
               />
@@ -349,7 +438,7 @@
               <span
                 class="mx-auto grid size-9 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
               >
-                <UIcon name="i-lucide-server-cog" class="size-4" />
+                <UIcon :name="iconServer" class="size-4" />
               </span>
               <p class="mt-2 text-sm font-medium">No hosts yet</p>
               <p
@@ -364,7 +453,7 @@
             >
               <div class="flex items-start gap-2">
                 <UIcon
-                  name="i-lucide-shield-check"
+                  :name="iconShieldCheck"
                   class="mt-0.5 size-4 shrink-0 text-[var(--md-primary)]"
                 />
                 <p
@@ -377,10 +466,7 @@
             </div>
           </aside>
 
-          <div
-            class="min-h-0 overflow-y-auto"
-            :aria-busy="hostActionPending"
-          >
+          <div class="min-h-0 overflow-y-auto" :aria-busy="hostActionPending">
             <section
               v-if="activeHost"
               class="border-b border-[var(--md-outline-variant)] p-4 sm:p-5"
@@ -396,11 +482,7 @@
                   "
                 >
                   <UIcon
-                    :name="
-                      connected
-                        ? 'i-lucide-circle-check'
-                        : 'i-lucide-server-off'
-                    "
+                    :name="connected ? iconCheck : iconServerOff"
                     class="size-5"
                   />
                 </span>
@@ -425,6 +507,11 @@
                     {{ activeHost.baseUrl }}
                   </p>
                   <p
+                    class="mt-1 text-[11px] text-[var(--md-on-surface-variant)]"
+                  >
+                    {{ activeRuntimeLabel }} · {{ activeDriverLabel }}
+                  </p>
+                  <p
                     v-if="
                       snapshot?.connectionError && !pinCredentialStatus.locked
                     "
@@ -444,13 +531,10 @@
                     class="mt-2 text-[11px] leading-relaxed text-[var(--md-on-surface-variant)]"
                   >
                     Going offline closes this browser connection only. The
-                    computer stays linked to this workspace until you remove
-                    it.
+                    computer stays linked to this workspace until you remove it.
                   </p>
                 </div>
-                <div
-                  class="flex shrink-0 flex-wrap gap-1"
-                >
+                <div class="flex shrink-0 flex-wrap gap-1">
                   <UTooltip
                     v-if="!pinCredentialStatus.locked"
                     :text="
@@ -467,10 +551,10 @@
                       variant="soft"
                       :icon="
                         connected
-                          ? 'i-lucide-refresh-cw'
+                          ? iconRefresh
                           : activeHostNeedsCredential
-                            ? 'i-lucide-key-round'
-                            : 'i-lucide-plug-zap'
+                            ? iconKey
+                            : iconConnect
                       "
                       :loading="hostActionPending"
                       @click="
@@ -497,7 +581,7 @@
                       size="sm"
                       variant="ghost"
                       color="neutral"
-                      icon="i-lucide-unplug"
+                      :icon="iconDisconnect"
                       aria-label="Go offline for now"
                       @click="goOfflineForNow"
                     >
@@ -513,7 +597,7 @@
                       size="sm"
                       variant="ghost"
                       color="error"
-                      icon="i-lucide-trash-2"
+                      :icon="iconTrash"
                       :loading="hostActionPending"
                       @click="requestCloudComputerRemoval"
                     >
@@ -533,7 +617,7 @@
                       variant="ghost"
                       color="neutral"
                       square
-                      icon="i-lucide-lock"
+                      :icon="iconLock"
                       aria-label="Lock saved token"
                       @click="lockSavedCredentials"
                     />
@@ -542,10 +626,7 @@
               </div>
 
               <div
-                v-if="
-                  activeHostIsCloud &&
-                  cloudRemovalHostId === activeHost.id
-                "
+                v-if="activeHostIsCloud && cloudRemovalHostId === activeHost.id"
                 class="mt-4 rounded-[var(--md-border-radius)] border border-[var(--md-error)] bg-[color-mix(in_srgb,var(--md-error)_6%,var(--md-surface-container-lowest))] p-4"
                 data-testid="cloud-computer-removal-confirmation"
                 role="alert"
@@ -580,7 +661,7 @@
                   <UButton
                     size="sm"
                     color="error"
-                    icon="i-lucide-trash-2"
+                    :icon="iconTrash"
                     :loading="hostActionPending"
                     @click="removeCloudComputer"
                   >
@@ -597,7 +678,7 @@
                   <span
                     class="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
                   >
-                    <UIcon name="i-lucide-lock-keyhole" class="size-4" />
+                    <UIcon :name="iconLock" class="size-4" />
                   </span>
                   <div>
                     <p class="text-sm font-semibold">Unlock saved token</p>
@@ -619,11 +700,11 @@
                     autocomplete="current-password"
                     placeholder="Enter device PIN"
                     aria-label="Device PIN"
-                    icon="i-lucide-key-round"
+                    :icon="iconKey"
                     @keyup.enter="unlockAndReconnect"
                   />
                   <UButton
-                    icon="i-lucide-unlock"
+                    :icon="iconUnlock"
                     :loading="hostActionPending"
                     @click="unlockAndReconnect"
                   >
@@ -651,7 +732,7 @@
                   <span
                     class="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
                   >
-                    <UIcon name="i-lucide-key-round" class="size-4" />
+                    <UIcon :name="iconKey" class="size-4" />
                   </span>
                   <div>
                     <p class="text-sm font-semibold">
@@ -676,7 +757,7 @@
                     autocomplete="off"
                     placeholder="Access token"
                     aria-label="Token for selected host"
-                    icon="i-lucide-key-round"
+                    :icon="iconKey"
                     required
                   />
                   <div v-if="pinCredentialStatus.supported">
@@ -715,7 +796,9 @@
                       />
                     </div>
                   </div>
-                  <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div
+                    class="flex flex-wrap items-center justify-between gap-2"
+                  >
                     <p
                       v-if="formError"
                       class="text-xs text-[var(--md-error)]"
@@ -726,7 +809,7 @@
                     <UButton
                       class="ml-auto"
                       type="submit"
-                      icon="i-lucide-plug-zap"
+                      :icon="iconConnect"
                       :loading="hostActionPending"
                       :disabled="!reauthToken.trim()"
                     >
@@ -745,11 +828,14 @@
                 <span
                   class="grid size-9 shrink-0 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
                 >
-                  <UIcon name="i-lucide-monitor-up" class="size-4" />
+                  <UIcon :name="iconInstall" class="size-4" />
                 </span>
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
-                    <h3 id="connect-computer-title" class="text-sm font-semibold">
+                    <h3
+                      id="connect-computer-title"
+                      class="text-sm font-semibold"
+                    >
                       Connect another computer
                     </h3>
                     <span
@@ -759,34 +845,17 @@
                     </span>
                   </div>
                   <p class="mt-0.5 text-xs text-[var(--md-on-surface-variant)]">
-                    Run one command on the computer that should run your agents,
-                    then enter its short code in OR3.
+                    External-runtime Connect commands will appear after the
+                    supporting Connect release is published.
                   </p>
                 </div>
-              </div>
-              <div
-                class="mt-4 flex flex-col gap-3 rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)] p-3 sm:flex-row sm:items-center"
-              >
-                <code class="min-w-0 flex-1 select-all font-mono text-sm">
-                  {{ CONNECT_COMMAND }}
-                </code>
-                <UButton
-                  size="sm"
-                  icon="i-lucide-copy"
-                  @click="copyConnectCommand"
-                >
-                  {{ connectCommandCopied ? "Copied" : "Copy command" }}
-                </UButton>
               </div>
               <p
                 class="mt-2 text-[11px] text-[var(--md-on-surface-variant)]"
                 aria-live="polite"
               >
-                {{
-                  connectCommandCopied
-                    ? "Connect command copied."
-                    : "The command opens a secure approval flow; no URL or token copying is required."
-                }}
+                Until then, use Advanced to add a verified runtime by URL and
+                token.
               </p>
             </section>
 
@@ -799,18 +868,17 @@
                 class="cursor-pointer list-none rounded-[var(--md-border-radius)] font-medium focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
               >
                 <span class="flex items-center gap-2 text-sm">
-                  <UIcon name="i-lucide-chevron-right" class="size-4 transition-transform group-open:rotate-90" />
+                  <UIcon
+                    :name="iconChevronRight"
+                    class="size-4 transition-transform group-open:rotate-90"
+                  />
                   Advanced: add another host by URL and token
                 </span>
               </summary>
-              <form
-                ref="addHostSection"
-                class="mt-4"
-                @submit.prevent="addHost"
-              >
+              <form ref="addHostSection" class="mt-4" @submit.prevent="addHost">
                 <p class="mb-4 text-xs text-[var(--md-on-surface-variant)]">
-                  For engineers connecting an existing or3-intern endpoint
-                  directly.
+                  Connect an existing agent service directly. OR3 detects the
+                  supported protocol automatically.
                 </p>
                 <div class="grid gap-3 sm:grid-cols-2">
                 <label class="space-y-1.5">
@@ -820,7 +888,7 @@
                     class="w-full"
                     placeholder="Host name"
                     aria-label="Host name"
-                    icon="i-lucide-tag"
+                    :icon="iconTag"
                   />
                 </label>
                 <label class="space-y-1.5">
@@ -831,7 +899,7 @@
                     type="url"
                     placeholder="http://127.0.0.1:9100"
                     aria-label="Host URL"
-                    icon="i-lucide-link"
+                    :icon="iconLink"
                     required
                   />
                 </label>
@@ -844,7 +912,7 @@
                     autocomplete="off"
                     placeholder="Access token"
                     aria-label="Access token"
-                    icon="i-lucide-key-round"
+                    :icon="iconKey"
                     required
                   />
                 </label>
@@ -874,13 +942,14 @@
                 >
                   <div class="mb-3 flex items-start gap-2">
                     <UIcon
-                      name="i-lucide-shield-alert"
+                      :name="iconShieldAlert"
                       class="mt-0.5 size-4 shrink-0 text-[var(--md-extended-color-warning-color)]"
                     />
                     <p
                       class="text-[11px] leading-relaxed text-[var(--md-on-surface-variant)]"
                     >
-                      <strong class="font-semibold text-[var(--md-on-surface)]"
+                        <strong
+                          class="font-semibold text-[var(--md-on-surface)]"
                         >Local encrypted storage.</strong
                       >
                       Use a unique PIN. A short or reused PIN may be
@@ -896,7 +965,7 @@
                       autocomplete="new-password"
                       placeholder="PIN (6+ digits)"
                       aria-label="Credential PIN"
-                      icon="i-lucide-lock-keyhole"
+                      :icon="iconLock"
                     />
                     <UInput
                       v-model="credentialPinConfirmation"
@@ -905,7 +974,7 @@
                       autocomplete="new-password"
                       placeholder="Confirm PIN"
                       aria-label="Confirm credential PIN"
-                      icon="i-lucide-check"
+                      :icon="iconCheck"
                     />
                   </div>
                 </div>
@@ -937,7 +1006,7 @@
                 <UButton
                   type="submit"
                   class="justify-center sm:min-w-36"
-                  icon="i-lucide-plug-zap"
+                  :icon="iconConnect"
                   :loading="hostActionPending"
                 >
                   Save and connect
@@ -953,13 +1022,7 @@
 </template>
 
 <script setup lang="ts">
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-} from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import type {
   ExternalAgentRunStatus,
   ExternalAgentSessionRef,
@@ -973,6 +1036,7 @@ import {
 import { runnerUsability } from "~/core/external-agents/launcher";
 import { useExternalAgentRuntime } from "~/core/external-agents/runtime";
 import { useActiveSidebarPage } from "~/composables/sidebar/useActiveSidebarPage";
+import { useIcon } from "~/composables/useIcon";
 import { useThemeResolver } from "~/composables/useThemeResolver";
 import { getGlobalMultiPaneApi } from "~/utils/multiPaneApi";
 import {
@@ -997,7 +1061,32 @@ interface HistoryItem {
   timeLabel: string;
 }
 
-const CONNECT_COMMAND = "npx @or3/connect";
+const iconChevronLeft = useIcon("ui.chevron.left");
+const iconChevronRight = useIcon("ui.chevron.right");
+const iconSettings = useIcon("ui.settings");
+const iconBot = useIcon("external-agent.bot");
+const iconSearch = useIcon("ui.search");
+const iconSearchEmpty = useIcon("external-agent.search.empty");
+const iconLoading = useIcon("ui.loading");
+const iconShieldAlert = useIcon("external-agent.shield.alert");
+const iconShieldCheck = useIcon("external-agent.shield.check");
+const iconWarning = useIcon("ui.warning");
+const iconNetwork = useIcon("external-agent.network");
+const iconPlus = useIcon("ui.plus");
+const iconServer = useIcon("external-agent.server");
+const iconServerOff = useIcon("external-agent.server.off");
+const iconCheck = useIcon("ui.check");
+const iconRefresh = useIcon("ui.refresh");
+const iconKey = useIcon("external-agent.key");
+const iconConnect = useIcon("external-agent.connect");
+const iconDisconnect = useIcon("external-agent.disconnect");
+const iconTrash = useIcon("ui.trash");
+const iconLock = useIcon("ui.lock");
+const iconUnlock = useIcon("ui.unlock");
+const iconInstall = useIcon("external-agent.install");
+const iconTag = useIcon("external-agent.tag");
+const iconLink = useIcon("external-agent.link");
+
 const runtime = useExternalAgentRuntime();
 const controller = runtime.controller;
 const snapshot = runtime.snapshot;
@@ -1019,12 +1108,16 @@ const reauthRememberToken = ref(false);
 const reauthPin = ref("");
 const reauthPinConfirmation = ref("");
 const unlockPin = ref("");
+const hostSwitcherOpen = ref(false);
+const quickUnlockPin = ref("");
+const quickSwitchError = ref<string | null>(null);
+const quickHostPending = ref(false);
+const pendingQuickHostId = ref<string | null>(null);
 const credentialStateVersion = ref(0);
 const hostActionPending = ref(false);
 const formError = ref<string | null>(null);
 const cloudRemovalHostId = ref<string | null>(null);
 const cloudRemovalError = ref<string | null>(null);
-const connectCommandCopied = ref(false);
 const collapsed = ref(new Set<TimeGroup>());
 const addHostSection = ref<HTMLElement | null>(null);
 const addHostDisclosure = ref<HTMLDetailsElement | null>(null);
@@ -1047,15 +1140,15 @@ const connected = computed(
     snapshot.value?.connectionState === "degraded",
 );
 const hasAvailableRunner = computed(() =>
-  (snapshot.value?.runners ?? []).some((runner) =>
-    runnerUsability(runner).usable,
+  (snapshot.value?.runners ?? []).some(
+    (runner) => runnerUsability(runner).usable,
   ),
 );
 const hostItems = computed(() =>
   (snapshot.value?.hosts ?? []).map((host) => ({
     value: host.id,
     label: host.name,
-    description: host.baseUrl,
+    description: `${host.driver === "runs" ? "Agent service" : "OR3 Intern"} · ${host.baseUrl}`,
   })),
 );
 const activeHost = computed(
@@ -1067,6 +1160,20 @@ const activeHost = computed(
 const activeHostIsCloud = computed(
   () => activeHost.value?.id.startsWith("or3-connect:") === true,
 );
+const activeDriverLabel = computed(() =>
+  activeHost.value?.driver === "runs" ? "Sessions + Runs" : "OR3 Intern",
+);
+const activeRuntimeLabel = computed(() => {
+  const displayName = snapshot.value?.capabilities?.runtimeDisplayName;
+  if (typeof displayName === "string" && displayName.trim()) return displayName;
+  const product = snapshot.value?.capabilities?.runtimeProduct;
+  if (typeof product !== "string" || !product.trim()) return "Agent service";
+  return product
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+});
 const activeHostNeedsCredential = computed(
   () =>
     Boolean(activeHost.value) &&
@@ -1123,11 +1230,15 @@ const activeRecordId = computed(() => {
     : null;
 });
 const history = computed<HistoryItem[]>(() => {
+  const activeHostId = snapshot.value?.activeHostId;
+  if (!activeHostId) return [];
   const refs = new Map<string, ExternalAgentSessionRef>();
   for (const item of snapshot.value?.sessionRefs ?? []) {
+    if (item.hostId !== activeHostId) continue;
     refs.set(`${item.hostId}:${item.remoteSessionId}`, item);
   }
   for (const session of snapshot.value?.sessions ?? []) {
+    if (session.hostId !== activeHostId) continue;
     refs.set(`${session.hostId}:${session.remoteSessionId}`, {
       hostId: session.hostId,
       remoteSessionId: session.remoteSessionId,
@@ -1378,17 +1489,10 @@ function focusReauthToken() {
       : target?.$el instanceof HTMLElement
         ? target.$el
         : null;
-  (element?.matches("input") ? element : element?.querySelector("input"))?.focus();
-}
-
-async function copyConnectCommand() {
-  formError.value = null;
-  try {
-    await navigator.clipboard.writeText(CONNECT_COMMAND);
-    connectCommandCopied.value = true;
-  } catch {
-    formError.value = `Copy failed. Run “${CONNECT_COMMAND}” in a terminal.`;
-  }
+  (element?.matches("input")
+    ? element
+    : element?.querySelector("input")
+  )?.focus();
 }
 
 function openConnections() {
@@ -1541,8 +1645,52 @@ async function switchHost(value: string) {
   }
 }
 
+async function quickSwitchHost(hostId: string) {
+  if (!controller) return;
+  quickSwitchError.value = null;
+  pendingQuickHostId.value = hostId;
+  if (pinCredentialStatus.value.locked) return;
+  quickHostPending.value = true;
+  try {
+    const connected = await controller.switchHost(hostId);
+    if (!connected) {
+      quickSwitchError.value =
+        controller.snapshot.connectionError ?? "Host switch failed";
+      return;
+    }
+    pendingQuickHostId.value = null;
+    hostSwitcherOpen.value = false;
+  } catch (cause) {
+    quickSwitchError.value =
+      cause instanceof Error ? cause.message : "Host switch failed";
+  } finally {
+    quickHostPending.value = false;
+  }
+}
+
+async function quickUnlockHosts() {
+  if (!controller) return;
+  quickHostPending.value = true;
+  quickSwitchError.value = null;
+  try {
+    await controller.unlockCredentials(quickUnlockPin.value);
+    credentialStateVersion.value += 1;
+    quickUnlockPin.value = "";
+    const hostId = pendingQuickHostId.value ?? snapshot.value?.activeHostId;
+    if (hostId) await quickSwitchHost(hostId);
+  } catch (cause) {
+    quickSwitchError.value =
+      cause instanceof Error ? cause.message : "Could not unlock saved hosts";
+  } finally {
+    quickHostPending.value = false;
+  }
+}
+
 onMounted(() => {
-  window.addEventListener(EXTERNAL_AGENT_OPEN_CONNECTIONS_EVENT, openConnections);
+  window.addEventListener(
+    EXTERNAL_AGENT_OPEN_CONNECTIONS_EVENT,
+    openConnections,
+  );
 });
 
 onBeforeUnmount(() => {
@@ -1568,11 +1716,7 @@ onBeforeUnmount(() => {
     var(--md-on-surface) 72%,
     var(--md-surface)
   );
-  --agent-sidebar-panel: color-mix(
-    in srgb,
-    var(--md-surface) 76%,
-    transparent
-  );
+  --agent-sidebar-panel: color-mix(in srgb, var(--md-surface) 76%, transparent);
   --agent-sidebar-row-hover: color-mix(
     in srgb,
     var(--md-primary) 9%,
@@ -1613,8 +1757,7 @@ onBeforeUnmount(() => {
 .external-agents-sidebar--textured :deep(.agent-sidebar-header-button) {
   color: var(--md-on-surface) !important;
   background: color-mix(in srgb, var(--md-surface) 72%, transparent) !important;
-  border: 1px solid
-    color-mix(in srgb, var(--md-outline) 30%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--md-outline) 30%, transparent) !important;
 }
 
 .external-agents-sidebar--textured :deep(.agent-sidebar-header-button:hover) {
@@ -1647,11 +1790,7 @@ onBeforeUnmount(() => {
 
 .external-agents-sidebar--textured :deep(.agent-sidebar-search input) {
   color: var(--md-on-surface) !important;
-  background: color-mix(
-    in srgb,
-    var(--md-surface) 82%,
-    transparent
-  ) !important;
+  background: color-mix(in srgb, var(--md-surface) 82%, transparent) !important;
   backdrop-filter: blur(10px);
 }
 

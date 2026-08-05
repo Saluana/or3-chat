@@ -7,6 +7,7 @@ import { shouldPauseStream, streamPayload } from "./event-store";
 
 const STREAM_DISCONNECT_RECONCILE_INITIAL_MS = 1_000;
 const STREAM_DISCONNECT_RECONCILE_MAX_MS = 30_000;
+const STREAM_EVENTS_PER_PAINT_YIELD = 4;
 
 function waitForAbortableDelay(
   delayMs: number,
@@ -81,75 +82,117 @@ export class ExternalAgentConnectionSupervisor {
     input.session.streamState = "connecting";
     input.publishSession();
 
-    const reconcileDisconnectedStream = async () => {
+    let ownsActionError = false;
+
+    void (async () => {
       let delayMs = 0;
-      while (streamIsCurrent()) {
-        if (
-          delayMs > 0 &&
-          !(await waitForAbortableDelay(delayMs, controller.signal))
-        )
-          return;
-        if (!streamIsCurrent()) return;
-        try {
-          await input.refresh();
-        } catch (error) {
-          if (controller.signal.aborted) return;
-          if (input.isStaleError(error)) {
+      let afterSeq = input.afterSeq;
+      try {
+        while (streamIsCurrent()) {
+          if (
+            delayMs > 0 &&
+            !(await waitForAbortableDelay(delayMs, controller.signal))
+          )
+            return;
+          if (!streamIsCurrent()) return;
+
+          input.session.streamState = "connecting";
+          input.publishSession();
+          let eventsSincePaintYield = 0;
+          try {
+            for await (const streamEvent of input.client.streamTurn(
+              input.session.remoteSessionId,
+              input.turnId,
+              { afterSeq, signal: controller.signal },
+            )) {
+              if (!streamIsCurrent()) return;
+              input.session.streamState = "connected";
+              if (ownsActionError) {
+                input.session.actionError = undefined;
+                ownsActionError = false;
+              }
+              const remote = streamPayload(streamEvent);
+              if (remote) {
+                afterSeq = Math.max(afterSeq, remote.seq);
+                input.ingest(remote);
+              }
+              if (
+                shouldPauseStream(input.session.status) ||
+                streamEvent.event === "done"
+              )
+                break;
+              if (
+                remote &&
+                ++eventsSincePaintYield >= STREAM_EVENTS_PER_PAINT_YIELD
+              ) {
+                eventsSincePaintYield = 0;
+                // Browsers may expose many buffered SSE frames in one read.
+                // Break the resulting microtask chain so Vue can render live
+                // text and tool events before the terminal frame is consumed.
+                if (!(await waitForAbortableDelay(0, controller.signal)))
+                  return;
+              }
+            }
+          } catch (error) {
+            const staleError = input.isStaleError(error);
+            if (
+              controller.signal.aborted ||
+              !input.isCurrent() ||
+              staleError
+            ) {
+              if (staleError) finish();
+              return;
+            }
+            input.session.actionError = input.presentError(error);
+            ownsActionError = true;
+          }
+
+          if (controller.signal.aborted || !input.isCurrent()) return;
+          if (shouldPauseStream(input.session.status)) {
+            if (ownsActionError) {
+              input.session.actionError = undefined;
+              ownsActionError = false;
+            }
+            input.session.streamState = "idle";
+            input.publishSession();
+            await input.persist().catch(() => undefined);
             finish();
             return;
           }
-        }
-        if (shouldPauseStream(input.session.status)) {
-          input.session.streamState = "idle";
-          input.publishSession();
-          void input.persist().catch(() => undefined);
-          finish();
-          return;
-        }
-        input.session.streamState = "disconnected";
-        input.publishSession();
-        delayMs =
-          delayMs === 0
-            ? STREAM_DISCONNECT_RECONCILE_INITIAL_MS
-            : Math.min(delayMs * 2, STREAM_DISCONNECT_RECONCILE_MAX_MS);
-      }
-    };
 
-    void (async () => {
-      try {
-        for await (const streamEvent of input.client.streamTurn(
-          input.session.remoteSessionId,
-          input.turnId,
-          { afterSeq: input.afterSeq, signal: controller.signal },
-        )) {
-          if (!streamIsCurrent()) return;
-          input.session.streamState = "connected";
-          const remote = streamPayload(streamEvent);
-          if (remote) input.ingest(remote);
-          if (
-            shouldPauseStream(input.session.status) ||
-            streamEvent.event === "done"
-          )
-            break;
+          input.session.streamState = "disconnected";
+          input.publishSession();
+          try {
+            await input.refresh();
+          } catch (error) {
+            if (controller.signal.aborted) return;
+            if (input.isStaleError(error)) {
+              finish();
+              return;
+            }
+            input.session.actionError = input.presentError(error);
+            ownsActionError = true;
+            input.publishSession();
+          }
+          if (shouldPauseStream(input.session.status)) {
+            if (ownsActionError) {
+              input.session.actionError = undefined;
+              ownsActionError = false;
+            }
+            input.session.streamState = "idle";
+            input.publishSession();
+            await input.persist().catch(() => undefined);
+            finish();
+            return;
+          }
+
+          delayMs =
+            delayMs === 0
+              ? STREAM_DISCONNECT_RECONCILE_INITIAL_MS
+              : Math.min(delayMs * 2, STREAM_DISCONNECT_RECONCILE_MAX_MS);
         }
-        if (!controller.signal.aborted) await reconcileDisconnectedStream();
-      } catch (error) {
-        if (
-          controller.signal.aborted ||
-          !input.isCurrent() ||
-          input.isStaleError(error)
-        )
-          return;
-        input.session.streamState = "disconnected";
-        input.session.actionError = input.presentError(error);
-        input.publishSession();
-        await reconcileDisconnectedStream();
       } finally {
-        if (
-          controller.signal.aborted ||
-          shouldPauseStream(input.session.status)
-        )
-          finish();
+        if (controller.signal.aborted || !input.isCurrent()) finish();
       }
     })();
   }

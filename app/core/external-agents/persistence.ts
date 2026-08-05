@@ -1,5 +1,6 @@
 import { getKvByName, setKvByName } from "~/db/kv";
 import { getDefaultDb, getWorkspaceDb } from "~/db/client";
+import { normalizeExternalAgentBaseUrl } from "./host-registry";
 import type {
   ExternalAgentHost,
   ExternalAgentPersistence,
@@ -21,22 +22,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseHost(value: unknown): ExternalAgentHost | null {
   if (!isRecord(value)) return null;
-  const { id, name, baseUrl, credentialRef, trustedAt, lastConnectedAt } =
-    value;
+  const {
+    id,
+    name,
+    baseUrl,
+    credentialRef,
+    driver,
+    runtime,
+    trustedAt,
+    lastConnectedAt,
+  } = value;
   if (
     typeof id !== "string" ||
     typeof name !== "string" ||
     typeof baseUrl !== "string" ||
     typeof credentialRef !== "string" ||
-    typeof trustedAt !== "string"
+    typeof trustedAt !== "string" ||
+    (driver !== undefined && driver !== "intern" && driver !== "runs") ||
+    (runtime !== undefined &&
+      runtime !== "intern" &&
+      runtime !== "openclaw" &&
+      runtime !== "hermes") ||
+    (runtime !== undefined &&
+      ((runtime === "intern" && driver !== undefined && driver !== "intern") ||
+        (runtime !== "intern" && driver !== "runs")))
   ) {
+    return null;
+  }
+  let normalizedBaseUrl: string;
+  try {
+    normalizedBaseUrl = normalizeExternalAgentBaseUrl(baseUrl);
+  } catch {
     return null;
   }
   return {
     id,
     name,
-    baseUrl,
+    baseUrl: normalizedBaseUrl,
     credentialRef,
+    ...(driver === undefined ? {} : { driver }),
+    ...(runtime === undefined ? {} : { runtime }),
     trustedAt,
     lastConnectedAt:
       typeof lastConnectedAt === "string" ? lastConnectedAt : undefined,
@@ -54,6 +79,9 @@ function parseSessionRef(value: unknown): ExternalAgentSessionRef | null {
     status,
     pendingApprovalCount,
     preview,
+    model,
+    thinkingLevel,
+    activeTurnId,
   } = value;
   if (typeof hostId !== "string" || typeof remoteSessionId !== "string") {
     return null;
@@ -79,6 +107,10 @@ function parseSessionRef(value: unknown): ExternalAgentSessionRef | null {
         ? Math.max(0, Math.floor(pendingApprovalCount))
         : undefined,
     preview: typeof preview === "string" ? preview.slice(0, 240) : undefined,
+    model: typeof model === "string" ? model : undefined,
+    thinkingLevel:
+      typeof thinkingLevel === "string" ? thinkingLevel : undefined,
+    activeTurnId: typeof activeTurnId === "string" ? activeTurnId : undefined,
   };
 }
 

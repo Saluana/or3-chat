@@ -61,8 +61,7 @@ export class ExternalAgentSessionRepository {
 
   removeRef(hostId: string, remoteSessionId: string): void {
     this.#refs = this.#refs.filter(
-      (ref) =>
-        ref.hostId !== hostId || ref.remoteSessionId !== remoteSessionId,
+      (ref) => ref.hostId !== hostId || ref.remoteSessionId !== remoteSessionId,
     );
   }
 
@@ -114,6 +113,7 @@ export class ExternalAgentSessionRepository {
       ),
       model: session.model,
       thinkingLevel: session.thinkingLevel,
+      activeTurnId: session.activeTurnId,
     };
     this.#refs = [
       ref,
@@ -177,9 +177,7 @@ export class ExternalAgentSessionRepository {
     if (!host) return;
     const equivalentHostIds = new Set(
       hosts
-        .filter((candidate) =>
-          sameEndpoint(candidate.baseUrl, host.baseUrl),
-        )
+        .filter((candidate) => sameEndpoint(candidate.baseUrl, host.baseUrl))
         .map((candidate) => candidate.id),
     );
     if (equivalentHostIds.size < 2) return;
@@ -190,10 +188,7 @@ export class ExternalAgentSessionRepository {
         equivalentHostIds.has(ref.hostId) && ref.hostId !== hostId
           ? { ...ref, hostId }
           : ref;
-      const key = externalAgentSessionKey(
-        next.hostId,
-        next.remoteSessionId,
-      );
+      const key = externalAgentSessionKey(next.hostId, next.remoteSessionId);
       const previous = rebound.get(key);
       if (
         !previous ||

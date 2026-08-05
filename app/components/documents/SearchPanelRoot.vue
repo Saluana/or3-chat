@@ -11,13 +11,30 @@
                 v-bind="searchResultCardProps"
                 @click="handleNavigate(result)"
             >
-                <h3 class="font-bold text-[14px] text-[var(--md-on-surface)]">
+                <div
+                    v-if="result.category"
+                    class="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--md-primary)] mb-1"
+                >
+                    {{ result.category }}
+                </div>
+                <h3
+                    class="font-semibold text-[14.5px] leading-snug text-[var(--md-on-surface)]"
+                >
                     {{ result.title }}
                 </h3>
-                <p class="text-sm text-[var(--md-on-surface-variant)] mt-1">
+                <p
+                    v-if="result.excerpt"
+                    class="text-[13px] leading-relaxed text-[var(--md-on-surface-variant)] mt-1 line-clamp-2"
+                >
                     {{ result.excerpt }}
                 </p>
             </UCard>
+        </div>
+        <div
+            v-else-if="searchQuery && !searchIndex"
+            class="text-sm text-[var(--md-on-surface-variant)] p-4 text-center document-search-loading-message"
+        >
+            Indexing docs&hellip;
         </div>
         <div
             v-else-if="searchQuery && !isSearching"
@@ -41,6 +58,7 @@ interface Props {
 interface SearchResult {
     id: string;
     title: string;
+    category: string;
     excerpt: string;
     path: string;
 }
@@ -105,10 +123,16 @@ async function initializeSearch() {
                         title: file.name.replace('.md', ''),
                         path: `/documentation${file.path}`,
                         category: section.title,
-                        description: file.category || '',
+                        description: (file.summary || file.category || '').replace(/`/g, ''),
                     });
                 }
             }
+        }
+
+        // Run any query that arrived while the index was still building
+        const pendingQuery = props.searchQuery || searchQuery.value;
+        if (pendingQuery && pendingQuery.length >= 2) {
+            await performSearch(pendingQuery);
         }
     } catch (error) {
         console.error('[SearchPanelRoot] Failed to initialize:', error);
@@ -145,7 +169,8 @@ async function performSearch(query: string) {
         searchResults.value = results.hits.map((hit: any) => ({
             id: hit.id,
             title: hit.document.title,
-            excerpt: `${hit.document.category} - ${hit.document.description}`,
+            category: hit.document.category || '',
+            excerpt: hit.document.description || '',
             path: hit.document.path,
         }));
 

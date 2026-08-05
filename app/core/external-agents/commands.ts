@@ -66,7 +66,7 @@ export function registerExternalAgentCommands(input: {
         id: EXTERNAL_AGENT_COMMAND_IDS.newSession,
         label: "New external agent session",
         description:
-          "Launch a coding agent through the selected or3-intern host",
+          "Launch a coding agent through the selected agent service",
         keywords: ["agent", "codex", "opencode", "runner"],
         icon: "i-lucide-bot",
         order: 90,
@@ -142,7 +142,7 @@ export function registerExternalAgentCommands(input: {
       {
         id: EXTERNAL_AGENT_COMMAND_IDS.reconnect,
         label: "Reconnect external agent host",
-        description: "Reconnect the selected trusted or3-intern host",
+        description: "Reconnect the selected trusted agent service",
         keywords: ["agent", "host", "offline", "reconnect"],
         icon: "i-lucide-refresh-cw",
         order: 93,

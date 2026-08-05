@@ -346,6 +346,9 @@
                         @tab-status="
                             (status: WorkspaceTabStatus) => onPaneTabStatus(pane.id, status)
                         "
+                        @tab-title="
+                            (title: string) => onPaneTabTitle(pane.id, title)
+                        "
                     />
 
                     <!-- Resize handle (only between panes, not after the last one) -->
@@ -1211,6 +1214,12 @@ function onPaneTabStatus(paneId: string, status: WorkspaceTabStatus): void {
     if (tabId) workspaceTabs.updateRuntime(tabId, { status });
 }
 
+function onPaneTabTitle(paneId: string, title: string): void {
+    if (!workspaceTabsEnabled.value) return;
+    const tabId = workspaceTabs.state.value.paneBindings.get(paneId);
+    if (tabId) workspaceTabs.updateCachedTitle(tabId, title);
+}
+
 const newSplitTooltip = computed(() => {
     if (!canAddPane.value) return newWindowTooltip.value.replace('window', 'split');
     return 'New split';
@@ -1252,7 +1261,13 @@ function reconcileWorkspaceTabsWithPanes(): void {
     if (!workspaceTabsEnabled.value) return;
     for (const pane of panes.value) {
         const resource = resourceForPane(pane);
-        if (resource) workspaceTabs.reconcilePaneResource(pane.id, resource);
+        if (resource) {
+            workspaceTabs.reconcilePaneResource(pane.id, resource, {
+                replaceCurrent:
+                    resource.kind === 'app' &&
+                    getPaneApp(resource.appId)?.replaceRecordInCurrentTab === true,
+            });
+        }
     }
 }
 

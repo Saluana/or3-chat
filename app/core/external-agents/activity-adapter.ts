@@ -125,7 +125,10 @@ export function createExternalAgentActivitySource(input: {
       );
     },
     async getRun(runId) {
-      const session = controller.getSession(runId);
+      const session = controller.getSession(
+        runId,
+        controller.snapshot.activeHostId ?? undefined,
+      );
       return session
         ? activityOk(toDetail(controller, session))
         : activityErr({
@@ -137,6 +140,9 @@ export function createExternalAgentActivitySource(input: {
     },
     subscribe(subscription) {
       return controller.subscribe((event) => {
+        const activeHostId = controller.snapshot.activeHostId;
+        if (event.type === "snapshot") return;
+        if (!activeHostId || event.session.hostId !== activeHostId) return;
         if (
           event.type === "timeline" &&
           (!subscription.runId ||
@@ -165,7 +171,10 @@ export function createExternalAgentActivitySource(input: {
       });
     },
     async executeAction(action) {
-      const session = controller.getSession(action.runId);
+      const session = controller.getSession(
+        action.runId,
+        controller.snapshot.activeHostId ?? undefined,
+      );
       if (!session) {
         return activityErr({
           code: "run_not_found",

@@ -12,12 +12,17 @@ import {
     createConnectUserCodeLookup,
     decryptConnectCredential,
 } from '../../../connect/crypto';
-import { noStore, normalizeUserCode } from '../../../connect/helpers';
+import {
+    noStore,
+    normalizeConnectRuntimeMetadata,
+    normalizeUserCode,
+} from '../../../connect/helpers';
 import type {
     ConnectAccessCredential,
     ConnectCredential,
 } from '../../../connect/types';
 import { getRateLimitProvider } from '../../../utils/rate-limit/store';
+import { probeRunsCapabilities } from '../../../connect/runs-probe';
 
 export default defineEventHandler(async (event) => {
     noStore(event);
@@ -138,7 +143,7 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'The approved computer is no longer available.',
         });
     }
-    const accessToken = decryptConnectCredential<ConnectAccessCredential>(
+    const access = decryptConnectCredential<ConnectAccessCredential>(
         environment.access_credential_ciphertext,
         config.encryptionKey,
         {
@@ -147,8 +152,38 @@ export default defineEventHandler(async (event) => {
             userId: session.user.id,
             workspaceId: session.workspace.id,
         }
-    ).controlToken;
-    const baseUrl = `https://${environment.hostname}`;
+    );
+    const accessToken = access.controlToken;
+    const environmentBinding = normalizeConnectRuntimeMetadata({
+        runtime: environment.runtime,
+        driver: environment.driver,
+        basePath: environment.base_path,
+    });
+    const accessBinding = normalizeConnectRuntimeMetadata(access);
+    if (
+        !environmentBinding ||
+        !accessBinding ||
+        environmentBinding.runtime !== accessBinding.runtime ||
+        environmentBinding.driver !== accessBinding.driver ||
+        environmentBinding.basePath !== accessBinding.basePath
+    ) {
+        console.warn(
+            `[connect] device-status environment ${environment.id}: runtime_binding_mismatch`
+        );
+        return {
+            stage: 'error' as const,
+            reason: 'runtime_binding_mismatch' as const,
+        };
+    }
+    const binding = environmentBinding;
+    const baseUrl = `https://${environment.hostname}${binding.basePath}`;
+    if (binding.driver === 'runs') {
+        const capabilities = await probeRunsCapabilities(baseUrl, accessToken);
+        if (capabilities.sessions && capabilities.events) {
+            return { stage: 'online' as const, readiness: true };
+        }
+        return { stage: 'installing' as const };
+    }
     let requestSequence = 0;
     const fetchWithoutCache = ((
         input: Parameters<typeof globalThis.fetch>[0],

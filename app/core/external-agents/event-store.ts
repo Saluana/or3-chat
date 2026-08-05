@@ -204,10 +204,12 @@ function normalizeTimelineEvent(
       "error_message",
       "name",
     ]);
-  const stableId =
-    typeof event.id === "number"
-      ? String(event.id)
-      : `${event.turn_id}:${event.seq}`;
+  // Runs-style protocols restart their numeric event sequence for every turn.
+  // Scope every transport id to the turn so a later turn's first deltas are
+  // not mistaken for duplicates from an earlier turn in the same session.
+  const stableId = `${event.turn_id}:${
+    typeof event.id === "number" ? event.id : event.seq
+  }`;
   return Object.freeze({
     id: `${session.hostId}:${session.remoteSessionId}:${stableId}`,
     hostId: session.hostId,
@@ -235,9 +237,15 @@ function approvalFromEvent(
         `${event.turnId}:${event.sequence}`,
     );
   const rawType = String(payload.rawType ?? "").toLowerCase();
-  const decision = String(payload.decision ?? payload.status ?? "").toLowerCase();
+  const decision = String(
+    payload.decision ?? payload.status ?? "",
+  ).toLowerCase();
   let status: ExternalAgentApproval["status"] = "pending";
-  if (rawType.includes("resolved") || rawType.includes("response") || decision) {
+  if (
+    rawType.includes("resolved") ||
+    rawType.includes("response") ||
+    decision
+  ) {
     if (decision.includes("approve") || decision === "allow")
       status = "approved";
     else if (decision.includes("deny") || decision.includes("reject"))
@@ -361,14 +369,20 @@ function timelineTerminalStatus(
   if (
     event.type === "error" &&
     rawType !== "runner_output" &&
-    (rawType === "error" ||
+    (rawType === "" ||
+      rawType === "error" ||
       rawType === "failed" ||
       rawType.endsWith(".error") ||
       rawType.endsWith("/error") ||
       rawType.endsWith(".failed") ||
       rawType.endsWith("/failed"))
-  )
-    return "failed";
+  ) {
+    const status = String(
+      event.payload.status ?? event.payload.state ?? "failed",
+    ).toLowerCase();
+    if (["failed", "error", "timed_out", "timeout"].includes(status))
+      return "failed";
+  }
   if (
     event.type !== "status" ||
     ![
@@ -421,7 +435,8 @@ export class ExternalAgentEventStore {
       .slice(0, MAX_TIMELINE_EVENTS_PER_TURN)
       .sort(
         (left, right) =>
-          left.seq - right.seq || String(left.id).localeCompare(String(right.id)),
+          left.seq - right.seq ||
+          String(left.id).localeCompare(String(right.id)),
       );
   }
 
@@ -526,6 +541,7 @@ export class ExternalAgentEventStore {
         !(input.session.status === "failed" && terminalStatus !== "failed")
       ) {
         input.session.status = terminalStatus;
+        input.session.activeTurnId = undefined;
         input.session.completedAt ??= normalized.occurredAt;
       }
     }
@@ -610,8 +626,7 @@ export class ExternalAgentEventStore {
     const latestTurnId = retainedTurns.at(-1)?.id;
     const turnEvents = index.byTurn.get(normalized.turnId) ?? [];
     const last = turnEvents.at(-1);
-    const appendInOrder =
-      !last || compareTimelineEvents(last, normalized) <= 0;
+    const appendInOrder = !last || compareTimelineEvents(last, normalized) <= 0;
     if (appendInOrder) turnEvents.push(normalized);
     else {
       let low = 0;

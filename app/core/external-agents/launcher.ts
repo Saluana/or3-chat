@@ -22,6 +22,9 @@ export interface ExternalAgentRunnerOption {
   readonly defaultMode: string;
   readonly defaultIsolation: string;
   readonly defaultCwd: string;
+  readonly showMode: boolean;
+  readonly showIsolation: boolean;
+  readonly showWorkspace: boolean;
 }
 
 export type ExternalAgentRunnerUsabilityCode =
@@ -289,6 +292,12 @@ export function buildExternalAgentRunnerOption(
     defaultMode,
     defaultIsolation,
     defaultCwd: String(runner.default_cwd ?? "").trim(),
+    showMode: chat.modeSelection !== false,
+    showIsolation: chat.isolationSelection !== false,
+    showWorkspace:
+      chat.customCwd === true ||
+      advertisedRoots(runner).length > 0 ||
+      Boolean(String(runner.default_cwd ?? "").trim()),
   });
 }
 

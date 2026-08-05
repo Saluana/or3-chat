@@ -41,10 +41,16 @@ vi.mock('../../../connect/crypto', () => ({
         decryptCredentialMock(...args),
 }));
 
-vi.mock('../../../connect/helpers', () => ({
+vi.mock('../../../connect/helpers', async () => ({
+    ...(await vi.importActual<typeof import('../../../connect/helpers')>(
+        '../../../connect/helpers'
+    )),
     noStore: vi.fn(),
-    normalizeUserCode: (value: unknown) =>
-        typeof value === 'string' ? value.trim().toUpperCase() : '',
+}));
+
+const probeRunsCapabilitiesMock = vi.fn();
+vi.mock('../../../connect/runs-probe', () => ({
+    probeRunsCapabilities: (...args: unknown[]) => probeRunsCapabilitiesMock(...args),
 }));
 
 const checkAndRecordMock = vi.fn();
@@ -141,6 +147,9 @@ describe('Connect device online status', () => {
             ],
         });
         createInternClientMock.mockReset();
+        probeRunsCapabilitiesMock
+            .mockReset()
+            .mockResolvedValue({ sessions: true, events: true });
     });
 
     it('keeps the browser approved while the terminal has not redeemed its credential', async () => {
@@ -218,6 +227,76 @@ describe('Connect device online status', () => {
         const handler = await statusHandler();
 
         await expect(handler(event)).resolves.toEqual({ stage: 'installing' });
+    });
+
+    it('uses the Runs capability probe for an OpenClaw environment', async () => {
+        listEnvironmentsMock.mockResolvedValue([
+            {
+                ...environment,
+                runtime: 'openclaw',
+                driver: 'runs',
+                base_path: '/or3/',
+            },
+        ]);
+        decryptCredentialMock.mockImplementation((ciphertext) =>
+            ciphertext === 'authorization-ciphertext'
+                ? {
+                      accountId: 'user-one',
+                      workspaceId: 'workspace-a',
+                      environmentId,
+                  }
+                : {
+                      controlToken: 'paired-device-token',
+                      runtime: 'openclaw',
+                      driver: 'runs',
+                      basePath: '/or3/',
+                  }
+        );
+        const handler = await statusHandler();
+
+        await expect(handler(event)).resolves.toEqual({ stage: 'online', readiness: true });
+        expect(probeRunsCapabilitiesMock).toHaveBeenCalledWith(
+            'https://grandma.connect.example.test/or3/',
+            'paired-device-token'
+        );
+        expect(createInternClientMock).not.toHaveBeenCalled();
+    });
+
+    it('returns a re-enroll reason when a Runs credential binding disagrees with its environment', async () => {
+        listEnvironmentsMock.mockResolvedValue([
+            {
+                ...environment,
+                runtime: 'openclaw',
+                driver: 'runs',
+                base_path: '/or3/',
+            },
+        ]);
+        decryptCredentialMock.mockImplementation((ciphertext) =>
+            ciphertext === 'authorization-ciphertext'
+                ? {
+                      accountId: 'user-one',
+                      workspaceId: 'workspace-a',
+                      environmentId,
+                  }
+                : {
+                      controlToken: 'paired-device-token',
+                      runtime: 'hermes',
+                      driver: 'runs',
+                      basePath: '/',
+                  }
+        );
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const handler = await statusHandler();
+
+        await expect(handler(event)).resolves.toEqual({
+            stage: 'error',
+            reason: 'runtime_binding_mismatch',
+        });
+        expect(warning).toHaveBeenCalledWith(
+            '[connect] device-status environment env-abcdefgh: runtime_binding_mismatch'
+        );
+        expect(probeRunsCapabilitiesMock).not.toHaveBeenCalled();
+        warning.mockRestore();
     });
 
     it('cannot probe an approved computer through another workspace session', async () => {

@@ -520,7 +520,10 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
     function reconcilePaneResource(
         paneId: string,
         resource: WorkspaceResource,
-        options_: { allowDuplicate?: boolean } = {}
+        options_: {
+            allowDuplicate?: boolean;
+            replaceCurrent?: boolean;
+        } = {}
     ): string | null {
         const currentTabId = state.value.paneBindings.get(paneId);
         const current = currentTabId ? tabById(currentTabId) : undefined;
@@ -544,12 +547,35 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
             )?.[0];
             return boundPane !== undefined && boundPane !== paneId;
         });
+        const existingTarget = state.value.tabs.find((tab) =>
+            resourceEqual(tab.resource, resource)
+        );
+        if (options_.replaceCurrent && current && !existingTarget) {
+            commit({
+                ...state.value,
+                tabs: state.value.tabs.map((tab) =>
+                    tab.id === current.id
+                        ? {
+                              ...tab,
+                              resource: { ...resource } as WorkspaceResource,
+                              cachedTitle:
+                                  resource.kind === 'app'
+                                      ? resource.appId
+                                      : tab.cachedTitle,
+                              ephemeral: false,
+                              lastActivatedAt: Date.now(),
+                          }
+                        : tab
+                ),
+                activeTabId: current.id,
+            });
+            return current.id;
+        }
         const reconciled = transitionReconcilePaneResource(
             state.value,
             paneId,
             resource,
             {
-                ...options_,
                 allowDuplicate:
                     options_.allowDuplicate ?? alreadyVisibleElsewhere,
             }
