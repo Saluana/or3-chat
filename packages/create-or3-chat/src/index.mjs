@@ -6,6 +6,7 @@ import {
     mkdir,
     readFile,
     readdir,
+    realpath,
     rename,
     rm,
     rmdir,
@@ -545,7 +546,11 @@ export async function main(argv = process.argv.slice(2)) {
 }
 
 const directPath = process.argv[1] ? resolve(process.argv[1]) : '';
-if (directPath === resolve(fileURLToPath(import.meta.url))) {
+const modulePath = resolve(fileURLToPath(import.meta.url));
+const resolvedDirectPath = directPath
+    ? await realpath(directPath).catch(() => directPath)
+    : '';
+if (resolvedDirectPath === modulePath) {
     main().catch((error) => {
         console.error(error instanceof Error ? error.message : String(error));
         process.exit(1);
