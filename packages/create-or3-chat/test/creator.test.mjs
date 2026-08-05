@@ -148,7 +148,7 @@ test('Docker manifest preparation preserves selected custom providers', () => {
         },
     });
 
-    assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.5');
+    assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.6');
     assert.equal(manifest.dependencies['or3-provider-clerk'], '0.0.4');
     assert.equal(manifest.dependencies['or3-provider-convex'], '0.0.4');
     assert.equal(manifest.dependencies['or3-provider-s3'], '0.0.4');
@@ -172,7 +172,7 @@ test('generated template has registry-clean first-party dependencies', async () 
     const dockerignore = await readFile(new URL('.dockerignore', templateUrl), 'utf8');
     assert.match(dockerignore, /^\.or3-initial-credentials$/m);
     assert.equal(manifest.dependencies['@or3/intern-client'], '0.1.1');
-    assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.5');
+    assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.6');
     for (const [name, version] of Object.entries(manifest.dependencies)) {
         if (String(version).startsWith('file:')) {
             assert.equal(name, '@or3/plugin-sdk');
