@@ -222,7 +222,10 @@ function safeErrorMessage(value: unknown, fallback: string): string {
 function featureSet(raw: JsonRecord): RunsFeatureSet {
   const features = record(raw.features);
   const endpoints = record(raw.endpoints);
-  const hasEndpoint = (name: string) => Object.hasOwn(endpoints, name);
+  const hasEndpoint = (name: string) => {
+    const endpoint = record(endpoints[name]);
+    return typeof endpoint.path === "string" && endpoint.path.trim().startsWith("/");
+  };
   return {
     sessions:
       features.session_resources === true ||

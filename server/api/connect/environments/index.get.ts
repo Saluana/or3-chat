@@ -47,46 +47,44 @@ export default defineEventHandler(async (event) => {
                             config.encryptionKey,
                             context
                         );
-                        if (
-                            environment.control_token_hash &&
-                            hashConnectSecret(access.controlToken) !==
-                                environment.control_token_hash
-                        ) {
-                            throw new Error('stored computer credential failed validation');
-                        }
-                        // Treat the durable environment declaration as the
-                        // authority. The encrypted envelope is checked too,
-                        // but must never be allowed to relabel a record when
-                        // an old/corrupt credential contains another runtime.
-                        const environmentBinding =
-                            normalizeConnectRuntimeMetadata({
-                                runtime: environment.runtime,
-                                driver: environment.driver,
-                                basePath: environment.base_path,
-                            });
-                        const accessBinding = normalizeConnectRuntimeMetadata(
-                            access
-                        );
-                        if (
-                            !environmentBinding ||
-                            !accessBinding ||
-                            environmentBinding.runtime !== accessBinding.runtime ||
-                            environmentBinding.driver !== accessBinding.driver ||
-                            environmentBinding.basePath !== accessBinding.basePath
-                        ) {
-                            throw new Error('runtime connection metadata is invalid');
-                        }
-                        binding = environmentBinding;
-                    } catch (error) {
-                        // A damaged or stale record must not hide every other
-                        // connected host. Never log decrypted credentials.
+                    } catch {
                         console.warn(
-                            `[connect] skipping malformed environment ${environment.id}: ${
-                                error instanceof Error ? error.message : 'invalid record'
-                            }`
+                            `[connect] skipping environment ${environment.id}: credential_decryption_failed`
                         );
                         return null;
                     }
+                    if (
+                        environment.control_token_hash &&
+                        hashConnectSecret(access.controlToken) !==
+                            environment.control_token_hash
+                    ) {
+                        console.warn(
+                            `[connect] skipping environment ${environment.id}: credential_hash_mismatch`
+                        );
+                        return null;
+                    }
+                    // Treat the durable environment declaration as the
+                    // authority. The encrypted envelope is checked too, but
+                    // must never be allowed to relabel an old/corrupt record.
+                    const environmentBinding = normalizeConnectRuntimeMetadata({
+                        runtime: environment.runtime,
+                        driver: environment.driver,
+                        basePath: environment.base_path,
+                    });
+                    const accessBinding = normalizeConnectRuntimeMetadata(access);
+                    if (
+                        !environmentBinding ||
+                        !accessBinding ||
+                        environmentBinding.runtime !== accessBinding.runtime ||
+                        environmentBinding.driver !== accessBinding.driver ||
+                        environmentBinding.basePath !== accessBinding.basePath
+                    ) {
+                        console.warn(
+                            `[connect] skipping environment ${environment.id}: runtime_binding_mismatch`
+                        );
+                        return null;
+                    }
+                    binding = environmentBinding;
                     // Rotate only after the full record has decrypted and
                     // passed its immutable runtime-binding checks. Store
                     // errors are operational failures and must reach callers.
@@ -111,7 +109,6 @@ export default defineEventHandler(async (event) => {
                         id: environment.id,
                         name: environment.name,
                         hostname: environment.hostname,
-                        status: environment.status,
                         baseUrl: `https://${environment.hostname}${binding.basePath}`,
                         accessToken: access.controlToken,
                         driver: binding.driver,

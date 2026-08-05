@@ -5,8 +5,12 @@ const MAX_BODY_BYTES = 32 * 1024 * 1024;
 const MAX_ATTACHMENT_COUNT = 10;
 const MAX_ATTACHMENT_CONTENT_CHARS = Math.ceil((20 * 1024 * 1024 * 4) / 3) + 4;
 const MAX_EVENTS = 2_000;
+const MAX_EVENT_BUFFER_BYTES = 2 * 1024 * 1024;
+const MAX_SINGLE_EVENT_BYTES = 768 * 1024;
 const MAX_SESSIONS = 200;
 const MAX_RUNS = 200;
+const MAX_RUN_OUTPUT_BYTES = 512 * 1024;
+const ACTIVE_RUN_TTL_MS = 30 * 60 * 1_000;
 const MAX_COMMAND_CHOICES = 24;
 const MODEL_PAGE_SIZE = 8;
 const SSE_HEARTBEAT_MS = 15_000;
@@ -74,6 +78,18 @@ function normalizeAttachments(value) {
 
 function nowSeconds() {
   return Date.now() / 1_000;
+}
+
+function terminalRun(run) {
+  return ["completed", "failed", "cancelled"].includes(run.status);
+}
+
+function byteLength(value) {
+  return Buffer.byteLength(value, "utf8");
+}
+
+function eventByteLength(event) {
+  return event._or3Bytes ?? byteLength(JSON.stringify(event));
 }
 
 function contentText(content) {
@@ -468,14 +484,18 @@ export class Or3RunsBridge {
     }
   }
 
-  prune() {
-    if (this.runs.size > MAX_RUNS) {
+  prune(maxRuns = MAX_RUNS) {
+    const expiredBefore = nowSeconds() - ACTIVE_RUN_TTL_MS / 1_000;
+    for (const run of this.runs.values()) {
+      if (!terminalRun(run) && run.updatedAt < expiredBefore) {
+        this.expireRun(run, "OpenClaw run expired after 30 minutes without activity");
+      }
+    }
+    if (this.runs.size > maxRuns) {
       const removable = [...this.runs.values()]
-        .filter((run) =>
-          ["completed", "failed", "cancelled"].includes(run.status),
-        )
+        .filter(terminalRun)
         .sort((left, right) => left.updatedAt - right.updatedAt);
-      while (this.runs.size > MAX_RUNS && removable.length) {
+      while (this.runs.size > maxRuns && removable.length) {
         const run = removable.shift();
         this.runs.delete(run.id);
         for (const [alias, runId] of this.runAliases) {
@@ -486,9 +506,7 @@ export class Or3RunsBridge {
     if (this.sessions.size > MAX_SESSIONS) {
       const activeSessionIds = new Set(
         [...this.runs.values()]
-          .filter(
-            (run) => !["completed", "failed", "cancelled"].includes(run.status),
-          )
+          .filter((run) => !terminalRun(run))
           .map((run) => run.sessionId),
       );
       const removable = [...this.sessions.values()]
@@ -509,6 +527,13 @@ export class Or3RunsBridge {
     if (!prompt)
       throw Object.assign(new Error("Run input is required"), { status: 400 });
     const attachments = normalizeAttachments(requestInput.attachments);
+    this.prune(MAX_RUNS - 1);
+    if (this.runs.size >= MAX_RUNS) {
+      throw Object.assign(
+        new Error("Too many active OpenClaw runs; wait for an existing run to finish"),
+        { status: 429 },
+      );
+    }
     const session = this.ensureSession(resolvedSessionId);
     const idempotencyKey = randomUUID();
     const createdAt = nowSeconds();
@@ -522,6 +547,7 @@ export class Or3RunsBridge {
       output: "",
       error: undefined,
       events: [],
+      eventBytes: 0,
       nextEventSequence: 1,
       listeners: new Set(),
       approval: undefined,
@@ -655,14 +681,36 @@ export class Or3RunsBridge {
   }
 
   append(run, event) {
-    if (["completed", "failed", "cancelled"].includes(run.status)) return;
+    if (terminalRun(run)) return;
+    if (event.event === "message.delta") {
+      const delta = stringValue(event.delta) ?? "";
+      if (byteLength(run.output) + byteLength(delta) > MAX_RUN_OUTPUT_BYTES) {
+        this.expireRun(run, `OpenClaw run output exceeded ${MAX_RUN_OUTPUT_BYTES / 1024} KB`);
+        return;
+      }
+    }
+    if (byteLength(JSON.stringify(event)) > MAX_SINGLE_EVENT_BYTES) {
+      this.expireRun(run, `OpenClaw run event exceeded ${MAX_SINGLE_EVENT_BYTES / 1024} KB`);
+      return;
+    }
     const value = {
       ...event,
       seq: run.nextEventSequence++,
       timestamp: nowSeconds(),
     };
+    Object.defineProperty(value, "_or3Bytes", {
+      value: byteLength(JSON.stringify(value)),
+      enumerable: false,
+    });
     run.events.push(value);
-    if (run.events.length > MAX_EVENTS) run.events.shift();
+    run.eventBytes = Number(run.eventBytes) || 0;
+    run.eventBytes += eventByteLength(value);
+    while (
+      run.events.length > MAX_EVENTS || run.eventBytes > MAX_EVENT_BUFFER_BYTES
+    ) {
+      const removed = run.events.shift();
+      if (removed) run.eventBytes -= eventByteLength(removed);
+    }
     run.updatedAt = value.timestamp;
     if (event.event === "message.delta") run.output += event.delta ?? "";
     if (event.event === "approval.request") run.status = "waiting_for_approval";
@@ -672,9 +720,12 @@ export class Or3RunsBridge {
       run.status = "failed";
       run.error = event.error;
     }
-    if (event.event === "run.cancelled") run.status = "cancelled";
+    if (event.event === "run.cancelled") {
+      run.status = "cancelled";
+      run.error = event.error;
+    }
     for (const listener of run.listeners) listener(value);
-    if (["completed", "failed", "cancelled"].includes(run.status)) {
+    if (terminalRun(run)) {
       for (const listener of run.listeners) listener(null);
       run.listeners.clear();
     }
@@ -688,6 +739,10 @@ export class Or3RunsBridge {
 
   appendCumulativeOutput(run, cumulative) {
     if (!cumulative || cumulative === run.output) return;
+    if (byteLength(cumulative) > MAX_RUN_OUTPUT_BYTES) {
+      this.expireRun(run, `OpenClaw run output exceeded ${MAX_RUN_OUTPUT_BYTES / 1024} KB`);
+      return;
+    }
     if (cumulative.startsWith(run.output)) {
       this.append(run, {
         event: "message.delta",
@@ -698,6 +753,19 @@ export class Or3RunsBridge {
     // A runtime can replace an incomplete streamed response with its final
     // content. The terminal event carries the authoritative replacement.
     run.output = cumulative;
+  }
+
+  expireRun(run, error) {
+    if (terminalRun(run)) return;
+    this.append(run, { event: "run.cancelled", error });
+    if (typeof this.control.stop === "function" && run.controlRunId) {
+      void Promise.resolve(
+        this.control.stop({
+          sessionKey: run.sessionKey,
+          runId: run.controlRunId,
+        }),
+      ).catch(() => {});
+    }
   }
 
   handleChatEvent(event) {

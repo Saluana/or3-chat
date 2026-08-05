@@ -94,12 +94,7 @@ export function normalizeConnectRuntimeMetadata(value: {
     const expectedBasePath = runtime === 'openclaw' ? '/or3/' : '/';
     const driver = value.driver === undefined ? expectedDriver : value.driver;
     const basePath = value.basePath === undefined ? expectedBasePath : value.basePath;
-    if (
-        (driver !== 'intern' && driver !== 'runs') ||
-        (basePath !== '/' && basePath !== '/or3/') ||
-        driver !== expectedDriver ||
-        basePath !== expectedBasePath
-    ) return null;
+    if (driver !== expectedDriver || basePath !== expectedBasePath) return null;
     return { runtime, driver, basePath };
 }
 

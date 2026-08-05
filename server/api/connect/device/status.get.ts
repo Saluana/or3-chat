@@ -167,7 +167,13 @@ export default defineEventHandler(async (event) => {
         environmentBinding.driver !== accessBinding.driver ||
         environmentBinding.basePath !== accessBinding.basePath
     ) {
-        return { stage: 'installing' as const };
+        console.warn(
+            `[connect] device-status environment ${environment.id}: runtime_binding_mismatch`
+        );
+        return {
+            stage: 'error' as const,
+            reason: 'runtime_binding_mismatch' as const,
+        };
     }
     const binding = environmentBinding;
     const baseUrl = `https://${environment.hostname}${binding.basePath}`;

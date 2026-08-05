@@ -154,16 +154,19 @@ deployment while keeping Convex's validators/schema additive.
   `npx @or3/connect hermes` commands; the local browser credential vault was
   locked, so opening a real transcript still requires the user's PIN and was
   not claimed as a live runtime test.
-- 5.3 is complete. Local checks completed on this branch include the focused
-  external-agent and Connect-server suites (23 files, 231 tests), OpenClaw
-  bridge tests (4), CLI adapter tests plus Go vet, direct Nuxt typechecking,
-  Convex typecheck/tests (20 files, 143 tests), SQLite Connect persistence
-  tests (17), skills validation, package dry-run, and `git diff --check` in
-  each checkout. The repository-wide Vitest command still reports unrelated
-  pre-existing dashboard assertions; the focused external-agent suites are
-  green. The `bun run type-check` wrapper cannot open its temporary tsx IPC
-  socket in this sandbox, while the underlying `vue-tsc --noEmit` check passes.
-  The broader Go command suite is blocked in this sandbox by its pre-existing
-  `httptest` IPv6 listener restriction. The SQLite provider's standalone
-  typecheck still reports the pre-existing host-app `ssrAuthEnabled` mismatch;
-  its Connect-specific errors are resolved.
+- 5.3 is complete for reproducible local validation only. As of 2026-08-03,
+  the review worktree is intentionally uncommitted; the exact commands and
+  latest successful results are: `npm exec vitest run
+  server/api/connect/__tests__/environment-scope.test.ts
+  server/api/connect/__tests__/device-status.test.ts` (2 files, 18 tests),
+  `go test ./cmd/or3-intern ./internal/connect`, `go vet ./cmd/or3-intern
+  ./internal/connect`, `(cd packages/openclaw-or3 && npm test)` (14 tests),
+  `npm exec vue-tsc -- --noEmit`, and `git diff --check` in both affected
+  repositories. These checks do not replace the signed-in OR3 Cloud,
+  named-tunnel, and real OpenClaw/Hermes end-to-end work left open in 5.1 and
+  5.2. The repository-wide Vitest command still reports unrelated pre-existing
+  dashboard assertions; the `bun run type-check` wrapper cannot open its
+  temporary tsx IPC socket in this sandbox, while direct `vue-tsc --noEmit`
+  passes. The SQLite provider's standalone typecheck still reports the
+  pre-existing host-app `ssrAuthEnabled` mismatch; its Connect-specific errors
+  are resolved.

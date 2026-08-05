@@ -18,10 +18,14 @@ function isRunsCapabilities(value: unknown): boolean {
   const capabilities = record(value);
   const features = record(capabilities.features);
   const endpoints = record(capabilities.endpoints);
+  const hasEndpoint = (name: string) => {
+    const endpoint = record(endpoints[name]);
+    return typeof endpoint.path === "string" && endpoint.path.trim().startsWith("/");
+  };
   const sessions =
-    features.session_resources === true || Object.hasOwn(endpoints, "sessions");
+    features.session_resources === true || hasEndpoint("sessions");
   const events =
-    features.run_events_sse === true || Object.hasOwn(endpoints, "run_events");
+    features.run_events_sse === true || hasEndpoint("run_events");
   return sessions && events;
 }
 

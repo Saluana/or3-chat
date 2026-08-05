@@ -168,7 +168,11 @@ describe('Connect environment workspace scope', () => {
     it('lists only the authenticated active workspace and labels the response', async () => {
         const handler = await listHandler();
 
-        await expect(handler(event)).resolves.toMatchObject({
+        const response = (await handler(event)) as {
+            workspaceId: string;
+            environments: Array<Record<string, unknown>>;
+        };
+        expect(response).toMatchObject({
             workspaceId: 'workspace-a',
             environments: [
                 {
@@ -177,6 +181,7 @@ describe('Connect environment workspace scope', () => {
                 },
             ],
         });
+        expect(response.environments[0]).not.toHaveProperty('status');
         expect(listEnvironmentsMock).toHaveBeenCalledWith({
             userId: 'user-one',
             workspaceId: 'workspace-a',
@@ -239,6 +244,23 @@ describe('Connect environment workspace scope', () => {
         const handler = await listHandler();
 
         await expect(handler(event)).rejects.toThrow('database unavailable');
+    });
+
+    it('logs a fixed credential-safe reason when an environment cannot decrypt', async () => {
+        decryptCredentialMock.mockImplementation(() => {
+            throw new Error('decrypted-token must never appear in logs');
+        });
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const handler = await listHandler();
+
+        await expect(handler(event)).resolves.toMatchObject({ environments: [] });
+        expect(warning).toHaveBeenCalledWith(
+            '[connect] skipping environment environment-a: credential_decryption_failed'
+        );
+        expect(warning).not.toHaveBeenCalledWith(
+            expect.stringContaining('decrypted-token')
+        );
+        warning.mockRestore();
     });
 
     it('binds token lookup and revocation to the credential scope', async () => {

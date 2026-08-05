@@ -3,26 +3,50 @@
         class="docs-shell h-[100dvh] flex flex-col bg-[var(--md-surface)] overflow-hidden"
     >
         <!-- Header -->
-        <header
-            class="docs-header flex-shrink-0 flex flex-col gap-3 px-4 py-2 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] z-10 md:flex-row md:items-center md:justify-between md:gap-0"
-        >
-            <div class="flex w-full items-center gap-3 md:w-[260px]">
-                <UButton
-                    v-bind="sidebarToggleButtonProps"
-                    :icon="useIcon('ui.menu').value"
-                    class="md:hidden!"
-                    :aria-controls="sidebarId"
-                    :aria-expanded="sidebarOpen"
-                    :aria-label="sidebarOpen ? 'Close navigation' : 'Open navigation'"
-                    @click="toggleSidebar"
-                />
-                <NuxtLink to="/" class="flex items-center gap-2 min-w-0">
-                    <img src="/butthole-logo.webp" alt="Logo" class="h-8 w-8 shrink-0" />
-                    <h1 class="font-ps2 text-base text-[var(--md-primary)] truncate">
-                        OR3 Docs
-                    </h1>
-                </NuxtLink>
-                <div class="ml-auto md:hidden">
+        <header class="docs-header">
+            <div class="docs-header-row">
+                <div class="docs-header-brand-cell">
+                    <UButton
+                        v-bind="sidebarToggleButtonProps"
+                        :icon="useIcon('ui.menu').value"
+                        class="md:hidden!"
+                        :aria-controls="sidebarId"
+                        :aria-expanded="sidebarOpen"
+                        :aria-label="
+                            sidebarOpen ? 'Close navigation' : 'Open navigation'
+                        "
+                        @click="toggleSidebar"
+                    />
+                    <NuxtLink to="/" class="docs-brand">
+                        <img
+                            src="/butthole-logo.webp"
+                            alt="OR3 logo"
+                            class="docs-brand-logo"
+                        />
+                        <span class="docs-brand-text">
+                            OR3&nbsp;<span class="docs-brand-accent">Docs</span>
+                        </span>
+                    </NuxtLink>
+                </div>
+
+                <!-- Search (desktop): aligned with the content column below -->
+                <div class="docs-header-search hidden md:block">
+                    <div class="docs-header-search-inner">
+                        <UInput
+                            v-bind="searchInputProps"
+                            v-model="searchQuery"
+                            class="docs-search"
+                        >
+                            <template #trailing>
+                                <kbd class="docs-search-kbd" aria-hidden="true"
+                                    >⌘K</kbd
+                                >
+                            </template>
+                        </UInput>
+                    </div>
+                </div>
+
+                <div class="docs-header-actions-cell">
                     <UButton
                         v-bind="headerThemeButtonProps"
                         :icon="themeToggleIcon"
@@ -32,22 +56,12 @@
                 </div>
             </div>
 
-            <!-- Search -->
-            <div class="docs-header-search w-full md:mx-6 md:flex-1">
+            <!-- Search (mobile): full-width row -->
+            <div class="docs-header-search-mobile md:hidden">
                 <UInput
                     v-bind="searchInputProps"
                     v-model="searchQuery"
-                    @keydown.meta.k.prevent="focusSearch"
-                />
-            </div>
-
-            <!-- Theme Toggle -->
-            <div class="hidden w-full items-center justify-end md:flex md:w-[260px]">
-                <UButton
-                    v-bind="headerThemeButtonProps"
-                    :icon="themeToggleIcon"
-                    :aria-label="'Toggle theme'"
-                    @click="toggleTheme"
+                    class="docs-search"
                 />
             </div>
         </header>
@@ -61,13 +75,13 @@
             >
                 <div
                     v-if="isMobile && sidebarOpen"
-                    class="docs-mobile-sidebar-root fixed inset-0 z-[60] flex"
+                    class="fixed inset-0 z-[60] flex"
                     role="dialog"
                     aria-modal="true"
                     :aria-labelledby="sidebarLabelId"
                 >
                     <div
-                        class="docs-mobile-sidebar-backdrop absolute inset-0 bg-black/50"
+                        class="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
                         aria-hidden="true"
                         @click="closeSidebar"
                     ></div>
@@ -81,69 +95,20 @@
                             v-if="sidebarOpen"
                             ref="mobileSidebarRef"
                             :id="sidebarId"
-                            class="docs-mobile-sidebar relative z-[61] h-full w-[min(80vw,320px)] max-w-full transform bg-[var(--md-surface)] border-r-[var(--md-border-width)] border-[color:var(--md-border-color)] shadow-lg overflow-y-auto scrollbars"
+                            class="docs-mobile-sidebar relative z-[61] h-full w-[min(84vw,320px)] max-w-full transform bg-[var(--md-surface)] border-r-[length:var(--md-border-width)] border-[color:var(--md-border-color)] shadow-2xl overflow-y-auto scrollbars"
                             @keydown="onSidebarKeydown"
                         >
                             <h2 :id="sidebarLabelId" class="sr-only">
                                 Documentation navigation
                             </h2>
-                            <nav class="docs-mobile-nav p-4">
-                                <div class="space-y-6">
-                                    <div
-                                        v-for="category in resolvedNavigation"
-                                        :key="category.label"
-                                        class="docs-nav-category"
-                                    >
-                                        <div class="docs-nav-category-label sb-group-header flex items-center gap-2 mb-2 px-1">
-                                            <span class="sb-group-header-label text-[var(--md-on-surface-variant)] uppercase tracking-wider">
-                                                {{ category.label }}
-                                            </span>
-                                            <div class="flex-1 h-px bg-[var(--md-outline-variant)] opacity-40"></div>
-                                        </div>
-                                        <div class="space-y-px">
-                                            <div
-                                                v-for="group in category.groups"
-                                                :key="`${category.label}-${group.label}`"
-                                            >
-                                                <button
-                                                    v-if="group.items.length > 1"
-                                                    type="button"
-                                                    class="docs-nav-group-toggle w-full flex items-center justify-between px-3 h-[40px] rounded-[var(--md-border-radius)] text-left text-[var(--md-on-surface)] transition-colors hover:bg-[var(--md-primary)]/8 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-primary)]"
-                                                    @click="toggleGroup(category.label, group.label)"
-                                                    :aria-expanded="isGroupExpanded(category.label, group.label)"
-                                                >
-                                                    <span class="font-vt323 text-[18px]">{{ group.label }}</span>
-                                                    <UIcon
-                                                        :name="useIcon('ui.chevron.down').value"
-                                                        class="transition-transform duration-200 w-4 h-4 opacity-50 shrink-0"
-                                                        :class="{ 'rotate-180': isGroupExpanded(category.label, group.label) }"
-                                                        aria-hidden="true"
-                                                    />
-                                                </button>
-                                                <Transition name="collapsible">
-                                                    <div
-                                                        v-if="group.items.length <= 1 || isGroupExpanded(category.label, group.label)"
-                                                        :class="group.items.length > 1 ? 'docs-nav-children ml-3 pl-3 border-l-2 border-[color:var(--md-outline-variant)] py-1' : ''"
-                                                    >
-                                                        <ul class="space-y-px">
-                                                            <li v-for="item in group.items" :key="item.path">
-                                                                <NuxtLink
-                                                                    :to="item.path"
-                                                                    class="docs-nav-link flex h-[36px] items-center px-2 rounded-[var(--md-border-radius)] text-[var(--md-on-surface-variant)] transition-colors font-vt323 text-[17px] hover:text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/8"
-                                                                    active-class="docs-nav-link-active"
-                                                                    @click="closeSidebar"
-                                                                >
-                                                                    {{ item.label }}
-                                                                </NuxtLink>
-                                                            </li>
-                                                        </ul>
-                                                    </div>
-                                                </Transition>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </nav>
+                            <div class="px-4 pt-5 pb-10">
+                                <DocsSidebarNav
+                                    :navigation="resolvedNavigation"
+                                    :is-group-expanded="isGroupExpanded"
+                                    :toggle-group="toggleGroup"
+                                    @navigate="closeSidebar"
+                                />
+                            </div>
                         </aside>
                     </Transition>
                 </div>
@@ -151,85 +116,34 @@
         </Teleport>
 
         <!-- Main Layout -->
-        <div class="docs-layout flex flex-1 min-h-0 overflow-hidden">
+        <div class="flex flex-1 min-h-0 overflow-hidden">
             <!-- Sidebar -->
             <aside
                 :id="sidebarId"
-                class="docs-sidebar flex-shrink-0 w-[260px] bg-[var(--md-surface)] overflow-y-auto scrollbars hidden md:block"
+                class="docs-sidebar flex-shrink-0 w-[272px] overflow-y-auto scrollbars hidden md:block"
             >
-                <nav class="docs-sidebar-nav p-3 pt-4">
-                    <div class="space-y-5">
-                        <!-- Categories -->
-                        <div
-                            v-for="category in resolvedNavigation"
-                            :key="category.label"
-                            class="docs-nav-category"
-                        >
-                            <div class="docs-nav-category-label sb-group-header flex items-center gap-2 mb-2 px-1">
-                                <span class="sb-group-header-label text-[var(--md-on-surface-variant)] uppercase tracking-wider">
-                                    {{ category.label }}
-                                </span>
-                                <div class="flex-1 h-px bg-[var(--md-outline-variant)] opacity-40"></div>
-                            </div>
-                            <div class="space-y-1">
-                        <div
-                            v-for="group in category.groups"
-                            :key="`${category.label}-${group.label}`"
-                        >
-                            <button
-                                v-if="group.items.length > 1"
-                                type="button"
-                                class="docs-nav-group-toggle w-full flex items-center justify-between px-3 h-[40px] rounded-[var(--md-border-radius)] text-left text-[var(--md-on-surface)] transition-colors hover:bg-[var(--md-surface-hover,color-mix(in_oklab,var(--md-primary),transparent_92%))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-primary)]"
-                                :class="{ 'bg-[var(--md-surface-active,color-mix(in_oklab,var(--md-primary),transparent_85%))] font-medium': isGroupExpanded(category.label, group.label) }"
-                                @click="toggleGroup(category.label, group.label)"
-                                :aria-expanded="isGroupExpanded(category.label, group.label)"
-                            >
-                                <span class="font-vt323 text-[18px]">{{ group.label }}</span>
-                                <UIcon
-                                    :name="useIcon('ui.chevron.down').value"
-                                    class="transition-transform duration-200 w-4 h-4 opacity-50 shrink-0"
-                                    :class="{ 'rotate-180': isGroupExpanded(category.label, group.label) }"
-                                    aria-hidden="true"
-                                />
-                            </button>
-                            <Transition name="collapsible">
-                                <div
-                                    v-if="group.items.length <= 1 || isGroupExpanded(category.label, group.label)"
-                                    :class="group.items.length > 1 ? 'docs-nav-children ml-3 pl-3 border-l-2 border-[color:var(--md-outline-variant)] py-1' : ''"
-                                >
-                                    <ul class="space-y-px">
-                                        <li v-for="item in group.items" :key="item.path">
-                                            <NuxtLink
-                                                :to="item.path"
-                                                class="docs-nav-link flex h-[36px] items-center px-2 rounded-[var(--md-border-radius)] text-[var(--md-on-surface-variant)] transition-colors font-vt323 text-[17px] hover:text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/8"
-                                                active-class="docs-nav-link-active"
-                                            >
-                                                {{ item.label }}
-                                            </NuxtLink>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </Transition>
-                        </div>
-                            </div>
-                        </div>
-                    </div>
-                </nav>
+                <div class="px-4 pt-6 pb-12">
+                    <DocsSidebarNav
+                        :navigation="resolvedNavigation"
+                        :is-group-expanded="isGroupExpanded"
+                        :toggle-group="toggleGroup"
+                    />
+                </div>
             </aside>
 
             <!-- Content Area -->
             <main
+                ref="mainEl"
                 class="docs-main flex-1 min-w-0 max-w-[100dvw] overflow-x-hidden overflow-y-auto scrollbars"
             >
                 <div
-                    class="max-w-[100dvw] sm:max-w-[700px] lg:max-w-[740px] mx-auto pt-6 pb-24 px-5 md:px-8 md:pt-8"
+                    class="docs-content-wrap max-w-[100dvw] sm:max-w-[720px] lg:max-w-[768px] mx-auto pt-7 pb-24 px-5 sm:px-8 md:pt-10"
                 >
                     <!-- Search Results -->
                     <div v-if="searchQuery && searchTrigger" class="mb-8">
-                        <h2
-                            class="font-ps2 text-base mb-4 text-[var(--md-on-surface)]"
-                        >
-                            Search Results
+                        <div class="docs-eyebrow mb-1">Search</div>
+                        <h2 class="docs-search-results-title">
+                            Results for &ldquo;{{ searchQuery }}&rdquo;
                         </h2>
                         <LazySearchPanel
                             v-if="docmap"
@@ -241,16 +155,20 @@
 
                     <!-- Page Content -->
                     <div v-else class="docs-content">
-                        <!-- Loading indicator -->
+                        <!-- Loading skeleton -->
                         <div
                             v-if="isLoadingContent"
-                            class="flex items-center justify-center py-16"
+                            class="docs-skeleton"
+                            aria-label="Loading content"
                         >
-                            <div
-                                class="text-[var(--md-on-surface-variant)] font-vt323 text-xl tracking-widest animate-pulse"
-                            >
-                                Loading...
-                            </div>
+                            <div class="docs-skeleton-bar docs-skeleton-title"></div>
+                            <div class="docs-skeleton-bar w-full"></div>
+                            <div class="docs-skeleton-bar w-11/12"></div>
+                            <div class="docs-skeleton-bar w-4/5"></div>
+                            <div class="docs-skeleton-bar docs-skeleton-heading"></div>
+                            <div class="docs-skeleton-bar w-full"></div>
+                            <div class="docs-skeleton-bar w-10/12"></div>
+                            <div class="docs-skeleton-bar w-3/5"></div>
                         </div>
 
                         <!-- Content -->
@@ -258,29 +176,30 @@
                             <!-- Mobile TOC (collapsible) -->
                             <div
                                 v-if="computedShowToc && tocList.length > 0"
-                                class="lg:hidden mb-6 border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)]"
+                                class="docs-mobile-toc lg:hidden"
                             >
                                 <button
                                     type="button"
-                                    class="w-full flex items-center justify-between px-4 py-3 text-left font-vt323 text-[18px] text-[var(--md-on-surface)] uppercase tracking-wide transition-colors hover:bg-[var(--md-primary)]/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-primary)]"
+                                    class="docs-mobile-toc-toggle"
                                     @click="mobileTocOpen = !mobileTocOpen"
                                     :aria-expanded="mobileTocOpen"
                                 >
                                     <span>On this page</span>
                                     <UIcon
                                         :name="useIcon('ui.chevron.down').value"
-                                        class="transition-transform duration-200 w-4 h-4 opacity-60"
+                                        class="w-3.5 h-3.5 opacity-60 transition-transform duration-200"
                                         :class="{ 'rotate-180': mobileTocOpen }"
                                         aria-hidden="true"
                                     />
                                 </button>
-                                <Transition name="collapsible">
+                                <Transition name="docs-collapsible">
                                     <div
                                         v-if="mobileTocOpen"
-                                        class="px-4 py-3 border-t-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
+                                        class="docs-mobile-toc-body"
                                     >
                                         <TocListView
                                             :toc="tocList"
+                                            :active-id="activeTocId"
                                             @select="onMobileTocSelect"
                                         />
                                     </div>
@@ -289,7 +208,7 @@
 
                             <StreamMarkdown
                                 :content="displayContent"
-                                class="prose prose-pre:font-mono or3-prose max-w-none"
+                                class="prose prose-pre:font-mono or3-prose docs-prose max-w-none"
                                 :allowed-link-prefixes="[
                                     'https://',
                                     'http://',
@@ -303,6 +222,51 @@
                                 :code-block-show-line-numbers="false"
                                 :shiki-theme="currentShikiTheme"
                             />
+
+                            <!-- Prev / Next navigation -->
+                            <nav
+                                v-if="prevPage || nextPage"
+                                class="docs-prevnext"
+                                aria-label="Page navigation"
+                            >
+                                <NuxtLink
+                                    v-if="prevPage"
+                                    :to="prevPage.path"
+                                    class="docs-prevnext-card docs-prevnext-prev"
+                                >
+                                    <span class="docs-prevnext-label">
+                                        <UIcon
+                                            :name="useIcon('ui.arrow.left').value"
+                                            class="w-3.5 h-3.5"
+                                            aria-hidden="true"
+                                        />
+                                        Previous
+                                    </span>
+                                    <span class="docs-prevnext-title">{{
+                                        prevPage.label
+                                    }}</span>
+                                </NuxtLink>
+                                <span v-else class="hidden sm:block"></span>
+                                <NuxtLink
+                                    v-if="nextPage"
+                                    :to="nextPage.path"
+                                    class="docs-prevnext-card docs-prevnext-next"
+                                >
+                                    <span class="docs-prevnext-label">
+                                        Next
+                                        <UIcon
+                                            :name="
+                                                useIcon('ui.chevron.right').value
+                                            "
+                                            class="w-3.5 h-3.5"
+                                            aria-hidden="true"
+                                        />
+                                    </span>
+                                    <span class="docs-prevnext-title">{{
+                                        nextPage.label
+                                    }}</span>
+                                </NuxtLink>
+                            </nav>
                         </div>
                     </div>
                 </div>
@@ -311,15 +275,15 @@
             <!-- Table of Contents (Right Sidebar) -->
             <aside
                 v-if="computedShowToc && tocList.length > 0"
-                class="docs-toc flex-shrink-0 w-[220px] border-l-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] overflow-y-auto scrollbars hidden lg:block"
+                class="docs-toc flex-shrink-0 w-[240px] overflow-y-auto scrollbars hidden lg:block"
             >
-                <nav class="p-4 pt-6">
-                    <div class="mb-3 pb-2 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]">
-                        <h3 class="font-vt323 text-[18px] text-[var(--md-on-surface-variant)] uppercase tracking-wider">
-                            On this page
-                        </h3>
-                    </div>
-                    <TocListView :toc="tocList" @select="scrollToHeading" />
+                <nav class="pl-5 pr-4 pt-9 pb-12" aria-label="On this page">
+                    <div class="docs-eyebrow mb-3">On this page</div>
+                    <TocListView
+                        :toc="tocList"
+                        :active-id="activeTocId"
+                        @select="scrollToHeading"
+                    />
                 </nav>
             </aside>
         </div>
@@ -348,6 +312,7 @@ import {
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import { useScrollLock } from '~/composables/core/useScrollLock';
 import LazySearchPanel from '~/components/documents/LazySearchPanel.vue';
+import DocsSidebarNav from '~/components/documentation/DocsSidebarNav.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
@@ -378,16 +343,6 @@ const themeToggleIcon = computed(() => {
 interface NavItem {
     label: string;
     path: string;
-}
-
-interface NavGroup {
-    label: string;
-    items: NavItem[];
-}
-
-interface NavCategory {
-    label: string;
-    groups: NavGroup[];
 }
 
 interface TocItem {
@@ -422,6 +377,10 @@ const TocListView = defineComponent({
             type: Array as PropType<TocItem[]>,
             required: true,
         },
+        activeId: {
+            type: String as PropType<string | null>,
+            default: null,
+        },
     },
     emits: ['select'],
     setup(props, { emit }) {
@@ -433,7 +392,7 @@ const TocListView = defineComponent({
         return () =>
             h(
                 'ul',
-                { class: 'space-y-2 text-sm' },
+                { class: 'docs-toc-list' },
                 props.toc.map((heading) =>
                     h(
                         'li',
@@ -443,11 +402,14 @@ const TocListView = defineComponent({
                             {
                                 href: `#${heading.id}`,
                                 class: [
-                                    'block py-1 px-2 text-[var(--md-on-surface)] transition-colors rounded-[var(--md-border-radius)] hover:text-[var(--md-primary)] hover:bg-[var(--md-primary)]/5',
+                                    'docs-toc-link',
+                                    heading.id === props.activeId
+                                        ? 'docs-toc-link-active'
+                                        : undefined,
                                     heading.level === 3
-                                        ? 'pl-4'
+                                        ? 'docs-toc-link-l3'
                                         : heading.level === 4
-                                        ? 'pl-6'
+                                        ? 'docs-toc-link-l4'
                                         : undefined,
                                 ],
                                 onClick: (event: MouseEvent) =>
@@ -463,7 +425,7 @@ const TocListView = defineComponent({
 
 const props = withDefaults(
     defineProps<{
-        navigation?: NavCategory[];
+        navigation?: any[];
         showToc?: boolean;
         toc?: TocItem[];
         content?: string;
@@ -476,13 +438,15 @@ const props = withDefaults(
 const searchQuery = ref('');
 const searchTrigger = ref(false);
 const docmap = ref<Docmap | null>(null);
-// currentContent and isLoadingContent defined later via useAsyncData
 
 // Root element that contains rendered markdown to extract headings from
 const contentRoot = ref<HTMLElement | null>(null);
+const mainEl = ref<HTMLElement | null>(null);
 // Flag to enable/disable mutation observer for TOC building
 const shouldObserveToc = ref(false);
 const headingOffsets = ref<Record<string, number>>({});
+const activeTocId = ref<string | null>(null);
+let scrollSpyRaf = 0;
 
 // Local TOC derived from DOM when not provided via props
 const localToc = ref<TocItem[]>([]);
@@ -531,14 +495,14 @@ function useDocsButtonProps(
 
 const sidebarToggleButtonProps = useDocsButtonProps('docs.sidebar-toggle', {
     class: 'docs-sidebar-toggle-btn theme-btn',
-    variant: 'basic',
+    variant: 'ghost',
     size: 'sm',
     square: true,
     color: 'neutral',
 });
 const headerThemeButtonProps = useDocsButtonProps('docs.theme-toggle', {
     class: 'docs-theme-toggle-btn theme-btn',
-    variant: 'basic',
+    variant: 'ghost',
     size: 'sm',
     square: true,
     color: 'neutral',
@@ -562,6 +526,10 @@ const searchInputProps = computed(() => {
         .filter(Boolean)
         .join(' ')
         .trim();
+    const rootUi = ['w-full', uiOverrides.root]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
     const { ui: _ignoredUi, ...rest } = merged;
     return {
         placeholder: 'Search docs...',
@@ -570,6 +538,7 @@ const searchInputProps = computed(() => {
         ...rest,
         ui: {
             ...uiOverrides,
+            root: rootUi,
             base: baseUi,
         },
     };
@@ -583,12 +552,40 @@ const {
     applyDocmapNavigation,
 } = useDocumentationNavigation(
     computed(() => route.path),
-    computed(() => props.navigation)
+    computed(() => props.navigation as any)
 );
 
 const { pending: isLoadingContent, displayContent } = useDocumentationContent(
     computed(() => route.path),
     computed(() => props.content)
+);
+
+// Prev / Next page navigation (flattened doc order)
+const flatNavItems = computed<NavItem[]>(() => {
+    const items: NavItem[] = [];
+    for (const category of resolvedNavigation.value) {
+        for (const group of category.groups) {
+            items.push(...group.items);
+        }
+    }
+    return items;
+});
+
+const currentNavIndex = computed(() =>
+    flatNavItems.value.findIndex((item) => item.path === route.path)
+);
+
+const prevPage = computed<NavItem | null>(() =>
+    currentNavIndex.value > 0
+        ? flatNavItems.value[currentNavIndex.value - 1]!
+        : null
+);
+
+const nextPage = computed<NavItem | null>(() =>
+    currentNavIndex.value >= 0 &&
+    currentNavIndex.value < flatNavItems.value.length - 1
+        ? flatNavItems.value[currentNavIndex.value + 1]!
+        : null
 );
 
 const mobileTocOpen = ref(false);
@@ -694,11 +691,9 @@ watch(docmapData, (newData) => {
     }
 });
 
-
-
 onMounted(async () => {
     useShikiHighlighter();
-    
+
     if (!docmapData.value) {
         try {
             const map = await $fetch<Docmap | null>('/_documentation/docmap.json');
@@ -709,16 +704,37 @@ onMounted(async () => {
             console.error('Client fetch failed:', e);
         }
     }
+
+    // Ensure the TOC builds on fresh SSR loads where the content watcher
+    // never fires (data already resolved during hydration).
+    await nextTick();
+    if (!isLoadingContent.value && displayContent.value) {
+        buildTocFromDom();
+        observeTocUntilReady();
+        updateActiveHeading();
+    }
 });
 
 // Use VueUse's useEventListener for window resize (auto-cleanup)
 useEventListener(window, 'resize', computeHeadingOffsets);
+
+// Scroll-spy: track the active heading while scrolling the main pane
+useEventListener(mainEl, 'scroll', onMainScroll, { passive: true });
+
+// Global Cmd/Ctrl+K focuses the docs search
+useEventListener(window, 'keydown', (event: KeyboardEvent) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        focusSearch();
+    }
+});
 
 watch(
     () => route.path,
     async (path, oldPath) => {
         mobileTocOpen.value = false;
         headingOffsets.value = {};
+        activeTocId.value = null;
         expandGroupsForPath(path);
         if (isMobile.value && sidebarOpen.value) {
             closeSidebar({ restoreFocus: false });
@@ -734,7 +750,10 @@ watch(
     tocList,
     () => {
         headingOffsets.value = {};
-        nextTick(computeHeadingOffsets);
+        nextTick(() => {
+            computeHeadingOffsets();
+            updateActiveHeading();
+        });
     },
     { immediate: true }
 );
@@ -770,9 +789,9 @@ function buildTocFromDom() {
     const root = contentRoot.value;
     const items = root ? buildTocFromElement(root).toc : [];
 
-    // If DOM headings found, use them
+    // If DOM headings found, use them (skip the page-level h1)
     if (items.length > 0) {
-        localToc.value = items;
+        localToc.value = items.filter((item) => item.level > 1);
         nextTick(computeHeadingOffsets);
         return;
     }
@@ -823,7 +842,7 @@ function observeTocUntilReady() {
 
 // Use VueUse's useMutationObserver for TOC observation (auto-cleanup)
 useMutationObserver(
-    () => shouldObserveToc.value ? contentRoot.value : null,
+    () => (shouldObserveToc.value ? contentRoot.value : null),
     () => {
         if (!contentRoot.value) return;
         const found = contentRoot.value.querySelector('h2, h3, h4');
@@ -837,7 +856,7 @@ useMutationObserver(
 
 function computeHeadingOffsets() {
     if (!import.meta.client) return;
-    const container = document.querySelector('main.flex-1');
+    const container = mainEl.value;
     if (!container) return;
     const containerRect = container.getBoundingClientRect();
     const offsets: Record<string, number> = {};
@@ -852,6 +871,50 @@ function computeHeadingOffsets() {
     headingOffsets.value = offsets;
 }
 
+function onMainScroll() {
+    if (scrollSpyRaf) return;
+    scrollSpyRaf = requestAnimationFrame(() => {
+        scrollSpyRaf = 0;
+        updateActiveHeading();
+    });
+}
+
+function updateActiveHeading() {
+    if (!import.meta.client) return;
+    const container = mainEl.value;
+    if (!container || tocList.value.length === 0) {
+        activeTocId.value = null;
+        return;
+    }
+    if (Object.keys(headingOffsets.value).length === 0) {
+        computeHeadingOffsets();
+    }
+
+    const scrollTop = container.scrollTop;
+    const threshold = scrollTop + 96;
+    let current: string | null = null;
+
+    for (const item of tocList.value) {
+        const offset = headingOffsets.value[item.id];
+        if (typeof offset !== 'number') continue;
+        if (offset <= threshold) {
+            current = item.id;
+        } else {
+            break;
+        }
+    }
+
+    // Near the bottom, activate the last heading
+    if (
+        container.scrollHeight - container.clientHeight - scrollTop < 48 &&
+        tocList.value.length > 0
+    ) {
+        current = tocList.value[tocList.value.length - 1]!.id;
+    }
+
+    activeTocId.value = current;
+}
+
 // Recompute TOC after content loads/renders
 watch([displayContent, isLoadingContent], async ([content, loading]) => {
     if (!import.meta.client) return;
@@ -860,10 +923,9 @@ watch([displayContent, isLoadingContent], async ([content, loading]) => {
         // Build now and also observe in case streaming/async render continues
         buildTocFromDom();
         observeTocUntilReady();
+        updateActiveHeading();
     }
 });
-
-
 
 // Trigger lazy search panel load when user types
 watch(searchQuery, (query) => {
@@ -881,11 +943,11 @@ async function navigateToResult(path: string) {
 }
 
 function focusSearch() {
-    // Focus search input
     const input = document.querySelector(
-        'input[placeholder*="Search"]'
-    ) as HTMLInputElement;
+        '.docs-header-search input, .docs-header-search-mobile input'
+    ) as HTMLInputElement | null;
     input?.focus();
+    input?.select();
 }
 
 function toggleTheme() {
@@ -895,7 +957,7 @@ function toggleTheme() {
 }
 
 function scrollToHeading(id: string) {
-    const main = document.querySelector('main.flex-1');
+    const main = mainEl.value;
     if (!main) return;
 
     if (!(id in headingOffsets.value)) {
@@ -905,11 +967,12 @@ function scrollToHeading(id: string) {
     const target = headingOffsets.value[id];
     if (typeof target !== 'number') return;
 
-    const offset = isMobile.value ? 24 : 32;
+    const offset = isMobile.value ? 20 : 28;
     main.scrollTo({
         top: Math.max(0, target - offset),
         behavior: 'smooth',
     });
+    activeTocId.value = id;
 }
 
 function onMobileTocSelect(id: string) {
@@ -920,67 +983,442 @@ function onMobileTocSelect(id: string) {
 
 <style scoped>
 @import '~/assets/css/or3-prose.css';
+@import '~/assets/css/docs-prose.css';
 
 .docs-shell {
-    font-family: var(--font-sans);
+    --docs-font:
+        'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont,
+        'Segoe UI', Roboto, sans-serif;
+    /* Theme-sanctioned border token (design-token registry), with a softer
+       variant for hairlines inside content */
+    --docs-border: var(--md-border-color);
+    --docs-border-soft: color-mix(
+        in oklab,
+        var(--md-border-color),
+        transparent 35%
+    );
+    --docs-sidebar-bg: color-mix(
+        in oklab,
+        var(--md-surface-variant) 70%,
+        var(--md-surface)
+    );
+    --docs-eyebrow-fg: color-mix(
+        in oklab,
+        var(--md-on-surface-variant),
+        transparent 25%
+    );
+    font-family: var(--docs-font);
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
     width: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
+
+/* ---------- Header ---------- */
+
+.docs-header {
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--docs-border);
+    background: color-mix(in oklab, var(--md-surface) 88%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--md-shadow) 4%, transparent);
+    z-index: 10;
+}
+
+.docs-header-row {
+    display: flex;
+    align-items: center;
+    height: 60px;
+}
+
+@media (max-width: 767px) {
+    .docs-header-row {
+        height: 56px;
+    }
+}
+
+/* Brand cell mirrors the sidebar width so the search below-lines up with
+   the content column */
+.docs-header-brand-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-width: 0;
+    flex-shrink: 0;
+    padding-left: 0.875rem;
+}
+
+@media (min-width: 768px) {
+    .docs-header-brand-cell {
+        width: 272px;
+        padding-left: 1.25rem;
+    }
+}
+
+.docs-header-actions-cell {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-shrink: 0;
+    margin-left: auto;
+    padding-right: 0.875rem;
+}
+
+@media (min-width: 768px) {
+    .docs-header-actions-cell {
+        padding-right: 1.25rem;
+    }
+}
+
+/* Actions cell mirrors the TOC rail width on large screens */
+@media (min-width: 1024px) {
+    .docs-header-actions-cell {
+        width: 240px;
+    }
+}
+
+.docs-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-width: 0;
+    border-radius: calc(var(--md-border-radius) * 0.75);
+}
+
+.docs-brand-logo {
+    height: 28px;
+    width: 28px;
+    flex-shrink: 0;
+}
+
+.docs-brand-text {
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    color: var(--md-on-surface);
+    white-space: nowrap;
+}
+
+.docs-brand-accent {
+    color: var(--md-primary);
+    font-weight: 550;
+}
+
+.docs-header-search {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Same max-width + padding as the content wrapper, so the pill's edges
+   align exactly with the article text column */
+.docs-header-search-inner {
+    max-width: 768px;
+    margin-inline: auto;
+    padding-inline: 2rem;
+}
+
+.docs-header-search-mobile {
+    padding: 0 1.25rem 0.75rem;
+}
+
+/* Filled-pill search: overrides the theme's default outlined input.
+   Elevation uses on-surface alpha so the pill darkens in light mode and
+   lightens in dark mode, staying visible on any theme. */
+.docs-search :deep(input) {
+    background-color: color-mix(in oklab, var(--md-on-surface) 6%, transparent);
+    border-color: transparent;
+    border-radius: 9999px;
+    box-shadow: none;
+    height: 40px;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.docs-search :deep(input:hover) {
+    background-color: color-mix(in oklab, var(--md-on-surface) 9%, transparent);
+}
+
+.docs-search :deep(input:focus),
+.docs-search :deep(input:focus-visible) {
+    background-color: color-mix(in oklab, var(--md-on-surface) 9%, transparent);
+    border-color: color-mix(in oklab, var(--md-primary) 45%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--md-primary) 14%, transparent);
+    outline: none;
+}
+
+.docs-search :deep(input::placeholder) {
+    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
+}
+
+.docs-search-kbd {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.18rem 0.42rem;
+    border: 1px solid var(--docs-border);
+    border-radius: 6px;
+    background: color-mix(in oklab, var(--md-on-surface) 4%, transparent);
+    box-shadow: 0 1px 0 var(--docs-border);
+    color: var(--md-on-surface-variant);
+    font-family: var(--docs-font);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* ---------- Sidebar ---------- */
 
 .docs-sidebar {
-    border-right: var(--md-border-width) solid var(--md-border-color);
+    border-right: 1px solid var(--docs-border);
+    background: var(--docs-sidebar-bg);
 }
 
-/* Active nav link */
-.docs-nav-link-active {
-    background-color: color-mix(in oklab, var(--md-primary), transparent 85%);
-    color: var(--md-primary);
-    font-weight: 500;
+/* ---------- Eyebrow labels ---------- */
+
+.docs-eyebrow {
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--docs-eyebrow-fg);
+    user-select: none;
 }
 
-.docs-nav-link:hover {
-    background-color: color-mix(in oklab, var(--md-primary), transparent 92%);
+.docs-search-results-title {
+    font-size: 1.35rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    color: var(--md-on-surface);
+    margin-bottom: 1.25rem;
 }
 
-/* TOC links */
-.docs-toc :deep(a) {
+/* ---------- TOC (right rail) ---------- */
+
+.docs-toc {
+    border-left: 1px solid var(--docs-border);
+}
+
+.docs-toc :deep(.docs-toc-list) {
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--docs-border);
+}
+
+.docs-toc :deep(.docs-toc-link) {
     display: block;
-    padding: 4px 8px;
-    color: var(--md-on-surface-variant);
-    border-radius: var(--md-border-radius);
-    transition: color 0.15s, background-color 0.15s;
-    font-family: var(--font-sans);
-    font-size: 17px;
+    margin-left: -1px;
+    padding: 0.28rem 0 0.28rem 0.875rem;
+    border-left: 2px solid transparent;
+    font-size: 13px;
     line-height: 1.4;
+    color: var(--md-on-surface-variant);
+    transition:
+        color 0.15s ease,
+        border-color 0.15s ease;
 }
 
-.docs-toc :deep(a:hover) {
+.docs-toc :deep(.docs-toc-link:hover) {
+    color: var(--md-on-surface);
+}
+
+.docs-toc :deep(.docs-toc-link-l3) {
+    padding-left: 1.75rem;
+}
+
+.docs-toc :deep(.docs-toc-link-l4) {
+    padding-left: 2.5rem;
+}
+
+.docs-toc :deep(.docs-toc-link-active),
+.docs-toc :deep(.docs-toc-link-active:hover) {
     color: var(--md-primary);
-    background-color: color-mix(in oklab, var(--md-primary), transparent 93%);
+    border-left-color: var(--md-primary);
+    font-weight: 550;
 }
 
-.collapsible-enter-active,
-.collapsible-leave-active {
-    transition: all 0.18s ease;
+/* ---------- Mobile TOC ---------- */
+
+.docs-mobile-toc {
+    margin-bottom: 1.75rem;
+    border: 1px solid var(--docs-border);
+    border-radius: calc(var(--md-border-radius) * 0.9);
+    background: var(--md-surface-container-lowest);
     overflow: hidden;
 }
 
-.collapsible-enter-from,
-.collapsible-leave-to {
-    opacity: 0;
-    max-height: 0;
-    transform: translateY(-4px);
+.docs-mobile-toc-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.6rem 0.875rem;
+    font-size: 12px;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--md-on-surface-variant);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
 }
 
-.collapsible-enter-to,
-.collapsible-leave-from {
-    opacity: 1;
-    max-height: 600px;
-    transform: translateY(0);
+.docs-mobile-toc-toggle:hover {
+    background: color-mix(in oklab, var(--md-on-surface) 4%, transparent);
+}
+
+.docs-mobile-toc-toggle:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: -2px;
+}
+
+.docs-mobile-toc-body {
+    padding: 0.5rem 0.875rem 0.75rem;
+    border-top: 1px solid var(--docs-border);
+}
+
+.docs-mobile-toc-body :deep(.docs-toc-list) {
+    border-left: none;
+}
+
+.docs-mobile-toc-body :deep(.docs-toc-link) {
+    margin-left: 0;
+    border-left: none;
+    padding-left: 0;
+}
+
+.docs-mobile-toc-body :deep(.docs-toc-link-l3) {
+    padding-left: 1rem;
+}
+
+.docs-mobile-toc-body :deep(.docs-toc-link-l4) {
+    padding-left: 1.75rem;
+}
+
+/* ---------- Loading skeleton ---------- */
+
+.docs-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding-top: 0.5rem;
+}
+
+.docs-skeleton-bar {
+    height: 13px;
+    border-radius: 6px;
+    background: linear-gradient(
+        90deg,
+        var(--md-surface-container) 25%,
+        var(--md-surface-container-high) 50%,
+        var(--md-surface-container) 75%
+    );
+    background-size: 200% 100%;
+    animation: docs-skeleton-shimmer 1.4s ease infinite;
+}
+
+.docs-skeleton-title {
+    height: 30px;
+    width: 46%;
+    margin-bottom: 1rem;
+}
+
+.docs-skeleton-heading {
+    height: 20px;
+    width: 32%;
+    margin-top: 1.5rem;
+    margin-bottom: 0.25rem;
+}
+
+@keyframes docs-skeleton-shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* ---------- Prev / Next ---------- */
+
+.docs-prevnext {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    margin-top: 4rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--docs-border);
+}
+
+@media (min-width: 640px) {
+    .docs-prevnext {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.docs-prevnext-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--docs-border);
+    border-radius: calc(var(--md-border-radius) * 1.1);
+    transition:
+        border-color 0.15s ease,
+        background-color 0.15s ease;
+}
+
+.docs-prevnext-card:hover {
+    border-color: color-mix(in oklab, var(--md-primary) 45%, transparent);
+    background: color-mix(in oklab, var(--md-primary) 4%, transparent);
+}
+
+.docs-prevnext-card:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 2px;
+}
+
+.docs-prevnext-next {
+    text-align: right;
+    align-items: flex-end;
+}
+
+.docs-prevnext-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--md-on-surface-variant);
+}
+
+.docs-prevnext-title {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--md-primary);
+}
+
+/* ---------- Collapsible transition ---------- */
+
+.docs-collapsible-enter-active,
+.docs-collapsible-leave-active {
+    transition:
+        opacity 0.18s ease,
+        transform 0.18s ease;
+    overflow: hidden;
+}
+
+.docs-collapsible-enter-from,
+.docs-collapsible-leave-to {
+    opacity: 0;
+    transform: translateY(-3px);
 }
 
 .sr-only {

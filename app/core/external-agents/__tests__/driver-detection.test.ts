@@ -44,6 +44,24 @@ describe("external agent driver detection", () => {
     ).resolves.toBe("intern");
   });
 
+  it("does not treat null or malformed endpoint entries as Runs support", async () => {
+    for (const endpoints of [
+      { sessions: null, run_events: null },
+      { sessions: false, run_events: { path: "events" } },
+    ]) {
+      const fetch = vi.fn<ExternalAgentDetectionFetch>(async () =>
+        response({ endpoints }),
+      );
+
+      await expect(
+        createExternalAgentDriverDetector(fetch)({
+          baseUrl: "https://agent.test",
+          resolveCredential: async () => "secret",
+        }),
+      ).resolves.toBe("intern");
+    }
+  });
+
   it("does not hide rejected credentials behind Intern fallback", async () => {
     const fetch = vi.fn<ExternalAgentDetectionFetch>(async () =>
       response({ error: "unauthorized" }, 401),

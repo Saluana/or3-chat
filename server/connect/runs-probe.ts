@@ -50,8 +50,8 @@ export async function probeRunsCapabilities(
         const features = record(payload.features);
         const endpoints = record(payload.endpoints);
         return {
-            sessions: features.session_resources === true || Object.hasOwn(endpoints, 'sessions'),
-            events: features.run_events_sse === true || Object.hasOwn(endpoints, 'run_events'),
+            sessions: features.session_resources === true || validEndpoint(endpoints.sessions),
+            events: features.run_events_sse === true || validEndpoint(endpoints.run_events),
         };
     } catch {
         return { sessions: false, events: false };
@@ -64,4 +64,9 @@ function record(value: unknown): Record<string, unknown> {
     return value && typeof value === 'object' && !Array.isArray(value)
         ? (value as Record<string, unknown>)
         : {};
+}
+
+function validEndpoint(value: unknown): boolean {
+    const endpoint = record(value);
+    return typeof endpoint.path === 'string' && endpoint.path.trim().startsWith('/');
 }

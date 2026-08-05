@@ -297,9 +297,9 @@
                   type="password"
                   inputmode="numeric"
                   autocomplete="current-password"
-                  maxlength="128"
+                  maxlength="6"
                   class="min-w-0 flex-1 rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-transparent px-2 py-1.5 text-sm"
-                  placeholder="PIN"
+                  placeholder="6-digit PIN"
                 />
                 <UButton type="submit" size="xs" :loading="quickHostPending">
                   Unlock

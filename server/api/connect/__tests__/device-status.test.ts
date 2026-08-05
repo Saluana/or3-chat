@@ -262,6 +262,43 @@ describe('Connect device online status', () => {
         expect(createInternClientMock).not.toHaveBeenCalled();
     });
 
+    it('returns a re-enroll reason when a Runs credential binding disagrees with its environment', async () => {
+        listEnvironmentsMock.mockResolvedValue([
+            {
+                ...environment,
+                runtime: 'openclaw',
+                driver: 'runs',
+                base_path: '/or3/',
+            },
+        ]);
+        decryptCredentialMock.mockImplementation((ciphertext) =>
+            ciphertext === 'authorization-ciphertext'
+                ? {
+                      accountId: 'user-one',
+                      workspaceId: 'workspace-a',
+                      environmentId,
+                  }
+                : {
+                      controlToken: 'paired-device-token',
+                      runtime: 'hermes',
+                      driver: 'runs',
+                      basePath: '/',
+                  }
+        );
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const handler = await statusHandler();
+
+        await expect(handler(event)).resolves.toEqual({
+            stage: 'error',
+            reason: 'runtime_binding_mismatch',
+        });
+        expect(warning).toHaveBeenCalledWith(
+            '[connect] device-status environment env-abcdefgh: runtime_binding_mismatch'
+        );
+        expect(probeRunsCapabilitiesMock).not.toHaveBeenCalled();
+        warning.mockRestore();
+    });
+
     it('cannot probe an approved computer through another workspace session', async () => {
         requireWorkspaceSessionMock.mockResolvedValue({
             authenticated: true,

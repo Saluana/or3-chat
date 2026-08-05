@@ -167,6 +167,30 @@ test("rejects unsupported approval scopes instead of widening them permanently",
   ]);
 });
 
+test("rejects unknown HTTP wrapper routes without starting or configuring a run", async () => {
+  const runtime = control();
+  const bridge = new Or3RunsBridge({ agentId: "main", control: runtime });
+  const request = new EventEmitter();
+  request.method = "POST";
+  request.url = "/v1/not-a-run";
+  request.headers = { authorization: "Bearer test-token" };
+  const response = {
+    statusCode: 200,
+    setHeader() {},
+    end() {},
+  };
+
+  await createOr3RunsHttpHandler(bridge, () => ({ token: "test-token" }))(
+    request,
+    response,
+  );
+
+  assert.equal(response.statusCode, 404);
+  assert.equal(runtime.calls.start, 0);
+  assert.deepEqual(runtime.calls.configure, []);
+  assert.deepEqual(runtime.calls.decide, []);
+});
+
 test("reconciles missing final output after partial streamed deltas", () => {
   const bridge = new Or3RunsBridge({ agentId: "main", control: control() });
   const run = {
@@ -280,4 +304,87 @@ test("streams events appended during SSE replay exactly once", async () => {
       [2, "second"],
     ],
   );
+});
+
+test("expires abandoned active runs and asks OpenClaw to stop them", () => {
+  const runtime = control();
+  const stops = [];
+  runtime.stop = async (request) => stops.push(request);
+  const bridge = new Or3RunsBridge({ agentId: "main", control: runtime });
+  const run = {
+    id: "stale-run",
+    controlRunId: "gateway-stale-run",
+    sessionKey: "agent:main:or3:stale",
+    status: "running",
+    output: "",
+    events: [],
+    nextEventSequence: 1,
+    listeners: new Set(),
+    commandChoices: [],
+    updatedAt: Date.now() / 1_000 - 31 * 60,
+  };
+  bridge.runs.set(run.id, run);
+
+  bridge.prune();
+
+  assert.equal(run.status, "cancelled");
+  assert.match(run.error, /expired/u);
+  assert.deepEqual(stops, [
+    { sessionKey: "agent:main:or3:stale", runId: "gateway-stale-run" },
+  ]);
+});
+
+test("rejects new work when fresh active runs have reached the bridge limit", async () => {
+  const bridge = new Or3RunsBridge({ agentId: "main", control: control() });
+  const updatedAt = Date.now() / 1_000;
+  for (let index = 0; index < 200; index += 1) {
+    bridge.runs.set(`active-${index}`, {
+      id: `active-${index}`,
+      status: "running",
+      output: "",
+      events: [],
+      nextEventSequence: 1,
+      listeners: new Set(),
+      commandChoices: [],
+      updatedAt,
+    });
+  }
+
+  await assert.rejects(
+    () => bridge.startRun("new-session", { input: "hello" }),
+    (error) => error?.status === 429,
+  );
+});
+
+test("bounds accumulated output and replay-event bytes for an active run", () => {
+  const bridge = new Or3RunsBridge({ agentId: "main", control: control() });
+  const run = {
+    id: "bounded-run",
+    sessionKey: "agent:main:or3:bounded",
+    status: "running",
+    output: "",
+    events: [],
+    nextEventSequence: 1,
+    listeners: new Set(),
+    commandChoices: [],
+  };
+  bridge.runs.set(run.id, run);
+
+  for (let index = 0; index < 4; index += 1) {
+    bridge.append(run, {
+      event: "tool.started",
+      tool: "large tool event",
+      preview: "x".repeat(700 * 1024),
+    });
+  }
+  assert.ok(run.eventBytes <= 2 * 1024 * 1024);
+  assert.ok(run.events.length < 4);
+
+  bridge.append(run, {
+    event: "message.delta",
+    delta: "x".repeat(512 * 1024 + 1),
+  });
+  assert.equal(run.status, "cancelled");
+  assert.match(run.error, /output exceeded/u);
+  assert.ok(run.output.length === 0);
 });
