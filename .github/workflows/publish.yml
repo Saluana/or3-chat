@@ -86,6 +86,10 @@ jobs:
       - name: Docker smoke
         run: |
           npm run setup -- --fast --mode self-hosted --target configure --cli --pm npm --admin-email smoke@example.com
+          export OR3_PUBLIC_DOMAIN=localhost
+          export OR3_ALLOWED_ORIGINS=https://localhost
+          export OR3_FORCE_HTTPS=true
+          export OR3_TRUST_PROXY=true
           cat >> .env <<'EOF'
           OR3_PUBLIC_DOMAIN=localhost
           OR3_ALLOWED_ORIGINS=https://localhost
