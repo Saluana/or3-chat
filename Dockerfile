@@ -19,16 +19,25 @@ ENV SSR_AUTH_ENABLED=$SSR_AUTH_ENABLED \
 
 WORKDIR /app
 ENV NODE_ENV=development \
-    NODE_OPTIONS=--max-old-space-size=4096
+    NODE_OPTIONS=--max-old-space-size=4096 \
+    NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
+    NPM_CONFIG_FETCH_TIMEOUT=600000
 
 RUN npm install --global npm@11.6.2
 COPY package*.json bun.lock* ./
 COPY packages/plugin-sdk ./packages/plugin-sdk
 COPY scripts/docker/prepare-manifest.mjs ./scripts/docker/prepare-manifest.mjs
+COPY scripts/docker/preflight-registry.mjs ./scripts/docker/preflight-registry.mjs
 RUN node scripts/docker/prepare-manifest.mjs package.json
 # `npm install` intentionally reconciles package.json with the npm lock when a
 # Bun-driven custom wizard added providers after the embedded locks were made.
-RUN npm install --no-audit --no-fund
+# The cache mount survives a failed build, so transient registry failures do
+# not force a full re-download on retry.
+RUN --mount=type=cache,target=/root/.npm \
+    node scripts/docker/preflight-registry.mjs && \
+    npm install --no-audit --no-fund
 
 COPY . .
 # Cloud providers are initialized while Nitro prerenders routes. Supply only

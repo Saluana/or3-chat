@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -610,6 +610,9 @@ describe('or3 cloud wizard apply', () => {
             'up',
             '--build',
             '-d',
+            '--wait',
+            '--wait-timeout',
+            '120',
         ]);
 
         const publicPlan = buildDeployPlan({
@@ -627,6 +630,9 @@ describe('or3 cloud wizard apply', () => {
             'up',
             '--build',
             '-d',
+            '--wait',
+            '--wait-timeout',
+            '120',
         ]);
     });
 
@@ -758,6 +764,22 @@ describe('or3 cloud wizard apply', () => {
         expect(content).toContain('OR3_SITE_NAME="New Name"');
         expect(content).not.toContain('KEEP_ME=value');
         expect(content).toContain('NEW_KEY=123');
+        expect((await stat(envPath)).mode & 0o777).toBe(0o600);
+    });
+
+    it('tightens permissions when an unchanged env file already exists', async () => {
+        const dir = await mkdtemp(resolve(tmpdir(), 'or3-wizard-env-permissions-'));
+        const envPath = resolve(dir, '.env');
+        await writeFile(envPath, 'OR3_SITE_NAME=OR3', 'utf8');
+        await chmod(envPath, 0o644);
+
+        const result = await writeEnvFileDetailed(
+            { OR3_SITE_NAME: 'OR3' },
+            { instanceDir: dir, envFile: '.env' }
+        );
+
+        expect(result.changed).toBe(false);
+        expect((await stat(envPath)).mode & 0o777).toBe(0o600);
     });
 
     it('writes self-hosted convex runtime keys to .env.local for local-dev flows', async () => {

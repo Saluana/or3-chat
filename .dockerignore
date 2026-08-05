@@ -15,5 +15,6 @@ tests
 .env
 .env.*
 !.env.example
+.or3-initial-credentials
 npm-debug.log*
 bun-error.log*

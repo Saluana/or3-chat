@@ -4,6 +4,7 @@ import { stdin as input, stdout as output } from 'node:process';
 import { isAbsolute, resolve } from 'node:path';
 import { createServer } from 'node:net';
 import { existsSync } from 'node:fs';
+import { chmod, readFile, writeFile } from 'node:fs/promises';
 import crossSpawn from 'cross-spawn';
 import { fileURLToPath } from 'node:url';
 import { Or3CloudWizardApi } from '../../shared/cloud/wizard/api';
@@ -856,74 +857,63 @@ function printDeployResult(result: WizardDeployResult): void {
     }
 }
 
-function printSaveThesePanel(
+type InitialCredentials = {
+    bootstrapEmail?: string;
+    bootstrapPassword?: string;
+    adminUsername?: string;
+    adminPassword?: string;
+};
+
+/**
+ * Writes generated first-run credentials without exposing them in terminal
+ * scrollback or redirected setup logs. Callers must tell the user where the
+ * file is; they must never print its contents.
+ */
+export async function writeInitialCredentialsFile(
+    instanceDir: string,
+    credentials: InitialCredentials
+): Promise<string | null> {
+    const lines = ['# OR3 first-run credentials — move to a password manager, then delete this file.'];
+    if (credentials.bootstrapEmail) {
+        lines.push(`OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=${credentials.bootstrapEmail}`);
+    }
+    if (credentials.bootstrapPassword) {
+        lines.push(
+            `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=${credentials.bootstrapPassword}`
+        );
+    }
+    if (credentials.adminUsername) {
+        lines.push(`OR3_ADMIN_USERNAME=${credentials.adminUsername}`);
+    }
+    if (credentials.adminPassword) {
+        lines.push(`OR3_ADMIN_PASSWORD=${credentials.adminPassword}`);
+    }
+    if (lines.length === 1) return null;
+
+    const path = resolve(instanceDir, '.or3-initial-credentials');
+    await writeFile(path, `${lines.join('\n')}\n`, { mode: 0o600 });
+    await chmod(path, 0o600);
+    return path;
+}
+
+function generatedLoginCredentials(
     answers: WizardAnswers,
     generatedSecrets: Array<{ key: string; value: string }>
-): void {
-    const hasBootstrap =
-        answers.authProvider === 'basic-auth' &&
-        answers.basicAuthBootstrapEmail;
-    if (
-        generatedSecrets.length === 0 &&
-        !hasBootstrap &&
-        !answers.adminUsername
-    ) {
-        return;
-    }
-
-    const lines: string[] = [];
-    lines.push('');
-    lines.push('  ┌─ SAVE THESE ──────────────────────────────');
-
-    if (hasBootstrap) {
-        lines.push(`  │  Bootstrap email:   ${answers.basicAuthBootstrapEmail}`);
-        const pwGen = generatedSecrets.find(
-            (g) => g.key === 'basicAuthBootstrapPassword'
-        );
-        if (pwGen) {
-            lines.push(`  │  Bootstrap password: ${pwGen.value}`);
-        } else {
-            lines.push('  │  Bootstrap password: (the one you entered above)');
-        }
-    }
-
-    if (answers.adminUsername) {
-        lines.push(
-            `  │  Admin dashboard:   ${answers.adminUsername}`
-        );
-        const pwGen = generatedSecrets.find((g) => g.key === 'adminPassword');
-        if (pwGen) {
-            lines.push(`  │  Admin password:     ${pwGen.value}`);
-        } else {
-            lines.push('  │  Admin password:     (the one you entered above)');
-        }
-    }
-
-    for (const gen of generatedSecrets) {
-        if (
-            gen.key === 'adminPassword' ||
-            gen.key === 'basicAuthBootstrapPassword' ||
-            gen.key === 'connectEncryptionKey'
-        ) {
-            continue;
-        }
-        const label =
-            {
-                basicAuthJwtSecret: 'Auth JWT secret',
-                fsTokenSecret: 'File access key',
-                clerkSecretKey: 'Clerk secret key',
-                s3SecretAccessKey: 'S3 secret access key',
-                convexSelfHostedAdminKey: 'Convex admin key',
-            }[gen.key] ?? gen.key;
-        lines.push(`  │  ${label}: ${gen.value}`);
-    }
-
-    lines.push('  │');
-    lines.push('  │  All values are also written to .env.');
-    lines.push('  │  Keep that file private — it contains secrets.');
-    lines.push('  └─────────────────────────────────────────────');
-    lines.push('');
-    console.log(lines.join('\n'));
+): InitialCredentials {
+    const bootstrapPassword = generatedSecrets.find(
+        (secret) => secret.key === 'basicAuthBootstrapPassword'
+    )?.value;
+    const adminPassword = generatedSecrets.find(
+        (secret) => secret.key === 'adminPassword'
+    )?.value;
+    return {
+        bootstrapEmail: bootstrapPassword
+            ? answers.basicAuthBootstrapEmail
+            : undefined,
+        bootstrapPassword,
+        adminUsername: adminPassword ? answers.adminUsername : undefined,
+        adminPassword,
+    };
 }
 
 function printCheatSheet(answers: WizardAnswers): void {
@@ -1121,8 +1111,26 @@ async function runFastInit(flags: CliFlags): Promise<void> {
         ? 'public'
         : 'private';
 
-    const bootstrapEmail = 'admin@example.com';
-    const bootstrapPassword = generateAdminPassword(24);
+    const bootstrapEmail = toStringFlag(flags, 'admin-email')?.trim();
+    if (!isPersonal && !bootstrapEmail) {
+        throw new Error(
+            'Fast self-hosted setup requires --admin-email. For example: --admin-email admin@example.com'
+        );
+    }
+    const passwordFromFlag = toStringFlag(flags, 'admin-password');
+    const passwordFile = toStringFlag(flags, 'admin-password-file');
+    if (passwordFromFlag && passwordFile) {
+        throw new Error(
+            'Use either --admin-password or --admin-password-file, not both.'
+        );
+    }
+    const passwordFromFile = passwordFile
+        ? (await readFile(resolve(instanceDir, passwordFile), 'utf8')).trim()
+        : undefined;
+    if (passwordFile && !passwordFromFile) {
+        throw new Error('--admin-password-file is empty.');
+    }
+    const bootstrapPassword = passwordFromFlag ?? passwordFromFile ?? generateAdminPassword(24);
     const fsRoot = resolve(instanceDir, '.data', 'or3-storage');
     if (!isPersonal) {
         await api.validatePath(fsRoot, true);
@@ -1157,7 +1165,7 @@ async function runFastInit(flags: CliFlags): Promise<void> {
             : {
                   basicAuthJwtSecret: api.generateSecureSecret(48),
                   basicAuthRefreshSecret: api.generateSecureSecret(48),
-                  basicAuthBootstrapEmail: bootstrapEmail,
+                  basicAuthBootstrapEmail: bootstrapEmail!,
                   basicAuthBootstrapPassword: bootstrapPassword,
                   fsTokenSecret: api.generateSecureSecret(48),
                   fsRoot,
@@ -1188,11 +1196,15 @@ async function runFastInit(flags: CliFlags): Promise<void> {
     }
 
     if (!isPersonal) {
-        console.log(`  Bootstrap email: ${bootstrapEmail}`);
-        console.log(`  Bootstrap password: ${bootstrapPassword}`);
-        console.log('');
-        console.log(`  Admin dashboard username: ${adminUsername}`);
-        console.log(`  Admin dashboard password: ${adminPassword}`);
+        const credentialsPath = await writeInitialCredentialsFile(instanceDir, {
+            bootstrapEmail,
+            bootstrapPassword,
+            adminUsername,
+            adminPassword,
+        });
+        console.log(
+            `  First-run credentials were written with mode 0600 to ${credentialsPath}. Move them to a password manager, then delete that file.`
+        );
     }
 
     const deployResult = await api.deploy(session.id);
@@ -1203,7 +1215,7 @@ async function runFastInit(flags: CliFlags): Promise<void> {
 function printHelp(): void {
     console.log(`or3-cloud commands
 
-  or3-cloud init [--mode personal|self-hosted|custom] [--target dev|docker|configure] [--preset personal-local|recommended|clerk-convex] [--instance-dir <path>] [--env-file .env|.env.local] [--dry-run] [--cli] [--manual] [--fast] [--ui] [--ui-port <port>] [--enable-install] [--pm bun|npm] [--domain <hostname>] [--no-open] [--no-focused-prompts]
+  or3-cloud init [--mode personal|self-hosted|custom] [--target dev|docker|configure] [--preset personal-local|recommended|clerk-convex] [--instance-dir <path>] [--env-file .env|.env.local] [--dry-run] [--cli] [--manual] [--fast] [--admin-email <email>] [--admin-password <password>|--admin-password-file <path>] [--ui] [--ui-port <port>] [--enable-install] [--pm bun|npm] [--domain <hostname>] [--no-open] [--no-focused-prompts]
   or3-cloud validate [--env-file .env|.env.local] [--strict]
   or3-cloud doctor [--env-file .env|.env.local] [--strict]
   or3-cloud presets list
@@ -1214,7 +1226,9 @@ function printHelp(): void {
 
   By default, 'init' opens the setup wizard in your browser.
   Use --cli to force the terminal-based wizard.
-  Use --fast for a zero-question automatic setup.
+  Use --fast for a zero-question automatic setup. Fast self-hosted setup
+  requires --admin-email and writes credentials to a 0600 file instead of
+  printing passwords to the terminal.
 `);
 }
 
@@ -1722,8 +1736,14 @@ async function runInit(flags: CliFlags): Promise<void> {
                 }
             }
 
-            if (generatedSecrets.length > 0 || answers.authProvider === 'basic-auth') {
-                printSaveThesePanel(answers, generatedSecrets);
+            const credentialsPath = await writeInitialCredentialsFile(
+                answers.instanceDir,
+                generatedLoginCredentials(answers, generatedSecrets)
+            );
+            if (credentialsPath) {
+                console.log(
+                    `  Generated first-run credentials were written with mode 0600 to ${credentialsPath}. Move them to a password manager, then delete that file.`
+                );
             }
             printCheatSheet(answers);
         }

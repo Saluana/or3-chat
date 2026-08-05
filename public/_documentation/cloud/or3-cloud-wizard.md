@@ -48,7 +48,7 @@ When published, the same CLI is packaged with a bin entry (`or3-cloud`) so it ca
 10. Optionally sets Convex backend env vars for Clerk + Convex stacks.
 11. Optionally runs deploy commands (`bun install`, `bun run dev:ssr` or `bun run build`).
 
-`bun start` → cloud opens the wizard with `--mode self-hosted` (recommended path, personal-local hidden). Use the **Use recommended defaults — skip questions** template (or `or3-cloud init --fast`) for zero guided inputs.
+`bun start` → cloud opens the wizard with `--mode self-hosted` (recommended path, personal-local hidden). Use the **Use recommended defaults — skip questions** template (or `or3-cloud init --fast --admin-email admin@example.com`) for zero guided inputs. Fast self-hosted setup requires a real admin email and writes generated credentials to a mode-`0600` `.or3-initial-credentials` file instead of terminal output.
 
 ## Commands
 
@@ -63,6 +63,8 @@ Common flags:
 - `--env-file .env|.env.local`
 - `--dry-run`
 - `--manual`
+- `--fast` (self-hosted requires `--admin-email <email>`)
+- `--admin-password-file <path>` (read an automation-managed password without putting it in command history)
 - `--enable-install` (feature-flagged package install execution)
 - `--package-manager bun|npm`
 

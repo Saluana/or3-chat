@@ -169,6 +169,7 @@ async function createBackupIfNeeded(
     const stamp = formatTimestamp(new Date());
     const backupPath = resolve(dirname(path), `${basename(path)}.backup.${stamp}`);
     await fs.copyFile(path, backupPath);
+    await fs.chmod(backupPath, 0o600);
     return backupPath;
 }
 
@@ -207,6 +208,12 @@ export async function writeEnvFileDetailed(
     const changed = nextContent !== previousContent;
 
     if (!changed) {
+        try {
+            await fs.chmod(path, 0o600);
+        } catch (error) {
+            const err = error as NodeJS.ErrnoException;
+            if (err.code !== 'ENOENT') throw error;
+        }
         return {
             path,
             backupPath: null,
@@ -215,7 +222,8 @@ export async function writeEnvFileDetailed(
     }
 
     const backupPath = await createBackupIfNeeded(path, options.createBackup);
-    await fs.writeFile(path, nextContent, 'utf8');
+    await fs.writeFile(path, nextContent, { encoding: 'utf8', mode: 0o600 });
+    await fs.chmod(path, 0o600);
     return {
         path,
         backupPath,

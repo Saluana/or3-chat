@@ -2,7 +2,7 @@
     "name": "or3-chat",
     "type": "module",
     "private": false,
-    "version": "0.1.1",
+    "version": "0.1.2",
     "license": "GPL-3.0",
     "engines": {
         "node": ">=24"
@@ -21,8 +21,8 @@
         "postinstall": "nuxt prepare",
         "setup": "tsx scripts/cli/or3-cloud.ts init",
         "doctor": "tsx scripts/cli/or3-cloud.ts doctor",
-        "docker:up": "docker compose -f compose.yaml up --build -d",
-        "docker:up:public": "docker compose -f compose.yaml -f compose.public.yaml up --build -d",
+        "docker:up": "docker compose -f compose.yaml up --build -d --wait --wait-timeout 120",
+        "docker:up:public": "docker compose -f compose.yaml -f compose.public.yaml up --build -d --wait --wait-timeout 120",
         "docker:logs": "docker compose -f compose.yaml logs -f",
         "docker:down": "docker compose -f compose.yaml down",
         "test": "vitest run --project=core-node --project=core-app --project=app-integration --reporter=dot --silent=passed-only --hideSkippedTests",

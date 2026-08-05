@@ -31,6 +31,11 @@ test('parses the supported initializer flags', () => {
             'bun',
             '--domain',
             'chat.example.com',
+            '--fast',
+            '--admin-email',
+            'admin@chat.example.com',
+            '--admin-password-file',
+            '/run/secrets/or3-admin-password',
             '--yes',
             '--skip-install',
             '--no-git',
@@ -43,6 +48,10 @@ test('parses the supported initializer flags', () => {
             interface: 'ui',
             packageManager: 'bun',
             domain: 'chat.example.com',
+            fast: true,
+            adminEmail: 'admin@chat.example.com',
+            adminPassword: undefined,
+            adminPasswordFile: '/run/secrets/or3-admin-password',
             yes: true,
             skipInstall: true,
             git: false,
@@ -155,6 +164,13 @@ test('generated template has registry-clean first-party dependencies', async () 
     );
     assert.equal(manifest.private, true);
     assert.equal(manifest.engines.node, '>=24');
+    const release = JSON.parse(
+        await readFile(new URL('or3-release.json', templateUrl), 'utf8')
+    );
+    assert.equal(release.or3Version, manifest.version);
+    assert.match(release.sourceRevision, /^[0-9a-f]{40}$/i);
+    const dockerignore = await readFile(new URL('.dockerignore', templateUrl), 'utf8');
+    assert.match(dockerignore, /^\.or3-initial-credentials$/m);
     assert.equal(manifest.dependencies['@or3/intern-client'], '0.1.1');
     assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.5');
     for (const [name, version] of Object.entries(manifest.dependencies)) {

@@ -21,6 +21,12 @@ const templateManifest = JSON.parse(
         'utf8'
     )
 );
+const templateRelease = JSON.parse(
+    await readFile(
+        resolve(root, 'packages/create-or3-chat/dist/template/or3-release.json'),
+        'utf8'
+    )
+);
 const qualifiedFirstPartyVersions = JSON.parse(
     await readFile(
         resolve(
@@ -37,6 +43,16 @@ if (
 ) {
     throw new Error(
         `Release versions differ: OR3=${rootManifest.version}, creator=${creatorManifest.version}, template=${templateManifest.version}.`
+    );
+}
+
+if (
+    templateRelease.or3Version !== rootManifest.version ||
+    templateRelease.creatorVersion !== creatorManifest.version ||
+    !/^[0-9a-f]{40}$/i.test(templateRelease.sourceRevision ?? '')
+) {
+    throw new Error(
+        'Template release metadata must contain the matching OR3/creator version and a full source commit SHA.'
     );
 }
 
@@ -136,5 +152,5 @@ if (verifyRegistry) {
 }
 
 console.log(
-    `create-or3-chat ${creatorManifest.version} is version-aligned with ${registryDependencies.length} exact first-party registry dependencies.`
+    `create-or3-chat ${creatorManifest.version} (${templateRelease.sourceRevision}) is version-aligned with ${registryDependencies.length} exact first-party registry dependencies.`
 );

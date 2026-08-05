@@ -7,10 +7,11 @@
 import { describe, it, expect } from 'vitest';
 import { ThemeCompiler } from '../theme-compiler';
 import { existsSync } from 'fs';
-import { rm, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { readFile, rm, mkdir, mkdtemp, stat, writeFile } from 'node:fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
+import { writeInitialCredentialsFile } from '../cli/or3-cloud';
 
 type CliRunResult = {
     exitCode: number;
@@ -20,13 +21,14 @@ type CliRunResult = {
 async function runBunCliScript(
     scriptPath: string,
     args: string[],
-    cwd: string
+    cwd: string,
+    env: NodeJS.ProcessEnv = process.env
 ): Promise<CliRunResult> {
     return await new Promise((resolvePromise, rejectPromise) => {
         const child = spawn('bun', [scriptPath, ...args], {
             cwd,
             stdio: ['ignore', 'pipe', 'pipe'],
-            env: process.env,
+            env,
         });
 
         let stdout = '';
@@ -79,6 +81,65 @@ describe('CLI Commands', () => {
 
                 expect(result.exitCode).toBe(0);
                 expect(result.output).toContain('Config is valid for .env.');
+            } finally {
+                await rm(workspaceDir, { recursive: true, force: true });
+            }
+        });
+
+        it('stores generated first-run credentials in a private file', async () => {
+            const workspaceDir = await mkdtemp(join(tmpdir(), 'or3-credentials-'));
+
+            try {
+                const path = await writeInitialCredentialsFile(workspaceDir, {
+                    bootstrapEmail: 'admin@example.com',
+                    bootstrapPassword: 'GeneratedPassword123',
+                    adminUsername: 'admin@example.com',
+                    adminPassword: 'GeneratedPassword123',
+                });
+
+                expect(path).toBe(join(workspaceDir, '.or3-initial-credentials'));
+                expect(await readFile(path!, 'utf8')).toContain(
+                    'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=GeneratedPassword123'
+                );
+                expect((await stat(path!)).mode & 0o777).toBe(0o600);
+            } finally {
+                await rm(workspaceDir, { recursive: true, force: true });
+            }
+        });
+
+        it('keeps fast-setup passwords out of terminal output', async () => {
+            const workspaceDir = await mkdtemp(join(tmpdir(), 'or3-fast-cli-'));
+            const wizardHome = join(workspaceDir, 'wizard-home');
+
+            try {
+                const result = await runBunCliScript(
+                    join(process.cwd(), 'scripts/cli/or3-cloud.ts'),
+                    [
+                        'init',
+                        '--fast',
+                        '--mode',
+                        'self-hosted',
+                        '--target',
+                        'configure',
+                        '--cli',
+                        '--instance-dir',
+                        workspaceDir,
+                        '--admin-email',
+                        'admin@example.com',
+                    ],
+                    workspaceDir,
+                    { ...process.env, OR3_CLOUD_WIZARD_HOME: wizardHome }
+                );
+
+                expect(result.exitCode).toBe(0);
+                expect(result.output).toContain('First-run credentials were written');
+                expect(result.output).not.toContain('Bootstrap password:');
+                expect(result.output).not.toContain('Admin dashboard password:');
+                const credentialsPath = join(
+                    workspaceDir,
+                    '.or3-initial-credentials'
+                );
+                expect((await stat(credentialsPath)).mode & 0o777).toBe(0o600);
             } finally {
                 await rm(workspaceDir, { recursive: true, force: true });
             }

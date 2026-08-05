@@ -180,9 +180,9 @@ export function rewriteTemplateManifest(manifest) {
             setup: 'tsx scripts/cli/or3-cloud.ts init',
             doctor: 'tsx scripts/cli/or3-cloud.ts doctor',
             'docker:up':
-                'docker compose -f compose.yaml up --build -d',
+                'docker compose -f compose.yaml up --build -d --wait --wait-timeout 120',
             'docker:up:public':
-                'docker compose -f compose.yaml -f compose.public.yaml up --build -d',
+                'docker compose -f compose.yaml -f compose.public.yaml up --build -d --wait --wait-timeout 120',
             'docker:logs': 'docker compose -f compose.yaml logs -f',
             'docker:down': 'docker compose -f compose.yaml down',
             'or3-cloud': 'tsx scripts/cli/or3-cloud.ts',
@@ -215,6 +215,35 @@ function run(command, args, cwd) {
     });
 }
 
+function capture(command, args, cwd) {
+    return new Promise((resolvePromise, rejectPromise) => {
+        const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'ignore'] });
+        let stdout = '';
+        child.stdout.on('data', (chunk) => {
+            stdout += String(chunk);
+        });
+        child.once('error', rejectPromise);
+        child.once('exit', (code) => {
+            if (code === 0) resolvePromise(stdout.trim());
+            else rejectPromise(new Error(`${command} ${args.join(' ')} failed.`));
+        });
+    });
+}
+
+async function sourceRevision() {
+    if (process.env.OR3_SOURCE_REVISION?.trim()) {
+        return process.env.OR3_SOURCE_REVISION.trim();
+    }
+    if (process.env.GITHUB_SHA?.trim()) {
+        return process.env.GITHUB_SHA.trim();
+    }
+    try {
+        return await capture('git', ['rev-parse', 'HEAD'], repoRoot);
+    } catch {
+        return 'unknown';
+    }
+}
+
 await rm(distRoot, { recursive: true, force: true });
 await mkdir(templateRoot, { recursive: true });
 await cp(join(packageRoot, 'src/index.mjs'), join(distRoot, 'index.mjs'));
@@ -229,6 +258,18 @@ const manifest = rewriteTemplateManifest(rootManifest);
 await writeFile(
     join(templateRoot, 'package.json'),
     `${JSON.stringify(manifest, null, 2)}\n`
+);
+await writeFile(
+    join(templateRoot, 'or3-release.json'),
+    `${JSON.stringify(
+        {
+            or3Version: manifest.version,
+            creatorVersion: manifest.version,
+            sourceRevision: await sourceRevision(),
+        },
+        null,
+        2
+    )}\n`
 );
 
 const gitignorePath = join(templateRoot, '.gitignore');

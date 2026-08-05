@@ -84,26 +84,35 @@ jobs:
             'OR3_STORAGE_FS_TOKEN_SECRET=ci-only-storage-secret-0123456789abcdef0123456789abcdef',
             'OR3_ADMIN_USERNAME=smoke-admin',
             'OR3_ADMIN_PASSWORD=SmokeAdminPassword1234',
+            'OR3_PUBLIC_DOMAIN=localhost',
+            'OR3_ALLOWED_ORIGINS=https://localhost',
+            'OR3_FORCE_HTTPS=true',
+            'OR3_TRUST_PROXY=true',
             'OR3_STRICT_CONFIG=true',
             ''
           ].join('\n'), { mode: 0o600 })"
       - name: Container health and persistence
         working-directory: packages/create-or3-chat/dist/template
         run: |
-          docker compose -f compose.yaml up --build -d
+          docker compose -f compose.yaml -f compose.public.yaml up --build -d
           for attempt in $(seq 1 120); do
             curl --fail --silent "http://127.0.0.1:3000/api/health?deep=true" && break
             sleep 1
           done
           curl --fail "http://127.0.0.1:3000/api/health?deep=true"
-          node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write
-          docker compose -f compose.yaml restart or3
+          for attempt in $(seq 1 30); do
+            curl --insecure --fail --silent "https://localhost/api/health?deep=true" && break
+            sleep 1
+          done
+          curl --insecure --fail "https://localhost/api/health?deep=true"
+          OR3_SMOKE_URL=https://localhost NODE_TLS_REJECT_UNAUTHORIZED=0 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write
+          docker compose -f compose.yaml -f compose.public.yaml restart or3
           for attempt in $(seq 1 60); do
             curl --fail --silent "http://127.0.0.1:3000/api/health?deep=true" && break
             sleep 1
           done
           curl --fail "http://127.0.0.1:3000/api/health?deep=true"
-          node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify
+          OR3_SMOKE_URL=https://localhost NODE_TLS_REJECT_UNAUTHORIZED=0 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify
       - if: always()
         working-directory: packages/create-or3-chat/dist/template
-        run: docker compose -f compose.yaml down --volumes
+        run: docker compose -f compose.yaml -f compose.public.yaml down --volumes

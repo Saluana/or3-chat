@@ -62,10 +62,8 @@ jobs:
 
       - name: Scaffold from packed artifact
         run: |
-          mkdir -p "$RUNNER_TEMP/creator-package"
-          tar -xzf "$RUNNER_TEMP"/create-or3-chat-*.tgz -C "$RUNNER_TEMP/creator-package"
-          node "$RUNNER_TEMP/creator-package/package/dist/index.mjs" "$RUNNER_TEMP/or3-npm" --yes --skip-install --no-git
-          node "$RUNNER_TEMP/creator-package/package/dist/index.mjs" "$RUNNER_TEMP/or3-bun" --yes --skip-install --no-git --pm bun
+          npm exec --yes --package="$RUNNER_TEMP"/create-or3-chat-*.tgz -- create-or3-chat "$RUNNER_TEMP/or3-npm" --yes --skip-install --no-git
+          npm exec --yes --package="$RUNNER_TEMP"/create-or3-chat-*.tgz -- create-or3-chat "$RUNNER_TEMP/or3-bun" --yes --skip-install --no-git --pm bun
 
       - name: npm template smoke
         run: |
@@ -81,26 +79,47 @@ jobs:
 
       - name: Docker smoke
         run: |
-          npm run setup -- --fast --mode self-hosted --target configure --cli --pm npm
-          docker compose -f compose.yaml config
-          OR3_PUBLIC_DOMAIN=chat.example.test docker compose -f compose.yaml -f compose.public.yaml config
-          docker compose -f compose.yaml up --build -d
+          npm run setup -- --fast --mode self-hosted --target configure --cli --pm npm --admin-email smoke@example.com
+          cat >> .env <<'EOF'
+          OR3_PUBLIC_DOMAIN=localhost
+          OR3_ALLOWED_ORIGINS=https://localhost
+          OR3_FORCE_HTTPS=true
+          OR3_TRUST_PROXY=true
+          EOF
+          docker compose -f compose.yaml -f compose.public.yaml config
+          docker compose -f compose.yaml -f compose.public.yaml up --build -d
           for attempt in $(seq 1 120); do
             curl --fail --silent "http://127.0.0.1:3000/api/health?deep=true" && break
             sleep 1
           done
           curl --fail "http://127.0.0.1:3000/api/health?deep=true"
-          node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write
-          docker compose -f compose.yaml restart or3
+          for attempt in $(seq 1 30); do
+            curl --insecure --fail --silent "https://localhost/api/health?deep=true" && break
+            sleep 1
+          done
+          curl --insecure --fail "https://localhost/api/health?deep=true"
+          OR3_SMOKE_URL=https://localhost NODE_TLS_REJECT_UNAUTHORIZED=0 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write
+          docker compose -f compose.yaml -f compose.public.yaml restart or3
           for attempt in $(seq 1 60); do
             curl --fail --silent "http://127.0.0.1:3000/api/health?deep=true" && break
             sleep 1
           done
           curl --fail "http://127.0.0.1:3000/api/health?deep=true"
-          node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify
-          docker compose -f compose.yaml down
+          OR3_SMOKE_URL=https://localhost NODE_TLS_REJECT_UNAUTHORIZED=0 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify
+          docker compose -f compose.yaml -f compose.public.yaml down
         working-directory: ${{ runner.temp }}/or3-npm
 
       - name: Publish
         if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
         run: npm publish "$RUNNER_TEMP"/create-or3-chat-*.tgz --access public
+
+      - name: Verify the documented npm create command
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+        run: |
+          version="$(node -p 'require("./packages/create-or3-chat/package.json").version')"
+          for attempt in $(seq 1 30); do
+            npm view "create-or3-chat@$version" version && break
+            sleep 2
+          done
+          npm create "or3-chat@$version" "$RUNNER_TEMP/or3-create-command" -- --mode self-hosted --target configure --cli --yes --skip-install --no-git
+          test -f "$RUNNER_TEMP/or3-create-command/or3-release.json"

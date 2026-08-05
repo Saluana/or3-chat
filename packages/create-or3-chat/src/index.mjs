@@ -55,6 +55,10 @@ export function parseArgs(args) {
         interface: undefined,
         packageManager: undefined,
         domain: undefined,
+        fast: false,
+        adminEmail: undefined,
+        adminPassword: undefined,
+        adminPasswordFile: undefined,
         yes: false,
         skipInstall: false,
         git: true,
@@ -75,13 +79,22 @@ export function parseArgs(args) {
         const [flag, inlineValue] = arg.split('=', 2);
         if (flag === '--help' || flag === '-h') options.help = true;
         else if (flag === '--yes') options.yes = true;
+        else if (flag === '--fast') options.fast = true;
         else if (flag === '--skip-install') options.skipInstall = true;
         else if (flag === '--no-git') options.git = false;
         else if (flag === '--no-open') options.open = false;
         else if (flag === '--ui') options.interface = 'ui';
         else if (flag === '--cli') options.interface = 'cli';
         else if (
-            ['--mode', '--target', '--pm', '--domain'].includes(flag)
+            [
+                '--mode',
+                '--target',
+                '--pm',
+                '--domain',
+                '--admin-email',
+                '--admin-password',
+                '--admin-password-file',
+            ].includes(flag)
         ) {
             const [value, nextIndex] = takeValue(
                 args,
@@ -93,7 +106,10 @@ export function parseArgs(args) {
             if (flag === '--mode') options.mode = value;
             else if (flag === '--target') options.target = value;
             else if (flag === '--pm') options.packageManager = value;
-            else options.domain = value;
+            else if (flag === '--domain') options.domain = value;
+            else if (flag === '--admin-email') options.adminEmail = value;
+            else if (flag === '--admin-password') options.adminPassword = value;
+            else options.adminPasswordFile = value;
         } else {
             throw new Error(`Unknown option "${flag}".`);
         }
@@ -291,6 +307,10 @@ function printHelp() {
   --ui | --cli
   --pm npm|bun
   --domain <hostname>
+  --fast
+  --admin-email <email>
+  --admin-password <password>
+  --admin-password-file <path>
   --yes
   --skip-install
   --no-git
@@ -436,9 +456,30 @@ async function runWizard(target, options, packageManager) {
         options.interface === 'ui' ? '--ui' : '--cli',
     ];
     if (options.domain) args.push('--domain', options.domain);
+    if (options.fast) args.push('--fast');
+    if (options.adminEmail) args.push('--admin-email', options.adminEmail);
+    if (options.adminPassword) args.push('--admin-password', options.adminPassword);
+    if (options.adminPasswordFile) {
+        args.push('--admin-password-file', options.adminPasswordFile);
+    }
     if (!options.open) args.push('--no-open');
     const setup = packageManagerCommand(packageManager, 'run', args);
     await run(setup.command, setup.args, { cwd: target });
+}
+
+async function printTemplateRelease(target) {
+    try {
+        const release = JSON.parse(
+            await readFile(resolve(target, 'or3-release.json'), 'utf8')
+        );
+        if (release.or3Version && release.sourceRevision) {
+            console.log(
+                `Template release: OR3 ${release.or3Version} (${release.sourceRevision})`
+            );
+        }
+    } catch {
+        // Older published creator packages have no release metadata.
+    }
 }
 
 export async function main(argv = process.argv.slice(2)) {
@@ -462,6 +503,7 @@ export async function main(argv = process.argv.slice(2)) {
 
     await scaffoldProject({ target, templateDir });
     console.log(`\nCreated OR3 Chat in ${target}`);
+    await printTemplateRelease(target);
 
     if (options.git && (await commandExists('git'))) {
         await run('git', ['init'], { cwd: target, stdio: 'ignore' });

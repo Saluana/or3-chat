@@ -226,8 +226,12 @@ Use `--cli` to force the terminal-based flow.
 **Fast path** — zero questions, instantly ready:
 
 ```bash
-npm run setup -- --fast --mode self-hosted --target dev
+npm run setup -- --fast --mode self-hosted --target dev --admin-email admin@example.com
 ```
+
+Fast self-hosted setup writes generated credentials to a mode-`0600`
+`.or3-initial-credentials` file instead of printing passwords. Move the values
+to a password manager, then delete the file.
 
 The wizard will ask you to pick providers for each layer:
 

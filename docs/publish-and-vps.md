@@ -1,7 +1,7 @@
-# Publish `create-or3-chat` and deploy it to a VPS
+# Publish `create-or3-chat`
 
-This guide covers the first `create-or3-chat` npm release and a public
-single-server deployment using Docker Compose and Caddy.
+This guide covers the first `create-or3-chat` npm release. For local, Docker,
+or public VPS installation, use [Installation and operations](installation.md).
 
 ## 1. Prepare npm
 
@@ -139,134 +139,11 @@ Local npm runs cannot generate GitHub provenance. Publishing is permanent for
 that name/version, so use `npm pack --dry-run` and verify the version before
 the final command.
 
-## 4. Prepare the VPS
+## 4. Hand off to the installation guide
 
-Use a fresh Linux VPS with a public IPv4 address. Two CPU cores, 4 GB of memory,
-and 20 GB of disk is a comfortable starting point for building the image on the
-server. A smaller host may work, but image builds are the memory-heavy part.
-
-Before connecting:
-
-1. Create an `A` record such as `chat.example.com` pointing to the VPS IPv4
-   address.
-2. Add an `AAAA` record only when IPv6 is correctly routed to the VPS.
-3. Open inbound TCP ports 22, 80, and 443 in the provider firewall. UDP 443 is
-   optional for HTTP/3.
-
-Connect with an SSH key, create a non-root sudo user if the image did not
-provide one, and enable the host firewall:
-
-```bash
-sudo ufw allow OpenSSH
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw allow 443/udp
-sudo ufw enable
-```
-
-Install Docker Engine and the Compose plugin using Docker's
-[official Ubuntu instructions](https://docs.docker.com/engine/install/ubuntu/).
-Then allow the current user to run Docker and reconnect:
-
-```bash
-sudo usermod -aG docker "$USER"
-exit
-```
-
-After reconnecting:
-
-```bash
-docker version
-docker compose version
-```
-
-Install Node.js 24 or newer from a trusted distribution for the VPS, then
-verify:
-
-```bash
-node --version
-npm --version
-```
-
-## 5. Create and deploy OR3
-
-On the VPS:
-
-```bash
-mkdir -p "$HOME/apps"
-cd "$HOME/apps"
-npm create or3-chat@latest my-chat -- \
-  --mode self-hosted \
-  --target docker \
-  --domain chat.example.com \
-  --cli
-```
-
-Replace the example domain with the DNS name prepared above. The SSH session
-selects the terminal wizard automatically; `--cli` makes the choice explicit.
-The recommended answers install Basic Auth, SQLite, and filesystem storage.
-Choose a real admin email, save the generated password in a password manager,
-review the configuration, and apply the deployment.
-
-The deployer starts this public stack:
-
-- OR3 on the private Compose network, with its host port bound only to
-  `127.0.0.1`
-- Caddy on public ports 80 and 443
-- Project-scoped persistent storage mounted at `/data`
-- Runtime secrets loaded from `.env`, not copied into the image
-
-Caddy obtains and renews HTTPS certificates after the domain resolves to the
-server. Do not create a separate public firewall rule for port 3000.
-
-## 6. Verify and operate it
-
-```bash
-cd "$HOME/apps/my-chat"
-docker compose -f compose.yaml -f compose.public.yaml ps
-curl --fail --show-error "https://chat.example.com/api/health?deep=true"
-```
-
-Open `https://chat.example.com`, sign in with the generated administrator
-credentials, send a test message, and upload a small file. Useful commands:
-
-```bash
-docker compose -f compose.yaml -f compose.public.yaml logs -f
-docker compose -f compose.yaml -f compose.public.yaml restart or3
-docker compose -f compose.yaml -f compose.public.yaml down
-docker compose -f compose.yaml -f compose.public.yaml up --build -d
-```
-
-`down` removes containers and the network but retains the named data volume.
-Do not add `--volumes` unless you intend to delete the installation's data.
-
-## 7. Back it up
-
-Back up before every upgrade:
-
-```bash
-cd "$HOME/apps/my-chat"
-docker compose stop or3
-docker compose run --rm --no-deps --user 0:0 \
-  -v "$PWD:/backup" \
-  --entrypoint sh or3 \
-  -c 'tar czf /backup/or3-data-backup.tgz -C /data .'
-docker compose start or3
-chmod 600 or3-data-backup.tgz
-```
-
-Copy `or3-data-backup.tgz` and `.env` to encrypted storage outside the VPS.
-Both contain sensitive data. Restore instructions are in
-[Installation and operations](installation.md#backups).
-
-## Troubleshooting
-
-- Run `npm run doctor` inside the generated project.
-- Check `docker compose -f compose.yaml -f compose.public.yaml logs -f` if deep
-  health is not ready.
-- Confirm DNS with `dig +short chat.example.com`.
-- Confirm ports 80 and 443 are not occupied by another web server.
-- If setup or an image build is interrupted, keep the directory and rerun
-  `npm run setup`; the wizard session and `.env` merge are resumable.
-- For a browser wizard over SSH, run `npm run setup -- --ui` and use the exact
-  SSH tunnel command it prints. The wizard remains loopback-only.
+After publication is available from the npm registry, follow the
+[public VPS with HTTPS and Caddy walkthrough](installation.md#public-vps-with-https-and-caddy).
+It covers Debian and Docker prerequisites, nftables and UFW, Cloudflare
+configuration, first-run credential handling, health checks, backups, and
+BuildKit DNS recovery. The generated `or3-release.json` records the exact
+artifact version and source revision deployed on the server.

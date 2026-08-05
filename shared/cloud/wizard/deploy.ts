@@ -302,7 +302,7 @@ export function buildDeployPlan(answers: WizardAnswers): CommandSpec[] {
         if (answers.dockerExposure === 'public') {
             args.push('-f', 'compose.public.yaml');
         }
-        args.push('up', '--build', '-d');
+        args.push('up', '--build', '-d', '--wait', '--wait-timeout', '120');
         return [
             {
                 step: 'Build and start OR3 with Docker Compose',
@@ -391,6 +391,16 @@ export async function deployAnswers(
                 console.warn(`[wizard:deploy] Optional step failed: ${message}`);
                 continue;
             }
+            if (answers.deploymentTarget === 'docker') {
+                const composeFiles =
+                    answers.dockerExposure === 'public'
+                        ? '-f compose.yaml -f compose.public.yaml'
+                        : '-f compose.yaml';
+                const message = error instanceof Error ? error.message : String(error);
+                throw new Error(
+                    `${message}\nDiagnostics: docker compose ${composeFiles} ps && docker compose ${composeFiles} logs --tail=200`
+                );
+            }
             throw error;
         }
     }
@@ -426,7 +436,7 @@ export async function deployAnswers(
             '-e',
             "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async r=>{const body=await r.json();if(!r.ok||body.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))",
         ];
-        const deadline = Date.now() + 60_000;
+        const deadline = Date.now() + 120_000;
         while (Date.now() < deadline) {
             const probe = await runCommandCapture(
                 'docker',
@@ -449,7 +459,7 @@ export async function deployAnswers(
             commands: printableCommands,
             instructions: healthy
                 ? 'OR3 is running and all configured providers are healthy.'
-                : 'Docker started, but its local deep-health endpoint did not report healthy within 60 seconds. Check container logs.',
+                : `Docker started, but its local deep-health endpoint did not report healthy within 120 seconds. Run: docker compose ${composeFiles} ps && docker compose ${composeFiles} logs --tail=200`,
             accessUrl,
             nextSteps: [
                 `Open ${accessUrl} in your browser.`,
