@@ -5,6 +5,7 @@ import {
     readFile,
     readdir,
     rm,
+    stat,
     writeFile,
 } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -112,6 +113,16 @@ async function copyPath(path) {
         recursive: true,
         filter: shouldCopy,
     });
+}
+
+async function copyOptionalPath(path) {
+    try {
+        await stat(join(repoRoot, path));
+    } catch (error) {
+        if (error?.code === 'ENOENT') return;
+        throw error;
+    }
+    await copyPath(path);
 }
 
 export function rewriteTemplateManifest(manifest) {
@@ -247,8 +258,11 @@ async function sourceRevision() {
 await rm(distRoot, { recursive: true, force: true });
 await mkdir(templateRoot, { recursive: true });
 await cp(join(packageRoot, 'src/index.mjs'), join(distRoot, 'index.mjs'));
-for (const path of [...TOP_LEVEL_FILES, ...RUNTIME_DIRECTORIES, ...SCRIPT_FILES]) {
+for (const path of [...TOP_LEVEL_FILES, ...SCRIPT_FILES]) {
     await copyPath(path);
+}
+for (const path of RUNTIME_DIRECTORIES) {
+    await copyOptionalPath(path);
 }
 
 const rootManifest = JSON.parse(
