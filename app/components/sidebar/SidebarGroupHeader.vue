@@ -1,8 +1,7 @@
 <template>
     <div
         :class="[label + '-header']"
-        class="w-full h-10 flex items-center justify-between gap-2 rounded-[var(--md-border-radius)] mx-1 px-1 cursor-default sb-group-header"
-        style="width: calc(100% - 8px)"
+        class="w-full h-10 flex items-center justify-between gap-2 rounded-[var(--md-border-radius)] px-0.5 cursor-default sb-group-header"
     >
         <button
             type="button"

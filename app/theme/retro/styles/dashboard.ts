@@ -88,6 +88,9 @@ export const dashboardStyles = {
             border: 'var(--md-border-width) solid var(--md-border-color) !important',
             borderRadius: 'var(--md-border-radius) !important',
             padding: '20px 16px',
+            minWidth: '0',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
         },
     },
 };

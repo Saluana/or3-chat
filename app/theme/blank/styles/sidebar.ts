@@ -119,6 +119,17 @@ export const sidebarOverrides = {
         },
     },
 
+    /* --- Mobile bottom nav bar (replaces rail on small screens) --- */
+    'button#sidebar.mobile-nav.item': {
+        class: 'rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] hover:text-[var(--md-on-surface)] active:bg-[var(--md-surface-active)]',
+    },
+    'button#sidebar.mobile-nav.item:active': {
+        class: 'rounded-xl bg-[color:var(--md-primary)]/8 text-[var(--md-primary)] hover:bg-[color:var(--md-primary)]/12 hover:text-[var(--md-primary)]',
+    },
+    'button#sidebar.mobile-nav.create-item': {
+        class: 'rounded-xl border-0 max-md:min-h-[44px]! max-md:text-[16px]!',
+    },
+
     /* --- Collapsed sidebar --- */
     'button#sidebar.collapsed-page': {
         ui: {
@@ -208,7 +219,7 @@ export const sidebarCssSelectors = {
     '.unified-sb-item': {
         style: {
             borderRadius: '12px',
-            marginInline: '4px',
+            marginInline: '0',
             border: '1px solid transparent',
         },
     },
@@ -325,6 +336,20 @@ export const sidebarCssSelectors = {
             alignItems: 'center',
             paddingLeft: '0',
             paddingRight: '0',
+        },
+    },
+    /* Mobile bottom nav bar — hairline top edge, soft FAB shadow */
+    '#mobile-bottom-nav': {
+        style: {
+            backgroundColor: 'var(--md-surface)',
+            borderTop:
+                '1px solid color-mix(in srgb, var(--md-border-color) 70%, transparent)',
+        },
+    },
+    '#mobile-bottom-nav .mobile-nav-create-fab': {
+        style: {
+            boxShadow:
+                '0 6px 16px color-mix(in srgb, var(--md-primary) 28%, transparent), 0 1px 4px rgb(0 0 0 / 0.12)',
         },
     },
 };

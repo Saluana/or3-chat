@@ -127,6 +127,19 @@ describe('Workspace DB Cache LRU', () => {
         expect(keys.includes('ws-other-0')).toBe(false);
     });
 
+    it('does not close the active workspace DB when its cache entry is evicted', async () => {
+        const workspaceId = `ws-active-pin-${crypto.randomUUID()}`;
+        const active = setActiveWorkspaceDb(workspaceId);
+        await active.open();
+
+        evictWorkspaceDb(workspaceId);
+        await Promise.resolve();
+
+        expect(active.isOpen()).toBe(true);
+        expect(getWorkspaceDb(workspaceId)).toBe(active);
+        await expect(active.kv.count()).resolves.toBe(0);
+    });
+
     it('reopens a cached workspace cleanly after browser storage eviction', async () => {
         const workspaceId = `ws-eviction-${crypto.randomUUID()}`;
         const original = getWorkspaceDb(workspaceId);

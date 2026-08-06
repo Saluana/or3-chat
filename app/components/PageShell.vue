@@ -70,7 +70,7 @@
                             :square="true"
                             aria-label="Open sidebar"
                             title="Open sidebar"
-                            :icon="useIcon('shell.sidebar.toggle.right').value"
+                            :icon="useIcon('ui.menu').value"
                             @click="openMobileSidebar"
                         />
                     </UTooltip>
@@ -176,7 +176,7 @@
                             :square="true"
                             aria-label="Open sidebar"
                             title="Open sidebar"
-                            :icon="useIcon('shell.sidebar.toggle.right').value"
+                            :icon="useIcon('ui.menu').value"
                             @click="openMobileSidebar"
                         />
                     </UTooltip>

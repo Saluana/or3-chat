@@ -59,21 +59,7 @@
                     :search-input="false"
                     aria-label="Sort open tabs"
                     class="workspace-tab-switcher-sort"
-                >
-                    <UButton
-                        v-bind="sortButtonProps"
-                        class="workspace-tab-switcher-sort-trigger theme-btn"
-                        :icon="sortIcon"
-                        trailing-icon="i-lucide-chevron-down"
-                        block
-                        :aria-label="`Sort by ${selectedSortLabel}`"
-                        :title="selectedSortLabel"
-                    >
-                        <span class="workspace-tab-switcher-sort-label">{{
-                            selectedSortLabel
-                        }}</span>
-                    </UButton>
-                </USelectMenu>
+                />
             </div>
 
             <button
@@ -226,12 +212,6 @@ const newTabIcon = useIcon('shell.tab.new');
 const searchIcon = useIcon('shell.tabs.search');
 const sortIcon = useIcon('ui.sort');
 
-const selectedSortLabel = computed(
-    () =>
-        sortOptions.find((option) => option.id === sortId.value)?.label ??
-        'Most recently opened'
-);
-
 const modalProps = useThemeOverrides({
     component: 'modal',
     context: 'shell',
@@ -368,25 +348,6 @@ const sortSelectProps = computed(() => ({
     variant: 'soft' as const,
     size: 'md' as const,
 }));
-
-const sortButtonOverrides = useThemeOverrides({
-    component: 'button',
-    context: 'shell',
-    identifier: 'shell.tab-switcher-sort',
-    isNuxtUI: true,
-});
-const sortButtonProps = computed(() =>
-    mergeThemeButton(
-        {
-            color: 'neutral' as const,
-            variant: 'outline' as const,
-            size: 'md' as const,
-            class: 'theme-btn',
-            ui: { base: 'theme-btn' },
-        },
-        sortButtonOverrides.value as Record<string, unknown>
-    )
-);
 
 const newTabButtonOverrides = useThemeOverrides({
     component: 'button',
@@ -530,7 +491,7 @@ function onNewTab(): void {
 .workspace-tab-switcher-sort {
     width: 100%;
 }
-.workspace-tab-switcher-sort-trigger {
+.workspace-tab-switcher-sort :deep([data-slot='base']) {
     width: 100%;
     justify-content: flex-start;
     border: var(--md-border-width, 1px) solid var(--md-border-color);
@@ -539,7 +500,7 @@ function onNewTab(): void {
     color: var(--md-on-surface);
     box-shadow: none;
 }
-.workspace-tab-switcher-sort-label {
+.workspace-tab-switcher-sort :deep([data-slot='value']) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

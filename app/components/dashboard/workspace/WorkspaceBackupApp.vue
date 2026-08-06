@@ -991,10 +991,11 @@ defineExpose({
 
 .supporting-text {
     font-size: 15px;
-    line-height: 1.25;
-    max-width: 82ch;
+    line-height: 1.35;
+    max-width: min(82ch, 100%);
     color: var(--md-on-surface-variant, var(--md-on-surface));
     opacity: 0.75;
+    overflow-wrap: break-word;
 }
 
 .fade-enter-active,

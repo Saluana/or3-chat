@@ -71,6 +71,14 @@ function getErrorInfo(e: unknown): { name: string; message: string } {
     return { name: '', message: '' };
 }
 
+function isDatabaseClosedError(e: unknown): boolean {
+    const { name, message } = getErrorInfo(e);
+    return (
+        name === 'DatabaseClosedError' ||
+        message.includes('Database has been closed')
+    );
+}
+
 /**
  * Purpose:
  * Execute a DB operation with standardized error handling.
@@ -94,6 +102,13 @@ export async function dbTry<T>(
     try {
         return await fn();
     } catch (e: unknown) {
+        // Closed handles happen during workspace switch / layout remount.
+        // Callers reopen via ensureDbOpen; do not toast as a hard failure.
+        if (isDatabaseClosedError(e)) {
+            if (opts.rethrow) throw e;
+            return undefined;
+        }
+
         // Quota detection: DOMException name or message heuristic
         const { name, message: msg } = getErrorInfo(e);
         const isQuota = /quota/i.test(name) || /quota/i.test(msg);

@@ -29,12 +29,10 @@ export const shellOverrides = {
         class: 'theme-btn',
         ui: { base: 'theme-btn' },
     },
-    'button#shell.tab-switcher-sort': {
+    'selectmenu#shell.tab-switcher-sort': {
         variant: 'outline' as const,
         color: 'neutral' as const,
         size: 'md' as const,
-        class: 'theme-btn',
-        ui: { base: 'theme-btn' },
     },
     'button#shell.tab-close': {
         variant: 'ghost' as const,

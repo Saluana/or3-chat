@@ -998,7 +998,14 @@ const readEntryHeight = (entry: ResizeObserverEntry): number | null => {
 onMounted(() => {
     dropZoneRef.value = composerShell.value?.rootElement ?? null;
     const inst = getCurrentInstance();
-    componentRootRef.value = (inst?.proxy?.$el as HTMLElement) || null;
+    const rootEl = inst?.proxy?.$el;
+    // Hydration-mismatch recovery can leave $el pointing at a bare text
+    // node; ResizeObserver only accepts Element targets, so fall back to
+    // the composer shell's root element in that case.
+    componentRootRef.value =
+        rootEl instanceof HTMLElement
+            ? rootEl
+            : (composerShell.value?.rootElement ?? null);
 });
 
 if (import.meta.client) {

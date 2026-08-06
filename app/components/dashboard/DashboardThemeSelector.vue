@@ -15,7 +15,7 @@
             </p>
         </div>
 
-        <div class="grid gap-3 sm:grid-cols-2">
+        <div class="grid min-w-0 gap-3 sm:grid-cols-2">
             <UButton
                 v-for="theme in availableThemes"
                 :key="theme.name"
@@ -29,7 +29,7 @@
                 :aria-pressed="theme.name === activeTheme"
                 @click="selectTheme(theme.name)"
             >
-                <span class="flex min-w-0 flex-1 items-center gap-3 text-left">
+                <span class="flex min-w-0 w-full flex-1 items-center gap-3 text-left">
                     <span class="theme-option-mark" aria-hidden="true">
                         <UIcon
                             :name="
@@ -40,8 +40,8 @@
                             class="h-4 w-4"
                         />
                     </span>
-                    <span class="min-w-0">
-                        <span class="block font-semibold">{{
+                    <span class="min-w-0 flex-1">
+                        <span class="block font-semibold break-words">{{
                             theme.displayName || theme.name
                         }}</span>
                         <span class="mt-0.5 block truncate text-xs opacity-65">
@@ -52,7 +52,7 @@
                     </span>
                     <span
                         v-if="theme.name === activeTheme"
-                        class="ml-auto text-xs text-[var(--md-primary)]"
+                        class="ml-auto shrink-0 text-xs text-[var(--md-primary)]"
                     >
                         Current
                     </span>
@@ -139,16 +139,28 @@ const themeButtonProps = computed(() => {
 }
 .supporting-text {
     font-size: 15px;
-    line-height: 1.2;
-    max-width: 82ch;
+    line-height: 1.35;
+    max-width: min(82ch, 100%);
     color: var(--md-on-surface-variant, var(--md-on-surface));
     opacity: 0.7;
+    overflow-wrap: break-word;
 }
 .theme-option-btn {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     min-height: 4.75rem;
     justify-content: stretch;
     padding: 0.8rem;
     text-transform: none;
+    white-space: normal;
+}
+.theme-option-btn :deep([data-slot='base']),
+.theme-option-btn :deep([data-slot='label']) {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
 }
 .theme-option-btn.active {
     color: var(--md-on-surface);

@@ -57,11 +57,4 @@ export const shellOverrides = {
         color: 'neutral' as const,
         size: 'md' as const,
     },
-    'button#shell.tab-switcher-sort': {
-        variant: 'soft' as const,
-        color: 'neutral' as const,
-        size: 'md' as const,
-        class: 'theme-btn border-0!',
-        ui: { base: 'theme-btn' },
-    },
 };

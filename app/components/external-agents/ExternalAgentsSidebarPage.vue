@@ -214,6 +214,7 @@
 
     <footer
       class="agent-sidebar-footer shrink-0 border-t border-[var(--md-outline-variant)] px-2 py-1.5"
+      :class="{ 'agent-sidebar-footer--mobile-nav': isMobile }"
     >
       <UPopover v-model:open="hostSwitcherOpen">
         <button
@@ -1038,6 +1039,7 @@ import { useExternalAgentRuntime } from "~/core/external-agents/runtime";
 import { useActiveSidebarPage } from "~/composables/sidebar/useActiveSidebarPage";
 import { useIcon } from "~/composables/useIcon";
 import { useThemeResolver } from "~/composables/useThemeResolver";
+import { isMobile } from "~/state/global";
 import { getGlobalMultiPaneApi } from "~/utils/multiPaneApi";
 import {
   computeTimeGroup,
@@ -1856,6 +1858,14 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--md-surface) 58%, transparent);
   border-color: color-mix(in srgb, var(--md-outline) 30%, transparent);
   backdrop-filter: blur(6px);
+}
+
+/*
+ * Mobile Create FAB overhangs ~26px above the tab bar. Keep the host switcher
+ * clear of that raised control so it can be tapped and isn't painted over.
+ */
+.agent-sidebar-footer--mobile-nav {
+  margin-bottom: 1.75rem;
 }
 
 .agent-sidebar-footer > span {

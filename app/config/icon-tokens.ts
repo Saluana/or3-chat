@@ -85,6 +85,7 @@ export const DEFAULT_ICONS = {
     'ui.clock': 'pixelarticons:clock',
     'ui.chart': 'pixelarticons:chart-bar',
     'ui.shield': 'pixelarticons:shield',
+    'ui.cloud': 'lucide:cloud',
     'ui.login': 'pixelarticons:login',
     'ui.logout': 'pixelarticons:logout',
     'ui.chevron.left': 'pixelarticons:chevron-left',

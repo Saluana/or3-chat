@@ -262,11 +262,22 @@ const workspaceDbCache = new LRUCache<string, Or3DB>({
     ttl: WORKSPACE_DB_TTL_MS,
     updateAgeOnGet: true,
     dispose: (db, workspaceId) => {
-        const dbName = db.name;
         const workspaceKey = String(workspaceId);
-        cleanupWorkspaceResources(dbName, workspaceKey);
 
-        // Close the DB when evicted to free IndexedDB connection
+        // TTL/LRU eviction must not close the live workspace DB. `getDb()` does
+        // not always touch the cache, so the active entry can age out while still
+        // referenced — closing it surfaces DatabaseClosedError on remount.
+        if (workspaceKey === activeWorkspaceId && db === activeDb) {
+            queueMicrotask(() => {
+                if (workspaceKey === activeWorkspaceId && db === activeDb) {
+                    workspaceDbCache.set(workspaceKey, db);
+                }
+            });
+            return;
+        }
+
+        cleanupWorkspaceResources(db.name, workspaceKey);
+
         try {
             db.close();
             console.debug(`[db:client] Closed evicted workspace DB: ${workspaceId}`);
@@ -367,6 +378,15 @@ export let db = defaultDb;
  * - Does not open the DB or validate schema availability.
  */
 export function getDb(): Or3DB {
+    // Keep the active workspace entry hot in the LRU so TTL cannot close it
+    // under in-flight readers (admin layout remount, favorites load, etc.).
+    if (activeWorkspaceId) {
+        if (workspaceDbCache.has(activeWorkspaceId)) {
+            workspaceDbCache.get(activeWorkspaceId);
+        } else if (activeDb !== defaultDb) {
+            workspaceDbCache.set(activeWorkspaceId, activeDb);
+        }
+    }
     return activeDb;
 }
 
@@ -420,7 +440,18 @@ export function getActiveWorkspaceId(): string | null {
 export function getWorkspaceDb(workspaceId: string): Or3DB {
     const existing = workspaceDbCache.get(workspaceId);
     if (existing) return existing;
-    
+
+    // Re-pin the live active instance instead of constructing a second Dexie
+    // handle for the same IndexedDB name after a cache eviction.
+    if (
+        activeWorkspaceId === workspaceId &&
+        activeDb !== defaultDb &&
+        activeDb.name === `or3-db-${workspaceId}`
+    ) {
+        workspaceDbCache.set(workspaceId, activeDb);
+        return activeDb;
+    }
+
     // Check if we're at capacity and will evict
     if (workspaceDbCache.size >= MAX_CACHED_WORKSPACE_DBS) {
         // Keep the active connection hot in the LRU. Evicting it would leave
@@ -435,7 +466,7 @@ export function getWorkspaceDb(workspaceId: string): Or3DB {
         }
         console.debug(`[db:client] Workspace DB cache full (${workspaceDbCache.size}/${MAX_CACHED_WORKSPACE_DBS}), will evict LRU`);
     }
-    
+
     const created = new Or3DB(`or3-db-${workspaceId}`);
     workspaceDbCache.set(workspaceId, created);
     console.debug(`[db:client] Created workspace DB: ${workspaceId} (cache: ${workspaceDbCache.size}/${MAX_CACHED_WORKSPACE_DBS})`);

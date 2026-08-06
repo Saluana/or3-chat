@@ -57,7 +57,7 @@
 
 [data-theme="blank"] .unified-sb-item {
   border-radius: 12px;
-  margin-inline: 4px;
+  margin-inline: 0;
   border: 1px solid transparent;
 }
 
@@ -152,6 +152,15 @@
   align-items: center;
   padding-left: 0;
   padding-right: 0;
+}
+
+[data-theme="blank"] #mobile-bottom-nav {
+  background-color: var(--md-surface);
+  border-top: 1px solid color-mix(in srgb, var(--md-border-color) 70%, transparent);
+}
+
+[data-theme="blank"] #mobile-bottom-nav .mobile-nav-create-fab {
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--md-primary) 28%, transparent), 0 1px 4px rgb(0 0 0 / 0.12);
 }
 
 [data-theme="blank"] #btn-reasoning-toggle {
@@ -335,6 +344,9 @@
   border-radius: 12px !important;
   padding: 20px 16px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 [data-theme="blank"] .document-editor-root {

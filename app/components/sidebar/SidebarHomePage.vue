@@ -78,8 +78,7 @@
                     <!-- Recent section label -->
                     <div
                         v-else-if="item.type === 'recent-header'"
-                        class="mx-1 mt-4 mb-1 px-2.5 flex items-center justify-between sb-recent-header"
-                        style="width: calc(100% - 8px)"
+                        class="mx-0 mt-4 mb-1 px-2.5 flex items-center justify-between sb-recent-header"
                     >
                         <span
                             class="text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--md-on-surface-variant)]"
@@ -125,8 +124,7 @@
                         title="No activity yet"
                         description="Kick things off with a project, or jump straight into a chat or document."
                         actions-layout="column"
-                        class="mx-1 sb-empty-state"
-                        style="width: calc(100% - 8px)"
+                        class="sb-empty-state"
                     >
                         <template #actions>
                             <UButton

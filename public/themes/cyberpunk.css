@@ -10,6 +10,14 @@
   border-right: var(--md-border-width) solid var(--md-border-color);
 }
 
+[data-theme="cyberpunk"] #mobile-bottom-nav {
+  background-color: var(--md-surface);
+}
+
+[data-theme="cyberpunk"] #mobile-bottom-nav .mobile-nav-create-fab {
+  box-shadow: 0 0 14px color-mix(in srgb, var(--md-primary) 45%, transparent), 0 2px 6px rgb(0 0 0 / 0.25);
+}
+
 [data-theme="cyberpunk"] #btn-reasoning-toggle {
   background-color: var(--md-surface) !important;
   border: var(--md-border-width) solid var(--md-border-color);

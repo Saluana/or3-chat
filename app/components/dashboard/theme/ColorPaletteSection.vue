@@ -386,10 +386,27 @@ watch(
 }
 .palette-token-row {
     display: flex;
+    min-width: 0;
     min-height: 3rem;
     align-items: center;
     gap: 0.75rem;
     padding: 0.5rem 0.7rem;
+}
+.palette-token-row > .flex {
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+@media (max-width: 480px) {
+    .palette-token-row {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    .palette-token-row > .flex {
+        width: 100%;
+        justify-content: flex-start;
+    }
 }
 @media (min-width: 860px) {
     .palette-groups {

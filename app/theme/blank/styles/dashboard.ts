@@ -90,6 +90,9 @@ export const dashboardStyles = {
             borderRadius: '12px !important',
             padding: '20px 16px',
             boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+            minWidth: '0',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
         },
     },
 };

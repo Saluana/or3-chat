@@ -447,9 +447,10 @@ const resetButtonProps = computed(() => {
 .supporting-text {
     font-size: 0.78rem;
     line-height: 1.45;
-    max-width: 82ch;
+    max-width: min(82ch, 100%);
     color: var(--md-on-surface-variant, var(--md-on-surface));
     opacity: 0.76;
+    overflow-wrap: break-word;
 }
 .dashboard-setting-heading {
     display: flex;

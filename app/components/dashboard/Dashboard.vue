@@ -42,7 +42,7 @@
             <div
                 v-if="state.view === 'page'"
                 id="dashboard-page-view"
-                class="h-full flex flex-col min-h-0"
+                class="h-full flex flex-col min-h-0 min-w-0 max-w-full"
             >
                 <div
                     id="dashboard-page-header"
@@ -115,7 +115,7 @@
                 <div
                     v-else
                     id="dashboard-page-content"
-                    class="dashboard-page-scroll flex-1 min-h-0 overflow-y-auto bg-[var(--md-surface-container-low)]"
+                    class="dashboard-page-scroll flex-1 min-h-0 min-w-0 max-w-full overflow-y-auto overflow-x-hidden bg-[var(--md-surface-container-low)]"
                 >
                     <div
                         v-if="state.loadingPage"
@@ -289,11 +289,11 @@ const dashboardModalOverrides = useThemeOverrides({
 
 const dashboardModalProps = computed(() => {
     const baseClass =
-        'w-[calc(100dvw-0.75rem)] h-[calc(100dvh-0.75rem)] sm:w-[96dvw] sm:max-w-[1180px] sm:h-[94dvh] sm:max-h-[900px] overflow-hidden';
+        'w-[calc(100dvw-0.75rem)] h-[calc(100dvh-0.75rem)] sm:w-[96dvw] sm:max-w-[1180px] sm:h-[94dvh] sm:max-h-[900px] overflow-hidden max-w-[100dvw]';
     const baseUi = {
-        content: 'z-[10]',
+        content: 'z-[10] max-w-[100dvw]',
         footer: 'justify-end border-t-[var(--md-border-width)]',
-        body: 'overflow-hidden h-full flex-1 !p-0',
+        body: 'overflow-hidden h-full flex-1 min-w-0 !p-0',
     } as Record<string, unknown>;
 
     const overrideValue =
@@ -360,10 +360,23 @@ const pluginIconSize = computed(() => {
 #dashboard-grid-view {
     display: flex;
     justify-content: center;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
 }
 
 .dashboard-page-scroll {
     scrollbar-gutter: stable;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+#dashboard-page-view,
+#dashboard-page-header,
+#dashboard-landing-grid {
+    min-width: 0;
+    max-width: 100%;
 }
 
 #dashboard-plugin-grid {

@@ -1,6 +1,11 @@
 <template>
-    <div class="flex flex-row w-full h-full" data-testid="sidebar-inner">
+    <div
+        class="flex w-full h-full max-md:flex-col flex-row"
+        data-testid="sidebar-inner"
+    >
+        <!-- Icon rail: desktop/tablet only — mobile uses the bottom nav bar -->
         <SidebarSideNavContentCollapsed
+            v-if="!isMobile"
             id="sidebar-content-collapsed"
             :active-thread="props.activeThread"
             @new-chat="onNewChat"
@@ -13,7 +18,7 @@
         <SidebarSideNavContent
             ref="sideNavContentRef"
             id="sidebar-content-expanded"
-            class="flex-1 min-w-0"
+            class="flex-1 min-w-0 min-h-0"
             :active-thread="props.activeThread"
             :items="items"
             :projects="projects"
@@ -56,6 +61,15 @@
             @delete-document="confirmDeleteDocument"
             @add-document-to-project-from-list="openAddDocumentToProject"
             @sidebar-footer-action="handleSidebarFooterAction"
+        />
+        <!-- Mobile-only bottom navigation bar (replaces the icon rail) -->
+        <SidebarSideMobileBottomNav
+            v-if="isMobile"
+            @new-chat="onNewChat"
+            @new-document="openCreateDocumentModal"
+            @new-project="openCreateProject"
+            @focus-search="openCommandPalette"
+            @toggle-dashboard="emit('toggleDashboard')"
         />
     </div>
 
@@ -193,6 +207,7 @@ import {
 } from '~/core/sidebar/sidebar-types';
 import { useResolvedSidebarSections } from '~/core/sidebar/sidebar-section-components';
 import { useSidebarThemeProps } from '~/composables/sidebar/useSidebarThemeProps';
+import { isMobile } from '~/state/global';
 
 const iconEdit = useIcon('ui.edit');
 const iconFolder = useIcon('sidebar.folder');

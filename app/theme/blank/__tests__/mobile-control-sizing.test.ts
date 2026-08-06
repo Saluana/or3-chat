@@ -58,10 +58,12 @@ describe('blank theme mobile control sizing', () => {
         expect(blankStyles).toContain('.page-link-description');
         expect(blankStyles).toContain('.sb-btn-title');
         expect(blankStyles).toContain('.sb-btn-icon');
-        expect(blankStyles).toContain('padding-right: 3.25rem !important');
+        expect(blankStyles).toContain('padding-right: 2.5rem !important');
         expect(blankStyles).toContain('font-size: 8px !important');
         expect(blankStyles).toContain('min-height: 56px !important');
         expect(blankStyles).toContain('padding-block: 6px !important');
+        expect(blankStyles).toContain('.basic-auth-account-menu');
+        expect(blankStyles).toContain('border: 1px solid rgba(0, 0, 0, 0.1)');
         expect(blankStyles).toContain('[aria-label="Account menu"]');
         expect(blankStyles).toContain('.sidebar-rail-caption');
         expect(blankStyles).toContain('.sidebar-mode-badge');

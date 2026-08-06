@@ -110,7 +110,7 @@
     }
 
     .workspace-tab-switcher-search-input,
-    .workspace-tab-switcher-sort-trigger,
+    .workspace-tab-switcher-sort [data-slot='base'],
     .workspace-tab-switcher-action {
         border-radius: 999px;
     }
@@ -332,6 +332,18 @@
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
     }
 
+    /*
+     * Basic-auth Account menu: blank's default --md-border-color (#e5e5e5) is
+     * nearly invisible on white. Match modal/popover chrome so the panel reads.
+     */
+    .basic-auth-account-menu {
+        border: 1px solid rgba(0, 0, 0, 0.1) !important;
+        border-radius: 14px !important;
+        box-shadow:
+            0 8px 24px rgba(0, 0, 0, 0.1),
+            0 0 1px rgba(0, 0, 0, 0.08) !important;
+    }
+
     /* ── Scroll styling ── */
     * {
         scrollbar-width: thin;
@@ -349,6 +361,13 @@
 [data-theme="blank"].dark {
     * {
         scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    }
+
+    .basic-auth-account-menu {
+        border-color: rgba(255, 255, 255, 0.12) !important;
+        box-shadow:
+            0 8px 24px rgba(0, 0, 0, 0.45),
+            0 0 1px rgba(255, 255, 255, 0.1) !important;
     }
 
     .cm-user {
@@ -560,7 +579,8 @@
 
     html[data-theme="blank"] .unified-sb-item {
         min-height: 48px !important;
-        padding-right: 3.25rem !important;
+        padding-inline: 0.625rem !important;
+        padding-right: 2.5rem !important;
         overflow: hidden;
     }
 
@@ -601,6 +621,76 @@
             font-size: 8px !important;
             line-height: 1.15 !important;
             letter-spacing: 0.04em !important;
+        }
+
+        /* More sheet: account rows match the polished list layout */
+        html[data-theme="blank"] .mobile-nav-more-auth
+            [aria-label="Account menu"],
+        html[data-theme="blank"] .mobile-nav-more-auth
+            [aria-label="Login"],
+        html[data-theme="blank"] .mobile-nav-more-auth
+            button[data-connection-state] {
+            width: 100% !important;
+            height: auto !important;
+            min-width: 0 !important;
+            min-height: 3.65rem !important;
+            padding: 0.75rem 0.85rem !important;
+        }
+
+        html[data-theme="blank"] .mobile-nav-more-auth
+            [aria-label="Account menu"] .sidebar-rail-caption,
+        html[data-theme="blank"] .mobile-nav-more-auth
+            [aria-label="Login"] .sidebar-rail-caption,
+        html[data-theme="blank"] .mobile-nav-more-auth
+            button[data-connection-state] .sidebar-rail-caption {
+            font-size: 15px !important;
+            font-weight: 600 !important;
+            line-height: 1.2 !important;
+            letter-spacing: 0.01em !important;
+            text-transform: none !important;
+        }
+
+        /* Keep Account glyphs at System-row size (beat bottom-nav 24px icons). */
+        html[data-theme="blank"] .mobile-nav-more-auth :where(svg, .iconify) {
+            width: 1rem !important;
+            height: 1rem !important;
+            min-width: 1rem !important;
+            min-height: 1rem !important;
+            font-size: 1rem !important;
+        }
+
+        html[data-theme="blank"] .mobile-nav-more-auth
+            :where(button > span > svg, button > span > .iconify) {
+            padding: 0.575rem !important;
+        }
+
+        html[data-theme="blank"] .mobile-nav-more-auth .iconify svg {
+            width: 1rem !important;
+            height: 1rem !important;
+            padding: 0 !important;
+            min-width: 0 !important;
+            min-height: 0 !important;
+        }
+
+        html[data-theme="blank"] .mobile-nav-more-sheet .more-tile-label {
+            font-size: 15px !important;
+            line-height: 1.2 !important;
+        }
+
+        html[data-theme="blank"] .mobile-nav-more-sheet .more-tile-desc,
+        html[data-theme="blank"] .mobile-nav-more-sheet .more-row-desc {
+            font-size: 12px !important;
+            line-height: 1.35 !important;
+        }
+
+        html[data-theme="blank"] .mobile-nav-more-sheet .more-section-label {
+            font-size: 10px !important;
+            line-height: 1.2 !important;
+        }
+
+        html[data-theme="blank"] .mobile-nav-more-sheet .more-row-label {
+            font-size: 15px !important;
+            line-height: 1.2 !important;
         }
     }
 

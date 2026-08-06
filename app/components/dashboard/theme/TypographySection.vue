@@ -11,17 +11,17 @@
         >
             Typography
         </h2>
-        <div class="flex items-center gap-4">
-            <label class="w-32">Base Font</label>
+        <div class="flex flex-wrap items-center gap-3 sm:gap-4">
+            <label class="w-full shrink-0 sm:w-32">Base Font</label>
             <input
                 type="range"
                 min="14"
                 max="24"
                 :value="localBaseFontPx"
                 @input="onFontSizeRange($event)"
-                class="flex-1"
+                class="min-w-0 flex-1"
             />
-            <span class="w-10 text-center tabular-nums"
+            <span class="w-10 shrink-0 text-center tabular-nums"
                 >{{ localBaseFontPx }}px</span
             >
         </div>

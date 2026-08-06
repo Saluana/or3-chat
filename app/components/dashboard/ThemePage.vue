@@ -47,7 +47,7 @@
         >
             <template v-if="activeSection === 'theme'">
                 <div
-                    class="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]"
+                    class="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]"
                 >
                     <DashboardThemeSelector />
                     <DashboardThemeModeToggle />
@@ -198,20 +198,26 @@ async function handleTabKeydown(
 }
 .supporting-text {
     font-size: 10px;
-    line-height: 1.2;
-    max-width: 56ch;
+    line-height: 1.35;
+    max-width: min(56ch, 100%);
     color: var(--md-on-surface-variant, var(--md-on-surface));
     opacity: 0.7;
+    overflow-wrap: break-word;
 }
 .theme-studio-tabs {
     display: flex;
     gap: 0.25rem;
     padding: 0.3rem;
+    min-width: 0;
+    max-width: 100%;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
     color: var(--md-on-surface);
     background: var(--md-surface);
     border: var(--md-border-width) solid var(--md-border-color);
     border-radius: var(--md-border-radius);
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
 }
 .theme-studio-tab {
     display: inline-flex;
@@ -252,6 +258,8 @@ async function handleTabKeydown(
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    min-width: 0;
+    max-width: 100%;
 }
 .theme-preview-grid {
     display: grid;
@@ -293,6 +301,8 @@ async function handleTabKeydown(
     .theme-studio-tab {
         flex-basis: 0;
     }
+}
+@media (min-width: 1024px) {
     .theme-preview-grid {
         grid-template-columns:
             auto auto minmax(5rem, 0.45fr) minmax(12rem, 1fr)

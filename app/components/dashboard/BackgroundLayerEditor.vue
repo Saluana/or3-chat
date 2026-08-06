@@ -95,8 +95,8 @@
         </div>
 
         <!-- Opacity slider -->
-        <div class="flex items-center gap-4">
-            <label class="w-32">Opacity</label>
+        <div class="flex flex-wrap items-center gap-3 sm:gap-4">
+            <label class="w-full shrink-0 sm:w-32">Opacity</label>
             <input
                 type="range"
                 min="0"
@@ -104,16 +104,16 @@
                 step="0.01"
                 :value="opacity"
                 @input="onOpacityInput"
-                class="flex-1"
+                class="min-w-0 flex-1"
             />
-            <span class="w-12 text-right tabular-nums">{{
+            <span class="w-12 shrink-0 text-right tabular-nums">{{
                 opacity.toFixed(2)
             }}</span>
         </div>
 
         <!-- Size slider -->
-        <div class="flex items-center gap-4">
-            <label class="w-32">Size</label>
+        <div class="flex flex-wrap items-center gap-3 sm:gap-4">
+            <label class="w-full shrink-0 sm:w-32">Size</label>
             <input
                 type="range"
                 min="8"
@@ -121,16 +121,16 @@
                 :disabled="fit"
                 :value="sizePx"
                 @input="onSizeInput"
-                class="flex-1"
+                class="min-w-0 flex-1"
             />
-            <span class="w-16 text-right tabular-nums text-xs">{{
+            <span class="w-16 shrink-0 text-right tabular-nums text-xs">{{
                 fit ? 'cover' : sizePx + 'px'
             }}</span>
         </div>
 
         <!-- Fallback Color -->
-        <div class="flex items-start gap-4 fallback-row">
-            <label class="w-32 text-xs pt-2">Fallback Color</label>
+        <div class="flex flex-wrap items-start gap-3 sm:gap-4 fallback-row">
+            <label class="w-full shrink-0 text-xs pt-2 sm:w-32">Fallback Color</label>
             <div class="flex flex-col gap-2 w-full sm:w-auto">
                 <UColorPicker
                     v-bind="colorPickerProps"

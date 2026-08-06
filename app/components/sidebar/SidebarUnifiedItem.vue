@@ -3,14 +3,13 @@
         ref="el"
         role="button"
         tabindex="0"
-        class="w-full group flex items-center gap-2 px-3 py-2.5 group relative transition-colors duration-200 rounded-[var(--md-border-radius)] cursor-pointer animate-sidebar-item-enter unified-sb-item theme-btn retro-press"
+        class="w-full group flex items-center gap-2.5 px-2.5 py-2.5 group relative transition-colors duration-200 rounded-[var(--md-border-radius)] cursor-pointer animate-sidebar-item-enter unified-sb-item theme-btn retro-press"
         :class="{
             'bg-[color:var(--md-primary)]/12 dark:bg-[color:var(--md-primary)]/20 text-[color:var(--md-primary)] unified-sb-item-active':
                 active,
             'text-[color:var(--md-on-surface)] hover:bg-[var(--md-surface-hover)]':
                 !active,
         }"
-        style="width: calc(100% - 8px)"
         @click="emit('select', item.id)"
         @keydown.enter="emit('select', item.id)"
         @keydown.space="emit('select', item.id)"
@@ -52,7 +51,7 @@
 
         <!-- Action Button (always visible on mobile, hover-reveal on desktop) -->
         <div
-            class="absolute right-2 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+            class="absolute right-1 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
         >
             <UPopover
                 :content="{ side: 'right', align: 'start', sideOffset: 6 }"

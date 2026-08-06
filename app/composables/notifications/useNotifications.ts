@@ -180,6 +180,7 @@ export function useNotifications(): NotificationsComposable {
 
         const notificationsObservable = liveQuery(async () => {
             try {
+                if (!db.isOpen()) await db.open();
                 return await db.notifications
                     .where('[user_id+created_at]')
                     .between(
@@ -216,6 +217,7 @@ export function useNotifications(): NotificationsComposable {
         // The .and() filter is acceptable for typical notification volumes (<1000).
         const unreadCountObservable = liveQuery(async () => {
             try {
+                if (!db.isOpen()) await db.open();
                 const count = await db.notifications
                     .where('user_id')
                     .equals(currentUserId)
@@ -254,6 +256,7 @@ export function useNotifications(): NotificationsComposable {
         const scopedMutedThreadsKey = mutedThreadsKeyForUser(currentUserId);
         const mutedThreadsObservable = liveQuery(async () => {
             try {
+                if (!db.isOpen()) await db.open();
                 const kvRecord =
                     (await db.kv.get(scopedMutedThreadsKey)) ||
                     (await db.kv.get(legacyMutedThreadsKey));

@@ -56,6 +56,19 @@ describe('dbTry', () => {
         expect(opts.toast).toBe(true);
     });
 
+    it('swallows DatabaseClosedError without toasting', async () => {
+        const res = await dbTry(
+            () => {
+                throw Object.assign(new Error('Database has been closed'), {
+                    name: 'DatabaseClosedError',
+                });
+            },
+            { op: 'read', entity: 'kv' }
+        );
+        expect(res).toBeUndefined();
+        expect(mockedReportError).not.toHaveBeenCalled();
+    });
+
     it('does not retain a sticky failure after quota pressure clears', async () => {
         let quotaAvailable = false;
         const write = () =>

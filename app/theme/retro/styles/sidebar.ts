@@ -119,6 +119,20 @@ export const sidebarOverrides = {
 
     'button#sidebar.bottom-nav.credits': SidebarPopoverButtonConfig,
 
+    /* --- Mobile bottom nav bar (replaces rail on small screens) --- */
+    'button#sidebar.mobile-nav.item': {
+        class: 'text-[var(--md-on-surface)]/75 hover:bg-[var(--md-primary)]/8 hover:text-[var(--md-on-surface)] active:bg-[var(--md-primary)]/15',
+    },
+    'button#sidebar.mobile-nav.item:active': {
+        class: 'text-[var(--md-primary)] bg-[var(--md-primary)]/12 hover:bg-[var(--md-primary)]/18 hover:text-[var(--md-primary)]',
+    },
+    'button#sidebar.mobile-nav.create': {
+        class: 'text-[var(--md-on-surface)]/75 hover:text-[var(--md-on-surface)]',
+    },
+    'button#sidebar.mobile-nav.create-item': {
+        class: 'border-[length:var(--md-border-width)] border-transparent hover:border-[color:var(--md-border-color)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
+    },
+
     /* --- Collapsed sidebar buttons --- */
     'button#sidebar.collapsed-page': {
         ui: {
@@ -212,4 +226,16 @@ export const sidebarCssSelectors = {
                 backgroundColor: 'transparent',
             },
         },
+    /* Mobile bottom nav bar — hard top edge + retro FAB */
+    '#mobile-bottom-nav': {
+        style: {
+            backgroundColor: 'var(--md-surface)',
+        },
+    },
+    '#mobile-bottom-nav .mobile-nav-create-fab': {
+        style: {
+            borderRadius: 'var(--md-border-radius)',
+            boxShadow: '2px 2px 0 var(--md-border-color)',
+        },
+    },
 };
