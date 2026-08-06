@@ -128,8 +128,12 @@ jobs:
         run: |
           version="$(node -p 'require("./packages/create-or3-chat/package.json").version')"
           for attempt in $(seq 1 30); do
-            npm view "create-or3-chat@$version" version && break
+            target="$RUNNER_TEMP/or3-create-command-$attempt"
+            if npm create "or3-chat@$version" "$target" -- --mode self-hosted --target configure --cli --yes --skip-install --no-git; then
+              test -f "$target/or3-release.json"
+              exit 0
+            fi
             sleep 2
           done
-          npm create "or3-chat@$version" "$RUNNER_TEMP/or3-create-command" -- --mode self-hosted --target configure --cli --yes --skip-install --no-git
-          test -f "$RUNNER_TEMP/or3-create-command/or3-release.json"
+          echo "npm create could not resolve create-or3-chat@$version after 30 attempts."
+          exit 1
