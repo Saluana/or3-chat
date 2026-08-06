@@ -127,13 +127,13 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
         run: |
           version="$(node -p 'require("./packages/create-or3-chat/package.json").version')"
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 120); do
             target="$RUNNER_TEMP/or3-create-command-$attempt"
-            if npm create "or3-chat@$version" "$target" -- --mode self-hosted --target configure --cli --yes --skip-install --no-git; then
+            if npm_config_prefer_online=true npm create "or3-chat@$version" "$target" -- --mode self-hosted --target configure --cli --yes --skip-install --no-git; then
               test -f "$target/or3-release.json"
               exit 0
             fi
             sleep 2
           done
-          echo "npm create could not resolve create-or3-chat@$version after 30 attempts."
+          echo "npm create could not resolve create-or3-chat@$version after 120 attempts."
           exit 1
