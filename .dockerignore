@@ -9,6 +9,11 @@ dist
 node_modules
 packages/create-or3-chat/dist
 tests
+!tests/plugin-runtime/
+!tests/plugin-runtime/build-fixtures/
+!tests/plugin-runtime/build-fixtures/extensions/
+!tests/plugin-runtime/build-fixtures/extensions/plugins/
+!tests/plugin-runtime/build-fixtures/extensions/plugins/**
 **/__tests__
 **/*.test.*
 **/*.spec.*

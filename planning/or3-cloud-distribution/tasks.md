@@ -10,7 +10,7 @@ local edits.
 
 Current release blocker: `@or3/cloud@0.1.12` exists on npm, but its matching
 `ghcr.io/saluana/or3-chat:0.1.12` image is absent, so that immutable package
-cannot deploy. The source is prepared as `0.1.14`; publish its image first,
+cannot deploy. The source is prepared as `0.1.15`; publish its image first,
 then its package through the image-first workflow. No registry publication or
 destructive VPS action was attempted locally.
 

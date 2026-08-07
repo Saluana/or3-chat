@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 const execFile = promisify(execFileCallback);
 
-export const PACKAGE_VERSION = '0.1.14';
+export const PACKAGE_VERSION = '0.1.15';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -1264,7 +1264,7 @@ async function updateCommand(directory: string, flags: Flags) {
   assertNoPending(state);
   await waitForDeepHealth(loaded.directory, state.mode, secretValues(env));
   const targetVersion = stringFlag(flags, 'to')?.trim() ?? PACKAGE_VERSION;
-  if (!isVersion(targetVersion)) throw new Error('--to must be a complete semantic version such as 0.1.14.');
+  if (!isVersion(targetVersion)) throw new Error('--to must be a complete semantic version such as 0.1.15.');
   if (targetVersion === state.appVersion) throw new Error(`The deployment is already on OR3 ${targetVersion}.`);
   const targetImage = imageFor(targetVersion);
   const targetDigest = await pullImage(targetImage);
