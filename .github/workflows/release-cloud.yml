@@ -37,7 +37,9 @@ jobs:
         run: bun run release:cloud:check
       - name: Read release version
         id: version
-        run: echo "version=$(node -p \"require('./packages/or3-cloud/package.json').version\")" >> "$GITHUB_OUTPUT"
+        run: |
+          version="$(node -p 'require("./packages/or3-cloud/package.json").version')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Verify fixed-profile provider dependencies
         run: bun run scripts/release/check-cloud-package.mjs --registry
       - name: Build and test Cloud CLI
