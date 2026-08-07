@@ -137,8 +137,9 @@ jobs:
           version="${{ steps.version.outputs.version }}"
           for attempt in $(seq 1 120); do
             if npm_config_prefer_online=true npm view "@or3/cloud@$version" version | grep -Fx "$version"; then
-              npm_config_prefer_online=true npx --yes "@or3/cloud@$version" --help
-              exit 0
+              if npm_config_prefer_online=true npx --yes "@or3/cloud@$version" --help; then
+                exit 0
+              fi
             fi
             sleep 2
           done
