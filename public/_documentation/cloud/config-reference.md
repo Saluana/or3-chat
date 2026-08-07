@@ -774,7 +774,7 @@ OR3_STRICT_CONFIG=true
 
 - [Base Config](./or3-config)
 - [Cloud Config](./or3-cloud-config)
-- [Cloud Install Wizard](./or3-cloud-wizard)
+- [Cloud Source Wizard](./or3-cloud-wizard)
 - [Auth System](./auth-system)
 - [Sync Layer](./sync-layer)
 - [Storage Layer](./storage-layer)

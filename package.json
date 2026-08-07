@@ -2,7 +2,7 @@
     "name": "or3-chat",
     "type": "module",
     "private": false,
-    "version": "0.1.11",
+    "version": "0.1.12",
     "license": "GPL-3.0",
     "engines": {
         "node": ">=24"
@@ -70,11 +70,11 @@
         "or3-cloud:validate": "tsx scripts/cli/or3-cloud.ts validate",
         "or3-cloud:doctor": "tsx scripts/cli/or3-cloud.ts doctor",
         "or3-cloud:build": "bun build ./scripts/cli/or3-cloud.ts --target=node --format=esm --outfile ./dist/or3-cloud.mjs",
+        "cloud:package:build": "bun run --cwd packages/or3-cloud build",
+        "cloud:package:check": "bun run --cwd packages/or3-cloud check",
+        "release:cloud:check": "bun run scripts/release/check-cloud-package.mjs",
         "release:check": "bun run scripts/release/check-or3-cloud.ts",
         "release:check:quick": "bun run scripts/release/check-or3-cloud.ts --quick",
-        "release:create:build": "node packages/create-or3-chat/scripts/build-template.mjs",
-        "release:create:locks": "node packages/create-or3-chat/scripts/build-template.mjs --generate-locks",
-        "release:create:check": "node scripts/release/check-create-or3-chat.mjs",
         "release:canary": "bun run scripts/release/staging-canary.ts",
         "release:canary:test": "bunx vitest run scripts/__tests__/release-staging-canary.test.ts",
         "plugin-runtime:ledger": "bun run scripts/plugin-runtime/generate-compatibility-ledger.ts",

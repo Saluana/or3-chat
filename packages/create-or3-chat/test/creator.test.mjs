@@ -17,6 +17,7 @@ import {
     parseArgs,
     scaffoldProject,
 } from '../src/index.mjs';
+import { main as packagedMain } from '../dist/index.mjs';
 import { prepareDockerManifest } from '../../../scripts/docker/prepare-manifest.mjs';
 
 test('parses the supported initializer flags', () => {
@@ -137,6 +138,20 @@ test('refuses non-empty directories and scaffolds atomically', async () => {
     );
 });
 
+test('documented initializer completes scaffolding and leaves the target directory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'create-or3-chat-command-'));
+    const previousDirectory = process.cwd();
+    process.chdir(root);
+    try {
+        await packagedMain(['smoke', '--yes', '--skip-install', '--no-git', '--no-open']);
+        const manifest = JSON.parse(await readFile(join(root, 'smoke', 'package.json'), 'utf8'));
+        assert.equal(manifest.private, true);
+        assert.equal(manifest.name, 'smoke');
+    } finally {
+        process.chdir(previousDirectory);
+    }
+});
+
 test('Docker manifest preparation preserves selected custom providers', () => {
     const manifest = prepareDockerManifest({
         dependencies: {
@@ -167,8 +182,16 @@ test('generated template has registry-clean first-party dependencies', async () 
     const release = JSON.parse(
         await readFile(new URL('or3-release.json', templateUrl), 'utf8')
     );
+    const creatorManifest = JSON.parse(
+        await readFile(new URL('../package.json', import.meta.url), 'utf8')
+    );
     assert.equal(release.or3Version, manifest.version);
+    assert.equal(release.creatorVersion, creatorManifest.version);
     assert.match(release.sourceRevision, /^[0-9a-f]{40}$/i);
+    const providerVersions = JSON.parse(
+        await readFile(new URL('packages/create-or3-chat/first-party-versions.json', templateUrl), 'utf8')
+    );
+    assert.equal(providerVersions['or3-provider-basic-auth'], '0.0.7');
     const dockerignore = await readFile(new URL('.dockerignore', templateUrl), 'utf8');
     assert.match(dockerignore, /^\.or3-initial-credentials$/m);
     assert.equal(manifest.dependencies['@or3/intern-client'], '0.1.1');

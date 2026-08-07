@@ -175,7 +175,7 @@
                 />
               </span>
               <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2">
+                <div class="flex min-w-0 items-center gap-2">
                   <span class="min-w-0 flex-1 truncate text-sm font-medium">
                     {{ item.title }}
                   </span>
@@ -333,7 +333,7 @@
       :ui="{
         overlay: 'bg-black/35 backdrop-blur-[3px]',
         content:
-          'sm:max-w-[900px] overflow-hidden border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] shadow-2xl',
+          'w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] min-w-0 overflow-hidden border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] shadow-2xl sm:max-w-[900px]',
         header: 'border-b border-[var(--md-outline-variant)] px-5 py-4 sm:px-6',
         body: 'p-0 sm:p-0',
         close: 'top-4 end-4',
@@ -361,11 +361,11 @@
 
       <template #body>
         <div
-          class="grid max-h-[min(76vh,700px)] min-h-0 md:grid-cols-[240px_minmax(0,1fr)]"
+          class="grid max-h-[min(76vh,700px)] min-h-0 min-w-0 overflow-x-hidden md:grid-cols-[240px_minmax(0,1fr)]"
           data-testid="agent-connections-modal"
         >
           <aside
-            class="border-b border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-4 md:border-b-0 md:border-r md:p-5"
+            class="min-w-0 overflow-hidden border-b border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-4 md:border-b-0 md:border-r md:p-5"
             aria-label="Saved hosts"
           >
             <div class="mb-3 flex items-center justify-between">
@@ -396,7 +396,7 @@
                 v-for="host in hostItems"
                 :key="host.value"
                 type="button"
-                class="group w-full rounded-[var(--md-border-radius)] border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
+                class="group min-w-0 max-w-full rounded-[var(--md-border-radius)] border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
                 :class="
                   host.value === snapshot?.activeHostId
                     ? 'border-[var(--md-primary)] bg-[var(--md-surface-container-lowest)] shadow-sm'
@@ -405,7 +405,7 @@
                 :aria-pressed="host.value === snapshot?.activeHostId"
                 @click="switchHost(host.value)"
               >
-                <div class="flex items-center gap-2">
+                <div class="flex min-w-0 items-center gap-2">
                   <span
                     class="size-2 shrink-0 rounded-full"
                     :class="
@@ -419,13 +419,13 @@
                   </span>
                   <span
                     v-if="host.value === snapshot?.activeHostId"
-                    class="rounded-full bg-[var(--md-primary-container)] px-2 py-0.5 text-[10px] font-semibold text-[var(--md-on-primary-container)]"
+                    class="max-w-[40%] shrink-0 truncate rounded-full bg-[var(--md-primary-container)] px-2 py-0.5 text-[10px] font-semibold text-[var(--md-on-primary-container)]"
                   >
                     Active
                   </span>
                 </div>
                 <p
-                  class="mt-1 truncate pl-4 text-[11px] text-[var(--md-on-surface-variant)]"
+                  class="mt-1 min-w-0 truncate pl-4 text-[11px] text-[var(--md-on-surface-variant)]"
                 >
                   {{ host.description }}
                 </p>
@@ -467,13 +467,16 @@
             </div>
           </aside>
 
-          <div class="min-h-0 overflow-y-auto" :aria-busy="hostActionPending">
+          <div
+            class="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto"
+            :aria-busy="hostActionPending"
+          >
             <section
               v-if="activeHost"
               class="border-b border-[var(--md-outline-variant)] p-4 sm:p-5"
               aria-labelledby="current-connection-title"
             >
-              <div class="flex flex-wrap items-start gap-3">
+              <div class="flex min-w-0 flex-wrap items-start gap-3">
                 <span
                   class="grid size-10 shrink-0 place-items-center rounded-[var(--md-border-radius)]"
                   :class="
@@ -535,7 +538,7 @@
                     computer stays linked to this workspace until you remove it.
                   </p>
                 </div>
-                <div class="flex shrink-0 flex-wrap gap-1">
+                <div class="flex min-w-0 shrink-0 flex-wrap gap-1">
                   <UTooltip
                     v-if="!pinCredentialStatus.locked"
                     :text="
@@ -1041,6 +1044,7 @@ import { useIcon } from "~/composables/useIcon";
 import { useThemeResolver } from "~/composables/useThemeResolver";
 import { isMobile } from "~/state/global";
 import { getGlobalMultiPaneApi } from "~/utils/multiPaneApi";
+import { closeSidebarIfMobile } from "~/utils/sidebarLayoutApi";
 import {
   computeTimeGroup,
   formatTimeDisplay,
@@ -1407,6 +1411,7 @@ async function openRecord(recordId: string) {
       initialRecordId: recordId,
     });
   }
+  closeSidebarIfMobile();
 }
 
 async function openHistory(item: HistoryItem) {

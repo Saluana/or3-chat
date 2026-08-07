@@ -402,7 +402,7 @@
                 {{ composerHint }}
               </span>
             </template>
-            <template #settings>
+            <template #settings="{ close }">
               <ExternalAgentSettingsPanel
                 v-model:runner-id="followUpRunnerId"
                 v-model:mode="followUpMode"
@@ -413,6 +413,7 @@
                 v-model:confirm-dangerous="followUpConfirmDangerous"
                 :runners="snapshot?.runners ?? []"
                 runner-locked
+                @close="close"
               />
             </template>
           </ExternalAgentComposer>

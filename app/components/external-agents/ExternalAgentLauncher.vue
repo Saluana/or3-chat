@@ -120,7 +120,7 @@
             <template v-if="cwd"> · {{ cwd }}</template>
           </span>
         </template>
-        <template #settings>
+        <template #settings="{ close }">
           <ExternalAgentSettingsPanel
             v-model:runner-id="runnerId"
             v-model:mode="mode"
@@ -130,6 +130,7 @@
             v-model:thinking-level="thinkingLevel"
             v-model:confirm-dangerous="confirmDangerous"
             :runners="runners"
+            @close="close"
           />
         </template>
       </ExternalAgentComposer>

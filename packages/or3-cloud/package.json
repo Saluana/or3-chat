@@ -1,0 +1,32 @@
+{
+  "name": "@or3/cloud",
+  "version": "0.1.12",
+  "description": "Install and operate the OR3 Cloud container distribution",
+  "type": "module",
+  "license": "GPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Saluana/or3-chat.git",
+    "directory": "packages/or3-cloud"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "or3": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "scripts": {
+    "build": "bun build src/cli.ts --target=node --format=esm --outfile=dist/cli.mjs",
+    "check": "bun run build && bun test",
+    "prepack": "bun run build",
+    "pack:check": "npm pack --dry-run --ignore-scripts"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -1,6 +1,8 @@
-# OR3 Cloud Install Wizard
+# OR3 Cloud Source Wizard
 
-The OR3 Cloud install wizard provides a single guided command for configuring local-only use, SSR auth, sync, storage, and OR3 Connect.
+This page documents the repository-local wizard for contributors and advanced
+custom-provider deployments. Normal local or VPS installations should use the
+managed `@or3/cloud` distribution documented in `/docs/installation`.
 
 ## Quick Start
 
@@ -14,7 +16,9 @@ Direct CLI usage:
 bun run scripts/cli/or3-cloud.ts init
 ```
 
-When published, the same CLI is packaged with a bin entry (`or3-cloud`) so it can be executed through `bunx` or `npx`.
+The source wizard is not the managed Cloud operator and does not perform image
+based upgrades. It remains available through the application repository's
+`or3-cloud` scripts.
 
 ## What the Wizard Does
 

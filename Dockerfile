@@ -28,18 +28,26 @@ ENV NODE_ENV=development \
 RUN npm install --global npm@11.6.2
 COPY package*.json bun.lock* ./
 COPY packages/plugin-sdk ./packages/plugin-sdk
+COPY packages/create-or3-chat/first-party-versions.json ./packages/create-or3-chat/first-party-versions.json
 COPY scripts/docker/prepare-manifest.mjs ./scripts/docker/prepare-manifest.mjs
 COPY scripts/docker/preflight-registry.mjs ./scripts/docker/preflight-registry.mjs
 RUN node scripts/docker/prepare-manifest.mjs package.json
-# `npm install` intentionally reconciles package.json with the npm lock when a
-# Bun-driven custom wizard added providers after the embedded locks were made.
-# The cache mount survives a failed build, so transient registry failures do
-# not force a full re-download on retry.
+# The source lock contains local provider links for contributor installs. The
+# manifest preparation step replaces those links with the pinned registry
+# versions, so refresh the lock in the image build and install from that exact
+# lock with npm ci. The cache mount survives failed builds and retries.
 RUN --mount=type=cache,target=/root/.npm \
     node scripts/docker/preflight-registry.mjs && \
-    npm install --no-audit --no-fund
+    npm install --package-lock-only --ignore-scripts --no-audit --no-fund && \
+    npm ci --no-audit --no-fund && \
+    cp package.json /tmp/or3-registry-package.json && \
+    cp package-lock.json /tmp/or3-registry-package-lock.json
 
 COPY . .
+# COPY . . includes the contributor manifest with local provider links. Keep
+# the registry-clean manifest/lock that was used to install node_modules.
+RUN cp /tmp/or3-registry-package.json package.json && \
+    cp /tmp/or3-registry-package-lock.json package-lock.json
 # Cloud providers are initialized while Nitro prerenders routes. Supply only
 # disposable build-time values here: real credentials and paths remain runtime
 # environment values from Compose and are never copied into the image.

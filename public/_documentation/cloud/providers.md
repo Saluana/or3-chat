@@ -2,7 +2,9 @@
 
 This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works.
 
-For guided setup, use the [Cloud Install Wizard](./or3-cloud-wizard).
+For normal local or VPS operation, use the managed [`@or3/cloud`](/docs/installation)
+operator. For editable source or custom providers, use the
+[Cloud Source Wizard](./or3-cloud-wizard).
 
 ## Provider Model
 

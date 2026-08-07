@@ -22,7 +22,7 @@
 - [Quick Start](#-quick-start)
 - [Static vs Cloud — Which Do I Pick?](#%EF%B8%8F-static-vs-cloud--which-do-i-pick)
 - [Static Mode (Default)](#-static-mode-default)
-- [Cloud Mode (Install Wizard)](#%EF%B8%8F-cloud-mode-install-wizard)
+- [Cloud Mode](#%EF%B8%8F-cloud-mode)
 - [Plugins](#-plugins)
 - [Themes](#-themes)
 - [Configuration Reference](#%EF%B8%8F-configuration-reference)
@@ -43,7 +43,8 @@ OR3 runs in two modes:
 1. **Static** — a pure browser app. Zero servers, zero sign-ups. Everything lives in your browser's IndexedDB.
 2. **Cloud** — add authentication, cross-device sync, file storage, and team workspaces by running OR3 on a server.
 
-You start with static. When you need more, the built-in install wizard sets up cloud for you.
+You start with static. When you need more, the managed `@or3/cloud` operator
+sets up the supported cloud profile for you.
 
 ![Chat workspace](public/screenshots/chat-screenshot.png)
 
@@ -58,7 +59,7 @@ You start with static. When you need more, the built-in install wizard sets up c
 - **Reasoning tracks** — see the model's chain-of-thought when supported
 - **File attachments** — send images and documents alongside your messages
 - **Branching & retry** — fork conversations or regenerate any response
-- **Background streaming** — AI keeps generating even if you navigate away (cloud mode)
+- **Background streaming** — optional cloud capability that keeps AI generating if you navigate away
 
 ### Documents
 
@@ -87,68 +88,49 @@ You start with static. When you need more, the built-in install wizard sets up c
 
 ## 🚀 Quick Start
 
-Create an editable, version-matched OR3 Chat project with npm or Bun:
+The supported installation path is the small `@or3/cloud` operator package. It
+uses the version-matched OR3 container and keeps the application data in a
+managed Docker volume.
+
+For a private local instance:
 
 ```bash
-npm create or3-chat@latest
+npx @or3/cloud init --local --admin-email you@example.com
 ```
+
+For a public VPS behind Caddy:
 
 ```bash
-bun create or3-chat@latest
+npx @or3/cloud init --public --domain chat.example.com --admin-email you@example.com
 ```
 
-The initializer asks no more than three questions: where to create the project,
-whether it is personal-local or self-hosted, and whether to use the browser or
-terminal wizard. Press Enter through the defaults for a running local instance.
+Node.js 24 or newer and Docker Compose v2 are required. The supported cloud
+profile is Basic Auth, SQLite, and filesystem storage, so no external database,
+authentication, or storage account is needed. See
+[Installation and operations](docs/installation.md) for prerequisites,
+firewall/DNS guidance, updates, backups, and recovery.
 
-Node.js 24 or newer is required. Bun is optional. Docker is only required for
-the self-hosted path.
-
-### Self-host with Docker
-
-Choose **Self-host with Docker** in the initializer. The recommended stack uses
-Basic Auth, SQLite, and filesystem storage, so it needs no external database,
-authentication, or storage account.
-
-```bash
-npm run docker:logs
-npm run docker:down
-```
-
-Private mode exposes OR3 only at `http://127.0.0.1:3000`. To serve a public
-domain, pass it during creation or choose public mode in the wizard:
-
-```bash
-npm create or3-chat@latest my-chat -- --mode self-hosted --domain chat.example.com
-```
-
-The public path adds Caddy on ports 80 and 443. Point the domain's DNS at the
-server before deploying; Caddy handles HTTPS automatically.
-
-### SSH and headless servers
-
-The terminal wizard is selected automatically under SSH. To explicitly use the
-browser wizard, run `npm run setup -- --ui`; OR3 prints the exact loopback URL
-and an SSH tunnel command. No setup service is exposed publicly.
+The repository-local wizard remains available for contributors who are building
+an editable source checkout or custom provider combination; it is not required
+for normal deployments.
 
 ### Backups and recovery
 
-Docker data lives in a project-scoped named volume (usually
-`<project-folder>_or3-data`). Back it up before an upgrade. Setup is resumable:
-if an install or deployment stops, keep the generated directory and run
-`npm run setup` or `bun run setup`.
+Managed Cloud deployments keep authentication, SQLite, and uploaded files in a
+named `/data` volume. Use `npx @or3/cloud backup` before upgrades; the operator
+CLI verifies the archive and retains an immediate rollback point.
 
 For port conflicts, missing Docker, invalid domains, provider checks, and other
 diagnostics, run:
 
 ```bash
-npm run doctor
+npx @or3/cloud doctor
 ```
 
-See [Installation and operations](docs/installation.md) for local, Docker,
-public-server, SSH, backup, and troubleshooting details. Maintainers can follow
-[Publish and deploy to a VPS](docs/publish-and-vps.md) for the first npm release
-and a production server walkthrough.
+See [Installation and operations](docs/installation.md) for the supported local
+and public VPS deployment. Maintainers can follow [Releasing OR3 Cloud](docs/releasing.md)
+for the image-first release workflow. Editable source and custom provider
+development still use the repository-local wizard.
 
 ---
 
@@ -169,12 +151,17 @@ OR3 ships as a **static app** by default. You can optionally turn on **cloud mod
 | Cross-device sync | — | ✅ |
 | Cloud file storage | — | ✅ |
 | Team workspaces | — | ✅ |
-| Server-side API key (users don't need their own) | — | ✅ |
-| Background streaming | — | ✅ |
+| Server-side API key (users don't need their own) | — | Optional |
+| Background streaming | — | Optional |
 | Admin panel | — | ✅ |
 | Rate limiting & usage controls | — | ✅ |
 
-**Start static.** If you later need accounts, sync, or shared workspaces, run the install wizard to add cloud features — your existing data stays intact.
+**Start static.** If you later need accounts, sync, or shared workspaces, run
+`npx @or3/cloud init` to add the supported cloud deployment; your existing
+browser data stays intact.
+
+The generated first-login credentials also protect the `/admin` dashboard.
+Move them to a password manager and remove the mode-`0600` credentials file.
 
 ---
 
@@ -210,92 +197,26 @@ Opens a local server at **http://localhost:4173**.
 
 ---
 
-## ☁️ Cloud Mode (Install Wizard)
+## ☁️ Cloud Mode
 
-Cloud mode adds a server layer on top of OR3. It enables user accounts, database sync, file storage, and admin controls. The built-in **install wizard** walks you through the entire setup.
-
-### Run the Wizard
-
-```bash
-npm run setup
-```
-
-By default, the wizard opens in your browser with a step-by-step UI.
-Use `--cli` to force the terminal-based flow.
-
-**Fast path** — zero questions, instantly ready:
+Cloud mode adds accounts, sync, file storage, and administration through the
+supported Basic Auth + SQLite + filesystem profile. Start it with the operator
+package:
 
 ```bash
-npm run setup -- --fast --mode self-hosted --target dev --admin-email admin@example.com
+npx @or3/cloud init --local --admin-email you@example.com
 ```
 
-Fast self-hosted setup writes generated credentials to a mode-`0600`
-`.or3-initial-credentials` file instead of printing passwords. Move the values
-to a password manager, then delete the file.
+Use `--public --domain chat.example.com` on a VPS to add Caddy and automatic
+HTTPS. The operator also provides `update`, `backup`, `restore`, `rollback`,
+`doctor`, `recover`, and the narrow `adopt` command for an existing generated
+deployment.
+See [Installation and operations](docs/installation.md) for the complete
+workflow.
 
-The wizard will ask you to pick providers for each layer:
-
-| Layer | What It Does | Available Providers |
-|---|---|---|
-| **Auth** | User login and sessions | Clerk, Basic Auth (email/password) |
-| **Sync** | Cross-device data sync | Convex, SQLite |
-| **Storage** | Cloud file uploads | Convex, S3-compatible, Local filesystem |
-
-### What the Wizard Does
-
-1. **Asks questions** — which providers you want, your API keys, and your preferences
-2. **Validates everything** — checks that your keys and URLs are correct
-3. **Writes your `.env` file** — safely updates environment variables without overwriting comments or unrelated keys
-4. **Generates provider config** — creates `or3.providers.generated.ts` so Nuxt loads the right modules
-5. **Optionally deploys** — runs provider-specific setup commands (e.g., Convex schema push)
-
-### After the Wizard
-
-Start the dev server:
-
-```bash
-npm run dev
-```
-
-Or build for production:
-
-```bash
-npm run build
-```
-
-### Health Check
-
-To verify everything is working correctly:
-
-```bash
-npm run doctor
-```
-
-Checks that provider packages are installed, database paths are writable, the port is free, and the config is valid. Runs in seconds with ✅/⚠️/❌ output per check.
-
-### Example: Minimal Self-Hosted Setup
-
-The fastest path to a self-hosted cloud instance with **zero external services**:
-
-| Layer | Provider | What You Need |
-|---|---|---|
-| Auth | **Basic Auth** | Nothing — built in. Users sign up with email/password |
-| Sync | **SQLite** | Nothing — uses a local SQLite file |
-| Storage | **Filesystem** | Nothing — saves uploads to a local folder |
-
-Just run the wizard, pick the self-hosted options, and go.
-
-### Example: Managed Cloud Setup
-
-For a fully managed stack with real-time sync:
-
-| Layer | Provider | What You Need |
-|---|---|---|
-| Auth | **Clerk** | A free Clerk account ([clerk.com](https://clerk.com)) |
-| Sync | **Convex** | A free Convex account ([convex.dev](https://convex.dev)) |
-| Storage | **S3** | Any S3-compatible bucket (AWS, Cloudflare R2, MinIO, etc.) |
-
-> **Tip:** You can mix and match. Use Clerk for auth with SQLite for sync and local filesystem for storage — whatever fits your needs.
+If you need an editable checkout or providers other than the supported cloud
+profile, use the repository-local source wizard documented in
+[`public/_documentation/cloud/or3-cloud-wizard.md`](public/_documentation/cloud/or3-cloud-wizard.md).
 
 ---
 
@@ -458,7 +379,9 @@ Controls auth, sync, storage, rate limiting, admin, and background streaming. On
 | **Admin** | Admin credentials, extension upload limits |
 | **Background Streaming** | Enable/disable, max concurrent jobs, timeout |
 
-All values are driven by environment variables. The install wizard writes these for you, or you can set them manually in `.env`.
+All values are driven by environment variables. The managed Cloud CLI (or the
+developer source wizard) writes these for you, or you can set them manually in
+`.env`.
 
 ---
 
@@ -478,7 +401,7 @@ Full documentation lives inside the project at [`public/_documentation/`](public
 | **Utils** | Tool registry, server tools, streaming, HLC clock, config resolution |
 | **Types** | Chat types, hook payload types, cloud config types |
 | **Themes** | Architecture, quick start, API reference, CSS selectors, best practices |
-| **Cloud** | Install wizard, provider system, sync protocol, storage, background jobs |
+| **Cloud** | Cloud operator, source provider system, sync protocol, storage, background jobs |
 
 The documentation map is defined in [`public/_documentation/docmap.json`](public/_documentation/docmap.json).
 

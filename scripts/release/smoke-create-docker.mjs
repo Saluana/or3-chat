@@ -108,7 +108,7 @@ async function verifyAdminDashboard() {
     const username = env.OR3_ADMIN_USERNAME;
     const password = env.OR3_ADMIN_PASSWORD;
     if (!username || !password) {
-        throw new Error('Admin dashboard credentials are missing from .env.');
+        throw new Error('Cloud smoke requires OR3_ADMIN_USERNAME and OR3_ADMIN_PASSWORD.');
     }
 
     const signIn = await fetch(new URL('/api/admin/auth/login', baseUrl), {

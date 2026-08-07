@@ -264,9 +264,16 @@ for (const path of [...TOP_LEVEL_FILES, ...SCRIPT_FILES]) {
 for (const path of RUNTIME_DIRECTORIES) {
     await copyOptionalPath(path);
 }
+// The generated source template still uses the repository Dockerfile. Keep
+// the single provider-version contract available at the path that Docker's
+// manifest preparation script resolves, without copying the creator itself.
+await copyPath('packages/create-or3-chat/first-party-versions.json');
 
 const rootManifest = JSON.parse(
     await readFile(join(repoRoot, 'package.json'), 'utf8')
+);
+const creatorManifest = JSON.parse(
+    await readFile(join(packageRoot, 'package.json'), 'utf8')
 );
 const manifest = rewriteTemplateManifest(rootManifest);
 await writeFile(
@@ -278,7 +285,7 @@ await writeFile(
     `${JSON.stringify(
         {
             or3Version: manifest.version,
-            creatorVersion: manifest.version,
+            creatorVersion: creatorManifest.version,
             sourceRevision: await sourceRevision(),
         },
         null,

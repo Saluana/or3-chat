@@ -15,7 +15,8 @@ on:
       - "shared/**"
       - "modules/**"
       - "packages/plugin-sdk/**"
-      - "packages/create-or3-chat/**"
+      - "packages/or3-cloud/**"
+      - "packages/create-or3-chat/first-party-versions.json"
       - "scripts/docker/**"
       - "scripts/release/**"
       - ".github/workflows/deployment-smoke.yml"
@@ -34,13 +35,14 @@ on:
       - "shared/**"
       - "modules/**"
       - "packages/plugin-sdk/**"
-      - "packages/create-or3-chat/**"
+      - "packages/or3-cloud/**"
+      - "packages/create-or3-chat/first-party-versions.json"
       - "scripts/docker/**"
       - "scripts/release/**"
       - ".github/workflows/deployment-smoke.yml"
 
 jobs:
-  clean-install-and-container:
+  fixed-cloud-image:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -53,66 +55,139 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: npm install --global npm@11.6.2
-      - name: Build registry-clean template and locks
+      - run: bun run release:cloud:check
+      - run: bun run cloud:package:check
+      - name: Build fixed-profile image
         run: |
-          node packages/create-or3-chat/scripts/build-template.mjs --generate-locks
-          node scripts/release/check-create-or3-chat.mjs --require-locks
-      - name: Clean npm install and production build
-        working-directory: packages/create-or3-chat/dist/template
+          version="$(node -p "require('./package.json').version")"
+          image="ghcr.io/saluana/or3-chat:$version"
+          docker build \
+            --build-arg SSR_AUTH_ENABLED=true \
+            --build-arg AUTH_PROVIDER=basic-auth \
+            --build-arg OR3_GUEST_ACCESS_ENABLED=false \
+            --build-arg OR3_SYNC_ENABLED=true \
+            --build-arg OR3_SYNC_PROVIDER=sqlite \
+            --build-arg OR3_STORAGE_ENABLED=true \
+            --build-arg NUXT_PUBLIC_STORAGE_PROVIDER=fs \
+            -t "$image" .
+          cat > "$RUNNER_TEMP/Dockerfile.unhealthy" <<EOF
+          FROM $image
+          CMD ["node", "-e", "process.exit(1)"]
+          EOF
+          docker build -f "$RUNNER_TEMP/Dockerfile.unhealthy" -t or3-cloud-unhealthy .
+      - name: Exercise managed local lifecycle
         run: |
-          npm ci
-          npm run build
-      - name: Create isolated smoke configuration
-        working-directory: packages/create-or3-chat/dist/template
-        run: |
-          node -e "require('node:fs').writeFileSync('.env', [
-            'SSR_AUTH_ENABLED=true',
-            'AUTH_PROVIDER=basic-auth',
-            'OR3_AUTH_PROVIDER=basic-auth',
-            'OR3_GUEST_ACCESS_ENABLED=false',
-            'OR3_BASIC_AUTH_JWT_SECRET=ci-only-jwt-secret-0123456789abcdef0123456789abcdef',
-            'OR3_BASIC_AUTH_REFRESH_SECRET=ci-only-refresh-secret-0123456789abcdef0123456789abcdef',
-            'OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=smoke@example.com',
-            'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=SmokePassword1234',
-            'OR3_ADMIN_JWT_SECRET=ci-only-admin-secret-0123456789abcdef0123456789abcdef',
-            'OR3_SYNC_ENABLED=true',
-            'OR3_CLOUD_SYNC_ENABLED=true',
-            'OR3_SYNC_PROVIDER=sqlite',
-            'OR3_STORAGE_ENABLED=true',
-            'OR3_CLOUD_STORAGE_ENABLED=true',
-            'NUXT_PUBLIC_STORAGE_PROVIDER=fs',
-            'OR3_STORAGE_FS_TOKEN_SECRET=ci-only-storage-secret-0123456789abcdef0123456789abcdef',
-            'OR3_ADMIN_USERNAME=smoke-admin',
-            'OR3_ADMIN_PASSWORD=SmokeAdminPassword1234',
-            'OR3_PUBLIC_DOMAIN=localhost',
-            'OR3_ALLOWED_ORIGINS=https://localhost',
-            'OR3_FORCE_HTTPS=true',
-            'OR3_TRUST_PROXY=true',
-            'OR3_STRICT_CONFIG=true',
-            ''
-          ].join('\n'), { mode: 0o600 })"
-      - name: Container health and persistence
-        working-directory: packages/create-or3-chat/dist/template
-        run: |
-          docker compose -f compose.yaml -f compose.public.yaml up --build -d
-          for attempt in $(seq 1 120); do
-            curl --fail --silent "http://127.0.0.1:3000/api/health?deep=true" && break
+          version="$(node -p "require('./package.json').version")"
+          image="ghcr.io/saluana/or3-chat:$version"
+          managed="$RUNNER_TEMP/or3-cloud-managed"
+          next_version="$(node -p "const [major, minor, patch] = process.argv[1].split('.'); major+'.'+minor+'.'+(Number(patch)+1)" "$version")"
+          OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true \
+            node packages/or3-cloud/dist/cli.mjs init "$managed" --local --port 3017 --admin-email smoke@example.com
+          curl --fail "http://127.0.0.1:3017/api/health?deep=true"
+          (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" doctor)
+          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
+          backup_output="$(cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" backup)"
+          echo "$backup_output"
+          backup_id="$(sed -n 's/^Backup \([^ ]*\) .*/\1/p' <<<"$backup_output")"
+          test -n "$backup_id"
+          (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" restore "$backup_id" --yes)
+          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" update --to "$next_version")
+          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" rollback --yes)
+          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          set +e
+          (cd "$managed" && OR3_CLOUD_TEST_IMAGE=or3-cloud-unhealthy OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" update --to "$next_version") > "$RUNNER_TEMP/update-failed.log" 2>&1
+          failed_update_status=$?
+          set -e
+          cat "$RUNNER_TEMP/update-failed.log"
+          test "$failed_update_status" -ne 0
+          grep -q 'restored' "$RUNNER_TEMP/update-failed.log"
+          for attempt in $(seq 1 60); do
+            curl --fail --silent "http://127.0.0.1:3017/api/health?deep=true" && break
             sleep 1
           done
-          curl --fail "http://127.0.0.1:3000/api/health?deep=true"
+          curl --fail "http://127.0.0.1:3017/api/health?deep=true"
+          printf '{"or3Version":"%s"}\n' "$version" > "$managed/or3-release.json"
+          printf '%s\n' \
+            "import basicAuth from 'or3-provider-basic-auth/nuxt'" \
+            "import sqlite from 'or3-provider-sqlite/nuxt'" \
+            "import fs from 'or3-provider-fs/nuxt'" > "$managed/or3.providers.generated.ts"
+          adopted="$RUNNER_TEMP/or3-cloud-adopted"
+          OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true \
+            node packages/or3-cloud/dist/cli.mjs adopt --from "$managed" "$adopted"
+          cp "$managed/.or3-smoke-state.json" "$adopted/.or3-smoke-state.json"
+          (cd "$adopted" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+      - name: Exercise public Caddy overlay
+        run: |
+          smoke="$RUNNER_TEMP/or3-cloud-public"
+          version="$(node -p "require('./package.json').version")"
+          image="ghcr.io/saluana/or3-chat:$version"
+          mkdir -p "$smoke"
+          cp packages/or3-cloud/assets/compose.yaml "$smoke/compose.yaml"
+          cp packages/or3-cloud/assets/compose.public.yaml "$smoke/compose.public.yaml"
+          cp packages/or3-cloud/assets/Caddyfile "$smoke/Caddyfile"
+          cat > "$smoke/.env" <<EOF
+          OR3_VERSION=$version
+          OR3_IMAGE=$image
+          OR3_COMPOSE_PROJECT=or3-cloud-public-smoke
+          OR3_VOLUME_NAME=or3-cloud-public-smoke-data
+          OR3_CADDY_DATA_VOLUME=or3-cloud-public-smoke-caddy-data
+          OR3_CADDY_CONFIG_VOLUME=or3-cloud-public-smoke-caddy-config
+          OR3_PORT=3018
+          SSR_AUTH_ENABLED=true
+          AUTH_PROVIDER=basic-auth
+          OR3_AUTH_PROVIDER=basic-auth
+          OR3_GUEST_ACCESS_ENABLED=false
+          OR3_BASIC_AUTH_JWT_SECRET=ci-only-jwt-secret-0123456789abcdef0123456789abcdef
+          OR3_BASIC_AUTH_REFRESH_SECRET=ci-only-refresh-secret-0123456789abcdef0123456789abcdef
+          OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=smoke@example.com
+          OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=SmokePassword1234
+          OR3_ADMIN_USERNAME=smoke@example.com
+          OR3_ADMIN_PASSWORD=SmokePassword1234
+          OR3_ADMIN_JWT_SECRET=ci-only-admin-secret-0123456789abcdef0123456789abcdef
+          OR3_SYNC_ENABLED=true
+          OR3_CLOUD_SYNC_ENABLED=true
+          OR3_SYNC_PROVIDER=sqlite
+          OR3_SQLITE_DB_PATH=/data/sync.sqlite
+          OR3_STORAGE_ENABLED=true
+          OR3_CLOUD_STORAGE_ENABLED=true
+          NUXT_PUBLIC_STORAGE_PROVIDER=fs
+          OR3_STORAGE_FS_ROOT=/data/storage
+          OR3_STORAGE_FS_TOKEN_SECRET=ci-only-storage-secret-0123456789abcdef0123456789abcdef
+          OR3_PUBLIC_DOMAIN=localhost
+          OR3_ALLOWED_ORIGINS=https://localhost
+          OR3_FORCE_HTTPS=true
+          OR3_TRUST_PROXY=true
+          EOF
+          chmod 600 "$smoke/.env"
+          docker compose --project-directory "$smoke" --env-file "$smoke/.env" -f "$smoke/compose.yaml" -f "$smoke/compose.public.yaml" up -d --wait --wait-timeout 180
           for attempt in $(seq 1 30); do
             curl --insecure --fail --silent "https://localhost/api/health?deep=true" && break
             sleep 1
           done
           curl --insecure --fail "https://localhost/api/health?deep=true"
-          OR3_SMOKE_URL=https://localhost NODE_TLS_REJECT_UNAUTHORIZED=0 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write
-          docker compose -f compose.yaml -f compose.public.yaml restart or3
+          OR3_SMOKE_URL=https://localhost NODE_TLS_REJECT_UNAUTHORIZED=0 \
+            node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write
+          docker compose --project-directory "$smoke" --env-file "$smoke/.env" \
+            -f "$smoke/compose.yaml" -f "$smoke/compose.public.yaml" restart or3
           for attempt in $(seq 1 60); do
-            curl --fail --silent "http://127.0.0.1:3000/api/health?deep=true" && break
+            curl --insecure --fail --silent "https://localhost/api/health?deep=true" && break
             sleep 1
           done
-          curl --fail "http://127.0.0.1:3000/api/health?deep=true"
-          OR3_SMOKE_URL=https://localhost NODE_TLS_REJECT_UNAUTHORIZED=0 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify
+          OR3_SMOKE_URL=https://localhost NODE_TLS_REJECT_UNAUTHORIZED=0 \
+            node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify
       - if: always()
-        working-directory: packages/create-or3-chat/dist/template
-        run: docker compose -f compose.yaml -f compose.public.yaml down --volumes
+        run: |
+          managed="$RUNNER_TEMP/or3-cloud-managed"
+          adopted="$RUNNER_TEMP/or3-cloud-adopted"
+          public="$RUNNER_TEMP/or3-cloud-public"
+          if [ -d "$managed" ]; then
+            docker compose --project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml" down --volumes 2>/dev/null || true
+          fi
+          if [ -d "$public" ]; then
+            docker compose --project-directory "$public" --env-file "$public/.env" -f "$public/compose.yaml" -f "$public/compose.public.yaml" down --volumes 2>/dev/null || true
+          fi
+          if [ -d "$adopted" ]; then
+            docker compose --project-directory "$adopted" --env-file "$adopted/.env" -f "$adopted/compose.yaml" down --volumes 2>/dev/null || true
+          fi

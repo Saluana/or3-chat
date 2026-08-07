@@ -167,7 +167,14 @@
         </div>
         <ClientOnly v-if="$slots.settings">
           <div class="chat-input-settings-btn shrink-0">
-            <UPopover>
+            <UPopover
+              v-model:open="settingsOpen"
+              :content="{
+                side: 'top',
+                sideOffset: 8,
+                collisionPadding: 8,
+              }"
+            >
               <UButton
                 v-bind="settingsButtonProps"
                 type="button"
@@ -178,10 +185,13 @@
               </UButton>
               <template #content>
                 <div
-                  class="max-h-[min(42rem,calc(100dvh-2rem))] w-[min(22rem,calc(100vw-2rem))] overscroll-contain overflow-y-auto p-4 [scrollbar-gutter:stable]"
+                  class="max-h-[min(42rem,calc(100dvh-2rem))] w-[min(22rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] min-w-0 overscroll-contain overflow-x-hidden overflow-y-auto p-3 sm:p-4 [scrollbar-gutter:stable]"
                   data-testid="external-agent-settings-scroll-region"
                 >
-                  <slot name="settings" />
+                  <slot
+                    name="settings"
+                    :close="closeSettings"
+                  />
                 </div>
               </template>
             </UPopover>
@@ -299,6 +309,7 @@ const input = ref<HTMLTextAreaElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const attachments = ref<ComposerAttachment[]>([]);
 const isDragging = ref(false);
+const settingsOpen = ref(false);
 const highlightedCommand = ref(0);
 const commandSuggestionsDismissed = ref(false);
 const pointerNavigationEnabled = ref(false);
@@ -341,6 +352,10 @@ const {
 } = useChatInputTheme(iconClose);
 const config = useOr3Config();
 const toast = useToast();
+
+function closeSettings() {
+  settingsOpen.value = false;
+}
 
 function submit() {
   if (

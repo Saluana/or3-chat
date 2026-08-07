@@ -1,120 +1,67 @@
-# Installation and operations
+# OR3 Cloud installation and operations
 
-This is the primary guide for running OR3 Chat locally or on a single VPS. For
-maintainers publishing `create-or3-chat`, see
-[Publish `create-or3-chat` and deploy it to a VPS](publish-and-vps.md).
+The supported self-hosted distribution is `@or3/cloud`. It runs the same
+versioned OR3 container on a local machine or on a single VPS, so the VPS does
+not need an OR3 source checkout, application `node_modules`, or a local Docker
+build.
 
-## Create a project
+The supported production profile is Basic Auth + SQLite sync + filesystem
+storage. Basic Auth protects OR3 itself; each user still needs an OpenRouter
+account or API key to use AI models.
 
-OR3 Chat requires Node.js 24 or newer. Use either package manager:
+## Prerequisites
 
-```bash
-npm create or3-chat@latest
-bun create or3-chat@latest
-```
-
-Both commands create the same versioned, editable application source. The
-initializer detects the invoking package manager; `--pm npm` and `--pm bun`
-override detection.
-
-The complete non-interactive interface is:
-
-```text
-create-or3-chat [directory]
-  --mode personal|self-hosted|custom
-  --target dev|docker|configure
-  --ui | --cli
-  --pm npm|bun
-  --domain <hostname>
-  --fast
-  --admin-email <email>
-  --admin-password <password>
-  --admin-password-file <path>
-  --yes
-  --skip-install
-  --no-git
-  --no-open
-```
-
-The initializer refuses to overwrite a non-empty directory. Once the generated
-directory is handed to you, an interrupted dependency install or setup is
-resumed in place with `npm run setup` or `bun run setup`.
-
-Each generated project includes `or3-release.json`, which records the exact
-OR3 and creator version plus the source commit used to build the template.
-Keep that file with support requests and check it before an upgrade. Pin a
-known creator version (for example, `npm create or3-chat@<version>`) when
-reproducibility matters; do not assume `@latest` matches an unreleased branch.
-
-## Personal local
-
-Personal mode stores conversations and settings in the browser. It does not
-configure server authentication, sync, or file storage. The initializer applies
-the defaults, starts OR3 on `http://127.0.0.1:3000`, waits for
-`/api/health`, and opens the browser when a graphical session is available.
-
-## Private Docker
-
-The recommended self-hosted stack is Basic Auth, SQLite, and filesystem
-storage. Apply and deploy from the wizard, or use the generated scripts:
-
-```bash
-npm run docker:up
-npm run docker:logs
-npm run docker:down
-```
-
-The application binds to `127.0.0.1:3000`. Persistent authentication, sync, and
-upload data is mounted at `/data` in a project-scoped named volume (usually
-`<project-folder>_or3-data`). Secrets are read from `.env` when the container
-starts and are not copied into the image.
-
-## Public VPS with HTTPS and Caddy
-
-This is the recommended single-server deployment. It uses Docker Compose and
-the generated Caddy service: Caddy owns public ports 80 and 443, terminates
-HTTPS, and proxies to OR3 on its private Compose network. Do not install a
-second Caddy or another web server on the host, and do not expose port 3000
-publicly.
-
-### Before you connect
-
-Use a Linux VPS with a public IPv4 address. Two CPU cores, 4 GB of RAM, and
-20 GB of disk is a comfortable starting point because the initial Docker image
-build can use substantial memory.
-
-1. Create an `A` record, such as `chat.example.com`, pointing to the VPS IPv4
-   address. Add an `AAAA` record only if IPv6 is correctly routed to the host.
-2. Open inbound TCP ports 22, 80, and 443 in the VPS provider firewall. UDP
-   443 is optional and enables HTTP/3.
-3. Connect with an SSH key and use a non-root sudo user.
-
-Install Docker Engine and the Compose plugin using Docker's instructions for
-your distribution—for Debian, use the [official Debian guide](https://docs.docker.com/engine/install/debian/),
-not the Ubuntu package names. Confirm that `docker compose version` reports
-Compose v2.
-Then let your user run Docker and reconnect:
-
-```bash
-sudo usermod -aG docker "$USER"
-exit
-```
-
-After reconnecting, install Node.js 24 or newer from a trusted distribution
-and confirm the prerequisites:
+Install Docker Engine and Docker Compose v2. Node.js 24+ is needed only for
+`npx` to download and invoke the operator CLI. Verify:
 
 ```bash
 docker version
 docker compose version
 node --version
-npm --version
+npx --version
 ```
 
-### Host firewall
+The OR3 container owns application dependencies. Do not run `npm install` in
+the deployment directory.
 
-Use one firewall manager. If you manage nftables directly, do not enable UFW
-as well. Your existing input chain needs loopback and established-connection
-rules plus access for SSH, HTTP, and HTTPS:
+## Run locally
+
+This keeps OR3 private on the local machine and does not install Caddy:
+
+```bash
+npx @or3/cloud init --local \
+  --admin-email you@example.com
+```
+
+The command generates a bootstrap password and writes it to a mode-`0600`
+`.or3-initial-credentials` file. Save it in a password manager, then remove
+that file. The same credentials enable the OR3 admin panel at `/admin`. Open
+`http://127.0.0.1:3000`; use `--port 3100` if needed.
+
+For automation, pass `--admin-password-file /path/to/password` (preferred) or
+`--admin-password 'A-valid-password'`. The file option avoids putting a secret
+in shell history and the CLI never prints either value.
+
+Useful commands run from the deployment directory:
+
+```bash
+npx @or3/cloud doctor
+npx @or3/cloud backup
+npx @or3/cloud update
+npx @or3/cloud rollback --yes
+npx @or3/cloud recover
+```
+
+## Public VPS with Caddy
+
+Use a Linux VPS with at least two CPU cores, 4 GB RAM, and 20 GB disk. Create
+an `A` record such as `cloud.example.com` pointing at the VPS before starting
+public mode. Open TCP 22, 80, and 443 in the VPS provider firewall; UDP 443 is
+optional for HTTP/3.
+
+The installer never changes the host firewall. Use exactly one firewall
+manager. If the host uses nftables, add equivalent rules to the existing input
+chain before its final drop/reject rule:
 
 ```nft
 ct state established,related accept
@@ -124,202 +71,145 @@ tcp dport { 80, 443 } accept
 udp dport 443 accept
 ```
 
-Adjust this to match your host's existing nftables table, chain, and SSH port.
-Put the accept rules before your final drop/reject rule. Validate a changed
-ruleset before applying it and keep a provider-console session available so a
-mistake cannot lock you out:
+Validate and apply your existing ruleset from a provider-console session:
 
 ```bash
 sudo nft -c -f /etc/nftables.conf
 sudo nft -f /etc/nftables.conf
 ```
 
-The UDP rule is optional. If you use UFW instead, allow `OpenSSH`, `80/tcp`,
-`443/tcp`, and optionally `443/udp`. OR3 never modifies the host firewall;
-choose one firewall manager and make these changes yourself.
+If the host uses UFW instead, allow `OpenSSH`, `80/tcp`, `443/tcp`, and
+optionally `443/udp`. Do not enable UFW alongside a directly managed nftables
+policy.
 
-### Cloudflare DNS (optional)
+Start the public deployment:
 
-For the least surprising first deployment, create the `A` record as **DNS
-only** (grey cloud), deploy OR3, and verify Caddy's certificate directly. You
-can then enable Cloudflare proxying (orange cloud) and set Cloudflare
-**SSL/TLS encryption mode** to **Full (strict)**. Do not use Flexible mode: it
-can create HTTPS redirect loops with Caddy.
+```bash
+npx @or3/cloud init --public \
+  --domain cloud.example.com \
+  --admin-email you@example.com
+```
+
+Caddy owns ports 80 and 443 and proxies to OR3 over the private Compose
+network. OR3 remains bound to `127.0.0.1:3000`; there is no public firewall
+rule for port 3000.
+
+Verify:
+
+```bash
+npx @or3/cloud doctor
+curl --fail --show-error 'https://cloud.example.com/api/health?deep=true'
+```
+
+Open the domain, sign in, send a test message, and upload a small file.
+
+### Cloudflare
+
+For the first deployment, use DNS-only (grey cloud) until Caddy has obtained a
+certificate. If you enable the Cloudflare proxy afterward, set SSL/TLS mode to
+**Full (strict)**. Do not use Flexible mode; it can create HTTPS redirect
+loops. Keep origin TCP 80 available for Caddy redirects and ACME challenges.
 
 If you later restrict the origin firewall, allow Cloudflare's current published
-IP ranges on ports 80 and 443 rather than copying a stale range list into this
-guide. Keep TCP 80 available at the origin; Caddy uses it for HTTP-to-HTTPS
-redirects and certificate challenges.
+IP ranges rather than copying an old list into this guide.
 
-### Create and launch OR3
+### Tailscale
 
-On the VPS, run:
+Local mode is already loopback-only. To expose it privately through Tailscale,
+use your own Tailscale Serve configuration to proxy to
+`http://127.0.0.1:3000`; do not expose OR3 directly on a Tailscale IP without
+matching its trusted-origin and HTTPS settings. The Cloud CLI intentionally
+does not modify Tailscale state.
 
-```bash
-mkdir -p "$HOME/apps"
-cd "$HOME/apps"
-npm create or3-chat@latest my-chat -- \
-  --mode self-hosted \
-  --target docker \
-  --domain chat.example.com \
-  --cli
-```
+## Updates
 
-Replace `chat.example.com` with the DNS name you created. The wizard selects
-the remaining configuration. For a straightforward self-hosted installation,
-choose Basic Auth, SQLite, and filesystem storage; use a real administrator
-email. Generated credentials are saved only in a mode-`0600`
-`.or3-initial-credentials` file, not printed in the terminal. Move them to a
-password manager and delete that file.
-
-The wizard creates `.env`, `compose.yaml`, `compose.public.yaml`, and a
-`Caddyfile`, then starts the stack. Runtime secrets stay in `.env`; persistent
-authentication, sync, and upload data is stored in a project-scoped Docker
-volume mounted at `/data`.
-
-If the initializer was run without applying the deployment, start it manually:
+Run updates from the managed deployment directory:
 
 ```bash
-cd "$HOME/apps/my-chat"
-docker compose -f compose.yaml -f compose.public.yaml up --build -d --wait --wait-timeout 120
+npx @or3/cloud update
 ```
 
-Caddy obtains and renews HTTPS certificates after the domain resolves to the
-server. A public domain is a hostname, not a URL. Caddy needs TCP 80 and 443;
-there is no separate firewall rule for port 3000.
+The CLI records the exact image version and digest, stops OR3 briefly to make a
+consistent `/data` backup, pulls the new image, waits for Compose and deep
+health, and keeps the previous image/data snapshot as the immediate rollback
+point. If the new version fails deep health, it restores the previous version
+and snapshot automatically.
 
-For unattended setup, the creator also accepts the fast path in one command.
-It requires a real admin email and generates a password into the private
-credentials file. Avoid `--admin-password` unless a non-interactive system
-requires it, because command-line arguments can be captured in shell history
-or process listings. Use `--admin-password-file /run/secrets/or3-password`
-when your deployment system provides a secret file.
+To target a specific published version:
 
 ```bash
-npm create or3-chat@latest my-chat -- \
-  --mode self-hosted \
-  --target docker \
-  --domain chat.example.com \
-  --fast \
-  --admin-email admin@example.com \
-  --cli
+npx @or3/cloud update --to 0.1.12
 ```
 
-### Verify and operate
+Do not use `docker compose down --volumes` during normal operation or upgrades;
+that deletes the authentication database, SQLite data, and uploaded files.
+
+## Backups and recovery
+
+Create a verified archive:
 
 ```bash
-cd "$HOME/apps/my-chat"
-docker compose -f compose.yaml -f compose.public.yaml ps
-curl --fail --show-error "https://chat.example.com/api/health?deep=true"
+npx @or3/cloud backup
 ```
 
-Open the hostname in a browser, sign in, send a test message, and upload a
-small file. Basic Auth protects OR3 itself; it does not provide AI credits.
-Each user still connects an OpenRouter account or supplies an OpenRouter API
-key to use models.
-
-Useful operational commands:
+The archive contains account, conversation, and uploaded-file data. Protect it
+like a password database. Restore requires explicit confirmation:
 
 ```bash
-docker compose -f compose.yaml -f compose.public.yaml logs -f
-docker compose -f compose.yaml -f compose.public.yaml restart or3
-docker compose -f compose.yaml -f compose.public.yaml up --build -d --wait --wait-timeout 120
+npx @or3/cloud restore <backup-id> --yes
+npx @or3/cloud rollback --yes
 ```
 
-`docker compose down` removes containers and the network but retains data.
-Do not add `--volumes` unless you intend to delete the installation's data.
+Rollback restores the data snapshot associated with the previous version and
+can discard writes made after that update. After either operation, verify
+login, a conversation, and a previously uploaded file.
 
-## SSH
+If a command is interrupted, the deployment is intentionally locked. Review
+`doctor` and the printed logs, then run `npx @or3/cloud recover`; it resumes the
+recorded operation (or restores its recorded backup) and only clears the lock
+after deep health passes. If the `.env` no longer matches the recorded target,
+recovery refuses to guess and leaves the operation record for manual review.
 
-SSH and other headless sessions default to the terminal wizard:
+## Adopt an existing generated deployment
+
+Existing `create-or3-chat` projects are not overwritten. For the documented
+Basic Auth + SQLite + filesystem profile, create a separate managed deployment:
 
 ```bash
-npm run setup -- --cli
+npx @or3/cloud adopt \
+  --from "$HOME/apps/or3-cloud" \
+  "$HOME/apps/or3-cloud-managed"
 ```
 
-To use the browser wizard remotely:
-
-```bash
-npm run setup -- --ui
-```
-
-The command prints a loopback port and an SSH forwarding command in this form:
-
-```bash
-ssh -L 4173:127.0.0.1:4173 user@server
-```
-
-Run the tunnel on your computer, then open the printed `127.0.0.1` wizard URL.
-
-## Backups
-
-Stop the application, then use the Compose service to archive its own `/data`
-volume without needing to know Docker's generated volume name:
-
-```bash
-docker compose stop or3
-docker compose run --rm --no-deps --user 0:0 \
-  -v "$PWD:/backup" \
-  --entrypoint sh or3 \
-  -c 'tar czf /backup/or3-data-backup.tgz -C /data .'
-docker compose start or3
-```
-
-Restore into an empty project volume before starting OR3:
-
-```bash
-docker compose down
-docker compose run --rm --no-deps --user 0:0 \
-  -v "$PWD:/backup:ro" \
-  --entrypoint sh or3 \
-  -c 'find /data -mindepth 1 -delete && tar xzf /backup/or3-data-backup.tgz -C /data'
-docker compose up -d
-```
-
-Protect the archive: it contains account, conversation, and uploaded-file data.
-For a public deployment, include `-f compose.public.yaml` in each Compose
-command above so restore operations manage the complete public stack.
-After a restore, run the deep health check, sign in, and download a previously
-uploaded file before considering the backup usable.
-
-## Upgrades
-
-Before upgrading, create and verify a backup, record `or3-release.json`, and
-keep the existing project directory. Review the target release notes, update
-the generated project's dependencies with its chosen package manager, rerun
-the setup wizard to merge any new configuration, then rebuild and wait for
-health:
-
-```bash
-npm install
-npm run setup -- --cli
-docker compose -f compose.yaml -f compose.public.yaml up --build -d --wait --wait-timeout 120
-curl --fail --show-error "https://chat.example.com/api/health?deep=true"
-```
-
-Do not use `docker compose down --volumes` during an upgrade. Retain the backup
-until the restored service, sign-in, sync, and file upload checks pass.
+Adoption inspects the source first, backs up `.env` and `/data`, preserves the
+source directory, transfers data into a new named volume, and verifies deep
+health before reporting success. Custom, Clerk/Convex, S3, or modified
+provider layouts are refused before the source is stopped.
 
 ## Troubleshooting
 
-- Run `npm run doctor` or `bun run doctor` for configuration and path checks.
-- Check `docker compose -f compose.yaml -f compose.public.yaml logs -f` when
-  `/api/health?deep=true` is not healthy.
-- Free port 3000 or set `OR3_PORT` before starting private Docker.
-- A public domain must be a hostname, not a URL, and its DNS must resolve to the
-  server before Caddy can obtain a certificate.
-- Confirm that ports 80 and 443 are not occupied by another web server or
-  host-installed Caddy.
-- If Docker build reports `EAI_AGAIN` or cannot resolve `registry.npmjs.org`,
-  first test Docker's resolver with `docker run --rm busybox nslookup
-  registry.npmjs.org`. If it fails while host DNS works, merge known resolvers
-  into Docker's existing `/etc/docker/daemon.json`, restart Docker, and retry:
+```bash
+npx @or3/cloud doctor
+```
 
-  ```json
-  { "dns": ["1.1.1.1", "8.8.8.8"] }
-  ```
+The doctor checks Docker, Compose, file permissions, image/state consistency,
+deep health, loopback binding, public DNS, and Caddy ports. It reports the
+required nftables/UFW rules but never changes them.
 
-  A current OR3 Dockerfile retries registry downloads and retains the npm cache
-  across failed builds; do not delete the project after a transient failure.
-- If a registry, install, or image build fails, do not delete the project.
-  Correct the cause and rerun setup or the Docker command.
+If Docker cannot resolve `registry.npmjs.org` or GHCR while the host can, test
+Docker DNS first:
+
+```bash
+docker run --rm busybox nslookup registry.npmjs.org
+```
+
+Correct Docker's resolver and retry. Do not delete the managed directory or its
+named volume when a pull fails. Keep the `.or3-cloud/operations` record and
+run the diagnostics command printed by the CLI.
+
+## Developer/source installation
+
+If you need editable application source, custom providers, or a non-default
+backend, clone the repository and use the existing source-local wizard. That
+path is for contributors and advanced deployments; normal local/VPS operation
+should use `@or3/cloud`.

@@ -1,17 +1,31 @@
 <template>
-  <div class="space-y-4">
-    <div>
-      <h2 class="text-sm font-semibold">Agent settings</h2>
-      <p class="mt-0.5 text-xs text-[var(--md-on-surface-variant)]">
-        {{
-          runnerLocked
-            ? "Applies to your next message."
-            : "Configure this session."
-        }}
-      </p>
+  <div class="min-w-0 max-w-full space-y-4">
+    <div
+      class="sticky top-0 z-10 -mx-3 -mt-3 flex min-w-0 items-start justify-between gap-3 bg-[var(--md-surface)] px-3 pb-3 pt-3 sm:-mx-4 sm:-mt-4 sm:px-4 sm:pb-3 sm:pt-4"
+    >
+      <div class="min-w-0">
+        <h2 class="text-sm font-semibold">Agent settings</h2>
+        <p class="mt-0.5 text-xs text-[var(--md-on-surface-variant)]">
+          {{
+            runnerLocked
+              ? "Applies to your next message."
+              : "Configure this session."
+          }}
+        </p>
+      </div>
+      <UButton
+        type="button"
+        color="neutral"
+        variant="ghost"
+        size="xs"
+        square
+        :icon="iconClose"
+        aria-label="Close agent settings"
+        @click="$emit('close')"
+      />
     </div>
 
-    <label class="block space-y-1.5">
+    <label class="block min-w-0 space-y-1.5">
       <span
         class="flex items-center justify-between gap-2 text-xs font-semibold"
       >
@@ -29,7 +43,7 @@
         :items="runnerItems"
         value-key="value"
         label-key="label"
-        class="w-full"
+        class="w-full min-w-0"
         aria-label="External agent provider"
         :disabled="runnerLocked"
         @update:model-value="$emit('update:runnerId', String($event ?? ''))"
@@ -40,38 +54,47 @@
       v-if="selectedOption?.showMode || selectedOption?.showIsolation"
       class="grid gap-3 sm:grid-cols-2"
     >
-      <label v-if="selectedOption?.showMode" class="block space-y-1.5">
+      <label
+        v-if="selectedOption?.showMode"
+        class="block min-w-0 space-y-1.5"
+      >
         <span class="text-xs font-semibold">Mode</span>
         <USelectMenu
           :model-value="mode"
           :items="modeItems"
           value-key="value"
           label-key="label"
-          class="w-full"
+          class="w-full min-w-0"
           aria-label="External agent mode"
           @update:model-value="$emit('update:mode', String($event ?? ''))"
         />
       </label>
-      <label v-if="selectedOption?.showIsolation" class="block space-y-1.5">
+      <label
+        v-if="selectedOption?.showIsolation"
+        class="block min-w-0 space-y-1.5"
+      >
         <span class="text-xs font-semibold">Isolation</span>
         <USelectMenu
           :model-value="isolation"
           :items="isolationItems"
           value-key="value"
           label-key="label"
-          class="w-full"
+          class="w-full min-w-0"
           aria-label="External agent isolation"
           @update:model-value="$emit('update:isolation', String($event ?? ''))"
         />
       </label>
     </div>
 
-    <label v-if="selectedOption?.showWorkspace" class="block space-y-1.5">
+    <label
+      v-if="selectedOption?.showWorkspace"
+      class="block min-w-0 space-y-1.5"
+    >
       <span class="text-xs font-semibold">Workspace root</span>
       <UInput
         v-if="selectedOption?.customCwd"
         :model-value="cwd"
-        class="w-full"
+        class="w-full min-w-0"
         placeholder="Host workspace path (optional)"
         aria-label="External agent workspace root"
         @update:model-value="$emit('update:cwd', String($event ?? ''))"
@@ -82,7 +105,7 @@
         :items="rootItems"
         value-key="value"
         label-key="label"
-        class="w-full"
+        class="w-full min-w-0"
         aria-label="External agent workspace root"
         @update:model-value="$emit('update:cwd', String($event ?? ''))"
       />
@@ -94,7 +117,10 @@
       </span>
     </label>
 
-    <label v-if="modelItems.length" class="block space-y-1.5">
+    <label
+      v-if="modelItems.length"
+      class="block min-w-0 space-y-1.5"
+    >
       <span class="text-xs font-semibold">Model</span>
       <USelectMenu
         :model-value="selectedModelValue"
@@ -102,7 +128,7 @@
         virtualize
         value-key="value"
         label-key="label"
-        class="w-full"
+        class="w-full min-w-0"
         aria-label="External agent model"
         @update:model-value="setModel"
       />
@@ -115,14 +141,17 @@
       </span>
     </label>
 
-    <label v-if="reasoningItems.length" class="block space-y-1.5">
+    <label
+      v-if="reasoningItems.length"
+      class="block min-w-0 space-y-1.5"
+    >
       <span class="text-xs font-semibold">Reasoning</span>
       <USelectMenu
         :model-value="selectedReasoningValue"
         :items="reasoningItems"
         value-key="value"
         label-key="label"
-        class="w-full"
+        class="w-full min-w-0"
         aria-label="External agent reasoning level"
         @update:model-value="setThinkingLevel"
       />
@@ -154,6 +183,7 @@ import type { ExternalAgentRunner } from "~/core/external-agents/types";
 import { useIcon } from "~/composables/useIcon";
 
 const iconLock = useIcon("ui.lock");
+const iconClose = useIcon("ui.close");
 
 const HOST_DEFAULT_MODEL_VALUE = "host_default";
 const MODEL_DEFAULT_REASONING_VALUE = "model_default";
@@ -174,6 +204,7 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
+  close: [];
   "update:runnerId": [value: string];
   "update:mode": [value: string];
   "update:isolation": [value: string];

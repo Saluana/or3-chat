@@ -49,6 +49,7 @@ const mocks = vi.hoisted(() => ({
   refreshCloudHosts: vi.fn(),
   newPaneForApp: vi.fn(),
   setPaneApp: vi.fn(),
+  closeSidebarIfMobile: vi.fn(),
 }));
 
 function deferred<T>() {
@@ -76,6 +77,10 @@ vi.mock("~/utils/multiPaneApi", () => ({
     newPaneForApp: mocks.newPaneForApp,
     setPaneApp: mocks.setPaneApp,
   }),
+}));
+
+vi.mock("~/utils/sidebarLayoutApi", () => ({
+  closeSidebarIfMobile: mocks.closeSidebarIfMobile,
 }));
 
 vi.mock("~/composables/sidebar/useActiveSidebarPage", () => ({
@@ -491,7 +496,23 @@ describe("External Agents components", () => {
         remoteSessionId: "session-1",
       }),
     });
+    expect(mocks.closeSidebarIfMobile).toHaveBeenCalledTimes(1);
     expect(mocks.newPaneForApp).not.toHaveBeenCalled();
+  });
+
+  it("closes the mobile sidebar when starting a new agent", async () => {
+    const wrapper = mount(ExternalAgentsSidebarPage, { global });
+    await flushPromises();
+
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("New agent"))
+      ?.trigger("click");
+
+    expect(mocks.setPaneApp).toHaveBeenCalledWith(0, "or3-external-agent", {
+      recordId: "new",
+    });
+    expect(mocks.closeSidebarIfMobile).toHaveBeenCalledTimes(1);
   });
 
   it("offers opt-in PIN encryption with an explicit offline-attack warning", async () => {
@@ -1648,8 +1669,13 @@ describe("External Agents components", () => {
     expect(region.classes()).toContain(
       "max-h-[min(42rem,calc(100dvh-2rem))]",
     );
+    expect(region.classes()).toContain("max-w-[calc(100vw-2rem)]");
+    expect(region.classes()).toContain("overflow-x-hidden");
     expect(region.classes()).toContain("overflow-y-auto");
     expect(region.classes()).toContain("overscroll-contain");
+    expect(
+      wrapper.find('[aria-label="Close agent settings"]').exists(),
+    ).toBe(true);
   });
 
   it("submits the runner's authoritative model id without inventing a provider prefix", async () => {

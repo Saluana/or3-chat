@@ -38,11 +38,10 @@ const qualifiedFirstPartyVersions = JSON.parse(
 );
 
 if (
-    rootManifest.version !== creatorManifest.version ||
     rootManifest.version !== templateManifest.version
 ) {
     throw new Error(
-        `Release versions differ: OR3=${rootManifest.version}, creator=${creatorManifest.version}, template=${templateManifest.version}.`
+        `Release versions differ: OR3=${rootManifest.version}, template=${templateManifest.version}.`
     );
 }
 

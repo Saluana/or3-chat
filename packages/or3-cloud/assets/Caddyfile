@@ -1,0 +1,7 @@
+{$OR3_PUBLIC_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy or3:3000 {
+		# Preserve incremental SSE/chat output instead of buffering it at the proxy.
+		flush_interval -1
+	}
+}
