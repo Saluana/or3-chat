@@ -73,4 +73,35 @@ describe('static generation provider import boundary', () => {
         expect(fsObservations.generatedProviderReads).toBe(1);
         expect(fsObservations.providerPackageChecks.length).toBeGreaterThan(0);
     });
+
+    it('exposes configured OpenRouter browser auth settings', async () => {
+        vi.stubEnv(
+            'NUXT_PUBLIC_OPENROUTER_REDIRECT_URI',
+            'https://chat.example.com/openrouter-callback'
+        );
+        vi.stubEnv('NUXT_PUBLIC_OPENROUTER_CLIENT_ID', 'or3-client');
+        vi.stubEnv('NUXT_PUBLIC_OPENROUTER_AUTH_URL', 'https://login.example.com');
+        vi.resetModules();
+
+        const { default: nuxtConfig } = await import('../../nuxt.config');
+        expect(nuxtConfig.runtimeConfig.public.openRouterRedirectUri).toBe(
+            'https://chat.example.com/openrouter-callback'
+        );
+        expect(nuxtConfig.runtimeConfig.public.openRouterClientId).toBe(
+            'or3-client'
+        );
+        expect(nuxtConfig.runtimeConfig.public.openRouterAuthUrl).toBe(
+            'https://login.example.com'
+        );
+    });
+
+    it('exposes the configured Connect origin for copyable setup commands', async () => {
+        vi.stubEnv('OR3_CONNECT_PUBLIC_URL', 'https://chat.example.com');
+        vi.resetModules();
+
+        const { default: nuxtConfig } = await import('../../nuxt.config');
+        expect(nuxtConfig.runtimeConfig.public.connect.publicUrl).toBe(
+            'https://chat.example.com'
+        );
+    });
 });

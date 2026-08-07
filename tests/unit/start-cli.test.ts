@@ -5,10 +5,11 @@ import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import {
     CLOUD_SETUP_ARGS,
-    LOCAL_MODE_ENV_CONTENTS,
+    LOCAL_MODE_STATE_CONTENTS,
+    LOCAL_MODE_STATE_PATH,
     shouldAskModeChoice,
     writeLocalModeMarker,
-} from '../../scripts/cli/start';
+} from '../../scripts/cli/start.mjs';
 
 describe('bun start mode choice', () => {
     let cwd: string;
@@ -35,17 +36,17 @@ describe('bun start mode choice', () => {
         expect(shouldAskModeChoice(cwd)).toBe(false);
     });
 
-    it('writes a local-mode .env marker so the next start skips the prompt', async () => {
+    it('writes a local-mode state marker without creating an environment file', async () => {
         const path = writeLocalModeMarker(cwd);
-        expect(path).toBe(join(cwd, '.env'));
+        expect(path).toBe(join(cwd, LOCAL_MODE_STATE_PATH));
         expect(existsSync(path)).toBe(true);
         const contents = await readFile(path, 'utf8');
-        expect(contents).toBe(LOCAL_MODE_ENV_CONTENTS);
-        expect(contents).toContain('SSR_AUTH_ENABLED=false');
+        expect(contents).toBe(LOCAL_MODE_STATE_CONTENTS);
+        expect(existsSync(join(cwd, '.env'))).toBe(false);
         expect(shouldAskModeChoice(cwd)).toBe(false);
     });
 
-    it('hands cloud setup the self-hosted mode flag', () => {
-        expect([...CLOUD_SETUP_ARGS]).toEqual(['--mode', 'self-hosted']);
+    it('hands cloud setup to the managed local installer', () => {
+        expect([...CLOUD_SETUP_ARGS]).toEqual(['init', '--local']);
     });
 });

@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 const execFile = promisify(execFileCallback);
 
-export const PACKAGE_VERSION = '0.1.12';
+export const PACKAGE_VERSION = '0.1.13';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -209,6 +209,26 @@ export function parseFlags(argv: string[]) {
     }
   }
   return { positionals, flags };
+}
+
+const COMMAND_FLAGS: Record<string, readonly string[]> = {
+  init: ['local', 'public', 'domain', 'admin-email', 'admin-password', 'admin-password-file', 'port'],
+  update: ['to'],
+  backup: [],
+  restore: ['yes'],
+  rollback: ['yes'],
+  doctor: [],
+  recover: [],
+  adopt: ['from'],
+};
+
+/** Reject typos before they can silently produce an unexpected deployment. */
+export function assertCommandFlags(command: string, flags: Flags) {
+  const allowed = new Set(['help', ...(COMMAND_FLAGS[command] ?? [])]);
+  const unknown = Object.keys(flags).filter((flag) => !allowed.has(flag));
+  if (unknown.length > 0) {
+    throw new Error(`Unknown option${unknown.length === 1 ? '' : 's'} for ${command}: ${unknown.map((flag) => `--${flag}`).join(', ')}. Run npx @or3/cloud ${command} --help.`);
+  }
 }
 
 function stringFlag(flags: Flags, key: string) {
@@ -529,9 +549,18 @@ async function waitForDeepHealth(directory: string, mode: Mode, secrets: string[
 }
 
 async function pullImage(image: string) {
-  if (process.env.OR3_CLOUD_SKIP_PULL !== 'true') {
+  const local = await run('docker', ['image', 'inspect', image]);
+  if (!local.ok && process.env.OR3_CLOUD_SKIP_PULL !== 'true') {
     const result = await run('docker', ['pull', image]);
-    if (!result.ok) throw new Error(`${result.command}\n${result.stderr}`);
+    if (!result.ok) {
+      const detail = result.stderr.trim();
+      if (/(not found|manifest unknown|pull access denied)/i.test(detail)) {
+        throw new Error(`The matching OR3 container image is not published yet: ${image}. This is a release issue, not a problem with your computer. Try again after the image release completes. ${detail}`);
+      }
+      throw new Error(`Could not download ${image}. Check your internet connection and Docker registry access, then retry. ${detail}`);
+    }
+  } else if (!local.ok) {
+    throw new Error(`${image} is not available locally and OR3_CLOUD_SKIP_PULL=true prevents downloading it.`);
   }
   return imageDigest(image);
 }
@@ -1235,7 +1264,7 @@ async function updateCommand(directory: string, flags: Flags) {
   assertNoPending(state);
   await waitForDeepHealth(loaded.directory, state.mode, secretValues(env));
   const targetVersion = stringFlag(flags, 'to')?.trim() ?? PACKAGE_VERSION;
-  if (!isVersion(targetVersion)) throw new Error('--to must be a complete semantic version such as 0.1.12.');
+  if (!isVersion(targetVersion)) throw new Error('--to must be a complete semantic version such as 0.1.13.');
   if (targetVersion === state.appVersion) throw new Error(`The deployment is already on OR3 ${targetVersion}.`);
   const targetImage = imageFor(targetVersion);
   const targetDigest = await pullImage(targetImage);
@@ -1725,6 +1754,8 @@ async function main(argv = process.argv.slice(2)) {
   if (command === '--version' || command === 'version') return console.log(PACKAGE_VERSION);
   const parsed = parseFlags(rest);
   try {
+    if (parsed.flags.help) return help();
+    assertCommandFlags(command, parsed.flags);
     if (command === 'init') return await initCommand(parsed.positionals, parsed.flags);
     if (command === 'update') return await updateCommand(process.cwd(), parsed.flags);
     if (command === 'backup') return await backupCommand(process.cwd());

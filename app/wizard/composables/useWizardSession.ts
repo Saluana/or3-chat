@@ -828,6 +828,7 @@ export function useWizardSession() {
                     createBackup: !answers.value.skipWriteBackup,
                     strict: answers.value.strictConfig,
                     skipDeploy: input.skipDeploy,
+                    installDependencies: !input.skipDeploy,
                 },
             });
             deployResponse.value = response;
@@ -836,7 +837,7 @@ export function useWizardSession() {
             if (input.dryRun) {
                 statusMessage.value = 'Validation passed.';
             } else if (input.skipDeploy) {
-                statusMessage.value = 'Settings applied.';
+                statusMessage.value = 'Settings saved.';
             } else if (response.deployResult?.accessUrl) {
                 statusMessage.value = 'Deployment completed.';
             } else {

@@ -498,11 +498,7 @@ function ensurePresetLocalSecrets(answers: WizardAnswers): WizardAnswers {
         answers.basicAuthBootstrapPassword?.trim() ||
         answers.adminPassword?.trim() ||
         generateAdminPassword(24);
-    const bootstrapEmail =
-        answers.basicAuthBootstrapEmail?.trim() ||
-        (answers.wizardMode === 'preset-local-fast'
-            ? 'admin@example.com'
-            : undefined);
+    const bootstrapEmail = answers.basicAuthBootstrapEmail?.trim();
 
     return {
         ...answers,

@@ -181,12 +181,15 @@ export function rewriteTemplateManifest(manifest) {
         engines: { node: '>=24' },
         scripts: {
             build: 'nuxt build',
-            start: 'tsx scripts/cli/start.ts',
+            start: 'node scripts/cli/start.mjs',
             dev: 'tsx scripts/cli/dev.ts',
             'dev:ssr':
                 'tsx scripts/cli/dev.ts --or3-ssr --host 127.0.0.1 --port 3000',
             'dev:offline': 'tsx scripts/cli/dev.ts --or3-offline',
+            generate: 'nuxt generate',
+            'generate:static': 'tsx scripts/cli/nuxt-task.ts generate-static',
             preview: 'nuxt preview',
+            'preview:static': 'npx --yes serve .output/public -l 4173',
             postinstall: 'nuxt prepare',
             setup: 'tsx scripts/cli/or3-cloud.ts init',
             doctor: 'tsx scripts/cli/or3-cloud.ts doctor',

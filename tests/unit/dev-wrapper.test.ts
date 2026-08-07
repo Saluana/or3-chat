@@ -31,6 +31,27 @@ describe('dev wrapper script wiring', () => {
     });
 
     it('keeps `start` as the one-command entry', () => {
-        expect(pkg.scripts.start).toBe('tsx scripts/cli/start.ts');
+        expect(pkg.scripts.start).toBe('node scripts/cli/start.mjs');
+    });
+
+    it('keeps a fresh source checkout independent of sibling repositories', () => {
+        const firstPartyVersions = JSON.parse(
+            readFileSync(
+                join(
+                    process.cwd(),
+                    'packages/create-or3-chat/first-party-versions.json'
+                ),
+                'utf-8'
+            )
+        ) as Record<string, string>;
+        const dependencies = JSON.parse(
+            readFileSync(join(process.cwd(), 'package.json'), 'utf-8')
+        ).dependencies as Record<string, string>;
+
+        for (const [name, version] of Object.entries(firstPartyVersions)) {
+            if (name in dependencies) {
+                expect(dependencies[name]).toBe(version);
+            }
+        }
     });
 });

@@ -12,6 +12,7 @@ import {
     type H3Event,
 } from 'h3';
 import crossSpawn from 'cross-spawn';
+import { lookup } from 'node:dns/promises';
 import { Socket } from 'node:net';
 import { useRuntimeConfig } from '#imports';
 import { Or3CloudWizardApi } from '../../shared/cloud/wizard/api';
@@ -71,6 +72,57 @@ function toStringOrUndefined(value: unknown): string | undefined {
 function toBoolean(value: unknown, fallback: boolean): boolean {
     if (typeof value === 'boolean') return value;
     return fallback;
+}
+
+/** Saving settings is deliberately side-effect free beyond the settings files. */
+export function shouldInstallWizardDependencies(input: {
+    skipDeploy?: boolean;
+    installDependencies?: boolean;
+}): boolean {
+    return input.skipDeploy === true
+        ? false
+        : toBoolean(input.installDependencies, true);
+}
+
+/**
+ * Public Docker deployment needs DNS and the Caddy ports before we write a
+ * config or start a build. This catches the common two-hour failure up front.
+ */
+export async function assertPublicDockerPreflight(
+    answers: Pick<
+        WizardAnswers,
+        'deploymentTarget' | 'dockerExposure' | 'publicDomain'
+    >,
+    options: {
+        lookupDomain?: (domain: string) => Promise<{ address: string }>;
+        portInUse?: (port: number) => Promise<boolean>;
+    } = {}
+): Promise<void> {
+    if (
+        answers.deploymentTarget !== 'docker' ||
+        answers.dockerExposure !== 'public'
+    ) {
+        return;
+    }
+
+    const domain = answers.publicDomain?.trim();
+    if (!domain) return;
+    try {
+        await (options.lookupDomain ?? lookup)(domain);
+    } catch {
+        throw new Error(
+            `DNS for ${domain} does not resolve from this machine. Create its A/AAAA record before deploying; no settings were changed.`
+        );
+    }
+
+    const portInUse = options.portInUse ?? ((port: number) => isPortListening(port, '127.0.0.1'));
+    for (const port of [80, 443]) {
+        if (await portInUse(port)) {
+            throw new Error(
+                `Public port ${port} is already in use. Stop the conflicting service before deploying OR3 publicly; no settings were changed.`
+            );
+        }
+    }
 }
 
 function parseDeploymentTarget(
@@ -417,7 +469,10 @@ export async function runWizardDeploy(
     const packageManager = parseInstallPackageManager(
         options.packageManager ?? answers.packageManager
     );
-    const installDependencies = toBoolean(options.installDependencies, true);
+    // "Apply Only" must only write the selected configuration. In particular,
+    // it must never run a package install or patch node_modules behind the
+    // user's back.
+    const installDependencies = shouldInstallWizardDependencies(options);
 
     const validation = await api.validate(
         sessionId,
@@ -429,6 +484,10 @@ export async function runWizardDeploy(
             ok: false,
             validation,
         };
+    }
+
+    if (!dryRun && !options.skipDeploy) {
+        await assertPublicDockerPreflight(answers);
     }
 
     const installPlan = createDependencyInstallPlan(answers);

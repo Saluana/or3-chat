@@ -159,7 +159,7 @@
                 @click="$emit('validate')"
             />
             <UButton
-                label="Apply Only"
+                label="Save Settings"
                 variant="outline"
                 :loading="isDeploying"
                 :disabled="isDeploying"
@@ -242,7 +242,7 @@ const successBanner = computed(() => {
     if (apply?.dryRun) {
         return {
             title: 'Validation passed',
-            body: 'Your configuration looks good. Nothing was written yet — use Apply Only or Apply + Deploy when you are ready.',
+            body: 'Your configuration looks good. Nothing was written yet — use Save Settings or Apply + Deploy when you are ready.',
         };
     }
     if (props.deployResponse.deployResult) {
@@ -252,7 +252,7 @@ const successBanner = computed(() => {
         };
     }
     return {
-        title: 'Settings applied',
+        title: 'Settings saved',
         body: buildApplyOnlySuccessBody(
             props.answers.connectEnabled,
             props.answers.packageManager

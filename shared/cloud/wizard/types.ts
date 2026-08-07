@@ -40,7 +40,7 @@ export type WizardPresetName = 'recommended' | 'legacy-clerk-convex' | string;
 export type WizardMode =
     | 'personal-local'
     | 'preset-local'
-    /** Recommended stack with zero guided questions (auto credentials). */
+    /** Legacy recommended mode retained only to reopen earlier sessions. */
     | 'preset-local-fast'
     | 'preset-clerk-convex'
     | 'custom';

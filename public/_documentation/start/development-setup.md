@@ -1,20 +1,20 @@
 # Development Environment Setup
 
-Step-by-step instructions for getting OR3 running locally. This guide covers cloning the repository, installing dependencies with Bun, configuring required environment variables, starting the Nuxt 4 dev server, and debugging the Tailwind-powered UI.
+One command gets a source checkout running locally. No API key, `.env` file, or
+manual dependency install is required for the local-first app.
 
 ---
 
 ## 1. Prerequisites
 
-Make sure the following tools are installed before you start:
+You need only:
 
--   **Node.js 24+** (the OR3 production baseline). Verify with `node -v`.
--   **Bun 1.1+** (project uses `bun.lockb`). Install from [bun.sh](https://bun.sh) and verify with `bun -v`.
--   **Git 2.40+** for cloning and keeping your fork up to date.
--   A modern browser (Chromium, Firefox, or Safari) for IndexedDB + Nuxt DevTools.
--   Recommended editor: **VS Code** with the official Vue, TypeScript, and Tailwind CSS extensions.
+- **Node.js 24+**. Verify with `node -v`.
+- **Git** to clone the repository.
+- A modern browser.
 
-> **Using npm or pnpm instead?** Bun is the default, but `npm install` / `pnpm install` also work. Delete `bun.lockb` or regenerate your lockfile if you switch package managers.
+Bun is optional. It is the repository's canonical package manager, but the
+first-run command below works with the Node/npm that comes with Node.js.
 
 ---
 
@@ -33,30 +33,34 @@ The project expects the working directory to remain `or3-chat/`. Nuxt uses `app/
 
 ---
 
-## 3. Install dependencies
+## 3. Start OR3
 
 ```bash
-# Install node modules using Bun
-bun install
-
-# Bun automatically runs "postinstall" (nuxt prepare) after packages finish installing.
+npm start
 ```
 
-> **First run on macOS?** You may need to grant the terminal network access the first time Bun starts the dev server.
+That command installs dependencies on the first run, asks one question
+(local-first chat or managed Cloud), and starts the app. Later, run `npm start`
+again. If you use Bun, `bun start` follows the same flow.
 
-If you prefer npm/pnpm:
+Local-first mode needs no account or `.env` file. It stores data in the
+browser. Connect OpenRouter from the in-app onboarding when you are ready.
+
+For the managed local Cloud profile directly, run:
 
 ```bash
-npm install  # or pnpm install
+npx @or3/cloud init --local
 ```
 
-Nuxt 4 requires ESM; make sure your shell keeps `NODE_OPTIONS` clean (no CommonJS flags).
+This generates its own secure configuration and password; it does not need a
+source checkout or manually entered application environment variables.
 
 ---
 
-## 4. Configure environment variables
+## 4. Optional developer configuration
 
-OR3 talks directly to OpenRouter. Create a local env file so you do not commit secrets:
+You only need `.env` values when developing a specific integration. For
+example, an OpenRouter API key can be supplied to test server-side behavior:
 
 Edit `.env` (git-ignored) and set at least:
 
@@ -65,20 +69,19 @@ OPENROUTER_API_KEY=sk-or-xxxxxxxxxxxxxxxxxxxxxxxx
 OPENROUTER_MODEL=openai/gpt-oss-120b
 ```
 
-These are only used in developement mode for testing and are not required. Without them some tests may fail.
-
-Restart the dev server after changing environment files so Nuxt picks up new values.
+These are optional for normal local development. Restart the dev server after
+changing environment files so Nuxt picks them up.
 
 ---
 
-## 5. Start the Nuxt dev server
+## 5. Start the Nuxt dev server manually
 
 ```bash
-bun run dev
+npm run dev
 ```
 
 -   Nuxt serves the app at **http://localhost:3000/** by default.
--   Pass extra flags after `--` (e.g., `bun run dev -- --https --open`).
+-   Pass extra flags after `--` (e.g., `npm run dev -- --https --open`).
 -   Expect warm-up time on first boot while Nuxt generates `.nuxt/` and Vite builds chunks.
 
 ---
@@ -149,7 +152,7 @@ bun run nuxi cleanup
 bun run nuxi prepare
 ```
 
--   Commit the updated `bun.lockb` so teammates pull the same versions.
+-   Commit the updated `bun.lock` so teammates pull the same versions.
 
 ---
 

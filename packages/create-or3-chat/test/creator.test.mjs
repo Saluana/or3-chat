@@ -179,6 +179,15 @@ test('generated template has registry-clean first-party dependencies', async () 
     );
     assert.equal(manifest.private, true);
     assert.equal(manifest.engines.node, '>=24');
+    assert.equal(manifest.scripts.start, 'node scripts/cli/start.mjs');
+    assert.equal(
+        manifest.scripts['generate:static'],
+        'tsx scripts/cli/nuxt-task.ts generate-static'
+    );
+    assert.equal(
+        manifest.scripts['preview:static'],
+        'npx --yes serve .output/public -l 4173'
+    );
     const release = JSON.parse(
         await readFile(new URL('or3-release.json', templateUrl), 'utf8')
     );

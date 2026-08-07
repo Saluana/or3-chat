@@ -28,26 +28,17 @@ Compatibility guide for common OR3 Cloud provider combinations.
 - Local IDs like `custom`, `memory`, `redis`, and `postgres` are intentionally not package-resolved.
 - Wizard-generated modules and config-derived modules are merged.
 
-## Standalone Clone Release Blocker
+## Standalone Clone Support
 
-The development manifest currently uses sibling `file:../...` dependencies for
-providers, workflows, and `or3-scroll`. A checkout without those siblings
-cannot complete `bun install --frozen-lockfile`.
+The application manifest pins its runtime providers, workflows, Intern client,
+and `or3-scroll` to immutable npm releases. A fresh `or3-chat` checkout can
+therefore install without sibling repositories. `@or3/plugin-sdk` remains a
+small in-repository development dependency and is copied into generated
+projects where needed.
 
-Do not replace those links with the currently published versions merely to make
-an isolated install pass. The published workflow packages do not expose the
-current execution/run-store/gateway API, the published SQLite provider does not
-expose `./webhooks/sqlite-store`, and published provider artifacts predate
-current storage/admin contracts.
-
-The safe release sequence is:
-
-1. Build, test, version-bump, and publish the current sibling packages.
-2. Pin those new immutable versions in `or3-chat`.
-3. Regenerate `bun.lock`.
-4. Verify from an empty cache and checkout with no siblings:
-   `bun install --frozen-lockfile`, provider compatibility tests, type-check,
-   and the production build.
+Before a release, regenerate `bun.lock` and verify an isolated checkout with
+`bun install --frozen-lockfile`, the provider compatibility test, type-check,
+and a production build.
 
 ## Related
 

@@ -8,10 +8,11 @@ The remaining unchecked tasks require external registry/account authority or a
 successful remote Docker/CI run; they are deliberately not marked complete by
 local edits.
 
-Current release blocker: `@or3/cloud@0.1.12` and
-`ghcr.io/saluana/or3-chat:0.1.12` are not published yet, and the local Docker
-daemon cannot resolve the Dockerfile frontend before the build starts. No
-registry publication or destructive VPS action was attempted.
+Current release blocker: `@or3/cloud@0.1.12` exists on npm, but its matching
+`ghcr.io/saluana/or3-chat:0.1.12` image is absent, so that immutable package
+cannot deploy. The source is prepared as `0.1.13`; publish its image first,
+then its package through the image-first workflow. No registry publication or
+destructive VPS action was attempted locally.
 
 ## 1. Release and package foundation
 
@@ -31,7 +32,7 @@ registry publication or destructive VPS action was attempted.
       Requirements: R2.AC1, R2.AC2, R2.AC4, R6.AC2
       Done when: the workflow builds from root using registry-clean dependency preparation, passes the fixed Basic Auth/SQLite/filesystem build arguments, publishes an exact version tag and digest, and fails when login, persistence, file storage, or deep health smoke fails.
 
-- [ ] 1.5 Sequence image publication before Cloud package publication in one release workflow
+- [x] 1.5 Sequence image publication before Cloud package publication in one release workflow
       Requirements: R2.AC1, R2.AC4, R2.AC5
       Done when: a tagged release refuses npm publish unless the exact image has been pushed and qualified; the packed CLI is smoke-tested against that image; and post-publish verification retries exact npm lookup and `npx` with online cache revalidation.
 

@@ -3,7 +3,7 @@
 Normal installations now use the managed Cloud distribution:
 
 ```bash
-npx @or3/cloud init --public --domain cloud.example.com --admin-email you@example.com
+npx @or3/cloud init --public --domain cloud.example.com
 ```
 
 See [Installation and operations](installation.md) for local mode, Caddy,

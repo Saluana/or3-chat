@@ -77,19 +77,11 @@ function isConnectAdvancedEnabled(answers: WizardAnswers): boolean {
 
 /**
  * Short recommended path: Customize off + recommended self-host mode.
- * Skips branding/themes/features/providers/sync/storage/connect/admin/AI.
- * Guided (`preset-local`) keeps the email field; fast skips that too.
+ * It skips advanced configuration but always asks for a real admin email.
  */
 function isSimplifiedRecommendedSetup(answers: WizardAnswers): boolean {
     return (
         isRecommendedSelfHostMode(answers.wizardMode) &&
-        !answers.targetAdvancedEnabled
-    );
-}
-
-function isFastRecommendedSetup(answers: WizardAnswers): boolean {
-    return (
-        answers.wizardMode === 'preset-local-fast' &&
         !answers.targetAdvancedEnabled
     );
 }
@@ -202,7 +194,7 @@ function providerFieldsStep(
             if (!current.ssrAuthEnabled) return true;
             if (kind === 'sync') return !current.syncEnabled;
             if (kind === 'storage') return !current.storageEnabled;
-            if (kind === 'auth') return isFastRecommendedSetup(current);
+            if (kind === 'auth') return false;
             return false;
         },
     };
@@ -375,12 +367,6 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                             value: 'preset-local',
                             description:
                                 'Recommended. Only asks for your admin email; secrets and paths are filled automatically.',
-                        },
-                        {
-                            label: 'Use recommended defaults — skip questions',
-                            value: 'preset-local-fast',
-                            description:
-                                'Same stack as self-hosted, with auto-generated credentials (admin@example.com). Jump straight to review.',
                         },
                         {
                             label: 'Clerk + Convex — managed authentication and data',

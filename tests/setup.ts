@@ -176,6 +176,7 @@ const defaultTestConfig = {
             requireUserKey: false,
             baseUrl: 'https://openrouter.ai/api/v1',
         },
+        connect: { publicUrl: 'https://or3.chat' },
         branding: { appName: 'Test', logoUrl: '', defaultTheme: 'dark' },
         legal: { termsUrl: '', privacyUrl: '' },
     },

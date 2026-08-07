@@ -85,12 +85,19 @@ export default defineNitroPlugin(() => {
         const publicURL = String(config.connect.publicURL ?? '').trim();
         try {
             const parsed = new URL(publicURL);
-            if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
+            if (
+                parsed.protocol !== 'https:' ||
+                parsed.username ||
+                parsed.password ||
+                parsed.pathname !== '/' ||
+                parsed.search ||
+                parsed.hash
+            ) {
                 throw new Error('invalid');
             }
         } catch {
             errors.push(
-                'OR3_CONNECT_PUBLIC_URL must be an absolute HTTPS URL without embedded credentials.'
+                'OR3_CONNECT_PUBLIC_URL must be an absolute HTTPS origin without a path, query, fragment, or embedded credentials.'
             );
         }
         if (String(config.connect.encryptionKey ?? '').trim().length < 32) {

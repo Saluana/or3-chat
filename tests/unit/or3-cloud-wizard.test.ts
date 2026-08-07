@@ -234,7 +234,7 @@ describe('or3 cloud wizard validation', () => {
         expect(presetLabels).toContain(
             'Self-hosted OR3 — accounts, SQLite, and filesystem storage'
         );
-        expect(presetLabels).toContain(
+        expect(presetLabels).not.toContain(
             'Use recommended defaults — skip questions'
         );
         expect(presetLabels).toContain(
@@ -306,7 +306,7 @@ describe('or3 cloud wizard validation', () => {
         );
     });
 
-    it('skips login for recommended fast defaults', () => {
+    it('requires a real administrator identity for legacy fast defaults', () => {
         const answers = {
             ...validRecommendedAnswers(),
             wizardMode: 'preset-local-fast' as const,
@@ -318,6 +318,7 @@ describe('or3 cloud wizard validation', () => {
         expect(visibleSteps.map((step) => step.id)).toEqual([
             'target',
             'preset',
+            'provider-auth',
             'review',
         ]);
     });

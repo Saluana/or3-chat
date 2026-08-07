@@ -21,7 +21,7 @@
       </p>
 
       <div
-        v-if="launcherRecovery.kind === 'connect'"
+        v-if="launcherRecovery.kind === 'connect' && CONNECT_COMMAND"
         class="mt-4 rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)] p-3"
       >
         <p class="text-xs font-medium">Run this on the computer with your code:</p>
@@ -30,9 +30,17 @@
         }}</code>
       </div>
 
+      <p
+        v-else-if="launcherRecovery.kind === 'connect'"
+        class="mt-4 text-sm leading-relaxed text-[var(--md-on-surface-variant)]"
+      >
+        OR3 Connect is not enabled for this workspace yet. An administrator can
+        enable it before connecting computers.
+      </p>
+
       <div class="mt-5 flex flex-wrap gap-2">
         <UButton
-          v-if="launcherRecovery.kind === 'connect'"
+          v-if="launcherRecovery.kind === 'connect' && CONNECT_COMMAND"
           :icon="iconCopy"
           @click="copyConnectCommand"
         >
@@ -149,6 +157,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
+import { useRuntimeConfig } from "#imports";
 import ExternalAgentComposer from "./ExternalAgentComposer.vue";
 import ExternalAgentSettingsPanel from "./ExternalAgentSettingsPanel.vue";
 import type {
@@ -168,8 +177,7 @@ import { presentExternalAgentError } from "~/core/external-agents/presentation";
 import { useExternalAgentRuntime } from "~/core/external-agents/runtime";
 import { useActiveSidebarPage } from "~/composables/sidebar/useActiveSidebarPage";
 import { useIcon } from "~/composables/useIcon";
-
-const CONNECT_COMMAND = "npx @or3/connect";
+import { buildConnectCommand } from "~/core/external-agents/connect-command";
 
 const props = withDefaults(
   defineProps<{
@@ -183,6 +191,10 @@ const emit = defineEmits<{
 }>();
 
 const runtime = useExternalAgentRuntime();
+const runtimeConfig = useRuntimeConfig();
+const CONNECT_COMMAND = computed(() =>
+  buildConnectCommand(runtimeConfig.public?.connect?.publicUrl),
+);
 const { setActivePage } = useActiveSidebarPage();
 const iconCopy = useIcon("ui.copy");
 const iconConnect = useIcon("external-agent.connect");
@@ -452,12 +464,13 @@ async function openConnectionSettings() {
 }
 
 async function copyConnectCommand() {
+  if (!CONNECT_COMMAND.value) return;
   recoveryError.value = null;
   try {
-    await navigator.clipboard.writeText(CONNECT_COMMAND);
+    await navigator.clipboard.writeText(CONNECT_COMMAND.value);
     connectCommandCopied.value = true;
   } catch {
-    recoveryError.value = `Copy failed. Run “${CONNECT_COMMAND}” in a terminal.`;
+    recoveryError.value = `Copy failed. Run “${CONNECT_COMMAND.value}” in a terminal.`;
   }
 }
 

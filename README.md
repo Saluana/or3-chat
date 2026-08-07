@@ -95,16 +95,16 @@ managed Docker volume.
 For a private local instance:
 
 ```bash
-npx @or3/cloud init --local --admin-email you@example.com
+npx @or3/cloud init --local
 ```
 
 For a public VPS behind Caddy:
 
 ```bash
-npx @or3/cloud init --public --domain chat.example.com --admin-email you@example.com
+npx @or3/cloud init --public --domain chat.example.com
 ```
 
-Node.js 24 or newer and Docker Compose v2 are required. The supported cloud
+Node.js 20 or newer and Docker Compose v2 are required. The supported cloud
 profile is Basic Auth, SQLite, and filesystem storage, so no external database,
 authentication, or storage account is needed. See
 [Installation and operations](docs/installation.md) for prerequisites,
@@ -204,7 +204,7 @@ supported Basic Auth + SQLite + filesystem profile. Start it with the operator
 package:
 
 ```bash
-npx @or3/cloud init --local --admin-email you@example.com
+npx @or3/cloud init --local
 ```
 
 Use `--public --domain chat.example.com` on a VPS to add Caddy and automatic

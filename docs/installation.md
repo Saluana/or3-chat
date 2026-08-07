@@ -11,7 +11,7 @@ account or API key to use AI models.
 
 ## Prerequisites
 
-Install Docker Engine and Docker Compose v2. Node.js 24+ is needed only for
+Install Docker Engine and Docker Compose v2. Node.js 20+ is needed only for
 `npx` to download and invoke the operator CLI. Verify:
 
 ```bash
@@ -29,11 +29,11 @@ the deployment directory.
 This keeps OR3 private on the local machine and does not install Caddy:
 
 ```bash
-npx @or3/cloud init --local \
-  --admin-email you@example.com
+npx @or3/cloud init --local
 ```
 
-The command generates a bootstrap password and writes it to a mode-`0600`
+The command asks once for the administrator email, generates a bootstrap
+password, and writes it to a mode-`0600`
 `.or3-initial-credentials` file. Save it in a password manager, then remove
 that file. The same credentials enable the OR3 admin panel at `/admin`. Open
 `http://127.0.0.1:3000`; use `--port 3100` if needed.
@@ -86,8 +86,7 @@ Start the public deployment:
 
 ```bash
 npx @or3/cloud init --public \
-  --domain cloud.example.com \
-  --admin-email you@example.com
+  --domain cloud.example.com
 ```
 
 Caddy owns ports 80 and 443 and proxies to OR3 over the private Compose
@@ -138,7 +137,7 @@ and snapshot automatically.
 To target a specific published version:
 
 ```bash
-npx @or3/cloud update --to 0.1.12
+npx @or3/cloud update --to <exact-version>
 ```
 
 Do not use `docker compose down --volumes` during normal operation or upgrades;

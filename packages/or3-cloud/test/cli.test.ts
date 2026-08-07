@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import {
   assertSupportedSource,
   assertSupportedSourceCompose,
+  assertCommandFlags,
   assertBackupMatchesDeployment,
   buildEnv,
   checkResolvedLoopbackBinding,
@@ -74,6 +75,15 @@ test('parses exact flags and accepts only complete release versions', () => {
   expect(isVersion('0.1.12')).toBe(true);
   expect(isVersion('0.1')).toBe(false);
   expect(isVersion('latest')).toBe(false);
+});
+
+test('rejects unknown command flags before a deployment can start', () => {
+  expect(() => assertCommandFlags('init', { local: true, prot: '3100' })).toThrow(
+    'Unknown option for init: --prot',
+  );
+  expect(() => assertCommandFlags('update', { to: '0.1.13', yes: true })).toThrow(
+    'Unknown option for update: --yes',
+  );
 });
 
 test('redacts known values and secret-shaped environment output', () => {

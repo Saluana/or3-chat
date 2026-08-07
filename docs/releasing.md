@@ -59,8 +59,8 @@ image during this release.
 Commit the version and source changes, then push the matching tag:
 
 ```bash
-git tag v0.1.12
-git push origin v0.1.12
+git tag v<version>
+git push origin v<version>
 ```
 
 The `Release OR3 Cloud` workflow then:
@@ -69,9 +69,9 @@ The `Release OR3 Cloud` workflow then:
 2. rejects a version that already exists in npm or GHCR;
 3. builds the root-context image with Basic Auth + SQLite + filesystem build
    flags;
-4. publishes `ghcr.io/saluana/or3-chat:0.1.12`;
+4. publishes `ghcr.io/saluana/or3-chat:<version>`;
 5. smoke-tests login-capable deep health and persistence;
-6. packs and publishes `@or3/cloud@0.1.12`; and
+6. packs and publishes `@or3/cloud@<version>`; and
 7. retries exact npm and `npx` verification until registry propagation ends.
 
 The workflow's image digest is the deployment identity. Copy it into the

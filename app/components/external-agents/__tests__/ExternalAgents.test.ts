@@ -429,7 +429,7 @@ describe("External Agents components", () => {
     );
     expect(wrapper.text()).toContain("Connect another computer");
     expect(wrapper.text()).toContain(
-      "External-runtime Connect commands will appear after the supporting Connect release is published.",
+      "Once OR3 Connect is enabled, start a new agent session to copy the one-command setup for this OR3 workspace.",
     );
     expect(wrapper.text()).toContain(
       "Advanced: add another host by URL and token",

@@ -36,7 +36,7 @@ import type {
 } from './types';
 import { detectPackageManager } from './package-manager';
 
-/** Recommended self-hosted modes (guided email-only or zero-question fast). */
+/** Recommended self-hosted modes. The legacy fast mode stays readable. */
 export function isRecommendedSelfHostMode(mode: WizardMode): boolean {
     return mode === 'preset-local' || mode === 'preset-local-fast';
 }
@@ -703,13 +703,6 @@ function applyRecommendedSelfHostDefaults(
         storageEnabled: true,
         storageProvider: 'fs',
         connectProvider: 'sqlite',
-        ...(wizardMode === 'preset-local-fast'
-            ? {
-                  basicAuthBootstrapEmail:
-                      answers.basicAuthBootstrapEmail?.trim() ||
-                      'admin@example.com',
-              }
-            : {}),
     };
 }
 
@@ -731,6 +724,8 @@ export function applyWizardModeDefaults(
         case 'preset-local':
             return applyRecommendedSelfHostDefaults(answers, 'preset-local');
         case 'preset-local-fast':
+            // Older saved sessions remain valid, but must now collect a real
+            // administrator identity like the recommended path.
             return applyRecommendedSelfHostDefaults(
                 answers,
                 'preset-local-fast'

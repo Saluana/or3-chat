@@ -26,7 +26,7 @@ based upgrades. It remains available through the application repository's
 2. Uses template mode to decide provider flow depth:
    - `personal-local`: browser-only use with no account, remote access, sync, or server storage.
    - `preset-local`: the recommended self-hosted stack with Basic Auth + SQLite + Filesystem (email-only when Customize is off).
-   - `preset-local-fast`: same stack with zero guided questions (auto credentials; review and deploy).
+   - legacy `preset-local-fast` sessions remain readable, but now collect the same real administrator identity as the recommended stack.
    - `preset-clerk-convex`: auto-applies Clerk + Convex + Convex and skips manual provider selection.
    - `custom`: keeps manual provider selection.
 3. Collects provider-specific answers only for selected providers.
@@ -52,7 +52,7 @@ based upgrades. It remains available through the application repository's
 10. Optionally sets Convex backend env vars for Clerk + Convex stacks.
 11. Optionally runs deploy commands (`bun install`, `bun run dev:ssr` or `bun run build`).
 
-`bun start` → cloud opens the wizard with `--mode self-hosted` (recommended path, personal-local hidden). Use the **Use recommended defaults — skip questions** template (or `or3-cloud init --fast --admin-email admin@example.com`) for zero guided inputs. Fast self-hosted setup requires a real admin email and writes generated credentials to a mode-`0600` `.or3-initial-credentials` file instead of terminal output.
+`npm start` (or `bun start`) asks whether to run locally or use managed Cloud. Choosing Cloud runs `npx @or3/cloud init --local`, which asks once for a real administrator email and creates the supported deployment. The source wizard remains for contributors and advanced custom-provider deployments.
 
 ## Commands
 
@@ -67,7 +67,7 @@ Common flags:
 - `--env-file .env|.env.local`
 - `--dry-run`
 - `--manual`
-- `--fast` (self-hosted requires `--admin-email <email>`)
+- `--fast` is an automation-only source command; self-hosted use requires `--admin-email <email>` and never invents a placeholder identity
 - `--admin-password-file <path>` (read an automation-managed password without putting it in command history)
 - `--enable-install` (feature-flagged package install execution)
 - `--package-manager bun|npm`

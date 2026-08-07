@@ -26,6 +26,7 @@ logs
 .env.*
 !.env.example
 .or3-initial-credentials
+.or3/
 or3-repo.md
 
 # Convex generated artifacts

@@ -576,6 +576,14 @@ export default defineNuxtConfig({
         },
         public: {
             appVersion: process.env.npm_package_version || '0.1.0',
+            // Declaring these keys makes NUXT_PUBLIC_OPENROUTER_* available to
+            // the client instead of silently falling back to the current URL.
+            openRouterRedirectUri:
+                process.env.NUXT_PUBLIC_OPENROUTER_REDIRECT_URI || '',
+            openRouterClientId:
+                process.env.NUXT_PUBLIC_OPENROUTER_CLIENT_ID || '',
+            openRouterAuthUrl:
+                process.env.NUXT_PUBLIC_OPENROUTER_AUTH_URL || '',
             // Single source of truth for client gating.
             // Avoid inferring enablement from presence of publishable keys.
             ssrAuthEnabled: effectiveSsrAuthEnabled,
@@ -614,6 +622,7 @@ export default defineNuxtConfig({
                 statusMessage: connectReadiness.message || '',
                 provider: connectProvider,
                 relayProvider: connectRelayProvider,
+                publicUrl: process.env.OR3_CONNECT_PUBLIC_URL || '',
             },
             limits: publicLimitsConfig,
             branding: brandingConfig,

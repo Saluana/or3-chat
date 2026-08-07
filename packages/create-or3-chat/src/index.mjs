@@ -512,9 +512,7 @@ export async function main(argv = process.argv.slice(2)) {
 
     if (options.skipInstall) {
         console.log('\nDependency installation skipped.');
-        console.log(`Resume with:\n  cd ${options.directory}`);
-        console.log(`  ${packageManager} install`);
-        console.log(`  ${packageManager} run setup`);
+        console.log(`Resume with one command:\n  cd ${options.directory} && ${packageManager} start`);
         return;
     }
 
@@ -539,7 +537,7 @@ export async function main(argv = process.argv.slice(2)) {
             `\nSetup stopped, but your project is safe at ${target}.`
         );
         console.error(
-            `Resume with: cd ${options.directory} && ${packageManager} run setup`
+            `Resume with: cd ${options.directory} && ${packageManager} start`
         );
         throw error;
     }

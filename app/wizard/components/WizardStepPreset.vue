@@ -34,10 +34,10 @@
                     @change="emit('update-field', wizardModeField.key, option.value)"
                 />
                 <span
-                    v-if="option.value === 'preset-local' || option.value === 'preset-local-fast'"
+                    v-if="option.value === 'preset-local'"
                     class="absolute -top-2.5 right-3 rounded-full bg-[var(--md-primary)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--md-on-primary,#fff)]"
                 >
-                    {{ option.value === 'preset-local-fast' ? 'Fastest' : 'Recommended' }}
+                    Recommended
                 </span>
                 <div class="mb-3 flex h-8 w-8 items-center justify-center rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/5">
                     <UIcon
@@ -123,7 +123,6 @@ function cardClass(value: WizardFieldOption['value']): string {
 function presetIcon(value: WizardFieldOption['value']): string {
     if (value === 'personal-local') return 'i-heroicons-computer-desktop';
     if (value === 'preset-local') return 'i-heroicons-server-stack';
-    if (value === 'preset-local-fast') return 'i-heroicons-bolt';
     if (value === 'preset-clerk-convex') return 'i-heroicons-cloud';
     return 'i-heroicons-wrench-screwdriver';
 }
