@@ -1,6 +1,6 @@
 {
   "name": "@or3/cloud",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Install and operate the OR3 Cloud container distribution",
   "type": "module",
   "license": "GPL-3.0",
