@@ -646,7 +646,7 @@ describe("RunsExternalAgentClient", () => {
     });
   });
 
-  it("keeps partial assistant history active without an explicit terminal marker", async () => {
+  it("treats assistant history text as completed when no live run is active", async () => {
     const fetch = vi.fn<RunsFetch>(async (input) => {
       const path = pathOf(input);
       if (path.endsWith("/messages")) {
@@ -675,9 +675,8 @@ describe("RunsExternalAgentClient", () => {
       turns: [
         expect.objectContaining({
           id: "message-user-partial",
-          status: "running",
-          completed_at: undefined,
-          final_text: undefined,
+          status: "succeeded",
+          final_text: "still streaming",
         }),
       ],
     });
@@ -689,11 +688,15 @@ describe("RunsExternalAgentClient", () => {
           type: "text_delta",
           text: "still streaming",
         }),
+        expect.objectContaining({
+          type: "turn.completed",
+          payload: { status: "completed" },
+        }),
       ]),
     });
   });
 
-  it("keeps a user-only history turn active instead of inventing success", async () => {
+  it("settles a user-only history turn as cancelled when no live run remains", async () => {
     const fetch = vi.fn<RunsFetch>(async (input) => {
       const path = pathOf(input);
       if (path.endsWith("/messages")) {
@@ -716,8 +719,7 @@ describe("RunsExternalAgentClient", () => {
       turns: [
         expect.objectContaining({
           id: "message-user-active",
-          status: "running",
-          completed_at: undefined,
+          status: "cancelled",
         }),
       ],
     });
@@ -726,7 +728,7 @@ describe("RunsExternalAgentClient", () => {
     ).resolves.toEqual({ events: [] });
   });
 
-  it("keeps a tool-only history turn active until terminal evidence exists", async () => {
+  it("settles tool-only history turns when no live run remains", async () => {
     const fetch = vi.fn<RunsFetch>(async (input) => {
       const path = pathOf(input);
       if (path.endsWith("/messages")) {
@@ -756,8 +758,8 @@ describe("RunsExternalAgentClient", () => {
       turns: [
         expect.objectContaining({
           id: "message-user-tool",
-          status: "running",
-          completed_at: undefined,
+          status: "succeeded",
+          completed_at: 1_750_000_002,
         }),
       ],
     });
@@ -766,11 +768,15 @@ describe("RunsExternalAgentClient", () => {
     ).resolves.toEqual({
       events: expect.arrayContaining([
         expect.objectContaining({ type: "tool.completed" }),
+        expect.objectContaining({
+          type: "turn.completed",
+          payload: { status: "completed" },
+        }),
       ]),
     });
   });
 
-  it("does not treat null completion timestamps as terminal history evidence", async () => {
+  it("does not treat null completion timestamps alone as terminal markers", async () => {
     const fetch = vi.fn<RunsFetch>(async (input) => {
       const path = pathOf(input);
       if (path.endsWith("/messages")) {
@@ -783,14 +789,6 @@ describe("RunsExternalAgentClient", () => {
               timestamp: 1_750_000_001,
               completed_at: null,
             },
-            {
-              id: "message-tool-null-terminal",
-              role: "tool",
-              tool_name: "terminal",
-              status: "running",
-              completed_at: null,
-              timestamp: 1_750_000_002,
-            },
           ],
         });
       }
@@ -798,15 +796,62 @@ describe("RunsExternalAgentClient", () => {
     });
     const client = clientWith(fetch);
 
+    // No assistant/tool progress and no live run → settle as cancelled, not
+    // invent success from a null completed_at on the user message.
     await expect(client.listTurns("session-null-terminal")).resolves.toEqual({
       turns: [
         expect.objectContaining({
           id: "message-user-null-terminal",
-          status: "running",
-          completed_at: undefined,
+          status: "cancelled",
         }),
       ],
     });
+  });
+
+  it("replays history turns without polling missing live run endpoints", async () => {
+    const fetch = vi.fn<RunsFetch>(async (input) => {
+      const path = pathOf(input);
+      if (path.endsWith("/messages")) {
+        return json({
+          data: [
+            {
+              id: "message-1",
+              role: "user",
+              content: "hello",
+              timestamp: 1_750_000_001,
+            },
+            {
+              id: "message-2",
+              role: "assistant",
+              content: "hi",
+              timestamp: 1_750_000_002,
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected live run request: ${path}`);
+    });
+    const client = clientWith(fetch);
+    await client.listTurns("session-history-stream");
+
+    const events: Array<string | undefined> = [];
+    for await (const event of client.streamTurn(
+      "session-history-stream",
+      "message-1",
+    )) {
+      events.push(
+        (event.json as { type?: string } | undefined)?.type ?? event.event,
+      );
+    }
+
+    expect(events).toEqual(
+      expect.arrayContaining(["text_delta", "turn.completed"]),
+    );
+    expect(
+      fetch.mock.calls.some(([request]) =>
+        pathOf(request).includes("/v1/runs/"),
+      ),
+    ).toBe(false);
   });
 
   it("parses CRLF frames split across chunks and a final unterminated frame", async () => {

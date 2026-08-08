@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import WorkspaceChrome from '../WorkspaceChrome.vue';
 
 vi.mock('~/composables/useIcon', () => ({
@@ -71,13 +72,20 @@ describe('WorkspaceChrome', () => {
         );
         expect(
             wrapper.find('button[aria-label="2 open tabs"]').exists()
-        ).toBe(true);
+        ).toBe(false);
 
         await wrapper.get('.workspace-chrome-active-title').trigger('click');
         expect(wrapper.find('[data-testid="workspace-tab-switcher"]').exists()).toBe(
             true
         );
         expect(wrapper.findAll('[data-test="action"]')).toHaveLength(1);
+
+        await wrapper.setProps({ mobile: true });
+        (wrapper.vm as { openTabSwitcher: () => void }).openTabSwitcher();
+        await nextTick();
+        expect(wrapper.find('[data-testid="workspace-tab-switcher"]').exists()).toBe(
+            true
+        );
     });
 
     it('renders desktop actions beside, not inside, the scrollable tab strip', () => {

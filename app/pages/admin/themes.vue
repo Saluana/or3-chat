@@ -21,7 +21,7 @@
 
         <template v-else>
             <div
-                v-if="rebuildRequired"
+                v-if="rebuildRequired && rebuildAvailable"
                 class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)]"
             >
                 <div class="flex items-center gap-3">
@@ -34,6 +34,20 @@
                             dev server manually to rescan theme modules.
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <div
+                v-if="extensionInstallDisabled"
+                class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)]"
+            >
+                <div class="text-sm">
+                    Custom theme upload and install are disabled on this managed deployment.
+                    This image is immutable and cannot rebuild installed source extensions.
+                </div>
+                <div class="text-xs opacity-70 mt-1">
+                    Built-in themes remain available above. To install custom themes, deploy OR3
+                    from source and restart the process after installing.
                 </div>
             </div>
 
@@ -69,17 +83,17 @@
                         class="hidden"
                         @change="installTheme"
                     />
-                    <UButton size="sm" :disabled="!isOwner" @click="showUrlModal = true" icon="i-heroicons-link">
+                    <UButton v-if="extensionInstallEnabled" size="sm" :disabled="!isOwner" @click="showUrlModal = true" icon="i-heroicons-link">
                         Import from URL
                     </UButton>
-                    <UButton size="sm" :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
+                    <UButton v-if="extensionInstallEnabled" size="sm" :disabled="!isOwner" @click="triggerFileInput" icon="i-heroicons-arrow-up-tray">
                         Install .zip
                     </UButton>
                 </div>
             </div>
 
             <!-- URL Import Modal -->
-            <AdminUrlImportModal v-model="showUrlModal" label="Theme" :loading="urlInstalling" @install="installThemeFromUrl" />
+            <AdminUrlImportModal v-model="showUrlModal" label="Theme" :loading="urlInstalling" :code-trust-warning="true" @install="installThemeFromUrl" />
 
             <div v-if="adminThemes.length === 0" class="text-sm opacity-70 py-8 text-center bg-[var(--md-surface-container-low)] rounded">
                 No themes installed.
@@ -247,6 +261,16 @@ const { confirm } = useConfirmDialog();
 const nuxtApp = useNuxtApp();
 const toast = useToast();
 const rebuildRequired = ref(false);
+const runtimeConfig = useRuntimeConfig();
+const publicAdminConfig = (runtimeConfig.public as {
+    admin?: {
+        pluginZipInstallEnabled?: boolean;
+        allowRebuild?: boolean;
+    };
+}).admin ?? {};
+const extensionInstallEnabled = publicAdminConfig.pluginZipInstallEnabled !== false;
+const extensionInstallDisabled = !extensionInstallEnabled;
+const rebuildAvailable = publicAdminConfig.allowRebuild === true;
 
 // URL import state
 const showUrlModal = ref(false);

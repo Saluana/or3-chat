@@ -13,12 +13,30 @@ if (!existsSync(versionFile)) {
 }
 const qualifiedVersions = JSON.parse(readFileSyncCallback(versionFile, 'utf8'));
 
+// The managed image ships only the fixed profile: Basic Auth + SQLite +
+// filesystem. Clerk, Convex, and S3 stacks are contributor/operator paths and
+// must not enter the registry-clean production graph (Convex also carries the
+// inactive ws advisory).
+const INACTIVE_FIXED_PROFILE_PROVIDERS = [
+    'or3-provider-clerk',
+    'or3-provider-convex',
+    'or3-provider-s3',
+];
+const INACTIVE_FIXED_PROFILE_DEV_DEPENDENCIES = ['convex'];
+
 export function prepareDockerManifest(input) {
     const manifest = structuredClone(input);
     for (const [name, version] of Object.entries(qualifiedVersions)) {
         if (name in (manifest.dependencies ?? {})) {
             manifest.dependencies[name] = version;
         }
+    }
+
+    for (const name of INACTIVE_FIXED_PROFILE_PROVIDERS) {
+        delete manifest.dependencies?.[name];
+    }
+    for (const name of INACTIVE_FIXED_PROFILE_DEV_DEPENDENCIES) {
+        delete manifest.devDependencies?.[name];
     }
 
     for (const [name, version] of Object.entries(manifest.dependencies ?? {})) {

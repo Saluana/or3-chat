@@ -420,6 +420,12 @@ function statusValue(value: unknown): string {
   }
 }
 
+function isRemoteTurnTerminal(status: string): boolean {
+  return (
+    status === "succeeded" || status === "failed" || status === "cancelled"
+  );
+}
+
 function turnFromStatus(
   raw: JsonRecord,
   metadata: RunMetadata,
@@ -1046,10 +1052,13 @@ class RunsExternalAgentClient implements ExternalAgentClient {
       if (!current) return;
       const sequence = turns.length + 1;
       const finalText = current.assistant.join("\n").trim();
-      // History can contain partial assistant text while a run is still
-      // active. Only an explicit provider terminal marker can complete a
-      // hydrated turn.
-      const hasTerminalEvidence = current.terminalEvidence;
+      // Providers like OpenClaw persist finished assistant text in session
+      // history without `done`/`finished` markers. Treat non-empty assistant
+      // content as completed; live runs (different ids) still win via
+      // listTurns when a turn is mid-flight.
+      const hasAssistantContent = Boolean(finalText);
+      const hasTerminalEvidence =
+        current.terminalEvidence || hasAssistantContent;
       const completedAt =
         current.toolEvents
           .map((event) => timestamp(event.timestamp, current!.requestedAt))
@@ -1138,25 +1147,111 @@ class RunsExternalAgentClient implements ExternalAgentClient {
   ): Promise<{ turns: ExternalRemoteTurn[] }> {
     const history = await this.#history(sessionId, input.signal);
     const live: ExternalRemoteTurn[] = [];
-    for (const metadata of this.#runMetadata.values()) {
+    let hasActiveLiveRun = false;
+    for (const metadata of [...this.#runMetadata.values()]) {
       if (metadata.sessionId !== sessionId) continue;
       try {
         const raw = await this.#json(`/v1/runs/${encodePath(metadata.runId)}`, {
           signal: input.signal,
         });
-        live.push(turnFromStatus(raw, metadata));
+        const turn = turnFromStatus(raw, metadata);
+        live.push(turn);
+        if (!isRemoteTurnTerminal(turn.status)) hasActiveLiveRun = true;
       } catch (error) {
         if (!(error instanceof RunsClientError && error.status === 404))
           throw error;
+        // Ephemeral host runs disappear after restart/GC. Drop them so we
+        // stop treating history message ids as live run targets.
+        this.#forgetRun(metadata.runId);
       }
     }
+    const resolvedHistory = hasActiveLiveRun
+      ? history
+      : history.map((turn) => this.#settleIdleHistoryTurn(sessionId, turn));
     const local = [...this.#localTurns.values()].filter(
       (turn) => turn.session_id === sessionId,
     );
-    const turns = [...history, ...live, ...local]
+    const turns = [...resolvedHistory, ...live, ...local]
       .sort((left, right) => left.sequence - right.sequence)
       .slice(-(input.limit ?? 50));
     return { turns };
+  }
+
+  #sessionHasLiveMetadata(sessionId: string): boolean {
+    for (const metadata of this.#runMetadata.values()) {
+      if (metadata.sessionId === sessionId) return true;
+    }
+    return false;
+  }
+
+  #forgetRun(runId: string): void {
+    this.#runMetadata.delete(runId);
+    this.#runStreams.delete(runId);
+  }
+
+  #completeHistoryTurn(
+    turn: ExternalRemoteTurn,
+    status: "succeeded" | "cancelled" | "failed",
+    events: ExternalRemoteEvent[],
+  ): ExternalRemoteTurn {
+    const text =
+      turn.final_text ??
+      events
+        .filter((event) => event.type === "text_delta" && event.text)
+        .map((event) => event.text)
+        .join("\n")
+        .trim();
+    const completedAt =
+      turn.completed_at ?? events.at(-1)?.ts ?? turn.requested_at;
+    if (
+      status === "succeeded" &&
+      !events.some((event) => event.type === "turn.completed")
+    ) {
+      const nextSeq = (events.at(-1)?.seq ?? 0) + 1;
+      events.push({
+        id: nextSeq,
+        turn_id: turn.id,
+        seq: nextSeq,
+        ts: completedAt,
+        type: "turn.completed",
+        payload: { status: "completed" },
+      });
+      this.#historyEvents.set(turn.id, events);
+    }
+    return {
+      ...turn,
+      status,
+      completed_at: completedAt,
+      final_text: text || turn.final_text,
+    };
+  }
+
+  #settleIdleHistoryTurn(
+    sessionId: string,
+    turn: ExternalRemoteTurn,
+  ): ExternalRemoteTurn {
+    if (isRemoteTurnTerminal(turn.status)) return turn;
+    const events = this.#historyEvents.get(turn.id) ?? [];
+    const hasProgress =
+      Boolean(turn.final_text?.trim()) ||
+      events.some(
+        (event) =>
+          event.type === "text_delta" ||
+          event.type === "tool.completed" ||
+          event.type === "tool.started" ||
+          event.type === "tool.failed",
+      );
+    const settled = this.#completeHistoryTurn(
+      turn,
+      hasProgress ? "succeeded" : "cancelled",
+      events,
+    );
+    const cached = this.#historyTurns.get(sessionId);
+    if (cached) {
+      const index = cached.findIndex((candidate) => candidate.id === turn.id);
+      if (index >= 0) cached[index] = settled;
+    }
+    return settled;
   }
 
   async startTurn(
@@ -1305,16 +1400,28 @@ class RunsExternalAgentClient implements ExternalAgentClient {
     if (localTurn) return localTurn;
     const metadata = this.#runMetadata.get(turnId);
     if (metadata) {
-      const raw = await this.#json(`/v1/runs/${encodePath(turnId)}`, {
-        signal: options?.signal,
-      });
-      return turnFromStatus(raw, metadata);
+      try {
+        const raw = await this.#json(`/v1/runs/${encodePath(turnId)}`, {
+          signal: options?.signal,
+        });
+        return turnFromStatus(raw, metadata);
+      } catch (error) {
+        if (!(error instanceof RunsClientError && error.status === 404))
+          throw error;
+        this.#forgetRun(turnId);
+      }
     }
     const history =
       this.#historyTurns.get(sessionId) ??
       (await this.#history(sessionId, options?.signal));
     const turn = history.find((candidate) => candidate.id === turnId);
     if (!turn) throw new RunsClientError(`Agent turn was not found`, 404);
+    if (
+      !isRemoteTurnTerminal(turn.status) &&
+      !this.#sessionHasLiveMetadata(sessionId)
+    ) {
+      return this.#settleIdleHistoryTurn(sessionId, turn);
+    }
     return turn;
   }
 
@@ -1670,12 +1777,31 @@ class RunsExternalAgentClient implements ExternalAgentClient {
         }
       } catch (error) {
         state.error = error;
+        if (error instanceof RunsClientError && error.status === 404) {
+          this.#forgetRun(metadata.runId);
+        }
       } finally {
         state.started = false;
         state.done = true;
         this.#wake(state);
       }
     })();
+  }
+
+  async *#replayHistoryTurnEvents(
+    turnId: string,
+    afterSeq = 0,
+  ): AsyncGenerator<ExternalRemoteStreamEvent> {
+    const events = this.#historyEvents.get(turnId) ?? [];
+    for (const event of events) {
+      if (event.seq <= afterSeq) continue;
+      yield {
+        event: "message",
+        id: String(event.seq),
+        cursor: event.seq,
+        json: event,
+      };
+    }
   }
 
   async *streamTurn(
@@ -1685,14 +1811,46 @@ class RunsExternalAgentClient implements ExternalAgentClient {
   ): AsyncIterable<ExternalRemoteStreamEvent> {
     let metadata = this.#runMetadata.get(turnId);
     if (!metadata) {
-      metadata = {
-        runId: turnId,
-        sessionId,
-        userMessage: "",
-        sequence: this.#nextTurnSequence.get(sessionId) ?? 1,
-        requestedAt: Date.now() / 1000,
-      };
-      this.#runMetadata.set(turnId, metadata);
+      const localTurn = this.#localTurns.get(turnId);
+      const buffered = this.#runStreams.get(turnId);
+      if (localTurn || buffered?.terminal) {
+        // Local slash-command turns already buffered terminal events.
+        metadata = {
+          runId: turnId,
+          sessionId,
+          userMessage: localTurn?.user_message ?? "",
+          sequence:
+            localTurn?.sequence ?? this.#nextTurnSequence.get(sessionId) ?? 1,
+          requestedAt: localTurn?.requested_at ?? Date.now() / 1000,
+        };
+      } else {
+        // History turns use message ids (e.g. message-1). Never invent a live
+        // run pump for those — `/v1/runs/{messageId}` 404s forever.
+        const history =
+          this.#historyTurns.get(sessionId) ??
+          (await this.#history(sessionId, input.signal));
+        const historyTurn = history.find(
+          (candidate) => candidate.id === turnId,
+        );
+        if (historyTurn) {
+          if (
+            !isRemoteTurnTerminal(historyTurn.status) &&
+            !this.#sessionHasLiveMetadata(sessionId)
+          ) {
+            this.#settleIdleHistoryTurn(sessionId, historyTurn);
+          }
+          yield* this.#replayHistoryTurnEvents(turnId, input.afterSeq ?? 0);
+          return;
+        }
+        metadata = {
+          runId: turnId,
+          sessionId,
+          userMessage: "",
+          sequence: this.#nextTurnSequence.get(sessionId) ?? 1,
+          requestedAt: Date.now() / 1000,
+        };
+        this.#runMetadata.set(turnId, metadata);
+      }
     }
     this.#ensureRunPump(metadata, input.signal);
     const state = this.#streamState(turnId);

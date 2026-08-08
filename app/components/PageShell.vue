@@ -39,6 +39,7 @@
         >
             <WorkspaceChrome
                 v-if="workspaceTabsChromeVisible"
+                ref="workspaceChromeRef"
                 :tabs="workspaceTabs.tabs.value"
                 :active-tab-id="workspaceTabs.activeTabId.value"
                 :visible-tab-ids="workspaceTabs.visibleTabIds.value"
@@ -1910,16 +1911,33 @@ const headerActionMenuItems = computed(() =>
         onSelect: () => void handleHeaderAction(entry),
     }))
 );
-/** Mobile moves theme into overflow so the chrome row stays usable. */
+const workspaceChromeRef = ref<{ openTabSwitcher?: () => void } | null>(null);
+const tabsOverflowIcon = useIcon('shell.tabs');
+const tabsOverflowLabel = computed(() => {
+    const count = workspaceTabs.tabs.value.length;
+    return count === 1 ? '1 open tab' : `${count} open tabs`;
+});
+
+/** Mobile moves theme + tabs into overflow so the chrome row stays usable. */
 const chromeOverflowMenuItems = computed(() => {
     const items = [...headerActionMenuItems.value];
     if (isMobile.value) {
-        items.unshift({
+        const mobileItems: typeof items = [];
+        if (workspaceTabsChromeVisible.value) {
+            mobileItems.push({
+                label: tabsOverflowLabel.value,
+                icon: tabsOverflowIcon.value,
+                disabled: false,
+                onSelect: () => void workspaceChromeRef.value?.openTabSwitcher?.(),
+            });
+        }
+        mobileItems.push({
             label: themeAriaLabel.value,
             icon: themeToggleIcon.value,
             disabled: false,
             onSelect: () => void toggleTheme(),
         });
+        items.unshift(...mobileItems);
     }
     return items;
 });

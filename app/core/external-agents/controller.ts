@@ -14,6 +14,7 @@ import {
   remoteDate,
   shouldPauseStream,
 } from "./event-store";
+import { RunsClientError } from "./runs-client";
 import {
   ExternalAgentHostRegistry,
   fallbackExternalAgentHostId,
@@ -1706,9 +1707,25 @@ export class ExternalAgentController {
   ): Promise<void> {
     const generation = session.hostGeneration;
     const refreshVersion = this.#nextSessionRefreshVersion(session);
-    const turn = await client.getTurn(session.remoteSessionId, turnId, {
-      signal: this.#connections.hostSignal,
-    });
+    let turn: ExternalRemoteTurn;
+    try {
+      turn = await client.getTurn(session.remoteSessionId, turnId, {
+        signal: this.#connections.hostSignal,
+      });
+    } catch (error) {
+      if (!(error instanceof RunsClientError && error.status === 404))
+        throw error;
+      this.#assertSessionRefresh(session, generation, lease, refreshVersion);
+      this.#finalizeMissingTurn(session, turnId);
+      this.#rememberSession(session);
+      if (options.persist === false) {
+        this.#emit({ type: "session", session });
+        return;
+      }
+      await this.#persist(lease);
+      this.#assertSessionRefresh(session, generation, lease, refreshVersion);
+      return;
+    }
     const terminal = isTerminal(
       mapExternalAgentStatus(turn.status, session.status),
     );
@@ -1901,6 +1918,49 @@ export class ExternalAgentController {
     session.activeTurnId = undefined;
     session.streamState = "idle";
     session.completedAt ??= nowIso();
+  }
+
+  /**
+   * Host runs are ephemeral. When `/v1/runs/{id}` 404s, stop treating the
+   * session as live so the sidebar and composer leave the "running" state.
+   */
+  #finalizeMissingTurn(
+    session: ExternalAgentSession,
+    turnId: string,
+  ): void {
+    const index = session.turns.findIndex((candidate) => candidate.id === turnId);
+    const existing = index >= 0 ? session.turns[index] : undefined;
+    const hasOutput = Boolean(
+      existing?.final_text?.trim() ||
+        session.output?.trim() ||
+        session.events.some(
+          (event) =>
+            event.turnId === turnId &&
+            (event.type === "message" || event.type === "tool"),
+        ),
+    );
+    const status = hasOutput ? "succeeded" : "cancelled";
+    const completedAt = Date.now() / 1000;
+    const turn: ExternalRemoteTurn = {
+      id: turnId,
+      session_id: session.remoteSessionId,
+      sequence: existing?.sequence ?? session.turns.length + 1,
+      status,
+      continuation_mode: existing?.continuation_mode ?? "replay",
+      requested_at: existing?.requested_at ?? completedAt,
+      completed_at: completedAt,
+      user_message: existing?.user_message,
+      final_text: existing?.final_text ?? session.output,
+      error: existing?.error,
+      model: existing?.model,
+      thinking_level: existing?.thinking_level,
+    };
+    if (index >= 0) session.turns[index] = turn;
+    else session.turns.push(turn);
+    session.actionError = undefined;
+    session.streamState = "idle";
+    if (status === "succeeded") session.error = undefined;
+    this.#applyLatestTurn(session, turn);
   }
 
   #abortActiveWork(): void {

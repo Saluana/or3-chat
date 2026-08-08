@@ -213,8 +213,7 @@
     </div>
 
     <footer
-      class="agent-sidebar-footer shrink-0 border-t border-[var(--md-outline-variant)] px-2 py-1.5"
-      :class="{ 'agent-sidebar-footer--mobile-nav': isMobile }"
+      class="agent-sidebar-footer shrink-0 border-t border-[var(--md-outline-variant)] px-2 py-1"
     >
       <UPopover v-model:open="hostSwitcherOpen">
         <button
@@ -849,8 +848,8 @@
                     </span>
                   </div>
                   <p class="mt-0.5 text-xs text-[var(--md-on-surface-variant)]">
-                    External-runtime Connect commands will appear after the
-                    supporting Connect release is published.
+                    Once OR3 Connect is enabled, start a new agent session to
+                    copy the one-command setup for this OR3 workspace.
                   </p>
                 </div>
               </div>
@@ -1042,7 +1041,6 @@ import { useExternalAgentRuntime } from "~/core/external-agents/runtime";
 import { useActiveSidebarPage } from "~/composables/sidebar/useActiveSidebarPage";
 import { useIcon } from "~/composables/useIcon";
 import { useThemeResolver } from "~/composables/useThemeResolver";
-import { isMobile } from "~/state/global";
 import { getGlobalMultiPaneApi } from "~/utils/multiPaneApi";
 import { closeSidebarIfMobile } from "~/utils/sidebarLayoutApi";
 import {
@@ -1863,14 +1861,12 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--md-surface) 58%, transparent);
   border-color: color-mix(in srgb, var(--md-outline) 30%, transparent);
   backdrop-filter: blur(6px);
-}
-
-/*
- * Mobile Create FAB overhangs ~26px above the tab bar. Keep the host switcher
- * clear of that raised control so it can be tapped and isn't painted over.
- */
-.agent-sidebar-footer--mobile-nav {
-  margin-bottom: 1.75rem;
+  /*
+   * Stay flush above the mobile tab bar. The center Create FAB may overlap the
+   * middle of this strip; host label/chevron stay on the sides and remain tappable.
+   */
+  position: relative;
+  z-index: 0;
 }
 
 .agent-sidebar-footer > span {

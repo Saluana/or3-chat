@@ -299,6 +299,76 @@ describe('resolveSessionContext provisioning and caching', () => {
         expect(authWorkspaceStoreMock.consumeInvite).not.toHaveBeenCalled();
     });
 
+    it('provisions the bootstrap owner on first sign-in without an invite', async () => {
+        testRuntimeConfig.value = {
+            ...testRuntimeConfig.value,
+            auth: {
+                ...testRuntimeConfig.value.auth,
+                registrationMode: 'invite_only',
+                invite: { tokenSecret: 'invite-secret' },
+                bootstrapEmail: 'owner@example.com',
+            },
+        };
+        providerGetSessionMock.mockResolvedValueOnce({
+            provider: PROVIDER_ID,
+            user: {
+                id: 'owner-1',
+                email: 'owner@example.com',
+                displayName: 'Owner',
+            },
+            expiresAt: new Date(Date.now() + 60_000),
+            claims: { exp: Math.floor(Date.now() / 1000) + 60 },
+        });
+        authWorkspaceStoreMock.getOrCreateUser.mockResolvedValueOnce({
+            userId: 'internal-owner',
+        });
+        authWorkspaceStoreMock.getOrCreateDefaultWorkspace.mockResolvedValueOnce({
+            workspaceId: 'ws-owner',
+            workspaceName: 'Owner workspace',
+        });
+        authWorkspaceStoreMock.getWorkspaceRole.mockResolvedValueOnce('owner');
+
+        const session = await resolveSessionContext(makeEvent());
+
+        expect(session.user?.id).toBe('internal-owner');
+        expect(authWorkspaceStoreMock.getOrCreateUser).toHaveBeenCalledWith({
+            provider: PROVIDER_ID,
+            providerUserId: 'owner-1',
+            email: 'owner@example.com',
+            displayName: 'Owner',
+        });
+        expect(authWorkspaceStoreMock.acceptInviteAndProvisionUser).not.toHaveBeenCalled();
+    });
+
+    it('still denies a non-owner identity on invite-only deployments', async () => {
+        testRuntimeConfig.value = {
+            ...testRuntimeConfig.value,
+            auth: {
+                ...testRuntimeConfig.value.auth,
+                registrationMode: 'invite_only',
+                invite: { tokenSecret: 'invite-secret' },
+                bootstrapEmail: 'owner@example.com',
+            },
+        };
+        providerGetSessionMock.mockResolvedValueOnce({
+            provider: PROVIDER_ID,
+            user: {
+                id: 'attacker-1',
+                email: 'attacker@example.com',
+                displayName: 'Attacker',
+            },
+            expiresAt: new Date(Date.now() + 60_000),
+            claims: { exp: Math.floor(Date.now() / 1000) + 60 },
+        });
+
+        await expect(resolveSessionContext(makeEvent())).rejects.toMatchObject({
+            statusCode: 403,
+            statusMessage: 'A valid invite is required to register.',
+        });
+        expect(authWorkspaceStoreMock.getOrCreateUser).not.toHaveBeenCalled();
+        expect(authWorkspaceStoreMock.acceptInviteAndProvisionUser).not.toHaveBeenCalled();
+    });
+
     it('does not create an internal user when atomic invite provisioning rejects', async () => {
         const inviteToken = createInviteToken(
             {

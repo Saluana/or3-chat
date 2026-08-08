@@ -310,6 +310,9 @@ export async function resolveSessionContext(
                 event,
                 store,
                 mode: registrationMode,
+                email: providerSession.user.email,
+                bootstrapEmail: (config.auth as { bootstrapEmail?: string } | undefined)
+                    ?.bootstrapEmail,
             });
 
             if (!registrationDecision.allowed) {

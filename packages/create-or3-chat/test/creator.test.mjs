@@ -152,7 +152,7 @@ test('documented initializer completes scaffolding and leaves the target directo
     }
 });
 
-test('Docker manifest preparation preserves selected custom providers', () => {
+test('Docker manifest preparation prunes inactive providers and replaces pinned custom providers', () => {
     const manifest = prepareDockerManifest({
         dependencies: {
             '@or3/plugin-sdk': 'file:./packages/plugin-sdk',
@@ -161,12 +161,16 @@ test('Docker manifest preparation preserves selected custom providers', () => {
             'or3-provider-convex': 'file:../or3-provider-convex',
             'or3-provider-s3': 'file:../or3-provider-s3',
         },
+        devDependencies: {
+            convex: '1.32.0',
+        },
     });
 
     assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.7');
-    assert.equal(manifest.dependencies['or3-provider-clerk'], '0.0.4');
-    assert.equal(manifest.dependencies['or3-provider-convex'], '0.0.4');
-    assert.equal(manifest.dependencies['or3-provider-s3'], '0.0.4');
+    assert.equal(manifest.dependencies['or3-provider-clerk'], undefined);
+    assert.equal(manifest.dependencies['or3-provider-convex'], undefined);
+    assert.equal(manifest.dependencies['or3-provider-s3'], undefined);
+    assert.equal(manifest.devDependencies['convex'], undefined);
 });
 
 test('generated template has registry-clean first-party dependencies', async () => {

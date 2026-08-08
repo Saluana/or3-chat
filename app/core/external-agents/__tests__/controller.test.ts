@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ExternalAgentController } from "../controller";
 import { projectExternalAgentConversation } from "../presentation";
+import { RunsClientError } from "../runs-client";
 import type {
   ExternalAgentClient,
   ExternalAgentCredentialVault,
@@ -965,6 +966,65 @@ describe("ExternalAgentController", () => {
       title: "Rehydrate me",
       hostGeneration: 1,
       status: "running",
+    });
+  });
+
+  it("clears stale running session refs when the host run 404s", async () => {
+    const saved = persistence({
+      hosts: [host],
+      activeHostId: host.id,
+      sessionRefs: [
+        {
+          hostId: host.id,
+          remoteSessionId: remoteSession.id,
+          title: "Ghost running",
+          status: "running",
+          activeTurnId: "message-1",
+          updatedAt: "2026-08-01T00:00:00.000Z",
+        },
+      ],
+    });
+    const client = fakeClient({ stream: [] });
+    client.listTurns = vi.fn(async () => ({
+      turns: [
+        {
+          id: "message-1",
+          session_id: remoteSession.id,
+          sequence: 1,
+          status: "running",
+          continuation_mode: "replay",
+          requested_at: 1_730_000_000_200,
+          user_message: "hello",
+        },
+      ],
+    }));
+    client.listTurnEvents = vi.fn(async () => ({ events: [] }));
+    client.getTurn = vi.fn(async () => {
+      throw new RunsClientError("Run not found", 404);
+    });
+    client.streamTurn = async function* () {
+      throw new RunsClientError("Run not found", 404);
+    };
+
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await vi.waitFor(() => {
+      expect(controller.getSession(remoteSession.id)?.status).toBe("cancelled");
+    });
+    expect(controller.getSession(remoteSession.id)).toMatchObject({
+      activeTurnId: undefined,
+      streamState: "idle",
+      actionError: undefined,
+    });
+    expect(saved.state.sessionRefs[0]).toMatchObject({
+      status: "cancelled",
+      activeTurnId: undefined,
     });
   });
 

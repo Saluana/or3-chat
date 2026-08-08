@@ -33,6 +33,7 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: npm install --global npm@11.6.2
+      - run: bun install --frozen-lockfile
       - name: Verify version contract
         run: bun run release:cloud:check
       - name: Read release version
@@ -44,6 +45,8 @@ jobs:
         run: bun run scripts/release/check-cloud-package.mjs --registry
       - name: Build and test Cloud CLI
         run: bun run cloud:package:check
+      - name: Typecheck the production Chat app
+        run: bun run type-check
       - name: Pack Cloud CLI
         id: pack
         working-directory: packages/or3-cloud

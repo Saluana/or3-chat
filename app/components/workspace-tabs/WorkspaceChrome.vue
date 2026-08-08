@@ -40,21 +40,6 @@
                         @new-tab="emit('new-tab')"
                         @create="emit('create-tab', $event)"
                     />
-                    <UTooltip :delay-duration="0" text="Open tabs">
-                        <UButton
-                            v-theme="'shell.tab-overflow'"
-                            v-bind="tabsButtonProps"
-                            class="workspace-chrome-action workspace-chrome-tabs-trigger"
-                            :aria-label="tabsTriggerLabel"
-                            :title="tabsTriggerLabel"
-                            @click="switcherOpen = true"
-                        >
-                            <UIcon :name="tabsIcon" />
-                            <span class="workspace-chrome-tabs-count">{{
-                                tabs.length
-                            }}</span>
-                        </UButton>
-                    </UTooltip>
                     <slot name="actions" />
                 </div>
             </div>
@@ -165,49 +150,6 @@ const chromeProps = useThemeOverrides({
     isNuxtUI: false,
 });
 
-/** Match PageShell chrome actions so every theme's `.theme-btn` applies. */
-const chromeActionBase = {
-    class: 'theme-btn workspace-chrome-action',
-    variant: 'ghost' as const,
-    size: 'sm' as const,
-    color: 'neutral' as const,
-    ui: {
-        base: 'theme-btn workspace-chrome-action',
-    },
-};
-
-const tabsButtonOverrides = useThemeOverrides({
-    component: 'button',
-    context: 'shell',
-    identifier: 'shell.tab-overflow',
-    isNuxtUI: true,
-});
-const tabsButtonProps = computed(() => ({
-    ...chromeActionBase,
-    ...tabsButtonOverrides.value,
-    class: [
-        chromeActionBase.class,
-        (tabsButtonOverrides.value as { class?: string }).class,
-        'workspace-chrome-tabs-trigger',
-    ]
-        .filter(Boolean)
-        .join(' '),
-    ui: {
-        ...chromeActionBase.ui,
-        ...((tabsButtonOverrides.value as { ui?: Record<string, unknown> }).ui ||
-            {}),
-        base: [
-            'theme-btn',
-            (
-                (tabsButtonOverrides.value as { ui?: { base?: string } }).ui ||
-                {}
-            ).base,
-        ]
-            .filter(Boolean)
-            .join(' '),
-    },
-}));
-
 const tabsIcon = useIcon('shell.tabs');
 
 const activeTab = computed(
@@ -223,10 +165,12 @@ const activeIcon = computed(() => {
         workspaceTabFallbackIcon(activeTab.value)
     );
 });
-const tabsTriggerLabel = computed(() => {
-    const count = props.tabs.length;
-    return count === 1 ? '1 open tab' : `${count} open tabs`;
-});
+
+function openTabSwitcher() {
+    switcherOpen.value = true;
+}
+
+defineExpose({ openTabSwitcher });
 </script>
 
 <style scoped>
@@ -344,17 +288,6 @@ const tabsTriggerLabel = computed(() => {
     font-weight: 600;
     line-height: 1.2;
     color: var(--md-on-surface);
-}
-.workspace-chrome-tabs-trigger {
-    gap: 0.2rem;
-    min-width: 2.5rem;
-    font-variant-numeric: tabular-nums;
-}
-.workspace-chrome-tabs-count {
-    font-size: 0.8125rem;
-    font-weight: 650;
-    line-height: 1;
-    color: inherit;
 }
 /* Tokenized chrome actions: match PageShell theme-btn look across themes. */
 .workspace-chrome--mobile :deep(.workspace-chrome-action) {

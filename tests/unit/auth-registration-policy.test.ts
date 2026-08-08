@@ -119,4 +119,28 @@ describe('auth registration policy', () => {
             expect(decision.invite.payload.workspaceId).toBe('ws_1');
         }
     });
+
+    it('provisions the configured bootstrap owner without an invite in invite_only mode', () => {
+        const decision = evaluateUnknownUserRegistration({
+            event: makeEvent(),
+            store: mockStore as any,
+            mode: 'invite_only',
+            email: 'Owner@Example.com',
+            bootstrapEmail: 'owner@example.com',
+        });
+
+        expect(decision).toMatchObject({ allowed: true, mode: 'invite_only', invite: null });
+    });
+
+    it('does not exempt non-owner emails in invite_only mode', () => {
+        const decision = evaluateUnknownUserRegistration({
+            event: makeEvent(),
+            store: mockStore as any,
+            mode: 'invite_only',
+            email: 'someone@example.com',
+            bootstrapEmail: 'owner@example.com',
+        });
+
+        expect(decision).toMatchObject({ allowed: false, reason: 'invite_required' });
+    });
 });

@@ -128,6 +128,18 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
     setEnv(env, 'OR3_AUTH_PROVIDER', answers.authProvider);
     setEnv(env, 'OR3_GUEST_ACCESS_ENABLED', boolToEnv(answers.guestAccessEnabled));
 
+    // Managed-style Docker deployments get the same closed defaults as the
+    // @or3/cloud operator: invite-only registration and no source-extension
+    // install/rebuild in the immutable image. Source targets stay configurable.
+    const isManagedDocker =
+        answers.deploymentTarget === 'docker' && Boolean(answers.ssrAuthEnabled);
+    if (isManagedDocker) {
+        setEnv(env, 'OR3_AUTH_REGISTRATION_MODE', 'invite_only');
+        setEnv(env, 'OR3_AUTH_AUTO_PROVISION', 'false');
+        setEnv(env, 'OR3_PLUGIN_ZIP_INSTALL_ENABLED', 'false');
+        setEnv(env, 'OR3_ADMIN_ALLOW_REBUILD', 'false');
+    }
+
     setEnv(env, 'OR3_SYNC_ENABLED', boolToEnv(answers.syncEnabled));
     setEnv(env, 'OR3_CLOUD_SYNC_ENABLED', boolToEnv(answers.syncEnabled));
     setEnv(env, 'OR3_SYNC_PROVIDER', answers.syncProvider);
@@ -288,6 +300,11 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
             env,
             'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD',
             answers.basicAuthBootstrapPassword
+        );
+        setEnv(
+            env,
+            'OR3_AUTH_INVITE_TOKEN_SECRET',
+            answers.basicAuthInviteTokenSecret
         );
     }
 

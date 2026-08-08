@@ -86,16 +86,30 @@ export function normalizeConnectRuntimeMetadata(value: {
     driver: ConnectDriver;
     basePath: '/' | '/or3/';
 } | null {
-    const runtime = value.runtime === undefined ? 'intern' : value.runtime;
-    if (runtime !== 'intern' && runtime !== 'openclaw' && runtime !== 'hermes') {
+    const runtimeValue = value.runtime === undefined ? 'intern' : value.runtime;
+    if (!isConnectRuntime(runtimeValue)) {
         return null;
     }
+    const runtime: ConnectRuntime = runtimeValue;
     const expectedDriver: ConnectDriver = runtime === 'intern' ? 'intern' : 'runs';
     const expectedBasePath = runtime === 'openclaw' ? '/or3/' : '/';
-    const driver = value.driver === undefined ? expectedDriver : value.driver;
-    const basePath = value.basePath === undefined ? expectedBasePath : value.basePath;
-    if (driver !== expectedDriver || basePath !== expectedBasePath) return null;
-    return { runtime, driver, basePath };
+    const driverValue = value.driver === undefined ? expectedDriver : value.driver;
+    if (!isConnectDriver(driverValue) || driverValue !== expectedDriver) return null;
+    const basePathValue = value.basePath === undefined ? expectedBasePath : value.basePath;
+    if (!isConnectBasePath(basePathValue) || basePathValue !== expectedBasePath) return null;
+    return { runtime, driver: driverValue, basePath: basePathValue };
+}
+
+function isConnectRuntime(value: unknown): value is ConnectRuntime {
+    return value === 'intern' || value === 'openclaw' || value === 'hermes';
+}
+
+function isConnectDriver(value: unknown): value is ConnectDriver {
+    return value === 'intern' || value === 'runs';
+}
+
+function isConnectBasePath(value: unknown): value is '/' | '/or3/' {
+    return value === '/' || value === '/or3/';
 }
 
 export function storeConnectHost(host: ConnectHostMetadata): StoredConnectHost {

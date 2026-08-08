@@ -7,6 +7,16 @@
                     Paste a direct link to a .zip archive. GitHub archive URLs work — e.g.:
                     <code class="text-xs break-all">https://github.com/user/repo/archive/refs/heads/main.zip</code>
                 </p>
+                <div
+                    v-if="codeTrustWarning"
+                    class="p-3 rounded border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)]"
+                >
+                    <div class="text-xs font-semibold">Trusted code warning</div>
+                    <div class="text-xs opacity-80 mt-1">
+                        This archive is application code. It executes with OR3 server privileges
+                        once activated and is not sandboxed. Only install code you trust.
+                    </div>
+                </div>
                 <UInput
                     v-model="url"
                     placeholder="https://github.com/user/repo/archive/refs/heads/main.zip"
@@ -42,6 +52,8 @@ const props = defineProps<{
     label: string;
     /** Whether an install is currently in progress. */
     loading: boolean;
+    /** Show the trusted-code warning for source installs. */
+    codeTrustWarning?: boolean;
 }>();
 
 const emit = defineEmits<{

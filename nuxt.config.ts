@@ -480,6 +480,7 @@ export default defineNuxtConfig({
                     ? Number(process.env.OR3_AUTH_INVITE_TOKEN_TTL_SECONDS)
                     : 7 * 24 * 60 * 60,
             },
+            bootstrapEmail: process.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL || '',
         },
         sync: {
             enabled: effectiveSyncEnabled,
@@ -653,6 +654,9 @@ export default defineNuxtConfig({
                 pluginIsolationEnabled: adminConfig.pluginIsolationEnabled,
                 pluginRouteDispatcherEnabled:
                     adminConfig.pluginRouteDispatcherEnabled,
+                pluginZipInstallEnabled: adminConfig.pluginZipInstallEnabled,
+                allowRestart: adminConfig.allowRestart,
+                allowRebuild: adminConfig.allowRebuild,
             },
             webhooks: {
                 enabled: webhooksConfig.enabled,

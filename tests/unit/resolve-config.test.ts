@@ -218,6 +218,33 @@ describe('buildOr3CloudConfigFromEnv', () => {
         );
     });
 
+    it('maps an explicit invite-only registration mode from env', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+            OR3_AUTH_REGISTRATION_MODE: 'invite_only',
+            OR3_GUEST_ACCESS_ENABLED: 'false',
+            OR3_AUTH_AUTO_PROVISION: 'false',
+            NODE_ENV: 'development',
+        });
+
+        expect(config.auth.registrationMode).toBe('invite_only');
+        expect(config.auth.guestAccessEnabled).toBe(false);
+        expect(config.auth.autoProvision).toBe(false);
+    });
+
+    it('maps the extension zip install toggle from env', () => {
+        const enabled = buildOr3CloudConfigFromEnv({
+            NODE_ENV: 'development',
+        });
+        const disabled = buildOr3CloudConfigFromEnv({
+            OR3_PLUGIN_ZIP_INSTALL_ENABLED: 'false',
+            NODE_ENV: 'development',
+        });
+
+        expect(enabled.admin?.pluginZipInstallEnabled).toBe(true);
+        expect(disabled.admin?.pluginZipInstallEnabled).toBe(false);
+    });
+
     it('maps lock page settings from env', () => {
         const config = buildOr3CloudConfigFromEnv({
             SSR_AUTH_ENABLED: 'true',

@@ -385,6 +385,10 @@ export function buildOr3CloudConfigFromEnv(
                 env.OR3_DISABLE_NON_CORE_PLUGINS,
                 false,
             ),
+            pluginZipInstallEnabled: envBool(
+                env.OR3_PLUGIN_ZIP_INSTALL_ENABLED,
+                true,
+            ),
             pluginRuntimeShadowEnabled: envBool(
                 env.OR3_PLUGIN_RUNTIME_SHADOW_ENABLED,
                 true,

@@ -506,6 +506,9 @@ function ensurePresetLocalSecrets(answers: WizardAnswers): WizardAnswers {
             answers.basicAuthJwtSecret?.trim() || generateSecureSecret(48),
         basicAuthRefreshSecret:
             answers.basicAuthRefreshSecret?.trim() || generateSecureSecret(48),
+        basicAuthInviteTokenSecret:
+            answers.basicAuthInviteTokenSecret?.trim() ||
+            generateSecureSecret(48),
         basicAuthBootstrapEmail: bootstrapEmail,
         basicAuthBootstrapPassword: bootstrapPassword,
         fsTokenSecret:

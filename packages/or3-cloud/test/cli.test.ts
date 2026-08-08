@@ -67,6 +67,43 @@ test('builds public origin settings without exposing secrets in the origin', () 
   expect(env.OR3_ALLOWED_ORIGINS).not.toContain(env.OR3_BASIC_AUTH_JWT_SECRET);
 });
 
+test('locks every managed profile to invite-only registration with guests off', () => {
+  for (const mode of ['local', 'public'] as const) {
+    const env = buildEnv({
+      mode,
+      version: '0.1.12',
+      directory: '/tmp/cloud-registration-test',
+      email: 'admin@example.com',
+      password: 'AValidPassword123',
+      domain: 'cloud.example.com',
+      port: 3000,
+    });
+    expect(env.OR3_AUTH_REGISTRATION_MODE).toBe('invite_only');
+    expect(env.OR3_AUTH_AUTO_PROVISION).toBe('false');
+    expect(env.OR3_GUEST_ACCESS_ENABLED).toBe('false');
+    expect(env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL).toBe('admin@example.com');
+    expect(env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD).toBe('AValidPassword123');
+    expect(env.OR3_AUTH_INVITE_TOKEN_SECRET).toBeTruthy();
+    expect(env.OR3_AUTH_INVITE_TOKEN_SECRET).not.toBe('AValidPassword123');
+  }
+});
+
+test('keeps custom extension install and rebuild off in every managed profile', () => {
+  for (const mode of ['local', 'public'] as const) {
+    const env = buildEnv({
+      mode,
+      version: '0.1.12',
+      directory: '/tmp/cloud-extensions-test',
+      email: 'admin@example.com',
+      password: 'AValidPassword123',
+      domain: 'cloud.example.com',
+      port: 3000,
+    });
+    expect(env.OR3_PLUGIN_ZIP_INSTALL_ENABLED).toBe('false');
+    expect(env.OR3_ADMIN_ALLOW_REBUILD).toBe('false');
+  }
+});
+
 test('parses exact flags and accepts only complete release versions', () => {
   expect(parseFlags(['target', '--local', '--port=3100', '--admin-email', 'admin@example.com'])).toEqual({
     positionals: ['target'],

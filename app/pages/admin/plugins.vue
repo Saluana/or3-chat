@@ -20,7 +20,7 @@
         </div>
 
         <div
-            v-if="rebuildRequired"
+            v-if="rebuildRequired && rebuildAvailable"
             class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)]"
         >
             <div class="font-semibold text-sm">Rebuild + Restart Required</div>
@@ -28,6 +28,20 @@
                 Newly installed client plugins are bundled at build time. In production, run
                 Rebuild + Restart from Admin &gt; System before enabling them. In development,
                 restart the dev server to pick up new client modules.
+            </div>
+        </div>
+
+        <div
+            v-if="extensionInstallDisabled"
+            class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)]"
+        >
+            <div class="text-sm">
+                Custom plugin upload and install are disabled on this managed deployment.
+                This image is immutable and cannot rebuild installed source extensions.
+            </div>
+            <div class="text-xs opacity-70 mt-1">
+                Bundled plugins remain available above. To install custom plugins, deploy OR3
+                from source and restart the process after installing.
             </div>
         </div>
 
@@ -39,7 +53,7 @@
                         Add or uninstall site-wide; activate per workspace.
                     </p>
                 </div>
-                <div v-if="canManageSitePlugins" class="flex flex-wrap items-center gap-2">
+                <div v-if="canManageSitePlugins && extensionInstallEnabled" class="flex flex-wrap items-center gap-2">
                      <!-- Input hidden mostly, custom button triggers it -->
                     <input
                         ref="fileInput"
@@ -47,7 +61,7 @@
                         accept=".zip"
                         class="hidden"
                         :disabled="fileInstalling"
-                        @change="installPlugin"
+                        @change="requestPluginFileInstall"
                     />
                     <UButton size="sm" :disabled="urlInstalling || fileInstalling" @click="showUrlModal = true" icon="i-heroicons-link">
                         Add from URL
@@ -59,7 +73,7 @@
             </div>
 
             <!-- URL Import Modal -->
-            <AdminUrlImportModal v-model="showUrlModal" label="Plugin" :loading="urlInstalling" @install="installPluginFromUrl" />
+            <AdminUrlImportModal v-model="showUrlModal" label="Plugin" :loading="urlInstalling" :code-trust-warning="true" @install="installPluginFromUrl" />
 
             <div
                 v-if="configuredPluginModules.length > 0"
@@ -293,6 +307,16 @@
                 <PluginRuntimeInspector />
             </div>
         </details>
+
+        <ConfirmDialog
+            v-model="showInstallTrustConfirm"
+            title="Install plugin from source?"
+            message="This plugin zip is application code. It will execute with OR3 server privileges once activated and is not sandboxed."
+            confirm-text="Install anyway"
+            important-note="Only install plugins you wrote or that you trust from a reviewed source."
+            note-tone="warning"
+            @confirm="confirmPluginFileInstall"
+        />
     </div>
 </template>
 
@@ -373,13 +397,39 @@ const { fileInput, triggerFileInput, install, installFromUrl, uninstall } = useE
     canManageSitePlugins
 );
 const runtimeConfig = useRuntimeConfig();
+const publicAdminConfig = (runtimeConfig.public as {
+    admin?: {
+        pluginZipInstallEnabled?: boolean;
+        allowRebuild?: boolean;
+    };
+}).admin ?? {};
+const extensionInstallEnabled = publicAdminConfig.pluginZipInstallEnabled !== false;
+const rebuildAvailable = publicAdminConfig.allowRebuild === true;
+const extensionInstallDisabled = !extensionInstallEnabled;
 
 // URL import state
 const showUrlModal = ref(false);
 const urlInstalling = ref(false);
 const fileInstalling = ref(false);
+const showInstallTrustConfirm = ref(false);
 const toast = useToast();
 const rebuildRequired = ref(false);
+
+function requestPluginFileInstall() {
+    if (!canManageSitePlugins.value) return;
+    const file = fileInput.value?.files?.[0];
+    if (!file) return;
+    showInstallTrustConfirm.value = true;
+}
+
+watch(showInstallTrustConfirm, (open) => {
+    if (!open && fileInput.value) fileInput.value.value = '';
+});
+
+function confirmPluginFileInstall() {
+    showInstallTrustConfirm.value = false;
+    void installPlugin();
+}
 
 async function installPluginFromUrl(url: string) {
     if (!canManageSitePlugins.value) return;

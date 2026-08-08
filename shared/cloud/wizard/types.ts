@@ -182,6 +182,8 @@ export interface WizardAnswers {
     basicAuthJwtSecret?: string;
     /** Maps to `OR3_BASIC_AUTH_REFRESH_SECRET`. Falls back to JWT secret if omitted. */
     basicAuthRefreshSecret?: string;
+    /** Maps to `OR3_AUTH_INVITE_TOKEN_SECRET`. Generated when invite-only registration is active. */
+    basicAuthInviteTokenSecret?: string;
     /** Maps to `OR3_BASIC_AUTH_ACCESS_TTL_SECONDS`. Default: 900 (15 min). */
     basicAuthAccessTtlSeconds: number;
     /** Maps to `OR3_BASIC_AUTH_REFRESH_TTL_SECONDS`. Default: 2592000 (30 days). */

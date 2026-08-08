@@ -39,6 +39,20 @@ export function resolveRegistrationMode(config: ReturnType<typeof useRuntimeConf
     return legacy === false ? 'disabled' : 'open';
 }
 
+function isBootstrapOwner(input: {
+    event: H3Event;
+    store: AuthWorkspaceStore;
+    mode: RegistrationMode;
+    inviteToken?: string | null;
+    email?: string | null;
+    bootstrapEmail?: string | null;
+}): boolean {
+    if (typeof input.email !== 'string' || !input.email.trim()) return false;
+    const bootstrap = input.bootstrapEmail?.trim().toLowerCase();
+    if (!bootstrap) return false;
+    return input.email.trim().toLowerCase() === bootstrap;
+}
+
 export function getInviteTokenFromEvent(event: H3Event): string | null {
     const headerToken = getHeader(event, 'x-or3-invite-token');
     if (headerToken && headerToken.trim()) {
@@ -77,6 +91,8 @@ export function evaluateUnknownUserRegistration(input: {
     store: AuthWorkspaceStore;
     mode: RegistrationMode;
     inviteToken?: string | null;
+    email?: string | null;
+    bootstrapEmail?: string | null;
 }): RegistrationDecision {
     const { event, store, mode } = input;
 
@@ -86,6 +102,12 @@ export function evaluateUnknownUserRegistration(input: {
 
     if (mode === 'disabled') {
         return { allowed: false, mode, reason: 'disabled' };
+    }
+
+    if (mode === 'invite_only' && isBootstrapOwner(input)) {
+        // The deployment owner was bootstrapped by the operator; their first
+        // sign-in provisions their account without requiring an invite.
+        return { allowed: true, mode, invite: null };
     }
 
     if (typeof store.acceptInviteAndProvisionUser !== 'function') {
