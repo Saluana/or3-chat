@@ -786,7 +786,7 @@ export default defineNuxtConfig({
         },
     },
     // Load Tailwind + theme variables globally
-    css: ['~/assets/css/main.css'],
+    css: ['~/assets/css/fonts.css', '~/assets/css/main.css'],
     icon: {
         serverBundle: {
             // Only bundle the iconify collections we actually use
@@ -801,40 +801,10 @@ export default defineNuxtConfig({
             ],
         },
     },
+    // Nuxt UI registers this module as a dependency. Keep its resolver local so
+    // production builds cannot block on external font services.
     fonts: {
-        defaults: {
-            // Only emit the latin subset + normal style to keep the global font CSS lightweight
-            subsets: ['latin'],
-            styles: ['normal'],
-            weights: ['400'],
-        },
-        families: [
-            {
-                name: 'Press Start 2P',
-                provider: 'google',
-                styles: ['normal'],
-                weights: ['400'],
-                subsets: ['latin'],
-            },
-            {
-                name: 'VT323',
-                provider: 'google',
-                styles: ['normal'],
-                weights: ['400'],
-                subsets: ['latin'],
-            },
-            {
-                name: 'IBM Plex Sans',
-                provider: 'google',
-                styles: ['normal'],
-                weights: ['400', '500', '600', '700'],
-                subsets: ['latin'],
-            },
-        ],
-        experimental: {
-            // Skip generating local metric fallback @font-face blocks (saves ~20% of the CSS payload)
-            disableLocalFallbacks: true,
-        },
+        provider: 'local',
     },
     nitro: {
         // Emit precompressed variants for the self-hosted Node server while
