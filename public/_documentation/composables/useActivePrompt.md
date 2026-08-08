@@ -80,11 +80,11 @@ Note: `getActivePromptContent()` returns the raw content value (or `null`) and i
 ## API
 
 -   activePromptId: Readonly<Ref<string | null>> — readonly reactive id of the selected prompt.
--   activePromptContent: Readonly<Ref<any | null>> — readonly reactive prompt content loaded from DB.
+-   activePromptContent: Readonly<Ref<TipTapDocument | null>> — readonly reactive prompt content (TipTap JSON) loaded from DB.
 -   setActivePrompt(id: string | null): Promise<void> — set selection. Passing `null` clears. If the
     id is not found the selection will be cleared.
 -   clearActivePrompt(): void — convenience that clears the selection (calls `setActivePrompt(null)`).
--   getActivePromptContent(): any | null — synchronous getter returning the raw content value.
+-   getActivePromptContent(): TipTapDocument | null — synchronous getter returning the raw content value.
 
 ---
 
@@ -95,15 +95,15 @@ The composable exposes the following TypeScript shape (approx):
 ```ts
 export interface ActivePromptState {
     activePromptId: string | null;
-    activePromptContent: any | null;
+    activePromptContent: TipTapDocument | null;
 }
 
 function useActivePrompt(): {
     activePromptId: Readonly<Ref<string | null>>;
-    activePromptContent: Readonly<Ref<any | null>>;
+    activePromptContent: Readonly<Ref<TipTapDocument | null>>;
     setActivePrompt(id: string | null): Promise<void>;
     clearActivePrompt(): void;
-    getActivePromptContent(): any | null;
+    getActivePromptContent(): TipTapDocument | null;
 };
 ```
 

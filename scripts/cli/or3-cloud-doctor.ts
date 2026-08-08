@@ -122,14 +122,30 @@ export async function runDoctorChecks(input: {
     }
 
     if (syncProvider === 'sqlite' && config.sync.enabled) {
-        const dbPath = map.OR3_SQLITE_DB_PATH || './.data/or3-sync.sqlite';
-        const dir = resolve(cwd, dbPath);
-        const ok = checkWritableDir(dir);
-        lines.push(
-            ok
-                ? `  ✅ SQLite sync DB path accessible`
-                : `  ⚠️  SQLite sync DB path may not be writable: ${dir}`
-        );
+        const sqliteDriver =
+            map.OR3_SQLITE_DRIVER?.trim().toLowerCase() || 'better-sqlite3';
+        if (sqliteDriver === 'better-sqlite3' || sqliteDriver === 'bun') {
+            const dbPath = map.OR3_SQLITE_DB_PATH || './.data/or3-sync.sqlite';
+            const dir = resolve(cwd, dbPath);
+            const ok = checkWritableDir(dir);
+            lines.push(
+                ok
+                    ? `  ✅ SQLite sync DB path accessible`
+                    : `  ⚠️  SQLite sync DB path may not be writable: ${dir}`
+            );
+        } else if (sqliteDriver === 'turso') {
+            lines.push(
+                map.OR3_SQLITE_TURSO_URL && map.OR3_SQLITE_TURSO_AUTH_TOKEN
+                    ? '  ✅ Turso SQLite runtime configured'
+                    : '  ⚠️  Turso SQLite runtime requires OR3_SQLITE_TURSO_URL and OR3_SQLITE_TURSO_AUTH_TOKEN'
+            );
+        } else if (sqliteDriver === 'd1') {
+            lines.push(
+                map.OR3_SQLITE_D1_BINDING
+                    ? `  ✅ Cloudflare D1 binding configured: ${map.OR3_SQLITE_D1_BINDING}`
+                    : '  ⚠️  Cloudflare D1 runtime requires OR3_SQLITE_D1_BINDING'
+            );
+        }
     }
     if (authProvider === 'basic-auth') {
         const dbPath =

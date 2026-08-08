@@ -27,7 +27,7 @@ bun add or3-provider-fs@link:../or3-provider-fs
 SSR_AUTH_ENABLED=true
 OR3_STORAGE_ENABLED=true
 NUXT_PUBLIC_STORAGE_PROVIDER=fs
-OR3_STORAGE_FS_ROOT=.data/storage
+OR3_STORAGE_FS_ROOT=/srv/or3/.data/storage
 OR3_STORAGE_FS_TOKEN_SECRET=replace-with-32+-char-random-secret
 ```
 

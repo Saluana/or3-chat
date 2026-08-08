@@ -173,21 +173,27 @@ interface AppError extends Error {
 
 ```ts
 type ErrorCode =
-    | 'ERR_INTERNAL'           // Generic internal error
-    | 'ERR_STREAM_ABORTED'     // User cancelled stream
-    | 'ERR_STREAM_FAILURE'     // Stream died unexpectedly
-    | 'ERR_NETWORK'            // Network connectivity
-    | 'ERR_TIMEOUT'            // Operation timed out
-    | 'ERR_DB_WRITE_FAILED'    // Database insert/update failed
-    | 'ERR_DB_READ_FAILED'     // Database query failed
-    | 'ERR_DB_QUOTA_EXCEEDED'  // Storage quota exceeded
-    | 'ERR_FILE_VALIDATION'    // File validation failed
-    | 'ERR_FILE_PERSIST'       // Could not save file
-    | 'ERR_VALIDATION'         // Input validation failed
-    | 'ERR_AUTH'               // Authentication failed
-    | 'ERR_RATE_LIMIT'         // Rate limited
-    | 'ERR_UNSUPPORTED_MODEL'  // Model not available
-    | 'ERR_HOOK_FAILURE'       // Hook threw exception
+    | 'ERR_INTERNAL'              // Generic internal error
+    | 'ERR_STREAM_ABORTED'        // User cancelled stream
+    | 'ERR_STREAM_FAILURE'        // Stream died unexpectedly
+    | 'ERR_NETWORK'               // Network connectivity
+    | 'ERR_TIMEOUT'               // Operation timed out
+    | 'ERR_DB_WRITE_FAILED'       // Database insert/update failed
+    | 'ERR_DB_READ_FAILED'        // Database query failed
+    | 'ERR_DB_QUOTA_EXCEEDED'     // Storage quota exceeded
+    | 'ERR_FILE_VALIDATION'       // File validation failed
+    | 'ERR_FILE_PERSIST'          // Could not save file
+    | 'ERR_FILE_TOO_LARGE'        // File exceeds size limit
+    | 'ERR_STORAGE_UPLOAD_FAILED' // Storage upload failed
+    | 'ERR_STORAGE_DOWNLOAD_FAILED' // Storage download failed
+    | 'ERR_STORAGE_QUOTA_EXCEEDED' // Storage quota exceeded
+    | 'ERR_STORAGE_FILE_NOT_FOUND' // File missing in storage
+    | 'ERR_STORAGE_PROVIDER_ERROR' // Storage provider error
+    | 'ERR_VALIDATION'            // Input validation failed
+    | 'ERR_AUTH'                  // Authentication failed
+    | 'ERR_RATE_LIMIT'            // Rate limited
+    | 'ERR_UNSUPPORTED_MODEL'     // Model not available
+    | 'ERR_HOOK_FAILURE'          // Hook threw exception
 ```
 
 ---
@@ -216,6 +222,8 @@ type ErrorCode =
 Nuxt UI's toast API is captured once during client plugin setup. This keeps
 `reportError()` safe when it runs later from asynchronous hooks, timers, or
 database callbacks where Vue injection composables cannot be called directly.
+The client plugin registers it via `setErrorToastApi(api)`; a null API is a
+no-op.
 
 ### Duplicate suppression
 
@@ -226,10 +234,13 @@ database callbacks where Vue injection composables cannot be called directly.
 
 ### Secret scrubbing
 
--   Scans all string values in message and tags
--   Replaces strings matching `/api|key|secret|token/i` with `***`
--   Truncates strings longer than 8192 chars
--   Preserves short strings and non-strings
+-   Scans the message and all tag values
+-   A value becomes `***` only when all of these hold:
+    -   It contains an `api|key|secret|token` keyword
+    -   It is longer than 20 characters
+    -   It looks like a token (no whitespace, only `A-Za-z0-9_-.:`)
+-   Strings longer than 8192 chars are truncated with a trailing ellipsis
+-   Short strings and non-strings pass through unchanged
 
 ---
 
@@ -388,6 +399,11 @@ reportError(err('ERR_NETWORK', 'Fetch failed'), { silent: true });
 // Within 300ms? Suppressed. After? Logged again.
 ```
 
+### Retry defaults
+
+`simpleRetry` retries a fixed number of times with a fixed delay. Defaults:
+`attempts = 2`, `delayMs = 400`. The last failure is rethrown.
+
 ---
 
 ## Troubleshooting
@@ -470,7 +486,7 @@ export function reportError(
         tags?: Record<string, any>;
         toast?: boolean;
         silent?: boolean;
-        retry?: () => any;
+        retry?: () => void;
         severity?: ErrorSeverity;
         retryable?: boolean;
     }
@@ -478,9 +494,11 @@ export function reportError(
 
 export async function simpleRetry<T>(
     fn: () => Promise<T>,
-    attempts?: number,
-    delayMs?: number
+    attempts?: number,   // default 2
+    delayMs?: number     // default 400
 ): Promise<T>
+
+export function setErrorToastApi(api: ErrorToastApi | null): void;
 ```
 
 ---

@@ -9,7 +9,7 @@ The OR3 Notification Center provides real-time, in-app notifications for AI even
 ### What You Get
 
 - **AI Streaming Notifications** - Alerts when background AI responses complete
-- **Sync Conflict Alerts** - Notifications when data conflicts are automatically resolved
+- **Sync Error Warnings** - Warnings when a local sync operation fails permanently
 - **System Warnings** - Errors and important system events
 - **Plugin Events** - Custom notifications from plugins and workflows
 
@@ -39,28 +39,23 @@ The OR3 Notification Center provides real-time, in-app notifications for AI even
 | Type | Icon | Description |
 |------|------|-------------|
 | `ai.message.received` | 🤖 | AI response is ready |
-| `sync.conflict` | 🔄 | Data conflict was resolved |
+| `sync.conflict` | 🔄 | Reserved type; conflicts are resolved silently and never create notifications |
 | `system.warning` | ⚠️ | System error or warning |
 | `custom.*` | 🔌 | Plugin-specific notifications |
 
 ### Sync Conflict Notifications
 
-When you use OR3 Cloud across multiple devices, you may occasionally see "Sync conflict resolved" notifications. This is **normal and expected**:
+Conflicts do **not** create notifications. When OR3 Cloud resolves a conflict
+across devices using Last-Write-Wins, it only emits a development log through
+the `sync.conflict:action:detected` hook. Nothing appears in the Notification
+Center, so there is no notification storm during initial sync or after a cursor
+reset.
 
-- OR3 automatically resolves conflicts using Last-Write-Wins
-- You'll see one notification per conflict
-- **During initial sync**, conflict notifications are suppressed to avoid noise
-- Historical conflicts (older than 24 hours) don't generate notifications
-
-**Why you see them:**
-- You edited the same message/thread on two devices
-- Network issues caused delayed sync
-- Multiple rapid edits created timing conflicts
-
-**What to do:**
-- Nothing! The conflict is already resolved
-- The notification is just informational
-- Your data is safe and consistent
+The only sync-related notification is the sync error warning: a
+`system.warning` created when a local operation fails permanently. Those
+warnings are suppressed during bootstrap and rescan, deduplicated within a
+15-second window per record and message, and burst-limited (more than 5 in 10
+seconds starts a 60-second cooldown).
 
 ---
 
@@ -179,12 +174,29 @@ hooks.addAction('notify:action:cleared', ({ count }) => {
 Event Source → Hook Engine → Plugin Listener → NotificationService → Dexie → UI
 ```
 
-1. **Event Source** emits a hook action (e.g., `sync.conflict:action:detected`)
+1. **Event Source** emits a hook action (e.g., `notify:action:push` from a background job completion)
 2. **Hook Engine** routes to registered listeners
 3. **Plugin Listener** converts to notification payload
 4. **NotificationService** applies filters and stores
 5. **Dexie** persists to IndexedDB
 6. **UI** updates via live query
+
+### Background Job Notifications
+
+Notifications for detached background chat jobs follow strict creation rules:
+
+- A local notification is created only when the job has **no in-app subscribers**
+  (`tracker.subscribers.size === 0`), the tab is hidden or subscribers are
+  absent, and the thread is not muted.
+- Muting is stored in Dexie `kv` under `notification_muted_threads`
+  (scoped per user as `notification_muted_threads:<userId>` with a legacy
+  unscoped fallback).
+- When server-side notifications are preferred, the client skips its own
+  notification and the **server** emits one only when no SSE viewers are
+  connected to that instance (`hasJobViewers(jobId)`).
+- Viewer tracking is process-local. In multi-instance deployments, a user
+  watching on another server is not seen, so server notifications can still
+  fire.
 
 ### Cross-Device Sync
 
@@ -270,30 +282,26 @@ echo $VITE_CONVEX_URL    # Should be set
 - Check network connectivity
 - Verify user authentication
 
-### Too Many Sync Conflict Notifications
+### Too Many Sync Notifications
 
-**This is now fixed** - conflict notifications are automatically suppressed during:
-- Initial workspace bootstrap (first load)
-- Rescan operations (cursor reset)
-- Historical conflicts (older than 24 hours)
+Sync conflict notifications do not exist, so a storm of them cannot happen.
+If you still see repeated sync error or AI notifications:
 
-If you're still seeing many conflict notifications:
-- Check that you're on the latest version
+- Sync error warnings are suppressed during bootstrap/rescan and deduped within
+  a 15-second window
+- AI completion notifications are skipped while a tab is watching the job
+  (subscribers attached) or when the thread is muted
 - Verify the `notification-listeners.client.ts` plugin is loaded
-- Look for console logs: `[notify] Skipping historical conflict notification`
+- Look for console logs starting with `[notify]`
 
 ### Debug Mode
 
-Enable verbose logging:
+There is no `debug:notifications` flag. Relevant logs appear in the browser
+console under these prefixes:
 
-```typescript
-// In browser console
-localStorage.setItem('debug:notifications', 'true');
-
-// Reload page and check console for:
-// [useNotifications] Query result: [...]
-// [NotificationService] Creating notification: {...}
-```
+- `[useNotifications]` - query and subscription errors, invalid muted-thread data
+- `[notify]` - sync event logs from `notification-listeners.client.ts`
+- `[NotificationService]` - service lifecycle errors
 
 ---
 

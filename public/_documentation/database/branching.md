@@ -41,12 +41,13 @@ Utilities for forking threads, retry-branching assistant replies, and building m
 -   `branch.fork:action:before/after` around thread creation.
 -   `branch.retry:*` sequence around retry-based forks.
 -   `branch.context:filter:messages` lets extensions rewrite the merged entity list before final merging.
+-   `branch.context:action:after` reports the merged context counts after building.
 
 ---
 
 ## Implementation notes
 
-1. **Transactions** — Forking and context building happen within Dexie transactions touching `threads` and `messages` tables to avoid race conditions.
+1. **Transactions** — `forkThread` runs inside a Dexie transaction touching `threads` and `messages` to avoid race conditions; `buildContext` uses parallel reads and is not transactional.
 2. **Indexing** — Copied messages normalize indexes starting at `0` to keep order stable in fresh forks.
 3. **Role normalization** — Any non-assistant/system role becomes `user` so AI context stays predictable.
 4. **Perf** — `buildContext` batches ancestor and local queries in parallel and dedupes via `Map` before merging.

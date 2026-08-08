@@ -16,7 +16,7 @@ Everything in this tutorial maps directly to the code in the repository—no hyp
 -   Familiarity with Vue single-file components and Nuxt plugins.
 -   Access to the shared posts table (already provided by the app).
 
-> **Tip:** A complete implementation ships in `app/plugins/custom-pane-todo-example.client.ts`. Use it as a reference while you work through the steps below.
+> **Tip:** A complete implementation ships in `app/plugins/examples/custom-pane-todo-example.client.ts`. Use it as a reference while you work through the steps below.
 
 ---
 
@@ -30,9 +30,9 @@ import { defineComponent, h, ref, computed, onMounted, watch } from 'vue';
 import { usePaneApps } from '~/composables/core/usePaneApps';
 import {
     useSidebarMultiPane,
-    useSidebarPageControls,
     useSidebarPostsApi,
-} from '~/composables/sidebar';
+} from '~/composables/sidebar/useSidebarEnvironment';
+import { useSidebarPageControls } from '~/composables/sidebar/useSidebarPageControls';
 import { usePostsList } from '~/composables/posts/usePostsList';
 
 export default defineNuxtPlugin(async () => {
@@ -478,7 +478,7 @@ If you need to reuse an existing pane instead of opening a new one each time, ca
 
 ## Optional Enhancements
 
--   **Reuse panes:** Search `custom-pane-todo-example.client.ts` for `updatePane` to see how to replace the active pane when it is blank.
+-   **Reuse panes:** Search `app/plugins/examples/custom-pane-todo-example.client.ts` for `updatePane` to see how to replace the active pane when it is blank.
 -   **Additional lifecycle hooks:** Pass `canActivate`, `onActivate`, or `onDeactivate` to `registerSidebarPage` to gate navigation or run setup/cleanup logic.
 -   **Posts helper shorthand:** `registerSidebarPage.withPosts` wraps the context exposure with post helpers if you need a structured integration.
 -   **Analytics:** Activation automatically fires the `ui.sidebar.page:action:open` hook; register a listener via `$hooks` to record usage.
@@ -491,9 +491,9 @@ If you need to reuse an existing pane instead of opening a new one each time, ca
 | ------------------------ | ------------------------------------------- | ------------------------------------------------------------------------ |
 | `usePaneApps`            | `~/composables/core/usePaneApps`            | Register workspace pane apps (`registerPaneApp`).                        |
 | `registerSidebarPage`    | `~/composables/sidebar/registerSidebarPage` | Register/deregister sidebar pages with HMR guardrails.                   |
-| `useSidebarMultiPane`    | `~/composables/sidebar`                     | Trimmed multi-pane adapter (`openApp`, `updatePane`, `setActive`, etc.). |
-| `useSidebarPageControls` | `~/composables/sidebar`                     | Access the current page id and navigate back to the default page.        |
-| `useSidebarPostsApi`     | `~/composables/sidebar`                     | Provides the pane plugin API (posts CRUD).                               |
+| `useSidebarMultiPane`    | `~/composables/sidebar/useSidebarEnvironment` | Trimmed multi-pane adapter (`openApp`, `updatePane`, `setActive`, etc.). |
+| `useSidebarPageControls` | `~/composables/sidebar/useSidebarPageControls` | Access the current page id and navigate back to the default page.        |
+| `useSidebarPostsApi`     | `~/composables/sidebar/useSidebarEnvironment` | Provides the pane plugin API (posts CRUD).                               |
 | `usePostsList`           | `~/composables/posts/usePostsList`          | Reactive Dexie query for posts of a given type.                          |
 
 You now have a fully functioning mini app that exercises every part of the V2 sidebar page stack using code that ships in the repository today.# Building a Mini App: Multi-Pane + Sidebar + Custom Posts
@@ -1461,7 +1461,7 @@ Now let's create the sidebar pages for our task manager.
 <script setup lang="ts">
 import { useTaskList } from '~/composables/tasks/useTaskList';
 import { useTasksCrud } from '~/composables/tasks/useTasksCrud';
-import { useSidebarEnvironment } from '~/composables/sidebar';
+import { useSidebarEnvironment } from '~/composables/sidebar/useSidebarEnvironment';
 import type { TaskPost } from '~/types/task';
 
 // Get task list functionality
@@ -1695,7 +1695,6 @@ Now let's create the task editor that opens in multi-pane.
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useTasksCrud } from '~/composables/tasks/useTasksCrud';
-import { usePanePluginApi } from '~/composables/sidebar';
 import type { TaskPost } from '~/types/task';
 
 interface Props {
@@ -1706,9 +1705,6 @@ const props = defineProps<Props>();
 
 // Get CRUD functions
 const { createTask, updateTask } = useTasksCrud();
-
-// Get pane plugin API for pane management
-const panePluginApi = usePanePluginApi();
 
 // State
 const currentTask = ref<TaskPost | null>(null);
@@ -1727,10 +1723,11 @@ async function loadTask() {
     error.value = null;
 
     try {
-        // Load task from database
-        const task = await panePluginApi?.posts?.get(props.recordId);
-        if (task && task.postType === 'task') {
-            currentTask.value = task as TaskPost;
+        // Load task from the shared posts table through the pane plugin API
+        const api = (globalThis as any).__or3PanePluginApi;
+        const result = await api?.posts?.get({ id: props.recordId });
+        if (result?.ok && result.post.postType === 'task') {
+            currentTask.value = result.post as TaskPost;
         } else {
             throw new Error('Task not found');
         }
@@ -1757,8 +1754,8 @@ async function handleSave(taskData: Partial<TaskPost>) {
 
         if (savedTask) {
             // Show success message
-            showToast(isEditing.value ? 'Task updated!' : 'Task created!', {
-                type: 'success',
+            useToast().add({
+                title: isEditing.value ? 'Task updated!' : 'Task created!',
             });
 
             // Close the pane
@@ -1766,16 +1763,21 @@ async function handleSave(taskData: Partial<TaskPost>) {
         }
     } catch (err) {
         console.error('Failed to save task:', err);
-        showToast('Failed to save task', { type: 'error' });
+        useToast().add({ title: 'Failed to save task', color: 'error' });
     } finally {
         saving.value = false;
     }
 }
 
 function closePane() {
-    // Close the current pane
-    if (panePluginApi?.pane) {
-        panePluginApi.pane.close();
+    // Close the pane this editor runs in
+    const mp = (globalThis as any).__or3MultiPaneApi;
+    if (!mp) return;
+    const index = mp.panes.value.findIndex(
+        (pane: any) => pane.mode === 'task-editor'
+    );
+    if (index !== -1) {
+        mp.closePane(index);
     }
 }
 
@@ -1874,7 +1876,7 @@ Now let's tie everything together by registering our mini app with OR3.
 
 ```ts
 // app/plugins/task-manager.client.ts
-import { registerSidebarPage } from '~/composables/sidebar';
+import { registerSidebarPage } from '~/composables/sidebar/registerSidebarPage';
 import { usePaneApps } from '~/composables/core/usePaneApps';
 
 export default defineNuxtPlugin(() => {
@@ -1887,8 +1889,7 @@ export default defineNuxtPlugin(() => {
         id: 'task-editor',
         label: 'Task Editor',
         component: () => import('~/components/tasks/TaskEditorPane.vue'),
-        icon: 'edit',
-        description: 'Create and edit tasks',
+        icon: 'i-lucide-check-square',
 
         // Optional: Create initial record
         async createInitialRecord({ app }) {
@@ -1903,9 +1904,8 @@ export default defineNuxtPlugin(() => {
         id: 'task-manager',
         label: 'Task Manager',
         component: () => import('~/components/tasks/TaskListPage.vue'),
-        icon: 'tasks',
+        icon: 'i-lucide-check-square',
         order: 50,
-        category: 'productivity',
         usesDefaultHeader: true,
 
         // Optional: Guard for access control
@@ -1957,7 +1957,7 @@ Now let's test that everything works together.
 1. Start your development server
 2. Open the browser console
 3. You should see: "Task Manager mini app registered successfully!"
-4. Check the sidebar - you should see "Task Manager" in the productivity category
+4. Check the sidebar - you should see "Task Manager" as a registered page
 
 ### Test the workflow
 
@@ -2114,7 +2114,7 @@ try {
 } catch (err) {
     reportError(err('ERR_CUSTOM', 'Descriptive error message'), {
         toast: true, // Show user notification
-        retry: true, // Show retry option
+        retry: () => retryOperation(), // Optional retry closure
     });
 }
 ```
@@ -2255,6 +2255,10 @@ This pattern can be extended to build any type of mini app in OR3, from project 
 Document generated from the Task Manager mini app implementation.
 
 
-## Task Pane plugin reference
+## Complete reference in the repository
 
-The repository now includes a full tasks pane plugin at `app/plugins/tasks-pane.client.ts` with modules under `app/plugins/tasks/**`. Use it as a complete reference for pane registration, sidebar registration, post-backed list data, and tool wiring.
+A complete implementation of this todo mini app ships in
+`app/plugins/examples/custom-pane-todo-example.client.ts`. It registers the
+pane app and sidebar page, uses post-backed list data, and shows how to reuse
+an existing pane with `updatePane`. It also registers a custom command-palette
+post source. Use it as a reference for the exact import paths used today.

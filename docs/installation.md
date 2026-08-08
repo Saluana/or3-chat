@@ -295,3 +295,6 @@ If you need editable application source, custom providers, or a non-default
 backend, clone the repository and use the existing source-local wizard. That
 path is for contributors and advanced deployments; normal local/VPS operation
 should use `@or3/cloud`.
+
+For the source deployment environment matrix, see the
+[Environment and Provider Settings Reference](../public/_documentation/cloud/environment-reference.md).

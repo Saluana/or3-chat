@@ -262,6 +262,29 @@ export function createDependencyInstallPlan(
                 );
             });
         }
+
+        const usesSqlite =
+            (answers.syncEnabled && answers.syncProvider === 'sqlite') ||
+            (answers.connectEnabled &&
+                resolveEffectiveConnectProvider(answers) === 'sqlite');
+        if (usesSqlite) {
+            const sqliteDriver = answers.sqliteDriver ?? 'better-sqlite3';
+            if (sqliteDriver === 'better-sqlite3') {
+                packageSet.add('better-sqlite3');
+                addReason(
+                    reasons,
+                    'better-sqlite3',
+                    'SQLite runtime selected in the wizard.'
+                );
+            } else if (sqliteDriver === 'turso') {
+                packageSet.add('libsql');
+                addReason(
+                    reasons,
+                    'libsql',
+                    'Turso/libSQL runtime selected in the wizard.'
+                );
+            }
+        }
     }
 
     const themeArtifacts =

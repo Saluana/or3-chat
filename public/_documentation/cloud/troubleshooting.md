@@ -11,9 +11,9 @@ Run through this checklist first:
 ```bash
 # 1. Verify environment variables
 echo $SSR_AUTH_ENABLED        # Should be "true" for cloud features
+echo $OR3_AUTH_PROVIDER        # Selected provider (e.g., basic-auth, clerk)
 echo $OR3_SYNC_ENABLED         # Should be "true" for sync
-echo $VITE_CONVEX_URL          # Should be set for sync/storage
-echo $NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY  # Should be set for auth
+echo $VITE_CONVEX_URL          # Should be set for sync/storage (Convex provider)
 
 # 2. Check build mode
 # Static builds (nuxt generate) don't support cloud features
@@ -21,7 +21,7 @@ echo $NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY  # Should be set for auth
 
 # 3. Verify network connectivity
 # - Can you reach Convex? (check browser console)
-# - Can you reach Clerk? (check auth popup)
+# - Can you reach your auth provider? (check auth popup)
 ```
 
 ---
@@ -145,15 +145,18 @@ console.log('Session:', session.data.value);
 
 **Symptoms:** Dozens of "Sync conflict resolved" notifications on first load.
 
-**This is Fixed:** The system now automatically:
-- Suppresses conflict notifications during bootstrap/rescan
-- Filters historical conflicts (older than 24 hours)
-- Deduplicates within 15-second windows
+**This cannot happen anymore.** Conflict events never create notifications.
+Sync error warnings are the only sync-related notification type, and they are:
 
-**If Still Seeing Many:**
-- Check browser console for: `[notify] Skipping historical conflict notification`
+- Suppressed during bootstrap/rescan
+- Deduplicated within a 15-second window per record and message
+- Burst-limited (more than 5 in 10 seconds starts a 60-second cooldown)
+
+**If You Still See Repeated Sync Notifications:**
 - Verify `notification-listeners.client.ts` plugin is loaded
-- Ensure you're on the latest version
+- Look for `[notify]` entries in the browser console
+- Check for AI completion notifications instead: those only fire when no
+  viewer is attached to the job and the thread is not muted
 
 ### Bootstrap Taking Forever
 
@@ -185,7 +188,7 @@ hooks.addAction('sync.bootstrap:action:complete', (data) => {
 **Symptoms:** Sync keeps restarting, data re-downloads frequently.
 
 **Causes:**
-- Cursor expiration (default 7 days)
+- Cursor expiration (default 24 hours)
 - Device cursor tracking issues
 - Clock skew between devices
 
@@ -330,6 +333,73 @@ console.log('Transfer status:', transfer?.status);
 
 ---
 
+## Background Streaming Issues
+
+### 401 When Starting a Background Job
+
+**Symptoms:** `POST /api/openrouter/stream` returns 401 with
+"Authentication required for background streaming".
+
+**Cause:** Background mode requires an authenticated SSR session with an active
+workspace. Guests and signed-out users are rejected even if they supply their
+own OpenRouter key.
+
+**Fix:** Sign in, confirm `/api/auth/session` returns `authenticated: true`
+with a `workspace.id`, then retry.
+
+### 404/405 on /api/openrouter/stream
+
+**Symptoms:** The stream route returns 404 or 405.
+
+**Causes:**
+- Static build (no server routes)
+- Stale dev process on port 3000/24678
+- Stale `or3:server-route-available` cache
+
+**Fix:** Clear the availability cache and reload:
+
+```js
+localStorage.removeItem('or3:server-route-available');
+localStorage.removeItem('or3:background-streaming-available');
+```
+
+The route cache has a 15-minute TTL and is set after the first successful or
+failed probe. After a runtime or provider switch, clear both keys before
+debugging.
+
+### 503 "Server Busy"
+
+**Symptoms:** Background start returns 503 "Server busy, try again later".
+
+**Cause:** The concurrency cap was hit: `OR3_BACKGROUND_MAX_JOBS` (default 20)
+or `OR3_BACKGROUND_MAX_JOBS_PER_USER` (default 5).
+
+**Fix:** Wait for an active job to finish, or raise the caps and restart.
+
+### Background Mode Never Triggers
+
+**Symptoms:** Chat always streams in the foreground even though background
+mode is configured.
+
+**Checks:**
+- Is `OR3_BACKGROUND_STREAMING_ENABLED=true` (both
+  `runtimeConfig.backgroundJobs.enabled` and
+  `public.backgroundStreaming.enabled`)?
+- Is the start mode `background` and the model modality text-only
+  (`modalities === ['text']`)?
+- Is the client on a static build or hitting an old dev process?
+
+### "It Worked Yesterday" Weirdness
+
+**Cause:** The localStorage availability caches persist across runtime and
+provider switches. Behavior can look inconsistent after toggling SSR or
+providers.
+
+**Fix:** Clear `or3:server-route-available` and
+`or3:background-streaming-available` (or use a fresh browser profile).
+
+---
+
 ## Build & Deployment Issues
 
 ### Cloud Features Not Working in Production
@@ -381,14 +451,13 @@ plugins/
 
 ### Enable Debug Logging
 
-```typescript
-// In browser console
-localStorage.setItem('debug:sync', 'true');
-localStorage.setItem('debug:notifications', 'true');
-localStorage.setItem('debug:auth', 'true');
+There are no `debug:*` localStorage flags. Relevant logs appear under these
+console prefixes:
 
-// Reload page and check console
-```
+- `[sync]` and `[OutboxManager]` - sync engine activity (development builds)
+- `[notify]` - notification listener activity
+- `[useNotifications]` - notification query and subscription errors
+- `[openrouterStream]` - chat streaming and background start decisions
 
 ### Monitor Hooks
 

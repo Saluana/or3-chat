@@ -43,19 +43,18 @@ applies.
 `class` entries are applied at runtime:
 
 - On theme activation (see `app/plugins/90.theme.client.ts`)
-- On page navigation (`page:finish` hook, debounced)
+- Automatically for newly added DOM: a session observes added nodes and
+  applies matching classes (covers lazy-loaded components)
 - On demand via `applyThemeClasses()`
 
-For lazy-loaded components, use:
-
-```ts
-import { useThemeClasses } from '~/composables/core/useThemeClasses';
-useThemeClasses();
-```
+The old `useThemeClasses()` helper (from `app/composables/core/useThemeClasses.ts`)
+is deprecated and is now a no-op; lazy-loaded components are covered by the
+DOM observer.
 
 ## Dynamic DOM updates
 
-If you inject DOM outside Vue (or after the theme applies), re-run:
+If you inject DOM outside Vue (or after the theme applies), the session's
+observer picks it up automatically. You can also re-run manually:
 
 ```ts
 import { applyThemeClasses } from '~/theme/_shared/css-selector-runtime';
@@ -75,6 +74,7 @@ if (theme?.cssSelectors) {
 ## Troubleshooting
 
 - No styles? Ensure `bun run theme:build-css` has been run.
-- No classes? Verify elements exist and call `useThemeClasses()` for lazy
-  components.
+- No classes? The DOM observer applies classes automatically; verify the
+  selector matches real markup. The old `useThemeClasses()` helper is
+  deprecated and is now a no-op.
 - Specificity issues? Check competing CSS in DevTools.

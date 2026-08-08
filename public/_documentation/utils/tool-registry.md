@@ -96,6 +96,7 @@ registry.registerTool(definition, handler, options?);
   - `override?: boolean` — Allow replacing existing tools (default: false)
   - `enabled?: boolean` — Initial enabled state (default: from UI metadata or true)
   - `runtime?: 'client' | 'server' | 'hybrid'` — Runtime hint merged with `definition.runtime` (default: `'hybrid'`)
+  - `workflowPolicy?: WorkflowToolRegistrationPolicy` — Policy applied when background workflows run the tool
 
 ### 3. Use in a plugin
 
@@ -142,8 +143,8 @@ Register a new tool or update an existing one.
 
 ```ts
 function registerTool(
-    definition: ExtendedToolDefinition,
-    handler: ToolHandler,
+    definition: TypedToolDefinition<TArgs>,
+    handler: ToolHandler<TArgs>,
     options?: RegisterOptions
 ): RegisteredTool
 ```
@@ -188,7 +189,7 @@ function getEnabledDefinitions(): ToolDefinition[]
 
 Use this when building the request to the AI model.
 
-### `executeTool(name, argsJson)`
+### `executeTool(name, argsJson, context?, admission?)`
 
 Execute a tool by name with JSON-stringified arguments.
 
@@ -206,13 +207,18 @@ function executeTool(
 }>
 ```
 
-Handles parsing, full JSON Schema validation, timeout, and error tracking automatically. The same validator is used by the browser and server registries, including nested requirements, types, enums, numeric/string bounds, and `additionalProperties`.
+Handles parsing, full JSON Schema validation, timeout, and error tracking automatically. The same validator is used by the browser and server registries, including nested requirements, types, enums, numeric/string bounds, and `additionalProperties`. It also enforces UTF-8 byte limits on arguments and on the returned result.
 
 Provider-visible chat calls pass an admission snapshot so disabled,
 server-only, or definition-changed tools cannot execute. The legacy direct
 `executeTool(name, argsJson)` overload remains compatible and does not enforce
 runtime placement on its own; callers handling untrusted model output must use
 the admitted execution path.
+
+When no `context` is passed, a synthetic one is created with null subject,
+workspace, thread, and message IDs, fresh runtime UUIDs, and a fresh
+AbortSignal. Tool handlers always receive the real `abortSignal` for the
+current execution.
 
 ### `setEnabled(name, enabled)`
 
@@ -229,16 +235,19 @@ Changes are automatically persisted to localStorage.
 ### `ExtendedToolDefinition`
 
 ```ts
-interface ExtendedToolDefinition {
+interface ExtendedToolDefinition extends ToolDefinition {
+    description?: string;      // Human-readable summary for toggles or docs
+    icon?: string;             // Icon identifier (e.g., 'i-mdi:weather-partly-cloudy')
+    category?: string;         // Grouping category
+    defaultEnabled?: boolean;  // Default toggle state
+}
+
+interface ToolDefinition {
     type: 'function';
     function: {
         name: string;
         description: string;
-        parameters: {
-            type: 'object';
-            properties: Record<string, any>;
-            required?: string[];
-        };
+        parameters: JsonSchemaObject; // shared JSON Schema draft-07
     };
     ui?: {
         label?: string;              // Display name in UI
@@ -247,16 +256,23 @@ interface ExtendedToolDefinition {
         defaultEnabled?: boolean;    // Initial enabled state
         category?: string;           // Group tools by category
     };
+    runtime?: 'hybrid' | 'client' | 'server'; // placement hint
 }
 ```
 
 ### `ToolHandler`
 
 ```ts
-type ToolHandler<TArgs = any> = (args: TArgs) => Promise<string> | string;
+type ToolHandler<TArgs = Record<string, unknown>> = (
+    args: TArgs,
+    context: ToolExecutionContext
+) => Promise<string> | string;
 ```
 
-Must return a string (or promise resolving to string) that will be passed back to the AI.
+Handlers receive the parsed arguments and a `ToolExecutionContext` with
+subject, workspace, thread, message, call and request IDs, plus an
+`AbortSignal`. They must return a string (or promise resolving to a string)
+that will be passed back to the AI.
 
 ### `RegisteredTool`
 
@@ -267,8 +283,14 @@ interface RegisteredTool {
     enabled: Ref<boolean>;          // Reactive toggle state
     lastError: Ref<string | null>;  // Most recent error
     runtime: 'client' | 'server' | 'hybrid';
+    workflowPolicy?: WorkflowToolRegistrationPolicy;
+    dispose: () => boolean;         // Removes this exact registration
 }
 ```
+
+`dispose()` is owner-bound: it returns `false` if the registration was already
+replaced or removed, so stale plugins cannot delete newer registrations.
+`unregisterTool(name)` removes by name without the owner check.
 
 ---
 
@@ -293,8 +315,8 @@ interface RegisteredTool {
 ### Persistence
 
 - User's toggle states saved to `localStorage` under `or3.tools.enabled`
-- Debounced writes (500ms) to avoid excessive storage operations
-- Hydrated on first registry access
+- Debounced writes (300ms) to avoid excessive storage operations
+- Hydrated lazily on first registry access
 - No-op on server (SSR-safe)
 
 ---
@@ -519,8 +541,8 @@ Full type signature:
 ```ts
 function useToolRegistry(): {
     registerTool: (
-        definition: ExtendedToolDefinition,
-        handler: ToolHandler,
+        definition: TypedToolDefinition<TArgs>,
+        handler: ToolHandler<TArgs>,
         options?: RegisterOptions
     ) => RegisteredTool;
     unregisterTool: (name: string) => void;
@@ -530,7 +552,9 @@ function useToolRegistry(): {
     getEnabledDefinitions: () => ToolDefinition[];
     executeTool: (
         name: string,
-        argsJson: string
+        argsJson: string,
+        context?: ToolExecutionContext,
+        admission?: ToolExecutionAdmission
     ) => Promise<{
         result: string | null;
         toolName: string;
@@ -544,8 +568,3 @@ function useToolRegistry(): {
 ---
 
 Document generated from `app/utils/chat/tool-registry.ts` implementation.
-
-
-### Task tools example
-
-The built-in tasks pane plugin registers conversational tools from `app/plugins/tasks/tooling/taskToolDefs.ts` using `registerTaskTools.ts`. Example names: `or3_tasks_add_item`, `or3_tasks_update_item`, and `or3_tasks_sort_by_difficulty`.

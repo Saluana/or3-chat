@@ -16,11 +16,12 @@ Key-value helpers for storing small preference or credential blobs in the Dexie 
 ## Data shape
 
 | Field        | Type     | Notes                                                        |
-| ------------ | -------- | ------------------------------------------------------------ | ----------------------------------------- |
+| ------------ | -------- | ------------------------------------------------------------ |
 | `id`         | `string` | Primary key. Name-based helpers use `kv:${name}` convention. |
 | `name`       | `string` | Logical key.                                                 |
-| `value`      | `string  | null`                                                        | Serialized payload (often JSON or token). |
-| `clock`      | `number` | Monotonic counter incremented on `setKvByName`.              |
+| `value`      | `string` | Serialized payload (often JSON or token); nullable.          |
+| `deleted`    | `boolean`| Soft delete flag; KV rows are removed with hard deletes only.|
+| `clock`      | `number` | Monotonic counter incremented on every write.                |
 | `created_at` | `number` | Unix seconds.                                                |
 | `updated_at` | `number` | Unix seconds.                                                |
 
@@ -34,19 +35,19 @@ Key-value helpers for storing small preference or credential blobs in the Dexie 
 | `upsertKv(value)`          | Full-row upsert with before/after hooks.                                         |
 | `hardDeleteKv(id)`         | Removes a row by primary key.                                                    |
 | `getKv(id)`                | Fetches by primary key and applies output filters.                               |
-| `getKvByName(name)`        | Finds first row matching `name`.                                                 |
-| `setKvByName(name, value)` | Creates or updates a row using `kv:${name}` ids, increments `clock`, runs hooks. |
-| `hardDeleteKvByName(name)` | Deletes by `name` with before/after hooks.                                       |
+| `getKvByName(name)`        | Finds first row matching `name`. Accepts an optional target DB.             |
+| `setKvByName(name, value)` | Creates or updates a row using `kv:${name}` ids, increments `clock`, runs hooks. Accepts an optional target DB. |
+| `hardDeleteKvByName(name)` | Deletes by `name` with before/after hooks. Accepts an optional target DB.   |
 
 ---
 
 ## Hooks
 
 -   `db.kv.create:filter:input` / `db.kv.create:action:(before|after)`
--   `db.kv.upsert:filter:input`
+-   `db.kv.upsert:filter:input` / `db.kv.upsert:action:(before|after)`
 -   `db.kv.get:filter:output` and `db.kv.getByName:filter:output`
 -   `db.kv.upsertByName:filter:input` / `:action:after`
--   `db.kv.delete(:action:hard:* )` + `db.kv.deleteByName:action:hard:*`
+-   `db.kv.delete:action:hard:(before|after)` + `db.kv.deleteByName:action:hard:(before|after)`
 
 ---
 

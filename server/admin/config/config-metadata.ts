@@ -187,6 +187,30 @@ export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
         group: 'Sync',
         order: 5,
     },
+    'OR3_SQLITE_DRIVER': {
+        label: 'SQLite Runtime',
+        description: 'Native SQLite runtime: better-sqlite3, Bun, Turso/libSQL, or Cloudflare D1',
+        group: 'Sync',
+        order: 5,
+    },
+    'OR3_SQLITE_TURSO_URL': {
+        label: 'Turso Database URL',
+        description: 'Remote libSQL/Turso database URL used by the Turso runtime',
+        group: 'Sync',
+        order: 5,
+    },
+    'OR3_SQLITE_TURSO_AUTH_TOKEN': {
+        label: 'Turso Auth Token',
+        description: 'Server-side authentication token for the Turso database',
+        group: 'Sync',
+        order: 5,
+    },
+    'OR3_SQLITE_D1_BINDING': {
+        label: 'Cloudflare D1 Binding',
+        description: 'D1 binding name from the Cloudflare Worker configuration',
+        group: 'Sync',
+        order: 5,
+    },
     'OR3_SQLITE_PRAGMA_JOURNAL_MODE': {
         label: 'SQLite Journal Mode',
         description: 'PRAGMA journal_mode value for sqlite sync provider (recommended: WAL)',

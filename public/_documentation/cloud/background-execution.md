@@ -18,10 +18,21 @@ Background execution is available only when SSR auth/server routes are active.
 - Main envs:
   - `OR3_BACKGROUND_STREAMING_ENABLED=true`
   - `OR3_BACKGROUND_STREAMING_PROVIDER=memory|convex|...`
-  - `OR3_BACKGROUND_MAX_JOBS=<n>`
+  - `OR3_BACKGROUND_MAX_JOBS=<n>` (default 20)
+  - `OR3_BACKGROUND_MAX_JOBS_PER_USER=<n>` (default 5)
   - `OR3_BACKGROUND_JOB_TIMEOUT=<seconds>`
 
 If the server route is unavailable (static build, stale route cache, or wrong dev process), background start fails and client helpers cache unavailability.
+
+Eligibility on the client requires all of the following:
+
+- `runtimeConfig.public.backgroundStreaming.enabled` is true (config flag)
+- Start mode is `background` (not `foreground`)
+- Model modality is text-only (`modalities === ['text']`)
+- An authenticated SSR session with an active workspace exists
+
+Tools do not block background mode; when tools are present, the server executes
+them in the background tool loop described below.
 
 ## Chat Background Streaming Flow
 

@@ -18,11 +18,12 @@ OR3 Chat never starts provider CLIs. A trusted `or3-intern` host owns runner
 discovery, authentication, roots, flags, permission policy, sessions,
 approvals, artifacts, and cancellation.
 
-Both Nuxt clients use the framework-free `@or3/intern-client`. Credentials stay
-in headers, errors are redacted, requests time out, and SSE reconnects with a
-stable cursor and replay deduplication. Host switches abort old requests and
-reject events from the prior host generation. Remote action failures preserve
-the canonical prior state.
+The browser plugin and the server-side OR3 Connect device probe both use the
+framework-free `@or3/intern-client`. Credentials stay in headers, errors are
+redacted, requests time out, and SSE reconnects with a stable cursor and
+replay deduplication. Host switches abort old requests and reject events from
+the prior host generation. Remote action failures preserve the canonical
+prior state.
 
 ### Enrollment and storage boundary
 

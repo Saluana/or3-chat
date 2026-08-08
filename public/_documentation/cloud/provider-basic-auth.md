@@ -40,7 +40,7 @@ OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=replace-with-strong-password
 Optional refresh/session tuning:
 
 ```bash
-OR3_BASIC_AUTH_REFRESH_SECRET=optional-separate-secret
+OR3_BASIC_AUTH_REFRESH_SECRET=replace-with-a-different-random-secret
 OR3_BASIC_AUTH_ACCESS_TTL_SECONDS=900
 OR3_BASIC_AUTH_REFRESH_TTL_SECONDS=2592000
 OR3_BASIC_AUTH_DB_PATH=.data/basic-auth.sqlite
@@ -60,7 +60,10 @@ OR3_AUTH_INVITE_TOKEN_TTL_SECONDS=604800
 ## Security Notes
 
 - Use long random secrets for `OR3_BASIC_AUTH_JWT_SECRET` and `OR3_BASIC_AUTH_REFRESH_SECRET`.
+- The provider validates both secrets in strict mode. The wizard copies the JWT secret into the refresh-secret setting when a separate value is not entered.
 - Keep bootstrap credentials only for initial provisioning. Rotate/remove afterward.
+- `OR3_BASIC_AUTH_ROTATION_GRACE_MS` defaults to `30000` and controls the short refresh-token rotation grace period.
+- `OR3_BASIC_AUTH_RATE_LIMIT_BACKEND=memory` is intended only for single-process development; keep the default SQLite backend for clustered deployments.
 - Set `OR3_AUTH_AUTO_PROVISION=false` for closed deployments.
 - In `invite_only` mode, registration verifies the invite signature, expiry, persisted status/token hash, and normalized email before creating the Basic Auth account or session.
 - The selected sync provider must implement atomic invite provisioning so internal user creation, auth mapping, workspace membership, and invite consumption either all commit or all roll back.

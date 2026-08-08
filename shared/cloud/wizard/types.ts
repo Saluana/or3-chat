@@ -65,6 +65,9 @@ export type WizardAuthProvider = 'basic-auth' | 'clerk' | 'custom';
 /** Sync provider selection. Maps to `OR3_SYNC_PROVIDER` env var. */
 export type WizardSyncProvider = 'sqlite' | 'convex' | 'firebase' | 'custom';
 
+/** Native runtime selected by the SQLite provider. */
+export type WizardSqliteDriver = 'better-sqlite3' | 'bun' | 'turso' | 'd1';
+
 /** Storage provider selection. Maps to `NUXT_PUBLIC_STORAGE_PROVIDER` env var. */
 export type WizardStorageProvider = 'fs' | 'convex' | 's3' | 'custom';
 
@@ -204,7 +207,9 @@ export interface WizardAnswers {
     syncEnabled: boolean;
     /** Maps to `OR3_SYNC_PROVIDER`. */
     syncProvider: WizardSyncProvider;
-    /** Maps to `OR3_SQLITE_DB_PATH`. Required when `syncProvider === 'sqlite'`. */
+    /** Maps to `OR3_SQLITE_DRIVER`. Defaults to the current better-sqlite3 setup. */
+    sqliteDriver: WizardSqliteDriver;
+    /** Maps to `OR3_SQLITE_DB_PATH`. Required for the local and Bun drivers. */
     sqliteDbPath?: string;
     /** Maps to `OR3_SQLITE_PRAGMA_JOURNAL_MODE`. Default: `'WAL'`. */
     sqlitePragmaJournalMode: string;
@@ -214,6 +219,12 @@ export interface WizardAnswers {
     sqliteAllowInMemory: boolean;
     /** Maps to `OR3_SQLITE_STRICT`. Forbids in-memory even with allow flag. Default: false. */
     sqliteStrict: boolean;
+    /** Maps to `OR3_SQLITE_TURSO_URL`. Required when `sqliteDriver === 'turso'`. */
+    sqliteTursoUrl?: string;
+    /** Maps to `OR3_SQLITE_TURSO_AUTH_TOKEN`. Required when `sqliteDriver === 'turso'`. */
+    sqliteTursoAuthToken?: string;
+    /** Maps to `OR3_SQLITE_D1_BINDING`. Defaults to `DB` when `sqliteDriver === 'd1'`. */
+    sqliteD1Binding?: string;
     /** Maps to `VITE_CONVEX_URL`. Required when any Convex provider is selected. */
     convexUrl?: string;
     /** Maps to `CONVEX_SELF_HOSTED_ADMIN_KEY`. Required server deployment/admin credential for Convex adapters. */
@@ -276,7 +287,7 @@ export interface WizardAnswers {
     s3KeyPrefix?: string;
     /** Maps to `OR3_STORAGE_S3_URL_TTL_SECONDS`. Default: 900. */
     s3UrlTtlSeconds: number;
-    /** Maps to `OR3_STORAGE_S3_REQUIRE_CHECKSUM`. Default: false. */
+    /** Maps to `OR3_STORAGE_S3_REQUIRE_CHECKSUM`. Checksum enforcement is required. */
     s3RequireChecksum: boolean;
 
     // ── Convex backend env (not .env) ──

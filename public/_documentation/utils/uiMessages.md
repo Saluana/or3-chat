@@ -1,20 +1,20 @@
 # UI Messages
 
-Type definitions and utilities for chat messages in the OR3 UI layer. Extends database message types with display properties like attachments, tool calls, and pending states.
+Type definitions and utilities for chat messages in the OR3 UI layer. Extends database message types with display properties like tool calls, workflow state, and pending flags.
 
-Think of `uiMessages` as the bridge between raw database records and what you actually render in the chat — it adds UI sugar like file previews, tool execution status, and streaming indicators without cluttering the database schema.
+Think of `uiMessages` as the bridge between raw database records and what you actually render in the chat — it flattens content into text, extracts tool call status, and adds workflow rendering state without cluttering the database schema.
 
 ---
 
 ## Purpose
 
-The UI message types provide:
+The UI message utilities provide:
 
-- **Display-ready messages** — Enriched with attachments and tool call info
+- **Display-ready messages** — Flattened text plus tool call and workflow info
 - **Type safety** — Full TypeScript support for all message variants
 - **Tool call tracking** — Status, arguments, and results for inline display
-- **Attachment mapping** — Links file hashes to preview URLs
 - **Streaming state** — Pending flags for active AI responses
+- **Ordered parts** — Optional `parts` array that preserves provider emission order
 
 ---
 
@@ -28,13 +28,16 @@ The main message type used throughout chat components.
 interface UiChatMessage {
     id: string;                          // Unique message ID
     role: 'user' | 'assistant' | 'system' | 'tool';
-    text: string;                        // Message content
+    text: string;                        // Flattened text content
     file_hashes?: string[];              // Attached file references
-    reasoning_text?: string;             // AI reasoning (if supported)
+    reasoning_text?: string | null;      // AI reasoning (if supported)
     stream_id?: string;                  // For tracking streaming messages
     pending?: boolean;                   // True while streaming
     toolCalls?: ToolCallInfo[];          // Active tool calls
-    attachments?: AttachmentWithPreview[]; // Files with preview URLs
+    parts?: UiChatMessagePart[];         // Ordered text/tool parts
+    error?: string | null;               // Message-level error
+    isWorkflow?: boolean;                // True for workflow messages
+    workflowState?: UiWorkflowState;     // Workflow execution state
 }
 ```
 
@@ -44,47 +47,59 @@ Tracks the lifecycle of a single tool invocation.
 
 ```ts
 interface ToolCallInfo {
-    id: string;                 // Tool call ID from OpenRouter
-    name: string;               // Tool function name
-    arguments: string;          // JSON arguments
-    result?: string;            // Handler result
-    error?: string;             // Error message if failed
-    status: 'loading' | 'complete' | 'error';
+    id?: string;                 // Tool call ID
+    name: string;                // Tool function name
+    label?: string;              // Display label
+    status: 'loading' | 'complete' | 'error' | 'pending';
+    args?: string;               // JSON arguments
+    result?: string;             // Handler result
+    error?: string;              // Error message if failed
+    fingerprint?: string;        // Execution fingerprint
+    completedAt?: number;        // Completion timestamp
 }
 ```
 
-### `AttachmentWithPreview`
+Note the status set includes `'pending'` in addition to `'loading'`,
+`'complete'`, and `'error'`.
 
-File attachment enriched with preview URL.
+### `UiChatMessagePart`
+
+Used when the message carries an ordered `parts` array. Text and tool calls
+render in the same sequence the provider emitted them.
 
 ```ts
-interface AttachmentWithPreview {
-    hash: string;              // File hash
-    name: string;              // Original filename
-    size: number;              // File size in bytes
-    type: string;              // MIME type
-    previewUrl?: string;       // Blob URL for preview
-}
+type UiChatMessagePart =
+    | { id: string; type: 'text'; text: string }
+    | { id: string; type: 'tool'; toolCall: ToolCallInfo };
 ```
+
+### `UiWorkflowState`
+
+Workflow-specific rendering state. Defined in `app/utils/chat/workflow-types.ts`
+and attached to workflow messages by `ensureUiMessage`.
 
 ---
 
 ## Functions
 
-### `ensureUiMessage(msg)`
+### `ensureUiMessage(raw)`
 
-Convert a raw database message into a UI message with attachments.
+Convert a raw message record into a UI message.
 
 ```ts
-function ensureUiMessage(msg: any): UiChatMessage
+function ensureUiMessage(raw: RawMessageLike): UiChatMessage
 ```
 
 **What it does:**
 
-1. Extracts tool calls from `data.tool_calls` if present
-2. Maps `file_hashes` to full `AttachmentWithPreview` objects
-3. Preserves all original fields
-4. Returns a typed `UiChatMessage`
+1. Resolves `id` from `id`, `stream_id`, or a fresh runtime UUID
+2. Extracts tool calls from `data.tool_calls` if present
+3. Reads `reasoning_text` from `data.reasoning_text` or the top level
+4. Detects workflow messages via the `data` discriminator and builds `workflowState`
+5. Flattens `text` or `content` parts into display text (workflow messages use `finalOutput`)
+6. Appends markdown image placeholders for assistant `file_hashes` (deduplicated against images the model already emitted)
+7. Derives `pending` from the workflow execution state or the raw flag
+8. Preserves all original fields and returns a typed `UiChatMessage`
 
 **Example:**
 
@@ -96,31 +111,28 @@ const rawMsg = {
     role: 'user',
     text: 'Hello',
     file_hashes: ['abc', 'def'],
-    data: {}
+    data: {},
 };
 
 const uiMsg = ensureUiMessage(rawMsg);
-// uiMsg.attachments is now an array with file details
+// uiMsg.text === 'Hello'
 ```
 
-### `extractToolCalls(data)`
+### `partsToText(parts, role?)`
 
-Pull tool call info from a message's data field.
+Flatten content parts into a displayable string.
 
 ```ts
-function extractToolCalls(data: any): ToolCallInfo[] | undefined
+function partsToText(
+    parts: string | ContentPartLike[] | null | undefined,
+    role?: string
+): string
 ```
 
-Returns undefined if no tool calls present.
-
-**Example:**
-
-```ts
-const toolCalls = extractToolCalls(message.data);
-if (toolCalls) {
-    console.log('Tool calls:', toolCalls.length);
-}
-```
+- Returns the string as-is when `parts` is a string
+- Concatenates `text` parts
+- Converts assistant-generated images to `![generated image](src)` markdown
+- Skips image embedding for user messages (shown via the attachments gallery)
 
 ---
 
@@ -131,34 +143,23 @@ if (toolCalls) {
 1. Raw message loaded from Dexie
 2. `ensureUiMessage` called during history load
 3. Tool calls extracted from `data.tool_calls`
-4. File hashes mapped to attachment objects
+4. Text flattened from `text`, `content`, or content parts
 5. Result cached in chat state
 
 ### Tool call lifecycle
 
 ```
-loading → handler executing
-   ↓
-complete → handler succeeded, result available
-   ↓
-error → handler failed, error message available
+pending → loading → complete (or error)
 ```
 
 Status updated in real-time during streaming.
 
-### Attachment resolution
+### Attachment placeholder injection
 
-```ts
-// In ensureUiMessage:
-if (msg.file_hashes?.length) {
-    const attachments = await Promise.all(
-        msg.file_hashes.map(hash => 
-            getAttachmentWithPreview(hash)
-        )
-    );
-    uiMsg.attachments = attachments;
-}
-```
+For assistant messages with `file_hashes`, the text is scanned for existing
+markdown images. Missing hashes are appended as transparent placeholder
+images (`![file-hash:<hash>](...)`) so the gallery can show the same image
+once instead of twice.
 
 ---
 
@@ -177,24 +178,9 @@ if (message.toolCalls?.length) {
 ```vue
 <template>
     <div v-for="call in message.toolCalls" :key="call.id">
-        <span v-if="call.status === 'loading'">⏳ Executing...</span>
-        <span v-else-if="call.status === 'complete'">✓ Done</span>
-        <span v-else-if="call.status === 'error'">⚠️ {{ call.error }}</span>
-    </div>
-</template>
-```
-
-### Show attachments
-
-```vue
-<template>
-    <div v-if="message.attachments?.length" class="attachments">
-        <img 
-            v-for="att in message.attachments" 
-            :key="att.hash"
-            :src="att.previewUrl"
-            :alt="att.name"
-        />
+        <span v-if="call.status === 'pending' || call.status === 'loading'">Executing...</span>
+        <span v-else-if="call.status === 'complete'">Done</span>
+        <span v-else-if="call.status === 'error'">{{ call.error }}</span>
     </div>
 </template>
 ```
@@ -202,9 +188,21 @@ if (message.toolCalls?.length) {
 ### Streaming indicator
 
 ```ts
-const isStreaming = computed(() => 
+const isStreaming = computed(() =>
     message.pending || message.toolCalls?.some(t => t.status === 'loading')
 );
+```
+
+### Render ordered parts
+
+```ts
+for (const part of message.parts ?? []) {
+    if (part.type === 'text') {
+        renderText(part.text);
+    } else {
+        renderTool(part.toolCall);
+    }
+}
 ```
 
 ---
@@ -225,39 +223,14 @@ const props = defineProps<{
 <template>
     <div :class="`message-${message.role}`">
         <div>{{ message.text }}</div>
-        
+
         <!-- Tool calls -->
-        <ToolCallIndicator 
+        <ToolCallIndicator
             v-if="message.toolCalls?.length"
             :tool-calls="message.toolCalls"
         />
-        
-        <!-- Attachments -->
-        <AttachmentGallery 
-            v-if="message.attachments?.length"
-            :attachments="message.attachments"
-        />
     </div>
 </template>
-```
-
-### `useChat.ts`
-
-```ts
-import { ensureUiMessage } from '~/utils/chat/uiMessages';
-
-// When loading history
-const uiMessages = rawMessages.map(m => ensureUiMessage(m));
-messages.value = uiMessages;
-
-// When receiving streaming updates
-const tailMsg = ensureUiMessage({
-    id: streamId,
-    role: 'assistant',
-    text: accumulatedText,
-    pending: true,
-    toolCalls: activeToolCalls.value
-});
 ```
 
 ---
@@ -294,7 +267,7 @@ function isPending(msg: UiChatMessage): boolean {
 // Good
 const uiMsg = ensureUiMessage(dbMsg);
 
-// Bad - missing attachments and tool calls
+// Bad - missing tool calls, text flattening, and workflow state
 const uiMsg = dbMsg as UiChatMessage;
 ```
 
@@ -325,22 +298,22 @@ message.text = newText;
 
 ```ts
 // Good
-const hasAttachments = computed(() => 
-    !!message.value.attachments?.length
+const hasToolCalls = computed(() =>
+    !!message.value.toolCalls?.length
 );
 
 // Bad - recalculates on every render
-const hasAttachments = !!message.attachments?.length;
+const hasToolCalls = !!message.toolCalls?.length;
 ```
 
 ---
 
 ## Limitations
 
-- Attachment preview URLs are blob URLs (memory-bound)
 - Tool call status is local only (not persisted)
 - Pending flag cleared on page reload
 - No nested tool call tracking
+- Attachments are resolved by components, not by this module
 
 ---
 
@@ -348,9 +321,9 @@ const hasAttachments = !!message.attachments?.length;
 
 - `useChat` — Chat composable that creates UI messages
 - `ChatMessage.vue` — Component that renders UI messages
-- `ToolCallIndicator.vue` — Displays tool call status
+- `workflow-types.ts` — `UiWorkflowState` definition
+- `~/utils/files/attachments` — File hash parsing helpers
 - `~/db/messages` — Database message schema
-- `~/utils/files/attachments` — Attachment utilities
 
 ---
 
@@ -364,32 +337,37 @@ interface UiChatMessage {
     role: 'user' | 'assistant' | 'system' | 'tool';
     text: string;
     file_hashes?: string[];
-    reasoning_text?: string;
+    reasoning_text?: string | null;
     stream_id?: string;
     pending?: boolean;
     toolCalls?: ToolCallInfo[];
-    attachments?: AttachmentWithPreview[];
+    parts?: UiChatMessagePart[];
+    error?: string | null;
+    isWorkflow?: boolean;
+    workflowState?: UiWorkflowState;
 }
 
 interface ToolCallInfo {
-    id: string;
+    id?: string;
     name: string;
-    arguments: string;
+    label?: string;
+    status: 'loading' | 'complete' | 'error' | 'pending';
+    args?: string;
     result?: string;
     error?: string;
-    status: 'loading' | 'complete' | 'error';
+    fingerprint?: string;
+    completedAt?: number;
 }
 
-interface AttachmentWithPreview {
-    hash: string;
-    name: string;
-    size: number;
-    type: string;
-    previewUrl?: string;
-}
+type UiChatMessagePart =
+    | { id: string; type: 'text'; text: string }
+    | { id: string; type: 'tool'; toolCall: ToolCallInfo };
 
-function ensureUiMessage(msg: any): UiChatMessage;
-function extractToolCalls(data: any): ToolCallInfo[] | undefined;
+function ensureUiMessage(raw: RawMessageLike): UiChatMessage;
+function partsToText(
+    parts: string | ContentPartLike[] | null | undefined,
+    role?: string
+): string;
 ```
 
 ---

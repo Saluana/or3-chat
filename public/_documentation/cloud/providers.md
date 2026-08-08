@@ -6,6 +6,10 @@ For normal local or VPS operation, use the managed [`@or3/cloud`](/docs/installa
 operator. For editable source or custom providers, use the
 [Cloud Source Wizard](./or3-cloud-wizard).
 
+Use the [Environment and Provider Settings Reference](./environment-reference)
+as the complete env-var matrix. The provider pages below then add provider-
+specific installation and operational details.
+
 ## Provider Model
 
 OR3 core is local-first and can run with zero cloud providers installed.
@@ -40,6 +44,7 @@ bun add or3-provider-convex
 bun add or3-provider-basic-auth
 bun add or3-provider-sqlite
 bun add or3-provider-fs
+bun add or3-provider-s3
 ```
 
 Or local sibling packages during development:
@@ -50,6 +55,7 @@ bun add or3-provider-convex@link:../or3-provider-convex
 bun add or3-provider-basic-auth@link:../or3-provider-basic-auth
 bun add or3-provider-sqlite@link:../or3-provider-sqlite
 bun add or3-provider-fs@link:../or3-provider-fs
+bun add or3-provider-s3@link:../or3-provider-s3
 ```
 
 ## Configure Providers
@@ -104,7 +110,7 @@ OR3_BASIC_AUTH_JWT_SECRET=replace-with-random-secret
 OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=admin@example.com
 OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=replace-with-strong-password
 OR3_SQLITE_DB_PATH=.data/or3-sync.sqlite
-OR3_STORAGE_FS_ROOT=.data/storage
+OR3_STORAGE_FS_ROOT=/srv/or3/.data/storage
 OR3_STORAGE_FS_TOKEN_SECRET=replace-with-random-secret
 ```
 
@@ -173,6 +179,7 @@ Install the package or change provider IDs in cloud config/env.
 - [provider-basic-auth](./provider-basic-auth)
 - [provider-sqlite](./provider-sqlite)
 - [provider-fs](./provider-fs)
+- [provider-s3](./provider-s3)
 - [provider-compatibility-matrix](./provider-compatibility-matrix)
 - [migration-default-stack](./migration-default-stack)
 - [deployment-operations](./deployment-operations)

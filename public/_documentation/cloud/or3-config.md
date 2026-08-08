@@ -64,6 +64,7 @@ All features are **enabled by default**. Set env to `'false'` to disable.
 |-----|--------------|-------------|
 | `features.backup.enabled` | `OR3_BACKUP_ENABLED` | Workspace backup in dashboard |
 | `features.dashboard.enabled` | `OR3_DASHBOARD_ENABLED` | Settings dashboard |
+| `features.workspaceTabs.enabled` | `OR3_WORKSPACE_TABS_ENABLED` | Workspace tabs and split-pane navigation |
 
 ### Limits
 

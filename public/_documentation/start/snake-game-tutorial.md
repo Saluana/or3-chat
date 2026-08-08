@@ -48,6 +48,8 @@ app/plugins/my-app/
 ### The Registration Flow
 
 ```typescript
+import { createPost } from '~/db';
+
 // 1. Plugin registers the pane app
 defineNuxtPlugin(() => {
     const { registerPaneApp } = usePaneApps();
@@ -609,7 +611,7 @@ Create `SnakeGameSidebar.vue`:
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useSidebarMultiPane, useSidebarPostsApi } from '~/composables/sidebar';
+import { useSidebarMultiPane, useSidebarPostsApi } from '~/composables/sidebar/useSidebarEnvironment';
 import { usePostsList } from '~/composables/posts/usePostsList';
 
 interface SnakeGameMeta {
@@ -1089,10 +1091,10 @@ You now have a complete understanding of building custom pane apps! Here's what 
 
 The complete snake game source code is available in:
 
--   `app/plugins/snake/snake-game.client.ts` - Registration
--   `app/plugins/snake/snake-game.ts` - Game logic
--   `app/plugins/snake/SnakeGamePane.vue` - Pane component
--   `app/plugins/snake/SnakeGameSidebar.vue` - Sidebar page
+-   `app/plugins/examples/snake-game.client.ts` - Registration
+-   `app/plugins/examples/snake/snake-game.ts` - Game logic
+-   `app/plugins/examples/snake/SnakeGamePane.vue` - Pane component
+-   `app/plugins/examples/snake/SnakeGameSidebar.vue` - Sidebar page
 
 Study these files to see how everything fits together in a real application.
 

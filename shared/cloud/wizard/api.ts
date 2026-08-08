@@ -514,8 +514,10 @@ function ensurePresetLocalSecrets(answers: WizardAnswers): WizardAnswers {
         fsTokenSecret:
             answers.fsTokenSecret?.trim() || generateSecureSecret(48),
         fsRoot: answers.fsRoot?.trim() || defaultFsRoot(answers.instanceDir),
+        sqliteDriver: answers.sqliteDriver ?? 'better-sqlite3',
         sqliteDbPath:
             answers.sqliteDbPath?.trim() || './.data/or3-sync.sqlite',
+        sqliteD1Binding: answers.sqliteD1Binding?.trim() || 'DB',
         adminUsername:
             answers.adminUsername?.trim() ||
             bootstrapEmail ||

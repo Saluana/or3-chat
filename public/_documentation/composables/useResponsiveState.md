@@ -57,10 +57,12 @@ const { isMobile } = useResponsiveState();
 ### 1. Get responsive state
 
 ```ts
-const { isMobile, isTablet } = useResponsiveState();
+const { isMobile, isTablet, isDesktop, hydrated } = useResponsiveState();
 
 // isMobile: Ref<boolean> — true when viewport ≤ 768px
 // isTablet: Ref<boolean> — true when viewport 769px–1023px
+// isDesktop: Ref<boolean> — true when viewport ≥ 1024px
+// hydrated: Ref<boolean> — true once the first client-side breakpoint check has run
 ```
 
 ### 2. Conditionally render layouts
@@ -122,10 +124,12 @@ function openSidebar() {
 
 When you call `useResponsiveState()`, you get an object with:
 
-| Property   | Type           | Description                                |
-| ---------- | -------------- | ------------------------------------------ |
-| `isMobile` | `Ref<boolean>` | `true` when viewport width ≤ 768px         |
-| `isTablet` | `Ref<boolean>` | `true` when viewport width is 769px–1023px |
+| Property   | Type           | Description                                        |
+| ---------- | -------------- | -------------------------------------------------- |
+| `isMobile` | `Ref<boolean>` | `true` when viewport width ≤ 768px                 |
+| `isTablet` | `Ref<boolean>` | `true` when viewport width is 769px–1023px         |
+| `isDesktop` | `Ref<boolean>` | `true` when viewport width ≥ 1024px               |
+| `hydrated` | `Ref<boolean>` | `true` after the first client-side breakpoint read |
 
 ---
 
@@ -378,6 +382,8 @@ Full type signature:
 function useResponsiveState(): {
     isMobile: Ref<boolean>;
     isTablet: Ref<boolean>;
+    isDesktop: Ref<boolean>;
+    hydrated: Ref<boolean>;
 };
 ```
 

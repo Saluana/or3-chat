@@ -2,6 +2,10 @@
 
 Server-side configuration for authentication, sync, storage, rate limiting, and security. **Requires SSR mode.**
 
+For the complete deployment environment-variable matrix—including provider
+credentials, SQLite runtimes, webhooks, Connect, plugin controls, and wizard
+tooling—see the [Environment and Provider Settings Reference](./environment-reference).
+
 For a complete, setting-by-setting deep dive (including defaults, strict-mode requirements, and how env vars are interpreted), see:
 
 - [Configuration Reference](./config-reference)
@@ -245,7 +249,7 @@ Admin routes are **disabled by default**. They become available only when `OR3_A
 | `admin.pluginModuleLoaderV2Enabled` (`OR3_PLUGIN_MODULE_LOADER_V2_ENABLED`)   | `false` | Startup-only gate for the V2 immutable package candidate/promotion lane and selected server modules; disable and restart for a no-data-deletion rollback              |
 | `admin.pluginModuleLoaderV2WorkspaceIds` (`OR3_PLUGIN_MODULE_LOADER_V2_WORKSPACE_IDS`) | `[]` | Startup-only V2 package canary allowlist; independent of the bundled V1 manager canary, empty means all workspaces when the loader is enabled |
 | `admin.pluginIsolationEnabled` (`OR3_PLUGIN_ISOLATION_ENABLED`)               | `false` | Enables optional isolated plugin execution surfaces where supported                                                                                                  |
-| `admin.pluginZipInstallEnabled`                                              | `true`  | Enables/disables ZIP-based extension install endpoint                                                                                                                |
+| `admin.pluginZipInstallEnabled` (`OR3_PLUGIN_ZIP_INSTALL_ENABLED`)           | `true`  | Enables/disables ZIP-based extension install endpoint                                                                                                                |
 | `admin.pluginRouteDispatcherEnabled`                                         | `true`  | Enables/disables manifest-declared plugin server route dispatcher                                                                                                    |
 
 ## Dependency Chain
@@ -357,6 +361,7 @@ const syncUrl = or3CloudConfig.sync.convex?.url;
 
 - [or3-config](./or3-config) — Base configuration (branding, features, limits)
 - [providers](./providers) — Install provider packages + Clerk/Convex bridge wiring
+- [environment-reference](./environment-reference) — Complete runtime/provider environment-variable matrix
 - [provider-clerk](./provider-clerk) — Dedicated Clerk provider install/setup guide
 - [provider-convex](./provider-convex) — Dedicated Convex provider install/setup guide
 - [auth-system](./auth-system) — Authentication architecture

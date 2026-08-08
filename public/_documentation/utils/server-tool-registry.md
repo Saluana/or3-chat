@@ -30,8 +30,13 @@ Options:
 - `runtime?: 'hybrid' | 'client' | 'server'`
 - `timeoutMs?: number` (default 10000)
 - `override?: boolean`
+- `workflowPolicy?: WorkflowToolRegistrationPolicy`
 
 Runtime defaults to `opts.runtime ?? definition.runtime ?? 'hybrid'`.
+
+Returns a disposer function `() => boolean`. The disposer removes only the
+registration it owns and returns `false` if that registration was already
+replaced. This keeps HMR and plugin reloads from deleting newer registrations.
 
 ### `executeServerTool`
 

@@ -80,6 +80,12 @@ Set:
 - `NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `NUXT_CLERK_SECRET_KEY`
 
+### Clerk test keys rejected in production
+
+In production builds, the provider refuses to start with Clerk test keys.
+Keys starting with `pk_test_` or `sk_test_` fail validation. Use live keys
+for production instances.
+
 ### Session rejected despite a valid Clerk login
 
 OR3 requires the Clerk user's primary email address to exist and have

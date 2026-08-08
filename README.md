@@ -401,6 +401,9 @@ not need to create or edit `.env` by hand.
 
 Start with [Start Here](docs/start-here.md), then use the focused guides below.
 
+For the complete deployment environment and provider settings matrix, see
+[Environment and provider settings](public/_documentation/cloud/environment-reference.md).
+
 Full documentation lives inside the project at [`public/_documentation/`](public/_documentation/)
 
 ### What's Covered

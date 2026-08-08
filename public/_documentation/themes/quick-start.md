@@ -18,7 +18,8 @@ This creates:
 ```
 app/theme/my-theme/
   theme.ts
-  styles.css        # optional, only if you add it to stylesheets[]
+  README.md       # theme notes
+  styles.css      # optional, only if you add it to stylesheets[]
 ```
 
 You can also add:

@@ -64,10 +64,10 @@ const messages: ChatMessage[] = [
 
 ```ts
 const orMessages = await buildOpenRouterMessages(messages, {
-  maxImageInputs: 8,           // Total images across history
-  dedupeImages: true,          // Skip duplicate hashes
+  maxImageInputs: 8,           // Total images across history (default)
+  dedupeImages: true,          // Skip duplicate hashes (default)
   imageInclusionPolicy: 'all', // 'all' | 'recent' | 'recent-user' | 'recent-assistant'
-  recentWindow: 12,            // Last N messages when using recent policy
+  recentWindow: 12,            // Last N messages when using recent policy (default)
   debug: false
 });
 ```
@@ -76,8 +76,11 @@ const orMessages = await buildOpenRouterMessages(messages, {
 
 ```ts
 interface ORMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: ORContentPart[];
+  tool_calls?: unknown[];   // copied through when present
+  tool_call_id?: string;
+  name?: string;
 }
 
 interface ORContentPart {
@@ -87,6 +90,16 @@ interface ORContentPart {
   file?: { filename: string; file_data: string };
 }
 ```
+
+### Default options
+
+| Option | Default |
+|--------|---------|
+| `maxImageInputs` | `8` |
+| `dedupeImages` | `true` |
+| `imageInclusionPolicy` | `'all'` |
+| `recentWindow` | `12` |
+| `debug` | `false` |
 
 ---
 
@@ -142,8 +155,11 @@ await buildOpenRouterMessages(messages, {
 
 ```ts
 interface ORMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: ORContentPart[];
+  tool_calls?: unknown[];
+  tool_call_id?: string;
+  name?: string;
 }
 
 // ORContentPart can be:
@@ -171,7 +187,7 @@ interface ORContentPartFile {
 Here's the flow:
 
 1. **Parse policies**: Determine which messages to inspect for images
-2. **Collect candidates**: Find all image/file hashes in candidate messages
+2. **Collect candidates**: Find image hashes in `file_hashes` and inline `type: 'image'` content parts
 3. **External filter**: Optional hook to filter/veto specific images
 4. **Dedupe & limit**: Remove duplicates, enforce max count
 5. **Group by message**: Organize images back to their original messages
@@ -202,7 +218,7 @@ hash = 'abc123def456'
 
 ```ts
 url = 'https://example.com/image.png'
-→ fetch(url)
+→ fetch(url)          // 8-second timeout, ~5MB size cap
 → blob
 → blobToDataUrl(blob)
 → 'data:image/png;base64,...'
@@ -212,6 +228,13 @@ url = 'https://example.com/image.png'
 
 Blob URLs (`blob:`) can't be accessed server-side, so they're skipped.
 
+### Pass-through refs
+
+Some refs are used as-is without hydration:
+
+- `data:image/...` URLs go straight into the message
+- Remote URLs that look like images (`.png`, `.jpg`, `.gif`, `.webp`, `.avif`, or a query string) pass through as `image_url` parts
+
 ---
 
 ## Caching
@@ -220,7 +243,7 @@ Images are cached in memory to avoid repeated conversions:
 
 ```ts
 // Global caches (persistent in window)
-window.__or3ImageDataUrlCache    // Maps ref → data URL
+window.__or3ImageDataUrlCache    // Maps ref → data URL (LRU, max 64 entries)
 window.__or3ImageHydrateInflight // In-flight promises
 ```
 
@@ -230,6 +253,7 @@ window.__or3ImageHydrateInflight // In-flight promises
 - Automatic deduplication
 
 **Lifetime:**
+- The cache is an LRU map capped at 64 entries
 - Cleared on page reload
 - Persists across multiple API calls
 
@@ -291,14 +315,15 @@ const orMessages = await buildOpenRouterMessages(messages, {
 
 ### Memory limits
 
-- Max 5MB per file (enforced during hydration)
-- Large images truncated silently
+- Remote and blob URL fetches are capped at ~5MB (enforced during hydration)
+- Large remote files are dropped, not truncated
 - Base64 encoding increases size ~33%
+- Local file hydration has no size cap
 
 ### Image types supported
 
 - **Input**: PNG, JPG, GIF, WebP, AVIF
-- **Detection**: Via MIME type or file extension
+- **Detection**: Local hashes are checked against file metadata (`kind: 'image'` or an `image/*` MIME type); remote URLs use an extension or query-string heuristic
 - **Inline formats**: data URLs, https URLs, local hashes, blob URLs
 
 ### PDF handling
@@ -311,6 +336,10 @@ content: [
   { type: 'file', file: { filename: 'doc.pdf', file_data: 'data:application/pdf;base64,...' } }
 ]
 ```
+
+- File parts hydrate local hashes through `getFileBlob`, preserving the MIME type
+- PDF data URLs are normalized to the `application/pdf` MIME prefix
+- A local hash that is not an image (for example, a PDF) is skipped from the image parts and handled as a file part instead
 
 ### Dedupe strategy
 

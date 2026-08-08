@@ -56,8 +56,11 @@ OR3_STORAGE_S3_KEY_PREFIX=or3-storage
 # Optional temporary credentials
 OR3_STORAGE_S3_SESSION_TOKEN=...
 
-# Optional hardening (may not work on all compat hosts)
-OR3_STORAGE_S3_REQUIRE_CHECKSUM=false
+# Checksum enforcement is mandatory. Omit this variable or set it to true.
+OR3_STORAGE_S3_REQUIRE_CHECKSUM=true
+
+# Development-only HTTP endpoint override
+OR3_STORAGE_S3_ALLOW_INSECURE_HTTP=true
 ```
 
 ## Bucket CORS (required)
@@ -72,6 +75,9 @@ Minimum guidance:
 - Allowed origins: your OR3 site origin(s)
 
 (Exact JSON varies by host. R2/MinIO/AWS all support equivalent CORS rules.)
+
+`OR3_STORAGE_S3_REQUIRE_CHECKSUM=false` is rejected at startup. S3 uploads
+always require `x-amz-checksum-sha256` and a signed `Content-Length`.
 
 ## How it works
 

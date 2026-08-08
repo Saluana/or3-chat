@@ -13,13 +13,17 @@ membership, or capability.
 | `workspace.read` | Yes | Yes | Yes | Only with workspace membership |
 | `workspace.write` | No | Yes | Yes | Only with editor/owner membership |
 | `users.manage` | No | No | Yes | Only with owner membership |
-| `sync.gc` | No | No | Yes | Yes |
+| `sync.gc` | No | No | Yes | Only with owner membership |
 | `storage.write` | No | Yes | Yes | Only with editor/owner membership |
 | `storage.gc` | No | No | No | Yes |
 | `ai.paid` | No | Yes | Yes | Only with editor/owner membership |
 | `ai.background` | No | Yes | Yes | Only with editor/owner membership |
 | `tool.execute` | No | Yes | Yes | Only with editor/owner membership |
 
+Capabilities map to base permissions through `server/auth/capability-gate.ts`.
+`sync.gc` requires `workspace.settings.manage` (owner only); `storage.gc` requires
+`admin.access` (deployment admin only); `storage.write`, `ai.paid`,
+`ai.background`, and `tool.execute` all resolve to `workspace.write`.
 Deployment administration does not silently grant ordinary workspace
 membership. A deployment admin must still be a member when an operation reads
 or writes workspace data, except for explicitly deployment-scoped maintenance.
@@ -41,10 +45,10 @@ it is not a direct client API.
 | Sync `pull`, `watchChanges`, `getServerVersion` | Public | `ctx.auth` membership | Target workspace; notification rows additionally restricted to their owner | `workspace.read` | Notification visibility is derived from the internal caller ID |
 | Sync `push` | Public | `ctx.auth` membership | Target workspace; notification writes additionally restricted to their owner | `workspace.write` | Device/op identifiers are data identifiers, not actors; notification `user_id` is server-derived |
 | Sync `updateDeviceCursor` | Public | `ctx.auth` membership and owned device | Target workspace/device | `workspace.read` | Device ownership is server-validated |
-| Sync history GC and scheduled retention | Internal | Trusted server/admin scheduler | Target workspace | `sync.gc` | No caller retention authority; currently disabled |
+| Sync history GC and scheduled retention | Internal | Trusted server/admin scheduler | Target workspace | `sync.gc` | No caller retention authority; enabled only when the active adapter declares snapshot-v1 retention |
 | Storage upload URL and commit | Public | `ctx.auth` membership | Target workspace/object intent | `storage.write` | None |
 | Storage file URL | Public | `ctx.auth` membership | Target workspace/hash | `workspace.read` | None |
-| Storage blob/metadata GC | Internal | Trusted deployment maintenance | Target workspace | `storage.gc` | No caller deletion authority; currently disabled where canonical references are unavailable |
+| Storage blob/metadata GC | Internal | Trusted deployment maintenance | Target workspace | `storage.gc` | No caller deletion authority; adapters may report GC disabled when canonical storage references are unavailable |
 | Background-job create/update/complete/fail/check/cleanup/count | Internal | Authenticated SSR job service | Job's stored user/workspace | `ai.background` or maintenance | No `user_id='*'`; ownership comes from the stored job and server session |
 | Background-job get/abort | Internal Convex; public only through SSR job routes | Resolved session matched to stored job | Job ID and originating workspace | read for status/stream, write for abort | No caller user ID and no wildcard bypass |
 | Notification create/read/mark-read | Internal functions; public sync is owner-filtered | Resolved subject or trusted server author | Canonical target user/workspace | user-scoped read/write | No caller-authoritative `user_id` |
@@ -68,12 +72,15 @@ behind the authenticated SSR routes and provider adapters described above.
   `workspaces.update`, `workspaces.setActive`, `workspaces.remove`,
   `workspaces.ensure`, `workspaces.resolveSession`,
   `workspaces.createInvite`, `workspaces.listInvites`,
-  `workspaces.revokeInvite`, `workspaces.consumeInvite`.
+  `workspaces.listInvitesInternal`, `workspaces.validateInviteInternal`,
+  `workspaces.acceptInviteAndProvisionUser`, `workspaces.revokeInvite`,
+  `workspaces.consumeInvite`.
 - Sync: `sync.push`, `sync.updateDeviceCursor`, `sync.pull`,
   `sync.watchChanges`, `sync.getServerVersion`, `sync.gcTombstones`,
   `sync.gcChangeLog`, `sync.runWorkspaceGc`, `sync.runScheduledGc`.
-- Storage: `storage.generateUploadUrl`, `storage.commitUpload`,
-  `storage.getFileUrl`, `storage.gcDeletedFiles`.
+- Storage: `storage.generateUploadUrl`, `storage.cancelUploadIntent`,
+  `storage.commitUpload`, `storage.getFileUrl`, `storage.deleteObject`,
+  `storage.gcDeletedFiles`.
 - Background jobs: `backgroundJobs.create`, `backgroundJobs.get`,
   `backgroundJobs.update`, `backgroundJobs.complete`, `backgroundJobs.fail`,
   `backgroundJobs.abort`, `backgroundJobs.checkAborted`,
@@ -117,10 +124,10 @@ behind the authenticated SSR routes and provider adapters described above.
 | Sync pull | Resolved session | Request workspace | `workspace.read` | Viewer, editor, owner |
 | Sync push | Resolved session | Request workspace | `workspace.write` | Editor, owner |
 | Device cursor update | Resolved session and device ownership | Request workspace/device | `workspace.read` | Viewer, editor, owner |
-| Sync GC routes | Resolved session | Request workspace | `sync.gc` | Owner/deployment admin; currently disabled |
+| Sync GC routes | Resolved session | Request workspace | `sync.gc` | Owner; enabled only when the active sync adapter declares snapshot-v1 retention |
 | Storage presign download | Resolved session | Request workspace/hash | `workspace.read` | Viewer, editor, owner |
 | Storage presign upload and commit | Resolved session | Request workspace/intent | `storage.write` | Editor, owner |
-| Storage GC route | Resolved session | Request workspace | `storage.gc` | Deployment admin; destructive providers currently disabled |
+| Storage GC route | Resolved session | Request workspace | `storage.gc` | Deployment admin; adapters may report GC disabled when canonical storage references are unavailable |
 
 ## AI, background jobs, workflows, and tools
 

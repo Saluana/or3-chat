@@ -48,7 +48,7 @@ Each workspace membership has a role. The role controls what permissions are act
 | `editor` | `workspace.read`, `workspace.write` |
 | `viewer` | `workspace.read` |
 
-Permissions are checked using `can(session, 'workspace.write')` or `requireCan(event, 'workspace.settings.manage')`. The latter throws a 403 if the check fails.
+Permissions are checked using `can(session, 'workspace.write')` or `requireCan(session, 'workspace.settings.manage')`. The latter throws a 403 if the check fails.
 
 Note: `admin.access` is a *deployment-level* permission. It is **not** granted by any workspace role — it comes from `deploymentAdmin` being set on the session (configured separately, see deployment admin docs).
 

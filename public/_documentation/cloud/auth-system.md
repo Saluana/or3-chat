@@ -1,6 +1,6 @@
 # Authentication System
 
-The OR3 Authentication System uses a hybrid approach: **Clerk** is used for user identity and workspace provisioning, while **OpenRouter** is used separately for LLM API access via PKCE. This separation ensures that we can manage user access and billing for the "cloud" features (Sync, Share) independently of their chosen LLM provider.
+The OR3 Authentication System uses a hybrid approach: an **auth provider** (Clerk or basic-auth, selected by `OR3_AUTH_PROVIDER`) handles user identity and workspace provisioning, while **OpenRouter** is used separately for LLM API access via PKCE. This separation ensures that we can manage user access and billing for the "cloud" features (Sync, Share) independently of their chosen LLM provider. The docs below describe the Clerk + Convex setup; basic-auth + SQLite is the default SSR stack.
 
 ---
 
@@ -29,11 +29,13 @@ The client app uses composables to manage this state:
 
 ### 3. LLM Authorization (OpenRouter)
 
-Access to LLM models is handled separately via **OAuth PKCE** with OpenRouter. This key is stored locally in IndexedDB and is **never** sent to our cloud servers.
+Access to LLM models is handled separately via **OAuth PKCE** with OpenRouter. The key is stored locally in IndexedDB and never written to server storage.
 
 *   **Flow**: User clicks "Connect OpenRouter" -> PKCE Handshake -> Token received.
 *   **Storage**: Token is saved in local Dexie DB (`kv` table).
-*   **Usage**: The token is injected directly into browser-side API calls to OpenRouter.
+*   **Usage**:
+    - Local mode: injected directly into browser-side API calls to OpenRouter.
+    - SSR mode: the key is sent as a request header (`x-or3-openrouter-key` or `Authorization: Bearer`) to `/api/openrouter/stream`, which proxies the stream to OpenRouter server-side. The key is used per request and is never persisted on the server.
 
 ### 4. Admin Dashboard Authorization (Clerk + Convex)
 

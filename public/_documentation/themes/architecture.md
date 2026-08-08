@@ -62,6 +62,18 @@ Activating a theme does the following:
 6. Applies background layers (`app/core/theme/backgrounds.ts`).
 7. Merges `app.config.ts` and `theme.ui` into `app.config`.
 8. Registers theme icons with `iconRegistry`.
+9. Registers packaged workspace profiles
+   (`app/plugins/92.workspace-profile-theme.client.ts`) as choices, with the
+   theme's `recommendedWorkspaceProfileId` surfaced as a recommendation.
+
+### User theme overrides
+
+Per-user overrides (`app/core/theme/useUserThemeOverrides.ts`) sit on top of
+the active theme. Users can change colors, background layers, and base font
+size without editing the theme. Overrides are stored per color mode in
+localStorage (`or3:user-theme-overrides:light` / `:dark`) and merged into the
+DOM at runtime. Each group has an `enabled` toggle, and values are clamped
+(font size 14-24px, opacity 0-1). See the capability table below.
 
 The signed-in preference repository is canonical once account storage is
 ready. The SSR cookie supplies first paint, and localStorage is a migration and

@@ -22,6 +22,7 @@ Generic post storage built on the `posts` Dexie table; used for lightweight CMS 
 | `content`  | Arbitrary string content (often Markdown).                       |
 | `postType` | Logical discriminator (e.g., `'markdown'`, `'doc'`, `'prompt'`). |
 | `meta`     | JSON string or structured object/array; normalized upstream.     |
+| `file_hashes` | Serialized JSON array of file hashes; nullable.              |
 | `deleted`  | Soft delete flag.                                                |
 
 ---
@@ -33,10 +34,12 @@ Generic post storage built on the `posts` Dexie table; used for lightweight CMS 
 | `createPost(input)`  | Filters, normalizes meta/title, writes a new post. |
 | `upsertPost(value)`  | Replaces an existing post with validation.         |
 | `getPost(id)`        | Fetches a post by id with output filters.          |
-| `allPosts()`         | Returns all posts (unfiltered); hook can prune.    |
-| `searchPosts(term)`  | Case-insensitive title search using Dexie filter.  |
+| `allPosts()`         | Returns all public posts; internal post types are excluded. |
+| `searchPosts(term)`  | Case-insensitive title search using Dexie filter; skips internal post types. |
 | `softDeletePost(id)` | Marks `deleted: true` and updates timestamp.       |
 | `hardDeletePost(id)` | Removes the row entirely.                          |
+
+Internal post types `or3:document-revision` and `or3:document-revision-chunk` (exported as `INTERNAL_POST_TYPES`) are hidden from list and search helpers; they back the document revision system.
 
 ---
 

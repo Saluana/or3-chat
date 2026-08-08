@@ -69,6 +69,7 @@ export const SECRET_ANSWER_KEYS: Array<keyof WizardAnswers> = [
     'connectEncryptionKey',
     'connectCloudflareApiToken',
     'connectCloudflareValidationAttestation',
+    'sqliteTursoAuthToken',
     'adminPassword',
 ];
 
@@ -122,10 +123,14 @@ export const WIZARD_OWNED_ENV_KEYS = [
     'OR3_PLUGIN_ZIP_INSTALL_ENABLED',
     'OR3_ADMIN_ALLOW_REBUILD',
     'OR3_SQLITE_DB_PATH',
+    'OR3_SQLITE_DRIVER',
     'OR3_SQLITE_PRAGMA_JOURNAL_MODE',
     'OR3_SQLITE_PRAGMA_SYNCHRONOUS',
     'OR3_SQLITE_ALLOW_IN_MEMORY',
     'OR3_SQLITE_STRICT',
+    'OR3_SQLITE_TURSO_URL',
+    'OR3_SQLITE_TURSO_AUTH_TOKEN',
+    'OR3_SQLITE_D1_BINDING',
     'OR3_CONNECT_ENABLED',
     'OR3_CONNECT_PROVIDER',
     'OR3_CONNECT_RELAY_PROVIDER',
@@ -358,12 +363,38 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 packageName: 'or3-provider-sqlite',
                 reason: 'SQLite sync + workspace store provider.',
             },
-            {
-                packageName: 'better-sqlite3',
-                reason: 'SQLite runtime used by sync provider.',
-            },
         ],
         fields: [
+            {
+                key: 'sqliteDriver',
+                type: 'select',
+                label: 'SQLite runtime',
+                help: 'Keep the default for a local Node database, or select Bun, Turso, or Cloudflare D1.',
+                defaultValue: 'better-sqlite3',
+                options: [
+                    {
+                        label: 'Local file (better-sqlite3, default)',
+                        value: 'better-sqlite3',
+                        description: 'Uses a local SQLite file with the current setup.',
+                    },
+                    {
+                        label: 'Bun built-in SQLite',
+                        value: 'bun',
+                        description: 'Uses Bun\'s built-in bun:sqlite driver and a local file.',
+                    },
+                    {
+                        label: 'Turso',
+                        value: 'turso',
+                        description: 'Uses a hosted Turso/libSQL database URL and auth token.',
+                    },
+                    {
+                        label: 'Cloudflare D1',
+                        value: 'd1',
+                        description: 'Uses a D1 binding already configured for your Cloudflare Worker. Requires a Workers-compatible auth and storage stack.',
+                    },
+                ],
+                tier: 'core',
+            },
             {
                 key: 'sqliteDbPath',
                 type: 'text',
@@ -372,6 +403,38 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 required: true,
                 defaultValue: './.data/or3-sync.sqlite',
                 tier: 'advanced',
+                visibleWhen: (answers) =>
+                    (answers.sqliteDriver ?? 'better-sqlite3') === 'better-sqlite3' ||
+                    answers.sqliteDriver === 'bun',
+            },
+            {
+                key: 'sqliteTursoUrl',
+                type: 'text',
+                label: 'Turso database URL',
+                help: 'Paste the libsql:// or https:// database URL from Turso.',
+                required: true,
+                tier: 'core',
+                visibleWhen: (answers) => answers.sqliteDriver === 'turso',
+            },
+            {
+                key: 'sqliteTursoAuthToken',
+                type: 'password',
+                label: 'Turso auth token',
+                help: 'Create a database auth token in Turso and keep it server-side.',
+                required: true,
+                secret: true,
+                tier: 'core',
+                visibleWhen: (answers) => answers.sqliteDriver === 'turso',
+            },
+            {
+                key: 'sqliteD1Binding',
+                type: 'text',
+                label: 'D1 binding name',
+                help: 'The D1 binding from your Wrangler configuration. DB is the usual name. OR3 Connect is not available with D1.',
+                required: true,
+                defaultValue: 'DB',
+                tier: 'core',
+                visibleWhen: (answers) => answers.sqliteDriver === 'd1',
             },
             {
                 key: 'sqlitePragmaJournalMode',
@@ -380,6 +443,9 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 help: 'WAL is the recommended setting for best performance. Leave as-is unless you know what this does.',
                 defaultValue: 'WAL',
                 tier: 'advanced',
+                visibleWhen: (answers) =>
+                    (answers.sqliteDriver ?? 'better-sqlite3') === 'better-sqlite3' ||
+                    answers.sqliteDriver === 'bun',
             },
             {
                 key: 'sqlitePragmaSynchronous',
@@ -388,6 +454,9 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 help: 'NORMAL is a good balance of speed and safety. Leave as-is unless you know what this does.',
                 defaultValue: 'NORMAL',
                 tier: 'advanced',
+                visibleWhen: (answers) =>
+                    (answers.sqliteDriver ?? 'better-sqlite3') === 'better-sqlite3' ||
+                    answers.sqliteDriver === 'bun',
             },
             {
                 key: 'sqliteAllowInMemory',
@@ -396,6 +465,9 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 help: 'Only enable this for automated tests. Data is lost when the server restarts.',
                 defaultValue: false,
                 tier: 'advanced',
+                visibleWhen: (answers) =>
+                    (answers.sqliteDriver ?? 'better-sqlite3') === 'better-sqlite3' ||
+                    answers.sqliteDriver === 'bun',
             },
             {
                 key: 'sqliteStrict',
@@ -404,6 +476,9 @@ export const providerCatalog: WizardProviderDescriptor[] = [
                 help: 'Enforces stricter type checking in the database. Off by default.',
                 defaultValue: false,
                 tier: 'advanced',
+                visibleWhen: (answers) =>
+                    (answers.sqliteDriver ?? 'better-sqlite3') === 'better-sqlite3' ||
+                    answers.sqliteDriver === 'bun',
             },
         ],
     },
@@ -607,9 +682,9 @@ export const providerCatalog: WizardProviderDescriptor[] = [
             {
                 key: 's3RequireChecksum',
                 type: 'boolean',
-                label: 'Require checksum on upload (optional hardening)',
-                help: 'If enabled, uploads must include x-amz-checksum-sha256. Some S3-compatible hosts may not support this.',
-                defaultValue: false,
+                label: 'Require checksum on upload',
+                help: 'S3 uploads require x-amz-checksum-sha256 and a signed Content-Length. The provider rejects disabling this.',
+                defaultValue: true,
                 tier: 'advanced',
             },
         ],
@@ -1054,11 +1129,15 @@ export function mapEnvToWizardAnswers(
     assignString('clerkPublishableKey', 'NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY');
     assignString('clerkSecretKey', 'NUXT_CLERK_SECRET_KEY');
 
+    assignString('sqliteDriver', 'OR3_SQLITE_DRIVER');
     assignString('sqliteDbPath', 'OR3_SQLITE_DB_PATH');
     assignString('sqlitePragmaJournalMode', 'OR3_SQLITE_PRAGMA_JOURNAL_MODE');
     assignString('sqlitePragmaSynchronous', 'OR3_SQLITE_PRAGMA_SYNCHRONOUS');
     assignBoolean('sqliteAllowInMemory', 'OR3_SQLITE_ALLOW_IN_MEMORY');
     assignBoolean('sqliteStrict', 'OR3_SQLITE_STRICT');
+    assignString('sqliteTursoUrl', 'OR3_SQLITE_TURSO_URL');
+    assignString('sqliteTursoAuthToken', 'OR3_SQLITE_TURSO_AUTH_TOKEN');
+    assignString('sqliteD1Binding', 'OR3_SQLITE_D1_BINDING');
 
     assignBoolean('connectEnabled', 'OR3_CONNECT_ENABLED');
     assignString('connectProvider', 'OR3_CONNECT_PROVIDER');
@@ -1211,11 +1290,15 @@ export function createDefaultAnswers(
         basicAuthDbPath: './.data/or3-basic-auth.sqlite',
         syncEnabled: true,
         syncProvider: 'sqlite',
+        sqliteDriver: 'better-sqlite3',
         sqliteDbPath: './.data/or3-sync.sqlite',
         sqlitePragmaJournalMode: 'WAL',
         sqlitePragmaSynchronous: 'NORMAL',
         sqliteAllowInMemory: false,
         sqliteStrict: false,
+        sqliteTursoUrl: '',
+        sqliteTursoAuthToken: '',
+        sqliteD1Binding: 'DB',
         connectEnabled: false,
         connectProvider: 'sqlite',
         connectRelayProvider: 'cloudflare',
@@ -1233,7 +1316,7 @@ export function createDefaultAnswers(
         s3ForcePathStyle: false,
         s3KeyPrefix: '',
         s3UrlTtlSeconds: 900,
-        s3RequireChecksum: false,
+        s3RequireChecksum: true,
         openrouterAllowUserOverride: true,
         openrouterRequireUserKey: false,
         limitsEnabled: true,

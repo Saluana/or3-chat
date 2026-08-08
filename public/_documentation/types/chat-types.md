@@ -26,22 +26,37 @@ The raw message format used internally and in the database.
 
 ```ts
 interface ChatMessage {
-    role: 'user' | 'assistant' | 'system';
+    role: 'user' | 'assistant' | 'system' | 'tool';
     content: string | ContentPart[];
     id?: string;
     stream_id?: string;
     file_hashes?: string | null;
     reasoning_text?: string | null;
+    error?: string | null;
+    pending?: boolean;
+    data?: Record<string, unknown> | null;
+    index?: number | null;
+    order_key?: string | null;
+    created_at?: number | null;
+    name?: string;
+    tool_call_id?: string;
+    tool_calls?: ToolCall[];
 }
 ```
 
 **Fields:**
-- `role` — Message sender (user, assistant, or system)
+- `role` — Message sender (user, assistant, system, or tool result)
 - `content` — Message text or array of content parts
 - `id` — Unique message identifier
 - `stream_id` — Links streaming messages to their final result
 - `file_hashes` — Comma-separated hash list for attached files
 - `reasoning_text` — AI reasoning output (if model supports it)
+- `pending` — True while a message is being sent
+- `data` — Arbitrary payload attached by senders
+- `index` — Ordering index within the thread
+- `order_key` — HLC-derived key that breaks index ties
+- `tool_calls` — Function calls the assistant requested
+- `tool_call_id` — Links a `tool` role message to its call
 
 **Note:** For UI rendering, use `UiChatMessage` from `uiMessages.ts` which adds `toolCalls`, `attachments`, and `pending` fields.
 
@@ -149,11 +164,7 @@ interface ToolDefinition {
     function: {
         name: string;
         description: string;
-        parameters: {
-            type: 'object';
-            properties: Record<string, any>;
-            required?: string[];
-        };
+        parameters: JsonSchemaObject;
     };
     ui?: {
         label?: string;              // Display name
@@ -162,8 +173,11 @@ interface ToolDefinition {
         defaultEnabled?: boolean;    // Initial enabled state
         category?: string;           // Group by category
     };
+    runtime?: 'hybrid' | 'client' | 'server';
 }
 ```
+
+`JsonSchemaObject` comes from `~~/shared/chat/tool-schema`. It requires `type: 'object'` and accepts optional `properties` and `required` arrays. The `runtime` field tells the tool registry where the tool may execute. `'hybrid'` (the default) runs on either side, `'client'` only on the browser, and `'server'` only in SSR background execution.
 
 **UI Metadata:**
 
@@ -242,7 +256,7 @@ const choice3: ToolChoice = {
 
 ### `ORStreamEvent`
 
-Events emitted by the OpenRouter streaming parser.
+Events emitted by the OpenRouter streaming parser. The definition lives in `shared/openrouter/parseOpenRouterSSE.ts` and is re-exported by `~/utils/chat/types`.
 
 ```ts
 type ORStreamEvent =
@@ -294,6 +308,10 @@ interface SendMessageParams {
     file_hashes?: string[];
     extraTextParts?: string[];
     online: boolean;
+    thinking?: boolean;
+    reasoningEffort?: string | null;
+    context_hashes?: string[];
+    historyOverride?: ChatMessage[];
 }
 ```
 
@@ -303,6 +321,10 @@ interface SendMessageParams {
 - `file_hashes` — Reference existing files by hash
 - `extraTextParts` — Additional text segments
 - `online` — Enable web search (adds ':online' suffix to model)
+- `thinking` — Enable extended reasoning mode
+- `reasoningEffort` — Reasoning budget for models that support it
+- `context_hashes` — Hashes to include for model context without reattaching to the new UI message
+- `historyOverride` — Canonical transcript prefix used for branch-preserving retry
 
 **Example:**
 
@@ -318,7 +340,7 @@ await chat.sendMessage('Analyze this', {
 
 ## Type Guards
 
-Helper functions for runtime type checking:
+`~/utils/chat/types` does not export runtime type guards. Narrow content parts inline instead:
 
 ```ts
 function isTextPart(part: ContentPart): part is TextPart {
@@ -410,10 +432,15 @@ const result = calculate(args.operation, args.a, args.b);
 
 ### Use type guards for content parts
 
+Write narrow helpers instead of unsafe assertions:
+
 ```ts
 // Good
-if (isImagePart(part)) {
-    console.log('Image:', part.mediaType);
+function isText(part: ContentPart): part is TextPart {
+    return part.type === 'text';
+}
+if (isText(part)) {
+    console.log('Text:', part.text);
 }
 
 // Bad - unsafe type assertion
@@ -487,13 +514,14 @@ import type {
     ToolCall,
     ToolDefinition,
     ToolChoice,
+    ToolRuntime,
     ORStreamEvent,
     SendMessageParams
 } from '~/utils/chat/types';
 ```
 
-Full definitions in `app/utils/chat/types.ts`.
+Core definitions live in `app/utils/chat/types.ts`. `ORStreamEvent` is defined in `shared/openrouter/parseOpenRouterSSE.ts`. `ToolDefinition.function.parameters` uses `JsonSchemaObject` from `shared/chat/tool-schema.ts`.
 
 ---
 
-Document generated from `app/utils/chat/types.ts` implementation.
+Document generated from `app/utils/chat/types.ts` and `shared/openrouter/parseOpenRouterSSE.ts` implementations.

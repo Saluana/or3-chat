@@ -18,6 +18,7 @@ Read-only helpers for paging `file_meta` rows when browsing uploads or the recyc
 | ---------------------------- | ------------------------------------------------- | --------------------------------------------------- |
 | `listImageMetasPaged`        | `(offset = 0, limit = 50) => Promise<FileMeta[]>` | Returns newest-first non-deleted image meta rows.   |
 | `listDeletedImageMetasPaged` | `(offset = 0, limit = 50) => Promise<FileMeta[]>` | Returns soft-deleted image meta rows for bin views. |
+| `listAllImageMetas`          | `(deleted = false) => Promise<FileMeta[]>`        | Returns every image-like row (live or deleted) for library-wide search and counts; binary payloads stay lazy. |
 | `updateFileName`             | `(hash: string, name: string) => Promise<void>`   | Renames a file (if found) and updates `updated_at`. |
 
 ---

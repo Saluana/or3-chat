@@ -63,7 +63,14 @@ const FIELD_ERROR_RULES: Array<{
     },
     { key: 'clerkPublishableKey', patterns: ['NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY'] },
     { key: 'clerkSecretKey', patterns: ['NUXT_CLERK_SECRET_KEY'] },
+    { key: 'sqliteDriver', patterns: ['OR3_SQLITE_DRIVER'] },
     { key: 'sqliteDbPath', patterns: ['OR3_SQLITE_DB_PATH'] },
+    { key: 'sqliteTursoUrl', patterns: ['OR3_SQLITE_TURSO_URL'] },
+    {
+        key: 'sqliteTursoAuthToken',
+        patterns: ['OR3_SQLITE_TURSO_AUTH_TOKEN'],
+    },
+    { key: 'sqliteD1Binding', patterns: ['OR3_SQLITE_D1_BINDING'] },
     { key: 'convexUrl', patterns: ['VITE_CONVEX_URL'] },
     { key: 'connectPublicUrl', patterns: ['OR3_CONNECT_PUBLIC_URL'] },
     {

@@ -17,8 +17,9 @@ SQLite and Convex implement provider-side materialized snapshot page generators,
 and the client atomically installs their page chains before replaying strictly
 after the watermark. Cross-provider coverage verifies deterministic rows,
 tombstones, intervening writes, duplicate boundaries, and fresh-device recovery
-after the original log entries have been pruned. Retention remains fail-closed
-pending its explicit safety-gate activation and operational rollout.
+after the original log entries have been pruned. Change-log and tombstone
+retention is enabled for adapters that declare the `snapshot-v1` retention
+contract; adapters that do not fail closed with `503`.
 
 When an existing device's cursor expires, snapshot-capable providers use the
 same canonical replacement path instead of attempting cursor-zero replay.
@@ -99,12 +100,15 @@ The sync engine emits lifecycle hooks that plugins can listen to:
 
 ### Write Path Hooks
 
-| Hook Key                     | Description                                       |
-| ---------------------------- | ------------------------------------------------- |
-| `sync.op:action:captured`    | A local write was intercepted and queued.         |
-| `sync.capture:action:failed` | Failed to capture a write (transaction error).    |
-| `sync.push:action:after`     | A batch of operations was successfully pushed.    |
-| `sync.error:action`          | A sync operation failed (retryable or permanent). |
+| Hook Key                     | Description                                             |
+| ---------------------------- | ------------------------------------------------------- |
+| `sync.op:action:captured`    | A local write was intercepted and queued.               |
+| `sync.capture:action:nonAtomic` | A write was captured outside a Dexie transaction.    |
+| `sync.push:action:before`    | A batch is about to be pushed to the server.            |
+| `sync.push:action:after`     | A batch push finished (counts successes and failures).  |
+| `sync.retry:action`          | An op was scheduled for retry.                          |
+| `sync.queue:action:full`     | Pending op queue is near capacity (500 ops).            |
+| `sync.error:action`          | A sync operation failed (retryable or permanent).       |
 
 ### Read Path Hooks
 
@@ -112,6 +116,7 @@ The sync engine emits lifecycle hooks that plugins can listen to:
 | ------------------------------- | ------------------------------------------------------------ |
 | `sync.pull:action:received`     | Remote changes were received from the server.                |
 | `sync.pull:action:applied`      | Remote changes were successfully applied to local DB.        |
+| `sync.pull:action:after`        | A pull cycle finished.                                       |
 | `sync.pull:action:error`        | Failed to apply remote changes.                              |
 | `sync.conflict:action:detected` | A conflict occurred (local and remote modified same record). |
 
@@ -122,6 +127,7 @@ The sync engine emits lifecycle hooks that plugins can listen to:
 | `sync.bootstrap:action:start`    | Bootstrap (initial sync) has started.             |
 | `sync.bootstrap:action:progress` | Bootstrap progress update (cursor, pulled count). |
 | `sync.bootstrap:action:complete` | Bootstrap has completed.                          |
+| `sync.bootstrap:action:error`    | Bootstrap failed.                                 |
 | `sync.rescan:action:starting`    | Rescan (cursor reset) has started.                |
 | `sync.rescan:action:progress`    | Rescan progress update.                           |
 | `sync.rescan:action:completed`   | Rescan has completed.                             |
@@ -132,16 +138,17 @@ The sync engine emits lifecycle hooks that plugins can listen to:
 | --------------------------------------------- | ------------------------------------------------------------- |
 | `sync.subscription:action:statusChange`       | Connection status changed (connected, disconnected, syncing). |
 | `sync.subscription:action:maxRetriesExceeded` | Max reconnection attempts reached.                            |
+| `sync.stats:action`                           | Periodic sync statistics report.                              |
 
 ### Notification Suppression During Bootstrap
 
-**Important:** During bootstrap and rescan operations, certain notifications are automatically suppressed to avoid overwhelming the user:
+**Important:** During bootstrap and rescan operations, sync error notifications are suppressed to avoid overwhelming the user:
 
-- **Sync conflict notifications** - Not created during bootstrap/rescan
 - **Sync error notifications** - Not created during bootstrap/rescan
-- **Historical conflicts** - Conflicts older than 24 hours never generate notifications
+- **Burst suppression** - More than 5 sync errors within 10 seconds starts a 60-second cooldown
+- **Deduplication** - Repeated errors for the same record and message are deduplicated within a 15-second window
 
-This prevents the "notification storm" that would otherwise occur when loading a workspace for the first time or after a cursor reset.
+Sync conflict events (`sync.conflict:action:detected`) are not user-facing at all. They only emit development logs, so loading a workspace for the first time can never produce a "notification storm".
 
 ```typescript
 // These hooks are useful for showing loading indicators
@@ -208,6 +215,13 @@ through payload data. Repeated operation IDs are allocated and applied once only
 when their complete operation fingerprints match. Conflicting reuse of an ID,
 including a conflict with an already-processed operation, returns `CONFLICT`
 without consuming another version.
+
+Server push requests are rate limited (`sync:push`: 200 requests per minute).
+Client outbox flushing treats HTTP 429 (and 502/503/504) as a deferral, not a
+failure: the batch moves back to `retry_wait` with `nextAttemptAt` taken from
+the `Retry-After` header, and `attempts` is not incremented. Only genuine
+failures count against the retry budget (`[250ms, 1s, 3s, 5s]`), so a hot outbox
+cannot exhaust healthy operations under sustained rate limiting.
 
 ### 3. Implementation Example (Skeleton)
 
@@ -301,16 +315,16 @@ echo $VITE_CONVEX_URL    # Should be set
 
 **Symptoms:** Dozens of "Sync conflict resolved" notifications on first load.
 
-**This is now fixed** - The system automatically:
+**This is no longer possible.** Conflict events never create notifications. They only produce development logs. Sync error notifications are the only sync-related notification type, and they are:
 
-- Suppresses conflict notifications during bootstrap/rescan
-- Filters out historical conflicts (older than 24 hours)
-- Deduplicates conflicts within a 15-second window
+- Suppressed during bootstrap/rescan
+- Deduplicated within a 15-second window per record and message
+- Burst-limited (more than 5 in 10 seconds triggers a 60-second cooldown)
 
-If you still see many notifications:
+If you still see repeated sync error notifications:
 
 - Check that `notification-listeners.client.ts` is loaded
-- Look for debug logs: `[notify] Skipping historical conflict notification`
+- Look for debug logs: `[notify]` entries in the browser console
 
 ### Bootstrap Taking Too Long
 
@@ -319,7 +333,7 @@ If you still see many notifications:
 **Solutions:**
 
 - This is normal for large workspaces (1000+ records)
-- Bootstrap is paginated (100 records per batch)
+- Snapshot bootstrap is paginated (300 rows per batch by default)
 - Monitor progress via `sync.bootstrap:action:progress` hook
 - Consider implementing a loading indicator
 
@@ -360,9 +374,8 @@ artifacts once the standalone dependency publishing blocker described in the
 
 **Causes:**
 
-- Cursor expiration (default 7 days)
+- Cursor expiration (default 24 hours)
 - Device cursor tracking issues
-- Server-side garbage collection
 
 **Solutions:**
 

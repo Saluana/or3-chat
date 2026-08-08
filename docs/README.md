@@ -42,6 +42,7 @@ Connect capability, and editable source development.
 ## Releases and Operations
 
 -   **[Installation and operations](installation.md)** - Local, Docker, and public VPS setup with Caddy
+-   **[Environment and provider settings](../public/_documentation/cloud/environment-reference.md)** - Complete runtime env matrix for auth, sync, storage, OpenRouter, admin, plugins, Connect, and the wizard
 -   **[Start Here](start-here.md)** - One supported setup route per goal
 -   **[Package upgrades and releases](releasing.md)** - Versioning, trusted publishing, image qualification, and Cloud package release
 -   **[Deprecated creator path](publish-and-vps.md)** - Migration note for older `create-or3-chat` projects

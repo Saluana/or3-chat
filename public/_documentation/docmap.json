@@ -8,40 +8,40 @@
             "path": "/start",
             "files": [
                 {
-                    "name": "overview.md",
-                    "path": "/start/overview",
+                    "name": "command-palette.md",
+                    "path": "/start/command-palette",
                     "category": "Introduction",
-                    "summary": "Covers what OR3 is, its core features. Quick refresher: Or3.chat is an open source, fast, extendable, and privacy-focused AI chat interface that lets developers build customized chat experiences.\n\nPhilosophy: Or3 prioritizes being a lean, polished foundation rather than adding bloat. Users can extend it themselves, request features, or build plugins using tools like Cursor or Claude Code.\n\nPrivacy First: Or3 doesn't provide LLM access or tokens. Instead, users connect their OpenRouter account via OAuth PKCE and pay for their own tokens. API keys are stored locally in indexedDB—never on external servers. The plugin system allows optional encryption, giving developers full control over security according to their threat model."
-                },
-                {
-                    "name": "plugin-quickstart.md",
-                    "path": "/start/plugin-quickstart",
-                    "category": "Tutorial",
-                    "summary": "Hands-on tutorial showing how to create V1 plugins for OR3. Covers dashboard pages, chat message actions, sidebar extensions, installation methods (file upload, URL import, API), and the installable package contract. Points to Plugin Runtime V2 SDK/docs for digest-addressed packages while keeping V1 APIs supported."
+                    "summary": "The command palette is the fastest way to move around OR3. It searches the full contents of your workspace — chats, documents, projects, system prompts, images, dashboard pages, and plugin records — and it runs commands without leaving the"
                 },
                 {
                     "name": "development-setup.md",
                     "path": "/start/development-setup",
                     "category": "Tutorial",
-                    "summary": "Step-by-step guide to setting up a local development environment for OR3. Covers cloning the repo, installing dependencies, running the dev server, and debugging tips."
-                },
-                {
-                    "name": "command-palette.md",
-                    "path": "/start/command-palette",
-                    "category": "Introduction",
-                    "summary": "User guide for the global command palette: Cmd/Ctrl+K and sidebar triggers, full-content search across chats, documents, projects, images, dashboard pages and commands, category prefixes (chat:, doc:, project:, image:, cmd:), keyboard reference including the Tab/Cmd+Enter action tray, preview behavior, unavailable actions, degraded-search fallbacks, and accessibility semantics."
-                },
-                {
-                    "name": "snake-game-tutorial.md",
-                    "path": "/start/snake-game-tutorial",
-                    "category": "Tutorial",
-                    "summary": "Comprehensive guide to building custom pane applications for OR3's multi-pane workspace. Learn by building a complete Snake Game with data persistence, sidebar integration, and proper pane management patterns.\n\nCovers:\n- Pane app architecture and registration\n- Vue reactivity with game logic classes\n- Data persistence using custom post types\n- Sidebar pages for navigation and management\n- Pane lifecycle and cleanup patterns\n- Real code examples from the Snake Game\n- Best practices and common patterns\n- Testing and debugging tips"
+                    "summary": "One command gets a source checkout running locally. No API key or .env file is required for the local-first app."
                 },
                 {
                     "name": "mini-app-tutorial.md",
                     "path": "/start/mini-app-tutorial",
                     "category": "Tutorial",
-                    "summary": "Comprehensive step-by-step tutorial for building a complete mini application in OR3 that integrates with the multi-pane workspace, adds sidebar pages, and uses custom post types for data storage.\\n\\nLearn how to create a Task Manager mini app that demonstrates:\\n- Creating custom post types for tasks\\n- Registering sidebar pages for task management\\n- Opening tasks in multi-pane panes\\n- Proper HMR cleanup and error handling\\n- TypeScript integration and validation\\n- Export/import functionality and advanced features"
+                    "summary": "Build a real mini app using the sidebar page registry, the multi-pane workspace, and the posts helpers that now ship with OR3. By the end you will have: - A registered pane app (example-todo) that opens inside the workspace."
+                },
+                {
+                    "name": "overview.md",
+                    "path": "/start/overview",
+                    "category": "Introduction",
+                    "summary": "Or3.chat is an open source, fast, extendable, and privacy-focused AI chat interface that lets developers build customized chat experiences. Philosophy: Or3 prioritizes being a lean, polished foundation rather than adding bloat. Users can extend it themselve..."
+                },
+                {
+                    "name": "plugin-quickstart.md",
+                    "path": "/start/plugin-quickstart",
+                    "category": "Tutorial",
+                    "summary": "This guide shows you how to extend the dashboard, chat messages, and sidebar through either source-level Nuxt plugins or installable V1 workspace packages. Both use the same reactive registries, but their module exports are different."
+                },
+                {
+                    "name": "snake-game-tutorial.md",
+                    "path": "/start/snake-game-tutorial",
+                    "category": "Tutorial",
+                    "summary": "Learn how to build fully-featured custom pane applications for OR3's multi-pane workspace. This tutorial walks through creating a Snake Game mini-app from scratch, covering data persistence, sidebar integration, and proper pane management patterns."
                 }
             ]
         },
@@ -50,118 +50,154 @@
             "path": "/composables",
             "files": [
                 {
+                    "name": "recordValidation.md",
+                    "path": "/composables/recordValidation",
+                    "category": "Core",
+                    "summary": "Tiny helper that validates a database record exists before a UI binds to it. It retries a few times to survive transient Dexie states (e.g. a closed database during startup)."
+                },
+                {
+                    "name": "registerSidebarPage.md",
+                    "path": "/composables/registerSidebarPage",
+                    "category": "Sidebar",
+                    "summary": "Enhanced helper function for registering sidebar pages with guardrails, HMR cleanup, and developer-friendly error handling. Provides a safe and convenient way to register sidebar pages. Think of registerSidebarPage as the sidebar's page registration assista..."
+                },
+                {
                     "name": "useActivePrompt.md",
                     "path": "/composables/useActivePrompt",
                     "category": "Chat",
-                    "summary": "Reactive composable that manages the currently selected system prompt for chat conversations.\\n\\nThis composable provides a module-singleton selection state (id + content) so multiple components\\nand composables can read the active system prompt consistently without creating duplicate refs.\\n\\nIt integrates with the local prompt database (`~/db/prompts`) to load prompt content and emits a\\nhook event after a prompt is selected so other subsystems can react."
+                    "summary": "Reactive composable that manages the currently selected system prompt for chat conversations. This composable provides a module-singleton selection state (id + content) so multiple components"
                 },
                 {
-                    "name": "useSystemPromptsModal.md",
-                    "path": "/composables/useSystemPromptsModal",
-                    "category": "Chat",
-                    "summary": "Shared controller for opening the globally hosted system prompt library in home, edit, or new mode with optional active chat context."
+                    "name": "useActiveSidebarPage.md",
+                    "path": "/composables/useActiveSidebarPage",
+                    "category": "Sidebar",
+                    "summary": "Manages the active sidebar page state with persistence, activation hooks, and page transitions. Uses global singleton state to ensure consistency across all components. Think of useActiveSidebarPage as the sidebar's navigation controller — it tracks which p..."
+                },
+                {
+                    "name": "useAdminAuth.md",
+                    "path": "/composables/useAdminAuth",
+                    "category": "Core",
+                    "summary": "Role-based permission helpers for admin pages. It derives computed booleans from the workspace role returned by the admin API."
+                },
+                {
+                    "name": "useAdminData.md",
+                    "path": "/composables/useAdminData",
+                    "category": "Core",
+                    "summary": "Client-side data fetch helpers for the admin dashboard. Each helper wraps useFetch against an admin API endpoint with credentials: 'include'."
+                },
+                {
+                    "name": "useAdminExtensions.md",
+                    "path": "/composables/useAdminExtensions",
+                    "category": "Core",
+                    "summary": "Client helpers for installing and uninstalling extensions (plugins, themes, and admin plugins) from the admin dashboard."
+                },
+                {
+                    "name": "useAdminPlugins.md",
+                    "path": "/composables/useAdminPlugins",
+                    "category": "Core",
+                    "summary": "Extension registry for the admin dashboard. Plugins register admin pages and widgets that appear inside the admin UI."
+                },
+                {
+                    "name": "useAdminTypes.md",
+                    "path": "/composables/useAdminTypes",
+                    "category": "Core",
+                    "summary": "Type definitions shared by the admin dashboard API responses. These are types only — no runtime code."
+                },
+                {
+                    "name": "useAdminUserLookup.md",
+                    "path": "/composables/useAdminUserLookup",
+                    "category": "Core",
+                    "summary": "Search helper for finding users in the admin dashboard. It queries /api/admin/search-users and guards against out-of-order responses."
+                },
+                {
+                    "name": "useAdminWorkspaceContext.md",
+                    "path": "/composables/useAdminWorkspaceContext",
+                    "category": "Core",
+                    "summary": "Global workspace selection state for admin pages. Super admins use it to pick which workspace they are operating on."
+                },
+                {
+                    "name": "useAdminWorkspaceGate.md",
+                    "path": "/composables/useAdminWorkspaceGate",
+                    "category": "Core",
+                    "summary": "Gate that shows the workspace selector for super admins who have not picked a workspace yet. It coordinates the session kind with the workspace context."
                 },
                 {
                     "name": "useAiSettings.md",
                     "path": "/composables/useAiSettings",
                     "category": "Chat",
-                    "summary": "`useAiSettings` gives you a reactive settings object and helper methods to read, update, and reset AI chat preferences. It sanitises input, survives hot-module reloads, and only touches storage in the browser.\\n\\n-   Tracks the current settings in a single global store (HMR-safe)\\n-   Loads initial values from `localStorage` once per session\\n-   Persists updates automatically\\n-   Normalises user input to avoid bad types or unknown keys"
+                    "summary": "Persistence layer for AI preference knobs. Keeps the chat experience consistent by storing master prompts and model defaults in browser storage, while exposing a clean interface for UI controls or automated scripts."
+                },
+                {
+                    "name": "useApiError.md",
+                    "path": "/composables/useApiError",
+                    "category": "Core",
+                    "summary": "Consistent extraction of user-friendly messages from API errors."
+                },
+                {
+                    "name": "useAuthTokenBroker.md",
+                    "path": "/composables/useAuthTokenBroker",
+                    "category": "Core",
+                    "summary": "Client-side token broker registry. Auth providers register a factory that can mint provider-specific tokens (for example Convex JWTs), and app code requests them by provider id."
                 },
                 {
                     "name": "useChat.md",
                     "path": "/composables/useChat",
                     "category": "Chat",
-                    "summary": "`useChat` is the heart of every chat conversation. When you want to:\\n\\n-   Send a message to an AI model\\n-   Display a conversation with streaming responses\\n-   Retry a failed message\\n-   Show loading states while the AI is thinking\\n-   Cancel an ongoing AI response"
+                    "summary": "The main composable for managing AI chat conversations in OR3. Handles sending messages, streaming responses, retrying failed messages, and managing conversation state. Think of useChat as your chat conversation manager — it keeps track of all messages, tal..."
+                },
+                {
+                    "name": "useChatAttachmentDisplay.md",
+                    "path": "/composables/useChatAttachmentDisplay",
+                    "category": "Core",
+                    "summary": "Helper composable that prepares chat input attachments for rendering. It takes the raw attachment list and splits it into image and PDF buckets with stable display indexes."
                 },
                 {
                     "name": "useChatInputBridge.md",
                     "path": "/composables/useChatInputBridge",
                     "category": "Chat",
-                    "summary": "Lightweight registry that lets external features (pane plugins, slash commands, automation) inject chat messages into an existing chat input without duplicating business logic. `useChatInputBridge` exposes a tiny, reactive directory of chat inputs keyed by `paneId`. Chat containers register their imperative API and the bridge forwards programmatic sends through the same UI pipeline a user click would trigger.\\n\\n-   Keeps message handling inside `ChatInputDropper`\\n-   Avoids rehydrating chat state or bypassing hooks\\n-   Supports multiple panes/windows\\n-   Safe in dev (HMR-resilient)"
+                    "summary": "Lightweight registry that lets external features (pane plugins, slash commands, automation) inject chat messages into an existing chat input without duplicating business logic."
+                },
+                {
+                    "name": "useChatInputTheme.md",
+                    "path": "/composables/useChatInputTheme",
+                    "category": "Core",
+                    "summary": "Composable that resolves themed props for every control in the chat input surface. It centralises send, stop, attach, settings, and composer action button styling so the input looks consistent across themes."
                 },
                 {
                     "name": "useChatMentions.md",
                     "path": "/composables/useChatMentions",
                     "category": "Chat",
-                    "summary": "Enable @-mentions of documents and chats in your conversations. The mentions system provides fast search with Orama, lazy-loaded Vue components, and automatic context injection into AI requests.\\n\\n-   Type `@` in chat input to trigger mention dropdown\\n-   Search documents and chats with live filtering\\n-   Keyboard navigation (Arrow Up/Down, Enter) or mouse click\\n-   Automatically injects full content as system messages\\n-   Fuzzy matching with relevance scoring\\n-   Truncates to 50KB per mention to manage tokens"
+                    "summary": "Enhance your chat conversations by referencing documents and chats directly in your messages. The mentions system lets you @-mention documents and chat threads, automatically injecting their full content as context for the AI."
                 },
                 {
-                    "name": "useDefaultPrompt.md",
-                    "path": "/composables/useDefaultPrompt",
-                    "category": "Chat",
-                    "summary": "`useDefaultPrompt` gives you a reactive `defaultPromptId` alongside helpers to set or clear it. It wraps the `kv` table, keeps a singleton ref of the active prompt ID, and fires hooks when the default changes so other modules can react."
+                    "name": "useChatModelSelection.md",
+                    "path": "/composables/useChatModelSelection",
+                    "category": "Core",
+                    "summary": "Reactive controller for the model picker in a chat composer. It manages the selected model, web search, thinking mode, and reasoning effort for a single thread, and persists the last model choice."
                 },
                 {
-                    "name": "useMessageActions.md",
-                    "path": "/composables/useMessageActions",
-                    "category": "Chat",
-                    "summary": "Extensible action registry for chat messages. Lets core UI and plugins add contextual buttons (copy, retry, favorite, etc.) in a consistent order with minimal wiring. Maintains a global list of action descriptors keyed by an id. Components register their actions once, and when rendering an individual message you can pull the filtered, sorted list for that message’s role."
+                    "name": "useClientAuthStatus.md",
+                    "path": "/composables/useClientAuthStatus",
+                    "category": "Core",
+                    "summary": "Client-side auth status resolver registry. Provider packages register a resolver that reports whether their SDK is ready and whether a user session exists."
                 },
                 {
-                    "name": "useMessageEditing.md",
-                    "path": "/composables/useMessageEditing",
-                    "category": "Chat",
-                    "summary": "Encapsulates the UI + persistence flow for editing a chat message. Handles toggling edit mode, keeping a draft buffer, and writing the updated content back to Dexie.\\n\\n`useMessageEditing` wraps all state required for an inline message editor:\\n\\n-   Tracks whether the message is currently being edited\\n-   Keeps a draft copy of the text with undo (cancel) support\\n-   Persists the change to the `messages` table via `upsert`\\n-   Works with plain objects or `Ref`-wrapped messages (streaming tail vs finalized)"
+                    "name": "useClientSessionRecovery.md",
+                    "path": "/composables/useClientSessionRecovery",
+                    "category": "Core",
+                    "summary": "Client-side session recovery registry. Auth providers register a recovery callback (for example a silent refresh) that the session context invokes when /api/auth/session reports no session."
                 },
                 {
-                    "name": "useModelStore.md",
-                    "path": "/composables/useModelStore",
-                    "category": "Chat",
-                    "summary": "Shared catalog + favorites manager for OpenRouter models. Centralises fetching, caching, and filtering so every pane sees the same list without repeated network hits.\\n\\n`useModelStore` exposes reactive state for the model catalog, favorites, search query, and filters. It layers three cache tiers (memory → Dexie → network) and dedupes concurrent fetches. Consumers can refresh, invalidate, or persist favorites with a single call.\\n\\n-   Hydrates catalog from memory, Dexie (`kv` table), or network\\n-   Persists the catalog in Dexie for 48 hours by default\\n-   Dedupes in-flight fetches across callers\\n-   Manages favorites with persistence to `kv`\\n-   Exposes helper refs for search/filter UI"
+                    "name": "useCommandPalette.md",
+                    "path": "/composables/useCommandPalette",
+                    "category": "Core",
+                    "summary": "Controller for the global command palette. It manages open state, search query, result groups, keyboard selection, previews, and the action tray, and coordinates all search sources through a lazy-loaded coordinator."
                 },
                 {
-                    "name": "useStreamAccumulator.md",
-                    "path": "/composables/useStreamAccumulator",
-                    "category": "Chat",
-                    "summary": "Frame-batched accumulator for AI streaming tokens. It receives partial text/reasoning deltas, buffers them, and flushes at most once per animation frame so the UI stays smooth.\\n\\n`useStreamAccumulator` replaces ad-hoc refs for building assistant responses. It normalises streaming flow with a single API:\\n\\n-   `append()` collects text or reasoning deltas without immediate DOM churn\\n-   `finalize()` seals the stream and records errors/abort state\\n-   `reset()` prepares for the next stream\\n-   `state` exposes reactive fields (`text`, `reasoningText`, `isActive`, etc.) any component can watch\\n\\nThe accumulator automatically batches writes via `requestAnimationFrame` when available, falling back to microtasks in environments without rAF (tests, SSR stubs)."
-                },
-                {
-                    "name": "useDocumentAiAgent.md",
-                    "path": "/composables/useDocumentAiAgent",
-                    "category": "Documents",
-                    "summary": "Build bounded, reviewable document edit proposals with a TipTap prompt composer. Supports saved and plugin `/` prompt commands, `@` references to workspace documents and chats, read-only context injection, attachments, token estimation, and validated edit operations."
-                },
-                {
-                    "name": "useDocumentHistoryActions.md",
-                    "path": "/composables/useDocumentHistoryActions",
-                    "category": "Documents",
-                    "summary": "Registry composable that lets plugins inject extra actions into the document history sidebar menu. Keeps a global list of action buttons, sorts them, and survives HMR so dashboard add-ons can extend the UI safely."
-                },
-                {
-                    "name": "useDocumentsList.md",
-                    "path": "/composables/useDocumentsList",
-                    "category": "Documents",
-                    "summary": "Lightweight fetch-and-refresh composable for the documents sidebar. Loads recent Dexie `documents` entries, trims heavy fields, and keeps the list fresh when database hooks fire."
-                },
-                {
-                    "name": "useDocumentsStore.md",
-                    "path": "/composables/useDocumentsStore",
-                    "category": "Documents",
-                    "summary": "Stateful document manager that loads Dexie records, stages edits, debounces autosaves, and coordinates pane-level hooks. It is the backbone for rich text documents in OR3’s multi-pane UI. `useDocumentsStore` exposes a suite of helpers around a shared `documentsMap` cache."
-                },
-                {
-                    "name": "useEditorNodes.md",
-                    "path": "/composables/useEditorNodes",
-                    "category": "Editor",
-                    "summary": "Registry trio that lets plugins add TipTap nodes, marks, and extensions to the OR3 editor without patching the core component. Maintains global maps, keeps ordering stable, and plays nicely with HMR. `useEditorNodes` exports helpers that manage three registries:\\n\\n-   `registerEditorNode` / `listEditorNodes` for TipTap `Node` extensions.\\n-   `registerEditorMark` / `listEditorMarks` for TipTap `Mark` extensions.\\n-   `registerEditorExtension` / `listEditorExtensions` for generic TipTap extensions.\\n\\nEach registry sorts entries by `order` (default 200) and stores them on `globalThis` so reloads don't duplicate items.\\n"
-                },
-                {
-                    "name": "useEditorExtensionLoader.md",
-                    "path": "/composables/useEditorExtensionLoader",
-                    "category": "Editor",
-                    "summary": "Factory and loader for lazy-loading TipTap editor extensions (nodes, marks, extensions). Resolves factories to actual extension instances while gracefully handling failures and skipping unavailable extensions.\\n\\n`useEditorExtensionLoader` bridges registration and initialization:\\n\\n-   Load TipTap nodes, marks, and extensions on-demand\\n-   Mix eager (already-imported) and lazy (dynamic import) extensions\\n-   Handle failures without crashing the editor\\n-   Support plugins providing lazy extension factories\\n-   Three helper functions for clean factory creation"
-                },
-                {
-                    "name": "useEditorToolbar.md",
-                    "path": "/composables/useEditorToolbar",
-                    "category": "Editor",
-                    "summary": "Toolbar registry for the TipTap editor. Lets plugins add buttons, toggles, or dropdowns to the retro editor header while keeping the UI reactive and order-aware. `useEditorToolbar` exposes helpers to manage toolbar buttons:\\n\\n-   `registerEditorToolbarButton()` adds or replaces a button definition.\\n-   `useEditorToolbarButtons(editorRef)` returns a computed, filtered, and sorted array of buttons ready to render.\\n-   `unregisterEditorToolbarButton()` cleans up during teardown/HMR.\\n-   `listRegisteredEditorToolbarButtonIds()` lets authors inspect the registry.\\n\\nButtons can customise visibility, active state, icons, ordering, and click behaviour."
-                },
-                {
-                    "name": "useEditorToolbar.md",
-                    "path": "/composables/useEditorToolbar",
-                    "category": "Editor",
-                    "summary": "Toolbar registry for the TipTap editor. Lets plugins add buttons, toggles, or dropdowns to the retro editor header while keeping the UI reactive and order-aware. `useEditorToolbar` exposes helpers to manage toolbar buttons:\\n\\n-   `registerEditorToolbarButton()` adds or replaces a button definition.\\n-   `useEditorToolbarButtons(editorRef)` returns a computed, filtered, and sorted array of buttons ready to render.\\n-   `unregisterEditorToolbarButton()` cleans up during teardown/HMR.\\n-   `listRegisteredEditorToolbarButtonIds()` lets authors inspect the registry.\\n\\nButtons can customise visibility, active state, icons, ordering, and click behaviour."
+                    "name": "useCommandPaletteShortcut.md",
+                    "path": "/composables/useCommandPaletteShortcut",
+                    "category": "Core",
+                    "summary": "Global keyboard handler for the command palette. It binds Cmd/Ctrl+K to open the palette and Escape to close it, then prewarms the search module during idle time."
                 },
                 {
                     "name": "useComposerActions.md",
@@ -170,22 +206,268 @@
                     "summary": "Composer action registry powering the quick-action buttons beneath the chat composer. Lets plugins add buttons that hook into the active editor, thread, or pane context with visibility and disabled logic."
                 },
                 {
+                    "name": "useConfirmDialog.md",
+                    "path": "/composables/useConfirmDialog",
+                    "category": "Core",
+                    "summary": "Shared confirmation dialog controller. Any component can open a modal confirm and await the user's choice as a promise."
+                },
+                {
+                    "name": "useDashboardPlugins.md",
+                    "path": "/composables/useDashboardPlugins",
+                    "category": "Dashboard",
+                    "summary": "Dashboard extension hub that lets first- and third-party features register launcher tiles, lazy-loaded pages, and capability flags for the retro dashboard. It centralises plugin discovery, page resolution, and in-app navigation state."
+                },
+                {
+                    "name": "useDefaultPrompt.md",
+                    "path": "/composables/useDefaultPrompt",
+                    "category": "Chat",
+                    "summary": "Central helper for tracking the default system prompt across chat panes. It wraps the kv table, keeps a singleton ref of the active prompt ID, and fires hooks when the default changes so other modules can react."
+                },
+                {
+                    "name": "useDocumentAiActions.md",
+                    "path": "/composables/useDocumentAiActions",
+                    "category": "Core",
+                    "summary": "Registry for Document AI prompt commands. Plugins contribute / commands shown in the Document AI composer."
+                },
+                {
+                    "name": "useDocumentAiAgent.md",
+                    "path": "/composables/useDocumentAiAgent",
+                    "category": "Documents",
+                    "summary": "The Document AI agent turns a prompt into a bounded, reviewable TipTap edit proposal. Its composer supports saved and plugin-contributed / prompt commands, file attachments, and @ references to another document or chat."
+                },
+                {
+                    "name": "useDocumentAiSettings.md",
+                    "path": "/composables/useDocumentAiSettings",
+                    "category": "Core",
+                    "summary": "Persistence and defaults for Document AI agent preferences. Settings are stored in the Dexie kv table and sanitized on every read."
+                },
+                {
+                    "name": "useDocumentationContent.md",
+                    "path": "/composables/useDocumentationContent",
+                    "category": "Core",
+                    "summary": "Loader for documentation markdown pages. It fetches / documentation/<slug .md files for the /documentation routes."
+                },
+                {
+                    "name": "useDocumentationNavigation.md",
+                    "path": "/composables/useDocumentationNavigation",
+                    "category": "Core",
+                    "summary": "Sidebar navigation for the documentation viewer. It builds category/group/item trees from the docmap and tracks which groups are expanded."
+                },
+                {
+                    "name": "useDocumentationToc.md",
+                    "path": "/composables/useDocumentationToc",
+                    "category": "Core",
+                    "summary": "Table-of-contents helpers for rendered documentation pages. These are pure functions that inspect a rendered HTML element."
+                },
+                {
+                    "name": "useDocumentEditorSessions.md",
+                    "path": "/composables/useDocumentEditorSessions",
+                    "category": "Core",
+                    "summary": "Registry of active document editor sessions. Editors register themselves per document and workspace, and other code can find them, wait for them, or ask them to capture content."
+                },
+                {
+                    "name": "useDocumentEditorToolbar.md",
+                    "path": "/composables/useDocumentEditorToolbar",
+                    "category": "Core",
+                    "summary": "Toolbar builder for the document editor. It defines the core button set and wires each button to TipTap commands."
+                },
+                {
+                    "name": "useDocumentHistoryActions.md",
+                    "path": "/composables/useDocumentHistoryActions",
+                    "category": "Documents",
+                    "summary": "Registry composable that lets plugins inject extra actions into the document history sidebar menu. Keeps a global list of action buttons, sorts them, and survives HMR so dashboard add-ons can extend the UI safely."
+                },
+                {
+                    "name": "useDocumentInsights.md",
+                    "path": "/composables/useDocumentInsights",
+                    "category": "Core",
+                    "summary": "Document metrics and outline computed from a live TipTap editor. It watches editor transactions and refreshes on a requestAnimationFrame budget."
+                },
+                {
+                    "name": "useDocumentsList.md",
+                    "path": "/composables/useDocumentsList",
+                    "category": "Documents",
+                    "summary": "Lightweight fetch-and-refresh composable for the documents sidebar. Loads recent Dexie documents entries, trims heavy fields, and keeps the list fresh when database hooks fire."
+                },
+                {
+                    "name": "useDocumentsStore.md",
+                    "path": "/composables/useDocumentsStore",
+                    "category": "Documents",
+                    "summary": "Stateful document manager that loads Dexie records, stages edits, debounces autosaves, and coordinates pane-level hooks. It is the backbone for rich text documents in OR3’s multi-pane UI."
+                },
+                {
+                    "name": "useEditorExtensionLoader.md",
+                    "path": "/composables/useEditorExtensionLoader",
+                    "category": "Editor",
+                    "summary": "Factory and loader for lazy-loading TipTap editor extensions (nodes, marks, extensions). Resolves factories to actual extension instances while gracefully handling failures and skipping unavailable extensions."
+                },
+                {
+                    "name": "useEditorInspectorPanels.md",
+                    "path": "/composables/useEditorInspectorPanels",
+                    "category": "Core",
+                    "summary": "Registry for the document editor's side inspector panels. Plugins add panels that render contextual tools beside the editor."
+                },
+                {
+                    "name": "useEditorNodes.md",
+                    "path": "/composables/useEditorNodes",
+                    "category": "Editor",
+                    "summary": "Registry trio that lets plugins add TipTap nodes, marks, and extensions to the OR3 editor without patching the core component. Maintains global maps, keeps ordering stable, and plays nicely with HMR."
+                },
+                {
+                    "name": "useEditorToolbar.md",
+                    "path": "/composables/useEditorToolbar",
+                    "category": "Editor",
+                    "summary": "Toolbar registry for the TipTap editor. Lets plugins add buttons, toggles, or dropdowns to the retro editor header while keeping the UI reactive and order-aware."
+                },
+                {
+                    "name": "useExtensionManagement.md",
+                    "path": "/composables/useExtensionManagement",
+                    "category": "Core",
+                    "summary": "Owner-gated wrapper around extension install and uninstall operations for the admin dashboard. It combines the file input with the extension API helpers."
+                },
+                {
                     "name": "useHeaderActions.md",
                     "path": "/composables/useHeaderActions",
                     "category": "Sidebar",
                     "summary": "Sidebar header action registry that powers the icon buttons in the chrome header (new thread, toggle layout, etc.). Lets plugins contribute actions that react to route, breakpoint, or custom context."
                 },
                 {
-                    "name": "useDashboardPlugins.md",
-                    "path": "/composables/useDashboardPlugins",
-                    "category": "Dashboard",
-                    "summary": "Dashboard extension hub that lets first- and third-party features register launcher tiles, lazy-loaded pages, and capability flags for the retro dashboard. It centralises plugin discovery, page resolution, and in-app navigation state. Useful for plugin settings, onboarding flows, or custom tools."
+                    "name": "useHookEffect.md",
+                    "path": "/composables/useHookEffect",
+                    "category": "Core",
+                    "summary": "Typed helper for subscribing to the internal hook bus. It registers a callback, cleans up automatically on component unmount and during hot-module reload, and returns a disposer if you need manual control."
+                },
+                {
+                    "name": "useIcon.md",
+                    "path": "/composables/useIcon",
+                    "category": "Core",
+                    "summary": "Reactive resolver for semantic icon tokens. It returns the concrete Iconify name for a token under the active theme."
+                },
+                {
+                    "name": "useLazyBoundaries.md",
+                    "path": "/composables/useLazyBoundaries",
+                    "category": "Core",
+                    "summary": "Singleton lazy boundary manager for code-splitting heavy features in OR3. Handles dynamic imports, loading state, module caching, and telemetry for performance-critical boundaries. Think of useLazyBoundaries as your code-splitting coordinator — it ensures h..."
+                },
+                {
+                    "name": "useManagedWebhooks.md",
+                    "path": "/composables/useManagedWebhooks",
+                    "category": "Core",
+                    "summary": "Controller for the managed webhooks dashboard page. It loads webhooks, handles create/edit/log UI state, and performs delete, toggle, bulk-disable, and test-ping operations with toast feedback."
+                },
+                {
+                    "name": "useMessageActions.md",
+                    "path": "/composables/useMessageActions",
+                    "category": "Chat",
+                    "summary": "Extensible action registry for chat messages. Lets core UI and plugins add contextual buttons (copy, retry, favorite, etc.) in a consistent order with minimal wiring."
+                },
+                {
+                    "name": "useMessageEditing.md",
+                    "path": "/composables/useMessageEditing",
+                    "category": "Chat",
+                    "summary": "Encapsulates the UI + persistence flow for editing a chat message. Handles toggling edit mode, keeping a draft buffer, and writing the updated content back to Dexie."
+                },
+                {
+                    "name": "useMessageMarkdown.md",
+                    "path": "/composables/useMessageMarkdown",
+                    "category": "Core",
+                    "summary": "Composable that prepares assistant message text for markdown rendering. It swaps file-hash: image references for placeholder URLs and exposes the current code-highlighting theme."
+                },
+                {
+                    "name": "useMessageMediaPrefetch.md",
+                    "path": "/composables/useMessageMediaPrefetch",
+                    "category": "Core",
+                    "summary": "Controller that warms image blobs for a virtual window of messages without mounting their rows. It keeps resources retained while their hashes stay inside the latest range, and releases them when they leave."
+                },
+                {
+                    "name": "useMessageThumbnails.md",
+                    "path": "/composables/useMessageThumbnails",
+                    "category": "Core",
+                    "summary": "Composable that resolves thumbnail URLs for attachments on a single message. It loads image blobs on demand, tracks PDF metadata, and supports an expand/collapse toggle for many attachments."
+                },
+                {
+                    "name": "useModelStore.md",
+                    "path": "/composables/useModelStore",
+                    "category": "Chat",
+                    "summary": "Shared catalog + favorites manager for OpenRouter models. Centralises fetching, caching, and filtering so every pane sees the same list without repeated network hits."
+                },
+                {
+                    "name": "useMultiPane.md",
+                    "path": "/composables/useMultiPane",
+                    "category": "Core",
+                    "summary": "State manager that powers OR3’s multi-pane chat/document workspace. It keeps the active pane list, loads messages on demand, enforces pane limits, and fires hook events so plugins can react to pane lifecycle changes."
+                },
+                {
+                    "name": "useNotifications.md",
+                    "path": "/composables/useNotifications",
+                    "category": "Core",
+                    "summary": "Reactive notification center backed by Dexie live queries and the notification hook system. It is the app-wide surface for reading and mutating notifications."
+                },
+                {
+                    "name": "useOr3Config.md",
+                    "path": "/composables/useOr3Config",
+                    "category": "Core",
+                    "summary": "Typed access to the app's runtime configuration. It merges fallback defaults with public runtime config and exposes feature, limits, UI, and site settings as a readonly object."
+                },
+                {
+                    "name": "usePageShellTheme.md",
+                    "path": "/composables/usePageShellTheme",
+                    "category": "Core",
+                    "summary": "Theme prop resolver for the app shell chrome: sidebar toggles, pane buttons, and the theme toggle. It resolves which components and button props the shell should render for the active theme."
+                },
+                {
+                    "name": "usePaginatedSidebarItems.md",
+                    "path": "/composables/usePaginatedSidebarItems",
+                    "category": "Core",
+                    "summary": "Paged, searchable list of sidebar items (threads and documents) backed by Dexie live queries. It grows the result window as the user scrolls."
+                },
+                {
+                    "name": "usePaneApps.md",
+                    "path": "/composables/usePaneApps",
+                    "category": "Core",
+                    "summary": "Registry for custom pane applications in the multi-pane workspace. Plugins register a PaneAppDef and the workspace opens it as a pane with its own mode id."
                 },
                 {
                     "name": "usePaneDocuments.md",
                     "path": "/composables/usePaneDocuments",
                     "category": "Documents",
-                    "summary": "Pane-aware controller that lets the dashboard create or switch documents inside the multi-pane workspace. It glues `useDocumentsStore`, pane state, and hook events into two ergonomic methods."
+                    "summary": "Pane-aware controller that lets the dashboard create or switch documents inside the multi-pane workspace. It glues useDocumentsStore, pane state, and hook events into two ergonomic methods."
+                },
+                {
+                    "name": "usePanePrompt.md",
+                    "path": "/composables/usePanePrompt",
+                    "category": "Core",
+                    "summary": "Tiny helper that tracks a “pending system prompt” per pane. It lets the UI stage a prompt that will be applied when the user creates their next thread in that pane."
+                },
+                {
+                    "name": "usePaneResizeController.md",
+                    "path": "/composables/usePaneResizeController",
+                    "category": "Core",
+                    "summary": "Controller for resizing panes in the multi-pane workspace. It wires pointer-drag resizing, keyboard resizing, and container-width recalculation into a single component."
+                },
+                {
+                    "name": "usePopoverKeyboard.md",
+                    "path": "/composables/usePopoverKeyboard",
+                    "category": "Core",
+                    "summary": "Accessibility helper for popover trigger buttons. It makes triggers keyboard-activatable with Enter and Space."
+                },
+                {
+                    "name": "usePostsList.md",
+                    "path": "/composables/usePostsList",
+                    "category": "Core",
+                    "summary": "Reactive listing of posts by type with a live Dexie query. It filters soft-deleted posts, sorts by timestamp, and parses meta from JSON."
+                },
+                {
+                    "name": "usePreviewCache.md",
+                    "path": "/composables/usePreviewCache",
+                    "category": "Core",
+                    "summary": "In-memory LRU-ish cache for preview assets (images, PDFs, etc.). It wraps blob URL creation, tracks byte usage, exposes metrics, and handles eviction with pinning so priority previews stick around."
+                },
+                {
+                    "name": "useProjectsCrud.md",
+                    "path": "/composables/useProjectsCrud",
+                    "category": "Projects",
+                    "summary": "Project CRUD toolkit that wraps Dexie helpers with validation, timestamping, and data normalisation for OR3 project records."
                 },
                 {
                     "name": "useProjectTreeActions.md",
@@ -194,10 +476,70 @@
                     "summary": "Extensible action registry for the project tree sidebar. Lets plugins add context buttons to project rows or child entries (documents, chats) with ordering and visibility controls."
                 },
                 {
-                    "name": "useProjectsCrud.md",
-                    "path": "/composables/useProjectsCrud",
-                    "category": "Projects",
-                    "summary": "Project CRUD toolkit that wraps Dexie helpers with validation, timestamping, and data normalisation for OR3 project records."
+                    "name": "useResponsiveState.md",
+                    "path": "/composables/useResponsiveState",
+                    "category": "Core",
+                    "summary": "Centralised responsive state helper that tracks viewport size and provides consistent mobile/desktop detection across your app. Enables SSR-safe responsive rendering without hydration mismatches."
+                },
+                {
+                    "name": "useScrollLock.md",
+                    "path": "/composables/useScrollLock",
+                    "category": "Core",
+                    "summary": "Utility composable that locks and unlocks body (or any element) scroll, essential for mobile overlays and modals. Manages overflow CSS property with automatic cleanup and optional reactive control."
+                },
+                {
+                    "name": "useServerRestart.md",
+                    "path": "/composables/useServerRestart",
+                    "category": "Core",
+                    "summary": "Owner-gated server restart flow with confirmation and toast feedback."
+                },
+                {
+                    "name": "useSession.md",
+                    "path": "/composables/useSession",
+                    "category": "Core",
+                    "summary": "Client-side session state composable (exported as useOr3Session). It exposes a small, stable session surface regardless of whether SSR auth is enabled."
+                },
+                {
+                    "name": "useSessionContext.md",
+                    "path": "/composables/useSessionContext",
+                    "category": "Core",
+                    "summary": "Workspace-aware session context. It fetches the full session payload from /api/auth/session and exposes reactive state plus a refresh action."
+                },
+                {
+                    "name": "useSessionRefresh.md",
+                    "path": "/composables/useSessionRefresh",
+                    "category": "Core",
+                    "summary": "Client-only composable that periodically refreshes the provider session token so it stays valid."
+                },
+                {
+                    "name": "useSidebarEnvironment.md",
+                    "path": "/composables/useSidebarEnvironment",
+                    "category": "Sidebar",
+                    "summary": "Provides dependency injection and context access for sidebar components. Creates a reactive environment with access to multi-pane API, data sources, and UI controls. Think of useSidebarEnvironment as the sidebar's service locator — it gives child components..."
+                },
+                {
+                    "name": "useSidebarPageControls.md",
+                    "path": "/composables/useSidebarPageControls",
+                    "category": "Sidebar",
+                    "summary": "Provides access to sidebar page navigation controls from child components. Allows sidebar pages to programmatically switch pages or check their own active status. Think of useSidebarPageControls as the sidebar's navigation remote — it gives pages the abilit..."
+                },
+                {
+                    "name": "useSidebarPages.md",
+                    "path": "/composables/useSidebarPages",
+                    "category": "Sidebar",
+                    "summary": "Registry and discovery system for sidebar pages. Manages page registration, provides listing functionality, and handles HMR cleanup for dynamic page management. Think of useSidebarPages as the sidebar's page directory — it tracks all available pages, handle..."
+                },
+                {
+                    "name": "useSidebarProjectActionButtonProps.md",
+                    "path": "/composables/useSidebarProjectActionButtonProps",
+                    "category": "Core",
+                    "summary": "Theme-aware props for project tree action buttons in the sidebar. It resolves overrides for a given button identifier and merges them with a neutral popover-style default."
+                },
+                {
+                    "name": "useSidebarProjectDisplay.md",
+                    "path": "/composables/useSidebarProjectDisplay",
+                    "category": "Core",
+                    "summary": "Computed view over sidebar datasets that decides what to render: threads, projects (with surviving entries), and documents, honoring the current search query."
                 },
                 {
                     "name": "useSidebarSearch.md",
@@ -212,6 +554,42 @@
                     "summary": "Sidebar chrome registry that lets plugins add new panels (top/main/bottom stacks) and footer actions to the OR3 sidebar. Provides ordering, placement, visibility, and disabled control."
                 },
                 {
+                    "name": "useSidebarThemeProps.md",
+                    "path": "/composables/useSidebarThemeProps",
+                    "category": "Core",
+                    "summary": "Theme-aware props for the sidebar's project selector and form fields."
+                },
+                {
+                    "name": "useStreamAccumulator.md",
+                    "path": "/composables/useStreamAccumulator",
+                    "category": "Chat",
+                    "summary": "Frame-batched accumulator for AI streaming tokens. It receives partial text/reasoning deltas, buffers them, and flushes at most once per animation frame so the UI stays smooth."
+                },
+                {
+                    "name": "useSystemPromptsModal.md",
+                    "path": "/composables/useSystemPromptsModal",
+                    "category": "Chat",
+                    "summary": "useSystemPromptsModal is the shared controller for the system prompt library. PageShell renders one modal host, while chat settings and the command palette open it with the appropriate entry state and chat context."
+                },
+                {
+                    "name": "useThemeClasses.md",
+                    "path": "/composables/useThemeClasses",
+                    "category": "Core",
+                    "summary": "Deprecated no-op composable."
+                },
+                {
+                    "name": "useThemeResolver.md",
+                    "path": "/composables/useThemeResolver",
+                    "category": "Core",
+                    "summary": "Core theming API. It resolves theme overrides for components, tracks the active theme, and switches themes."
+                },
+                {
+                    "name": "useThemeSelection.md",
+                    "path": "/composables/useThemeSelection",
+                    "category": "Core",
+                    "summary": "Persistence for the user's selected theme. It loads the choice from the Dexie kv table (with a one-time localStorage migration) and saves changes."
+                },
+                {
                     "name": "useThreadHistoryActions.md",
                     "path": "/composables/useThreadHistoryActions",
                     "category": "Threads",
@@ -224,88 +602,100 @@
                     "summary": "Thread-specific search composable that powers the sidebar query field. Builds a small Orama index over thread titles, debounces input, and falls back to substring matching when required."
                 },
                 {
-                    "name": "useHookEffect.md",
-                    "path": "/composables/useHookEffect",
+                    "name": "useThumbnailUrlCache.md",
+                    "path": "/composables/useThumbnailUrlCache",
                     "category": "Core",
-                    "summary": "Typed helper for subscribing to hook events with automatic lifecycle cleanup. Registers callbacks on component mount and safely deregisters on unmount or HMR, preventing listener leaks.\\n\\n`useHookEffect` wraps the hook engine with Vue lifecycle awareness:\\n\\n-   Supports every hook name with full TypeScript inference\\n-   Auto-detaches on `onBeforeUnmount` and HMR resets\\n-   Lets you override hook kind (action/filter) and priority\\n-   Returns a disposer for manual cleanup if needed"
-                },
-                {
-                    "name": "useLazyBoundaries.md",
-                    "path": "/composables/useLazyBoundaries",
-                    "category": "Core",
-                    "summary": "Singleton lazy boundary manager for code-splitting heavy features in OR3. Handles dynamic imports, loading state, module caching, and telemetry for performance-critical boundaries.\\n\\n`useLazyBoundaries` ensures heavy modules (TipTap editor, Orama search, workspace export) load on-demand:\\n\\n-   Loads modules only once with promise caching\\n-   Tracks reactive state for each boundary (idle/loading/ready/error)\\n-   Emits telemetry events for performance monitoring\\n-   Supports retry with automatic cache clearing on errors\\n-   Provides optional callbacks after successful resolution"
-                },
-                {
-                    "name": "useResponsiveState.md",
-                    "path": "/composables/useResponsiveState",
-                    "category": "Core",
-                    "summary": "Centralised responsive state helper that tracks viewport size and provides consistent mobile/desktop detection across your app. Enables SSR-safe responsive rendering without hydration mismatches.\\n\\n`useResponsiveState` solves the hydration mismatch problem:\\n\\n-   Detect if viewport is mobile (≤768px) or desktop (>768px)\\n-   SSR-safe: assumes desktop during SSR to prevent hydration issues\\n-   Reactive state that updates on resize\\n-   Consistent breakpoints across your entire app"
-                },
-                {
-                    "name": "useScrollLock.md",
-                    "path": "/composables/useScrollLock",
-                    "category": "Core",
-                    "summary": "Utility composable that locks and unlocks body (or any element) scroll, essential for mobile overlays and modals. Manages `overflow` CSS property with automatic cleanup and optional reactive control.\\n\\n`useScrollLock` solves mobile UX problems:\\n\\n-   Lock scroll when showing overlays/modals\\n-   Automatic cleanup on component unmount\\n-   Optional reactive control via ref\\n-   Preserves existing overflow values"
+                    "summary": "Shared cache for thumbnail object URLs. It deduplicates in-flight loads, tracks reference counts, and revokes blob URLs after a grace period so memory stays bounded."
                 },
                 {
                     "name": "useTokenizer.md",
                     "path": "/composables/useTokenizer",
                     "category": "Core",
-                    "summary": "Composable for GPT tokenization with automatic Web Worker optimization. Counts tokens using a dedicated worker thread when available, falling back to direct encoding for SSR or when workers fail.\\n\\n`useTokenizer` keeps the UI responsive while counting tokens:\\n\\n-   Count tokens in single messages or batches\\n-   Uses Web Worker to avoid blocking main thread\\n-   Automatic fallback when workers unavailable\\n-   Shared worker instance across all components\\n-   SSR-safe with client-side hydration"
+                    "summary": "Composable for GPT tokenization with automatic Web Worker optimization. Counts tokens using a dedicated worker thread when available, falling back to direct encoding for SSR or when workers fail."
                 },
                 {
-                    "name": "useActiveSidebarPage.md",
-                    "path": "/composables/useActiveSidebarPage",
-                    "category": "Sidebar",
-                    "summary": "Manages the active sidebar page state with persistence, activation hooks, and page transitions. Uses global singleton state to ensure consistency across all components.\\n\\nThink of `useActiveSidebarPage` as the sidebar's navigation controller — it tracks which page is currently active, handles page switching logic, and maintains the selected page across sessions."
-                },
-                {
-                    "name": "useSidebarEnvironment.md",
-                    "path": "/composables/useSidebarEnvironment",
-                    "category": "Sidebar",
-                    "summary": "Provides dependency injection and context access for sidebar components. Creates a reactive environment with access to multi-pane API, data sources, and UI controls.\\n\\nThink of `useSidebarEnvironment` as the sidebar's service locator — it gives child components access to everything they need without prop drilling or global dependencies."
-                },
-                {
-                    "name": "useSidebarPageControls.md",
-                    "path": "/composables/useSidebarPageControls",
-                    "category": "Sidebar",
-                    "summary": "Provides access to sidebar page navigation controls from child components. Allows sidebar pages to programmatically switch pages or check their own active status.\\n\\nThink of `useSidebarPageControls` as the sidebar's navigation remote — it gives pages the ability to navigate to other pages or check their own state without directly accessing the page manager."
-                },
-                {
-                    "name": "useSidebarPages.md",
-                    "path": "/composables/useSidebarPages",
-                    "category": "Sidebar",
-                    "summary": "Registry and discovery system for sidebar pages. Manages page registration, provides listing functionality, and handles HMR cleanup for dynamic page management.\\n\\nThink of `useSidebarPages` as the sidebar's page directory — it tracks all available pages, handles registration, and provides the tools to discover and manage sidebar pages."
-                },
-                {
-                    "name": "registerSidebarPage.md",
-                    "path": "/composables/registerSidebarPage",
-                    "category": "Sidebar",
-                    "summary": "Enhanced helper function for registering sidebar pages with guardrails, HMR cleanup, and developer-friendly error handling. Provides a safe and convenient way to register sidebar pages.\\n\\nThink of `registerSidebarPage` as the sidebar's page registration assistant — it handles all the boilerplate, validation, and cleanup so you can focus on creating great sidebar pages."
-                },
-                {
-                    "name": "useMultiPane.md",
-                    "path": "/composables/useMultiPane",
+                    "name": "useTypedThemeOverrides.md",
+                    "path": "/composables/useTypedThemeOverrides",
                     "category": "Core",
-                    "summary": "Multi-pane workspace manager that powers OR3's split-view chat and document editing. Tracks active panes, loads message history, enforces pane limits, and fires lifecycle hooks so plugins stay in sync.\\n\\n`useMultiPane` centralizes all window management logic:\\n\\n-   Creates, focuses, and closes panes with fallback enforcement\\n-   Loads chat messages on demand (Dexie-backed)\\n-   Prevents UI focus bugs with index tracking\\n-   Emits hook events for pane open/close/switch lifecycle\\n-   Supports configurable pane caps and custom loaders"
+                    "summary": "Type-safe wrappers around useThemeOverrides for common component types. Each wrapper merges base props with resolved theme overrides."
                 },
                 {
-                    "name": "usePanePrompt.md",
-                    "path": "/composables/usePanePrompt",
+                    "name": "useValidatedEntityPageShell.md",
+                    "path": "/composables/useValidatedEntityPageShell",
                     "category": "Core",
-                    "summary": "Simple per-pane prompt staging utility that lets users pick a system prompt before creating a thread. Stores pending prompt IDs in a reactive map, so the next thread creation uses the selected prompt.\\n\\n`usePanePrompt` backs the prompt selector UI:\\n\\n-   `setPanePendingPrompt(paneId, promptId)` to stage a prompt\\n-   `getPanePendingPrompt(paneId)` to read it before thread creation\\n-   `clearPanePendingPrompt(paneId)` to forget it once applied\\n-   Reactive map survives HMR and integrates with devtools"
+                    "summary": "Page guard for entity detail routes. It loads the route entity, redirects when it is missing or deleted, and only then marks the page ready to render."
                 },
                 {
-                    "name": "usePreviewCache.md",
-                    "path": "/composables/usePreviewCache",
+                    "name": "useWorkflowStreamAccumulator.md",
+                    "path": "/composables/useWorkflowStreamAccumulator",
                     "category": "Core",
-                    "summary": "LRU-style in-memory cache for preview assets (images, PDFs, etc.) with blob URL creation, byte tracking, and smart eviction. Pin entries to keep them while in view, and track hit/miss metrics for telemetry.\\n\\n`usePreviewCache` manages preview rendering:\\n\\n-   `ensure(key, loader, pin?)` to fetch or reuse cached URLs\\n-   Tracks hits, misses, and evictions for instrumentation\\n-   Supports pinning entries to prevent eviction\\n-   Exposes `useSharedPreviewCache()` for app-wide singleton\\n-   Normalises options and handles blob URL lifecycle safely"
+                    "summary": "Reactive accumulator for workflow execution streaming. It receives per-node execution events and exposes a single read-only state object that UI components can render live."
                 },
                 {
                     "name": "useWorkspaceBackup.md",
                     "path": "/composables/useWorkspaceBackup",
                     "category": "Core",
-                    "summary": "Full-featured workspace export/import controller that coordinates Dexie backups, progress tracking, and hook events. Streams backups to File System API or StreamSaver, peeks backup metadata before import, and supports replace/append modes.\\n\\n`useWorkspaceBackup` manages data persistence workflows:\\n\\n-   `exportWorkspace()` to stream entire database to file\\n-   `peekBackup(file)` to show metadata before import\\n-   `importWorkspace(file, mode)` with replace or append strategies\\n-   Reactive `state` for real-time UI binding (loading, progress, errors)\\n-   Dispatches hooks for extension telemetry"
+                    "summary": "Full-featured workspace export/import controller for OR3. It coordinates Dexie exports, streaming backups, progress reporting, hook telemetry, and error handling so the UI can offer reliable backup workflows."
+                },
+                {
+                    "name": "useWorkspaceLegacyImport.md",
+                    "path": "/composables/useWorkspaceLegacyImport",
+                    "category": "Core",
+                    "summary": "One-time migration helper that copies local (legacy) database data into a workspace-scoped database."
+                },
+                {
+                    "name": "useWorkspaceManager.md",
+                    "path": "/composables/useWorkspaceManager",
+                    "category": "Core",
+                    "summary": "Single source of truth for the active workspace id. It watches the session context and switches the active Dexie database exactly once per workspace change."
+                },
+                {
+                    "name": "useWorkspaceManagerCache.md",
+                    "path": "/composables/useWorkspaceManagerCache",
+                    "category": "Core",
+                    "summary": "KV-backed cache for workspace lists. It stores workspace summaries plus the active id so workspace switching can render instantly before a fetch completes."
+                },
+                {
+                    "name": "useWorkspaceManagerSession.md",
+                    "path": "/composables/useWorkspaceManagerSession",
+                    "category": "Core",
+                    "summary": "Programmatic workspace switching with server confirmation. It coordinates a revision coordinator so only the newest switch wins, even when multiple tabs act at once."
+                },
+                {
+                    "name": "useWorkspaceProfiles.md",
+                    "path": "/composables/useWorkspaceProfiles",
+                    "category": "Core",
+                    "summary": "Runtime for workspace profiles. A profile defines which sidebar pages, dashboard tiles, pane apps, and commands a workspace uses, and how many panes are allowed."
+                },
+                {
+                    "name": "useWorkspaceTabDrafts.md",
+                    "path": "/composables/useWorkspaceTabDrafts",
+                    "category": "Core",
+                    "summary": "In-memory draft store for chat composers inside workspace tabs. It keeps unsent text, editor JSON, attachments, and composer settings alive while a user switches tabs, and never persists drafts to the manifest."
+                },
+                {
+                    "name": "useWorkspaceTabHost.md",
+                    "path": "/composables/useWorkspaceTabHost",
+                    "category": "Core",
+                    "summary": "Adapter that connects the workspace tab session to the multi-pane engine. It is a narrow bridge: it maps pane ids to pane indexes and binds tab resources to panes, but never owns messages or document content."
+                },
+                {
+                    "name": "useWorkspaceTabMetadata.md",
+                    "path": "/composables/useWorkspaceTabMetadata",
+                    "category": "Core",
+                    "summary": "Batch resolver for tab strip titles and icons. It refreshes one compact metadata map instead of creating a live database query for every open tab."
+                },
+                {
+                    "name": "useWorkspaceTabPersistence.md",
+                    "path": "/composables/useWorkspaceTabPersistence",
+                    "category": "Core",
+                    "summary": "Local storage layer for the workspace tab session. It writes the tab manifest to localStorage per workspace and profile, debounced, and reads it back on restore."
+                },
+                {
+                    "name": "useWorkspaceTabs.md",
+                    "path": "/composables/useWorkspaceTabs",
+                    "category": "Core",
+                    "summary": "Reactive orchestration for the local workspace tab session. It owns the tab manifest (open tabs, active tab, pane bindings) and every tab operation, while a host adapter owns the mounted panes."
                 }
             ]
         },
@@ -314,46 +704,46 @@
             "path": "/hooks",
             "files": [
                 {
+                    "name": "chat-editor-extensions.md",
+                    "path": "/hooks/chat-editor-extensions",
+                    "category": "Integration",
+                    "summary": "Enable plugins to add TipTap extensions to the chat composer without touching the component. ChatInputDropper.vue exposes two hook points so plugins can lazy‑load heavy code and inject their extensions at initialization time."
+                },
+                {
                     "name": "hook-catalog.md",
                     "path": "/hooks/hook-catalog",
                     "category": "Reference",
-                    "summary": "Authoritative reference table of all available hooks with their argument shapes and return values. Derived from hook keys and payload types so developers can quickly see what each hook expects and what it should return."
-                },
-                {
-                    "name": "hooks.md",
-                    "path": "/hooks/hooks",
-                    "category": "Core",
-                    "summary": "Lightweight hook engine powering OR3's action/filter system with priority scheduling, async support, and diagnostics. Register side-effect listeners (actions) or value transformers (filters), match with wildcards, and track execution timing. Notes Hook Runtime V2 startup selection and SDK context.hooks for V2 packages."
-                },
-                {
-                    "name": "typed-hooks.md",
-                    "path": "/hooks/typed-hooks",
-                    "category": "Core",
-                    "summary": "TypeScript wrapper around the hook engine that preserves runtime behavior while delivering full type inference. Callback signatures are inferred from hook names, and kind (`action`/`filter`) is picked automatically from the hook name."
-                },
-                {
-                    "name": "hook-types.md",
-                    "path": "/hooks/hook-types",
-                    "category": "Types",
-                    "summary": "TypeScript toolkit defining hook names, payload interfaces, and inference helpers. Exposes structured payload types for AI, UI panes, branching, and DB entities, plus utility types for plugins to validate hook names and callback signatures."
+                    "summary": "Authoritative catalog of available hooks with their argument shapes and return values. This is derived from the codebase (hook keys, payload types, and call sites) so developers don’t have to console.log."
                 },
                 {
                     "name": "hook-keys.md",
                     "path": "/hooks/hook-keys",
                     "category": "Types",
-                    "summary": "Catalog of well-known hook keys with typed helpers for ergonomic registration. Defines string literal unions for UI/AI/DB hooks, exposes the `typedOn(hooks)` wrapper for auto-completing hook names in your editor, and maps payloads to argument tuples."
+                    "summary": "Catalog of high-signal hook keys and typed helpers for ergonomically registering listeners."
                 },
                 {
-                    "name": "chat-editor-extensions.md",
-                    "path": "/hooks/chat-editor-extensions",
-                    "category": "Integration",
-                    "summary": "How to add TipTap extensions to the chat composer without touching the component. Explains the two hook points `editor:request-extensions` (action) and `ui.chat.editor:filter:extensions` (filter), shows a minimal plugin that lazy-loads an extension and appends it to the editor's extension list, and covers ordering, SSR guards, and failure safety."
+                    "name": "hook-types.md",
+                    "path": "/hooks/hook-types",
+                    "category": "Types",
+                    "summary": "TypeScript toolkit describing hook names, payload interfaces, and inference helpers for the OR3 hook engine."
+                },
+                {
+                    "name": "hooks.md",
+                    "path": "/hooks/hooks",
+                    "category": "Core",
+                    "summary": "Lightweight hook engine that powers OR3’s action/filter system with priority scheduling, async support, and diagnostics."
+                },
+                {
+                    "name": "typed-hooks.md",
+                    "path": "/hooks/typed-hooks",
+                    "category": "Core",
+                    "summary": "Typed wrapper around the hook engine that preserves runtime behavior while delivering full TypeScript inference."
                 },
                 {
                     "name": "useHooks.md",
                     "path": "/hooks/useHooks",
                     "category": "Integration",
-                    "summary": "Nuxt composable returning the app-wide typed hook engine, with fallback creation for tests and SSR environments. Wraps the injected `$hooks` instance and caches the typed wrapper so listeners persist across calls."
+                    "summary": "Nuxt composable that returns the app-wide typed hook engine, injected as $hooks by the 00-hooks plugin."
                 }
             ]
         },
@@ -365,109 +755,115 @@
                     "name": "attachments.md",
                     "path": "/database/attachments",
                     "category": "Entities",
-                    "summary": "Attachment table helpers for creating, updating, and deleting upload metadata with full hook coverage. Validates payloads, emits before/after hooks, supports soft and hard delete, and tracks revision clocks."
+                    "summary": "Attachment table helpers for creating, updating, and deleting upload metadata with full hook coverage."
                 },
                 {
                     "name": "branching.md",
                     "path": "/database/branching",
                     "category": "Threads",
-                    "summary": "Utilities for forking threads, retry-branching assistant replies, and building merged conversation contexts across Dexie tables. Handles branch modes (reference vs copy), clones messages when needed, and keeps indexes dense."
+                    "summary": "Utilities for forking threads, retry-branching assistant replies, and building merged conversation contexts across Dexie tables."
                 },
                 {
                     "name": "client.md",
                     "path": "/database/client",
                     "category": "Core",
-                    "summary": "Dexie database client that defines the `Or3DB` schema and typed table instances for every entity. Establishes the `or3-db` IndexedDB database with version 5, collapses historical migrations, and keeps existing installs compatible."
+                    "summary": "Dexie database client that defines the Or3DB schema, typed tables, and versioning rules."
                 },
                 {
                     "name": "dbTry.md",
                     "path": "/database/dbTry",
                     "category": "Utilities",
-                    "summary": "Error-handling wrapper around Dexie calls that traps quota exceptions and standardizes error metadata. Emits toast-friendly `ERR_DB_QUOTA_EXCEEDED` errors, tags other failures as read/write errors, and optionally rethrows after logging."
+                    "summary": "Thin error-handling wrapper around Dexie calls that surfaces quota issues and standardizes error metadata."
+                },
+                {
+                    "name": "document-revisions.md",
+                    "path": "/database/document-revisions",
+                    "category": "Entities",
+                    "summary": "Document revision manifests and chunks stored in the shared posts table, with retention pruning."
                 },
                 {
                     "name": "documents.md",
                     "path": "/database/documents",
                     "category": "Entities",
-                    "summary": "Document storage built on the shared `posts` table (`postType: 'doc'`) with TipTap JSON payloads and hook integration. Serializes rich-text documents without a new Dexie store, provides soft/hard delete paths, and normalizes titles."
+                    "summary": "Document storage built on the shared posts table (postType: 'doc') with TipTap JSON payloads and hook integration."
                 },
                 {
                     "name": "files-select.md",
                     "path": "/database/files-select",
                     "category": "Utilities",
-                    "summary": "Read-only helpers for paging `file_meta` rows when browsing uploads or the recycle bin. Filters image-like files by MIME type or kind, applies simple pagination over `updated_at` index, and provides rename helpers."
+                    "summary": "Read-only helpers for paging file meta rows when browsing uploads or the recycle bin."
                 },
                 {
                     "name": "files-util.md",
                     "path": "/database/files-util",
                     "category": "Utilities",
-                    "summary": "Utility helpers for enforcing message file limits and serializing file hash arrays. Resolves max files per message from env variables, safely parses and dedupes hashes, and preserves insertion order when serializing."
+                    "summary": "Utility helpers for enforcing message file limits and serializing file hash arrays."
                 },
                 {
                     "name": "files.md",
                     "path": "/database/files",
                     "category": "Entities",
-                    "summary": "File storage layer that deduplicates blobs by hash, keeps metadata in Dexie, and exposes hook-friendly lifecycle helpers. Stores binary blobs separately from metadata, emits numerous hooks for validation/tracking, and supports ref counting."
+                    "summary": "File storage layer that deduplicates blobs by hash, keeps metadata in Dexie, and exposes hook-friendly lifecycle helpers."
                 },
                 {
                     "name": "index.md",
                     "path": "/database/index",
                     "category": "Core",
-                    "summary": "Barrel exports for the database layer, re-exporting Dexie client, CRUD helpers, and common type aliases. Groups helpers into semantic objects (create, upsert, queries, del, tx, kv) so callers can import cleanly."
+                    "summary": "Barrel exports for the database layer, re-exporting the Dexie client, CRUD helpers, and common type aliases."
                 },
                 {
                     "name": "kv.md",
                     "path": "/database/kv",
                     "category": "Entities",
-                    "summary": "Key-value helpers for storing small preference or credential blobs in the Dexie `kv` table. Validates payloads, wraps reads/writes in error handling, and integrates with the hook system for before/after actions."
+                    "summary": "Key-value helpers for storing small preference or credential blobs in the Dexie kv table."
                 },
                 {
                     "name": "message-files.md",
                     "path": "/database/message-files",
                     "category": "Messages",
-                    "summary": "Helpers for attaching and detaching files to chat messages while maintaining ref counts and serialized hash lists. Resolves file metadata from message hashes, uploads or references new files, and atomically updates messages inside Dexie transactions."
+                    "summary": "Helpers for attaching/detaching files to chat messages while maintaining ref counts and serialized hash lists."
                 },
                 {
                     "name": "messages.md",
                     "path": "/database/messages",
                     "category": "Messages",
-                    "summary": "Thread message CRUD utilities with hook integration, sparse indexing, and attachment support. Manages sparse indexes to support fast insertion, exposes transactional helpers for append/move/copy/insert, and provides normalization tools."
+                    "summary": "Thread message CRUD utilities with hook integration, sparse indexing, and attachment support."
                 },
                 {
                     "name": "posts.md",
                     "path": "/database/posts",
                     "category": "Entities",
-                    "summary": "Generic post storage built on the `posts` Dexie table; used for lightweight CMS data like release notes or docs. Validates posts, normalizes meta payloads to JSON, and exposes CRUD helpers plus simple search utilities."
+                    "summary": "Generic post storage built on the posts Dexie table; used for lightweight CMS data like release notes or docs."
                 },
                 {
                     "name": "projects.md",
                     "path": "/database/projects",
                     "category": "Entities",
-                    "summary": "CRUD helpers for project metadata stored in the `projects` Dexie table. Validates incoming project objects, wraps persistence in error handling, and emits hook actions/filters for every operation."
+                    "summary": "CRUD helpers for project metadata stored in the projects Dexie table."
                 },
                 {
                     "name": "prompts.md",
                     "path": "/database/prompts",
                     "category": "Entities",
-                    "summary": "Prompt library built on the shared `posts` table (`postType: 'prompt'`) with TipTap JSON payloads. Normalizes titles, serializes content, reuses hook conventions, and supports soft/hard delete flows."
+                    "summary": "Prompt library built on the shared posts table (postType: 'prompt') with TipTap JSON payloads."
                 },
                 {
                     "name": "schema.md",
                     "path": "/database/schema",
                     "category": "Core",
-                    "summary": "Central Zod schemas and generated TypeScript types for all Dexie tables. Defines runtime validation for every entity, supplies create-specific schemas that auto-populate IDs/timestamps, and exports inferred types for strong typing."
+                    "summary": "Central Zod schemas and generated TypeScript types for all Dexie tables."
                 },
                 {
                     "name": "threads.md",
                     "path": "/database/threads",
                     "category": "Threads",
-                    "summary": "Thread CRUD and query helpers with hook integration, branching support, and system prompt utilities. Creates/upserts threads, handles soft/hard delete, searches by title, supports child-thread queries, and stores prompt references."
+                    "summary": "Thread CRUD and query helpers with hook integration, branching support, and system prompt utilities."
                 },
                 {
                     "name": "util.md",
                     "path": "/database/util",
                     "category": "Utilities",
-                    "summary": "Shared helpers for parsing with Zod, generating IDs, and producing Unix timestamps. Wraps `schema.safeParse` to throw readable errors, provides `nowSec()` for consistent timestamps, and offers `newId()` with fallback ID generation."
+                    "summary": "Shared helpers for parsing with Zod, generating IDs, and producing Unix timestamps."
                 }
             ]
         },
@@ -476,34 +872,34 @@
             "path": "/auth",
             "files": [
                 {
-                    "name": "useOpenrouter.md",
-                    "path": "/auth/useOpenrouter",
-                    "category": "Authentication",
-                    "summary": "Authentication composable for OpenRouter PKCE login flow. Manages the OAuth-like authentication process, handles PKCE code challenge/verifier generation, redirects with security parameters, and logs out users."
-                },
-                {
-                    "name": "useUserApiKey.md",
-                    "path": "/auth/useUserApiKey",
-                    "category": "Authentication",
-                    "summary": "Composable for managing the OpenRouter API key in shared application state. Provides reactive access to the stored API key with sync between global state and Dexie database."
+                    "name": "models-service.md",
+                    "path": "/auth/models-service",
+                    "category": "Models",
+                    "summary": "Service for fetching, caching, and filtering OpenRouter's model catalog. Provides utilities to query available models by text, modalities, context length, parameters, and pricing tier. Think of modelsService as your model marketplace — it keeps an up-to-dat..."
                 },
                 {
                     "name": "openrouter-auth.md",
                     "path": "/auth/openrouter-auth",
                     "category": "Exchange",
-                    "summary": "Server-safe function that exchanges an OpenRouter authorization code for an API key. Handles PKCE code verification and retrieves the user's API key after successful authentication."
+                    "summary": "Function that exchanges an OpenRouter authorization code for an API key. Handles PKCE code verification and retrieves the user's API key after successful authentication. Think of exchangeOpenRouterCode as the handshake — after OpenRouter redirects you back,..."
                 },
                 {
                     "name": "openrouter-build.md",
                     "path": "/auth/openrouter-build",
                     "category": "Messages",
-                    "summary": "Utility for building OpenAI-compatible message arrays with hydrated images and files. Converts internal message format to OpenRouter API format with support for image deduplication, limits, and historical inclusion policies."
+                    "summary": "Utility for building OpenAI-compatible message arrays with hydrated images and files. Converts internal message format to OpenRouter API format with support for image deduplication, limits, and historical image inclusion policies."
                 },
                 {
-                    "name": "models-service.md",
-                    "path": "/auth/models-service",
-                    "category": "Models",
-                    "summary": "Service for fetching, caching, and filtering OpenRouter's model catalog. Provides utilities to query available models by text, modalities, context length, parameters, and pricing tier with 1-hour cache TTL."
+                    "name": "useOpenrouter.md",
+                    "path": "/auth/useOpenrouter",
+                    "category": "Authentication",
+                    "summary": "Authentication composable for OpenRouter PKCE login flow. Manages the OAuth-like authentication process with OpenRouter, including code verification, session storage, and API key management. Think of useOpenRouterAuth as your authentication gateway to OpenR..."
+                },
+                {
+                    "name": "useUserApiKey.md",
+                    "path": "/auth/useUserApiKey",
+                    "category": "Authentication",
+                    "summary": "Composable for managing the OpenRouter API key in shared application state. Provides reactive access to the stored API key with sync between global state and Dexie database. Think of useUserApiKey as your API key vault — it securely stores and retrieves you..."
                 }
             ]
         },
@@ -512,52 +908,88 @@
             "path": "/utils",
             "files": [
                 {
-                    "name": "tool-registry.md",
-                    "path": "/utils/tool-registry",
-                    "category": "Tools",
-                    "summary": "Lightweight singleton registry for managing LLM function-calling tools in OR3 Chat. Lets plugins register OpenRouter-compatible tools with handlers, metadata, and toggle persistence. Provides centralized tool management with reactive state, persistent preferences, type safety, lifecycle management, and built-in error handling with timeouts."
-                },
-                {
-                    "name": "tools-public.md",
-                    "path": "/utils/tools-public",
-                    "category": "Tools",
-                    "summary": "Simplified plugin API for tool registration. Re-exports registry functions and provides a helper for better TypeScript inference when defining tools. Recommended import path for plugins registering tools — keeps plugin code clean and isolated from internal implementation details. Exports useToolRegistry, defineTool helper, and all tool-related type definitions."
-                },
-                {
-                    "name": "tool-runtime.md",
-                    "path": "/utils/tool-runtime",
-                    "category": "Tools",
-                    "summary": "Runtime model for tools across client and server paths. Documents `hybrid|client|server` semantics, default runtime behavior, and how foreground/background execution chooses the correct registry."
-                },
-                {
-                    "name": "server-tool-registry.md",
-                    "path": "/utils/server-tool-registry",
-                    "category": "Tools",
-                    "summary": "Server-side tool registry reference used by SSR background chat/workflow execution. Covers registration API, runtime enforcement, timeout behavior, and Nitro plugin registration patterns."
-                },
-                {
-                    "name": "uiMessages.md",
-                    "path": "/utils/uiMessages",
-                    "category": "Chat",
-                    "summary": "Type definitions and utilities for chat messages in the OR3 UI layer. Extends database message types with display properties like attachments, tool calls, and pending states. Bridges raw database records and rendered chat UI with enriched messages, tool call tracking, attachment mapping, and streaming indicators."
-                },
-                {
-                    "name": "openrouterStream.md",
-                    "path": "/utils/openrouterStream",
-                    "category": "Streaming",
-                    "summary": "Low-level streaming helper for OpenRouter API responses. Handles SSE (Server-Sent Events) parsing, tool calling, reasoning, images, and text chunks with proper buffering and accumulation.\n\nopenrouterStream` is an async generator that opens a streaming connection to OpenRouter's `/chat/completions` endpoint, parses incoming SSE data into structured events, handles multi-part tool calls streamed across chunks, and provides normalized event types for easy consumption."
+                    "name": "capability-guards.md",
+                    "path": "/utils/capability-guards",
+                    "category": "Reference",
+                    "summary": "UI-level permission checks for actions exposed to plugins. Guards verify that the active plugin holds the required capability before an operation runs, and show a permission-denied toast when it does not."
                 },
                 {
                     "name": "errors.md",
                     "path": "/utils/errors",
                     "category": "Error Handling",
-                    "summary": "Centralized error utility for OR3. Provides error types, factories, reporting, retry logic, and duplicate suppression with automatic secret scrubbing and hook integration.\n\n`errors.ts` standardizes error creation, ensures secrets never leak, and integrates with the hook system so other modules can react to failures. Features include standardized error types, error factories, centralized reporting with toast notifications, secret scrubbing, duplicate suppression, hook integration, and simple retry helpers."
+                    "summary": "Centralized error utility for OR3. Provides error types, factories, reporting, retry logic, and duplicate suppression with automatic secret scrubbing and hook integration. Think of errors.ts as your error handling toolkit — it standardizes error creation, e..."
+                },
+                {
+                    "name": "files-attachments.md",
+                    "path": "/utils/files-attachments",
+                    "category": "Reference",
+                    "summary": "Pure functions that normalize file hash and image inputs into consistent shapes. Used by chat and workflow utilities for attachment handling. Attachment helpers tolerate messy input: hash lists arrive as arrays, JSON strings, comma lists, or a single string..."
+                },
+                {
+                    "name": "hash.md",
+                    "path": "/utils/hash",
+                    "category": "Reference",
+                    "summary": "File hashing helpers used for deduplication and attachment tracking. New files use SHA-256 with a sha256: prefix; legacy MD5 hashes stay supported for reading and verification. Hashing utilities keep uploads smooth: they chunk large files, yield to the main..."
+                },
+                {
+                    "name": "modelCatalog.md",
+                    "path": "/utils/modelCatalog",
+                    "category": "Reference",
+                    "summary": "Pure, framework-free helpers that power the model catalog UI. Derive provider info, capabilities, badges, filters, and formatted labels from OpenRouter model records. Model catalog helpers turn raw OpenRouterModel data into what the UI actually shows: provi..."
+                },
+                {
+                    "name": "multiPaneApi.md",
+                    "path": "/utils/multiPaneApi",
+                    "category": "Reference",
+                    "summary": "Global access to the multi-pane layout, plus type-safe helpers for reading pane state. Follows the same singleton pattern as sidebarLayoutApi. The multi-pane API lets any component or plugin reach the active panes without prop drilling. The API instance its..."
+                },
+                {
+                    "name": "openrouterStream.md",
+                    "path": "/utils/openrouterStream",
+                    "category": "Streaming",
+                    "summary": "Low-level streaming helper for OpenRouter API responses. Handles SSE (Server-Sent Events) parsing, tool calling, reasoning, images, and text chunks with proper buffering and accumulation. Also starts and tracks SSR background streaming jobs."
+                },
+                {
+                    "name": "server-tool-registry.md",
+                    "path": "/utils/server-tool-registry",
+                    "category": "Tools",
+                    "summary": "server/utils/chat/tool-registry.ts provides the server-side tool registry used by background chat and background workflow execution. It is intentionally separate from the client Vue registry."
                 },
                 {
                     "name": "sidebar-layout-api.md",
                     "path": "/utils/sidebar-layout-api",
                     "category": "Sidebar",
-                    "summary": "Global API for controlling sidebar layout state from any component. Lets plugins close the sidebar on mobile, expand/collapse, or toggle visibility without event chain modifications. Provides closeSidebarIfMobile() convenience function and full SidebarLayoutApi interface with close, open, expand, toggleCollapse, and isMobile methods. Follows the same singleton pattern as multiPaneApi."
+                    "summary": "Global API for controlling sidebar layout state from any component. Lets plugins close the sidebar on mobile, expand/collapse, or toggle visibility without event chain modifications. Think of the sidebar layout API as a remote control for the sidebar — any..."
+                },
+                {
+                    "name": "tool-registry.md",
+                    "path": "/utils/tool-registry",
+                    "category": "Tools",
+                    "summary": "Lightweight singleton registry for managing LLM function-calling tools in OR3 Chat. Lets plugins register OpenRouter-compatible tools with handlers, metadata, and toggle persistence. Think of the tool registry as your plugin's control panel for extending th..."
+                },
+                {
+                    "name": "tool-runtime.md",
+                    "path": "/utils/tool-runtime",
+                    "category": "Tools",
+                    "summary": "OR3 tools use a shared runtime flag to control where a tool may execute: ts type ToolRuntime = 'hybrid' 'client' 'server' Defined in app/utils/chat/types.ts."
+                },
+                {
+                    "name": "tools-public.md",
+                    "path": "/utils/tools-public",
+                    "category": "Tools",
+                    "summary": "Simplified plugin API for tool registration. Re-exports registry functions and provides a helper for better TypeScript inference when defining tools. This is the recommended import path for plugins registering tools — it keeps your plugin code clean and iso..."
+                },
+                {
+                    "name": "uiMessages.md",
+                    "path": "/utils/uiMessages",
+                    "category": "Chat",
+                    "summary": "Type definitions and utilities for chat messages in the OR3 UI layer. Extends database message types with display properties like tool calls, workflow state, and pending flags. Think of uiMessages as the bridge between raw database records and what you actu..."
+                },
+                {
+                    "name": "workspace-backup-stream.md",
+                    "path": "/utils/workspace-backup-stream",
+                    "category": "Reference",
+                    "summary": "Streams workspace backups to and from a versioned JSONL format. Exports Dexie tables line by line, keeps file blobs lines small, and imports with strict validation. Workspace backups move large datasets without loading everything into memory. Export writes..."
                 }
             ]
         },
@@ -569,25 +1001,31 @@
                     "name": "chat-types.md",
                     "path": "/types/chat-types",
                     "category": "Chat",
-                    "summary": "TypeScript type definitions for OR3 chat messages, tool calling, and streaming. Defines ChatMessage, ContentPart variants (text/image/file), ToolDefinition with optional UI metadata, ToolCall for function invocations, ORStreamEvent for streaming, and SendMessageParams. The ToolDefinition.ui field provides display names, icons, and default states for the tool registry."
-                },
-                {
-                    "name": "hooks.md",
-                    "path": "/types/hooks",
-                    "category": "Hooks",
-                    "summary": "Canonical reference for every exported TypeScript type and interface that powers the hook engine. Groups primitives (HookKind, RegisterOptions, HookEngine), typed wrappers, and payload generics so you can build type-safe plugins."
-                },
-                {
-                    "name": "database.md",
-                    "path": "/types/database",
-                    "category": "Database",
-                    "summary": "Reference for every exported type and interface defined under `app/db`. Describes schema-derived entities (Project, Thread, Message, etc.), helper payloads, and Dexie table contracts so you can strongly type database operations."
+                    "summary": "TypeScript type definitions for OR3 chat messages, tool calling, and streaming. Defines the core interfaces used throughout the chat system for messages, content parts, tool definitions, and stream events."
                 },
                 {
                     "name": "composables.md",
                     "path": "/types/composables",
                     "category": "Composables",
-                    "summary": "Canonical reference for every exported TypeScript type and interface defined under `app/composables`. Covers shared registry contracts, workspace state shapes, streaming accumulators, and plugin extension point signatures."
+                    "summary": "Canonical reference for every exported TypeScript type and interface defined under app/composables. These contracts power registry utilities, workspace state, streaming, UI chrome, and plugin extension points. Each table links the shape you consume when bui..."
+                },
+                {
+                    "name": "database.md",
+                    "path": "/types/database",
+                    "category": "Database",
+                    "summary": "Reference for every exported type and interface defined under app/db. These aliases describe the Dexie schema, higher-level records, and helper payloads that wrap database operations."
+                },
+                {
+                    "name": "hooks.md",
+                    "path": "/types/hooks",
+                    "category": "Hooks",
+                    "summary": "Canonical reference for every exported TypeScript type and interface that powers the hook engine. All definitions come from app/core/hooks/ / .ts (with the engine primitives defined in shared/hooks/hook-engine-core.ts and re-exported) and are grouped by con..."
+                },
+                {
+                    "name": "plugins.md",
+                    "path": "/types/plugins",
+                    "category": "Plugins",
+                    "summary": "Reference for the TypeScript types that plugins use to talk to the OR3 host. Covers the client-side pane plugin API, the access gate policy used by every plugin contribution, and the ambient declaration files in types/ that wire plugin-facing modules into t..."
                 }
             ]
         },
@@ -596,64 +1034,64 @@
             "path": "/themes",
             "files": [
                 {
-                    "name": "architecture.md",
-                    "path": "/themes/architecture",
-                    "category": "Reference",
-                    "summary": "Deep dive into the internal architecture of the OR3 theme system. Explains the compilation process (validation, CSS generation, selector parsing), runtime resolution (matching, merging, prop mapping), hybrid CSS selector approach, and integration points (v-theme directive, composables). Includes architecture diagrams and directory structure overview."
-                },
-                {
-                    "name": "quick-start.md",
-                    "path": "/themes/quick-start",
-                    "category": "Tutorial",
-                    "summary": "Quick start guide for creating custom themes in OR3. Learn how to use the refined theme system to create a custom theme in under 30 minutes. Covers theme scaffolding with CLI tools, defining Material Design 3 color palettes, component overrides with CSS-like selectors, testing and validation, and applying themes with the v-theme directive."
-                },
-                {
-                    "name": "custom-theme-tutorial.md",
-                    "path": "/themes/custom-theme-tutorial",
-                    "category": "Tutorial",
-                    "summary": "End-to-end tutorial for building, packaging, and installing a custom OR3 theme. Walks through scaffolding with the CLI, defining a full Material Design 3 color palette (light + dark), adding component overrides, icon overrides, Nuxt UI slot patches, scoped CSS, and background images. Covers creating the or3.manifest.json, zipping the theme correctly, installing via the admin panel (file upload or URL import), API (multipart, URL JSON, or base64), and uninstalling. Uses the built-in Cyberpunk theme as a reference throughout."
-                },
-                {
                     "name": "api-reference.md",
                     "path": "/themes/api-reference",
                     "category": "Reference",
-                    "summary": "Complete API reference for OR3's refined theme system. Documents all public APIs including defineTheme() factory function, v-theme directive usage patterns, RuntimeResolver class for theme resolution, CLI commands for theme management, TypeScript types (ThemeName, ThemeContext, ThemeIdentifier), composables (useTheme, useRuntimeResolver), and advanced utilities for selector parsing and specificity calculation."
+                    "summary": "Reference for the current OR3 theme system API, types, and tooling."
                 },
                 {
-                    "name": "component-overrides.md",
-                    "path": "/themes/component-overrides",
-                    "category": "Guide",
-                    "summary": "Detailed guide to the theme component override system. Explains when to use `customComponents` instead of prop overrides or CSS selectors, how theme-local Vue components are registered, how the runtime resolves and applies them, SSR and hydration behavior, wrapper-vs-fork tradeoffs, contract preservation, and common debugging pitfalls."
-                },
-                {
-                    "name": "migration-guide.md",
-                    "path": "/themes/migration-guide",
-                    "category": "Guide",
-                    "summary": "Step-by-step migration guide from OR3's old theme system to the refined system. Covers auditing existing themes and extracting colors, creating refined theme definitions with Material Design 3 tokens, updating components to use v-theme directive, migrating CSS variables to MD3 tokens, testing and validation workflows, cleanup procedures, and common migration patterns with before/after examples."
+                    "name": "architecture.md",
+                    "path": "/themes/architecture",
+                    "category": "Reference",
+                    "summary": "This document describes how the current OR3 theme system is wired from definition to runtime application."
                 },
                 {
                     "name": "best-practices.md",
                     "path": "/themes/best-practices",
                     "category": "Guide",
-                    "summary": "Performance, maintainability, and scalability best practices for OR3 themes. Covers naming conventions (kebab-case, semantic identifiers), selector strategy and specificity rules, color design with Material Design 3 guidelines and WCAG AA contrast requirements, performance optimization (<100 overrides, resolver reuse), component design patterns, testing strategies (unit, integration, visual regression), versioning and maintenance, security considerations, and common pitfalls to avoid."
+                    "summary": "Guidance for maintainable, performant themes."
                 },
                 {
-                    "name": "troubleshooting.md",
-                    "path": "/themes/troubleshooting",
+                    "name": "component-overrides.md",
+                    "path": "/themes/component-overrides",
                     "category": "Guide",
-                    "summary": "Comprehensive troubleshooting guide for OR3's refined theme system. Covers solutions for theme not applying, colors looking wrong, overrides not working, performance issues, TypeScript errors, CLI command failures, build errors, runtime errors, visual issues, browser compatibility problems, debugging techniques (enable debug logs, inspect resolver state, check CSS variables, test specificity), FAQ section, and bug reporting template."
+                    "summary": "Theme component overrides let a theme replace selected OR3 app components with theme-local Vue components. They are a trusted-code capability. Declarative themes cannot ship Vue components. The current component contract version is 1."
                 },
                 {
                     "name": "css-selectors.md",
                     "path": "/themes/css-selectors",
                     "category": "Reference",
-                    "summary": "In-depth reference for OR3's CSS-like selector syntax used in theming. Documents selector types (type, class, attribute, pseudo-class), combinators (descendant, child, adjacent sibling, general sibling), specificity calculation rules, examples of common patterns, limitations (no pseudo-elements, no complex selectors), and best practices for writing effective selectors."
+                    "summary": "cssSelectors lets themes target DOM that cannot easily use component overrides (third-party widgets, portals, legacy HTML)."
+                },
+                {
+                    "name": "custom-theme-tutorial.md",
+                    "path": "/themes/custom-theme-tutorial",
+                    "category": "Tutorial",
+                    "summary": "This tutorial walks you through creating a fully-featured OR3 theme from scratch, packaging it as a ZIP, and installing it via the admin panel. We'll use the Cyberpunk theme (already in the repo) as our working reference so every"
+                },
+                {
+                    "name": "migration-guide.md",
+                    "path": "/themes/migration-guide",
+                    "category": "Guide",
+                    "summary": "This guide explains how to move from legacy CSS-based theming to the current theme system."
+                },
+                {
+                    "name": "quick-start.md",
+                    "path": "/themes/quick-start",
+                    "category": "Tutorial",
+                    "summary": "This guide walks through creating a theme and wiring it into components."
                 },
                 {
                     "name": "theme-icons.md",
                     "path": "/themes/theme-icons",
                     "category": "Reference",
-                    "summary": "Documentation for the semantic icon system. Covers core concepts (Tokens, Registry, Composable), usage in components and configuration, adding new icons, and overriding icons in themes."
+                    "summary": "OR3 uses semantic icon tokens so themes can swap icon sets without changing component code."
+                },
+                {
+                    "name": "troubleshooting.md",
+                    "path": "/themes/troubleshooting",
+                    "category": "Guide",
+                    "summary": "Common issues and fixes for the current theme system."
                 }
             ]
         },
@@ -662,172 +1100,178 @@
             "path": "/cloud",
             "files": [
                 {
-                    "name": "or3-config.md",
-                    "path": "/cloud/or3-config",
-                    "category": "Configuration",
-                    "summary": "Local-first configuration for site branding, feature toggles, and client-side limits. Covers site.name/logo/theme settings, granular feature flags for workflows/documents/mentions/backup, upload limits, and UI defaults like pane count."
-                },
-                {
-                    "name": "or3-cloud-config.md",
-                    "path": "/cloud/or3-cloud-config",
-                    "category": "Configuration",
-                    "summary": "Server-side configuration for cloud features. Covers authentication (Clerk/basic-auth), optional pre-auth lock page behavior, sync (Convex), storage providers, LLM services (OpenRouter managed keys), rate limiting with pluggable backends, legal URLs, and security (CORS, HTTPS). Includes dependency chain and validation rules."
-                },
-                {
-                    "name": "config-reference.md",
-                    "path": "/cloud/config-reference",
-                    "category": "Reference",
-                    "summary": "Authoritative reference for every OR3 configuration setting (base + cloud). Documents all config paths and environment variables with defaults, validation rules, and how each setting affects behavior, including SSR auth lock page controls and their route-gating behavior."
-                },
-                {
-                    "name": "webhooks.md",
-                    "path": "/cloud/webhooks",
-                    "category": "Guide",
-                    "summary": "Complete guide to OR3 webhooks. Covers quick-start setup, user and admin event catalogs with data shapes, payload envelope and headers, HMAC-SHA256 signature verification, a full Express.js receiver example with TypeScript, verification snippets for Python and Go, retry policy, SSRF protection, signing secret encryption, configuration reference, delivery logs, admin custom hook subscriptions, and troubleshooting."
-                },
-                {
-                    "name": "or3-cloud-wizard.md",
-                    "path": "/cloud/or3-cloud-wizard",
-                    "category": "Guide",
-                    "summary": "Guide for the shared OR3 installation wizard used by the CLI and browser UI. Covers true local-only setup, self-hosted provider presets (including email-only and zero-question fast defaults), OR3 Connect remote access, validation, secret-safe env writes, dry-run mode, deploy commands, and Convex backend env setup."
-                },
-                {
-                    "name": "providers.md",
-                    "path": "/cloud/providers",
-                    "category": "Guide",
-                    "summary": "Practical guide for installing cloud provider packages and wiring them through OR3 cloud config. Covers local-only mode, Clerk-only mode, Clerk + Convex setup, and the Clerk to Convex token-broker bridge flow."
-                },
-                {
-                    "name": "provider-clerk.md",
-                    "path": "/cloud/provider-clerk",
-                    "category": "Guide",
-                    "summary": "Dedicated setup guide for `or3-provider-clerk`. Covers install, required env vars, runtime registrations, and token broker behavior for Clerk-backed auth."
-                },
-                {
-                    "name": "provider-basic-auth.md",
-                    "path": "/cloud/provider-basic-auth",
-                    "category": "Guide",
-                    "summary": "Dedicated setup guide for `or3-provider-basic-auth`. Covers install, required env vars, bootstrap credentials, token lifecycle tuning, and operational security checks."
-                },
-                {
-                    "name": "provider-convex.md",
-                    "path": "/cloud/provider-convex",
-                    "category": "Guide",
-                    "summary": "Dedicated setup guide for `or3-provider-convex`. Covers install, backend init/codegen, required config, authorization guardrails, and consistent materialized snapshot pages."
-                },
-                {
                     "name": "admin-access-bridge.md",
                     "path": "/cloud/admin-access-bridge",
                     "category": "Architecture",
-                    "summary": "Explains Clerk + Convex admin identity bridging for the admin dashboard, including how super-admin login can bootstrap `admin_users`, why grants persist, and why admin logout does not revoke Clerk deployment-admin access."
-                },
-                {
-                    "name": "provider-sqlite.md",
-                    "path": "/cloud/provider-sqlite",
-                    "category": "Guide",
-                    "summary": "Dedicated setup guide for `or3-provider-sqlite`. Covers install, required env vars, durability pragmas, sync invariants, and operational notes for persistent SQLite deployments."
-                },
-                {
-                    "name": "provider-s3.md",
-                    "path": "/cloud/provider-s3",
-                    "category": "Guide",
-                    "summary": "Dedicated setup guide for `or3-provider-s3`. Covers server-only S3 credentials, required env vars, endpoint/path-style options for S3-compatible hosts, and required bucket CORS for direct browser uploads/downloads."
-                },
-                {
-                    "name": "provider-fs.md",
-                    "path": "/cloud/provider-fs",
-                    "category": "Guide",
-                    "summary": "Dedicated setup guide for `or3-provider-fs`. Covers install, required env vars, hash/integrity expectations, presign TTL settings, and filesystem storage operational practices."
-                },
-                {
-                    "name": "provider-compatibility-matrix.md",
-                    "path": "/cloud/provider-compatibility-matrix",
-                    "category": "Reference",
-                    "summary": "Compatibility matrix for supported OR3 cloud provider combinations, including default SSR and legacy Clerk+Convex stacks, with package-resolution notes and composition guidance."
-                },
-                {
-                    "name": "migration-default-stack.md",
-                    "path": "/cloud/migration-default-stack",
-                    "category": "Guide",
-                    "summary": "Step-by-step migration guide from Clerk+Convex to the default SSR stack (basic-auth + sqlite + fs), including install, env updates, verification checklist, and rollback plan."
-                },
-                {
-                    "name": "deployment-operations.md",
-                    "path": "/cloud/deployment-operations",
-                    "category": "Operations",
-                    "summary": "Deployment and operations runbook for OR3 Cloud SSR environments. Covers env groups, health checks, logging, scaling, rolling restarts, bounded multi-instance soak checks, and provider failure/recovery evidence."
-                },
-                {
-                    "name": "or3-connect.md",
-                    "path": "/cloud/or3-connect",
-                    "category": "Guide",
-                    "summary": "One-command remote computer setup for OR3 Cloud. Covers browser device authorization, verified bootstrap binaries, persistent macOS/Linux services, Cloudflare named tunnels, Convex environment persistence, security controls, revocation, and production configuration."
-                },
-                {
-                    "name": "release-checklist.md",
-                    "path": "/cloud/release-checklist",
-                    "category": "Operations",
-                    "summary": "Authoritative OR3 Cloud release gate separating reproducible checks from staging, backup/restore, rollback, multi-instance soak, rolling-restart, and dependency failure-injection evidence."
-                },
-                {
-                    "name": "release-notes-production-readiness.md",
-                    "path": "/cloud/release-notes-production-readiness",
-                    "category": "Release Notes",
-                    "summary": "Production-readiness release notes summarizing sync casing normalization, background execution hardening, documentation additions, current limitations, and rollback instructions."
-                },
-                {
-                    "name": "sync-layer.md",
-                    "path": "/cloud/sync-layer",
-                    "category": "Architecture",
-                    "summary": "Detailed overview of the offline-first DB Sync Layer. Covers materialized snapshot bootstrap, retention safety, write/read paths, LWW conflict resolution, and core sync components."
+                    "summary": "This page explains why a Clerk user can appear as an admin in deployments that use the Convex provider."
                 },
                 {
                     "name": "auth-system.md",
                     "path": "/cloud/auth-system",
                     "category": "Architecture",
-                    "summary": "Architecture of the Hybrid Authentication System. Explains how Clerk is used for Identity/Sync and OpenRouter for LLM access, including the Server-Side Provisioning flow (Convex Workspaces)."
-                },
-                {
-                    "name": "identity-access-concepts.md",
-                    "path": "/cloud/identity-access-concepts",
-                    "category": "Architecture",
-                    "summary": "Conceptual guide to OR3 access control vocabulary and flow. Explains provider vs internal user IDs, workspaces, active workspace selection, workspace roles, entitlements, `can()` permissions, and how plugin policy decisions are layered."
-                },
-                {
-                    "name": "capability-matrix.md",
-                    "path": "/cloud/capability-matrix",
-                    "category": "Reference",
-                    "summary": "Normative authorization matrix for public Convex, workspace, sync, storage, AI, background-job, workflow, and tool operations, including subject source, resource scope, capability, and allowed roles."
-                },
-                {
-                    "name": "plugin-access-gating.md",
-                    "path": "/cloud/plugin-access-gating",
-                    "category": "Architecture",
-                    "summary": "End-to-end reference for plugin access gating across client and server. Covers policy fields (`authRequired`, role/entitlement requirements), workspace overrides, `plugins.enabled` semantics, `/api/plugins/access`, and UX hardening to prevent dashboard auth flicker."
-                },
-                {
-                    "name": "storage-layer.md",
-                    "path": "/cloud/storage-layer",
-                    "category": "Architecture",
-                    "summary": "Overview of the CAS (Content-Addressable Storage) system for large assets. Details the local-first 'Blob' architecture, FileTransferQueue for offline support, and pluggable ObjectStorageProvider interface."
+                    "summary": "The OR3 Authentication System uses a hybrid approach: an auth provider (Clerk or basic-auth, selected by OR3 AUTH PROVIDER) handles user identity and workspace provisioning, while OpenRouter is used separately for LLM API access via PKCE. This separation en..."
                 },
                 {
                     "name": "background-execution.md",
                     "path": "/cloud/background-execution",
                     "category": "Architecture",
-                    "summary": "Architecture and API reference for SSR background jobs powering chat streaming, tool execution, and workflow execution with HITL. Covers endpoint contracts, auth/rate-limit gates, reattach flows, and job metadata (`tool_calls`, `workflow_state`)."
+                    "summary": "OR3 supports SSR background jobs for chat streaming, tool execution, and workflows so work can continue when the user detaches or navigates away. This document covers the implementation currently wired in:"
+                },
+                {
+                    "name": "capability-matrix.md",
+                    "path": "/cloud/capability-matrix",
+                    "category": "Reference",
+                    "summary": "This is the normative authorization inventory for public OR3 Cloud operations. Authorization is derived from a verified provider identity and the canonical workspace membership. Request bodies may identify resources, content, and"
+                },
+                {
+                    "name": "config-reference.md",
+                    "path": "/cloud/config-reference",
+                    "category": "Reference",
+                    "summary": "This page is the typed reference for the base and cloud configuration objects, including defaults, validation, and how settings affect behavior. The complete deployment environment-variable matrix is maintained separately below."
+                },
+                {
+                    "name": "deployment-operations.md",
+                    "path": "/cloud/deployment-operations",
+                    "category": "Operations",
+                    "summary": "Operational runbook for OR3 Cloud SSR deployments."
+                },
+                {
+                    "name": "environment-reference.md",
+                    "path": "/cloud/environment-reference",
+                    "category": "Reference",
+                    "summary": "This is the deployment-oriented reference for environment variables consumed by or3-chat and its first-party provider packages. It complements the typed configuration reference: - Base configuration documents config.or3.ts."
+                },
+                {
+                    "name": "identity-access-concepts.md",
+                    "path": "/cloud/identity-access-concepts",
+                    "category": "Architecture",
+                    "summary": "OR3 access control has more moving parts than a simple \"is the user logged in?\" check. This doc explains those parts, why they exist, and how they combine to produce a final allow/deny decision."
+                },
+                {
+                    "name": "migration-default-stack.md",
+                    "path": "/cloud/migration-default-stack",
+                    "category": "Guide",
+                    "summary": "This guide migrates an existing SSR deployment from clerk + convex to basic-auth + sqlite + fs."
                 },
                 {
                     "name": "notifications.md",
                     "path": "/cloud/notifications",
                     "category": "Features",
-                    "summary": "Complete guide to the OR3 Notification Center. Covers AI streaming notifications, sync conflict alerts, system warnings, and custom plugin notifications. Explains local-first architecture, cross-device sync, creating custom notifications via hooks/composables, filtering, and troubleshooting notification issues."
+                    "summary": "The OR3 Notification Center provides real-time, in-app notifications for AI events, sync conflicts, system warnings, and custom plugin events. It works offline-first and syncs across devices when OR3 Cloud is enabled."
+                },
+                {
+                    "name": "or3-cloud-config.md",
+                    "path": "/cloud/or3-cloud-config",
+                    "category": "Configuration",
+                    "summary": "Server-side configuration for authentication, sync, storage, rate limiting, and security. Requires SSR mode. For the complete deployment environment-variable matrix—including provider credentials, SQLite runtimes, webhooks, Connect, plugin controls, and wizard"
+                },
+                {
+                    "name": "or3-cloud-wizard.md",
+                    "path": "/cloud/or3-cloud-wizard",
+                    "category": "Guide",
+                    "summary": "This is an advanced source-development path. Managed Cloud intentionally withholds remote Connect until its operator and staging proof are complete; use Start Here for supported beginner routes."
+                },
+                {
+                    "name": "or3-config.md",
+                    "path": "/cloud/or3-config",
+                    "category": "Configuration",
+                    "summary": "Local-first configuration for site branding, feature toggles, and client-side limits. Works with both static and SSR builds. For a complete, setting-by-setting deep dive (including defaults, validation rules, and how each setting affects behavior), see:"
+                },
+                {
+                    "name": "or3-connect.md",
+                    "path": "/cloud/or3-connect",
+                    "category": "Guide",
+                    "summary": "Managed Cloud status: withheld. Remote Connect is not part of the supported managed Cloud launch. Its Cloudflare/domain/attestation flow and a disposable staging lifecycle must pass before the production UI or beginner"
+                },
+                {
+                    "name": "plugin-access-gating.md",
+                    "path": "/cloud/plugin-access-gating",
+                    "category": "Architecture",
+                    "summary": "Plugin gating controls which plugins, dashboard items, and sidebar surfaces a user can see and interact with. It has two distinct jobs that must both work correctly: - Client-side gating hides UI surfaces the user can’t access. This is a UX concern — it kee..."
+                },
+                {
+                    "name": "provider-basic-auth.md",
+                    "path": "/cloud/provider-basic-auth",
+                    "category": "Guide",
+                    "summary": "Setup and operating guide for the default-stack auth provider."
+                },
+                {
+                    "name": "provider-clerk.md",
+                    "path": "/cloud/provider-clerk",
+                    "category": "Guide",
+                    "summary": "Dedicated install and wiring guide for the Clerk auth provider package."
+                },
+                {
+                    "name": "provider-compatibility-matrix.md",
+                    "path": "/cloud/provider-compatibility-matrix",
+                    "category": "Reference",
+                    "summary": "Compatibility guide for common OR3 Cloud provider combinations."
+                },
+                {
+                    "name": "provider-convex.md",
+                    "path": "/cloud/provider-convex",
+                    "category": "Guide",
+                    "summary": "Dedicated install and wiring guide for the Convex sync/storage/backend provider package."
+                },
+                {
+                    "name": "provider-fs.md",
+                    "path": "/cloud/provider-fs",
+                    "category": "Guide",
+                    "summary": "Setup and operating guide for the default-stack object storage backend."
+                },
+                {
+                    "name": "provider-s3.md",
+                    "path": "/cloud/provider-s3",
+                    "category": "Guide",
+                    "summary": "S3-compatible storage provider for OR3 Cloud. This provider: - registers a server-side StorageGatewayAdapter with ID s3 - generates short-lived presigned upload/download URLs - binds uploads to the declared SHA-256 checksum and exact content length"
+                },
+                {
+                    "name": "provider-sqlite.md",
+                    "path": "/cloud/provider-sqlite",
+                    "category": "Guide",
+                    "summary": "Setup and operating guide for the default-stack sync backend."
+                },
+                {
+                    "name": "providers.md",
+                    "path": "/cloud/providers",
+                    "category": "Guide",
+                    "summary": "This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works. For normal local or VPS operation, use the managed @or3/cloud operator. For editable source or custom providers, use the"
+                },
+                {
+                    "name": "release-checklist.md",
+                    "path": "/cloud/release-checklist",
+                    "category": "Operations",
+                    "summary": "This is the authoritative promotion gate for OR3 Cloud. It separates reproducible code checks from deployment-specific checks that must be performed against the exact production candidate."
+                },
+                {
+                    "name": "release-notes-production-readiness.md",
+                    "path": "/cloud/release-notes-production-readiness",
+                    "category": "Release Notes",
+                    "summary": "Release notes for the production-readiness tranche covering sync casing normalization, background execution hardening, and documentation completion. Current code verdict: RELEASE CANDIDATE. Production promotion still"
+                },
+                {
+                    "name": "storage-layer.md",
+                    "path": "/cloud/storage-layer",
+                    "category": "Architecture",
+                    "summary": "The OR3 Storage Layer handles large binary assets (images, PDFs) separately from the main database sync. It uses a local-first, hash-addressed architecture to ensure assets are always available offline once downloaded."
+                },
+                {
+                    "name": "sync-layer.md",
+                    "path": "/cloud/sync-layer",
+                    "category": "Architecture",
+                    "summary": "The OR3 Sync Layer provides offline-first, bidirectional synchronization between the local Dexie database and the Convex backend. It enables users to work offline and have their changes automatically synced when connectivity is restored, with support for mu..."
                 },
                 {
                     "name": "troubleshooting.md",
                     "path": "/cloud/troubleshooting",
                     "category": "Guide",
-                    "summary": "Comprehensive troubleshooting guide for OR3 Cloud features. Covers authentication issues (login, session persistence), sync problems (changes not syncing, conflict notifications, bootstrap delays), storage failures (uploads, downloads, quotas), notification issues, and build/deployment problems. Includes diagnostic checklists, debug logging, and common error messages."
+                    "summary": "This guide helps you diagnose and fix common issues with OR3 Cloud features including authentication, sync, storage, and notifications."
+                },
+                {
+                    "name": "webhooks.md",
+                    "path": "/cloud/webhooks",
+                    "category": "Guide",
+                    "summary": "OR3 webhooks deliver real-time server-side events to external HTTP endpoints. Every delivery is a signed JSON payload with automatic retries, delivery logging, and SSRF protection. There are two webhook scopes:"
                 }
             ]
         },
@@ -839,13 +1283,13 @@
                     "name": "activity-external-agents.md",
                     "path": "/architecture/activity-external-agents",
                     "category": "Architecture",
-                    "summary": "Ownership, lifecycle, security, extension, troubleshooting, and non-goals for the Activity Center and or3-intern-backed External Agents."
+                    "summary": "# Activity and External Agents"
                 },
                 {
                     "name": "workspace-profiles.md",
                     "path": "/architecture/workspace-profiles",
                     "category": "Reference",
-                    "summary": "Workspace Profile V1 schema, immutable resolution, fallback, workspace selection, SSR lifecycle, theme recommendations, versioning, and security."
+                    "summary": "Workspace Profiles are safe, declarative projections over existing OR3 registries. V1 may reference navigation, dashboard, pane, command, and mobile IDs; Zod rejects unknown or executable fields."
                 }
             ]
         },
@@ -854,46 +1298,46 @@
             "path": "/plugins",
             "files": [
                 {
-                    "name": "runtime-v2-overview.md",
-                    "path": "/plugins/runtime-v2-overview",
-                    "category": "Guide",
-                    "summary": "Overview of Plugin Runtime V2: frozen V1 compatibility, digest-addressed packages, @or3/plugin-sdk authoring, CLI tooling, operator limitations (non-sandbox trusted-host, non-fleet-atomic activation, data retention on disable), and default-off startup flags."
-                },
-                {
-                    "name": "v1-support-and-migration.md",
-                    "path": "/plugins/v1-support-and-migration",
-                    "category": "Guide",
-                    "summary": "V1 support policy through the V2 line, earliest V3 removal posture, migration steps to Manifest V2 / SDK packages, import replacement map, and lifecycle-coverage limitations."
-                },
-                {
-                    "name": "trust-and-safe-mode.md",
-                    "path": "/plugins/trust-and-safe-mode",
-                    "category": "Operations",
-                    "summary": "Trust classes (trusted-host vs isolated), state rollback rules, and the safe-mode operator runbook using OR3_DISABLE_NON_CORE_PLUGINS without the plugin UI."
-                },
-                {
-                    "name": "plugin-sdk.md",
-                    "path": "/plugins/plugin-sdk",
-                    "category": "Reference",
-                    "summary": "Authoring reference for @or3/plugin-sdk: defineOr3Plugin, host-created PluginContext, mediated clients, testing harness, and CLI validate/create commands."
-                },
-                {
-                    "name": "manifest-v2.md",
-                    "path": "/plugins/manifest-v2",
-                    "category": "Reference",
-                    "summary": "Manifest V2 contract: engines, runtime entrypoints, grants, trust, settings/stateCompatibility, and canonical package digests via plugin-runtime CLI inspect/pack."
-                },
-                {
                     "name": "admin-plugins.md",
                     "path": "/plugins/admin-plugins",
                     "category": "Reference",
-                    "summary": "Admin plugin V1 package layout, page and widget registration APIs, install and rebuild requirements, safe mode behavior, and current lifecycle limitations."
+                    "summary": "Admin plugins add trusted client-side pages and overview widgets to the global admin dashboard. They are a separate V1 extension kind from workspace plugins and only load when SSR authentication is enabled."
                 },
                 {
                     "name": "command-palette.md",
                     "path": "/plugins/command-palette",
                     "category": "Reference",
-                    "summary": "Command palette plugin contracts: ui.command-palette.register grant, post-source and command contribution kinds, V1 workspace API registration, alias rules, mediated isolated command execution, and todo/workflow examples."
+                    "summary": "Plugins can contribute local searchable records and commands to OR3's global command palette. The Cmd/Ctrl+K overlay consumes these registrations immediately and removes them with the owning plugin scope."
+                },
+                {
+                    "name": "manifest-v2.md",
+                    "path": "/plugins/manifest-v2",
+                    "category": "Reference",
+                    "summary": "V2 packages ship or3.manifest.json with manifestVersion: 2. The owner-only standard extension install endpoint dispatches a V2 ZIP to the immutable candidate store. After a canary and explicit promotion, an enabled"
+                },
+                {
+                    "name": "plugin-sdk.md",
+                    "path": "/plugins/plugin-sdk",
+                    "category": "Reference",
+                    "summary": "Stable Plugin Runtime V2 authoring surface. Import only this package (or documented subpaths: /manifest, /host, /testing). The package is currently an authoring and compatibility-test surface. OR3's"
+                },
+                {
+                    "name": "runtime-v2-overview.md",
+                    "path": "/plugins/runtime-v2-overview",
+                    "category": "Guide",
+                    "summary": "Plugin Runtime V2 adds digest-addressed packages, a frozen V1 compatibility line, @or3/plugin-sdk authoring, and optional isolation. The generation-safe manager is promoted by default, but it currently manages bundled V1"
+                },
+                {
+                    "name": "trust-and-safe-mode.md",
+                    "path": "/plugins/trust-and-safe-mode",
+                    "category": "Operations",
+                    "summary": "# Trust Model and Safe Mode"
+                },
+                {
+                    "name": "v1-support-and-migration.md",
+                    "path": "/plugins/v1-support-and-migration",
+                    "category": "Guide",
+                    "summary": "# V1 Support Policy and V2 Migration"
                 }
             ]
         }

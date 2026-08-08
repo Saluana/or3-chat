@@ -63,7 +63,7 @@ NUXT_PUBLIC_STORAGE_PROVIDER=fs|convex|s3
 FS examples:
 
 ```bash
-OR3_STORAGE_FS_ROOT=.data/storage
+OR3_STORAGE_FS_ROOT=/srv/or3/.data/storage
 OR3_STORAGE_FS_TOKEN_SECRET=...
 OR3_STORAGE_FS_URL_TTL_SECONDS=300
 ```

@@ -9,6 +9,8 @@ Authoritative catalog of available hooks with their argument shapes and return v
 -   Kind: action vs filter. Actions return void; filters must return the next value in the chain.
 -   Args: tuple passed to your handler. Use `typedOn(hooks).on(key, fn)` for editor inference.
 -   Returns: concrete return type for filters. Veto-capable filters allow `false` (or `''`) to cancel/clear.
+-   Typed-only: the key exists in `hook-types.ts` but no call site emits it yet. Registering still typechecks; nothing will fire.
+-   Server-side: hooks in the final section run on the admin hook engine or Nitro webhook events, not on `$hooks`.
 
 See also: `hooks.md` for engine API, `hook-keys.md` and `hook-types.md` for detailed payload types.
 
@@ -115,7 +117,9 @@ Notes
 
 | Key                                       | Kind   | Args (tuple)                                                                        | Returns |
 | ----------------------------------------- | ------ | ----------------------------------------------------------------------------------- | ------- |
+| `workflow.execution:action:start`         | action | `[{ messageId: string; workflowId: string }]`                                      | —       |
 | `workflow.execution:action:state_update`  | action | `[{ messageId: string; state: WorkflowStreamingState \| WorkflowMessageData }]`    | —       |
+| `workflow.execution:action:node_complete` | action | `[{ messageId: string; nodeId: string }]`                                          | —       |
 | `workflow.execution:action:complete`      | action | `[{ messageId: string; workflowId: string; finalOutput?: string }]`                | —       |
 
 ---
@@ -125,25 +129,59 @@ Notes
 | Key                                      | Kind   | Args (tuple)                                                                                                  | Returns |
 | ---------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------- | ------- |
 | `sync.op:action:captured`                | action | `[{ op: SyncPendingOpPayload }]`                                                                              | —       |
+| `sync.capture:action:nonAtomic`          | action | `[{ tableName: string; pk: string; storeNames: string[]; kind?: 'tombstone' }]`                              | —       |
 | `sync.push:action:before`                | action | `[{ scope: SyncScopePayload; count: number }]`                                                                | —       |
 | `sync.push:action:after`                 | action | `[{ scope: SyncScopePayload; successCount: number; failCount: number }]`                                     | —       |
 | `sync.bootstrap:action:start`            | action | `[{ scope: SyncScopePayload }]`                                                                               | —       |
 | `sync.bootstrap:action:progress`         | action | `[{ scope: SyncScopePayload; cursor: number; pulledCount: number; hasMore: boolean }]`                      | —       |
 | `sync.bootstrap:action:complete`         | action | `[{ scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }]`                    | —       |
+| `sync.bootstrap:action:error`            | action | `[{ scope: SyncScopePayload; error: string }]`                                                                | —       |
 | `sync.pull:action:received`              | action | `[{ scope: SyncScopePayload; changeCount: number }]`                                                          | —       |
 | `sync.pull:action:applied`               | action | `[{ scope: SyncScopePayload; applied: number; skipped: number; conflicts: number }]`                         | —       |
 | `sync.pull:action:error`                 | action | `[{ scope: SyncScopePayload; error: string }]`                                                                | —       |
-| `sync.pull:action:after`                 | action | `[{ scope: SyncScopePayload; count: number; cursor: number }]`                                                | —       |
+| `sync.pull:action:after`                 | action | `[{ scope: SyncScopePayload; count: number; cursor: number }]` — typed only                                    | —       |
 | `sync.subscription:action:statusChange`  | action | `[{ scope: SyncScopePayload; previousStatus: string; status: string }]`                                      | —       |
+| `sync.subscription:action:maxRetriesExceeded` | action | `[{ scope: SyncScopePayload; attempts: number }]`                                                        | —       |
 | `sync.conflict:action:detected`          | action | `[{ tableName: string; pk: string; local: unknown; remote: unknown; winner: 'local' \| 'remote' }]`        | —       |
 | `sync.error:action`                      | action | `[{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }]`                                        | —       |
 | `sync.retry:action`                      | action | `[{ op: SyncPendingOpPayload; attempt: number }]`                                                             | —       |
 | `sync.queue:action:full`                 | action | `[{ pendingCount: number; maxSize: number }]`                                                                 | —       |
 | `sync.rescan:action:starting`            | action | `[{ scope: SyncScopePayload }]`                                                                               | —       |
-| `sync.rescan:action:progress`            | action | `[{ scope: SyncScopePayload; progress: number }]`                                                             | —       |
+| `sync.rescan:action:progress`            | action | `[{ scope: SyncScopePayload; progress: number }]` — typed only                                                 | —       |
 | `sync.rescan:action:completed`           | action | `[{ scope: SyncScopePayload }]`                                                                               | —       |
-| `sync.stats:action`                      | action | `[{ pendingCount: number; cursor: number; lastSyncAt: number }]`                                             | —       |
-| `sync:action:error`                      | action | `[{ message?: string } & Record<string, unknown>]`                                                            | —       |
+| `sync.stats:action`                      | action | `[{ pendingCount: number; cursor: number; lastSyncAt: number }]` — typed only                                | —       |
+| `sync:action:error`                      | action | `[{ message?: string } & Record<string, unknown>]` — emitted server-side via Nitro webhook events            | —       |
+
+---
+
+## Workspace backup
+
+Emitted by `app/composables/core/useWorkspaceBackup.ts`. Telemetry payloads carry progress metadata; error hooks add `error` and `durationMs`.
+
+| Key                                        | Kind   | Args (tuple)                                                                                  | Returns |
+| ------------------------------------------ | ------ | --------------------------------------------------------------------------------------------- | ------- |
+| `workspace.backup.export:action:before`    | action | `[{ format: 'stream'; filenameBase: string; suggestedName: string }]`                         | —       |
+| `workspace.backup.export:action:after`     | action | `[{ format: 'stream'; filenameBase: string; suggestedName: string; durationMs: number }]`    | —       |
+| `workspace.backup.export:action:error`     | action | `[{ format: 'stream'; filenameBase: string; suggestedName: string; durationMs: number; error: unknown }]` | — |
+| `workspace.backup.export:action:cancelled` | action | `[{ format: 'stream'; filenameBase: string; suggestedName: string; durationMs: number }]`    | —       |
+| `workspace.backup.import:action:before`    | action | `[{ fileName: string \| null; mode: 'replace' \| 'append'; overwrite: boolean; format: 'stream' \| 'dexie' \| 'unknown' }]` | — |
+| `workspace.backup.import:action:after`     | action | `[same as before, with format: 'stream' \| 'dexie' + durationMs: number]`                     | —       |
+| `workspace.backup.import:action:error`     | action | `[same as before, with format: 'stream' \| 'dexie' + durationMs: number + error: unknown]`    | —       |
+| `workspace.backup.peek:action:before`      | action | `[{ fileName: string \| null }]`                                                              | —       |
+| `workspace.backup.peek:action:after`       | action | `[{ fileName: string \| null; format: 'stream' \| 'dexie'; metadata: ImportMetadata; durationMs: number }]` | — |
+| `workspace.backup.peek:action:error`       | action | `[{ fileName: string \| null; error: unknown; durationMs: number }]`                          | —       |
+| `workspace:reloaded`                       | action | `[]`                                                                                          | —       |
+
+---
+
+## Sidebar pages
+
+Emitted by `app/composables/sidebar/useActiveSidebarPage.ts` during page activation and guard runs.
+
+| Key                                   | Kind   | Args (tuple)                                                                                  | Returns |
+| ------------------------------------- | ------ | --------------------------------------------------------------------------------------------- | ------- |
+| `ui.sidebar.page:action:open`         | action | `[{ id: string; page: SidebarPage }]`                                                         | —       |
+| `ui.sidebar.page:action:load-error`   | action | `[{ pageId: string; error: unknown; phase?: 'canActivate' \| 'onActivate' \| 'onDeactivate' }]` | —     |
 
 ---
 
@@ -163,15 +201,24 @@ Filters
 
 Common ops per family (varies by module; see each `app/db/*.ts`):
 
--   `create`, `upsert`, `update`, `delete`, `get`, `byThread`/`byProject`/`children`, `search`, specialized ops like `append`, `insertAfter`, `normalize`, `fork`, `updateSystemPrompt`.
+-   `create`, `upsert`, `update`, `delete`, `get`, `byThread`/`byProject`/`children`, `search`, specialized ops like `append`, `insertAfter`, `normalize`, `fork`, `updateSystemPrompt`, plus `move`, `copy`, and `restore` on messages/files.
 
 Special cases
 
--   `db.files.refchange:action:after`
--   `db.kv.upsertByName:action:after`
+-   `db.files.refchange:action:after` — `[{ before: FileEntity; after: FileEntity; delta: number }]`
+-   `db.files.restore:action:before|after` — `[FileEntity]`
+-   `db.kv.upsertByName:action:after` — `[KvEntry]`
 -   `db.kv.deleteByName:action:hard:before|after`
+-   `db.threads.updateSystemPrompt:action:before` — `[{ thread: ThreadEntity; promptId: string }]`; `:after` — `[{ thread: ThreadEntity; promptId: string }]`
 -   `db.threads.getSystemPrompt:filter:output` — `[value: string | null]` → `string | null`
 -   `db.documents.title:filter` — `[title: string, context: { phase: 'create' | 'update'; id: string; rawTitle?: string | null; existing?: DocumentEntity }]` → `string`
+-   `db.messages.append:action:before` — `[MessageCreateEntity]`; `:after` — `[MessageEntity]`
+-   `db.messages.insertAfter:action:before` — `[{ after: MessageEntity; value: MessageCreateEntity }]`; `:after` — `[MessageEntity]`
+-   `db.messages.move:action:before` — `[{ message: MessageEntity; toThreadId: string }]`; `:after` — `[{ messageId: string; toThreadId: string }]`
+-   `db.messages.copy:action:before` — `[{ message: MessageEntity; toThreadId: string }]`; `:after` — `[{ from: string; toThreadId: string }]`
+-   `db.messages.normalize:action:before` — `[{ threadId: string; start: number; step: number }]`; `:after` — `[{ threadId: string }]`
+
+Note: `restore`, `append`, `move`, `copy`, and `insertAfter` are emitted in code but are not yet in the `DbOperation` union in `hook-types.ts`. They typecheck through the open string fallback, not through `DbActionHookName`.
 
 Returns quick-reference
 
@@ -185,10 +232,10 @@ Returns quick-reference
 
 | Key                                       | Kind   | Args (tuple)                                            | Returns     |
 | ----------------------------------------- | ------ | ------------------------------------------------------- | ----------- |
-| `app.init:action:after`                   | action | `[nuxtApp: any]`                                        | —           |
-| `error:raised`                            | action | `[error: unknown]`                                      | —           |
-| `error:<domain>`                          | action | `[error: unknown]`                                      | —           |
-| `ai.chat.error:action`                    | action | `[payload: { error: unknown }]`                         | —           |
+| `app.init:action:after`                   | action | `[{ nuxtApp }]`                                        | —           |
+| `error:raised`                            | action | `[error: AppError]`                                    | —           |
+| `error:<domain>`                          | action | `[error: AppError]` — fired only when `tags.domain` is set | —        |
+| `ai.chat.error:action`                    | action | `[{ error: AppError }]` — fired only when `tags.domain === 'chat'` | — |
 | `chat.systemPrompt.select:action:after`   | action | `[payload: { id: string; content: any }]`               | —           |
 | `chat.systemPrompt.default:action:update` | action | `[id: string]`                                          | —           |
 | `ui.sidebar.select:action:before`         | action | `[payload: { kind: 'chat' \| 'doc'; id: string }]`      | —           |
@@ -196,7 +243,7 @@ Returns quick-reference
 | `ui.chat.new:action:after`                | action | `[payload: {}]`                                         | —           |
 | `editor.created:action:after`             | action | `[payload: { editor: any }]`                            | —           |
 | `editor.updated:action:after`             | action | `[payload: { editor: any }]`                            | —           |
-| `editor:request-extensions`               | action | `[undefined]`                                           | —           |
+| `editor:request-extensions`               | action | `[]`                                                    | —           |
 | `ui.chat.editor:filter:extensions`        | filter | `[extensions: unknown[]]`                               | `unknown[]` |
 | `ui.chat.editor:action:before_send`       | action | `[json: Record<string, unknown>]`                       | —           |
 
@@ -212,7 +259,12 @@ Notes
 | -------------------------------- | ------ | -------------------------------------------------------------- | ---------------- |
 | `auth.access:filter:decision`    | filter | `[decision: AccessDecision, context: { session: SessionContext \| null }]` | `AccessDecision` |
 | `auth.user:action:created`       | action | `[{ userId: string; provider: string }]`                        | —                |
-| `auth.workspace:action:created`  | action | `[{ workspaceId: string; userId: string }]`                     | —                |
+| `auth.workspace:action:created`  | action | `[{ workspaceId: string; userId: string }]` — typed only        | —                |
+
+Notes
+
+-   `auth.access:filter:decision` no longer runs through `hooks.applyFilters`. The server runs a deny-only constraint engine (`AuthHookEngine.applyAccessDecisionFilters` in `server/auth/hooks.ts`). Legacy filter callbacks with this signature are accepted via `addAccessDecisionFilter`, but grants are rejected and recorded in `_diagnostics.errors` under `auth.access:*` keys.
+-   `auth.user:action:created` fires server-side as a Nitro webhook event from `server/auth/session.ts`.
 
 ---
 
@@ -226,8 +278,33 @@ Notes
 | `storage.files.download:action:after`        | action | `[payload: StorageFileDownloadAfterPayload]`           | —                                        |
 | `storage.files.url:filter:options`           | filter | `[options: StorageFileUrlOptionsPayload]`              | `StorageFileUrlOptionsPayload`           |
 | `storage.files.upload:filter:policy`         | filter | `[policy: StorageFileUploadPolicyPayload \| false]`    | `StorageFileUploadPolicyPayload \| false` |
-| `storage.files.gc:action:run`                | action | `[payload: StorageFileGcPayload]`                      | —                                        |
-| `storage:action:error`                       | action | `[{ message?: string } & Record<string, unknown>]`     | —                                        |
+| `storage.files.gc:action:run`                | action | `[payload: StorageFileGcPayload]` — typed only          | —                                        |
+| `storage:action:error`                       | action | `[{ message?: string } & Record<string, unknown>]` — emitted server-side via Nitro webhook events | — |
+
+---
+
+## Server-side admin and webhook hooks
+
+These do not run on the app `$hooks` engine.
+
+Admin hooks run on the server admin engine (`event.context.adminHooks`, see `server/hooks/admin-hook-types.ts`):
+
+| Key                                  | Kind   | Args (tuple)                                                                            | Returns |
+| ------------------------------------ | ------ | --------------------------------------------------------------------------------------- | ------- |
+| `admin.plugin:action:installed`      | action | `[{ id: string; kind: 'plugin' \| 'theme' \| 'admin_plugin'; version: string }]`        | —       |
+| `admin.plugin:action:enabled`        | action | `[{ id: string; workspaceId: string }]`                                                 | —       |
+| `admin.plugin:action:disabled`       | action | `[{ id: string; workspaceId: string }]`                                                 | —       |
+| `admin.user:action:role_changed`     | action | `[{ workspaceId: string; userId: string; role: 'owner' \| 'editor' \| 'viewer' }]`      | —       |
+| `admin.workspace:action:created`     | action | `[{ workspaceId: string; name: string; ownerUserId: string; createdBy: { kind: 'super_admin' \| 'workspace_admin'; id: string } }]` | — |
+| `admin.workspace:action:deleted`     | action | `[{ workspaceId: string; deletedBy: { kind: 'super_admin' \| 'workspace_admin'; id: string } }]` | — |
+
+Nitro webhook events fire on `nitroApp.hooks` via `emitWebhookSystemHook` and feed the webhook dispatcher (see `server/utils/webhooks/event-bridge.ts`):
+
+-   `sync:action:error` — `[{ message?: string } & Record<string, unknown>]`
+-   `storage:action:error` — `[{ message?: string } & Record<string, unknown>]`
+-   `background.job:completed` / `background.job:failed` — `[{ jobId: string; status: 'completed' \| 'failed'; workspaceId: string; userId: string; threadId: string; messageId: string; error: string \| null }]`
+-   `ai.chat.stream:action:complete` is also emitted server-side with the app payload plus webhook fields (`workspaceId`, `messageId`, `modelId`, `jobId`, `completedAt`).
+-   Curated event bridge keys: `db.threads.create:action:after`, `db.threads.update:action:after`, `db.messages.create:action:after`, `db.messages.append:action:after`, `db.messages.update:action:after`, `ai.chat.stream:action:complete`, `db.documents.create:action:after`, `db.documents.update:action:after`, `db.documents.delete:action:soft:after`, `notify:action:push`, `auth.user:action:created`, and the admin keys above.
 
 ---
 

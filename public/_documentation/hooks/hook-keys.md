@@ -27,9 +27,9 @@ These unions power editor autocomplete while remaining permissive for plugin aut
 
 ## Hook payload mapping
 
-`HookPayloads` maps each `KnownHookKey` to a tuple of arguments expected by handlers. Examples:
+`HookPayloadMap` (from `hook-types`) maps each `KnownHookKey` to a tuple of arguments expected by handlers. Examples:
 
--   `'ai.chat.stream:action:delta'` → `[requestId: string, payload: AiStreamDeltaPayload]`
+-   `'ai.chat.stream:action:delta'` → `[chunk: string, payload: AiStreamDeltaPayload]`
 -   `'ui.pane.thread:filter:select'` → `[threadId, pane, previousId]`
 -   `'files.attach:filter:input'` → `[FilesAttachInputPayload | false]`
 

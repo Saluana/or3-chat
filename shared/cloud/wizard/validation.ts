@@ -232,9 +232,54 @@ function validateFieldLevel(answers: WizardAnswers): {
         }
     }
 
-    if (answers.ssrAuthEnabled && answers.syncEnabled && answers.syncProvider === 'sqlite') {
-        const sqlitePath = answers.sqliteDbPath?.trim() ?? '';
-        if (!sqlitePath) errors.push('OR3_SQLITE_DB_PATH is required for sqlite sync.');
+    const usesSqlite =
+        (answers.ssrAuthEnabled &&
+            answers.syncEnabled &&
+            answers.syncProvider === 'sqlite') ||
+        (answers.connectEnabled &&
+            resolveEffectiveConnectProvider(answers) === 'sqlite');
+    if (usesSqlite) {
+        const sqliteDriver = answers.sqliteDriver ?? 'better-sqlite3';
+        if (sqliteDriver === 'better-sqlite3' || sqliteDriver === 'bun') {
+            const sqlitePath = answers.sqliteDbPath?.trim() ?? '';
+            if (!sqlitePath) {
+                errors.push('OR3_SQLITE_DB_PATH is required for the selected SQLite driver.');
+            }
+        } else if (sqliteDriver === 'turso') {
+            const tursoUrl = answers.sqliteTursoUrl?.trim() ?? '';
+            if (!tursoUrl) {
+                errors.push('OR3_SQLITE_TURSO_URL is required for Turso.');
+            } else if (!parseUrl(tursoUrl)) {
+                errors.push('OR3_SQLITE_TURSO_URL must be a valid database URL.');
+            }
+            if (!(answers.sqliteTursoAuthToken?.trim() ?? '')) {
+                errors.push('OR3_SQLITE_TURSO_AUTH_TOKEN is required for Turso.');
+            }
+        } else if (sqliteDriver === 'd1') {
+            const binding = answers.sqliteD1Binding?.trim() ?? '';
+            if (!binding) {
+                errors.push('OR3_SQLITE_D1_BINDING is required for Cloudflare D1.');
+            } else if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(binding)) {
+                errors.push('OR3_SQLITE_D1_BINDING must be a valid Workers binding name.');
+            }
+            if (answers.connectEnabled) {
+                errors.push(
+                    'Cloudflare D1 does not support OR3 Connect persistence yet. Disable OR3 Connect or choose another SQLite runtime.'
+                );
+            }
+            if (answers.ssrAuthEnabled && answers.authProvider === 'basic-auth') {
+                errors.push(
+                    'Cloudflare D1 requires a Workers-compatible auth provider. Basic Auth uses a local better-sqlite3 database; choose Clerk or another compatible auth provider.'
+                );
+            }
+            if (answers.storageEnabled && answers.storageProvider === 'fs') {
+                errors.push(
+                    'Cloudflare D1 requires Workers-compatible storage. The filesystem storage provider is not available in a Cloudflare Worker.'
+                );
+            }
+        } else {
+            errors.push('OR3_SQLITE_DRIVER must be better-sqlite3, bun, turso, or d1.');
+        }
     }
 
     if (answers.connectEnabled) {
@@ -385,6 +430,12 @@ function validateFieldLevel(answers: WizardAnswers): {
             errors.push('OR3_STORAGE_S3_URL_TTL_SECONDS must be an integer.');
         } else if (answers.s3UrlTtlSeconds < 1 || answers.s3UrlTtlSeconds > 24 * 60 * 60) {
             errors.push('OR3_STORAGE_S3_URL_TTL_SECONDS must be between 1 and 86400.');
+        }
+
+        if (answers.s3RequireChecksum === false) {
+            errors.push(
+                'OR3_STORAGE_S3_REQUIRE_CHECKSUM cannot be false; checksum enforcement is required by the S3 provider.'
+            );
         }
     }
 

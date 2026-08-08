@@ -28,8 +28,19 @@ export interface ThemeDefinition {
   backgrounds?: ThemeBackgrounds;
   icons?: Record<string, string>;
   customComponents?: Partial<Record<AppThemeComponent, string>>;
+  componentContractVersion?: 1;
+  workspaceProfiles?: WorkspaceProfileV1[];
+  recommendedWorkspaceProfileId?: string;
 }
 ```
+
+- `componentContractVersion` must match the current contract version (`1`);
+  incompatible versions fail validation. See `/themes/component-overrides`.
+- `workspaceProfiles` packages declarative workspace layouts with the theme.
+  They are registered as choices only; activating a theme never applies one.
+  See `/architecture/workspace-profiles`.
+- `recommendedWorkspaceProfileId` points at one of the packaged profiles as
+  an explicit recommendation action, never an automatic selection.
 
 For a practical guide to replacing app components, see
 `/themes/component-overrides`.
@@ -293,12 +304,53 @@ const overrides = useThemeOverrides({
 
 ### useThemeClasses
 
-Applies `cssSelectors.class` for lazy-loaded components:
+**Deprecated.** This helper used to apply `cssSelectors.class` for lazy-loaded
+components:
 
 ```ts
 import { useThemeClasses } from '~/composables/core/useThemeClasses';
 useThemeClasses();
 ```
+
+It is now a no-op that logs a warning in dev. The active theme's runtime
+classes are applied automatically: a DOM observer watches for newly added
+elements and applies matching classes. You do not need to call it.
+
+### useIcon
+
+Resolves a semantic icon token to a concrete icon name for the active theme:
+
+```ts
+import { useIcon } from '~/composables/useIcon';
+const icon = useIcon('chat.send'); // computed<string>
+```
+
+### useThemeSelection
+
+Reads and writes the user's theme selection. The source of truth is the Dexie
+KV store (`theme_selection`), which syncs across devices. A legacy
+`localStorage.activeTheme` value is migrated once. The `or3_active_theme`
+cookie supplies the first SSR paint.
+
+```ts
+const { selectedTheme, selectionSource, setSelectedTheme } = useThemeSelection();
+await setSelectedTheme('cyberpunk');
+```
+
+`getThemeSelectionSync()` returns the current selection synchronously (with a
+localStorage fallback) for plugin initialization.
+
+### Typed override helpers
+
+`app/composables/useTypedThemeOverrides.ts` provides type-safe wrappers around
+`useThemeOverrides()` for common Nuxt UI components. Each merges base props
+with theme overrides and returns a computed:
+
+- `useButtonOverrides(params, baseProps)`
+- `useInputOverrides(params, baseProps)`
+- `useTextareaOverrides(params, baseProps)`
+- `useModalOverrides(params, baseProps)`
+- `usePlainOverrides(params, baseProps)` (plain HTML elements)
 
 ## Theme plugin ($theme)
 
@@ -330,13 +382,19 @@ structure than the core component.
 
 ## CLI Commands
 
-- `bun run theme:create` scaffold a theme in `app/theme/<name>`.
-- `bun run theme:validate [name]` validate themes and generate
-  `types/theme-generated.d.ts`.
+- `bun run theme:create` scaffold a theme in `app/theme/<name>` (writes
+  `theme.ts` and a `README.md`).
+- `bun run theme:validate [name]` validate themes and regenerate
+  `types/theme-generated.d.ts` and the metadata manifest
+  (`app/theme/_shared/theme-manifest.generated.ts`).
 - `bun run theme:build-css` build `/public/themes/<name>.css` from
   `cssSelectors.style`.
 - `bun run theme:switch` update `OR3_DEFAULT_THEME` in `.env`
   (does not change the current runtime theme).
+
+During development, the theme compiler also runs as a Vite plugin
+(`plugins/vite-theme-compiler.ts`). It validates themes on build start and
+recompiles types and CSS on theme file changes (HMR).
 
 ## Generated Types
 

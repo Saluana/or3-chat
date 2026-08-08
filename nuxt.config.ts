@@ -47,6 +47,18 @@ const connectRelayProvider =
 const strictConnectConfig =
     process.env.NODE_ENV === 'production' ||
     process.env.OR3_STRICT_CONFIG === 'true';
+const sqliteRuntime = process.env.OR3_SQLITE_DRIVER?.trim().toLowerCase() ||
+    'better-sqlite3';
+const sqliteNativeTraceIncludes =
+    sqliteRuntime === 'turso' || sqliteRuntime === 'libsql'
+        ? [resolve(__dirname, 'node_modules/libsql/index.js')]
+        : sqliteRuntime === 'bun' ||
+            sqliteRuntime === 'bun:sqlite' ||
+            sqliteRuntime === 'd1' ||
+            sqliteRuntime === 'cloudflare-d1' ||
+            sqliteRuntime === 'cloudflare'
+          ? []
+          : [resolve(__dirname, 'node_modules/better-sqlite3/lib/index.js')];
 
 const localPackageCandidates = [
     {
@@ -828,21 +840,15 @@ export default defineNuxtConfig({
         // Emit precompressed variants for the self-hosted Node server while
         // keeping the original assets for hosts that do their own compression.
         compressPublicAssets: true,
-        // better-sqlite3 resolves its native binding dynamically at runtime.
-        // Explicit tracing keeps the platform-specific .node binary in the
-        // self-contained Node server output.
+        // Local native runtimes resolve their binding dynamically at runtime.
+        // Trace only the selected runtime so Bun and D1 builds stay native-free.
         externals: {
             // Nitro's production package tracing can flatten incompatible
             // transitive packages into the server output. Bundle Dexie so SSR
             // retains its ESM named exports, and bundle Unhead so Nuxt's v3
             // renderer cannot be paired with Nuxt UI's transitive v2 runtime.
             inline: ['dexie', 'unhead'],
-            traceInclude: [
-                resolve(
-                    __dirname,
-                    'node_modules/better-sqlite3/lib/index.js'
-                ),
-            ],
+            traceInclude: sqliteNativeTraceIncludes,
         },
         // Server tsconfig needs preserveSymlinks for file:-linked provider packages.
         typescript: {

@@ -20,4 +20,4 @@ Package pointer rollback runs on the server promotion service and is gated by st
 4. Use Runtime controls for retry/quarantine clear when the V2 manager is selected.
 5. Keep V2 feature flags off unless executing a reviewed promotion.
 
-See also planning docs under `planning/plugin-runtime-v2/trust-model-and-safe-mode.md`.
+See also `planning/complete/plugin-runtime-v2/trust-model-and-safe-mode.md`.

@@ -1,7 +1,7 @@
 # Development Environment Setup
 
-One command gets a source checkout running locally. No API key, `.env` file, or
-manual dependency install is required for the local-first app.
+One command gets a source checkout running locally. No API key or `.env` file
+is required for the local-first app.
 
 ---
 
@@ -13,8 +13,10 @@ You need only:
 - **Git** to clone the repository.
 - A modern browser.
 
-Bun is optional. It is the repository's canonical package manager, but the
-first-run command below works with the Node/npm that comes with Node.js.
+**Bun** is the repository's canonical package manager (the project pins
+`bun@1.3.14` in `package.json`). Install it from [bun.sh](https://bun.sh) and
+verify with `bun -v`. The npm/npx equivalents still work, but the commands
+below use Bun.
 
 ---
 
@@ -35,25 +37,51 @@ The project expects the working directory to remain `or3-chat/`. Nuxt uses `app/
 
 ## 3. Start OR3
 
+Install dependencies once, then start the dev server:
+
 ```bash
-npm start
+bun install
+bun run dev
 ```
 
-That command installs dependencies on the first run, asks one question
-(local-first chat or managed Cloud), and starts the app. Later, run `npm start`
-again. If you use Bun, `bun start` follows the same flow.
+`bun run dev` runs `scripts/cli/dev.ts`, a wrapper around `nuxt dev`. It checks
+that the target port (3000 by default) is free on both IPv4 and IPv6 loopback
+before starting. If another OR3 or Nuxt server is already running there, it
+explains the conflict and offers the next free port instead of silently
+starting a second broken server.
 
 Local-first mode needs no account or `.env` file. It stores data in the
 browser. Connect OpenRouter from the in-app onboarding when you are ready.
 
-For the managed local Cloud profile directly, run:
+Other dev modes:
+
+```bash
+bun run dev:ssr     # SSR auth on (cloud mode), 127.0.0.1:3000
+bun run dev:offline # all cloud features off, pure local-first session
+```
+
+### Managed Cloud (no source checkout)
+
+The supported way to run a Cloud deployment is the small `@or3/cloud` operator
+package, which uses the version-matched OR3 image and needs no source checkout
+or manually entered environment variables:
 
 ```bash
 npx @or3/cloud init --local
 ```
 
-This generates its own secure configuration and password; it does not need a
-source checkout or manually entered application environment variables.
+For a public VPS behind Caddy:
+
+```bash
+npx @or3/cloud init --public --domain chat.example.com
+```
+
+See `docs/start-here.md` in the repository root for the full path comparison.
+
+> **Note:** The older `npm start` / `bun start` entry point
+> (`scripts/cli/start.mjs`) still works and installs dependencies on first
+> run, but it is a legacy convenience for source checkouts. It is not the
+> beginner or release path.
 
 ---
 
@@ -66,7 +94,6 @@ Edit `.env` (git-ignored) and set at least:
 
 ```ini
 OPENROUTER_API_KEY=sk-or-xxxxxxxxxxxxxxxxxxxxxxxx
-OPENROUTER_MODEL=openai/gpt-oss-120b
 ```
 
 These are optional for normal local development. Restart the dev server after
@@ -74,14 +101,10 @@ changing environment files so Nuxt picks them up.
 
 ---
 
-## 5. Start the Nuxt dev server manually
-
-```bash
-npm run dev
-```
+## 5. Dev server flags
 
 -   Nuxt serves the app at **http://localhost:3000/** by default.
--   Pass extra flags after `--` (e.g., `npm run dev -- --https --open`).
+-   Pass extra flags after `--` (e.g., `bun run dev -- --https --open`).
 -   Expect warm-up time on first boot while Nuxt generates `.nuxt/` and Vite builds chunks.
 
 ---
@@ -135,7 +158,7 @@ bun run generate
 
 -   **Nuxt DevTools** → Components tab shows reactive state, props, and emitted events. Use the Graph tab to inspect route params and runtime config.
 -   **Network throttling**: Test streaming behavior by enabling Slow 3G in browser DevTools. The chat UI renders incremental tokens from the OpenRouter stream helper.
--   **Console logging**: leverage OR3's `~/utils/errors.ts` helpers (`reportError`, `withErrorToast`) for structured logs and toast integration.
+-   **Console logging**: leverage OR3's `~/utils/errors.ts` helpers (`reportError` with `{ toast: true }`, `err`) for structured logs and toast integration.
 -   **Dexie debugging**: install the [Dexie Inspector](https://chromewebstore.google.com/detail/dexie-inspector/dhgnppuogchnjdlacomooganmphadamk) for richer IndexedDB views.
 -   **VS Code launch config**: attach to the Vite server by adding a "Chrome" debug profile pointing at `http://localhost:3000`. Source maps resolve back to files in `app/` thanks to Nuxt 4 + Vite.
 -   **Hot module quirks**: if Nuxt HMR gets stuck, stop the dev server, delete `.nuxt/` and `node_modules/.vite`, then rerun `bun run dev`.
@@ -148,8 +171,8 @@ bun run generate
 -   Regenerate type imports after dependency changes:
 
 ```bash
-bun run nuxi cleanup
-bun run nuxi prepare
+bun x nuxi cleanup
+bun x nuxi prepare
 ```
 
 -   Commit the updated `bun.lock` so teammates pull the same versions.
@@ -161,7 +184,7 @@ bun run nuxi prepare
 | Problem                           | Fix                                                                                                                   |
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `Error: Please use Node.js >= 24` | Update Node via nvm/Homebrew. Run `nvm install 24 && nvm use 24`.                                                     |
-| Port 3000 already in use          | Run `bun run dev -- --port 3001` or free the port (`lsof -i :3000`).                                                  |
+| Port 3000 already in use          | `bun run dev` detects the conflict and offers the next free port. To force a port, run `bun run dev -- --port 3001`, or free the port (`lsof -ti:3000 \| xargs kill`). |
 | Tailwind classes not applied      | Ensure the file lives under `app/` or add an explicit `@source` path in `main.css`.                                   |
 | OpenRouter auth redirect fails    | Confirm `NUXT_PUBLIC_OPENROUTER_REDIRECT_URI` matches the URL registered with OpenRouter and the Nuxt dev server URL. |
 | PWA caches stale assets           | Clear Application → Cache Storage and unregister the service worker.                                                  |

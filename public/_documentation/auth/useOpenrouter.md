@@ -138,6 +138,14 @@ export default defineNuxtConfig({
 })
 ```
 
+Defaults and redirect parameters:
+
+- `openRouterAuthUrl` defaults to `https://openrouter.ai/auth`
+- `openRouterRedirectUri` defaults to `${window.location.origin}/openrouter-callback`
+- `openRouterClientId` is optional. It helps OpenRouter match your registered app instead of auto-creating one from the referrer.
+- The redirect URL includes `callback_url`, `state`, `code_challenge`, and `code_challenge_method` (plus `client_id` when set)
+- If the callback URL is not HTTPS and not localhost, a console warning explains the common mobile issue
+
 ---
 
 ## Common patterns
@@ -173,15 +181,23 @@ window.addEventListener('openrouter:connected', () => {
 
 ## Important notes
 
-### Session storage only
+### Dual storage (session + local)
 
-- Code verifier stored in `sessionStorage` (cleared on tab close)
-- Never persisted to `localStorage`
-- Not accessible from other tabs
+`startLogin()` saves the verifier, method, and state to both `sessionStorage` and `localStorage`:
+
+- `sessionStorage` is the primary copy (cleared on tab close)
+- `localStorage` is a fallback if a reload or restore loses the session copy
+- The callback page reads either copy
+
+The verifier and state are random, single-use values. Treat the verifier as sensitive.
 
 ### HTTPS requirement
 
 PKCE S256 requires HTTPS (or localhost for dev). Falls back to plain method on iOS Safari for HTTP.
+
+### Sign-in gate in SSR mode
+
+When `ssrAuthEnabled` is true, `startLogin()` checks the current session first. If no one is signed in, it shows a "Sign in required" toast and does not redirect. In cloud mode, users must sign in to the workspace before connecting OpenRouter.
 
 ### Logout behavior
 
@@ -198,6 +214,8 @@ PKCE S256 requires HTTPS (or localhost for dev). Falls back to plain method on i
 - `exchangeOpenRouterCode` — swap auth code for API key
 - `openrouter-callback.vue` — handles redirect
 - `useChat` — uses API key for messages
+- `useSessionContext` (Composables) — session check used by the SSR-mode sign-in gate
+- `useSession`, `useClientSessionRecovery`, `useAuthTokenBroker` (Composables) — cloud session state and token handling
 
 ---
 

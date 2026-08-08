@@ -8,7 +8,7 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 
 -   Serializes rich-text documents into the `posts` table without introducing a new Dexie store.
 -   Surfaces CRUD helpers that parse/merge content and titles through hook filters.
--   Provides soft- and hard-delete paths, plus a small `ensureDbOpen` helper used by feature modules.
+-   Provides soft- and hard-delete paths, plus `file_hashes` tracking derived from document content.
 
 ---
 
@@ -19,6 +19,7 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 | `DocumentRow`    | `content: string`  | Raw JSON string persisted in Dexie.                      |
 |                  | `postType`         | Always `'doc'`; used to discriminate from prompts/posts. |
 |                  | `deleted: boolean` | Soft delete flag toggled via `softDeleteDocument`.       |
+|                  | `file_hashes`      | Serialized JSON array of hashes from embedded file nodes.|
 | `DocumentRecord` | `content: any`     | Parsed TipTap JSON returned to callers.                  |
 
 ---
@@ -33,7 +34,6 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 | `updateDocument(id, patch)` | Re-resolves titles/content, fires before/after hooks, persists and returns updated record. |
 | `softDeleteDocument(id)`    | Marks `deleted: true` and bumps `updated_at`.                                              |
 | `hardDeleteDocument(id)`    | Removes the row entirely.                                                                  |
-| `ensureDbOpen()`            | Opens Dexie when closed (no-op if already open).                                           |
 
 ---
 
@@ -47,9 +47,10 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 
 ## Implementation notes
 
-1. **Title normalization** — `normalizeTitle` trims empty strings to `'Untitled'`, then passes through hook filters.
+1. **Title normalization** — `normalizeTitle` trims empty strings to `'Untitled'`, then passes through the `db.documents.title:filter` hook with phase/id/raw context.
 2. **Content safety** — `parseContent` guards against malformed JSON, returning an empty doc structure on error.
 3. **Update payloads** — Build `DbUpdatePayload` objects so hooks receive full `existing`, `updated`, and `patch` context.
+4. **File hashes** — `file_hashes` is derived from embedded file nodes in the content via `serializeDocumentFileHashes` on create and update.
 
 ---
 

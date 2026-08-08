@@ -31,6 +31,7 @@ Thread CRUD and query helpers with hook integration, branching support, and syst
 | Function                                       | Description                                                  |
 | ---------------------------------------------- | ------------------------------------------------------------ |
 | `createThread(input)`                          | Filters input, applies defaults, validates, persists thread. |
+| `createThreadInDb(db, input, context?)`        | Same as `createThread` against an explicit DB; use for long-running flows so workspace switches cannot redirect writes. |
 | `upsertThread(value)`                          | Validates and writes thread updates.                         |
 | `threadsByProject(projectId)`                  | Returns threads scoped to a project (hook-filtered).         |
 | `searchThreadsByTitle(term)`                   | Case-insensitive title filter using Dexie.                   |
@@ -59,6 +60,7 @@ Thread CRUD and query helpers with hook integration, branching support, and syst
 1. **Transactions** — Delete/fork flows run inside Dexie transactions touching both `threads` and `messages` to stay consistent.
 2. **Forking** — New thread IDs generated via `newId()`. When copying messages the helper duplicates rows and optionally updates thread metadata timestamps.
 3. **Search** — Title search uses Dexie filter; pair with Orama-based composables for better ranking when needed.
+4. **Limits** — On the client, `createThread` enforces the `maxConversations` limit from runtime config (when enabled) before writing.
 
 ---
 

@@ -11,10 +11,12 @@ managed `@or3/cloud` distribution documented in `/docs/installation`.
 ## Quick Start
 
 ```bash
-bun run or3-cloud:init
+bun run setup
 ```
 
-Direct CLI usage:
+This runs `scripts/cli/or3-cloud.ts init`. In a terminal it opens the browser
+wizard by default; `--ui` forces the browser wizard, `--cli` forces the
+terminal wizard, and `--fast` runs a zero-question setup. Direct CLI usage:
 
 ```bash
 bun run scripts/cli/or3-cloud.ts init
@@ -33,7 +35,9 @@ based upgrades. It remains available through the application repository's
    - legacy `preset-local-fast` sessions remain readable, but now collect the same real administrator identity as the recommended stack.
    - `preset-clerk-convex`: auto-applies Clerk + Convex + Convex and skips manual provider selection.
    - `custom`: keeps manual provider selection.
-3. Collects provider-specific answers only for selected providers.
+3. Collects provider-specific answers only for selected providers, including a
+   SQLite runtime selector: existing local `better-sqlite3`, Bun, Turso/libSQL,
+   or a preconfigured Cloudflare D1 binding.
 4. Supports per-section advanced toggles with a global expert mode switch.
 5. Prompts only visible fields (conditional prompts respect prior answers).
    - Auto-generated secrets (JWT, bootstrap password, FS token, admin password) stay behind advanced options
@@ -66,15 +70,23 @@ Interactive wizard flow.
 
 Common flags:
 
+- `--mode personal|self-hosted|custom` (chooses a preset; self-hosted matches `--preset recommended`)
 - `--preset personal-local|recommended|legacy-clerk-convex`
+- `--target dev|docker|configure`
 - `--instance-dir <path>`
 - `--env-file .env|.env.local`
 - `--dry-run`
+- `--cli` (force the terminal wizard; the default opens in your browser when a display is available)
+- `--ui` / `--ui-port <port>` (open the browser wizard; `--no-open` skips auto-open)
 - `--manual`
 - `--fast` is an automation-only source command; self-hosted use requires `--admin-email <email>` and never invents a placeholder identity
-- `--admin-password-file <path>` (read an automation-managed password without putting it in command history)
+- `--admin-password <password>` / `--admin-password-file <path>` (read an automation-managed password without putting it in command history)
+- `--domain <hostname>` (public domain; sets Docker exposure to `public`)
+- `--docker-exposure private|public`
 - `--enable-install` (feature-flagged package install execution)
-- `--package-manager bun|npm`
+- `--strict` / `--no-backup`
+- `--pm bun|npm` (also accepted as `--package-manager`)
+- `--no-focused-prompts` (disable one-question-at-a-time terminal screens)
 
 Navigation inside setup questions:
 
@@ -94,6 +106,19 @@ Validates the current env file in-place.
 bun run scripts/cli/or3-cloud.ts validate --env-file .env
 ```
 
+### `or3-cloud doctor`
+
+Extends `validate` with runtime health checks: provider packages installed,
+generated providers file in sync, writable database and storage paths, port
+availability, and Convex CLI checks. Exits with code 1 on hard failures.
+
+```bash
+bun run scripts/cli/or3-cloud.ts doctor --env-file .env
+```
+
+The `doctor` npm script (same as `bun run doctor`) runs it for the current
+directory.
+
 ### `or3-cloud presets`
 
 Preset management:
@@ -109,20 +134,26 @@ Secrets are excluded from preset storage by default.
 
 Runs deploy for the last session (or specific `--session <id>`):
 
-- local-dev: `bun install`, optional `bunx convex dev`, `bun run dev:ssr`
+- local-dev: `bun install`, optional Convex scaffold init and `bunx convex dev`, `bun run dev:ssr`
+- docker: `docker compose -f compose.yaml up --build -d --wait` (adds `-f compose.public.yaml` for public exposure) and probes the `/api/health?deep=true` endpoint
+- configure-only: writes configuration and starts nothing
 - prod-build: `bun install`, `bun run build` (then run `bun run preview`)
 
 ## Environment Variables Written
 
 The wizard writes canonical runtime env keys that OR3 already consumes:
 
+- `SSR_AUTH_ENABLED` (master cloud switch)
 - `AUTH_PROVIDER`
 - `OR3_SYNC_ENABLED`
 - `OR3_SYNC_PROVIDER`
+- `OR3_SQLITE_DRIVER` plus the selected runtime's path, Turso credentials, or
+  D1 binding
 - `OR3_STORAGE_ENABLED`
 - `NUXT_PUBLIC_STORAGE_PROVIDER`
 - provider-specific keys (basic-auth / sqlite / fs / clerk / convex)
 - `OR3_CONNECT_*` keys when remote agent computers are enabled
+- admin dashboard keys (`OR3_ADMIN_USERNAME`, `OR3_ADMIN_PASSWORD`)
 
 Compatibility aliases are also written for forward naming cleanup support:
 
@@ -161,8 +192,8 @@ When advanced prompts are skipped for a section, the wizard applies these defaul
 
 - OR3 base: `themeInstallMode=use-existing`, `themesToInstall=blank,retro`, logo/favicon unset
 - Auth: `basicAuthAccessTtlSeconds=900`, `basicAuthRefreshTtlSeconds=2592000`, `basicAuthDbPath=./.data/or3-basic-auth.sqlite`
-- Sync: `sqlitePragmaJournalMode=WAL`, `sqlitePragmaSynchronous=NORMAL`, `sqliteAllowInMemory=false`, `sqliteStrict=false`, Convex self-hosted extras unset
-- Storage: `fsUrlTtlSeconds=900`, `s3ForcePathStyle=false`, `s3UrlTtlSeconds=900`, `s3RequireChecksum=false`, optional S3 extras unset
+- Sync: `sqlitePragmaJournalMode=WAL`, `sqlitePragmaSynchronous=NORMAL`, `sqliteAllowInMemory=false`, `sqliteStrict=false`, Convex self-hosted extras unset. SQLite runtime selection and its required connection values stay in the core flow.
+- Storage: `fsUrlTtlSeconds=900`, `s3ForcePathStyle=false`, `s3UrlTtlSeconds=900`, checksum enforcement enabled, optional S3 extras unset. Leave `OR3_STORAGE_S3_REQUIRE_CHECKSUM` unset or set it to `true`; the S3 provider rejects `false`.
 - AI/Limits/Security: `openrouterAllowUserOverride=true`, `openrouterRequireUserKey=false`, `requestsPerMinute=20`, `maxConversations=0`, `maxMessagesPerDay=0`, `forwardedForHeader=x-forwarded-for`, `strictConfig=false`
 - OR3 Connect: persistence inherits sync, relay is `cloudflare`, maximum computers is `3`, and Cloudflare account/zone IDs are discovered when omitted
 
@@ -178,6 +209,7 @@ When Clerk + Convex is selected, the wizard keeps Convex backend env separate fr
 ## Related
 
 - [Configuration Reference](./config-reference)
+- [Environment and Provider Settings Reference](./environment-reference)
 - [Cloud Providers](./providers)
 - [OR3 Cloud Config](./or3-cloud-config)
 - [OR3 Connect](./or3-connect)

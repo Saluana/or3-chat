@@ -78,14 +78,21 @@ watch(apiKey, (newKey) => {
 });
 ```
 
-### 3. Set a new key
+### 3. Set a new key (in memory)
 
 ```ts
-const newKey = 'sk_...';
+const newKey = 'sk-or-...';
 setKey(newKey);
 
 // Key is immediately available
-console.log(apiKey.value); // 'sk_...'
+console.log(apiKey.value); // 'sk-or-...'
+```
+
+`setKey()` only updates memory. The key is lost on reload unless you persist it:
+
+```ts
+// Canonical save path: validates, writes Dexie KV, and updates state
+await persistUserApiKey('sk-or-...');
 ```
 
 ### 4. Clear the key
@@ -96,6 +103,8 @@ clearKey();
 // Key is now null
 console.log(apiKey.value); // null
 ```
+
+`clearKey()` also only updates memory. For a full disconnect that also clears storage, call `logoutOpenRouter()` from `useOpenRouterAuth`.
 
 ---
 
@@ -119,10 +128,56 @@ Here's the flow:
 2. **Async load**: Key loads asynchronously without blocking composable
 3. **State sync**: Key stored in shared `state.value.openrouterKey`
 4. **Reactive ref**: Computed ref wraps state for reactivity
-5. **Updates**: `setKey/clearKey` immediately update state
-6. **Persistence**: Typically called from auth flow (`exchangeOpenRouterCode`)
+5. **Updates**: `setKey/clearKey` immediately update state (memory only)
+6. **Persistence**: `persistUserApiKey()` or the OAuth callback writes the key to KV
 
 The key is stored in Dexie's KV table with name `'openrouter_api_key'`.
+
+---
+
+## Save and validate a key
+
+The module also exports two helpers used by the paste-key and OAuth flows:
+
+### `persistUserApiKey(key)`
+
+This is the canonical way to save a key. It:
+
+1. Trims the input and validates its format
+2. Throws an error if the format is invalid
+3. Writes the key to the Dexie `kv` table (survives reloads)
+4. Updates the global reactive state
+5. Dispatches the `openrouter:connected` event
+
+```ts
+import { persistUserApiKey } from '~/core/auth/useUserApiKey';
+
+try {
+  await persistUserApiKey('sk-or-abc123...');
+} catch (e) {
+  console.error('Invalid key format', e);
+}
+```
+
+Never set `state.value.openrouterKey` directly without `kv.set()`. The key is lost on reload.
+
+### `isValidOpenRouterKeyFormat(key)`
+
+Checks the shape of a key:
+
+- Starts with `sk-or-`
+- Has at least 8 characters after the prefix
+
+```ts
+import { isValidOpenRouterKeyFormat } from '~/core/auth/useUserApiKey';
+
+isValidOpenRouterKeyFormat('sk-or-abc123...'); // true
+isValidOpenRouterKeyFormat('sk_abc123...');    // false
+```
+
+### `hydrateUserApiKeyFromKv()`
+
+Loads the key from Dexie into global state. `useUserApiKey()` calls this once on the first client-side call; you normally do not need to call it yourself.
 
 ---
 
@@ -217,7 +272,7 @@ Key loads asynchronously from Dexie:
 ## Related
 
 - `useOpenRouterAuth` — get a key via PKCE login
-- `exchangeOpenRouterCode` — calls `setKey` after successful auth
+- `exchangeOpenRouterCode` — returns the key after successful auth; the callback page persists it via KV
 - `useChat` — uses key for API requests
 - `~/db/kv` — underlying KV storage
 
@@ -231,6 +286,10 @@ function useUserApiKey(): {
   setKey: (key: string) => void;
   clearKey: () => void;
 }
+
+export function isValidOpenRouterKeyFormat(key: string): boolean;
+export async function persistUserApiKey(key: string): Promise<void>;
+export async function hydrateUserApiKeyFromKv(): Promise<void>;
 ```
 
 ---

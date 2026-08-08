@@ -726,7 +726,7 @@ console.log('Registered tools:', registry.listTools.value);
 
 ### Reference Implementation
 
-See `app/plugins/demo-calculator-tool.client.ts` for a complete working example with:
+See `app/plugins/examples/demo-calculator-tool.client.ts` for a complete working example with:
 
 -   Four operations (add, subtract, multiply, divide)
 -   Error handling (division by zero)
@@ -903,8 +903,8 @@ Use OR3's built-in composables for data access:
 import { db } from '~/db';
 import { useToast } from '#imports';
 
-// Access threads
-const { threads } = await db.queries.getThreadsList();
+// Search threads by title
+const threads = await db.queries.searchThreadsByTitle('roadmap');
 
 // Show notifications
 useToast().add({ title: 'Success!' });
@@ -912,17 +912,26 @@ useToast().add({ title: 'Success!' });
 
 ### 7. **Leverage the hook system**
 
-Use hooks to react to app events:
+Use hooks to react to app events. `useHooks()` returns the app-wide typed hook engine:
 
 ```typescript
-import { typedOn } from '~/core/hooks';
-
 export default defineNuxtPlugin(() => {
-    typedOn('thread:created', async ({ thread }) => {
-        console.log('New thread:', thread.id);
+    const hooks = useHooks();
+
+    // Run code when a thread is created (payload: { entity, tableName })
+    hooks.addAction('db.threads.create:action:after', async ({ entity }) => {
+        console.log('New thread:', entity.id);
     });
+
+    // Transform a value before it is used
+    const text = await hooks.applyFilters(
+        'ui.chat.message:filter:outgoing',
+        draft
+    );
 });
 ```
+
+See the [hooks documentation](/documentation/hooks/hooks) for the full hook catalog.
 
 ## Available Icon Sets
 
@@ -938,9 +947,9 @@ Browse all icons at [iconify.design](https://iconify.design)
 ## Next Steps
 
 -   Explore example plugins in `app/plugins/examples/`
--   Read composable documentation in `/docs/composables/`
--   Check the hook reference in `/docs/hooks/`
--   Study the database utilities in `/docs/database/`
+-   Read composable documentation in `/documentation/composables/`
+-   Check the hook reference in `/documentation/hooks/`
+-   Study the database utilities in `/documentation/database/`
 
 ## Debugging
 
@@ -963,14 +972,18 @@ console.log(listRegisteredSidebarSectionIds());
 
 ### Save plugin settings
 
+The `kv` shorthand in `~/db` wraps the Dexie `kv` table. It stores strings, so
+serialize objects:
+
 ```typescript
-import { setKV, getKV } from '~/db';
+import { kv } from '~/db';
 
 // Save
-await setKV('my-plugin:settings', { enabled: true });
+await kv.set('my-plugin:settings', JSON.stringify({ enabled: true }));
 
 // Load
-const settings = await getKV('my-plugin:settings');
+const stored = await kv.get('my-plugin:settings');
+const settings = stored ? JSON.parse(stored) : {};
 ```
 
 ### Access current thread
@@ -978,8 +991,8 @@ const settings = await getKV('my-plugin:settings');
 ```typescript
 import { useMultiPane } from '~/composables';
 
-const { activePane } = useMultiPane();
-const threadId = activePane.value?.threadId;
+const { panes, activePaneIndex } = useMultiPane();
+const threadId = panes.value[activePaneIndex.value]?.threadId;
 ```
 
 ### Create a new document

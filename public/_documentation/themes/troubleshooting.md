@@ -15,6 +15,9 @@ bun run theme:build-css
 Browser console checks:
 
 ```js
+// Theme selection lives in Dexie KV under 'theme_selection'.
+// The legacy key below still exists during migration and is re-read as a
+// fallback, but it is no longer the source of truth.
 localStorage.getItem('activeTheme');
 document.documentElement.getAttribute('data-theme');
 ```
@@ -63,13 +66,17 @@ The directive always uses `state: 'default'`. Use `cssSelectors` for DOM states.
 
 1. If you use `style`, run `bun run theme:build-css`.
 2. Ensure `<html>` has `data-theme="<name>"`.
-3. For lazy components, use `useThemeClasses()` to re-apply runtime classes.
+3. Runtime classes are applied automatically by a DOM observer, including for
+   lazy-loaded components. The old `useThemeClasses()` helper is deprecated and
+   is now a no-op; you do not need to call it.
 
 ## Theme switching does not persist
 
-Theme selection is stored in `localStorage.activeTheme` and in the
-`or3_active_theme` cookie. Private browsing or blocked storage can prevent
-persistence.
+Theme selection is stored in the Dexie KV store (`theme_selection`), with the
+`or3_active_theme` cookie and a legacy `localStorage.activeTheme` fallback.
+The KV record enables cross-device sync. Blocked storage (private browsing,
+disabled cookies) or a failed KV write can prevent persistence; check the
+console for `[useThemeSelection]` errors.
 
 ## TypeScript types missing
 

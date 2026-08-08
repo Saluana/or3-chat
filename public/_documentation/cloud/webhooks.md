@@ -32,7 +32,9 @@ OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS=10000
 OR3_WEBHOOKS_LOG_RETENTION_HOURS=72
 ```
 
-> **Important:** If `OR3_WEBHOOKS_ENCRYPTION_KEY` is not set, webhook creation is rejected and the runtime will not start.
+> **Important:** If `OR3_WEBHOOKS_ENCRYPTION_KEY` is not set, webhook creation
+> is rejected and the webhook runtime (dispatcher, event bridge, and delivery
+> logs) will not start. The rest of the app keeps running.
 
 ### 2. Create a Webhook
 
@@ -383,7 +385,7 @@ curl -X POST http://localhost:4000/webhooks/or3 \
 1. **Use `express.text()`, not `express.json()`** — signature verification requires the exact raw body bytes. Parsing to JSON and re-serializing may alter whitespace or key order.
 2. **Always use `timingSafeEqual`** — prevents timing side-channel attacks on the signature comparison.
 3. **Check timestamp freshness** — reject payloads older than 5 minutes to block replay attacks.
-4. **Return 2xx promptly** — OR3 treats any 2xx as successful delivery. Non-2xx responses trigger automatic retries with exponential backoff.
+4. **Return 2xx promptly** — OR3 treats any 2xx as successful delivery. Non-2xx responses trigger automatic retries with increasing delays.
 
 ---
 
@@ -439,7 +441,7 @@ func VerifyOR3Webhook(rawBody, timestamp, signature, secret string) bool {
 
 ## Retry Policy
 
-Failed deliveries are retried with exponential backoff:
+Failed deliveries are retried with a fixed schedule of increasing delays:
 
 | Attempt | Delay |
 |---|---|
@@ -460,11 +462,13 @@ A delivery is considered **successful** on any HTTP 2xx response. Any non-2xx, n
 
 ### SSRF Protection
 
-OR3 performs DNS-time private IP checks before delivering webhooks. By default, URLs resolving to private/internal IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x, ::1, etc.) are blocked.
+OR3 can perform DNS-time private IP checks before delivering webhooks. When
+enabled, URLs resolving to private/internal IP ranges (10.x, 172.16-31.x,
+192.168.x, 127.x, ::1, etc.) are blocked.
 
 Control this with `OR3_WEBHOOKS_BLOCK_PRIVATE_IPS`:
-- `true` (default in production) — blocks private IPs
-- `false` — allows private IPs (useful for local development)
+- `true` — blocks private IPs (enable this for production)
+- `false` (default) — allows private IPs (useful for local development)
 
 ### Signing Secret Encryption
 
@@ -490,7 +494,7 @@ Webhook URLs must:
 | Admin limit | `OR3_WEBHOOKS_ADMIN_MAX` | `50` | Max admin-scope webhooks |
 | Rate limit | `OR3_WEBHOOKS_RATE_LIMIT_PER_MINUTE` | `120` | Max deliveries per webhook per minute |
 | Delivery timeout | `OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS` | `10000` | HTTP timeout per delivery attempt |
-| Block private IPs | `OR3_WEBHOOKS_BLOCK_PRIVATE_IPS` | `true` | SSRF protection toggle |
+| Block private IPs | `OR3_WEBHOOKS_BLOCK_PRIVATE_IPS` | `false` | SSRF protection toggle |
 | Retry window | `OR3_WEBHOOKS_MAX_RETRY_HOURS` | `1` | Hours to keep retrying failed deliveries |
 | Log retention | `OR3_WEBHOOKS_LOG_RETENTION_HOURS` | `72` | Hours to keep delivery logs |
 

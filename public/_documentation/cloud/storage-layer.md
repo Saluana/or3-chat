@@ -19,6 +19,9 @@ All files are identified by their SHA-256 hash. This leads to several benefits:
 *   **Binary Data**: Stored in `db.file_blobs` (IndexedDB).
 *   **Transfers**: Managed by `FileTransferQueue` (upload/download).
 
+`file_meta.ref_count` is derived locally from reference edges in messages/posts;
+it is never synced (sanitized out of sync payloads) and cannot be set remotely.
+
 When a component needs an image:
 1.  It checks `db.file_blobs` for the binary data.
 2.  If missing, it requests a download via the Transfer Queue.

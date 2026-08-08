@@ -93,7 +93,12 @@ High-signal sync hooks used by the DB sync layer:
 -   `sync.bootstrap:action:start`
 -   `sync.bootstrap:action:progress`
 -   `sync.bootstrap:action:complete`
+-   `sync.bootstrap:action:error`
 -   `sync.pull:action:received`
 -   `sync.pull:action:applied`
 -   `sync.pull:action:error`
 -   `sync.subscription:action:statusChange`
+-   `sync.subscription:action:maxRetriesExceeded`
+-   `sync.capture:action:nonAtomic`
+
+See `hook-catalog.md` for payload shapes and the full sync hook set.

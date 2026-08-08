@@ -1,8 +1,8 @@
 # exchangeOpenRouterCode
 
-Server-safe function that exchanges an OpenRouter authorization code for an API key. Handles PKCE code verification and retrieves the user's API key after successful authentication.
+Function that exchanges an OpenRouter authorization code for an API key. Handles PKCE code verification and retrieves the user's API key after successful authentication.
 
-Think of `exchangeOpenRouterCode` as the backend handshake — after OpenRouter redirects you back, this function verifies your code and gets your key.
+Think of `exchangeOpenRouterCode` as the handshake — after OpenRouter redirects you back, this function verifies your code and gets your key.
 
 ---
 
@@ -10,7 +10,7 @@ Think of `exchangeOpenRouterCode` as the backend handshake — after OpenRouter 
 
 `exchangeOpenRouterCode` completes the OAuth flow by:
 
-- Sending the authorization code to OpenRouter
+- Sending the authorization code to OpenRouter through the OpenRouter SDK
 - Verifying the PKCE code verifier
 - Retrieving the user's API key
 - Handling network and API errors gracefully
@@ -85,17 +85,9 @@ if (!result.ok) {
 }
 ```
 
-### 4. Custom fetch (for testing)
+### 4. Where the request goes
 
-```ts
-const result = await exchangeOpenRouterCode({
-  code: 'test_code',
-  verifier: 'test_verifier',
-  codeMethod: 'plain',
-  fetchImpl: customFetch, // Use your own fetch
-  attempt: 1 // Retry attempt number
-});
-```
+The exchange runs in the browser through the `@openrouter/sdk` client. The base URL comes from `runtimeConfig.public.openRouter.baseUrl` when set. There is no server API route for the exchange — the callback page calls `exchangeOpenRouterCode` directly.
 
 ---
 
@@ -107,7 +99,7 @@ const result = await exchangeOpenRouterCode({
 interface ExchangeResultSuccess {
   ok: true;
   userKey: string;      // The API key
-  status: number;       // HTTP 200 etc
+  status: number;       // 200
 }
 ```
 
@@ -123,11 +115,11 @@ interface ExchangeResultFail {
 
 ### Failure Reasons
 
-| Reason | Meaning | Retryable |
-|--------|---------|-----------|
-| `'network'` | Fetch failed (no internet, CORS, timeout) | Yes |
-| `'bad-response'` | Response wasn't OK or couldn't parse JSON | Yes |
-| `'no-key'` | Response OK but no `key` or `access_token` | No |
+| Reason | Meaning | Status | Retryable |
+|--------|---------|--------|-----------|
+| `'network'` | Request aborted or SDK network error | `0` | Yes |
+| `'bad-response'` | OpenRouter returned an error | SDK error status | Yes |
+| `'no-key'` | Response OK but no `key` in it | `200` | No |
 
 ---
 
@@ -138,7 +130,6 @@ interface ExchangeParams {
   code: string;                    // Authorization code from OpenRouter
   verifier: string;                // Original PKCE code verifier
   codeMethod: string;              // 'S256' or 'plain'
-  fetchImpl?: typeof fetch;         // Optional custom fetch implementation
   attempt?: number;                // Retry count for error logging
 }
 ```
@@ -149,36 +140,33 @@ interface ExchangeParams {
 
 Here's what happens:
 
-1. **POST request**: Sends code + verifier to `https://openrouter.ai/api/v1/auth/keys`
-2. **Request body**:
-   ```json
-   {
-     "code": "<auth_code>",
-     "code_verifier": "<code_verifier>",
-     "code_challenge_method": "<method>"
-   }
-   ```
-3. **Fetch**: Uses provided fetch or global `fetch`
-4. **Parse response**: JSON decode the response
-5. **Check key**: Look for `json.key` or `json.access_token`
-6. **Return**: Success with key, or failure with reason
-7. **Error logging**: Reports to error system with tags and context
-
----
+1. **Client setup**: Creates an OpenRouter SDK client. The API key is left empty (the exchange endpoint does not need one). The base URL comes from `runtimeConfig.public.openRouter.baseUrl` when set.
+2. **SDK call**: Calls `client.oAuth.exchangeAuthCodeForAPIKey()` with `code`, `code_verifier`, and `code_challenge_method`
+3. **Parse response**: The SDK returns an object with a `key` field
+4. **Check key**: If `key` is missing, returns `{ ok: false, reason: 'no-key' }`
+5. **Return**: Success with the key, or failure with a reason
+6. **Error logging**: SDK errors are normalized and reported to the error system with tags and context
 
 ## Error Handling
 
-All errors are caught and reported:
+All errors are caught and reported through `reportError()` with a toast:
 
-- **Network errors**: `reportError` with `'network'` tag and `attempt`
-- **Bad responses**: `reportError` with HTTP status
-- **Missing key**: `reportError` with response key count
+- **SDK error codes** are mapped to app error codes:
 
-Errors include context tags:
+| SDK code | App code |
+|----------|----------|
+| `ERR_AUTH` | `ERR_AUTH` |
+| `ERR_RATE_LIMIT` | `ERR_RATE_LIMIT` |
+| `ERR_TIMEOUT` | `ERR_TIMEOUT` |
+| `ERR_ABORTED` | `ERR_NETWORK` (returns `reason: 'network'`) |
+| anything else | `ERR_NETWORK` |
+
+Error context tags:
 - `domain: 'auth'`
 - `stage: 'exchange'`
-- `status: <http_status>`
 - `attempt: <retry_number>`
+
+Errors also carry a `retryable` flag from the SDK error normalizer.
 
 ---
 
@@ -188,26 +176,31 @@ Errors include context tags:
 
 ```ts
 // pages/openrouter-callback.vue
-const { $router, $route } = useNuxtApp();
-
 onMounted(async () => {
-  const code = $route.query.code as string;
-  const verifier = sessionStorage.getItem('openrouter_code_verifier');
-  const method = sessionStorage.getItem('openrouter_code_method');
+  const code = route.query.code as string;
+  // Reads sessionStorage first, then localStorage (reload fallback)
+  const verifier =
+    sessionStorage.getItem('openrouter_code_verifier') ||
+    localStorage.getItem('openrouter_code_verifier') ||
+    '';
+
+  // Missing code or verifier aborts with a user-facing message
+  // A saved state value must match the query state (CSRF check)
 
   const result = await exchangeOpenRouterCode({
     code,
-    verifier: verifier || '',
-    codeMethod: method || 'plain'
+    verifier,
+    codeMethod: 'S256',
+    attempt: 1
   });
 
   if (result.ok) {
-    // Dispatch event
+    // Persist the key (KV + global state) and dispatch the event
+    await kv.set('openrouter_api_key', result.userKey);
     window.dispatchEvent(new CustomEvent('openrouter:connected'));
-    // Redirect to home
-    $router.push('/');
+    // Clear verifier/state/method markers, then redirect home
   } else {
-    console.error('Auth failed:', result.reason);
+    // Non-'no-key' failures get a retry closure via reportError
   }
 });
 ```
@@ -250,7 +243,7 @@ If verification fails, response is 400/401 with error message.
 
 ### Key format
 
-Keys start with `sk_` or similar prefix. Always treat as sensitive:
+Keys start with `sk-or-` and are long random strings. Always treat as sensitive:
 - Never log the full key
 - Store only in secure storage (KV table)
 - Use in Authorization headers only
@@ -279,12 +272,14 @@ try {
 
 ### Session cleanup
 
-After exchange (success or failure), clear session storage:
+After exchange (success or failure), the callback page clears its session markers from both `sessionStorage` and `localStorage`:
 
 ```ts
-sessionStorage.removeItem('openrouter_code_verifier');
-sessionStorage.removeItem('openrouter_code_method');
-sessionStorage.removeItem('openrouter_state');
+['openrouter_auth_code', 'openrouter_code_verifier', 'openrouter_state', 'openrouter_code_method']
+  .forEach((k) => {
+    sessionStorage.removeItem(k);
+    localStorage.removeItem(k);
+  });
 ```
 
 ---
@@ -295,6 +290,7 @@ sessionStorage.removeItem('openrouter_state');
 - `useUserApiKey` — stores the key after exchange
 - `openrouter-callback.vue` — calls this on redirect
 - `~/core/auth/useOpenrouter.ts` — PKCE setup
+- `shared/openrouter` — SDK client factory, error normalization, OAuth argument wrapping
 
 ---
 
@@ -319,7 +315,6 @@ interface ExchangeParams {
   code: string;
   verifier: string;
   codeMethod: string;
-  fetchImpl?: typeof fetch;
   attempt?: number;
 }
 

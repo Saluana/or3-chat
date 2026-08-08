@@ -9,9 +9,10 @@ Persistence layer for AI preference knobs. Keeps the chat experience consistent 
 `useAiSettings` gives you a reactive settings object and helper methods to read, update, and reset AI chat preferences. It sanitises input, survives hot-module reloads, and only touches storage in the browser.
 
 -   Tracks the current settings in a single global store (HMR-safe)
--   Loads initial values from `localStorage` once per session
+-   Loads initial values from the Dexie `kv` table once per session
 -   Persists updates automatically
 -   Normalises user input to avoid bad types or unknown keys
+-   Migrates legacy `localStorage` settings to `kv` on first use
 
 ---
 
@@ -141,24 +142,22 @@ console.log('Reloaded settings', latest);
 ## Internal mechanics
 
 1. **Singleton store**: A global object placed on `globalThis` survives HMR and ensures only one reactive store. The store holds `{ settings: Ref<AiSettingsV1>, loaded: boolean }`.
-2. **Lazy hydration**: On first call in the browser, `loadFromStorage()` runs. Server contexts keep defaults because `window`/`document` are missing.
+2. **Lazy hydration**: On first call in the browser, `loadSettings()` runs. It reads the `kv` table (key `ai_settings`); if nothing is stored there, it migrates a legacy `localStorage` record (key `or3.ai.settings.v1`) into `kv`. Server contexts keep defaults because storage is missing.
 3. **Sanitisation**: `sanitizeAiSettings()` strips unknown keys, forces `defaultModelMode` to the allowed union, and normalises `fixedModelId`.
-4. **Persistence**: `set` immediately writes to storage. A deep `watch` also saves direct mutations made outside of `set` for compatibility.
+4. **Persistence**: `set` writes to `kv` via `setKvByName` immediately.
 5. **Safety**: All storage access is wrapped in try/catch with console warnings in dev mode to avoid breaking the app when storage is unavailable.
 
 ---
 
 ## Edge cases & tips
 
--   **SSR**: Guarded by `isBrowser()` so storage isn’t touched during server rendering.
+-   **SSR**: Loading is guarded by `import.meta.client`, so storage isn’t touched during server rendering.
 -   **Storage quota**: Failures fall back to logging a warning; settings stay in memory for the session.
 -   **HMR**: Because the store lives on `globalThis`, you can tweak the composable without losing user-configured settings while the dev server is running.
--   **Direct mutations**: Prefer `set`, but the deep watch ensures manual changes like `settings.value.masterSystemPrompt = '...'` still persist.
-
----
+-   **Direct mutations**: Prefer `set`; the composable does not watch for direct mutations of `settings.value`.
 
 ## Related references
 
 -   `useChat` — respects the defaults defined here.
 -   `useAiSettingsPanel` (if present) — typical consumer for user-facing UI.
--   `AI_SETTINGS_STORAGE_KEY` — storage key constant if you need to inspect it manually.
+-   `~/db/kv` — settings are persisted under the `ai_settings` key. `AI_SETTINGS_STORAGE_KEY` is the deprecated legacy `localStorage` key used only for one-time migration.

@@ -1,6 +1,13 @@
 # Configuration Reference
 
-This page is the authoritative reference for every OR3 configuration setting (base + cloud), including environment variables, defaults, and what each setting actually does.
+This page is the typed reference for the base and cloud configuration objects,
+including defaults, validation, and how settings affect behavior. The complete
+deployment environment-variable matrix is maintained separately below.
+
+For a deployment-first list of every runtime and provider environment variable,
+including SQLite runtimes, provider safety switches, webhooks, Connect, plugin
+controls, and wizard tooling, see the [Environment and Provider Settings
+Reference](./environment-reference).
 
 OR3 has two configuration layers:
 
@@ -208,6 +215,13 @@ Feature toggles. All default to enabled.
 - Env: `OR3_DASHBOARD_ENABLED`
 - Purpose: Enables the dashboard/settings UI.
 
+#### `features.workspaceTabs.enabled`
+
+- Type: `boolean`
+- Default: `true`
+- Env: `OR3_WORKSPACE_TABS_ENABLED`
+- Purpose: Enables workspace tabs, split panes, and their command-palette actions.
+
 ### `limits`
 
 Local limits enforced in the client.
@@ -323,14 +337,35 @@ Important default behavior when using env:
 - Type: `boolean`
 - Default: `false`
 - Env: `SSR_AUTH_ENABLED`
-- Purpose: Gates all cloud features (auth, sync, storage, admin).
+- Purpose: Gates the SSR cloud stack (auth, sync, storage). Admin routes are a separate SSR surface enabled by credentials, not by this flag.
 
 #### `auth.provider`
 
 - Type: `'basic-auth' | 'clerk' | 'custom'`
 - Default: `'clerk'`
-- Env: `AUTH_PROVIDER`
+- Env: `OR3_AUTH_PROVIDER` (or compatibility alias `AUTH_PROVIDER`)
 - Purpose: Selects the SSR auth provider.
+
+#### `auth.guestAccessEnabled`
+
+- Type: `boolean`
+- Default: `false`
+- Env: `OR3_GUEST_ACCESS_ENABLED`
+- Purpose: Allows unauthenticated guest access where the active auth/provider policy supports it.
+
+#### `auth.autoProvision`
+
+- Type: `boolean`
+- Default: `true`
+- Env: `OR3_AUTH_AUTO_PROVISION`
+- Purpose: Legacy first-session provisioning switch. Prefer `auth.registrationMode` for new deployments.
+
+#### `auth.sessionProvisioningFailure`
+
+- Type: `'throw' | 'unauthenticated' | 'service-unavailable'`
+- Default: `'throw'`
+- Env: `OR3_SESSION_PROVISIONING_FAILURE`
+- Purpose: Controls how session resolution reports a provisioning failure.
 
 #### `auth.registrationMode`
 
@@ -775,6 +810,7 @@ OR3_STRICT_CONFIG=true
 - [Base Config](./or3-config)
 - [Cloud Config](./or3-cloud-config)
 - [Cloud Source Wizard](./or3-cloud-wizard)
+- [Environment and Provider Settings Reference](./environment-reference)
 - [Auth System](./auth-system)
 - [Sync Layer](./sync-layer)
 - [Storage Layer](./storage-layer)

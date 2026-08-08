@@ -23,7 +23,7 @@ describe('wizard: s3 storage provider', () => {
             s3ForcePathStyle: true,
             s3KeyPrefix: 'or3',
             s3UrlTtlSeconds: 120,
-            s3RequireChecksum: false,
+            s3RequireChecksum: true,
         };
 
         const { env, providerModules } = deriveEnvFromAnswers(answers);
@@ -38,7 +38,7 @@ describe('wizard: s3 storage provider', () => {
         expect(env.OR3_STORAGE_S3_FORCE_PATH_STYLE).toBe('true');
         expect(env.OR3_STORAGE_S3_KEY_PREFIX).toBe('or3');
         expect(env.OR3_STORAGE_S3_URL_TTL_SECONDS).toBe('120');
-        expect(env.OR3_STORAGE_S3_REQUIRE_CHECKSUM).toBe('false');
+        expect(env.OR3_STORAGE_S3_REQUIRE_CHECKSUM).toBe('true');
 
         expect(providerModules).toContain('or3-provider-s3/nuxt');
     });
@@ -53,7 +53,7 @@ describe('wizard: s3 storage provider', () => {
             s3SecretAccessKey: 'sk',
             s3ForcePathStyle: false,
             s3UrlTtlSeconds: 900,
-            s3RequireChecksum: false,
+            s3RequireChecksum: true,
             // Avoid unrelated wizard validation failure.
             openrouterInstanceApiKey: 'test-openrouter-key',
             openrouterAllowUserOverride: true,
@@ -79,7 +79,7 @@ describe('wizard: s3 storage provider', () => {
             s3ForcePathStyle: false,
             storageAdvancedEnabled: true,
             s3UrlTtlSeconds: 900.5,
-            s3RequireChecksum: false,
+            s3RequireChecksum: true,
             openrouterInstanceApiKey: 'test-openrouter-key',
             openrouterAllowUserOverride: true,
         };
@@ -99,7 +99,7 @@ describe('wizard: s3 storage provider', () => {
             s3ForcePathStyle: false,
             storageAdvancedEnabled: true,
             s3UrlTtlSeconds: 0,
-            s3RequireChecksum: false,
+            s3RequireChecksum: true,
             openrouterInstanceApiKey: 'test-openrouter-key',
             openrouterAllowUserOverride: true,
         };

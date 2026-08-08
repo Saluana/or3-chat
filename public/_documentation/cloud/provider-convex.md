@@ -10,7 +10,9 @@ Dedicated install and wiring guide for the Convex sync/storage/backend provider 
 - Server sync gateway adapter
 - Server storage gateway adapter
 - Server auth workspace store
-- Convex-backed rate limiting, background jobs, and notification emitter
+- Convex-backed rate limiting, background jobs, notification emitter, and webhook store
+- OR3 Connect persistence store (when Connect uses the Convex provider)
+- Deployment admin checker (verifies `admin_users` grants in Convex)
 
 ## Install
 
@@ -38,6 +40,12 @@ VITE_CONVEX_URL=https://<deployment>.convex.cloud
 CONVEX_SELF_HOSTED_ADMIN_KEY=<server-only-admin-credential>
 ```
 
+For a local/self-hosted Convex endpoint, set
+`OR3_CONVEX_ALLOW_INSECURE_HTTP=true` only when the URL is intentionally
+`http://`. Production Convex URLs must use HTTPS. If using the wizard, Convex
+backend-only values such as `CLERK_ISSUER_URL` and the shared
+`OR3_ADMIN_JWT_SECRET` are written with `bunx convex env set`.
+
 The server-only Convex admin credential is required whenever the Convex
 provider backs auth/session resolution, background jobs, notifications,
 webhooks, or rate limiting. Keep it out of public runtime config and browser
@@ -53,7 +61,14 @@ NUXT_CLERK_SECRET_KEY=sk_...
 
 ## Convex Backend Init
 
-Copy templates into the host:
+The supported scaffold command (used by the wizard and `doctor` preflight) is:
+
+```bash
+bunx or3-provider-convex init
+```
+
+It copies the provider templates into `./convex`. You can also copy them
+manually:
 
 ```bash
 cp -r node_modules/or3-provider-convex/templates/convex ./convex

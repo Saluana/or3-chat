@@ -28,6 +28,7 @@ The CLI creates:
 ```
 app/theme/ocean-dark/
   theme.ts
+  README.md
 ```
 
 You can add the rest of the files manually as you work through this tutorial.
@@ -380,9 +381,11 @@ Rules:
 - This tutorial authors `theme.ts`, so it uses `trusted-code`. Prefer the
   declarative tier and `or3.theme.json` when no code or Vue replacements are
   needed.
-- Keeping the theme definition `name` equal to the manifest `id` is recommended
-  for clarity, but the compiler tracks the installed source directory
-  separately and no longer requires them to match.
+- For **trusted-code** themes, the definition `name` no longer needs to match
+  the manifest `id`: the compiler tracks the installed source directory
+  separately. Keeping them equal is still recommended for clarity.
+  **Declarative** themes (`themeTrust: "declarative"`) are stricter: the
+  `name` in `or3.theme.json` must match the manifest `id` or install fails.
 
 ---
 

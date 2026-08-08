@@ -79,6 +79,11 @@ bun run plugin-runtime:v1-imports:warn -- app/plugins/examples
 
 ## Operator notes
 
+- Startup surface selection: `OR3_PLUGIN_CONTRIBUTION_V2_SURFACES` is a
+  comma-separated list of V2 contribution surfaces (`command-palette`,
+  `client-tools`, `server-tools`, `admin-extensions`). Selected registries run
+  through the V2 contribution kernel. The setting is startup-only; restart to
+  change it.
 - Trusted-host is **not** a sandbox.
 - Activation is **not** fleet-atomic.
 - Disable retains packages and data until explicit deletion.

@@ -9,12 +9,19 @@ Canonical reference for every exported TypeScript type and interface defined und
 | Type             | Kind      | Description                                                                                                                            |
 | ---------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `RegistryItem`   | interface | Minimal contract for registry entries (`id`, optional `order`). Shared by sidebar, header, project tree, and other registries.         |
+| `RegistrationHandle` | interface | Owner-scoped handle returned by `register()`. Removing it only removes the entry when this registration is still the current owner. |
 | `RegistryApi<T>` | interface | Generic API returned by `createRegistry` exposing `register`, `unregister`, `listIds`, `snapshot`, and a reactive `useItems()` helper. |
 
 ```ts
 // app/composables/_registry.ts
 import { computed, shallowRef } from 'vue';
 import type { ComputedRef, ShallowRef } from 'vue';
+import {
+    createRegistrationHandle,
+    type RegistrationHandle,
+} from '~~/shared/plugins/registration-handle';
+
+export type { RegistrationHandle };
 
 export interface RegistryItem {
     id: string;
@@ -22,7 +29,7 @@ export interface RegistryItem {
 }
 
 export interface RegistryApi<T extends RegistryItem> {
-    register(item: T): void;
+    register(item: T): RegistrationHandle;
     unregister(id: string): void;
     listIds(): string[];
     snapshot(): T[];
@@ -32,47 +39,35 @@ export interface RegistryApi<T extends RegistryItem> {
 export function createRegistry<T extends RegistryItem>(
     globalKey: string,
     sortFn: (a: T, b: T) => number = (a, b) =>
-        (a.order ?? 200) - (b.order ?? 200)
+        (a.order ?? 200) - (b.order ?? 200) ||
+        a.id.localeCompare(b.id)
 ): RegistryApi<T> {
     const g: any = globalThis as any;
-    const registry: Map<string, T> =
-        g[globalKey] || (g[globalKey] = new Map<string, T>());
-    const store: ShallowRef<T[]> = shallowRef([]);
+    const registry: Map<string, { item: T; owner: symbol }> =
+        g[globalKey] || (g[globalKey] = new Map());
 
-    function sync() {
-        store.value = Array.from(registry.values());
-    }
-
-    function register(item: T) {
-        if (import.meta.dev && registry.has(item.id)) {
-            console.warn(`[registry:${globalKey}] Replacing id: ${item.id}`);
-        }
-        const frozen = Object.freeze({ ...item });
-        registry.set(item.id, frozen);
+    function register(item: T): RegistrationHandle {
+        const owner = Symbol(`${globalKey}:${item.id}`);
+        registry.set(item.id, { item: Object.freeze({ ...item }), owner });
         sync();
+        return createRegistrationHandle({
+            id: item.id,
+            owner,
+            isCurrent: () => registry.get(item.id)?.owner === owner,
+            remove: () => {
+                if (registry.get(item.id)?.owner === owner) {
+                    registry.delete(item.id);
+                    sync();
+                }
+            },
+        });
     }
-
-    function unregister(id: string) {
-        if (registry.delete(id)) sync();
-    }
-
-    function listIds() {
-        return Array.from(registry.keys());
-    }
-
-    function snapshot(): T[] {
-        return store.value.slice();
-    }
-
-    function useItems(): ComputedRef<readonly T[]> {
-        return computed(() => [...store.value].sort(sortFn));
-    }
-
-    if (!store.value.length && registry.size) sync();
 
     return { register, unregister, listIds, snapshot, useItems };
 }
 ```
+
+`register()` returns a `RegistrationHandle`. Keep it and call `remove()` to unregister; the handle only wins when its owner symbol still owns the entry, so a later re-registration cannot be silently removed by an earlier handle.
 
 ---
 
@@ -185,30 +180,37 @@ export interface PreviewCacheMetrics {
 
 | Type                      | Kind      | Description                                                                                                              |
 | ------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `MultiPaneMessage`        | interface | Normalised pane message payload (`role`, `content`, optional `file_hashes`, `id`, `stream_id`).                          |
+| `PaneMode`                | alias     | `'chat'`, `'doc'`, or an arbitrary string for custom pane apps.                                                          |
+| `MultiPaneMessage`        | interface | Normalised pane message payload (`role`, `content`, optional `file_hashes`, `id`, `stream_id`, `data`).                  |
 | `PaneState`               | interface | Persistent pane descriptor (`id`, `mode`, `threadId`, optional `documentId`, `messages`, `validating`).                  |
-| `UseMultiPaneOptions`     | interface | Optional configuration for `useMultiPane()` (`initialThreadId`, `maxPanes`, `allowMultiplePanes`, `onFlushDocument`, `loadMessagesFor`). |
-| `UseMultiPaneApi`         | interface | Methods returned by `useMultiPane()` (`panes`, `activePaneIndex`, `addPane`, `setPaneThread`, navigation helpers, etc.). |
+| `UseMultiPaneOptions`     | interface | Optional configuration for `useMultiPane()` (initial thread, pane limits, width bounds, callbacks).                       |
+| `UseMultiPaneApi`         | interface | Methods returned by `useMultiPane()` (`panes`, `addPane`, `setPaneThread`, `newPaneForApp`, resize helpers, etc.).        |
 | `MultiPaneState`          | alias     | Re-export of `PaneState` for consumers that prefer `MultiPaneState[]` semantics.                                         |
 | `UsePaneDocumentsOptions` | interface | `usePaneDocuments()` inputs (pane refs, `activePaneIndex`, `createNewDoc`, `flushDocument`).                             |
 | `UsePaneDocumentsApi`     | interface | Document helpers returned by `usePaneDocuments()` (`newDocumentInActive`, `selectDocumentInActive`).                     |
 
 ```ts
 // app/composables/core/useMultiPane.ts
-import type { Ref, ComputedRef } from 'vue';
+import type { Ref, ComputedRef, MaybeRefOrGetter } from 'vue';
+
+export type PaneMode = 'chat' | 'doc' | (string & { _brand?: 'pane-mode' });
 
 export type MultiPaneMessage = {
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'system' | 'tool';
     content: string;
     file_hashes?: string | null;
     id?: string;
     stream_id?: string;
+    data?: Record<string, unknown> | null;
+    reasoning_text?: string | null;
+    index?: number | null;
+    created_at?: number | null;
 };
 
 export interface PaneState {
     id: string;
-    mode: 'chat' | 'doc' | string; // Custom pane apps can register with arbitrary mode identifiers
-    threadId: string;
+    mode: PaneMode;
+    threadId: string; // '' indicates unsaved/new chat
     documentId?: string;
     messages: MultiPaneMessage[];
     validating: boolean;
@@ -216,29 +218,49 @@ export interface PaneState {
 
 export interface UseMultiPaneOptions {
     initialThreadId?: string;
-    maxPanes?: number;
+    maxPanes?: MaybeRefOrGetter<number>; // default 3
     onFlushDocument?: (id: string) => void | Promise<void>;
     loadMessagesFor?: (id: string) => Promise<MultiPaneMessage[]>;
+    minPaneWidth?: number; // default 280
+    maxPaneWidth?: number; // default 2000
+    storageKey?: string; // localStorage key for pane widths
+    allowMultiplePanes?: MaybeRefOrGetter<boolean>;
 }
 
 export interface UseMultiPaneApi {
     panes: Ref<PaneState[]>;
     activePaneIndex: Ref<number>;
+    activePaneId: ComputedRef<string | null>;
     canAddPane: ComputedRef<boolean>;
     newWindowTooltip: ComputedRef<string>;
-    addPane(): void;
-    closePane(index: number): Promise<void> | void;
-    setActive(index: number): void;
-    focusPrev(current: number): void;
-    focusNext(current: number): void;
-    setPaneThread(index: number, threadId: string): Promise<void>;
-    loadMessagesFor(id: string): Promise<MultiPaneMessage[]>;
-    ensureAtLeastOne(): void;
+    addPane: () => string | null;
+    closePane: (index: number) => Promise<void> | void;
+    setActive: (index: number) => void;
+    focusPrev: (current: number) => void;
+    focusNext: (current: number) => void;
+    setPaneThread: (index: number, threadId: string) => Promise<void>;
+    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;
+    ensureAtLeastOne: () => void;
+    newPaneForApp: (
+        appId: string,
+        opts?: { initialRecordId?: string }
+    ) => Promise<void>;
+    setPaneApp: (
+        index: number,
+        appId: string,
+        opts?: { recordId?: string }
+    ) => Promise<void>;
+    updatePane: (index: number, updates: Partial<PaneState>) => void;
+    getPaneIndexById: (paneId: string) => number;
+    getPaneById: (paneId: string) => PaneState | undefined;
+    getPaneWidth: (index: number) => string;
+    handleResize: (paneIndex: number, deltaX: number, persist?: boolean) => void;
+    persistPaneWidths: () => void;
+    recalculateWidthsForContainer: (newContainerWidth: number) => void;
+    paneWidths: Ref<number[]>;
 }
 
 export type MultiPaneState = PaneState;
-
-// app/composables/documents/usePaneDocuments.ts
 ```
 
 ```ts
@@ -267,31 +289,31 @@ export interface UsePaneDocumentsApi {
 
 | Type                    | Kind      | Description                                                                                                  |
 | ----------------------- | --------- | ------------------------------------------------------------------------------------------------------------ |
-| `DocumentHistoryAction` | interface | Defines sidebar document history actions (id, icon, label, optional `order`, async `handler({ document })`). |
-| `ThreadHistoryAction`   | interface | Same pattern for thread history dropdown entries (`handler({ document: Thread })`).                          |
+| `HistoryActionRegistryItem<T>` | interface | Shared history action shape (id, icon, label, optional `order`/`pluginId`/`access`, async `handler({ document })`). |
+| `DocumentHistoryAction` | interface | History action for document entries; extends `HistoryActionRegistryItem<Post>`.                              |
+| `ThreadHistoryAction`   | interface | Same pattern for thread entries; extends `HistoryActionRegistryItem<Thread>`.                                |
 
 ```ts
-// app/composables/documents/useDocumentHistoryActions.ts
-import type { Post } from '~/db';
+// app/composables/history/createHistoryActionRegistry.ts
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 
-export interface DocumentHistoryAction {
+export interface HistoryActionRegistryItem<TDocument> {
     id: string;
+    pluginId?: string;
+    access?: PluginGatePolicy;
     icon: string;
     label: string;
     order?: number;
-    handler: (ctx: { document: Post }) => void | Promise<void>;
+    handler: (ctx: { document: TDocument }) => void | Promise<void>;
 }
+
+// app/composables/documents/useDocumentHistoryActions.ts
+import type { Post } from '~/db';
+export interface DocumentHistoryAction extends HistoryActionRegistryItem<Post> {}
 
 // app/composables/threads/useThreadHistoryActions.ts
 import type { Thread } from '~/db';
-
-export interface ThreadHistoryAction {
-    id: string;
-    icon: string;
-    label: string;
-    order?: number;
-    handler: (ctx: { document: Thread }) => void | Promise<void>;
-}
+export interface ThreadHistoryAction extends HistoryActionRegistryItem<Thread> {}
 ```
 
 ---
@@ -306,21 +328,28 @@ export interface ThreadHistoryAction {
 
 ```ts
 // app/composables/chat/useActivePrompt.ts
-import { ref, readonly } from 'vue';
+import type { TipTapDocument } from '~/types/database';
 
 export interface ActivePromptState {
     activePromptId: string | null;
-    activePromptContent: any | null;
+    activePromptContent: TipTapDocument | null;
 }
 
 // app/composables/chat/useMessageActions.ts
+import type { UiChatMessage } from '~/utils/chat/uiMessages';
+
 export interface ChatMessageAction {
     id: string;
     icon: string;
     tooltip: string;
     showOn: 'user' | 'assistant' | 'both';
     order?: number;
-    handler: (ctx: { message: any; threadId?: string }) => void | Promise<void>;
+    handler: (ctx: {
+        message: UiChatMessage;
+        threadId?: string;
+    }) => void | Promise<void>;
+    pluginId?: string;
+    access?: PluginGatePolicy;
 }
 
 // app/composables/chat/useAiSettings.ts
@@ -338,9 +367,9 @@ export interface AiSettingsV1 {
 
 | Type                    | Kind      | Description                                                                                         |
 | ----------------------- | --------- | --------------------------------------------------------------------------------------------------- |
-| `StreamingState`        | interface | Reactive token buffer state (`text`, `reasoningText`, `isActive`, `finalized`, `error`, `version`). |
+| `StreamingState`        | interface | Reactive token buffer state (`text`, `reasoningText`, `isActive`, `finalized`, `aborted`, `error`, `version`). |
 | `AppendKind`            | union     | `'text'` or `'reasoning'`; distinguishes which buffer `append()` targets.                           |
-| `StreamAccumulatorApi`  | interface | Contract returned by `createStreamAccumulator()` (`state`, `append`, `finalize`, `reset`).          |
+| `StreamAccumulatorApi`  | interface | Contract returned by `createStreamAccumulator()` (`state`, `append`, `hydrate`, `finalize`, `reset`). |
 | `UnifiedStreamingState` | alias     | Re-export of `StreamingState` for callers expecting the previous naming.                            |
 
 ```ts
@@ -350,8 +379,9 @@ export interface StreamingState {
     reasoningText: string;
     isActive: boolean;
     finalized: boolean;
+    aborted: boolean;
     error: Error | null;
-    version: number;
+    version: number; // increments on each flush for lightweight watchers
 }
 
 export type AppendKind = 'text' | 'reasoning';
@@ -359,8 +389,9 @@ export type AppendKind = 'text' | 'reasoning';
 export interface StreamAccumulatorApi {
     state: Readonly<StreamingState>;
     append(delta: string, options: { kind: AppendKind }): void;
-    finalize(opts?: { error?: Error; aborted?: boolean }): void;
-    reset(): void;
+    hydrate(seed: { text?: unknown; reasoningText?: unknown }): void;
+    finalize(opts?: { error?: Error; aborted?: boolean }): void; // idempotent
+    reset(): void; // prepare for a fresh stream
 }
 
 export type UnifiedStreamingState = StreamingState;
@@ -416,6 +447,8 @@ export interface ProjectTreeHandlerCtx {
 
 export interface ProjectTreeAction extends RegistryItem {
     id: string;
+    pluginId?: string;
+    access?: PluginGatePolicy;
     icon: string;
     label: string;
     order?: number;
@@ -452,6 +485,7 @@ export interface DeleteProjectOptions {
 ```ts
 // app/composables/dashboard/useDashboardPlugins.ts
 import type { Component } from 'vue';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 
 export interface DashboardPlugin {
     id: string;
@@ -462,6 +496,8 @@ export interface DashboardPlugin {
     handler?: (ctx: { id: string }) => void | Promise<void>;
     pages?: DashboardPluginPage[];
     capabilities?: string[];
+    access?: PluginGatePolicy;
+    pluginId?: string;
 }
 
 export interface DashboardPluginPage {
@@ -470,7 +506,9 @@ export interface DashboardPluginPage {
     icon?: string;
     order?: number;
     description?: string;
-    component: Component | (() => Promise<any>);
+    component: Component | (() => Promise<{ default?: Component } | Component>);
+    access?: PluginGatePolicy;
+    isAvailable?: () => boolean;
 }
 
 export type DashboardNavigationErrorCode =
@@ -504,6 +542,8 @@ export interface UseDashboardNavigationOptions {
 }
 ```
 
+The navigation error types (`DashboardNavigationErrorCode`, `DashboardNavigationError`, `DashboardNavigationState`, `DashboardNavigationResult`, `UseDashboardNavigationOptions`) are re-exported from `~/core/dashboard/dashboard-navigation-types`. `access` gates a plugin or page behind workspace policy checks; `pluginId` links it to the owning installable plugin.
+
 ---
 
 ## Sidebar, header & composer chrome
@@ -511,7 +551,8 @@ export interface UseDashboardNavigationOptions {
 | Type                         | Kind      | Description                                                                                                            |
 | ---------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `SidebarSectionPlacement`    | union     | `'top'`, `'main'`, or `'bottom'`; controls where custom sections render.                                               |
-| `SidebarSection`             | interface | Registry entry for sidebar stack sections (id, component/async loader, optional `order`/`placement`).                  |
+| `SidebarSection`             | interface | Registry entry for sidebar stack sections (id, component/async loader, optional `order`/`placement`/`pluginId`/`access`). |
+| `SidebarSectionGroups`       | interface | Groups sections into `top`, `main`, and `bottom` lists for rendering.                                                  |
 | `SidebarFooterActionContext` | interface | Runtime context passed to footer action handlers (`activeThreadId`, `activeDocumentId`, `isCollapsed`).                |
 | `ChromeActionColor`          | union     | Palette of supported footer/header button colors (Iconify-compatible strings plus strong/neutral variants).            |
 | `SidebarFooterAction`        | interface | Footer action registry entry (id, icon, optional label/tooltip/order/color, handler + visibility/disabled predicates). |
@@ -529,14 +570,23 @@ import type { Component, ComputedRef } from 'vue';
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
 import type { Editor } from '@tiptap/vue-3';
 import type { RegistryItem } from '../_registry';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 
 export type SidebarSectionPlacement = 'top' | 'main' | 'bottom';
 
 export interface SidebarSection extends RegistryItem {
     id: string;
-    component: Component | (() => Promise<any>);
+    component: Component | (() => Promise<Component>);
     order?: number;
     placement?: SidebarSectionPlacement;
+    pluginId?: string;
+    access?: PluginGatePolicy;
+}
+
+export interface SidebarSectionGroups {
+    top: SidebarSection[];
+    main: SidebarSection[];
+    bottom: SidebarSection[];
 }
 
 export interface SidebarFooterActionContext {
@@ -553,8 +603,7 @@ export type ChromeActionColor =
     | 'warning'
     | 'error'
     | 'info'
-    | 'inverse-primary'
-    | (string & {});
+    | 'inverse-primary';
 
 export interface SidebarFooterAction extends RegistryItem {
     id: string;
@@ -590,6 +639,8 @@ export interface HeaderAction extends RegistryItem {
     handler: (ctx: HeaderActionContext) => void | Promise<void>;
     visible?: (ctx: HeaderActionContext) => boolean;
     disabled?: (ctx: HeaderActionContext) => boolean;
+    pluginId?: string;
+    access?: PluginGatePolicy;
 }
 
 export interface HeaderActionEntry {
@@ -616,6 +667,8 @@ export interface ComposerAction {
     handler: (ctx: ComposerActionContext) => void | Promise<void>;
     visible?: (ctx: ComposerActionContext) => boolean;
     disabled?: (ctx: ComposerActionContext) => boolean;
+    pluginId?: string;
+    access?: PluginGatePolicy;
 }
 
 export interface ComposerActionEntry {
@@ -624,35 +677,44 @@ export interface ComposerActionEntry {
 }
 ```
 
+All of these action contracts accept optional `pluginId` and `access` fields. The workspace policy layer uses them to hide or disable contributions for the current workspace and session.
+
 ---
 
 ## Editor extension points (`app/composables/editor`)
 
 | Type                  | Kind      | Description                                                                                                     |
 | --------------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
-| `EditorNode`          | interface | TipTap node extension registration (id, `Node` instance, optional `order`).                                     |
-| `EditorMark`          | interface | TipTap mark extension registration (id, `Mark` instance, optional `order`).                                     |
-| `EditorExtension`     | interface | Generic TipTap extension registration (id, `Extension` instance, optional `order`).                             |
-| `EditorToolbarButton` | interface | Editor toolbar button contract (id, icon, tooltip, optional `order`, `isActive`, `visible`, and click handler). |
+| `EditorNode`          | interface | TipTap node extension registration (id, `Node` instance, optional `order`/`pluginId`/`access`).                 |
+| `EditorMark`          | interface | TipTap mark extension registration (id, `Mark` instance, optional `order`/`pluginId`/`access`).                 |
+| `EditorExtension`     | interface | Generic TipTap extension registration (id, `Extension` instance, optional `order`/`pluginId`/`access`).         |
+| `EditorToolbarButton` | interface | Editor toolbar button contract (id, icon, tooltip, optional `order`, `group`, `priority`, visibility and click handler). |
 
 ```ts
 // app/composables/editor/useEditorNodes.ts
 import type { Node, Mark, Extension } from '@tiptap/core';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 
 export interface EditorNode {
     id: string;
+    pluginId?: string;
+    access?: PluginGatePolicy;
     extension: Node;
     order?: number;
 }
 
 export interface EditorMark {
     id: string;
+    pluginId?: string;
+    access?: PluginGatePolicy;
     extension: Mark;
     order?: number;
 }
 
 export interface EditorExtension {
     id: string;
+    pluginId?: string;
+    access?: PluginGatePolicy;
     extension: Extension;
     order?: number;
 }
@@ -662,13 +724,267 @@ import type { Editor } from '@tiptap/vue-3';
 
 export interface EditorToolbarButton {
     id: string;
+    pluginId?: string;
+    access?: PluginGatePolicy;
     icon: string;
     tooltip?: string;
     order?: number;
+    group?: 'format' | 'insert' | 'history' | 'plugin-overflow' | string;
+    priority?: number;
     isActive?: (editor: Editor) => boolean;
     onClick: (editor: Editor) => void | Promise<void>;
     visible?: (editor: Editor) => boolean;
 }
+```
+
+---
+
+## Workspace tabs and drafts (`app/composables/core`)
+
+The tab system persists the pane layout per workspace and profile. Its core shapes live in `~/core/workspace-tabs/types`; the composable layer adds the contracts below.
+
+| Type                   | Kind      | Description                                                                              |
+| ---------------------- | --------- | ---------------------------------------------------------------------------------------- |
+| `WorkspaceTabStorage`  | interface | Minimal storage adapter (`getItem`/`setItem`) used for tab persistence.                  |
+| `WorkspaceTabsOptions` | interface | Inputs for `useWorkspaceTabs()` (host adapter, pane limit, workspace/profile scoping, callbacks). |
+| `PaneActivation`       | interface | Abortable, generation-tracked activation token for a pane.                               |
+| `WorkspaceTabHost`     | interface | Adapter between the tab session and the multi-pane engine (pane list, focus, binding).   |
+| `WorkspaceTabMetadata` | interface | Resolved tab title data (`title`, `fullTitle`, optional `icon`).                          |
+| `WorkspaceChatTabDraft`| interface | Persisted composer draft (text, editor JSON, attachments, large text blocks, composer settings). |
+
+```ts
+// app/composables/core/useWorkspaceTabPersistence.ts
+export interface WorkspaceTabStorage {
+    getItem(key: string): string | null;
+    setItem(key: string, value: string): void;
+}
+
+// app/composables/core/useWorkspaceTabHost.ts
+export interface PaneActivation {
+    readonly paneId: string;
+    readonly generation: number;
+    readonly signal: AbortSignal;
+    isCurrent(): boolean;
+}
+
+export interface WorkspaceTabHost {
+    paneIds(): string[];
+    activePaneId(): string | null;
+    focusPane(paneId: string): void;
+    addPane(): string | null;
+    closePane(paneId: string): Promise<void>;
+    bindResourceToPane(
+        paneId: string,
+        resource: WorkspaceResource,
+        activation: PaneActivation
+    ): Promise<void>;
+}
+
+// app/composables/core/useWorkspaceTabMetadata.ts
+export interface WorkspaceTabMetadata {
+    title: string;
+    fullTitle: string;
+    icon?: string;
+}
+
+// app/composables/core/useWorkspaceTabDrafts.ts
+export interface WorkspaceChatTabDraft {
+    version: 1;
+    text: string;
+    editorJson?: Record<string, unknown>;
+    attachments: UploadedImage[];
+    largeTextBlocks: LargeTextBlock[];
+    composer?: {
+        model: string;
+        webSearchEnabled: boolean;
+        thinkingEnabled: boolean;
+        reasoningEffort?: string;
+        imageSettings: ImageSettings;
+    };
+    updatedAt: number;
+}
+```
+
+`WorkspaceResource` and the snapshot shapes (`WorkspaceTabsSnapshotV1`, `WorkspaceTabsState`) come from `~/core/workspace-tabs/types` and `~/core/workspace-tabs/snapshot-schema`.
+
+---
+
+## Workspace management (`app/composables/workspace`)
+
+| Type                              | Kind      | Description                                                                                    |
+| --------------------------------- | --------- | ---------------------------------------------------------------------------------------------- |
+| `ActiveWorkspaceChangeResult`     | interface | Result of a programmatic workspace switch (`committed` flag plus the revision that won).       |
+| `ActiveWorkspaceRevision`         | interface | Totally ordered workspace change (`revision`, `actorId`, `workspaceId`, `phase`).              |
+| `ActiveWorkspaceRevisionPhase`    | union     | `'intent'`, `'committed'`, or `'rejected'`.                                                    |
+| `ActiveWorkspaceRevisionCoordinator` | interface | Cross-tab coordination API (`begin`, `publishCurrent`, `updatePhase`, `observe`, `isCurrent`). |
+
+```ts
+// app/composables/workspace/activeWorkspaceRevision.ts
+export type ActiveWorkspaceRevisionPhase = 'intent' | 'committed' | 'rejected';
+
+export interface ActiveWorkspaceRevision {
+    revision: number;
+    actorId: string;
+    workspaceId: string | null;
+    phase: ActiveWorkspaceRevisionPhase;
+    authorizationRevision?: number;
+}
+
+export interface ActiveWorkspaceRevisionCoordinator {
+    begin(workspaceId: string): ActiveWorkspaceRevision;
+    publishCurrent(
+        workspaceId: string | null,
+        authorizationRevision?: number
+    ): ActiveWorkspaceRevision;
+    updatePhase(
+        revision: ActiveWorkspaceRevision,
+        phase: Extract<ActiveWorkspaceRevisionPhase, 'committed' | 'rejected'>,
+        authorizationRevision?: number
+    ): ActiveWorkspaceRevision | null;
+    observe(revision: ActiveWorkspaceRevision): boolean;
+    current(): ActiveWorkspaceRevision | null;
+    isCurrent(revision: ActiveWorkspaceRevision): boolean;
+}
+
+// app/composables/workspace/useWorkspaceManagerSession.ts
+export interface ActiveWorkspaceChangeResult {
+    committed: boolean;
+    revision: ActiveWorkspaceRevision;
+}
+```
+
+`useWorkspaceManager()` is the single source of truth for the active workspace id. It computes `activeWorkspaceId` from the session and calls `setActiveWorkspaceDb()` exactly once per change. Use it before relying on `getDb()` inside plugins or features that must follow workspace switches.
+
+---
+
+## Notification center (`app/composables/notifications/useNotifications.ts`)
+
+| Type                    | Kind      | Description                                                                                |
+| ----------------------- | --------- | ------------------------------------------------------------------------------------------ |
+| `NotificationsComposable` | interface | Reactive notification API (`notifications`, `unreadCount`, `markRead`, `markAllRead`, `clearAll`, `push`, mute helpers). |
+
+```ts
+// app/composables/notifications/useNotifications.ts
+import type { ComputedRef } from 'vue';
+import type { Notification } from '~/db/schema';
+import type { NotificationCreatePayload } from '~/core/hooks/hook-types';
+
+export interface NotificationsComposable {
+    notifications: ComputedRef<Notification[]>;
+    unreadCount: ComputedRef<number>;
+    loading: ComputedRef<boolean>;
+    markRead: (id: string) => Promise<void>;
+    markAllRead: () => Promise<void>;
+    clearAll: () => Promise<number>;
+    push: (payload: NotificationCreatePayload) => Promise<void>;
+    isThreadMuted: (threadId: string) => boolean;
+    muteThread: (threadId: string) => Promise<void>;
+    unmuteThread: (threadId: string) => Promise<void>;
+}
+```
+
+---
+
+## Pane apps and sidebar pages (plugin extension points)
+
+Custom pane applications and sidebar pages are the main plugin contribution surfaces beyond action registries.
+
+| Type                    | Kind      | Description                                                                                          |
+| ----------------------- | --------- | ---------------------------------------------------------------------------------------------------- |
+| `PaneAppDef`            | interface | Definition of a custom pane app (id, label, component, post type, optional record factory).          |
+| `RegisteredPaneApp`     | alias     | Normalized `PaneAppDef` as stored in the pane app registry.                                          |
+| `SidebarPageDef`        | interface | Sidebar page definition (id, label, icon, component, lifecycle hooks, access policy).                |
+| `SidebarPageContext`    | interface | Registration-time context with an `expose()` helper for publishing APIs.                             |
+| `SidebarActivateContext`| interface | Activation-time context (current/previous page, multi-pane API, pane plugin API).                    |
+| `RegisteredSidebarPage` | alias     | Registry-ready `SidebarPageDef`.                                                                     |
+
+```ts
+// app/composables/core/usePaneApps.ts
+import type { Component } from 'vue';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
+
+export interface PaneAppDef {
+    id: string;
+    label: string;
+    icon?: string;
+    component: Component | (() => Promise<Component>);
+    postType?: string;
+    createInitialRecord?: (ctx: {
+        app: PaneAppDef;
+    }) => Promise<{ id: string } | null>;
+    order?: number;
+    pluginId?: string;
+    access?: PluginGatePolicy;
+    replaceRecordInCurrentTab?: boolean;
+}
+
+export type RegisteredPaneApp = PaneAppDef;
+
+// app/composables/sidebar/useSidebarPages.ts
+export interface SidebarPageDef {
+    id: string;
+    label: string;
+    icon: string;
+    order?: number;
+    component: Component | (() => Promise<Component>);
+    keepAlive?: boolean;
+    usesDefaultHeader?: boolean;
+    provideContext?: (ctx: SidebarPageContext) => void;
+    canActivate?: (ctx: SidebarActivateContext) => boolean | Promise<boolean>;
+    onActivate?: (ctx: SidebarActivateContext) => void | Promise<void>;
+    onDeactivate?: (ctx: SidebarActivateContext) => void | Promise<void>;
+    pluginId?: string;
+    access?: PluginGatePolicy;
+}
+
+export interface SidebarPageContext {
+    page: SidebarPageDef;
+    expose: (api: Record<string, unknown>) => void;
+}
+
+export interface SidebarActivateContext {
+    page: SidebarPageDef;
+    previousPage: SidebarPageDef | null;
+    isCollapsed: boolean;
+    multiPane: UseMultiPaneApi;
+    panePluginApi: PanePluginApi;
+}
+
+export type RegisteredSidebarPage = SidebarPageDef;
+```
+
+`PanePluginApi` is the client-side API exposed to pane apps (`__or3PanePluginApi`); see the [Plugin types](./plugins) reference.
+
+---
+
+## Admin workspace context and admin API types (`app/composables/admin`)
+
+| Type                    | Kind      | Description                                                                                          |
+| ----------------------- | --------- | ---------------------------------------------------------------------------------------------------- |
+| `WorkspaceResponse`     | alias     | Admin API response for a workspace (id, name, role, members, enabled plugins).                       |
+| `SystemStatus`          | alias     | Admin system status (auth/sync/storage providers, background streaming, admin controls).             |
+| `ProviderStatus`        | alias     | Status of one provider (enabled flag, provider name, optional actions).                              |
+| `StatusResponse`        | alias     | Full status endpoint payload (system status, warnings, optional session role).                       |
+
+`useAdminWorkspaceContext()` tracks the workspace selected in the admin UI. It returns readonly refs `selectedWorkspaceId` and `selectedWorkspace` (shape: `{ id, name, memberCount, ownerEmail? }`), plus `selectWorkspace`, `clearWorkspace`, and a computed `hasWorkspace`. Selection is in-memory only.
+
+```ts
+// app/composables/admin/useAdminTypes.ts
+export type SystemStatus = {
+    auth: ProviderStatus;
+    sync: ProviderStatus;
+    storage: ProviderStatus;
+    backgroundStreaming: { enabled: boolean; storageProvider: string };
+    admin?: { allowRestart: boolean; allowRebuild: boolean };
+};
+
+export type WorkspaceResponse = {
+    workspace: { id: string; name: string };
+    role: string;
+    members: Array<{ userId: string; email?: string; role: string }>;
+    enabledPlugins: string[];
+    guestAccessEnabled: boolean;
+};
 ```
 
 ---

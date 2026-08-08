@@ -317,24 +317,44 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
         setEnv(env, 'NUXT_CLERK_SECRET_KEY', answers.clerkSecretKey);
     }
 
-    if (answers.syncProvider === 'sqlite') {
-        setEnv(env, 'OR3_SQLITE_DB_PATH', answers.sqliteDbPath);
-        setEnv(
-            env,
-            'OR3_SQLITE_PRAGMA_JOURNAL_MODE',
-            answers.sqlitePragmaJournalMode
-        );
-        setEnv(
-            env,
-            'OR3_SQLITE_PRAGMA_SYNCHRONOUS',
-            answers.sqlitePragmaSynchronous
-        );
-        setEnv(
-            env,
-            'OR3_SQLITE_ALLOW_IN_MEMORY',
-            boolToEnv(answers.sqliteAllowInMemory)
-        );
-        setEnv(env, 'OR3_SQLITE_STRICT', boolToEnv(answers.sqliteStrict));
+    const usesSqlite =
+        answers.syncProvider === 'sqlite' ||
+        (answers.connectEnabled &&
+            resolveEffectiveConnectProvider(answers) === 'sqlite');
+    if (usesSqlite) {
+        const sqliteDriver = answers.sqliteDriver ?? 'better-sqlite3';
+        setEnv(env, 'OR3_SQLITE_DRIVER', sqliteDriver);
+        if (
+            sqliteDriver === 'better-sqlite3' ||
+            sqliteDriver === 'bun'
+        ) {
+            setEnv(env, 'OR3_SQLITE_DB_PATH', answers.sqliteDbPath);
+            setEnv(
+                env,
+                'OR3_SQLITE_PRAGMA_JOURNAL_MODE',
+                answers.sqlitePragmaJournalMode
+            );
+            setEnv(
+                env,
+                'OR3_SQLITE_PRAGMA_SYNCHRONOUS',
+                answers.sqlitePragmaSynchronous
+            );
+            setEnv(
+                env,
+                'OR3_SQLITE_ALLOW_IN_MEMORY',
+                boolToEnv(answers.sqliteAllowInMemory)
+            );
+            setEnv(env, 'OR3_SQLITE_STRICT', boolToEnv(answers.sqliteStrict));
+        } else if (sqliteDriver === 'turso') {
+            setEnv(env, 'OR3_SQLITE_TURSO_URL', answers.sqliteTursoUrl);
+            setEnv(
+                env,
+                'OR3_SQLITE_TURSO_AUTH_TOKEN',
+                answers.sqliteTursoAuthToken
+            );
+        } else if (sqliteDriver === 'd1') {
+            setEnv(env, 'OR3_SQLITE_D1_BINDING', answers.sqliteD1Binding);
+        }
     }
 
     const usesConvex =

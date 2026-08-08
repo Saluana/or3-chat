@@ -24,13 +24,17 @@ Central Zod schemas and generated TypeScript types for all Dexie tables.
 | `PostSchema` / `PostCreateSchema`             | Covers generic posts plus normalized title/meta logic.                     |
 | `KvSchema` / `KvCreateSchema`                 | Simple key-value store with optional `value`.                              |
 | `AttachmentSchema` / `AttachmentCreateSchema` | Enforces URL+type/name, optional `deleted`.                                |
-| `FileMetaSchema` / `FileMetaCreateSchema`     | Metadata for blobs, defaulting `ref_count` and `clock`.                    |
+| `FileMetaSchema` / `FileMetaCreateSchema`     | Metadata for blobs, defaulting `ref_count` to 1 and `clock` to 0.          |
+| `NotificationActionSchema`                    | Action with `navigate` or `callback` kind and optional target fields.      |
+| `NotificationSchema` / `NotificationCreateSchema` | Inbox records scoped by `user_id` with actions, read state, and clocks. |
+
+Derived types mirror the schemas exactly: `Project`, `Thread`, `ThreadCreate`, `Message`, `MessageCreate`, `Post`, `PostCreate`, `Kv`, `KvCreate`, `Attachment`, `AttachmentCreate`, `FileMeta`, `FileMetaCreate`, `NotificationAction`, `Notification`, and `NotificationCreate`.
 
 ---
 
 ## Helpers
 
--   `newId()` — Returns `crypto.randomUUID()` when available, fallback to timestamp string.
+-   `newId()` — UUID v4 from the shared runtime-compatible generator; prefers `crypto.randomUUID()`, falls back to `crypto.getRandomValues()`, and keeps UUID shape with a non-cryptographic last resort.
 -   `nowSec()` — Unix timestamp (seconds) used as default for timestamps.
 
 ---

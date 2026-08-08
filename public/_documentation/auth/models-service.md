@@ -175,7 +175,15 @@ interface OpenRouterModel {
   canonical_slug?: string;
   context_length?: number;             // Alternative field
   hugging_face_id?: string;
+  per_request_limits?: Record<string, unknown>;
   supported_parameters?: string[];     // ['temperature', 'top_p', 'reasoning']
+  reasoning?: {
+    supported_efforts?: string[] | null; // ['low', 'medium', 'high', ...]
+    default_effort?: string;             // 'none' or an effort level
+    default_enabled?: boolean;
+    supports_max_tokens?: boolean;
+    mandatory?: boolean;
+  };
 }
 ```
 
@@ -186,8 +194,9 @@ interface OpenRouterModel {
 ### Default cache
 
 - **Key**: `'openrouter_model_catalog_v1'` in localStorage
-- **TTL**: 1 hour
-- **Size**: ~50KB (all models JSON)
+- **TTL**: 1 hour (default)
+- **Format**: JSON object with `{ data: OpenRouterModel[], fetchedAt: number }`
+- **Fallback**: If fetch fails, returns last cached data if available; throws if there is no cache
 
 ### Cache invalidation
 
@@ -199,9 +208,13 @@ await modelsService.fetchModels({ force: true });
 localStorage.removeItem('openrouter_model_catalog_v1');
 ```
 
-### Fallback
+### How models are fetched
 
-If fetch fails, returns last cached data if available.
+`fetchModels()` calls the OpenRouter SDK's `models.list()` through the shared client, iterates the result pages, and maps each SDK model to the local `OpenRouterModel` shape. The stored user key from `localStorage['openrouter_api_key']` is attached when present. The base URL comes from `runtimeConfig.public.openRouter.baseUrl` when set.
+
+### Relation to `useModelStore`
+
+`models-service` keeps a 1-hour localStorage cache. `useModelStore` (Composables section) layers three tiers on top — memory, Dexie, and this network fetch — and persists the catalog in Dexie for 48 hours by default. The two docs describe different layers of the same catalog, not competing caches.
 
 ---
 
@@ -285,6 +298,8 @@ Prices are **stringified decimals**:
 - `"0.00001"` = $0.00001 per token
 - `"0"` = Free
 - Can be converted with `Number(string)`
+
+`filterByPriceBucket` uses the maximum of the prompt and completion price as the effective price.
 
 Price buckets are heuristic:
 - **free**: $0
@@ -374,7 +389,7 @@ export interface OpenRouterModel {
   id: string;
   name: string;
   description?: string;
-  // ... (see Model Format section)
+  // ... (see Model Format section; includes per_request_limits and reasoning)
 }
 
 export interface ModelCatalogCache {
@@ -438,6 +453,8 @@ export const modelsService: {
   filterByParameters: typeof filterByParameters;
   filterByPriceBucket: typeof filterByPriceBucket;
 };
+
+export default modelsService;
 ```
 
 ---

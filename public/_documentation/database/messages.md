@@ -19,9 +19,10 @@ Thread message CRUD utilities with hook integration, sparse indexing, and attach
 | ------------- | --------------------------------------------------------------- |
 | `id`          | Message UUID (auto-generated for create flows).                 |
 | `thread_id`   | Foreign key to the parent thread.                               |
-| `role`        | `'user' \| 'assistant' \| 'system'` (validated via schema).     |
+| `role`        | Free string; normalized to `'user' \| 'assistant' \| 'system'` at the hook boundary. |
 | `data`        | Arbitrary payload (serialized JSON) used by renderers.          |
 | `index`       | Sparse ordering integer (default increments by 1000).           |
+| `order_key`   | HLC-derived ordering key that breaks `index` ties deterministically. |
 | `file_hashes` | Serialized JSON array of file hashes; use `files-util` helpers. |
 | `clock`       | Revision counter.                                               |
 
@@ -32,15 +33,16 @@ Thread message CRUD utilities with hook integration, sparse indexing, and attach
 | Function                                          | Description                                                                                 |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `createMessage(input)`                            | Validates payload (including array → string conversion for `file_hashes`) and writes a row. |
-| `upsertMessage(value)`                            | Validates and replaces a row.                                                               |
+| `upsertMessage(value)` / `upsertMessageInDb(db, value)` | Validates and replaces a row; the `InDb` variant targets an explicit DB.              |
 | `messagesByThread(threadId)`                      | Fetches ordered messages, applying output filters.                                          |
 | `getMessage(id)` / `messageByStream(streamId)`    | Targeted lookups with output filters.                                                       |
 | `softDeleteMessage(id)` / `hardDeleteMessage(id)` | Delete flows with before/after hook actions.                                                |
-| `appendMessage(input)`                            | Transactionally inserts at end of thread and updates timestamps.                            |
+| `appendMessage(input)` / `appendMessageToDb(db, input)` | Transactionally inserts at end of thread and updates timestamps.                      |
 | `moveMessage(messageId, toThreadId)`              | Moves a message to another thread and reindexes.                                            |
 | `copyMessage(messageId, toThreadId)`              | Duplicates a message into another thread with new ID.                                       |
 | `insertMessageAfter(afterId, input)`              | Inserts between two messages, normalizing indexes as needed.                                |
 | `normalizeThreadIndexes(threadId, start?, step?)` | Reassigns sequential indexes (default 1000 spacing).                                        |
+| `compareMessageOrder(a, b)`                       | Orders by `index`, then `order_key`, then `id`; used by `messagesByThread`.                 |
 
 ---
 
@@ -58,7 +60,7 @@ These hooks allow feature modules to enrich messages (e.g., auto-tagging, analyt
 
 -   New messages default to increments of `1000`, leaving gaps for future inserts.
 -   `insertMessageAfter` uses midpoint spacing; when no gap remains it calls `normalizeThreadIndexes` to re-sequence.
--   Dexie compound index `[thread_id+index]` keeps ordering queries fast.
+-   Dexie compound index `[thread_id+index]` keeps ordering queries fast; `messagesByThread` also sorts by `order_key` then `id` to break ties deterministically.
 
 ---
 

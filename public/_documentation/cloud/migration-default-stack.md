@@ -46,7 +46,7 @@ OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=admin@example.com
 OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=replace-with-strong-password
 
 OR3_SQLITE_DB_PATH=.data/or3-sync.sqlite
-OR3_STORAGE_FS_ROOT=.data/storage
+OR3_STORAGE_FS_ROOT=/srv/or3/.data/storage
 OR3_STORAGE_FS_TOKEN_SECRET=replace-with-random-secret
 ```
 
@@ -83,4 +83,3 @@ Verify:
 - [provider-sqlite](./provider-sqlite)
 - [provider-fs](./provider-fs)
 - [release-notes-production-readiness](./release-notes-production-readiness)
-

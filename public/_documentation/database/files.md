@@ -17,14 +17,16 @@ File storage layer that deduplicates blobs by hash, keeps metadata in Dexie, and
 
 | Field            | Description                                                     |
 | ---------------- | --------------------------------------------------------------- |
-| `hash`           | MD5 hash used as primary key for both metadata and blob tables. |
+| `hash`           | SHA-256 hash (`sha256:` prefix) used as primary key for both metadata and blob tables; legacy MD5 hashes remain readable. |
 | `name`           | Display name supplied by uploader.                              |
 | `mime_type`      | MIME type (defaults to `application/octet-stream`).             |
 | `kind`           | `'image'` or `'pdf'` (auto-detected).                           |
-| `size_bytes`     | Blob size in bytes; enforced against 20 MB cap.                 |
+| `size_bytes`     | Blob size in bytes; enforced against a default 20 MB cap.       |
 | `width`/`height` | Optional image dimensions extracted via object URL.             |
 | `ref_count`      | Number of referencing entities (messages).                      |
 | `deleted`        | Soft delete flag set by `softDeleteFile`/`softDeleteMany`.      |
+
+The max size cap defaults to 20 MB and is configurable via `or3.limits.maxFileSizeBytes` in runtime config.
 
 ---
 
@@ -34,7 +36,8 @@ File storage layer that deduplicates blobs by hash, keeps metadata in Dexie, and
 | ---------------------------------- | --------------------------------------------------------------------------------------- |
 | `createOrRefFile(file, name)`      | Dedupes by hash, increments ref count, stores blob + metadata, runs before/after hooks. |
 | `getFileMeta(hash)`                | Loads metadata and applies output filters.                                              |
-| `getFileBlob(hash)`                | Returns the stored `Blob` (or `undefined`).                                             |
+| `getFileBlob(hash)`                | Returns the stored `Blob`; falls back to `ensureFileBlob` when missing locally.         |
+| `ensureFileBlob(hash)`             | Ensures a blob exists locally, downloading through the storage transfer queue (client only). |
 | `softDeleteFile(hash)`             | Marks a single file as deleted.                                                         |
 | `softDeleteMany(hashes)`           | Batch soft delete inside a transaction.                                                 |
 | `restoreMany(hashes)`              | Clears `deleted` flag for multiple files.                                               |
@@ -62,6 +65,7 @@ These make it easy to inject custom validation, analytics, or audit trails aroun
 1. **Perf markers** — In dev mode the module records `performance.measure` spans for create/ref operations.
 2. **Image metadata** — Uses an object URL to resolve dimensions without full decode; errors are swallowed gracefully.
 3. **Transactions** — Critical write operations run inside Dexie transactions covering both metadata and blob tables to keep state consistent. Deduplication is rechecked inside the write transaction so concurrent identical uploads increment one canonical metadata row instead of overwriting its reference count.
+4. **Transfer queue** — New files without a remote storage id are enqueued for upload; `ensureFileBlob` downloads missing blobs through the storage transfer queue when it is available.
 
 ---
 
