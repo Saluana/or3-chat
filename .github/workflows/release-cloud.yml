@@ -261,7 +261,9 @@ jobs:
           OR3_IMAGE: ${{ steps.image-plan.outputs.qualifying_image }}
         run: |
           smoke="$RUNNER_TEMP/or3-audit-cloud-smoke"
-          OR3_CLOUD_TEST_IMAGE="$OR3_IMAGE" OR3_CLOUD_SKIP_PULL=true \
+          # The candidate was anonymously pulled above; retain the registry
+          # manifest check so the CLI validates both release architectures.
+          OR3_CLOUD_TEST_IMAGE="$OR3_IMAGE" \
             npm exec --yes --package="${{ steps.pack.outputs.tarball }}" -- \
             or3 init "$smoke" --local --port 3017 --admin-email smoke@example.com
           for attempt in $(seq 1 120); do
