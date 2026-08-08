@@ -147,7 +147,7 @@ import type {
     RegisterSendResult,
     SendResult,
 } from '~/utils/chat/types';
-import { Or3Scroll, type Or3ScrollViewState } from 'or3-scroll';
+import { Or3Scroll } from 'or3-scroll';
 import 'or3-scroll/style.css';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
@@ -622,10 +622,22 @@ onBeforeUnmount(() => mediaPrefetch.dispose());
 
 // Scroll handling centralized in VirtualMessageList
 // Ref is now the VirtualMessageList component instance, not a raw element
+type ScrollViewState = {
+    version: 1;
+    contentKey?: string | number;
+    mode: 'bottom' | 'anchor';
+    anchors?: Array<{
+        key: string | number;
+        withinItem: number;
+        index: number;
+    }>;
+    scrollTop: number;
+};
+
 type ScrollApi = {
     scrollToBottom?: (opts?: { smooth?: boolean }) => void;
-    captureScrollState?: () => Or3ScrollViewState;
-    restoreScrollState?: (state?: Or3ScrollViewState) => Promise<void>;
+    captureScrollState?: () => ScrollViewState;
+    restoreScrollState?: (state?: ScrollViewState) => Promise<void>;
     refreshMeasurements?: () => void;
 };
 const scroller = ref<ScrollApi | null>(null);
