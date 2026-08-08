@@ -18,7 +18,7 @@ services:
     volumes:
       - or3-data:/data
     restart: unless-stopped
-    # Container hardening: the runtime image already runs as USER node and
+    # Container hardening: the runtime image already runs as a non-root user and
     # listens on port 3000 (no privileged ports), so all capabilities are
     # dropped and the root filesystem is read-only. Persistent state lives on
     # the or3-data volume (/data: SQLite, storage, admin data, extensions);
