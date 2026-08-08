@@ -2,17 +2,24 @@
 
 ## Implementation status
 
+> Historical plan: the repository-wide production-readiness plan in
+> `../../../planning/production-readiness-afternoon/` is now the authoritative
+> launch checklist. This file is retained for provenance and must not be used
+> as a release runbook.
+
 The repository implementation is complete through the package, operator CLI,
 deployment assets, release workflows, documentation, and focused local checks.
 The remaining unchecked tasks require external registry/account authority or a
 successful remote Docker/CI run; they are deliberately not marked complete by
 local edits.
 
-Current release blocker: `@or3/cloud@0.1.12` exists on npm, but its matching
-`ghcr.io/saluana/or3-chat:0.1.12` image is absent, so that immutable package
-cannot deploy. The source is prepared as `0.1.15`; publish its image first,
-then its package through the image-first workflow. No registry publication or
-destructive VPS action was attempted locally.
+Current release evidence is maintained in
+`../../../planning/production-readiness-afternoon/release-evidence-0.1.16.md`.
+The corrected source candidate is `0.1.16`; it is locally qualified but not
+published (`npm view @or3/cloud@0.1.16` is E404 and the matching GHCR image is
+not available). The immutable `0.1.15` artifacts are superseded and must not
+be republished. No registry publication or destructive VPS action was
+attempted locally.
 
 ## 1. Release and package foundation
 

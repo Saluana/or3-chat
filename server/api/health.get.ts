@@ -23,16 +23,19 @@ export interface HealthResponse {
             available: boolean;
             provider?: string;
             checks?: { warnings: string[]; errors: string[] };
+            details?: Record<string, unknown>;
         };
         storage?: {
             available: boolean;
             provider?: string;
             checks?: { warnings: string[]; errors: string[] };
+            details?: Record<string, unknown>;
         };
         auth?: {
             available: boolean;
             provider?: string;
             checks?: { warnings: string[]; errors: string[] };
+            details?: Record<string, unknown>;
         };
     };
 }
@@ -41,6 +44,7 @@ type DeepProviderStatus = {
     available: boolean;
     provider?: string;
     checks?: { warnings: string[]; errors: string[] };
+    details?: Record<string, unknown>;
 };
 
 async function resolveDeepProviderStatus(
@@ -73,6 +77,7 @@ async function resolveDeepProviderStatus(
                 warnings,
                 errors,
             },
+            details: status.details ?? {},
         };
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -83,6 +88,7 @@ async function resolveDeepProviderStatus(
                 warnings: [],
                 errors: [message],
             },
+            details: {},
         };
     }
 }

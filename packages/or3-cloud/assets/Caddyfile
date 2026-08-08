@@ -1,4 +1,15 @@
 {$OR3_PUBLIC_DOMAIN} {
+	# Security headers. Caddy 308-redirects plain HTTP to HTTPS before this
+	# site handler runs, so Strict-Transport-Security is only ever emitted on
+	# HTTPS responses (it is meaningless on plain HTTP).
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+
 	encode zstd gzip
 	reverse_proxy or3:3000 {
 		# Preserve incremental SSE/chat output instead of buffering it at the proxy.

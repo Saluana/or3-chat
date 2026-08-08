@@ -109,6 +109,7 @@ describe('Health check endpoint', () => {
                 warnings: [],
                 errors: [],
             },
+            details: {},
         });
         expect(response.providers?.storage).toEqual({
             available: true,
@@ -117,6 +118,7 @@ describe('Health check endpoint', () => {
                 warnings: [],
                 errors: [],
             },
+            details: {},
         });
         expect(response.providers?.auth).toEqual({
             available: true,
@@ -125,6 +127,7 @@ describe('Health check endpoint', () => {
                 warnings: [],
                 errors: [],
             },
+            details: {},
         });
     });
 
@@ -177,5 +180,65 @@ describe('Health check endpoint', () => {
 
         expect(response.status).toBe('degraded');
         expect(response.providers?.sync?.checks?.errors).toContain('convex unreachable');
+    });
+
+    it('passes provider details through and keeps status ok on maintenance failure', async () => {
+        getProviderAdminAdapterMock.mockImplementation(
+            (kind: 'auth' | 'sync' | 'storage', provider: string) => {
+                if (kind === 'sync' && provider === 'convex') {
+                    return {
+                        getStatus: vi.fn(async () => ({
+                            details: {
+                                maintenance: {
+                                    enabled: true,
+                                    lastRun: '2025-01-01T00:00:00.000Z',
+                                    backlog: 3,
+                                    lastError: 'boom',
+                                    state: 'failed' as const,
+                                },
+                            },
+                            warnings: [
+                                {
+                                    level: 'warning' as const,
+                                    message: 'Sync history maintenance failed: boom',
+                                },
+                            ],
+                            actions: [],
+                        })),
+                    };
+                }
+
+                return {
+                    getStatus: vi.fn(async () => ({
+                        details: {},
+                        warnings: [],
+                        actions: [],
+                    })),
+                };
+            }
+        );
+
+        const event = createMockH3Event({
+            method: 'GET',
+            path: '/api/health?deep=true',
+            query: { deep: 'true' },
+        });
+
+        const response = await handler(event);
+
+        expect(response.status).toBe('ok');
+        expect(response.providers?.sync?.details).toMatchObject({
+            maintenance: {
+                enabled: true,
+                lastRun: '2025-01-01T00:00:00.000Z',
+                backlog: 3,
+                lastError: 'boom',
+                state: 'failed',
+            },
+        });
+        expect(response.providers?.sync?.available).toBe(true);
+        expect(response.providers?.sync?.checks?.warnings).toContain(
+            'Sync history maintenance failed: boom'
+        );
     });
 });

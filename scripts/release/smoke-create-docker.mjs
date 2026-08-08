@@ -20,10 +20,9 @@ function parseEnv(source) {
         if (separator < 1) continue;
         const key = line.slice(0, separator).trim();
         let value = line.slice(separator + 1).trim();
-        if (
-            (value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'"))
-        ) {
+        if (value.startsWith("'") && value.endsWith("'")) {
+            value = value.slice(1, -1).replaceAll(/\\([\\'])/g, '$1');
+        } else if (value.startsWith('"') && value.endsWith('"')) {
             value = value.slice(1, -1);
         }
         values[key] = value;
@@ -157,13 +156,30 @@ async function verifySync(cookie, workspaceId) {
 }
 
 async function verifyCloudMode() {
-    const response = await expectOk(await fetch(new URL('/', baseUrl)));
-    const page = await response.text();
-    if (!page.includes('ssrAuthEnabled:true')) {
-        throw new Error('Rendered application did not enable cloud mode.');
-    }
-    if (!page.includes('authProvider:"basic-auth"')) {
-        throw new Error('Rendered application did not select basic authentication.');
+    // The production lock page can be streamed/serialized differently across
+    // Nuxt builds, so qualify the runtime contract through the public deep
+    // health response rather than brittle HTML substring matching.
+    const response = await expectOk(
+        await fetch(new URL('/api/health?deep=true', baseUrl))
+    );
+    const health = await response.json();
+    const providers = health.providers ?? {};
+    if (
+        health.status !== 'ok' ||
+        providers.auth?.provider !== 'basic-auth' ||
+        providers.sync?.provider !== 'sqlite' ||
+        providers.storage?.provider !== 'fs'
+    ) {
+        throw new Error(
+            `Managed Cloud provider profile is not active: ${JSON.stringify({
+                status: health.status,
+                providers: {
+                    auth: providers.auth?.provider,
+                    sync: providers.sync?.provider,
+                    storage: providers.storage?.provider,
+                },
+            })}`
+        );
     }
 }
 

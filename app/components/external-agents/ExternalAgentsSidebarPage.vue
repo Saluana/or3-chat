@@ -839,17 +839,32 @@
                       id="connect-computer-title"
                       class="text-sm font-semibold"
                     >
-                      Connect another computer
+                      {{
+                        connectEnabled
+                          ? "Connect another computer"
+                          : "Remote Connect unavailable"
+                      }}
                     </h3>
                     <span
+                      v-if="connectEnabled"
                       class="rounded-full bg-[var(--md-primary-container)] px-2 py-0.5 text-[10px] font-semibold text-[var(--md-on-primary-container)]"
                     >
                       Recommended
                     </span>
                   </div>
-                  <p class="mt-0.5 text-xs text-[var(--md-on-surface-variant)]">
+                  <p
+                    v-if="connectEnabled"
+                    class="mt-0.5 text-xs text-[var(--md-on-surface-variant)]"
+                  >
                     Once OR3 Connect is enabled, start a new agent session to
                     copy the one-command setup for this OR3 workspace.
+                  </p>
+                  <p
+                    v-else
+                    class="mt-0.5 text-xs text-[var(--md-on-surface-variant)]"
+                  >
+                    Remote Connect is withheld until its managed staging flow
+                    is ready. Local Intern hosts remain available below.
                   </p>
                 </div>
               </div>
@@ -857,8 +872,11 @@
                 class="mt-2 text-[11px] text-[var(--md-on-surface-variant)]"
                 aria-live="polite"
               >
-                Until then, use Advanced to add a verified runtime by URL and
-                token.
+                {{
+                  connectEnabled
+                    ? "Until then, use Advanced to add a verified runtime by URL and token."
+                    : "Use Advanced only to add a local Intern host that you operate."
+                }}
               </p>
             </section>
 
@@ -875,7 +893,11 @@
                     :name="iconChevronRight"
                     class="size-4 transition-transform group-open:rotate-90"
                   />
-                  Advanced: add another host by URL and token
+                  {{
+                    connectEnabled
+                      ? "Advanced: add another host by URL and token"
+                      : "Advanced: add a local Intern host"
+                  }}
                 </span>
               </summary>
               <form ref="addHostSection" class="mt-4" @submit.prevent="addHost">
@@ -1026,6 +1048,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { useRuntimeConfig } from "#imports";
 import type {
   ExternalAgentRunStatus,
   ExternalAgentSessionRef,
@@ -1094,6 +1117,10 @@ const iconLink = useIcon("external-agent.link");
 const runtime = useExternalAgentRuntime();
 const controller = runtime.controller;
 const snapshot = runtime.snapshot;
+const runtimeConfig = useRuntimeConfig();
+const connectEnabled = computed(
+  () => runtimeConfig.public?.connect?.enabled === true,
+);
 const { setActivePage } = useActiveSidebarPage();
 const { activeTheme } = useThemeResolver();
 const usesTexturedSidebarTreatment = computed(

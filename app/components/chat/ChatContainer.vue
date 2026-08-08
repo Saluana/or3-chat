@@ -154,7 +154,7 @@ import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
-import { useToast, useHooks, useChat, useRuntimeConfig } from '#imports';
+import { useToast, useHooks, useChat, useRuntimeConfig, useState } from '#imports';
 import { getMaxMessageFileHashes } from '~/db/files-util';
 import { kv } from '~/db';
 import {
@@ -251,6 +251,14 @@ const emit = defineEmits<{
 // key. Disappears automatically once a key exists; dismissal is persisted.
 const WELCOME_DISMISS_KV_KEY = 'or3_welcome_card_dismissed';
 const runtimeConfig = useRuntimeConfig();
+// Managed Cloud must let an anonymous visitor reach the sign-in control before
+// showing the OpenRouter first-run card. The shared auth-session state is
+// populated by useSessionContext after sign-in; local/static builds have no
+// auth gate and may show the card immediately.
+const authSessionState = useState<{ session?: { authenticated?: boolean } } | null>(
+    'auth-session',
+    () => null,
+);
 const { apiKey } = useUserApiKey();
 const keyStateReady = ref(false);
 const welcomeDismissed = ref(true); // default hidden until hydrated
@@ -261,6 +269,8 @@ const openRouterAvailability = computed(() =>
 const showWelcomeCard = computed(
     () =>
         keyStateReady.value &&
+        (runtimeConfig.public?.ssrAuthEnabled !== true ||
+            authSessionState.value?.session?.authenticated === true) &&
         !welcomeDismissed.value &&
         openRouterAvailability.value.canAcceptUserKey &&
         !openRouterAvailability.value.hasUsableKey(apiKey.value) &&

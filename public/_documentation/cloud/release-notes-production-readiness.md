@@ -12,6 +12,9 @@ Release notes for the production-readiness tranche covering sync casing normaliz
 - Background tool/workflow execution now emits structured logs with secret redaction.
 - Added end-to-end harness/spec coverage for background reattachment and detached completion notification behavior.
 - Published provider and operations documentation for default-stack deployment paths.
+- Managed remote Connect remains explicitly withheld until the Cloudflare/domain
+  operator flow and disposable staging lifecycle are proved; local Intern is
+  still supported independently.
 
 ## Included Changes
 

@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://or3.chat">Website</a> · <a href="https://or3.chat/documentation">Docs</a> · <a href="https://github.com/Saluana/or3-chat/issues">Issues</a> · <a href="#-quick-start">Quick Start</a>
+  <a href="https://or3.chat">Website</a> · <a href="https://or3.chat/documentation">Docs</a> · <a href="https://github.com/Saluana/or3-chat/issues">Issues</a> · <a href="docs/start-here.md">Start Here</a>
 </p>
 
 ---
@@ -20,6 +20,7 @@
 - [What is OR3?](#-what-is-or3)
 - [Core Features](#-core-features)
 - [Quick Start](#-quick-start)
+- [Start Here](docs/start-here.md)
 - [Static vs Cloud — Which Do I Pick?](#%EF%B8%8F-static-vs-cloud--which-do-i-pick)
 - [Static Mode (Default)](#-static-mode-default)
 - [Cloud Mode](#%EF%B8%8F-cloud-mode)
@@ -87,6 +88,9 @@ sets up the supported cloud profile for you.
 ---
 
 ## 🚀 Quick Start
+
+New here? Start with the [one-page setup guide](docs/start-here.md) and choose
+local Cloud, public Cloud, local Intern, or source development.
 
 The supported installation path is the small `@or3/cloud` operator package. It
 uses the version-matched OR3 container and keeps the application data in a
@@ -163,6 +167,10 @@ browser data stays intact.
 The generated first-login credentials also protect the `/admin` dashboard.
 Move them to a password manager and remove the mode-`0600` credentials file.
 
+Managed Cloud keeps bundled plugins and themes available, but does not expose
+upload/install or source rebuild controls. Those extension workflows require
+the editable source path and a deliberate trusted-code deployment.
+
 ---
 
 ## 📦 Static Mode (Default)
@@ -213,6 +221,10 @@ HTTPS. The operator also provides `update`, `backup`, `restore`, `rollback`,
 deployment.
 See [Installation and operations](docs/installation.md) for the complete
 workflow.
+
+Remote OR3 Connect is currently withheld from the managed Cloud profile until
+its Cloudflare/domain staging flow is proved. Use [Start Here](docs/start-here.md)
+for the supported local Intern path and the exact source-only boundary.
 
 If you need an editable checkout or providers other than the supported cloud
 profile, use the repository-local source wizard documented in
@@ -379,13 +391,15 @@ Controls auth, sync, storage, rate limiting, admin, and background streaming. On
 | **Admin** | Admin credentials, extension upload limits |
 | **Background Streaming** | Enable/disable, max concurrent jobs, timeout |
 
-All values are driven by environment variables. The managed Cloud CLI (or the
-developer source wizard) writes these for you, or you can set them manually in
-`.env`.
+Advanced/source deployments drive these values with environment variables. The
+managed Cloud CLI writes its own protected deployment state; normal users do
+not need to create or edit `.env` by hand.
 
 ---
 
 ## 📖 Documentation
+
+Start with [Start Here](docs/start-here.md), then use the focused guides below.
 
 Full documentation lives inside the project at [`public/_documentation/`](public/_documentation/)
 

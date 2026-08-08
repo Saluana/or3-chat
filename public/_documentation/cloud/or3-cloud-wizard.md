@@ -1,5 +1,9 @@
 # OR3 Cloud Source Wizard
 
+> This is an advanced source-development path. Managed Cloud intentionally
+> withholds remote Connect until its operator and staging proof are complete;
+> use [Start Here](../../../docs/start-here.md) for supported beginner routes.
+
 This page documents the repository-local wizard for contributors and advanced
 custom-provider deployments. Normal local or VPS installations should use the
 managed `@or3/cloud` distribution documented in `/docs/installation`.

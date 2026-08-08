@@ -1,17 +1,26 @@
 import { expect, test } from 'bun:test';
 import {
+  assertCommandFlags,
+  assertEnoughFreeSpace,
+  assertPurgeBackupFreshness,
+  assertRemovableArtifactName,
   assertSupportedSource,
   assertSupportedSourceCompose,
-  assertCommandFlags,
   assertBackupMatchesDeployment,
+  assertSupportedArchitecture,
+  buildCredentialsResetScript,
   buildEnv,
   checkResolvedLoopbackBinding,
   isVersion,
   parseEnv,
   parseFlags,
+  purgeVolumesFromState,
   redact,
+  requiredArchiveSpace,
+  selectPruneTargets,
   serializeEnv,
   stateFromEnv,
+  supportedImageArchitectures,
 } from '../src/cli';
 
 test('round trips the generated env format without losing values', () => {
@@ -209,4 +218,150 @@ test('refuses unsupported V1 provider modules before adoption', () => {
   }, 'or3-provider-basic-auth/nuxt\nor3-provider-sqlite/nuxt\nor3-provider-s3/nuxt')).toThrow(
     'V1 provider modules are unsupported',
   );
+});
+
+test('requires archive space plus reserve headroom before destructive ops', () => {
+  const required = 100 * 1024 * 1024;
+  const headroom = Math.max(required / 2, 64 * 1024 * 1024);
+  expect(requiredArchiveSpace(required)).toBe(required + headroom);
+  expect(() => assertEnoughFreeSpace(requiredArchiveSpace(required), required, 'Backup')).not.toThrow();
+  expect(() => assertEnoughFreeSpace(requiredArchiveSpace(required) - 1, required, 'Backup')).toThrow(
+    'Backup needs at least',
+  );
+  expect(() => assertEnoughFreeSpace(1024 * 1024, required, 'Restore')).toThrow('free space');
+});
+
+test('guard permits only an OR3-generated backup ID for artifact cleanup', () => {
+  expect(assertRemovableArtifactName('backup-2026-08-07T10-30-00-000Z-a1b2c3d4')).toBe(
+    'backup-2026-08-07T10-30-00-000Z-a1b2c3d4',
+  );
+  for (const name of ['../../etc/shadow', 'backup-../other', 'notabackup', 'other-2026-01-01', ''] ) {
+    expect(() => assertRemovableArtifactName(name)).toThrow('Refusing to remove a backup artifact');
+  }
+});
+
+test('prunes newest-first retention while protecting rollback and pending backups', () => {
+  const backups = [
+    { backupId: 'backup-oldest', createdAt: '2026-01-01T00:00:00.000Z' },
+    { backupId: 'backup-middle', createdAt: '2026-02-01T00:00:00.000Z' },
+    { backupId: 'backup-newest', createdAt: '2026-03-01T00:00:00.000Z' },
+  ];
+  expect(selectPruneTargets(backups, 2, new Set())).toEqual(['backup-oldest']);
+  expect(selectPruneTargets(backups, 5, new Set())).toEqual([]);
+  expect(selectPruneTargets(backups, 2, new Set(['backup-oldest']))).toEqual([]);
+  expect(selectPruneTargets(backups, 1, new Set(['backup-middle']))).toEqual(['backup-oldest']);
+  expect(selectPruneTargets(backups, 1, new Set(['backup-middle']), true)).toEqual(['backup-middle', 'backup-oldest']);
+  expect(() => selectPruneTargets(backups, 0, new Set())).toThrow('at least 1');
+  expect(() => selectPruneTargets(backups, 1.5, new Set())).toThrow('at least 1');
+});
+
+test('purge targets derive only from validated state and refuse without a recent backup', () => {
+  const localEnv = buildEnv({
+    mode: 'local',
+    version: '0.1.12',
+    directory: '/tmp/or3-cloud-purge-local',
+    email: 'admin@example.com',
+    password: 'AValidPassword123',
+    port: 3000,
+  });
+  const localState = stateFromEnv('/tmp/or3-cloud-purge-local', localEnv, 'local', 'init', 'sha256:test');
+  expect(purgeVolumesFromState(localState)).toEqual([localState.volumeName]);
+
+  const publicEnv = buildEnv({
+    mode: 'public',
+    version: '0.1.12',
+    directory: '/tmp/or3-cloud-purge-public',
+    email: 'admin@example.com',
+    password: 'AValidPassword123',
+    domain: 'cloud.example.com',
+    port: 3000,
+  });
+  const publicState = stateFromEnv('/tmp/or3-cloud-purge-public', publicEnv, 'public', 'init', 'sha256:test');
+  expect(purgeVolumesFromState(publicState)).toEqual([
+    publicState.volumeName,
+    publicState.caddyDataVolume as string,
+    publicState.caddyConfigVolume as string,
+  ]);
+
+  const now = Date.now();
+  expect(() => assertPurgeBackupFreshness([], now)).toThrow('backup newer than 24 hours');
+  expect(() => assertPurgeBackupFreshness(
+    [{ backupId: 'backup-stale', createdAt: new Date(now - 25 * 60 * 60 * 1000).toISOString() }],
+    now,
+  )).toThrow('backup newer than 24 hours');
+  expect(() => assertPurgeBackupFreshness(
+    [{ backupId: 'backup-fresh', createdAt: new Date(now - 60 * 60 * 1000).toISOString() }],
+    now,
+  )).not.toThrow();
+});
+
+test('credentials reset script rewrites the owner hash, revokes sessions, and rotates admin credentials', () => {
+  const script = buildCredentialsResetScript({
+    ownerEmail: 'admin@example.com',
+    ownerPassword: 'ANewOwnerPassword123',
+    adminUsername: 'admin@example.com',
+    adminPassword: 'ANewAdminPassword123',
+  });
+  expect(script).toContain('better-sqlite3');
+  expect(script).toContain('bcryptjs/index.js');
+  expect(script).toContain("UPDATE basic_auth_accounts SET password_hash = ?, token_version = token_version + 1, updated_at = ?");
+  expect(script).toContain('WHERE account_id = ?');
+  expect(script).toContain('SELECT id FROM basic_auth_accounts WHERE email = ?');
+  expect(script).toContain('basic_auth_sessions');
+  expect(script).toContain('/data/auth.sqlite');
+  expect(script).toContain('admin-credentials.json');
+  expect(script).toContain('process.exit(1)');
+  expect(script).not.toContain('ANewOwnerPassword123');
+  expect(script).not.toContain('ANewAdminPassword123');
+});
+
+test('accepts only the new operator flags and rejects typos before dispatch', () => {
+  expect(() => assertCommandFlags('remove', { 'purge-data': true, yes: true })).not.toThrow();
+  expect(() => assertCommandFlags('remove', { purge: true })).toThrow('Unknown option for remove: --purge');
+  expect(() => assertCommandFlags('credentials', { yes: true, 'owner-password': 'x', 'admin-password': 'y' })).not.toThrow();
+  expect(() => assertCommandFlags('credentials', { force: true })).toThrow('Unknown option for credentials: --force');
+  expect(() => assertCommandFlags('backup', { keep: '3' })).not.toThrow();
+  expect(() => assertCommandFlags('logs', { tail: '50' })).not.toThrow();
+  expect(() => assertCommandFlags('status', { yes: true })).toThrow('Unknown option for status: --yes');
+});
+
+test('accepts a manifest list that publishes both amd64 and arm64', () => {
+  const manifest = {
+    mediaType: 'application/vnd.docker.distribution.manifest.list.v2+json',
+    manifests: [
+      { platform: { os: 'linux', architecture: 'amd64' } },
+      { platform: { os: 'linux', architecture: 'arm64' } },
+    ],
+  };
+  expect(supportedImageArchitectures(manifest)).toEqual(['amd64', 'arm64']);
+  expect(() => assertSupportedArchitecture(manifest, 'amd64')).not.toThrow();
+  expect(() => assertSupportedArchitecture(manifest, 'arm64')).not.toThrow();
+});
+
+test('rejects an arm64 host when the manifest list publishes amd64 only', () => {
+  const manifest = {
+    mediaType: 'application/vnd.docker.distribution.manifest.list.v2+json',
+    manifests: [{ platform: { os: 'linux', architecture: 'amd64' } }],
+  };
+  expect(() => assertSupportedArchitecture(manifest, 'amd64')).not.toThrow();
+  expect(() => assertSupportedArchitecture(manifest, 'arm64')).toThrow(
+    'OR3 does not publish a arm64 image for this version yet. Supported architectures: amd64. Install on a supported machine or wait for the next release.',
+  );
+});
+
+test('accepts a single-arch manifest for its own architecture and rejects others', () => {
+  const manifest = { mediaType: 'application/vnd.docker.distribution.manifest.v2+json', architecture: 'arm64' };
+  expect(supportedImageArchitectures(manifest)).toEqual(['arm64']);
+  expect(() => assertSupportedArchitecture(manifest, 'arm64')).not.toThrow();
+  expect(() => assertSupportedArchitecture(manifest, 'amd64')).toThrow(
+    'OR3 does not publish a amd64 image for this version yet. Supported architectures: arm64.',
+  );
+});
+
+test('fails closed on malformed or empty manifests', () => {
+  for (const manifest of [{}, { manifests: [] }, { manifests: [{ platform: {} }] }, null, undefined]) {
+    expect(() => assertSupportedArchitecture(manifest as never, 'amd64')).toThrow(
+      'no recognizable architecture list',
+    );
+  }
 });

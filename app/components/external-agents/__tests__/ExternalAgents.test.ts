@@ -6,6 +6,7 @@ import ExternalAgentSessionPane from "../ExternalAgentSessionPane.vue";
 import ExternalAgentLauncher from "../ExternalAgentLauncher.vue";
 import { encodeExternalAgentSessionRef } from "~/core/external-agents/refs";
 import { CORE_APP_COMPONENT_DEFAULTS } from "~/theme/_shared/theme-components-registry";
+import { testRuntimeConfig } from "../../../../tests/setup";
 import type { ThemePlugin } from "~/plugins/90.theme.client";
 import type {
   ExternalAgentSession,
@@ -362,6 +363,7 @@ const global = {
 describe("External Agents components", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    testRuntimeConfig.value.public.connect.enabled = true;
   });
 
   beforeEach(() => {
@@ -1300,6 +1302,33 @@ describe("External Agents components", () => {
     expect(wrapper.text()).toContain("npx @or3/connect");
     expect(wrapper.text()).toContain("Copy Connect command");
     expect(wrapper.text()).toContain("Advanced: connect by URL and token");
+  });
+
+  it("withholds remote Connect promotion while keeping local Intern settings", async () => {
+    testRuntimeConfig.value.public.connect.enabled = false;
+    mocks.snapshot.value = snapshot({
+      hosts: [],
+      activeHostId: null,
+      connectionState: "disconnected",
+      runners: [],
+      sessions: [],
+    });
+    const wrapper = mount(ExternalAgentLauncher, {
+      global: {
+        ...global,
+        stubs: {
+          ...global.stubs,
+          ExternalAgentLauncher: false,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Remote Connect unavailable");
+    expect(wrapper.text()).toContain("local Intern host");
+    expect(wrapper.text()).not.toContain("npx @or3/connect");
+    expect(wrapper.text()).not.toContain("Copy Connect command");
+    expect(wrapper.text()).not.toContain("Advanced: connect by URL and token");
   });
 
   it("explains runner authentication and offers discovery refresh", async () => {

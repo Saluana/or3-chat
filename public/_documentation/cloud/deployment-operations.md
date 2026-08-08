@@ -15,7 +15,8 @@ Operational runbook for OR3 Cloud SSR deployments.
 
 ```bash
 SSR_AUTH_ENABLED=true
-OR3_AUTH_AUTO_PROVISION=true
+OR3_AUTH_REGISTRATION_MODE=invite_only
+OR3_AUTH_AUTO_PROVISION=false
 ```
 
 ## Auth

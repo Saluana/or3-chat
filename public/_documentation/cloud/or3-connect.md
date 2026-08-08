@@ -1,18 +1,26 @@
 # OR3 Connect
 
-OR3 Connect makes a computer running `or3-intern` available to the signed-in
-OR3 Cloud account without a VPN or manual tunnel:
+> **Managed Cloud status: withheld.** Remote Connect is not part of the
+> supported managed Cloud launch. Its Cloudflare/domain/attestation flow and a
+> disposable staging lifecycle must pass before the production UI or beginner
+> docs can offer a runnable command.
+
+Do not run a generic `npx @or3/connect` command against a managed Cloud
+instance, and do not paste a URL or token as a workaround. For a local agent
+computer, use the independently supported local Intern bootstrap once its
+matching package and verified release assets are published. Check [Connect
+release status](https://github.com/Saluana/or3-intern/blob/main/docs/connect-release-status.md)
+first; the current registry package predates this command:
 
 ```bash
-npx @or3/connect
+npx @or3/connect intern
 ```
 
-The command installs checksum-verified release binaries in `~/.or3/bin`, opens
-OR3's browser device authorization, and asks once before installing a
-launchd/systemd background service. The browser and terminal display the same
-short phrase; approve only when they match.
+The remainder of this page is an advanced source/operator reference for a
+future or explicitly configured Connect deployment. It is not a managed Cloud
+setup path and does not change the current withheld capability.
 
-## User commands
+## Source/operator commands (not managed Cloud)
 
 ```bash
 npx @or3/connect
@@ -25,8 +33,8 @@ npx @or3/connect uninstall
 `--no-service` keeps the connection in the current terminal. `--no-browser`
 prints the sign-in URL for headless systems.
 
-Remote mode requires an OR3 Cloud account. Offline/local OR3 never requires an
-account and does not contact this control plane.
+Remote mode requires an OR3 Cloud account and a separately configured control
+plane. Offline/local OR3 never requires an account and does not contact it.
 
 `OR3_CONNECT_PUBLIC_URL` must be the URL that the connecting computer can open
 in its browser. If OR3 Chat is only running on your computer, do not enable
@@ -58,7 +66,7 @@ OR3_SQLITE_DB_PATH=.data/or3-sync.sqlite
 OR3_CONNECT_ENABLED=true
 OR3_CONNECT_PROVIDER=sqlite
 OR3_CONNECT_RELAY_PROVIDER=cloudflare
-OR3_CONNECT_PUBLIC_URL=https://or3.chat
+OR3_CONNECT_PUBLIC_URL=https://cloud.example.com
 OR3_CONNECT_ENCRYPTION_KEY=<at-least-32-random-characters>
 OR3_CONNECT_MAX_COMPUTERS=3
 # Optional overrides; normally discovered from the hostname:
@@ -117,15 +125,16 @@ It requires no OR3 account, relay, or Connect configuration.
 - Disconnect deletes DNS/tunnel resources, revokes the environment, and removes
   local state/service files.
 
-## Release operations
+## Release operations (future/advanced only)
 
 Tag `or3-intern` with `v*` to build macOS/Linux amd64/arm64 archives and publish
 the `or3` npm bootstrap. Release assets must expose GitHub SHA-256 digests;
 the bootstrap refuses unverified assets.
 
-Before production, run the canary from a network different from the host and
-verify connect, reload hydration, agent streaming, approval prompts, restart
-survival, revoke, and offline/local behavior.
+Before any future production enablement, run the canary from a network
+different from the host and verify connect, reload hydration, agent streaming,
+approval prompts, restart survival, revoke, and offline/local behavior. Until
+that evidence exists, keep the managed Cloud capability disabled.
 
 ## Provider contract
 

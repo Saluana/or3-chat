@@ -8,6 +8,11 @@ set -eu
 auth_enabled=${SSR_AUTH_ENABLED:-false}
 auth_provider=${OR3_AUTH_PROVIDER:-${AUTH_PROVIDER:-clerk}}
 guest_access_enabled=${OR3_GUEST_ACCESS_ENABLED:-false}
+registration_mode=${OR3_AUTH_REGISTRATION_MODE:-open}
+auto_provision=${OR3_AUTH_AUTO_PROVISION:-true}
+bootstrap_email=${OR3_BASIC_AUTH_BOOTSTRAP_EMAIL:-}
+invite_token_secret=${OR3_AUTH_INVITE_TOKEN_SECRET:-}
+invite_token_ttl_seconds=${OR3_AUTH_INVITE_TOKEN_TTL_SECONDS:-604800}
 
 sync_enabled=${OR3_CLOUD_SYNC_ENABLED:-${OR3_SYNC_ENABLED:-false}}
 sync_provider=${OR3_SYNC_PROVIDER:-convex}
@@ -41,6 +46,21 @@ if [ -z "${NUXT_PUBLIC_AUTH_PROVIDER+x}" ]; then
 fi
 if [ -z "${NUXT_PUBLIC_GUEST_ACCESS_ENABLED+x}" ]; then
     export NUXT_PUBLIC_GUEST_ACCESS_ENABLED="${guest_access_enabled}"
+fi
+if [ -z "${NUXT_AUTH_REGISTRATION_MODE+x}" ]; then
+    export NUXT_AUTH_REGISTRATION_MODE="${registration_mode}"
+fi
+if [ -z "${NUXT_AUTH_AUTO_PROVISION+x}" ]; then
+    export NUXT_AUTH_AUTO_PROVISION="${auto_provision}"
+fi
+if [ -z "${NUXT_AUTH_BOOTSTRAP_EMAIL+x}" ]; then
+    export NUXT_AUTH_BOOTSTRAP_EMAIL="${bootstrap_email}"
+fi
+if [ -z "${NUXT_AUTH_INVITE_TOKEN_SECRET+x}" ]; then
+    export NUXT_AUTH_INVITE_TOKEN_SECRET="${invite_token_secret}"
+fi
+if [ -z "${NUXT_AUTH_INVITE_TOKEN_TTL_SECONDS+x}" ]; then
+    export NUXT_AUTH_INVITE_TOKEN_TTL_SECONDS="${invite_token_ttl_seconds}"
 fi
 
 if [ -z "${NUXT_SYNC_ENABLED+x}" ]; then

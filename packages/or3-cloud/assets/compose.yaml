@@ -18,12 +18,40 @@ services:
     volumes:
       - or3-data:/data
     restart: unless-stopped
+    # Container hardening: the runtime image already runs as USER node and
+    # listens on port 3000 (no privileged ports), so all capabilities are
+    # dropped and the root filesystem is read-only. Persistent state lives on
+    # the or3-data volume (/data: SQLite, storage, admin data, extensions);
+    # scratch space (SQLite WAL, H3 multipart uploads, Nuxt server caches)
+    # is a 256m tmpfs at /tmp. Phase-5 smokes must re-verify uploads and
+    # plugin installs against this read-only profile.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
+      # Deep health, mirroring the CLI's HEALTH_SCRIPT: exit non-zero unless
+      # the response is HTTP ok AND the parsed body status is exactly 'ok'.
+      # A degraded provider (e.g. sync/storage/auth down) reports HTTP 200
+      # with status 'degraded' and is therefore marked unhealthy. Docker
+      # Compose uses that state for startup dependencies and `or3 status`
+      # reports it, but Docker does not restart a running container solely
+      # because a healthcheck fails; `restart: unless-stopped` covers process
+      # exits only. Operators should run `or3 doctor`/`or3 restart` for a
+      # persistent degraded state.
       test:
         - CMD
         - node
         - -e
-        - "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        - "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok||b.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 12

@@ -38,6 +38,7 @@ bun run release:cloud:check
 bun run scripts/release/check-cloud-package.mjs --registry
 bun run cloud:package:check
 bun run --cwd packages/or3-cloud pack:check
+bun run check:docs
 ```
 
 When the default profile changed, verify the exact build-time provider versions
@@ -103,6 +104,7 @@ npm deprecate 'create-or3-chat@<0.1.12' 'Use npx @or3/cloud init; the creator is
 
 - `bun run release:cloud:check` passes.
 - `bun run cloud:package:check` passes.
+- `bun run check:docs` passes (and, on qualification, executes the exact packed Cloud CLI).
 - `npm pack --dry-run` contains only the Cloud CLI and deployment assets.
 - The exact default provider versions exist on npm.
 - The public GHCR image pulls from a clean machine.

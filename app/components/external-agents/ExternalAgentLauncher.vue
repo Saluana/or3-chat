@@ -21,7 +21,11 @@
       </p>
 
       <div
-        v-if="launcherRecovery.kind === 'connect' && CONNECT_COMMAND"
+        v-if="
+          launcherRecovery.kind === 'connect' &&
+          connectEnabled &&
+          CONNECT_COMMAND
+        "
         class="mt-4 rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)] p-3"
       >
         <p class="text-xs font-medium">Run this on the computer with your code:</p>
@@ -31,16 +35,21 @@
       </div>
 
       <p
-        v-else-if="launcherRecovery.kind === 'connect'"
+        v-else-if="launcherRecovery.kind === 'connect_unavailable'"
         class="mt-4 text-sm leading-relaxed text-[var(--md-on-surface-variant)]"
       >
-        OR3 Connect is not enabled for this workspace yet. An administrator can
-        enable it before connecting computers.
+        Remote Connect is not available on this Cloud instance. An administrator
+        must configure and prove it before it can be enabled. To use a local
+        Intern host, open Connection settings.
       </p>
 
       <div class="mt-5 flex flex-wrap gap-2">
         <UButton
-          v-if="launcherRecovery.kind === 'connect' && CONNECT_COMMAND"
+          v-if="
+            launcherRecovery.kind === 'connect' &&
+            connectEnabled &&
+            CONNECT_COMMAND
+          "
           :icon="iconCopy"
           @click="copyConnectCommand"
         >
@@ -91,7 +100,7 @@
       </div>
 
       <details
-        v-if="launcherRecovery.kind === 'connect'"
+        v-if="launcherRecovery.kind === 'connect' && connectEnabled"
         class="mt-4 text-xs text-[var(--md-on-surface-variant)]"
       >
         <summary class="cursor-pointer font-medium">
@@ -192,6 +201,9 @@ const emit = defineEmits<{
 
 const runtime = useExternalAgentRuntime();
 const runtimeConfig = useRuntimeConfig();
+const connectEnabled = computed(
+  () => runtimeConfig.public?.connect?.enabled === true,
+);
 const CONNECT_COMMAND = computed(() =>
   buildConnectCommand(runtimeConfig.public?.connect?.publicUrl),
 );
@@ -279,11 +291,16 @@ const launcherRecovery = computed(() => {
   void current?.generation;
   if (!current?.hosts.length || !current.activeHostId) {
     return {
-      kind: "connect" as const,
+      kind: connectEnabled.value
+        ? ("connect" as const)
+        : ("connect_unavailable" as const),
       icon: iconInstall.value,
-      title: "Connect your computer",
-      description:
-        "Run one command on the computer that should run agents, then enter the code it shows.",
+      title: connectEnabled.value
+        ? "Connect your computer"
+        : "Remote Connect unavailable",
+      description: connectEnabled.value
+        ? "Run one command on the computer that should run agents, then enter the code it shows."
+        : "Remote Connect is withheld from this Cloud instance until its managed staging flow is ready.",
     };
   }
   if (controller?.pinCredentialStatus.locked) {

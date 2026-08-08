@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 import { createHash, randomBytes } from 'node:crypto';
-import { execFile as execFileCallback } from 'node:child_process';
+import { execFile as execFileCallback, spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { lookup } from 'node:dns/promises';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { existsSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import {
   chmod,
   copyFile,
@@ -16,20 +16,28 @@ import {
   rename,
   rm,
   stat,
+  statfs,
   writeFile,
 } from 'node:fs/promises';
+import { Writable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
-import { dirname, basename, isAbsolute, join, resolve } from 'node:path';
+import { dirname, basename, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createGunzip } from 'node:zlib';
 
 const execFile = promisify(execFileCallback);
 
-export const PACKAGE_VERSION = '0.1.15';
+export const PACKAGE_VERSION = '0.1.16';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
 const DEFAULT_PORT = 3000;
 const DEEP_HEALTH_TIMEOUT_MS = 180_000;
+const BACKUP_RETENTION_KEEP = 5;
+const PURGE_REQUIRES_BACKUP_WITHIN_MS = 24 * 60 * 60 * 1000;
+const FREE_SPACE_HEADROOM_BYTES = 64 * 1024 * 1024;
+const BACKUP_ID_PATTERN = /^backup-[0-9A-Za-z-]+$/;
 const SECRET_KEYS = [
   'OR3_BASIC_AUTH_JWT_SECRET',
   'OR3_BASIC_AUTH_REFRESH_SECRET',
@@ -50,7 +58,7 @@ const DEPLOYMENT_ENV_KEYS = [
 ] as const;
 
 type Mode = 'local' | 'public';
-type Operation = 'init' | 'update' | 'restore' | 'adopt';
+type Operation = 'init' | 'update' | 'restore' | 'adopt' | 'credentials-reset';
 type PendingOperation = NonNullable<ManagedState['incompleteOperation']>;
 
 export type ManagedState = {
@@ -78,6 +86,9 @@ export type ManagedState = {
     targetVersion?: string;
     targetImage?: string;
     targetImageDigest?: string;
+    credentialReset?: {
+      nextEnv: Record<string, string>;
+    };
   };
   lastError?: string;
 };
@@ -90,6 +101,8 @@ export type BackupManifest = {
   image: string;
   imageDigest: string;
   dataSha256: string;
+  /** Uncompressed live-volume bytes measured immediately before archiving. */
+  dataBytes?: number;
   configSha256?: string;
   mode: Mode;
   domain?: string;
@@ -108,6 +121,16 @@ type RollbackPoint = {
   createdAt: string;
 };
 
+type BackupExportReceipt = {
+  schemaVersion: 1;
+  backupId: string;
+  exportedAt: string;
+  destination: string;
+  destinationDevice: number;
+  dataSha256: string;
+  configSha256?: string;
+};
+
 type Flags = Record<string, string | boolean>;
 
 type CommandResult =
@@ -118,6 +141,8 @@ const ALLOWED_ENV_KEYS = new Set([
   'SSR_AUTH_ENABLED',
   'AUTH_PROVIDER',
   'OR3_AUTH_PROVIDER',
+  'OR3_AUTH_REGISTRATION_MODE',
+  'OR3_AUTH_AUTO_PROVISION',
   'OR3_GUEST_ACCESS_ENABLED',
   'OR3_BASIC_AUTH_JWT_SECRET',
   'OR3_BASIC_AUTH_REFRESH_SECRET',
@@ -215,12 +240,19 @@ export function parseFlags(argv: string[]) {
 const COMMAND_FLAGS: Record<string, readonly string[]> = {
   init: ['local', 'public', 'domain', 'admin-email', 'admin-password', 'admin-password-file', 'port'],
   update: ['to'],
-  backup: [],
+  backup: ['keep', 'force', 'yes'],
   restore: ['yes'],
   rollback: ['yes'],
   doctor: [],
   recover: [],
   adopt: ['from'],
+  credentials: ['yes', 'owner-password', 'admin-password'],
+  status: [],
+  logs: ['tail'],
+  start: [],
+  stop: [],
+  restart: [],
+  remove: ['purge-data', 'yes'],
 };
 
 /** Reject typos before they can silently produce an unexpected deployment. */
@@ -354,6 +386,35 @@ async function readText(path: string) {
   return readFile(path, 'utf8');
 }
 
+/** Total bytes an operation needs on disk: required data plus reserve headroom. */
+export function requiredArchiveSpace(requiredBytes: number) {
+  return requiredBytes + Math.max(Math.ceil(requiredBytes / 2), FREE_SPACE_HEADROOM_BYTES);
+}
+
+/** Pure free-space gate: fails when free bytes cannot cover the archive plus headroom. */
+export function assertEnoughFreeSpace(freeBytes: number, requiredBytes: number, label: string) {
+  const needed = requiredArchiveSpace(requiredBytes);
+  if (freeBytes < needed) {
+    throw new Error(`${label} needs at least ${needed} bytes of free space (${requiredBytes} required plus reserve headroom) but only ${freeBytes} bytes are available. Free disk space or move backups off-host before retrying.`);
+  }
+}
+
+/**
+ * Preflight for archive operations. Checks the filesystem that holds
+ * `targetPath` (the directory the archive will be written into) via statfs,
+ * which reports free blocks for the unprivileged user. Used before a backup
+ * writes data.tgz and before a restore extracts one.
+ */
+async function assertFreeSpaceForArchive(targetPath: string, requiredBytes: number, label: string) {
+  let stats;
+  try {
+    stats = await statfs(dirname(targetPath));
+  } catch (error) {
+    throw new Error(`Could not check free disk space for ${dirname(targetPath)}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  assertEnoughFreeSpace(Number(stats.bavail) * Number(stats.bsize), requiredBytes, label);
+}
+
 export function parseEnv(text: string) {
   const values: Record<string, string> = {};
   for (const line of text.split(/\r?\n/)) {
@@ -393,6 +454,7 @@ function deploymentPaths(directory: string) {
     state: join(cloud, 'state.json'),
     operations: join(cloud, 'operations'),
     backups: join(cloud, 'backups'),
+    exports: join(cloud, 'exports'),
   };
 }
 
@@ -514,6 +576,7 @@ async function assertSafeComposeBinding(directory: string, mode: Mode, env: Reco
 }
 
 const HEALTH_SCRIPT = "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async response=>{const body=await response.json().catch(()=>({}));if(!response.ok||body.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))";
+const MAINTENANCE_SCRIPT = "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async response=>{const body=await response.json().catch(()=>({}));const m=body?.providers?.sync?.details?.maintenance;if(m)console.log(JSON.stringify(m))}).catch(()=>{})";
 
 async function waitForDeepHealthWithArgs(composeCommand: string[], directory: string, secrets: string[] = []) {
   const deadline = Date.now() + DEEP_HEALTH_TIMEOUT_MS;
@@ -603,6 +666,62 @@ async function imageDigest(image: string) {
   const idResult = await run('docker', ['image', 'inspect', '--format', '{{.Id}}', image]);
   if (!idResult.ok || !idResult.stdout.trim()) throw new Error(`Could not resolve a digest for ${image}.`);
   return idResult.stdout.trim();
+}
+
+export type ImageManifest = {
+  architecture?: string;
+  manifests?: Array<{ platform?: { architecture?: string } }>;
+};
+
+export function supportedImageArchitectures(manifest: ImageManifest | null | undefined): string[] {
+  if (manifest && Array.isArray(manifest.manifests)) {
+    const architectures = manifest.manifests
+      .map((entry) => entry.platform?.architecture)
+      .filter((value): value is string => typeof value === 'string');
+    if (architectures.length > 0) return [...new Set(architectures)];
+  }
+  if (manifest && typeof manifest.architecture === 'string') return [manifest.architecture];
+  throw new Error('The OR3 image manifest has no recognizable architecture list. Refusing to continue without confirming the image supports this machine.');
+}
+
+export function assertSupportedArchitecture(manifest: ImageManifest | null | undefined, hostArch: 'arm64' | 'amd64') {
+  const supported = supportedImageArchitectures(manifest);
+  if (!supported.includes(hostArch)) {
+    throw new Error(
+      `OR3 does not publish a ${hostArch} image for this version yet. Supported architectures: ${supported.join(', ') || 'none detected'}. Install on a supported machine or wait for the next release.`,
+    );
+  }
+}
+
+function hostArchitecture(): 'arm64' | 'amd64' {
+  if (process.arch === 'arm64') return 'arm64';
+  if (process.arch === 'x64') return 'amd64';
+  throw new Error(`OR3 supports only linux/amd64 and linux/arm64 hosts; this machine reports ${process.arch}. Install on a supported machine.`);
+}
+
+async function assertSupportedHostArchitecture(image: string) {
+  const hostArch = hostArchitecture();
+  // Qualification runs intentionally use a local, not-yet-published candidate
+  // image. Its single-platform Docker image config is the authoritative source
+  // there; normal operator installs still require the registry manifest list.
+  if (process.env.OR3_CLOUD_SKIP_PULL === 'true') {
+    const local = await run('docker', ['image', 'inspect', '--format', '{{.Architecture}}', image]);
+    if (local.ok && local.stdout.trim()) {
+      assertSupportedArchitecture({ architecture: local.stdout.trim() }, hostArch);
+      return;
+    }
+  }
+  const result = await run('docker', ['manifest', 'inspect', image]);
+  if (!result.ok) {
+    throw new Error(`Could not inspect the OR3 image manifest for ${image}. ${result.stderr.trim()}`);
+  }
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(result.stdout.trim());
+  } catch {
+    throw new Error(`The OR3 image manifest for ${image} could not be parsed. Refusing to continue without confirming the image supports this machine.`);
+  }
+  assertSupportedArchitecture(manifest as ImageManifest, hostArch);
 }
 
 function composeProjectNames(directory: string) {
@@ -782,6 +901,152 @@ function backupDirectory(directory: string, backupId: string) {
   return join(deploymentPaths(directory).backups, backupId);
 }
 
+/**
+ * Measures the live data volume (mounted at /data) in bytes for the
+ * free-space preflight, before the service is stopped.
+ *
+ * Probe choice: `du -sb` runs inside the or3 image itself — first via
+ * `docker compose exec` against the running container, then via
+ * `docker compose run --entrypoint sh` (same image, no second image needed)
+ * when the deployment is stopped. The managed image is a node base image with
+ * a shell and coreutils, and /data is already mounted there.
+ */
+async function dataVolumeSize(directory: string, mode: Mode, env: Record<string, string>) {
+  const parseDuOutput = (stdout: string) => {
+    const match = stdout.trim().match(/^(\d+)/);
+    if (!match) throw new Error(`Could not parse the data volume size from "du" output.`);
+    return Number(match[1]);
+  };
+  const exec = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', 'sh', '-c', 'du -sb /data 2>/dev/null'])], directory);
+  if (exec.ok) return parseDuOutput(exec.stdout);
+  const fallback = await run('docker', [...composeArgs(directory, mode, ['run', '--rm', '--no-deps', '--entrypoint', 'sh', 'or3', '-c', 'du -sb /data 2>/dev/null'])], directory);
+  if (fallback.ok) return parseDuOutput(fallback.stdout);
+  throw new Error(`Could not measure the data volume size for the free-space preflight. Start the deployment and retry. ${redact(`${exec.stderr} ${fallback.stderr}`)}`);
+}
+
+/** Pure guard: only an operation's own generated backup ID may be removed. */
+export function assertRemovableArtifactName(name: string) {
+  if (!BACKUP_ID_PATTERN.test(name)) {
+    throw new Error(`Refusing to remove a backup artifact named "${name}". Only paths matching an OR3-generated backup ID may be removed.`);
+  }
+  return name;
+}
+
+/**
+ * Removes exactly the named backup directory under .or3-cloud/backups and
+ * nothing else: the name must match an OR3-generated backup ID and the
+ * resolved path must sit directly inside the backups root.
+ */
+async function removeNamedBackupArtifact(directory: string, backupId: string) {
+  assertRemovableArtifactName(backupId);
+  const target = backupDirectory(directory, backupId);
+  if (dirname(target) !== deploymentPaths(directory).backups) {
+    throw new Error(`Refusing to remove a path outside the backups directory: ${target}.`);
+  }
+  await rm(target, { recursive: true, force: true });
+  await rm(join(deploymentPaths(directory).exports, `${backupId}.json`), { force: true });
+}
+
+type BackupListing = {
+  backupId: string;
+  createdAt: string;
+  appVersion: string;
+  path: string;
+  bytes: number;
+  dataSha256: string;
+};
+
+/** Reads a backup manifest for listing/pruning without checksum verification. */
+async function readBackupManifestMetadata(backupPath: string): Promise<BackupManifest | null> {
+  try {
+    const manifest = JSON.parse(await readText(join(backupPath, 'manifest.json'))) as BackupManifest;
+    if (manifest.schemaVersion !== 1 || !manifest.backupId || !manifest.createdAt) return null;
+    return manifest;
+  } catch {
+    return null;
+  }
+}
+
+/** Enumerates complete backups (manifest present) newest first. */
+async function enumerateBackups(directory: string): Promise<BackupListing[]> {
+  const backupsRoot = deploymentPaths(directory).backups;
+  let entries: string[] = [];
+  try {
+    entries = await readdir(backupsRoot);
+  } catch {
+    return [];
+  }
+  const result: BackupListing[] = [];
+  for (const entry of entries) {
+    const path = join(backupsRoot, entry);
+    const manifest = await readBackupManifestMetadata(path);
+    if (!manifest) continue;
+    let bytes = 0;
+    try {
+      for (const file of ['data.tgz', 'config.env', 'manifest.json']) {
+        bytes += (await stat(join(path, file))).size;
+      }
+    } catch {
+      bytes = 0;
+    }
+    result.push({
+      backupId: manifest.backupId,
+      createdAt: manifest.createdAt,
+      appVersion: manifest.appVersion,
+      path,
+      bytes,
+      dataSha256: manifest.dataSha256,
+    });
+  }
+  result.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  return result;
+}
+
+/**
+ * Pure retention rule: keeps the newest `keep` backups. Backups referenced by
+ * the rollback point or an incomplete operation are never pruned unless
+ * `force` is set. Returns the IDs to delete (newest first).
+ */
+export function selectPruneTargets(
+  backups: Array<{ backupId: string; createdAt: string }>,
+  keep: number,
+  protectedIds: ReadonlySet<string>,
+  force = false,
+) {
+  if (!Number.isInteger(keep) || keep < 1) throw new Error('Backup retention must be an integer of at least 1.');
+  const sorted = [...backups].sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  const deletable = force ? sorted : sorted.filter((backup) => !protectedIds.has(backup.backupId));
+  return deletable.slice(keep).map((backup) => backup.backupId);
+}
+
+function parseKeep(flags: Flags) {
+  const value = stringFlag(flags, 'keep') ?? String(BACKUP_RETENTION_KEEP);
+  const keep = Number(value);
+  if (!Number.isInteger(keep) || keep < 1) throw new Error('--keep must be an integer of at least 1.');
+  return keep;
+}
+
+/**
+ * Enforces bounded backup retention. Protected backups (the recorded rollback
+ * point and any incomplete-operation backup) are exempt unless `force` is
+ * passed. Prints each deleted backup id and path.
+ */
+async function pruneBackups(directory: string, state: ManagedState, keep: number, force: boolean) {
+  const backups = await enumerateBackups(directory);
+  const protectedIds = new Set<string>();
+  if (state.rollback?.backupId) protectedIds.add(state.rollback.backupId);
+  if (state.incompleteOperation?.backupId) protectedIds.add(state.incompleteOperation.backupId);
+  const targets = selectPruneTargets(backups, keep, protectedIds, force);
+  if (force && targets.length > 0) {
+    console.log(`--force --yes will permanently delete: ${targets.join(', ')}`);
+  }
+  for (const backupId of targets) {
+    await removeNamedBackupArtifact(directory, backupId);
+    console.log(`Deleted backup ${backupId} at ${backupDirectory(directory, backupId)}`);
+  }
+  return targets.length;
+}
+
 function assertDeploymentIdentity(state: ManagedState, env: Record<string, string>) {
   const expected: Record<string, string | undefined> = {
     OR3_COMPOSE_PROJECT: state.composeProject,
@@ -796,6 +1061,31 @@ function assertDeploymentIdentity(state: ManagedState, env: Record<string, strin
     if (env[key] !== expected[key]) {
       throw new Error(`Managed state does not match ${key} in .env. Refusing to operate on an unexpected deployment identity.`);
     }
+  }
+}
+
+/**
+ * Refuses to operate on a directory whose basename no longer resolves to the
+ * Compose project and volume names recorded in managed state. A renamed or
+ * copied deployment would otherwise target a different (or unrelated) project
+ * in Docker. Reuse of composeProjectNames keeps the same derivation as init.
+ */
+function assertDeploymentDirectoryIdentity(directory: string, state: ManagedState) {
+  const resolved = resolve(directory);
+  const names = composeProjectNames(resolved);
+  const mismatches: string[] = [];
+  if (state.composeProject !== names.project) {
+    mismatches.push(`compose project "${state.composeProject}" (this directory resolves to "${names.project}")`);
+  }
+  if (state.volumeName !== names.volume) {
+    mismatches.push(`volume "${state.volumeName}" (this directory resolves to "${names.volume}")`);
+  }
+  if (state.mode === 'public') {
+    if (state.caddyDataVolume !== names.caddyData) mismatches.push(`Caddy data volume "${state.caddyDataVolume}"`);
+    if (state.caddyConfigVolume !== names.caddyConfig) mismatches.push(`Caddy config volume "${state.caddyConfigVolume}"`);
+  }
+  if (mismatches.length) {
+    throw new Error(`Managed state does not match the deployment directory identity: ${mismatches.join('; ')}. Refusing to operate on an unrelated project. Run doctor for diagnostics.`);
   }
 }
 
@@ -840,30 +1130,98 @@ export function assertBackupMatchesDeployment(manifest: BackupManifest, backupEn
 
 async function sha256File(path: string) {
   const digest = createHash('sha256');
-  digest.update(await readFile(path));
+  await new Promise<void>((resolvePromise, reject) => {
+    const stream = createReadStream(path);
+    stream.on('data', (chunk: Buffer) => digest.update(chunk));
+    stream.once('error', reject);
+    stream.once('end', resolvePromise);
+  });
   return digest.digest('hex');
 }
 
+/** Streams a container archive to a host-owned file without a root bind mount. */
+async function streamCommandToFile(
+  command: string,
+  args: string[],
+  destination: string,
+  cwd?: string,
+  secrets: string[] = [],
+) {
+  if (await fileExists(destination)) {
+    throw new Error(`Refusing to overwrite existing archive ${destination}.`);
+  }
+  await mkdir(dirname(destination), { recursive: true, mode: 0o700 });
+  const temporary = `${destination}.${randomBytes(8).toString('hex')}.partial`;
+  const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+  let stderr = '';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk: string) => {
+    stderr = `${stderr}${chunk}`.slice(-64 * 1024);
+  });
+  const exit = new Promise<number | null>((resolvePromise, reject) => {
+    child.once('error', reject);
+    child.once('close', resolvePromise);
+  });
+  try {
+    const [exitCode] = await Promise.all([
+      exit,
+      pipeline(child.stdout, createWriteStream(temporary, { flags: 'wx', mode: 0o600 })),
+    ]);
+    if (exitCode !== 0) {
+      throw new Error(`${command} ${args.join(' ')} exited with ${exitCode}. ${redact(stderr, secrets)}`.trim());
+    }
+    await chmod(temporary, 0o600);
+    await rename(temporary, destination);
+  } catch (error) {
+    if (!child.killed) child.kill('SIGTERM');
+    await rm(temporary, { force: true }).catch(() => undefined);
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`${detail}${stderr && !detail.includes(stderr) ? `\n${redact(stderr, secrets)}` : ''}`);
+  }
+}
+
+async function gzipUncompressedBytes(path: string) {
+  let bytes = 0;
+  const counter = new Writable({
+    write(chunk, _encoding, callback) {
+      bytes += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(String(chunk));
+      callback();
+    },
+  });
+  await pipeline(createReadStream(path), createGunzip(), counter);
+  return bytes;
+}
+
 async function volumeArchive(directory: string, mode: Mode, env: Record<string, string>, backupDir: string) {
-  const mount = `${backupDir}:/backup`;
-  await compose(directory, mode, [
-    'run', '--rm', '--no-deps', '--user', '0:0', '-v', mount,
-    '--entrypoint', 'sh', 'or3', '-c',
-    'umask 077 && tar czf /backup/data.tgz -C /data . && tar tzf /backup/data.tgz >/dev/null',
-  ], secretValues(env));
+  await streamCommandToFile(
+    'docker',
+    composeArgs(directory, mode, [
+      'run', '--rm', '--no-deps', '--entrypoint', 'sh', 'or3', '-c',
+      'tar czf - -C /data .',
+    ]),
+    join(backupDir, 'data.tgz'),
+    directory,
+    secretValues(env),
+  );
 }
 
 async function archiveExternalVolume(image: string, volume: string, backupDir: string) {
-  const result = await run('docker', [
-    'run', '--rm', '--user', '0:0', '-v', `${volume}:/source:ro`, '-v', `${backupDir}:/backup`,
-    image, 'sh', '-c', 'umask 077 && tar czf /backup/data.tgz -C /source . && tar tzf /backup/data.tgz >/dev/null',
-  ]);
-  if (!result.ok) throw new Error(`${result.command}\n${result.stderr}`);
+  // Source V1 volumes may be root-owned, so the reader stays root. The archive
+  // itself is streamed to a file opened by this user, avoiding root-owned 0600
+  // backups on ordinary Linux Docker hosts.
+  await streamCommandToFile(
+    'docker',
+    ['run', '--rm', '--user', '0:0', '-v', `${volume}:/source:ro`, image, 'sh', '-c', 'tar czf - -C /source .'],
+    join(backupDir, 'data.tgz'),
+  );
 }
 
 async function restoreAdoptionBackup(directory: string, mode: Mode, env: Record<string, string>, backupPath: string) {
   await compose(directory, mode, [
-    'run', '--rm', '--no-deps', '--user', '0:0', '-v', `${backupPath}:/backup:ro`,
+    // The hardened service drops DAC override capabilities. Keep the image's
+    // normal `node` user here: it owns the managed /data volume and can safely
+    // replace its contents, whereas forced root cannot traverse it.
+    'run', '--rm', '--no-deps', '-v', `${backupPath}:/backup:ro`,
     '--entrypoint', 'sh', 'or3', '-c',
     'find /data -mindepth 1 -delete && tar xzf /backup/data.tgz -C /data',
   ], secretValues(env));
@@ -873,10 +1231,15 @@ async function createBackup(directory: string, state: ManagedState, env: Record<
   await requireImageDigest(state.image, state.imageDigest, 'Current deployment');
   const backupId = id('backup');
   const backupDir = backupDirectory(directory, backupId);
-  await mkdir(backupDir, { recursive: true, mode: 0o700 });
-  await chmod(backupDir, 0o700);
+  // Preflight before anything is created: the archive needs the live volume
+  // size plus reserve headroom on the deployment filesystem.
+  const volumeSize = await dataVolumeSize(directory, state.mode, env);
+  await assertFreeSpaceForArchive(backupDir, volumeSize, 'Backup');
+  let manifestWritten = false;
   let stopAttempted = false;
   try {
+    await mkdir(backupDir, { recursive: true, mode: 0o700 });
+    await chmod(backupDir, 0o700);
     stopAttempted = true;
     await stopProject(directory, state.mode);
     await volumeArchive(directory, state.mode, env, backupDir);
@@ -889,6 +1252,7 @@ async function createBackup(directory: string, state: ManagedState, env: Record<
       image: state.image,
       imageDigest: state.imageDigest,
       dataSha256: await sha256File(join(backupDir, 'data.tgz')),
+      dataBytes: volumeSize,
       configSha256: await sha256File(join(backupDir, 'config.env')),
       mode: state.mode,
       domain: state.domain,
@@ -899,7 +1263,19 @@ async function createBackup(directory: string, state: ManagedState, env: Record<
       port: state.port,
     };
     await writeSecure(join(backupDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    manifestWritten = true;
+    try {
+      await pruneBackups(directory, state, BACKUP_RETENTION_KEEP, false);
+    } catch (error) {
+      console.log(`Warning: automatic backup retention could not run: ${error instanceof Error ? error.message : String(error)}`);
+    }
     return { backupId, backupDir, manifest };
+  } catch (error) {
+    if (!manifestWritten) {
+      await removeNamedBackupArtifact(directory, backupId).catch(() => undefined);
+      throw new Error(`${error instanceof Error ? error.message : String(error)} The partial backup artifact at ${backupDir} was removed.`);
+    }
+    throw error;
   } finally {
     if (stopAttempted) {
       try {
@@ -918,7 +1294,8 @@ async function readManifest(backupPath: string) {
     !manifest.backupId ||
     !isVersion(manifest.appVersion) ||
     !manifest.image ||
-    !/^sha256:[0-9a-f]{64}$/i.test(manifest.imageDigest)
+    !/^sha256:[0-9a-f]{64}$/i.test(manifest.imageDigest) ||
+    (manifest.dataBytes !== undefined && (!Number.isSafeInteger(manifest.dataBytes) || manifest.dataBytes < 0))
   ) {
     throw new Error(`Invalid backup manifest at ${backupPath}.`);
   }
@@ -931,6 +1308,33 @@ async function readManifest(backupPath: string) {
   return manifest;
 }
 
+async function dataVolumeFreeBytes(directory: string, mode: Mode, env: Record<string, string>) {
+  const parse = (stdout: string) => {
+    const blocks = Number(stdout.trim());
+    if (!Number.isSafeInteger(blocks) || blocks < 0) throw new Error('Could not parse free blocks from the data volume.');
+    return blocks * 1024;
+  };
+  const script = "df -Pk /data | awk 'NR == 2 { print $4 }'";
+  const exec = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', 'sh', '-c', script])], directory);
+  if (exec.ok) return parse(exec.stdout);
+  const fallback = await run('docker', [...composeArgs(directory, mode, ['run', '--rm', '--no-deps', '--entrypoint', 'sh', 'or3', '-c', script])], directory);
+  if (fallback.ok) return parse(fallback.stdout);
+  throw new Error(`Could not measure free space in the Docker data volume. ${redact(`${exec.stderr} ${fallback.stderr}`, secretValues(env))}`);
+}
+
+async function assertRestoreFreeSpace(
+  directory: string,
+  state: ManagedState,
+  env: Record<string, string>,
+  manifest: BackupManifest,
+  backupPath: string,
+) {
+  const archiveBytes = await gzipUncompressedBytes(join(backupPath, 'data.tgz'));
+  const requiredBytes = Math.max(manifest.dataBytes ?? 0, archiveBytes);
+  const freeBytes = await dataVolumeFreeBytes(directory, state.mode, env);
+  assertEnoughFreeSpace(freeBytes, requiredBytes, 'Restore');
+}
+
 async function restoreBackupData(directory: string, state: ManagedState, env: Record<string, string>, backupPath: string) {
   const manifest = await readManifest(backupPath);
   const backupEnv = parseEnv(await readText(join(backupPath, 'config.env')));
@@ -939,6 +1343,10 @@ async function restoreBackupData(directory: string, state: ManagedState, env: Re
   }
   assertBackupMatchesDeployment(manifest, backupEnv, state, env);
   if (manifest.imageDigest) await requireImageDigest(manifest.image, manifest.imageDigest, `Backup ${manifest.backupId}`);
+  // Preflight the filesystem Docker will actually extract into. A compressed
+  // tarball's byte size and the backup directory's filesystem cannot prove
+  // there is room in /data.
+  await assertRestoreFreeSpace(directory, state, env, manifest, backupPath);
   let started = false;
   let stopAttempted = false;
   try {
@@ -946,7 +1354,7 @@ async function restoreBackupData(directory: string, state: ManagedState, env: Re
     await stopProject(directory, state.mode);
     await copySecure(join(backupPath, 'config.env'), deploymentPaths(directory).env);
     await compose(directory, state.mode, [
-      'run', '--rm', '--no-deps', '--user', '0:0', '-v', `${backupPath}:/backup:ro`,
+      'run', '--rm', '--no-deps', '-v', `${backupPath}:/backup:ro`,
       '--entrypoint', 'sh', 'or3', '-c',
       'find /data -mindepth 1 -delete && tar xzf /backup/data.tgz -C /data',
     ], secretValues(backupEnv));
@@ -993,19 +1401,29 @@ Usage:
   npx @or3/cloud init [directory] --local
   npx @or3/cloud init [directory] --public --domain <hostname>
   npx @or3/cloud update [--to <exact-version>]
-  npx @or3/cloud backup
+  npx @or3/cloud backup [list|prune [--keep <n>]|export <backup-id> <destination-dir>]
   npx @or3/cloud restore <backup-id-or-path> --yes
   npx @or3/cloud rollback --yes
+  npx @or3/cloud credentials reset --yes [--owner-password <p> --admin-password <p>]
   npx @or3/cloud doctor
   npx @or3/cloud recover
   npx @or3/cloud adopt --from <v1-directory> [directory]
+  npx @or3/cloud status
+  npx @or3/cloud logs [--tail <n>] [service]
+  npx @or3/cloud start | stop | restart
+  npx @or3/cloud remove [--purge-data --yes]
 
 Options:
   --admin-email <email>          Administrator email for first login
-  --admin-password <password>    Explicit password (prefer --admin-password-file)
+  --admin-password <password>    Explicit password (prefer --admin-password-file); for credentials reset, the new admin password
   --admin-password-file <path>   Read the bootstrap password without shell history
+  --owner-password <password>    New owner (basic auth) password for credentials reset
   --port <port>                  Local OR3 port (default: 3000)
-  --yes                          Confirm a destructive restore or rollback
+  --keep <n>                     Backups to retain when pruning (default: 5)
+  --force                        Prune backups even when referenced by the rollback point
+  --tail <n>                     Log lines to show (default: 200)
+  --purge-data                   Remove data volumes and managed files (with remove)
+  --yes                          Confirm a destructive restore, rollback, credentials reset, or purge
   --help                         Show this help
   --version                      Show the Cloud package version
 
@@ -1048,6 +1466,7 @@ async function initCommand(positionals: string[], flags: Flags) {
   const version = PACKAGE_VERSION;
   const image = imageFor(version);
   await pullImage(image);
+  await assertSupportedHostArchitecture(image);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await chmod(directory, 0o700);
   await mkdir(deploymentPaths(directory).operations, { recursive: true, mode: 0o700 });
@@ -1105,6 +1524,16 @@ async function recoverCommand(directory: string) {
     return;
   }
   try {
+    if (pending.operation === 'credentials-reset') {
+      const nextEnv = pending.credentialReset?.nextEnv;
+      if (!nextEnv) throw new Error('The incomplete credential reset has no protected recovery data. Restore a backup rather than guessing credentials.');
+      await applyCredentialReset(loaded.directory, loaded.state, nextEnv);
+      loaded.state.lastError = undefined;
+      await clearPending(loaded.directory, loaded.state);
+      console.log('Recovered the incomplete credential reset. Owner and admin credentials were verified inside the OR3 container.');
+      return;
+    }
+
     if (pending.operation === 'restore' || pending.operation === 'rollback') {
       if (!pending.backupId) throw new Error(`The incomplete ${pending.operation} has no recorded backup ID.`);
       const backupPath = await resolveBackup(loaded.directory, pending.backupId);
@@ -1220,7 +1649,10 @@ async function recoverCommand(directory: string) {
     await commitRecoveredState(loaded.directory, loaded.state, recovered);
     console.log(`Recovered the incomplete ${pending.operation} operation. OR3 ${recovered.appVersion} is deeply healthy.`);
   } catch (error) {
-    loaded.state.lastError = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));
+    const recoverySecrets = pending.operation === 'credentials-reset'
+      ? secretValues(pending.credentialReset?.nextEnv ?? loaded.env)
+      : secretValues(loaded.env);
+    loaded.state.lastError = redact(error instanceof Error ? error.message : String(error), recoverySecrets);
     if (pending.operation === 'adopt' && pending.sourceDirectory) {
       try {
         await compose(loaded.directory, loaded.state.mode, ['down']).catch(() => undefined);
@@ -1244,7 +1676,7 @@ function assertNoPending(state: ManagedState) {
   }
 }
 
-async function backupCommand(directory: string) {
+async function backupCreateCommand(directory: string) {
   await ensureDocker();
   const loaded = await loadManaged(directory);
   assertNoPending(loaded.state);
@@ -1264,6 +1696,108 @@ async function backupCommand(directory: string) {
   }
 }
 
+async function backupListCommand(directory: string) {
+  const loaded = await loadManaged(directory);
+  const backups = await enumerateBackups(loaded.directory);
+  if (backups.length === 0) {
+    console.log(`No backups exist yet for ${loaded.directory}. Run "npx @or3/cloud backup" to create one.`);
+    return;
+  }
+  console.log(`OR3 Cloud backups for ${loaded.directory} (${backups.length}):`);
+  console.log('backupId                      createdAt                      version  bytes     checksum');
+  for (const backup of backups) {
+    console.log(
+      `${backup.backupId.padEnd(30)} ${backup.createdAt.padEnd(30)} ${backup.appVersion.padEnd(8)} ${String(backup.bytes).padStart(9)}  ${backup.dataSha256.slice(0, 12)}`,
+    );
+  }
+  console.log('\nBackups contain credentials and secrets; keep them owner-only and export off-host.');
+}
+
+async function backupPruneCommand(directory: string, flags: Flags) {
+  const loaded = await loadManaged(directory);
+  assertNoPending(loaded.state);
+  const keep = parseKeep(flags);
+  const force = boolFlag(flags, 'force');
+  if (force && !boolFlag(flags, 'yes')) throw new Error('--force may delete the only rollback or recovery backup. Re-run with --force --yes after confirming the exact backups shown by `backup list`.');
+  const deleted = await pruneBackups(loaded.directory, loaded.state, keep, force);
+  console.log(deleted > 0
+    ? `Pruned ${deleted} backup(s); keeping the newest ${keep}.`
+    : `Nothing to prune: keeping all backups (newest ${keep}).`);
+}
+
+async function backupExportCommand(directory: string, backupId: string, destination: string) {
+  const backupPath = await resolveBackup(directory, backupId);
+  const manifest = await readManifest(backupPath);
+  const dest = resolve(destination);
+  const source = resolve(backupPath);
+  if (source === dest || dest.startsWith(`${source}${sep}`)) {
+    throw new Error('Choose a destination directory different from the backup itself.');
+  }
+  if (await fileExists(dest)) throw new Error(`Destination ${dest} already exists. Choose a new empty destination so an export can never merge with unrelated files.`);
+  await mkdir(dirname(dest), { recursive: true, mode: 0o700 });
+  await mkdir(dest, { mode: 0o700 });
+  try {
+    await chmod(dest, 0o700);
+    for (const file of ['data.tgz', 'config.env', 'manifest.json']) {
+      await copySecure(join(backupPath, file), join(dest, file));
+    }
+    const dataSha = await sha256File(join(dest, 'data.tgz'));
+    if (dataSha !== manifest.dataSha256) {
+      throw new Error(`Exported data.tgz checksum mismatch for ${manifest.backupId}. Expected ${manifest.dataSha256}, got ${dataSha}.`);
+    }
+    if (manifest.configSha256) {
+      const configSha = await sha256File(join(dest, 'config.env'));
+      if (configSha !== manifest.configSha256) {
+        throw new Error(`Exported config.env checksum mismatch for ${manifest.backupId}.`);
+      }
+    }
+    const destinationDevice = (await stat(dest)).dev;
+    await mkdir(deploymentPaths(directory).exports, { recursive: true, mode: 0o700 });
+    const receipt: BackupExportReceipt = {
+      schemaVersion: 1,
+      backupId: manifest.backupId,
+      exportedAt: now(),
+      destination: dest,
+      destinationDevice,
+      dataSha256: manifest.dataSha256,
+      configSha256: manifest.configSha256,
+    };
+    await writeSecure(join(deploymentPaths(directory).exports, `${manifest.backupId}.json`), `${JSON.stringify(receipt, null, 2)}\n`);
+    const bytes = (await stat(join(dest, 'data.tgz'))).size + (await stat(join(dest, 'config.env'))).size + (await stat(join(dest, 'manifest.json'))).size;
+    console.log(`Exported backup ${manifest.backupId} (${bytes} bytes) to ${dest}`);
+    console.log('The exported copy contains credentials and secrets. It is owner-only (0600); keep it off-host.');
+    if ((await stat(backupPath)).dev === destinationDevice) {
+      console.log('This export is on the same filesystem as the deployment and cannot authorize `remove --purge-data`. Copy it to a mounted backup disk or another host, then export again there.');
+    } else {
+      console.log('Verified export recorded. It can authorize `remove --purge-data --yes` while this backup remains fresh.');
+    }
+  } catch (error) {
+    await rm(dest, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+async function backupCommand(directory: string, positionals: string[], flags: Flags) {
+  const subcommand = positionals[0];
+  if (!subcommand) return await backupCreateCommand(directory);
+  if (subcommand === 'list') {
+    if (positionals.length > 1) throw new Error('backup list accepts no arguments.');
+    return await backupListCommand(directory);
+  }
+  if (subcommand === 'prune') {
+    if (positionals.length > 1) throw new Error('backup prune accepts no arguments.');
+    return await backupPruneCommand(directory, flags);
+  }
+  if (subcommand === 'export') {
+    const backupId = positionals[1];
+    const destination = positionals[2];
+    if (!backupId || !destination) throw new Error('backup export requires a backup ID and a destination directory.');
+    if (positionals.length > 3) throw new Error('backup export accepts a backup ID and a destination directory only.');
+    return await backupExportCommand(directory, backupId, destination);
+  }
+  throw new Error(`Unknown backup subcommand "${subcommand}". Use list, prune, export, or no subcommand to create a backup.`);
+}
+
 async function updateCommand(directory: string, flags: Flags) {
   await ensureDocker();
   const loaded = await loadManaged(directory);
@@ -1271,10 +1805,11 @@ async function updateCommand(directory: string, flags: Flags) {
   assertNoPending(state);
   await waitForDeepHealth(loaded.directory, state.mode, secretValues(env));
   const targetVersion = stringFlag(flags, 'to')?.trim() ?? PACKAGE_VERSION;
-  if (!isVersion(targetVersion)) throw new Error('--to must be a complete semantic version such as 0.1.15.');
+  if (!isVersion(targetVersion)) throw new Error(`--to must be a complete semantic version such as ${PACKAGE_VERSION}.`);
   if (targetVersion === state.appVersion) throw new Error(`The deployment is already on OR3 ${targetVersion}.`);
   const targetImage = imageFor(targetVersion);
   const targetDigest = await pullImage(targetImage);
+  await assertSupportedHostArchitecture(targetImage);
   const oldEnv = { ...env };
   const pending: PendingOperation = {
     id: id('update'),
@@ -1351,6 +1886,10 @@ async function restoreCommand(directory: string, flags: Flags, positionals: stri
   }
   assertBackupMatchesDeployment(manifest, backupEnv, loaded.state, loaded.env);
   if (manifest.imageDigest) await pullAndRequireImage(manifest.image, manifest.imageDigest, `Backup ${manifest.backupId}`);
+  await assertSupportedHostArchitecture(manifest.image);
+  // Do this before recording a recovery operation: a capacity refusal has not
+  // touched the live deployment and should not require an operator recovery.
+  await assertRestoreFreeSpace(loaded.directory, loaded.state, loaded.env, manifest, backupPath);
   const pending: PendingOperation = {
     id: id('restore'),
     operation: 'restore',
@@ -1396,6 +1935,8 @@ async function rollbackCommand(directory: string, flags: Flags) {
   }
   assertBackupMatchesDeployment(manifest, backupEnv, loaded.state, loaded.env);
   await pullAndRequireImage(point.image, point.imageDigest, 'Rollback');
+  await assertSupportedHostArchitecture(point.image);
+  await assertRestoreFreeSpace(loaded.directory, loaded.state, loaded.env, manifest, backupPath);
   const pending: PendingOperation = {
     id: id('rollback'),
     operation: 'rollback',
@@ -1648,6 +2189,7 @@ async function adoptCommand(positionals: string[], flags: Flags) {
     throw new Error(`V1 OR3_IMAGE ${sourceEnv.OR3_IMAGE} does not match the published image for ${release.or3Version}.`);
   }
   await pullImage(image);
+  await assertSupportedHostArchitecture(image);
   const sourceVolume = await readSourceVolume(sourceDirectory);
   const email = sourceEnv.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
   const password = sourceEnv.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD;
@@ -1755,6 +2297,489 @@ async function adoptCommand(positionals: string[], flags: Flags) {
   }
 }
 
+/**
+ * Resolves the two new passwords for `credentials reset`: both flags together,
+ * or interactive prompts. Credentials are never generated or printed here;
+ * the passwords go only into protected state files and the container reset.
+ */
+async function resolveResetPasswords(flags: Flags) {
+  const ownerPassword = stringFlag(flags, 'owner-password');
+  const adminPassword = stringFlag(flags, 'admin-password');
+  if (ownerPassword !== undefined || adminPassword !== undefined) {
+    if (ownerPassword === undefined || adminPassword === undefined) {
+      throw new Error('Use both --owner-password and --admin-password together so a reset never applies one credential without the other.');
+    }
+    validatePassword(ownerPassword);
+    validatePassword(adminPassword);
+    return { ownerPassword, adminPassword };
+  }
+  if (!input.isTTY || !output.isTTY) {
+    throw new Error('--owner-password and --admin-password are required in a non-interactive session. Credentials are never generated automatically.');
+  }
+  const prompt = readline.createInterface({ input, output });
+  try {
+    const owner = (await prompt.question('New owner (basic auth) password: ')).trim();
+    validatePassword(owner);
+    const admin = (await prompt.question('New admin password: ')).trim();
+    validatePassword(admin);
+    return { ownerPassword: owner, adminPassword: admin };
+  } finally {
+    prompt.close();
+  }
+}
+
+/**
+ * Builds the Node script executed inside the or3 container for `credentials reset`.
+ *
+ * Schema contract (or3-provider-basic-auth, session-store.ts):
+ * - basic_auth_accounts: password_hash, token_version, updated_at; email unique.
+ * - basic_auth_sessions: revoked_at, rotation_grace_until, rotation_grace_refresh_token;
+ *   account lookup by email, sessions keyed by account_id.
+ * The script mirrors updatePasswordAndRevokeSessions: it bumps token_version
+ * (invalidates every outstanding refresh token, verified at refresh time) and
+ * revokes all sessions for the owner account, clearing rotation grace tokens.
+ * Admin credentials are re-hashed into /data/admin/admin-credentials.json
+ * (bootstrapAdminCredentialsFromEnv only imports env credentials once, so the
+ * file must be rewritten in place), preserving created_at.
+ * Admin JWT session cookies are invalidated by rotating OR3_ADMIN_JWT_SECRET
+ * in .env at restart; admin auth is per-request (no persistent session table).
+ * The script fails hard with a plain-language message if better-sqlite3 or
+ * bcryptjs cannot be required, and restores the admin credentials file if the
+ * database update fails, so no partial state survives.
+ */
+export function buildCredentialsResetScript(input: {
+  ownerEmail: string;
+  ownerPassword: string;
+  adminUsername: string;
+  adminPassword: string;
+  authDbPath?: string;
+  adminCredentialsPath?: string;
+}) {
+  const authDbPath = input.authDbPath ?? '/data/auth.sqlite';
+  const adminCredentialsPath = input.adminCredentialsPath ?? '/data/admin/admin-credentials.json';
+  return `const fs = require('fs');
+const path = require('path');
+const candidates = [process.cwd(), '/app'];
+const resolveModule = (name) => {
+  for (const root of candidates) {
+    const resolved = path.join(root, '.output/server/node_modules', name);
+    if (fs.existsSync(resolved)) return resolved;
+  }
+  return null;
+};
+let Database;
+try {
+  const betterSqlite3Path = resolveModule('better-sqlite3');
+  if (!betterSqlite3Path) throw new Error('better-sqlite3 directory not found');
+  Database = require(betterSqlite3Path);
+} catch (error) {
+  console.error('OR3 credentials reset failed: better-sqlite3 is not available in this image, so the auth database could not be updated. Nothing was changed. Update the OR3 image to a release that bundles it, then retry.');
+  process.exit(1);
+}
+let bcrypt;
+try {
+  // bcryptjs 2.x ships a broken "exports" map (require -> missing umd/index.js),
+  // so it must be loaded by explicit absolute path, like the server bundle does.
+  const bcryptPath = resolveModule('bcryptjs/index.js');
+  if (!bcryptPath) throw new Error('bcryptjs directory not found');
+  bcrypt = require(bcryptPath);
+} catch (error) {
+  console.error('OR3 credentials reset failed: bcryptjs is not available in this image, so new password hashes could not be computed. Nothing was changed. Update the OR3 image to a release that bundles it, then retry.');
+  process.exit(1);
+}
+const ownerEmail = process.env.OR3_RESET_OWNER_EMAIL;
+const ownerPassword = process.env.OR3_RESET_OWNER_PASSWORD;
+const adminUsername = process.env.OR3_RESET_ADMIN_USERNAME;
+const adminPassword = process.env.OR3_RESET_ADMIN_PASSWORD;
+if (!ownerEmail || !ownerPassword || !adminUsername || !adminPassword) {
+  console.error('OR3 credentials reset failed: required environment values were not supplied to the reset script. Nothing was changed.');
+  process.exit(1);
+}
+const ownerHash = bcrypt.hashSync(ownerPassword, 12);
+const adminHash = bcrypt.hashSync(adminPassword, 12);
+const now = Date.now();
+const db = new Database(${JSON.stringify(authDbPath)});
+db.pragma('busy_timeout = 10000');
+const account = db.prepare('SELECT id FROM basic_auth_accounts WHERE email = ?').get(ownerEmail);
+if (!account) {
+  console.error('OR3 credentials reset failed: no Basic Auth account matches OR3_BASIC_AUTH_BOOTSTRAP_EMAIL. Nothing was changed.');
+  process.exit(1);
+}
+const adminCredentialsPath = ${JSON.stringify(adminCredentialsPath)};
+const previousCredentials = (() => {
+  try { return fs.readFileSync(adminCredentialsPath, 'utf8'); } catch { return null; }
+})();
+let credentials;
+try {
+  credentials = previousCredentials ? JSON.parse(previousCredentials) : { created_at: new Date().toISOString() };
+} catch (error) {
+  console.error('OR3 credentials reset failed: the admin credentials file is corrupt. Nothing was changed.');
+  process.exit(1);
+}
+credentials.username = adminUsername;
+credentials.password_hash_bcrypt = adminHash;
+credentials.updated_at = new Date().toISOString();
+try {
+  fs.writeFileSync(adminCredentialsPath, JSON.stringify(credentials, null, 2) + '\\n', { mode: 0o600 });
+} catch (error) {
+  console.error('OR3 credentials reset failed: could not update the admin credentials file at ' + adminCredentialsPath + '. Nothing was changed. ' + (error && error.message ? error.message : String(error)));
+  process.exit(1);
+}
+try {
+  db.transaction(() => {
+    db.prepare('UPDATE basic_auth_accounts SET password_hash = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?').run(ownerHash, now, account.id);
+    db.prepare('UPDATE basic_auth_sessions SET revoked_at = COALESCE(revoked_at, ?), rotation_grace_until = NULL, rotation_grace_refresh_token = NULL WHERE account_id = ?').run(now, account.id);
+  })();
+} catch (error) {
+  if (previousCredentials !== null) {
+    try { fs.writeFileSync(adminCredentialsPath, previousCredentials, { mode: 0o600 }); } catch {}
+  } else {
+    try { fs.rmSync(adminCredentialsPath, { force: true }); } catch {}
+  }
+  console.error('OR3 credentials reset failed: the authentication database rejected the update. Any partial change was rolled back. ' + (error && error.message ? error.message : String(error)));
+  process.exit(1);
+}
+db.close();
+console.log('credentials-reset: owner hash, sessions, and admin credentials updated.');
+`;
+}
+
+function credentialResetValues(env: Record<string, string>) {
+  const ownerEmail = env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
+  const ownerPassword = env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD;
+  const adminUsername = env.OR3_ADMIN_USERNAME;
+  const adminPassword = env.OR3_ADMIN_PASSWORD;
+  if (!ownerEmail || !ownerPassword || !adminUsername || !adminPassword) {
+    throw new Error('Credential recovery data is incomplete. Run doctor and restore a backup rather than guessing credentials.');
+  }
+  return { ownerEmail, ownerPassword, adminUsername, adminPassword };
+}
+
+const CREDENTIALS_VERIFY_SCRIPT = `
+const request = async (path, body) => {
+  const response = await fetch('http://127.0.0.1:3000' + path, {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!response.ok) throw new Error(path + ' returned HTTP ' + response.status);
+};
+Promise.all([
+  request('/api/basic-auth/sign-in', { email: process.env.OR3_RESET_OWNER_EMAIL, password: process.env.OR3_RESET_OWNER_PASSWORD }),
+  request('/api/admin/auth/login', { username: process.env.OR3_RESET_ADMIN_USERNAME, password: process.env.OR3_RESET_ADMIN_PASSWORD }),
+]).catch((error) => { console.error('Credential verification failed: ' + error.message); process.exit(1); });
+`;
+
+async function runCredentialsResetScript(directory: string, mode: Mode, values: ReturnType<typeof credentialResetValues>) {
+  const script = buildCredentialsResetScript(values);
+  const result = await run('docker', [
+    ...composeArgs(directory, mode, [
+      'exec', '-T',
+      '-e', `OR3_RESET_OWNER_EMAIL=${values.ownerEmail}`,
+      '-e', `OR3_RESET_OWNER_PASSWORD=${values.ownerPassword}`,
+      '-e', `OR3_RESET_ADMIN_USERNAME=${values.adminUsername}`,
+      '-e', `OR3_RESET_ADMIN_PASSWORD=${values.adminPassword}`,
+      'or3', 'node', '-e', script,
+    ]),
+  ], directory);
+  if (!result.ok) throw new Error(`${result.command}\n${redact(result.stderr, [values.ownerPassword, values.adminPassword])}`);
+}
+
+async function verifyCredentialsInsideContainer(directory: string, mode: Mode, values: ReturnType<typeof credentialResetValues>) {
+  const result = await run('docker', [
+    ...composeArgs(directory, mode, [
+      'exec', '-T',
+      '-e', `OR3_RESET_OWNER_EMAIL=${values.ownerEmail}`,
+      '-e', `OR3_RESET_OWNER_PASSWORD=${values.ownerPassword}`,
+      '-e', `OR3_RESET_ADMIN_USERNAME=${values.adminUsername}`,
+      '-e', `OR3_RESET_ADMIN_PASSWORD=${values.adminPassword}`,
+      'or3', 'node', '-e', CREDENTIALS_VERIFY_SCRIPT,
+    ]),
+  ], directory);
+  if (!result.ok) throw new Error(`Credential verification inside the OR3 container failed. ${redact(result.stderr, [values.ownerPassword, values.adminPassword])}`);
+}
+
+async function applyCredentialReset(directory: string, state: ManagedState, nextEnv: Record<string, string>) {
+  const values = credentialResetValues(nextEnv);
+  const running = await run('docker', [...composeArgs(directory, state.mode, ['ps', '-q', 'or3'])], directory);
+  if (!running.ok || !running.stdout.trim()) {
+    // A process interruption may have written the operation journal before the
+    // first mutation. Start the intended configuration and replay the reset;
+    // the database operation is idempotent for the requested credentials.
+    await writeSecure(deploymentPaths(directory).env, serializeEnv(nextEnv));
+    await startProject(directory, state.mode, nextEnv);
+  }
+  await runCredentialsResetScript(directory, state.mode, values);
+  await writeSecure(deploymentPaths(directory).env, serializeEnv(nextEnv));
+  const initialCredentials = join(directory, '.or3-initial-credentials');
+  if (await fileExists(initialCredentials)) {
+    await writeSecure(initialCredentials, `email=${values.ownerEmail}\npassword=${values.ownerPassword}\n`);
+  }
+  await stopProject(directory, state.mode);
+  await startProject(directory, state.mode, nextEnv);
+  await verifyCredentialsInsideContainer(directory, state.mode, values);
+}
+
+async function credentialsResetCommand(directory: string, flags: Flags) {
+  if (!boolFlag(flags, 'yes')) throw new Error('Credentials reset changes the owner password, revokes all app sessions, and changes the admin password. Re-run with --yes after confirming the impact.');
+  await ensureDocker();
+  const loaded = await loadManaged(directory);
+  assertDeploymentDirectoryIdentity(directory, loaded.state);
+  assertNoPending(loaded.state);
+  const ownerEmail = loaded.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
+  const adminUsername = loaded.env.OR3_ADMIN_USERNAME;
+  if (!ownerEmail) throw new Error('OR3_BASIC_AUTH_BOOTSTRAP_EMAIL is missing from .env, so the owner account cannot be reset.');
+  if (!adminUsername) throw new Error('OR3_ADMIN_USERNAME is missing from .env, so the admin password cannot be reset.');
+  const { ownerPassword, adminPassword } = await resolveResetPasswords(flags);
+  const nextEnv = {
+    ...loaded.env,
+    OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD: ownerPassword,
+    OR3_ADMIN_PASSWORD: adminPassword,
+    // Rotating the admin JWT secret invalidates every previously issued admin
+    // session cookie; admin auth is per-request basic auth over JWT cookies
+    // with no persistent session table to revoke.
+    OR3_ADMIN_JWT_SECRET: randomSecret(),
+  };
+  const pending: PendingOperation = {
+    id: id('credentials-reset'),
+    operation: 'credentials-reset',
+    startedAt: now(),
+    message: 'Resetting owner and admin credentials',
+    credentialReset: { nextEnv },
+  };
+  await markPending(loaded.directory, loaded.state, pending);
+  try {
+    await applyCredentialReset(loaded.directory, loaded.state, nextEnv);
+    await clearPending(loaded.directory, loaded.state);
+    console.log('Owner and admin credentials are now separate. The old owner password and all app sessions were revoked.');
+    console.log('Admin session cookies were invalidated by rotating OR3_ADMIN_JWT_SECRET. New passwords were written only to protected files; sign in again with them.');
+  } catch (error) {
+    loaded.state.lastError = redact(error instanceof Error ? error.message : String(error), secretValues(nextEnv));
+    await writeState(loaded.directory, loaded.state);
+    throw new Error(`${loaded.state.lastError}\nCredential reset is recoverable: run \"npx @or3/cloud recover\" to replay the intended protected operation.`);
+  }
+}
+
+async function credentialsCommand(directory: string, positionals: string[], flags: Flags) {
+  const subcommand = positionals[0];
+  if (subcommand !== 'reset') {
+    throw new Error(`Unknown credentials subcommand "${subcommand ?? ''}". Use "npx @or3/cloud credentials reset --yes".`);
+  }
+  if (positionals.length > 1) throw new Error('credentials reset accepts no arguments.');
+  return await credentialsResetCommand(directory, flags);
+}
+
+/** Reports deployment summary, container status, and a bounded deep-health probe. */
+async function statusCommand(directory: string) {
+  const loaded = await loadManaged(directory);
+  assertDeploymentDirectoryIdentity(directory, loaded.state);
+  const { state } = loaded;
+  console.log(`OR3 Cloud deployment: ${loaded.directory}`);
+  console.log(`  mode: ${state.mode}`);
+  console.log(`  version: ${state.appVersion}`);
+  if (state.domain) console.log(`  domain: ${state.domain}`);
+  console.log(`  port: ${state.port}`);
+  console.log(`  image digest: ${state.imageDigest}`);
+  console.log(`  last successful operation: ${state.lastSuccessfulOperation} (${state.updatedAt})`);
+  if (state.incompleteOperation) console.log(`  incomplete operation: ${state.incompleteOperation.operation} (${state.incompleteOperation.id})`);
+  if (state.lastError) console.log(`  last error: ${state.lastError}`);
+  console.log();
+  const ps = await run('docker', [...composeArgs(directory, state.mode, ['ps'])], directory);
+  if (ps.ok) {
+    console.log(ps.stdout.trim());
+  } else {
+    console.log(`Could not list containers: ${ps.stderr}`);
+  }
+const health = await probeDeepHealth(directory, state.mode);
+  if (health === 'ok') console.log('Deep health: OK');
+  else if (health === 'degraded') console.log('Deep health: DEGRADED (the container is running but /api/health?deep=true is failing).');
+  else console.log('Deep health: unreachable (the or3 container is not running).');
+  await printMaintenanceSummary(directory, state.mode);
+}
+
+/** Renders the provider maintenance state (SQLite history GC) from deep health. */
+async function printMaintenanceSummary(directory: string, mode: Mode) {
+  const result = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', 'node', '-e', MAINTENANCE_SCRIPT])], directory);
+  if (!result.ok || !result.stdout.trim()) return;
+  try {
+    const maintenance = JSON.parse(result.stdout.trim()) as {
+      enabled?: boolean;
+      lastRun?: string;
+      backlog?: number;
+      lastError?: string;
+      state?: string;
+    };
+    if (!maintenance.enabled) return;
+    const state = maintenance.state ?? 'idle';
+    const line = `Sync history maintenance: ${state}${maintenance.lastRun ? ` (last run ${maintenance.lastRun})` : ''}${maintenance.backlog !== undefined ? `, backlog ${maintenance.backlog}` : ''}`;
+    if (state === 'failed') {
+      console.log(`⚠ ${line}${maintenance.lastError ? `: ${maintenance.lastError}` : ''}`);
+    } else {
+      console.log(`  ${line}`);
+    }
+  } catch {
+    // The maintenance payload is informational; never fail status on a parse issue.
+  }
+}
+
+async function logsCommand(directory: string, flags: Flags, positionals: string[]) {
+  const loaded = await loadManaged(directory);
+  assertDeploymentDirectoryIdentity(directory, loaded.state);
+  if (positionals.length > 1) throw new Error('logs accepts at most one service name.');
+  const tailValue = stringFlag(flags, 'tail') ?? '200';
+  const tail = Number(tailValue);
+  if (!Number.isInteger(tail) || tail < 1) throw new Error('--tail must be a positive integer.');
+  const service = positionals[0];
+  const args = composeArgs(directory, loaded.state.mode, [
+    'logs', '--no-color', '--tail', String(tail), ...(service ? [service] : []),
+  ]);
+  const result = await run('docker', [...args], directory);
+  if (!result.ok) throw new Error(`${result.command}\n${result.stderr}`);
+  const secrets = secretValues(loaded.env);
+  process.stdout.write(redact(result.stdout, secrets));
+  if (result.stderr) process.stderr.write(redact(result.stderr, secrets));
+}
+
+async function startCommand(directory: string) {
+  await ensureDocker();
+  const loaded = await loadManaged(directory);
+  assertDeploymentDirectoryIdentity(directory, loaded.state);
+  await startProject(directory, loaded.state.mode, loaded.env);
+  const url = loaded.state.mode === 'public' ? `https://${loaded.state.domain}` : `http://127.0.0.1:${loaded.state.port}`;
+  console.log(`OR3 started and is deeply healthy at ${url}.`);
+}
+
+async function stopCommand(directory: string) {
+  await ensureDocker();
+  const loaded = await loadManaged(directory);
+  assertDeploymentDirectoryIdentity(directory, loaded.state);
+  await stopProject(directory, loaded.state.mode);
+  console.log('OR3 stopped. The data volume, backups, and managed state are retained.');
+}
+
+async function restartCommand(directory: string) {
+  await ensureDocker();
+  const loaded = await loadManaged(directory);
+  assertDeploymentDirectoryIdentity(directory, loaded.state);
+  await compose(directory, loaded.state.mode, ['restart', 'or3']);
+  await waitForDeepHealth(directory, loaded.state.mode, secretValues(loaded.env));
+  console.log('OR3 restarted and is deeply healthy.');
+}
+
+/** Purge targets derived only from validated managed state — never user input. */
+export function purgeVolumesFromState(state: ManagedState) {
+  const volumes = [state.volumeName];
+  if (state.mode === 'public') {
+    if (state.caddyDataVolume) volumes.push(state.caddyDataVolume);
+    if (state.caddyConfigVolume) volumes.push(state.caddyConfigVolume);
+  }
+  return volumes;
+}
+
+/** Pure freshness gate used before verifying an export receipt. */
+export function assertPurgeBackupFreshness(
+  backups: Array<{ backupId: string; createdAt: string }>,
+  nowMs: number,
+) {
+  const cutoff = nowMs - PURGE_REQUIRES_BACKUP_WITHIN_MS;
+  if (!backups.some((backup) => new Date(backup.createdAt).getTime() >= cutoff)) {
+    throw new Error('No backup newer than 24 hours exists for this deployment. Run "npx @or3/cloud backup" and "npx @or3/cloud backup export <backup-id> <destination-dir>" before destroying local data.');
+  }
+}
+
+async function readBackupExportReceipt(directory: string, backupId: string): Promise<BackupExportReceipt | undefined> {
+  try {
+    const receipt = JSON.parse(await readText(join(deploymentPaths(directory).exports, `${backupId}.json`))) as Partial<BackupExportReceipt>;
+    if (
+      receipt.schemaVersion !== 1 ||
+      receipt.backupId !== backupId ||
+      typeof receipt.destination !== 'string' ||
+      !isAbsolute(receipt.destination) ||
+      typeof receipt.destinationDevice !== 'number' ||
+      !receipt.dataSha256
+    ) return undefined;
+    return receipt as BackupExportReceipt;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Purge is allowed only when a fresh backup has a checksum-verified export on
+ * another filesystem. The receipt is revalidated at destruction time so a
+ * copied receipt, deleted export, or same-device destination cannot bypass it.
+ */
+async function assertPurgeHasVerifiedExport(directory: string, backups: BackupListing[], nowMs: number) {
+  assertPurgeBackupFreshness(backups, nowMs);
+  const cutoff = nowMs - PURGE_REQUIRES_BACKUP_WITHIN_MS;
+  for (const backup of backups) {
+    if (new Date(backup.createdAt).getTime() < cutoff) continue;
+    const receipt = await readBackupExportReceipt(directory, backup.backupId);
+    if (!receipt || !await fileExists(receipt.destination)) continue;
+    try {
+      const exported = await readManifest(receipt.destination);
+      const sourceDevice = (await stat(backup.path)).dev;
+      const destinationDevice = (await stat(receipt.destination)).dev;
+      if (
+        sourceDevice !== destinationDevice &&
+        receipt.destinationDevice === destinationDevice &&
+        exported.backupId === backup.backupId &&
+        exported.dataSha256 === receipt.dataSha256 &&
+        exported.dataSha256 === backup.dataSha256 &&
+        exported.configSha256 === receipt.configSha256
+      ) return receipt;
+    } catch {
+      // Try another fresh backup; a malformed or missing export cannot count.
+    }
+  }
+  throw new Error('No fresh checksum-verified backup export on another filesystem is available. Run `npx @or3/cloud backup export <backup-id> <new-directory-on-a-mounted-backup-disk>` before purging local data.');
+}
+
+async function removeCommand(directory: string, flags: Flags) {
+  if (boolFlag(flags, 'purge-data') && !boolFlag(flags, 'yes')) {
+    throw new Error('--purge-data deletes the data volume, every backup, and the managed files. Re-run with --purge-data --yes after confirming the data-loss boundary.');
+  }
+  await ensureDocker();
+  const loaded = await loadManaged(directory);
+  assertDeploymentDirectoryIdentity(directory, loaded.state);
+  assertNoPending(loaded.state);
+  const { state } = loaded;
+  if (!boolFlag(flags, 'purge-data')) {
+    // Data-retaining removal: containers and the compose network only.
+    // Volumes, backups, .env, state, and the .or3-cloud directory survive.
+    await compose(directory, state.mode, ['down']);
+    console.log(`Removed runtime containers and network. Data volume, backups, configuration, and managed state are retained at ${directory}. Re-run \`npx @or3/cloud start\` to restore service.`);
+    return;
+  }
+  // Hard refuse unless a fresh export is still checksum-verified on another
+  // filesystem, rather than treating a local backup as disaster recovery.
+  const exportReceipt = await assertPurgeHasVerifiedExport(directory, await enumerateBackups(directory), Date.now());
+  const volumes = purgeVolumesFromState(state);
+  const managedFiles = ['.env', '.or3-cloud', 'compose.yaml', ...(state.mode === 'public' ? ['compose.public.yaml', 'Caddyfile'] : []), '.or3-initial-credentials'];
+  console.log('Removing exactly these targets:');
+  for (const volume of volumes) console.log(`  docker volume ${volume}`);
+  for (const file of managedFiles) console.log(`  ${join(directory, file)}`);
+  await compose(directory, state.mode, ['down']);
+  for (const volume of volumes) {
+    const result = await run('docker', ['volume', 'rm', volume], directory);
+    if (!result.ok) throw new Error(`${result.command}\n${result.stderr}`);
+  }
+  for (const file of managedFiles) {
+    await rm(join(directory, file), { recursive: true, force: true });
+  }
+  console.log(`Purged: data volumes, backups, .env, managed state, and compose files were deleted. The verified export at ${exportReceipt.destination} is the remaining copy.`);
+}
+
+/** Bounded single-shot health probe for status: ok | degraded | unreachable. */
+async function probeDeepHealth(directory: string, mode: Mode) {
+  const result = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', 'node', '-e', HEALTH_SCRIPT])], directory);
+  if (result.ok) return 'ok' as const;
+  const ps = await run('docker', [...composeArgs(directory, mode, ['ps', '-q', 'or3'])], directory);
+  if (ps.ok && ps.stdout.trim()) return 'degraded' as const;
+  return 'unreachable' as const;
+}
+
 async function main(argv = process.argv.slice(2)) {
   const [command = 'help', ...rest] = argv;
   if (command === '--help' || command === 'help') return help();
@@ -1765,12 +2790,19 @@ async function main(argv = process.argv.slice(2)) {
     assertCommandFlags(command, parsed.flags);
     if (command === 'init') return await initCommand(parsed.positionals, parsed.flags);
     if (command === 'update') return await updateCommand(process.cwd(), parsed.flags);
-    if (command === 'backup') return await backupCommand(process.cwd());
+    if (command === 'backup') return await backupCommand(process.cwd(), parsed.positionals, parsed.flags);
     if (command === 'restore') return await restoreCommand(process.cwd(), parsed.flags, parsed.positionals);
     if (command === 'rollback') return await rollbackCommand(process.cwd(), parsed.flags);
+    if (command === 'credentials') return await credentialsCommand(process.cwd(), parsed.positionals, parsed.flags);
     if (command === 'doctor') return await doctorCommand(process.cwd());
     if (command === 'recover') return await recoverCommand(process.cwd());
     if (command === 'adopt') return await adoptCommand(parsed.positionals, parsed.flags);
+    if (command === 'status') return await statusCommand(process.cwd());
+    if (command === 'logs') return await logsCommand(process.cwd(), parsed.flags, parsed.positionals);
+    if (command === 'start') return await startCommand(process.cwd());
+    if (command === 'stop') return await stopCommand(process.cwd());
+    if (command === 'restart') return await restartCommand(process.cwd());
+    if (command === 'remove') return await removeCommand(process.cwd(), parsed.flags);
     throw new Error(`Unknown command "${command}". Run npx @or3/cloud --help.`);
   } catch (error) {
     console.error(`\nOR3 Cloud failed: ${redact(error instanceof Error ? error.message : String(error))}`);

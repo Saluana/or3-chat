@@ -9,6 +9,26 @@
             </NuxtLink>
 
             <section
+                v-if="!connectEnabled"
+                class="rounded-[28px] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-6! shadow-[var(--md-elevation-2)] sm:p-9!"
+            >
+                <div class="mb-7! flex size-14 items-center justify-center rounded-2xl bg-[var(--md-primary-container)]">
+                    <UIcon :name="computerIcon" class="size-7 text-[var(--md-on-primary-container)]" />
+                </div>
+                <h1 class="text-2xl font-semibold">Remote Connect unavailable</h1>
+                <p class="mt-3! leading-6 text-[var(--md-on-surface-variant)]">
+                    This Cloud instance does not offer remote Connect. An
+                    administrator must configure and prove the managed flow
+                    before it can be enabled. Use a local Intern host through
+                    Agents → Connection settings instead.
+                </p>
+                <UButton to="/" block size="xl" class="mt-8!">
+                    Back to OR3
+                </UButton>
+            </section>
+
+            <section
+                v-else
                 class="rounded-[28px] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-6! shadow-[var(--md-elevation-2)] sm:p-9!"
                 :aria-busy="busy || monitoring"
             >
@@ -258,7 +278,11 @@
             </section>
 
             <p class="mt-5! text-center text-xs leading-5 text-[var(--md-on-surface-variant)]">
-                The computer stays local-first. Remote access can be revoked from either device at any time.
+                {{
+                    connectEnabled
+                        ? 'The computer stays local-first. Remote access can be revoked from either device at any time.'
+                        : 'Local Intern hosts stay on the computer until you explicitly add one in Connection settings.'
+                }}
             </p>
         </div>
     </main>
@@ -304,6 +328,10 @@ type ConnectApprovalResponse = {
 const route = useRoute();
 const backIcon = useIcon('ui.arrow.left');
 const computerIcon = useIcon('sidebar.activity');
+const runtimeConfig = useRuntimeConfig();
+const connectEnabled = computed(
+    () => runtimeConfig.public?.connect?.enabled === true
+);
 const code = ref(typeof route.query.code === 'string' ? route.query.code : '');
 const computerName = ref('');
 const request = ref<ConnectRequest | null>(null);
@@ -359,6 +387,7 @@ const screenReaderStatus = computed(() => {
 });
 
 onMounted(() => {
+    if (!connectEnabled.value) return;
     expiryTimer = setInterval(() => {
         now.value = Date.now();
         if (

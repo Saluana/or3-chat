@@ -17,4 +17,11 @@ describe('Connect approval recovery copy', () => {
         expect(connectPageSource).toContain('ref="codeInput"');
         expect(connectPageSource).toContain('resetForNewCode');
     });
+
+    it('renders a non-runnable disabled state when managed Connect is withheld', () => {
+        expect(connectPageSource).toContain('Remote Connect unavailable');
+        expect(connectPageSource).toContain('connectEnabled');
+        expect(connectPageSource).toContain('v-if="!connectEnabled"');
+        expect(connectPageSource).toContain('administrator must configure and prove');
+    });
 });

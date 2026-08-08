@@ -371,11 +371,10 @@ Mock Externalities: Isolate business logic from side effects (databases, APIs) t
     - For Convex-selected stacks, include `bunx or3-provider-convex init` in deploy flow before `bunx convex dev --once`.
     - Without this step, first-run sandboxes fail preflight with missing `convex/` even when dependencies are installed correctly.
 
-39. **`bun start` is the single entry point for the app**
-    - `scripts/cli/start.ts` installs dependencies on first run, then asks one question (local vs cloud) or hands off directly.
-    - Choosing local writes a minimal `.env` (`SSR_AUTH_ENABLED=false`) so the prompt never reappears.
-    - Non-interactive environments start `bun run dev` directly.
-    - Registered in `package.json` as the `start` script.
+39. **Use the supported entry point for the job**
+    - Managed local/VPS deployments use `npx @or3/cloud init --local|--public`; they do not use the source developer launcher.
+    - Source contributors use `bun run dev` or `bun run dev:ssr` from this authoritative tree. `bun start` delegates to `scripts/cli/start.mjs` for legacy source convenience only and is not a release or beginner setup path.
+    - Do not document `scripts/cli/start.ts`, hand-written `.env`, or manual `OR3_*` values as normal setup; those are advanced source/operator paths.
 
 40. **`scripts/cli/dev.ts` wraps `nuxt dev` with port preflight**
     - Detects port conflicts (stale Nuxt servers on both IPv4 and IPv6 loopback), explains the cause, and offers interactive port fallback.

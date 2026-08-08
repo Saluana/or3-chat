@@ -1,8 +1,13 @@
 services:
   caddy:
-    image: caddy:2.10-alpine
+    # Pinned to the exact patch release and image digest so a floating tag
+    # cannot silently change proxy behavior or the base image.
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
     depends_on:
       or3:
+        # This gates Caddy's initial startup only. A later unhealthy OR3
+        # healthcheck does not trigger automatic container restarts; use the
+        # Cloud CLI's doctor/status/restart flow for persistent degradation.
         condition: service_healthy
     environment:
       OR3_PUBLIC_DOMAIN: ${OR3_PUBLIC_DOMAIN}
@@ -15,6 +20,26 @@ services:
       - caddy-data:/data
       - caddy-config:/config
     restart: unless-stopped
+    # Container hardening. The official image runs as root (no caddy user) and
+    # /data + /config are root-owned, so the process stays root but all
+    # capabilities are dropped except NET_BIND_SERVICE, which is required to
+    # bind the privileged ports 80/443. The root filesystem is read-only;
+    # certificates/state live on the caddy-data/caddy-config volumes and
+    # scratch space is a small noexec tmpfs at /tmp.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   caddy-data:

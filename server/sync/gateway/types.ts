@@ -100,6 +100,24 @@ export interface UploadIntentConsumptionRequest {
 
 /**
  * Purpose:
+ * Provider-side sync-history maintenance state surfaced through deep health.
+ *
+ * Shape:
+ * - `enabled` reflects the verified snapshot-v1 retention contract.
+ * - `state` is `'running'` while a maintenance pass is in flight.
+ * - `lastError` is set only when the most recent pass failed; a failed pass
+ *   must never mark the provider unavailable (health stays `ok`).
+ */
+export type SyncMaintenanceState = {
+    enabled: boolean;
+    lastRun?: string;
+    backlog?: number;
+    lastError?: string;
+    state: 'idle' | 'running' | 'failed';
+};
+
+/**
+ * Purpose:
  * Server-side sync gateway adapter interface.
  *
  * Responsibilities:
@@ -220,4 +238,25 @@ export interface SyncGatewayAdapter {
         event: H3Event,
         input: { scope: { workspaceId: string }; retentionSeconds: number }
     ): Promise<void>;
+
+    /**
+     * Enumerate non-deleted workspace IDs for bounded maintenance sweeps.
+     * Used by the in-process sync-history maintenance scheduler.
+     */
+    listWorkspaceIds?(): Promise<string[]>;
+
+    /**
+     * Read the provider's sync-history maintenance state (last run, backlog,
+     * failure). Optional — only providers that run maintenance implement it.
+     */
+    getMaintenanceState?(): SyncMaintenanceState;
+
+    /** Mark a maintenance pass as in-flight (guards overlapping runs). */
+    beginMaintenanceRun?(): void;
+
+    /** Record a successful maintenance pass; the provider computes the backlog. */
+    completeMaintenanceRun?(input: { lastRun: string }): void;
+
+    /** Record a failed maintenance pass with the error message. */
+    failMaintenanceRun?(error: string): void;
 }

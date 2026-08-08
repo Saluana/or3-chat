@@ -2,6 +2,12 @@
 
 Welcome to the OR3 Chat system documentation. This guide covers plugin development, API usage, and system architecture.
 
+## Start Here
+
+Choose a supported setup route in the [Start Here guide](start-here.md). It
+covers local Cloud, public Cloud, local Intern, the currently withheld remote
+Connect capability, and editable source development.
+
 ## Plugin Development
 
 -   **[Sidebar Plugin Guide](plugins/sidebar-plugin-guide.md)** - Complete guide for creating sidebar pages and pane apps
@@ -13,7 +19,7 @@ Welcome to the OR3 Chat system documentation. This guide covers plugin developme
 
 -   **[Hooks System](hooks.md)** - Complete hook system documentation and catalog
 -   **[Error Handling](error-handling.md)** - Error handling patterns and best practices
--   **[Performance Optimization](performance-optimization-documentation-shell.md)** - Performance tuning guidelines
+-   **[Streaming Core](streaming-core.md)** - Performance-sensitive streaming and rendering guidance
 
 ## UI Extensions
 
@@ -36,6 +42,7 @@ Welcome to the OR3 Chat system documentation. This guide covers plugin developme
 ## Releases and Operations
 
 -   **[Installation and operations](installation.md)** - Local, Docker, and public VPS setup with Caddy
+-   **[Start Here](start-here.md)** - One supported setup route per goal
 -   **[Package upgrades and releases](releasing.md)** - Versioning, trusted publishing, image qualification, and Cloud package release
 -   **[Deprecated creator path](publish-and-vps.md)** - Migration note for older `create-or3-chat` projects
 
@@ -48,7 +55,7 @@ Welcome to the OR3 Chat system documentation. This guide covers plugin developme
 -   **[Hooks Augmentation](hooks-augmentation.md)** - Extending the hook system
 -   **[Tokenizer Optimization](tokenizer-optimization.md)** - Tokenizer performance
 -   **[Images Preview Cache](images-preview-cache.md)** - Image caching system
--   **[Changelog](changelog.md)** - Recent platform changes
+-   **[Release notes](../public/_documentation/cloud/release-notes-production-readiness.md)** - Recent production-readiness changes
 
 ## Planning
 
