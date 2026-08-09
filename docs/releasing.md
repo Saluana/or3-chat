@@ -34,12 +34,17 @@ version.
 Run the focused package checks:
 
 ```bash
-bun run release:cloud:check
 bun run scripts/release/check-cloud-package.mjs --registry
 bun run cloud:package:check
 bun run --cwd packages/or3-cloud pack:check
 bun run check:docs
 ```
+
+Before creating the tag, build the fixed-profile image locally and run the
+complete managed lifecycle from `.github/workflows/deployment-smoke.yml`:
+init, doctor, write, backup, restore, rollback, deliberately unhealthy update
+recovery, adoption, and persistence verification. This is the pre-tag gate;
+the tag workflow is intentionally the only automatic release build.
 
 When the default profile changed, verify the exact build-time provider versions
 in `packages/create-or3-chat/first-party-versions.json` are already available
@@ -67,14 +72,18 @@ git push origin v<version>
 The `Release OR3 Cloud` workflow then:
 
 1. checks the version contract and provider registry entries;
-2. rejects a version that already exists in npm or GHCR;
+2. rejects a version that already exists in npm; an existing image is resumed
+   only when its source revision and version labels match the tag exactly;
 3. builds the Nuxt output once on the native runner, then packages amd64 and
    arm64 runtime images with Basic Auth + SQLite + filesystem build flags;
-4. scans both runtime architectures and verifies their manifest entries;
-5. runs the full login, persistence, restart, and clean-browser journey on
-   amd64 plus a focused native SQLite query on arm64;
+4. verifies the pinned distroless + BusyBox backup/restore command contract,
+   scans both runtime architectures, and verifies their manifest entries;
+5. runs the login, persistence, restart, and clean-browser journey on amd64
+   plus the same runtime contract and a native SQLite query on arm64;
 6. publishes `ghcr.io/saluana/or3-chat:<version>`;
-7. packs and publishes `@or3/cloud@<version>`; and
+7. hands one qualified artifact to an isolated npm trusted-publishing job,
+   which re-verifies the public image digest before publishing
+   `@or3/cloud@<version>`; and
 8. retries exact npm and `npx` verification until registry propagation ends.
 
 The workflow's image digest is the deployment identity. Copy it into the
@@ -109,6 +118,8 @@ npm deprecate 'create-or3-chat@<0.1.12' 'Use npx @or3/cloud init; the creator is
 - `bun run check:docs` passes (and, on qualification, executes the exact packed Cloud CLI).
 - `npm pack --dry-run` contains only the Cloud CLI and deployment assets.
 - The exact default provider versions exist on npm.
+- The complete local managed lifecycle in `deployment-smoke.yml` passes before
+  the tag is created.
 - The public GHCR image pulls from a clean machine.
 - Basic Auth login, deep health, conversation persistence, and file persistence
   pass after container restart.

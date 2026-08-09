@@ -1,9 +1,15 @@
 # syntax=docker/dockerfile:1.7
 # Pinned multi-architecture OCI index (linux/amd64 + linux/arm64); update only
 # through the release qualification flow after scanning the resulting image.
+# The Cloud operator executes a small shell-tool contract against the managed
+# /data volume for backup, restore, adoption, and free-space checks. This stage
+# is a static multicall binary plus applet links; it performs no target-arch RUN
+# so the multi-arch build does not require QEMU.
+FROM busybox:1.37.0-uclibc@sha256:8d7b1636e974e0adfd8d945955fca609304f0a56c18799dfd032d6e661382d84 AS runtime-tools
+
 # The Nuxt output is architecture-neutral and better-sqlite3 ships both Linux
 # runtime bindings in its package. Build it once on the native CI platform;
-# only the distroless runtime stage varies across the output architectures.
+# only the runtime and static operator tools vary across output architectures.
 FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS build
 
 ARG SSR_AUTH_ENABLED=false
@@ -76,8 +82,9 @@ RUN mkdir -p /tmp/or3-build/storage /tmp/or3-runtime-data/admin /tmp/or3-runtime
     OR3_STORAGE_FS_TOKEN_SECRET=or3-build-only-storage-token-not-for-runtime \
     npm run build
 
-# The distroless runtime keeps only Node and the libraries it requires. It is
-# pinned to a multi-architecture OCI index and qualified by the release scan.
+# The distroless runtime keeps only Node, its required libraries, and the
+# pinned static multicall tool above. Both bases are pinned multi-arch
+# OCI indexes and the resulting architectures are scanned during release.
 FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:fbbdda866ea71aef98c4abece17e3d61fbf820cc2ef3961522caa2478716171a AS runtime
 
 ENV NODE_ENV=production \
@@ -90,6 +97,7 @@ WORKDIR /app
 COPY --from=build --chown=65532:65532 /app/.output ./.output
 COPY --from=build --chown=65532:65532 /app/scripts/docker/runtime-entrypoint.mjs ./scripts/docker/runtime-entrypoint.mjs
 COPY --from=build --chown=65532:65532 /tmp/or3-runtime-data /data
+COPY --from=runtime-tools /bin/ /bin/
 
 USER 65532:65532
 EXPOSE 3000

@@ -1,19 +1,19 @@
 name: Release OR3 Cloud
 
-# Dispatch is QUALIFICATION-ONLY: a manual run builds and qualifies the
-# candidate (typecheck, package checks, lock drift, a local amd64 image build,
-# API + clean-browser smokes) but never publishes. Publication
-# happens ONLY on the exact version-matching tag push (refs/tags/v*).
+# A matching immutable tag starts one qualification and publication attempt.
+# Local qualification is required before tagging; this workflow never rebuilds
+# the same candidate through a separate manual-dispatch path.
 on:
-  workflow_dispatch:
   push:
     tags:
       - "v*"
 
+concurrency:
+  group: release-or3-cloud
+  cancel-in-progress: false
+
 permissions:
   contents: read
-  packages: write
-  id-token: write
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -29,27 +29,31 @@ jobs:
   # ---------------------------------------------------------------------------
   qualify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      digest: ${{ steps.release-digest.outputs.digest }}
     # The app build runs once on the native runner. Only a short native-binding
     # probe uses arm64 emulation, so a longer release indicates a real problem.
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-          package-manager-cache: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
       - run: npm install --global npm@11.6.2
       - run: bun install --frozen-lockfile
-      - name: Verify version contract
-        run: bun run release:cloud:check
       - name: Read release version
         id: version
         run: |
           version="$(node -p 'require("./packages/or3-cloud/package.json").version')"
+          test "$GITHUB_REF_NAME" = "v$version" || { echo "Release tag $GITHUB_REF_NAME does not match Cloud version $version."; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Gate on lockfile drift
         run: bun run scripts/release/check-lock-drift.mjs
@@ -72,16 +76,15 @@ jobs:
         id: pack
         working-directory: packages/or3-cloud
         run: |
-          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
-          tarball="$(find "$RUNNER_TEMP" -maxdepth 1 -name 'or3-cloud-*.tgz' -print -quit)"
+          mkdir -p "$GITHUB_WORKSPACE/release-artifact"
+          npm pack --ignore-scripts --pack-destination "$GITHUB_WORKSPACE/release-artifact"
+          tarball="$(find "$GITHUB_WORKSPACE/release-artifact" -maxdepth 1 -name 'or3-cloud-*.tgz' -print -quit)"
           test -n "$tarball"
           echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
       - name: Check beginner documentation and exact Cloud artifact
         env:
           CLOUD_TARBALL: ${{ steps.pack.outputs.tarball }}
         run: bun run check:docs -- --cloud-tarball "$CLOUD_TARBALL"
-      - name: Check canonical docs and beginner commands
-        run: node scripts/release/check-docs.mjs --cloud-tarball "${{ steps.pack.outputs.tarball }}"
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -110,12 +113,6 @@ jobs:
         run: |
           set -euo pipefail
           release="ghcr.io/saluana/or3-chat:$VERSION"
-          if [[ "$GITHUB_REF" != refs/tags/v* ]]; then
-            echo "qualifying_image=$release" >> "$GITHUB_OUTPUT"
-            echo "release_image=$release" >> "$GITHUB_OUTPUT"
-            echo "resume=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           if docker manifest inspect "$release" >/dev/null 2>&1; then
             docker pull "$release"
             revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$release")"
@@ -136,7 +133,8 @@ jobs:
       # tag is created after every gate below succeeds.
       - name: Build candidate fixed-profile image
         id: image
-        if: startsWith(github.ref, 'refs/tags/v') && steps.image-plan.outputs.resume != 'true'
+        if: steps.image-plan.outputs.resume != 'true'
+        timeout-minutes: 15
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -163,38 +161,9 @@ jobs:
             NUXT_PUBLIC_STORAGE_PROVIDER=fs
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Build local amd64 image for dispatch qualification
-        id: local-image
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64
-          load: true
-          tags: ${{ steps.image-plan.outputs.qualifying_image }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ steps.version.outputs.version }}
-          provenance: false
-          sbom: false
-          build-args: |
-            SSR_AUTH_ENABLED=true
-            AUTH_PROVIDER=basic-auth
-            OR3_GUEST_ACCESS_ENABLED=false
-            OR3_AUTH_REGISTRATION_MODE=invite_only
-            OR3_AUTH_AUTO_PROVISION=false
-            OR3_SYNC_ENABLED=true
-            OR3_SYNC_PROVIDER=sqlite
-            OR3_STORAGE_ENABLED=true
-            NUXT_PUBLIC_STORAGE_PROVIDER=fs
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
       # After the multi-arch image is published (tag run), assert the manifest
       # list contains both linux/amd64 and linux/arm64.
       - name: Verify multi-arch manifest list
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           OR3_IMAGE: ${{ steps.image-plan.outputs.qualifying_image }}
         run: |
@@ -205,14 +174,38 @@ jobs:
           grep -q 'linux/arm64' <<<"$inspect"
           echo "Multi-arch manifest verified for linux/amd64 and linux/arm64."
       - name: Verify anonymous GHCR pull
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           OR3_IMAGE: ${{ steps.image-plan.outputs.qualifying_image }}
         run: |
           docker logout ghcr.io
           docker pull "$OR3_IMAGE"
+      - name: Verify hardened amd64 runtime command contract
+        env:
+          OR3_IMAGE: ${{ steps.image-plan.outputs.qualifying_image }}
+        run: |
+          set -euo pipefail
+          docker run --rm --platform linux/amd64 \
+            --user 65532:65532 --read-only --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m --volume /data \
+            --entrypoint /bin/sh "$OR3_IMAGE" -c '
+              set -eu
+              test -x /nodejs/bin/node
+              for applet in sh tar gzip du df awk find; do command -v "$applet" >/dev/null; done
+              printf "runtime-contract\n" > /data/runtime-contract.txt
+              du -sb /data > /tmp/du.txt
+              test -s /tmp/du.txt
+              df -Pk /data | awk NR==2 > /tmp/df.txt
+              test -s /tmp/df.txt
+              tar czf /tmp/data.tgz -C /data .
+              find /data -mindepth 1 -delete
+              test ! -e /data/runtime-contract.txt
+              tar xzf /tmp/data.tgz -C /data
+              read value < /data/runtime-contract.txt
+              test "$value" = runtime-contract
+              /nodejs/bin/node -e "if (typeof fetch !== \"function\") process.exit(1)"
+            '
       - uses: docker/login-action@v3
-        if: startsWith(github.ref, 'refs/tags/v')
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -235,28 +228,17 @@ jobs:
         env:
           OR3_IMAGE: ${{ steps.image-plan.outputs.qualifying_image }}
         run: |
-          node scripts/release/scan-image.mjs "$OR3_IMAGE" \
+          (cd release-artifact && node "$GITHUB_WORKSPACE/scripts/release/scan-image.mjs" "$OR3_IMAGE" \
             --platform linux/amd64 --syft "${{ steps.syft.outputs.cmd }}" \
-            --out release-evidence-amd64.json
+            --out release-evidence-amd64.json)
       - name: Scan linux/arm64 image
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           OR3_IMAGE: ${{ steps.image-plan.outputs.qualifying_image }}
         run: |
-          node scripts/release/scan-image.mjs "$OR3_IMAGE" \
+          (cd release-artifact && node "$GITHUB_WORKSPACE/scripts/release/scan-image.mjs" "$OR3_IMAGE" \
             --platform linux/arm64 --syft "${{ steps.syft.outputs.cmd }}" \
-            --out release-evidence-arm64.json
-      - uses: actions/upload-artifact@v4
-        if: startsWith(github.ref, 'refs/tags/v')
-        with:
-          name: or3-cloud-release-evidence
-          path: |
-            release-evidence-*.json
-            or3-sbom-*.spdx.json
-      - uses: actions/upload-artifact@v4
-        with:
-          name: or3-cloud-tarball
-          path: ${{ steps.pack.outputs.tarball }}
+            --out release-evidence-arm64.json)
       # Native amd64 operator journey: provision through the packed CLI, then
       # verify auth, SQLite sync, storage, and persistence across restart.
       - name: Smoke-test the qualifying image on amd64
@@ -264,8 +246,19 @@ jobs:
           OR3_IMAGE: ${{ steps.image-plan.outputs.qualifying_image }}
         run: |
           set -euo pipefail
-          docker image rm "$OR3_IMAGE" 2>/dev/null || true
           smoke="$RUNNER_TEMP/or3-audit-cloud-smoke"
+          dump_smoke_diagnostics() {
+            if [ -f "$smoke/.env" ] && [ -f "$smoke/compose.yaml" ]; then
+              echo "::group::Failed smoke diagnostics"
+              docker compose --project-directory "$smoke" --env-file "$smoke/.env" -f "$smoke/compose.yaml" ps -a || true
+              docker compose --project-directory "$smoke" --env-file "$smoke/.env" -f "$smoke/compose.yaml" logs --tail=200 || true
+              for container in $(docker compose --project-directory "$smoke" --env-file "$smoke/.env" -f "$smoke/compose.yaml" ps -aq 2>/dev/null); do
+                docker inspect --format '{{json .State}}' "$container" || true
+              done
+              echo "::endgroup::"
+            fi
+          }
+          trap 'status=$?; if [ "$status" -ne 0 ]; then dump_smoke_diagnostics; fi; exit "$status"' EXIT
           # The candidate was anonymously pulled above; retain the registry
           # manifest check so the CLI validates both release architectures.
           DOCKER_DEFAULT_PLATFORM=linux/amd64 OR3_CLOUD_TEST_IMAGE="$OR3_IMAGE" \
@@ -277,6 +270,14 @@ jobs:
           done
           curl --fail "http://127.0.0.1:3017/api/health?deep=true"
           (cd "$smoke" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
+          backup_output="$(cd "$smoke" && DOCKER_DEFAULT_PLATFORM=linux/amd64 \
+            npm exec --yes --package="${{ steps.pack.outputs.tarball }}" -- or3 backup)"
+          echo "$backup_output"
+          backup_id="$(sed -n 's/^Backup \([^ ]*\) .*/\1/p' <<<"$backup_output")"
+          test -n "$backup_id"
+          (cd "$smoke" && DOCKER_DEFAULT_PLATFORM=linux/amd64 \
+            npm exec --yes --package="${{ steps.pack.outputs.tarball }}" -- or3 restore "$backup_id" --yes)
+          (cd "$smoke" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
           (cd "$smoke" && DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose --env-file .env -f compose.yaml restart or3)
           for attempt in $(seq 1 60); do
             curl --fail --silent "http://127.0.0.1:3017/api/health?deep=true" && break
@@ -296,6 +297,14 @@ jobs:
             docker compose --project-directory "$smoke" --env-file "$smoke/.env" -f "$smoke/compose.yaml" down --volumes
             rm -rf -- "$smoke"
           fi
+      - if: always()
+        name: Clean up a failed release smoke deployment
+        run: |
+          smoke="$RUNNER_TEMP/or3-audit-cloud-smoke"
+          if [ -d "$smoke" ]; then
+            docker compose --project-directory "$smoke" --env-file "$smoke/.env" -f "$smoke/compose.yaml" down --volumes 2>/dev/null || true
+            rm -rf -- "$smoke" || true
+          fi
       - name: Enable arm64 runtime emulation
         if: startsWith(github.ref, 'refs/tags/v')
         uses: docker/setup-qemu-action@v3
@@ -311,6 +320,19 @@ jobs:
         run: |
           set -euo pipefail
           docker image rm "$OR3_IMAGE" 2>/dev/null || true
+          docker run --rm --platform linux/arm64 \
+            --user 65532:65532 --read-only --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m --volume /data \
+            --entrypoint /bin/sh "$OR3_IMAGE" -c '
+              set -eu
+              for applet in sh tar gzip du df awk find; do command -v "$applet" >/dev/null; done
+              printf "runtime-contract\n" > /data/runtime-contract.txt
+              tar czf /tmp/data.tgz -C /data .
+              find /data -mindepth 1 -delete
+              tar xzf /tmp/data.tgz -C /data
+              test -f /data/runtime-contract.txt
+            '
           docker run --rm --platform linux/arm64 \
             --entrypoint /nodejs/bin/node "$OR3_IMAGE" -e '
               const Database = require("/app/.output/server/node_modules/better-sqlite3");
@@ -339,100 +361,51 @@ jobs:
           digest="$(docker buildx imagetools inspect "$RELEASE_IMAGE" --format '{{.Index.Digest}}')"
           test -n "$digest"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          echo "$digest" > digest.txt
+          echo "$digest" > release-artifact/digest.txt
           echo "Promoted and verified $RELEASE_IMAGE @ $digest"
       - uses: actions/upload-artifact@v4
-        if: startsWith(github.ref, 'refs/tags/v')
         with:
-          name: or3-cloud-image-digest
-          path: digest.txt
-      - if: always()
-        name: Clean up release smoke deployment
-        run: |
-          smoke="$RUNNER_TEMP/or3-audit-cloud-smoke"
-          if [ -d "$smoke" ]; then
-            docker compose --project-directory "$smoke" --env-file "$smoke/.env" -f "$smoke/compose.yaml" down --volumes 2>/dev/null || true
-            rm -rf -- "$smoke"
-          fi
-      - if: always()
-        name: Verify named smoke resources are gone
-        run: |
-          set -euo pipefail
-          leftovers="$(
-            {
-              docker ps -aq --filter name='or3-audit-cloud-smoke' || true
-            } | sed '/^$/d' | sort -u
-          )"
-          test -z "$leftovers" || { echo "Named smoke containers remain: $leftovers"; exit 1; }
-          test ! -e "$RUNNER_TEMP/or3-audit-cloud-smoke"
+          name: or3-cloud-release-${{ steps.version.outputs.version }}
+          path: release-artifact/
+          if-no-files-found: error
+          retention-days: 30
 
-  # ---------------------------------------------------------------------------
-  # Job B "publish-npm" (tag-only): publishes ONLY the missing npm half.
-  #
-  # Before publishing it must:
-  #   a. Verify the image for this version exists in GHCR AND its digest matches
-  #      the digest produced in the qualify job (persisted as an artifact).
-  #   b. If the image exists and identity is verified -> publish npm (resumable).
-  #      If the image does NOT exist -> fail (never publish npm without image).
-  #   c. If npm already exists -> fail ("version already published; choose a
-  #      new version") -- never overwrite.
-  # ---------------------------------------------------------------------------
+  # npm trusted publishing stays isolated from checkout, builds, scanners, and
+  # registry-write credentials. This job only accepts the exact qualified
+  # tarball after independently matching the promoted public image digest.
   publish-npm:
-    if: startsWith(github.ref, 'refs/tags/v')
     needs: qualify
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-          package-manager-cache: false
       - run: npm install --global npm@11.6.2
-      - name: Read release version
-        id: version
-        run: |
-          version="$(node -p 'require("./packages/or3-cloud/package.json").version')"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
-            echo "Release tag $GITHUB_REF_NAME does not match Cloud version $version."
-            exit 1
-          fi
       - uses: actions/download-artifact@v4
         with:
-          name: or3-cloud-image-digest
-          path: digest
-      - uses: actions/download-artifact@v4
-        with:
-          name: or3-cloud-tarball
-          path: tarball
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Verify image exists and identity matches the qualified build
+          name: or3-cloud-release-${{ needs.qualify.outputs.version }}
+          path: release-artifact
+      - name: Verify qualified image and artifact identity
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.qualify.outputs.version }}
+          EXPECTED_DIGEST: ${{ needs.qualify.outputs.digest }}
         run: |
           set -euo pipefail
-          recorded="$(tr -d '[:space:]' < digest/digest.txt)"
-          test -n "$recorded" || { echo "No recorded image digest found; refusing to publish npm."; exit 1; }
-          image="ghcr.io/saluana/or3-chat:$VERSION"
-          if ! docker manifest inspect "$image" >/dev/null 2>&1; then
-            echo "Image $image does not exist; refusing to publish npm without the image."
-            exit 1
-          fi
-          existing="$(docker buildx imagetools inspect "$image" --format '{{.Index.Digest}}')"
-          if [ "$existing" != "$recorded" ]; then
-            echo "Image digest mismatch for $image: existing=$existing recorded=$recorded"
-            exit 1
-          fi
-          echo "Image identity verified: $image @ $existing"
+          test "$GITHUB_REF_NAME" = "v$VERSION"
+          recorded="$(tr -d '[:space:]' < release-artifact/digest.txt)"
+          test -n "$recorded"
+          test "$recorded" = "$EXPECTED_DIGEST"
+          actual="$(docker buildx imagetools inspect "ghcr.io/saluana/or3-chat:$VERSION" --format '{{.Index.Digest}}')"
+          test "$actual" = "$recorded"
+          test -f "release-artifact/or3-cloud-$VERSION.tgz"
       - name: Reject reused npm version
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.qualify.outputs.version }}
         run: |
           set -euo pipefail
           npm_output="$(npm view "@or3/cloud@$VERSION" version 2>&1)" || npm_status=$?
@@ -445,17 +418,18 @@ jobs:
             exit "${npm_status}"
           fi
       - name: Publish @or3/cloud
-        run: npm publish "$(find tarball -maxdepth 1 -name 'or3-cloud-*.tgz' -print -quit)" --access public
+        run: npm publish "release-artifact/or3-cloud-${{ needs.qualify.outputs.version }}.tgz" --access public
       - name: Verify exact npm and npx propagation
+        env:
+          VERSION: ${{ needs.qualify.outputs.version }}
         run: |
-          version="${{ steps.version.outputs.version }}"
           for attempt in $(seq 1 120); do
-            if npm_config_prefer_online=true npm view "@or3/cloud@$version" version | grep -Fx "$version"; then
-              if npm_config_prefer_online=true npx --yes "@or3/cloud@$version" --help; then
+            if npm_config_prefer_online=true npm view "@or3/cloud@$VERSION" version | grep -Fx "$VERSION"; then
+              if npm_config_prefer_online=true npx --yes "@or3/cloud@$VERSION" --help; then
                 exit 0
               fi
             fi
             sleep 2
           done
-          echo "@or3/cloud@$version was not available after registry propagation retries."
+          echo "@or3/cloud@$VERSION was not available after registry propagation retries."
           exit 1

@@ -28,7 +28,7 @@ import { createGunzip } from 'node:zlib';
 
 const execFile = promisify(execFileCallback);
 
-export const PACKAGE_VERSION = '0.1.27';
+export const PACKAGE_VERSION = '0.1.28';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -133,9 +133,13 @@ type BackupExportReceipt = {
 
 type Flags = Record<string, string | boolean>;
 
-type CommandResult =
-  | { ok: true; stdout: string; stderr: string }
-  | { ok: false; command: string; exitCode: number | null; stderr: string };
+type CommandResult = {
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+  command: string;
+  exitCode: number | null;
+};
 
 const ALLOWED_ENV_KEYS = new Set([
   'SSR_AUTH_ENABLED',
@@ -356,14 +360,22 @@ async function run(command: string, args: string[], cwd?: string): Promise<Comma
       encoding: 'utf8',
       env: process.env,
     });
-    return { ok: true, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
+    return {
+      ok: true,
+      stdout: result.stdout ?? '',
+      stderr: result.stderr ?? '',
+      command: printable,
+      exitCode: 0,
+    };
   } catch (error) {
     const failure = error as { code?: number | string; stdout?: string; stderr?: string };
+    const stdout = failure.stdout ?? '';
     return {
       ok: false,
+      stdout,
       command: printable,
       exitCode: typeof failure.code === 'number' ? failure.code : null,
-      stderr: redact(failure.stderr ?? failure.stdout ?? String(error)),
+      stderr: redact(failure.stderr || stdout || String(error)),
     };
   }
 }
@@ -522,10 +534,32 @@ function diagnostics(directory: string, mode: Mode) {
   return `cd ${quote(directory)} && docker compose --env-file ${quote(join(directory, '.env'))} ${files} ps && docker compose --env-file ${quote(join(directory, '.env'))} ${files} logs --tail=200`;
 }
 
+async function captureComposeDiagnostics(directory: string, mode: Mode, secrets: string[]) {
+  const sections: string[] = [];
+  for (const [label, command] of [
+    ['compose ps', ['ps', '-a']],
+    ['compose logs', ['logs', '--tail=200']],
+  ] as const) {
+    const result = await run('docker', composeArgs(directory, mode, [...command]), directory);
+    const detail = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+    sections.push(`${label}:\n${detail || '(no output)'}`);
+  }
+  const containers = await run('docker', composeArgs(directory, mode, ['ps', '-aq']), directory);
+  for (const container of containers.stdout.split(/\s+/).filter(Boolean)) {
+    const state = await run('docker', ['inspect', '--format', '{{json .State}}', container], directory);
+    const detail = [state.stdout, state.stderr].filter(Boolean).join('\n').trim();
+    sections.push(`container ${container} state:\n${detail || '(no output)'}`);
+  }
+  return redact(sections.join('\n\n'), secrets);
+}
+
 async function compose(directory: string, mode: Mode, command: string[], secrets: string[] = []) {
   const result = await run('docker', composeArgs(directory, mode, command), directory);
   if (!result.ok) {
-    throw new Error(`${result.command}\n${redact(result.stderr, secrets)}\nDiagnostics: ${diagnostics(directory, mode)}`);
+    const captured = await captureComposeDiagnostics(directory, mode, secrets).catch((error) =>
+      redact(`Diagnostics capture failed: ${error instanceof Error ? error.message : String(error)}`, secrets),
+    );
+    throw new Error(`${redact(result.command, secrets)}\n${redact(result.stderr, secrets)}\nCaptured Docker diagnostics:\n${captured}\nDiagnostics: ${diagnostics(directory, mode)}`);
   }
   return result.stdout;
 }
@@ -598,12 +632,13 @@ async function assertSafeComposeBinding(directory: string, mode: Mode, env: Reco
 
 const HEALTH_SCRIPT = "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async response=>{const body=await response.json().catch(()=>({}));if(!response.ok||body.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))";
 const MAINTENANCE_SCRIPT = "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async response=>{const body=await response.json().catch(()=>({}));const m=body?.providers?.sync?.details?.maintenance;if(m)console.log(JSON.stringify(m))}).catch(()=>{})";
+const CONTAINER_NODE = '/nodejs/bin/node';
 
 async function waitForDeepHealthWithArgs(composeCommand: string[], directory: string, secrets: string[] = []) {
   const deadline = Date.now() + DEEP_HEALTH_TIMEOUT_MS;
   let lastError = 'health check did not complete';
   while (Date.now() < deadline) {
-    const result = await run('docker', [...composeCommand, 'exec', '-T', 'or3', 'node', '-e', HEALTH_SCRIPT], directory);
+    const result = await run('docker', [...composeCommand, 'exec', '-T', 'or3', CONTAINER_NODE, '-e', HEALTH_SCRIPT], directory);
     if (result.ok) return;
     lastError = redact(result.stderr, secrets);
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 1000));
@@ -629,7 +664,10 @@ async function waitForDeepHealth(directory: string, mode: Mode, secrets: string[
   try {
     await waitForDeepHealthWithArgs(composeArgs(directory, mode), directory, secrets);
   } catch (error) {
-    throw new Error(`${error instanceof Error ? error.message : String(error)}\nDiagnostics: ${diagnostics(directory, mode)}`);
+    const captured = await captureComposeDiagnostics(directory, mode, secrets).catch((captureError) =>
+      redact(`Diagnostics capture failed: ${captureError instanceof Error ? captureError.message : String(captureError)}`, secrets),
+    );
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\nCaptured Docker diagnostics:\n${captured}\nDiagnostics: ${diagnostics(directory, mode)}`);
   }
 }
 
@@ -929,8 +967,8 @@ function backupDirectory(directory: string, backupId: string) {
  * Probe choice: `du -sb` runs inside the or3 image itself — first via
  * `docker compose exec` against the running container, then via
  * `docker compose run --entrypoint sh` (same image, no second image needed)
- * when the deployment is stopped. The managed image is a node base image with
- * a shell and coreutils, and /data is already mounted there.
+ * when the deployment is stopped. The managed distroless image includes the
+ * pinned BusyBox applets used here, and /data is already mounted there.
  */
 async function dataVolumeSize(directory: string, mode: Mode, env: Record<string, string>) {
   const parseDuOutput = (stdout: string) => {
@@ -1153,7 +1191,7 @@ async function sha256File(path: string) {
   const digest = createHash('sha256');
   await new Promise<void>((resolvePromise, reject) => {
     const stream = createReadStream(path);
-    stream.on('data', (chunk: Buffer) => digest.update(chunk));
+    stream.on('data', (chunk) => digest.update(chunk));
     stream.once('error', reject);
     stream.once('end', resolvePromise);
   });
@@ -1201,6 +1239,39 @@ async function streamCommandToFile(
   }
 }
 
+/** Streams a private host archive into a container without bind-mounting it. */
+async function streamFileToCommand(
+  command: string,
+  args: string[],
+  source: string,
+  cwd?: string,
+  secrets: string[] = [],
+) {
+  const child = spawn(command, args, { cwd, stdio: ['pipe', 'ignore', 'pipe'] });
+  let stderr = '';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk: string) => {
+    stderr = `${stderr}${chunk}`.slice(-64 * 1024);
+  });
+  const exit = new Promise<number | null>((resolvePromise, reject) => {
+    child.once('error', reject);
+    child.once('close', resolvePromise);
+  });
+  try {
+    const [exitCode] = await Promise.all([
+      exit,
+      pipeline(createReadStream(source), child.stdin),
+    ]);
+    if (exitCode !== 0) {
+      throw new Error(`${command} ${args.join(' ')} exited with ${exitCode}. ${redact(stderr, secrets)}`.trim());
+    }
+  } catch (error) {
+    if (!child.killed) child.kill('SIGTERM');
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`${detail}${stderr && !detail.includes(stderr) ? `\n${redact(stderr, secrets)}` : ''}`);
+  }
+}
+
 async function gzipUncompressedBytes(path: string) {
   let bytes = 0;
   const counter = new Writable({
@@ -1237,15 +1308,20 @@ async function archiveExternalVolume(image: string, volume: string, backupDir: s
   );
 }
 
-async function restoreAdoptionBackup(directory: string, mode: Mode, env: Record<string, string>, backupPath: string) {
-  await compose(directory, mode, [
-    // The hardened service drops DAC override capabilities. Keep the image's
-    // normal `node` user here: it owns the managed /data volume and can safely
-    // replace its contents, whereas forced root cannot traverse it.
-    'run', '--rm', '--no-deps', '-v', `${backupPath}:/backup:ro`,
-    '--entrypoint', 'sh', 'or3', '-c',
-    'find /data -mindepth 1 -delete && tar xzf /backup/data.tgz -C /data',
-  ], secretValues(env));
+async function restoreVolumeArchive(directory: string, mode: Mode, env: Record<string, string>, backupPath: string) {
+  // Host backups intentionally stay 0700/0600. Stream the archive over stdin
+  // so the normal image user can write its owned /data volume without either
+  // exposing the backup through a bind mount or forcing a capability-less root.
+  await streamFileToCommand(
+    'docker',
+    composeArgs(directory, mode, [
+      'run', '--rm', '-T', '--no-deps', '--entrypoint', 'sh', 'or3', '-c',
+      'find /data -mindepth 1 -delete && tar xzf - -C /data',
+    ]),
+    join(backupPath, 'data.tgz'),
+    directory,
+    secretValues(env),
+  );
 }
 
 async function createBackup(directory: string, state: ManagedState, env: Record<string, string>) {
@@ -1374,11 +1450,7 @@ async function restoreBackupData(directory: string, state: ManagedState, env: Re
     stopAttempted = true;
     await stopProject(directory, state.mode);
     await copySecure(join(backupPath, 'config.env'), deploymentPaths(directory).env);
-    await compose(directory, state.mode, [
-      'run', '--rm', '--no-deps', '-v', `${backupPath}:/backup:ro`,
-      '--entrypoint', 'sh', 'or3', '-c',
-      'find /data -mindepth 1 -delete && tar xzf /backup/data.tgz -C /data',
-    ], secretValues(backupEnv));
+    await restoreVolumeArchive(directory, state.mode, backupEnv, backupPath);
     const restoredEnv = parseEnv(await readText(deploymentPaths(directory).env));
     await startProject(directory, state.mode, restoredEnv);
     started = true;
@@ -1652,7 +1724,7 @@ async function recoverCommand(directory: string) {
         throw new Error(`Source backup ${sourceManifest.backupId} does not match the managed adoption target.`);
       }
       await stopProject(loaded.directory, loaded.state.mode);
-      await restoreAdoptionBackup(loaded.directory, loaded.state.mode, loaded.env, sourceBackupPath);
+      await restoreVolumeArchive(loaded.directory, loaded.state.mode, loaded.env, sourceBackupPath);
     }
 
     // Init and backup keep the current .env as the intended deployment.
@@ -2306,7 +2378,7 @@ async function adoptCommand(positionals: string[], flags: Flags) {
     };
     await writeSecure(join(sourceBackupDir, 'manifest.json'), `${JSON.stringify(sourceManifest, null, 2)}\n`);
     await updatePending(targetDirectory, state, { backupId: sourceBackupId });
-    await compose(targetDirectory, mode, ['run', '--rm', '--no-deps', '--user', '0:0', '-v', `${sourceVolume}:/source:ro`, '--entrypoint', 'sh', 'or3', '-c', 'mkdir -p /data && cp -a /source/. /data/'], secretValues(targetEnv));
+    await restoreVolumeArchive(targetDirectory, mode, targetEnv, sourceBackupDir);
     await startProject(targetDirectory, mode, targetEnv);
     await clearPending(targetDirectory, state);
     console.log(`Adopted ${sourceDirectory} into ${targetDirectory} at OR3 ${release.or3Version}.`);
@@ -2511,7 +2583,7 @@ async function runCredentialsResetScript(directory: string, mode: Mode, values: 
       '-e', `OR3_RESET_OWNER_PASSWORD=${values.ownerPassword}`,
       '-e', `OR3_RESET_ADMIN_USERNAME=${values.adminUsername}`,
       '-e', `OR3_RESET_ADMIN_PASSWORD=${values.adminPassword}`,
-      'or3', 'node', '-e', script,
+      'or3', CONTAINER_NODE, '-e', script,
     ]),
   ], directory);
   if (!result.ok) throw new Error(`${result.command}\n${redact(result.stderr, [values.ownerPassword, values.adminPassword])}`);
@@ -2525,7 +2597,7 @@ async function verifyCredentialsInsideContainer(directory: string, mode: Mode, v
       '-e', `OR3_RESET_OWNER_PASSWORD=${values.ownerPassword}`,
       '-e', `OR3_RESET_ADMIN_USERNAME=${values.adminUsername}`,
       '-e', `OR3_RESET_ADMIN_PASSWORD=${values.adminPassword}`,
-      'or3', 'node', '-e', CREDENTIALS_VERIFY_SCRIPT,
+      'or3', CONTAINER_NODE, '-e', CREDENTIALS_VERIFY_SCRIPT,
     ]),
   ], directory);
   if (!result.ok) throw new Error(`Credential verification inside the OR3 container failed. ${redact(result.stderr, [values.ownerPassword, values.adminPassword])}`);
@@ -2636,7 +2708,7 @@ const health = await probeDeepHealth(directory, state.mode);
 
 /** Renders the provider maintenance state (SQLite history GC) from deep health. */
 async function printMaintenanceSummary(directory: string, mode: Mode) {
-  const result = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', 'node', '-e', MAINTENANCE_SCRIPT])], directory);
+  const result = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', CONTAINER_NODE, '-e', MAINTENANCE_SCRIPT])], directory);
   if (!result.ok || !result.stdout.trim()) return;
   try {
     const maintenance = JSON.parse(result.stdout.trim()) as {
@@ -2809,7 +2881,7 @@ async function removeCommand(directory: string, flags: Flags) {
 
 /** Bounded single-shot health probe for status: ok | degraded | unreachable. */
 async function probeDeepHealth(directory: string, mode: Mode) {
-  const result = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', 'node', '-e', HEALTH_SCRIPT])], directory);
+  const result = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', CONTAINER_NODE, '-e', HEALTH_SCRIPT])], directory);
   if (result.ok) return 'ok' as const;
   const ps = await run('docker', [...composeArgs(directory, mode, ['ps', '-q', 'or3'])], directory);
   if (ps.ok && ps.stdout.trim()) return 'degraded' as const;

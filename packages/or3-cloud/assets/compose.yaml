@@ -49,7 +49,7 @@ services:
       # persistent degraded state.
       test:
         - CMD
-        - node
+        - /nodejs/bin/node
         - -e
         - "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok||b.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))"
       interval: 10s

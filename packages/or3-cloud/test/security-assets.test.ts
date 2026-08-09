@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 const ASSET_ROOT = resolve(import.meta.dir, '../assets');
 const RUNTIME_ENTRYPOINT = resolve(import.meta.dir, '../../../scripts/docker/runtime-entrypoint.mjs');
 const DOCKERFILE = resolve(import.meta.dir, '../../../Dockerfile');
+const CLOUD_CLI_SOURCE = resolve(import.meta.dir, '../src/cli.ts');
 
 function asset(name: string): string {
   return readFileSync(resolve(ASSET_ROOT, name), 'utf8');
@@ -36,19 +37,47 @@ test('local compose.yaml has no Caddy service', () => {
 test('Dockerfile builds shared Nuxt output only once on the native runner', () => {
   const dockerfile = readFileSync(DOCKERFILE, 'utf8');
   expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:.* AS build$/m);
+  expect(dockerfile).toMatch(/^FROM busybox:1\.37\.0-uclibc@sha256:.* AS runtime-tools$/m);
   expect(dockerfile).toMatch(/^FROM gcr\.io\/distroless\/nodejs24-debian13:.* AS runtime$/m);
+  const toolsStage = dockerfile.slice(dockerfile.indexOf('FROM busybox:'), dockerfile.indexOf(' AS build'));
+  expect(toolsStage).not.toContain('\nRUN ');
+  expect(dockerfile).toContain('COPY --from=runtime-tools /bin/ /bin/');
+  expect(dockerfile).toContain('ENTRYPOINT ["/nodejs/bin/node"');
 });
 
 test('compose.yaml deep health treats degraded as unhealthy', () => {
   const compose = asset('compose.yaml');
   const healthcheck = compose.slice(compose.indexOf('healthcheck:'));
   expect(healthcheck).toContain('deep=true');
+  expect(healthcheck).toContain('/nodejs/bin/node');
   expect(healthcheck).toContain("b.status!=='ok'");
   expect(healthcheck).toContain('process.exit(1)');
   expect(healthcheck).toContain('interval: 10s');
   expect(healthcheck).toContain('timeout: 5s');
   expect(healthcheck).toContain('retries: 12');
   expect(healthcheck).toContain('start_period: 30s');
+});
+
+test('container-side CLI probes use the runtime Node executable explicitly', () => {
+  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  expect(cli).toContain("const CONTAINER_NODE = '/nodejs/bin/node';");
+  expect(cli).not.toContain("'or3', 'node', '-e'");
+});
+
+test('restore and adoption stream private archives into the managed volume', () => {
+  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  expect(cli).toContain('pipeline(createReadStream(source), child.stdin)');
+  expect(cli).toContain("'find /data -mindepth 1 -delete && tar xzf - -C /data'");
+  expect(cli).not.toContain('`${backupPath}:/backup:ro`');
+  expect(cli).not.toContain("'--user', '0:0', '-v', `${sourceVolume}:/source:ro`");
+});
+
+test('compose failures capture redacted state before cleanup', () => {
+  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  expect(cli).toContain("['compose ps', ['ps', '-a']]");
+  expect(cli).toContain("['compose logs', ['logs', '--tail=200']]");
+  expect(cli).toContain("['inspect', '--format', '{{json .State}}', container]");
+  expect(cli.match(/Captured Docker diagnostics:/g)?.length).toBe(2);
 });
 
 test('compose.yaml hardens the or3 container', () => {
