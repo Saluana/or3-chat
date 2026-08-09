@@ -1054,32 +1054,6 @@
 		@apply border-none!;
 	}
 
-	/* Workflow editor drag/select toggle buttons */
-	.workflow-toggle-active,
-	.workflow-validation-active {
-		box-shadow: none !important;
-		transform: none !important;
-		border: var(--md-border-width) solid var(--md-border-color) !important;
-	}
-
-	.workflow-toggle-active:hover,
-	.workflow-toggle-active:active,
-	.workflow-validation-active:hover,
-	.workflow-validation-active:active {
-		box-shadow: none !important;
-		transform: none !important;
-		border: var(--md-border-width) solid var(--md-border-color) !important;
-	}
-
-	/* Remove right border from first button in group to avoid double border */
-	.workflow-toolbar .theme-btn:first-child:not(:only-child) {
-		border-right: none !important;
-	}
-
-	/* Ensure non-active toggle buttons have proper border */
-	.workflow-toolbar .theme-btn:not(.workflow-toggle-active):not(.workflow-validation-active) {
-		border: var(--md-border-width) solid var(--md-border-color);
-	}
 }
 
 .cm-assistant {
@@ -1211,9 +1185,13 @@
 		height: var(--doc-tb-size) !important;
 		min-height: var(--doc-tb-size) !important;
 		padding: 0 !important;
-		display: inline-grid !important;
-		place-items: center;
+		display: inline-flex !important;
+		align-items: center;
 		justify-content: center;
+		gap: 0.4rem;
+		grid-auto-flow: column !important;
+		grid-template-rows: 1fr !important;
+		white-space: nowrap;
 		border: var(--doc-tb-border-width) solid var(--doc-tb-border-color) !important;
 		border-radius: var(--md-border-radius) !important;
 		background: var(--doc-tb-face) !important;
@@ -1378,6 +1356,246 @@
 
 	.document-editor-root .editor-toolbar--mobile .heading-style-button {
 		font-size: 1rem !important;
+	}
+
+	/*
+	 * Workflow toolbar — use the document toolbar's control system verbatim.
+	 * Semantic validation/run controls keep their meaning while sharing its
+	 * sizing, borders, shadows, and responsive rhythm.
+	 */
+	.workflow-app .workflow-toolbar {
+		--doc-tb-size: 36px;
+		--doc-tb-icon: 16px;
+		--doc-tb-gap: 4px;
+		--doc-tb-group: 11px;
+		--doc-tb-border-width: 1px;
+		--doc-tb-shadow-room: 3px;
+		--doc-tb-border-color: color-mix(
+			in srgb,
+			var(--md-border-color) 72%,
+			transparent
+		);
+		--doc-tb-face: color-mix(in srgb, var(--md-info) 62%, var(--md-surface));
+		--doc-tb-face-hover: var(--md-info);
+		--doc-tb-face-active: color-mix(
+			in srgb,
+			var(--md-primary) 72%,
+			var(--md-info)
+		);
+		--doc-tb-ink: var(--md-primary-shade);
+		--doc-tb-ink-active: var(--md-on-primary, #fff);
+		--doc-tb-shadow-idle: 1px 1px 0
+			color-mix(in srgb, var(--md-border-color) 48%, transparent);
+		--doc-tb-shadow-hover: 2px 2px 0 var(--md-border-color);
+		--doc-tb-shadow-pressed: 0 0 0 transparent;
+		--workflow-toolbar-control-size: var(--doc-tb-size);
+		--workflow-toolbar-gap: var(--doc-tb-gap);
+		--workflow-toolbar-surface: var(--md-surface);
+
+		min-height: 52px;
+		padding-block: 5px;
+		gap: var(--doc-tb-gap);
+		overflow: visible;
+		box-shadow: none;
+	}
+
+	.workflow-app .workflow-toolbar-primary-rail {
+		gap: var(--doc-tb-gap);
+		align-items: center;
+		padding-block: var(--doc-tb-shadow-room);
+		padding-inline: var(--doc-tb-shadow-room)
+			calc(1rem + var(--doc-tb-shadow-room));
+		overflow-x: auto;
+		overflow-y: hidden;
+	}
+
+	.workflow-app .workflow-toolbar-group,
+	.workflow-app .workflow-toolbar-trailing {
+		gap: var(--doc-tb-gap);
+	}
+
+	.workflow-app .workflow-toolbar-trailing {
+		margin-inline-start: 2px;
+		padding-block: var(--doc-tb-shadow-room);
+		padding-inline-start: calc(var(--doc-tb-group) - var(--doc-tb-gap));
+		padding-inline-end: var(--doc-tb-shadow-room);
+		overflow: visible;
+		background: var(--workflow-toolbar-surface);
+		box-shadow: none;
+	}
+
+	.workflow-app .workflow-toolbar-separator {
+		width: 1px;
+		height: 18px;
+		margin-block: 0;
+		margin-inline: calc((var(--doc-tb-group) - var(--doc-tb-gap)) / 2);
+		background: color-mix(
+			in srgb,
+			var(--md-border-color) 38%,
+			transparent
+		);
+	}
+
+	.workflow-app .workflow-mode-toggle {
+		height: auto;
+		gap: var(--doc-tb-gap);
+		padding: 0;
+		border: 0;
+		background: transparent;
+	}
+
+	.workflow-app .workflow-toolbar .workflow-toolbar-button {
+		box-sizing: border-box;
+		width: var(--doc-tb-size) !important;
+		min-width: var(--doc-tb-size) !important;
+		height: var(--doc-tb-size) !important;
+		min-height: var(--doc-tb-size) !important;
+		padding: 0 !important;
+		display: inline-grid !important;
+		place-items: center;
+		justify-content: center;
+		border: var(--doc-tb-border-width) solid var(--doc-tb-border-color) !important;
+		border-radius: var(--md-border-radius) !important;
+		background: var(--doc-tb-face) !important;
+		color: var(--doc-tb-ink) !important;
+		opacity: 1 !important;
+		backdrop-filter: none !important;
+		-webkit-backdrop-filter: none !important;
+		--tw-shadow: var(--doc-tb-shadow-idle) !important;
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			var(--tw-shadow) !important;
+		transition:
+			transform 70ms ease,
+			box-shadow 70ms ease,
+			background-color 70ms ease,
+			border-color 70ms ease;
+	}
+
+	.workflow-app
+		.workflow-toolbar:not(.workflow-toolbar--compact)
+		.workflow-mode-button,
+	.workflow-app
+		.workflow-toolbar:not(.workflow-toolbar--compact)
+		.workflow-validation-status,
+	.workflow-app
+		.workflow-toolbar:not(.workflow-toolbar--compact)
+		.workflow-run-button {
+		width: auto !important;
+		padding-inline: 0.65rem !important;
+	}
+
+	.workflow-app .workflow-toolbar .workflow-toolbar-button svg {
+		width: var(--doc-tb-icon) !important;
+		height: var(--doc-tb-icon) !important;
+		flex-shrink: 0;
+	}
+
+	.workflow-app .workflow-toolbar .workflow-toolbar-button:hover:not(:disabled) {
+		background: var(--doc-tb-face-hover) !important;
+		border-color: var(--md-border-color) !important;
+		--tw-shadow: var(--doc-tb-shadow-hover) !important;
+	}
+
+	.workflow-app .workflow-toolbar .workflow-toolbar-button:active:not(:disabled) {
+		transform: translate(1px, 1px);
+		--tw-shadow: var(--doc-tb-shadow-pressed) !important;
+	}
+
+	.workflow-app .workflow-toolbar .workflow-toolbar-button:disabled {
+		opacity: 0.45 !important;
+	}
+
+	.workflow-app
+		.workflow-toolbar
+		.workflow-mode-button[aria-pressed='true'] {
+		background: var(--doc-tb-face-active) !important;
+		border-color: var(--md-border-color) !important;
+		color: var(--doc-tb-ink-active) !important;
+		--tw-shadow: var(--doc-tb-shadow-hover) !important;
+	}
+
+	.workflow-app .workflow-toolbar .workflow-validation-status {
+		border-color: color-mix(
+			in srgb,
+			var(--md-warning) 52%,
+			var(--md-border-color)
+		) !important;
+		background: color-mix(
+			in srgb,
+			var(--md-warning) 10%,
+			var(--md-surface)
+		) !important;
+		color: var(--md-warning) !important;
+	}
+
+	.workflow-app
+		.workflow-toolbar
+		.workflow-validation-status:hover:not(:disabled) {
+		background: color-mix(
+			in srgb,
+			var(--md-warning) 18%,
+			var(--md-surface)
+		) !important;
+	}
+
+	.workflow-app .workflow-toolbar .workflow-run-button {
+		border-color: var(--md-border-color) !important;
+		background: color-mix(
+			in srgb,
+			var(--md-success) 50%,
+			var(--md-on-surface)
+		) !important;
+		color: var(--md-on-primary) !important;
+	}
+
+	.workflow-app .workflow-toolbar .workflow-run-button:hover:not(:disabled) {
+		background: color-mix(
+			in srgb,
+			var(--md-success) 58%,
+			var(--md-on-surface)
+		) !important;
+	}
+
+	/* Narrow pane: same 34px controls and 50px rail as documents. */
+	.workflow-app .workflow-toolbar--compact {
+		--doc-tb-size: 34px;
+		--doc-tb-icon: 15px;
+		--doc-tb-gap: 3px;
+		--doc-tb-group: 9px;
+		min-height: 50px;
+		padding-block: 4px;
+	}
+
+	.workflow-app .workflow-toolbar--compact .workflow-toolbar-primary-rail {
+		gap: var(--doc-tb-gap);
+		padding-block: var(--doc-tb-shadow-room);
+		padding-inline: var(--doc-tb-shadow-room)
+			calc(0.9rem + var(--doc-tb-shadow-room));
+	}
+
+	.workflow-app .workflow-toolbar--compact .workflow-toolbar-trailing {
+		gap: var(--doc-tb-gap);
+		padding-block: var(--doc-tb-shadow-room);
+		padding-inline-start: 0.35rem;
+		padding-inline-end: var(--doc-tb-shadow-room);
+	}
+
+	.workflow-app .workflow-toolbar--compact .workflow-toolbar-separator {
+		height: 18px;
+		margin-inline: calc((var(--doc-tb-group) - var(--doc-tb-gap)) / 2);
+	}
+
+	/* True mobile: restore the roomier document toolbar hit face. */
+	.workflow-app .workflow-toolbar--mobile {
+		--doc-tb-size: 36px;
+		--doc-tb-icon: 16px;
+		--doc-tb-gap: 3px;
+		--doc-tb-group: 8px;
+		min-height: 52px;
+		padding-block: 5px;
+		padding-inline: 0.3rem 0.15rem;
 	}
 
 	/*
@@ -1756,7 +1974,9 @@ html[data-theme='retro'].dark .workspace-tab-switcher-action--done:focus-visible
  * info face (unreadable). Lift idle ink/face; keep bright active states.
  */
 html[data-theme='retro'].dark .document-editor-root .editor-toolbar,
-.dark html[data-theme='retro'] .document-editor-root .editor-toolbar {
+.dark html[data-theme='retro'] .document-editor-root .editor-toolbar,
+html[data-theme='retro'].dark .workflow-app .workflow-toolbar,
+.dark html[data-theme='retro'] .workflow-app .workflow-toolbar {
 	--doc-tb-face: color-mix(
 		in srgb,
 		var(--md-surface-variant) 55%,
@@ -1778,6 +1998,25 @@ html[data-theme='retro'].dark .document-editor-root .editor-toolbar,
 	--doc-tb-shadow-idle: 1px 1px 0
 		color-mix(in srgb, var(--md-border-color) 60%, transparent);
 	--doc-tb-shadow-hover: 2px 2px 0 var(--md-border-color);
+}
+
+html[data-theme='retro'].dark .workflow-app .workflow-run-button,
+.dark html[data-theme='retro'] .workflow-app .workflow-run-button {
+	background: color-mix(
+		in srgb,
+		var(--md-success) 55%,
+		var(--md-surface-container-lowest)
+	) !important;
+	color: var(--md-on-primary) !important;
+}
+
+html[data-theme='retro'].dark .workflow-app .workflow-run-button:hover:not(:disabled),
+.dark html[data-theme='retro'] .workflow-app .workflow-run-button:hover:not(:disabled) {
+	background: color-mix(
+		in srgb,
+		var(--md-success) 65%,
+		var(--md-surface-container-lowest)
+	) !important;
 }
 
 html[data-theme='retro'].dark

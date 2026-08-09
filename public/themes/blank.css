@@ -358,7 +358,7 @@
 }
 
 [data-theme="blank"] .document-editor-root .document-editor-toolbar {
-  border-bottom: 1px solid var(--md-border-color);
+  border-bottom: max(1px, var(--md-border-width)) solid var(--md-border-color);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--md-on-surface) 4%, transparent);
 }
 

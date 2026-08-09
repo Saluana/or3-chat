@@ -1,10 +1,9 @@
 // app/plugins/workflows.client.ts
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { useHooks, useRuntimeConfig } from '#imports';
+import { useRuntimeConfig } from '#imports';
 import { createManagedWorkspacePluginRuntime } from '~/composables/plugins/workspace-runtime';
 import WorkflowPane from './workflows/components/WorkflowPane.vue';
 import WorkflowSidebar from './workflows/components/WorkflowSidebar.vue';
-import { destroyEditorForPane } from './workflows/composables/useWorkflows';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 
 // Vue Flow styles (required)
@@ -34,12 +33,8 @@ export default defineNuxtPlugin(() => {
     });
     const api = pluginRuntime.api;
 
-    const hooks = useHooks();
-
     // Register the pane app with post type for score tracking (if execution enabled)
     const executionEnabled = features.workflows.execution !== false;
-    let disposePaneCloseHook: (() => void) | undefined;
-    
     if (executionEnabled) {
         try {
             api.registerPaneApp({
@@ -75,15 +70,6 @@ export default defineNuxtPlugin(() => {
                 e
             );
         }
-
-        disposePaneCloseHook = hooks.on(
-            'ui.pane.close:action:before',
-            ({ pane }) => {
-                if (pane.mode === 'or3-workflows') {
-                    destroyEditorForPane(pane.id);
-                }
-            }
-        );
     }
 
     // Register the sidebar page (if editor enabled)
@@ -105,7 +91,6 @@ export default defineNuxtPlugin(() => {
     // HMR cleanup
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
-            disposePaneCloseHook?.();
             void pluginRuntime.dispose('workflow plugin HMR');
         });
     }

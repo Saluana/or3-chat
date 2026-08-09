@@ -55,7 +55,7 @@
   
   --or3-color-warning: var(--md-warning, #d97706);
   --or3-color-warning-hover: #f59e0b;
-  --or3-color-warning-muted: rgba(217, 119, 6, 0.12);
+  --or3-color-warning-muted: color-mix(in srgb, var(--md-warning, #d97706) 12%, transparent);
   
   --or3-color-error: var(--md-error, #dc2626);
   --or3-color-error-hover: #ef4444;
@@ -109,7 +109,7 @@
   --or3-color-success-muted: rgba(5, 150, 105, 0.12);
   --or3-color-warning: var(--md-warning, #d97706);
   --or3-color-warning-hover: #f59e0b;
-  --or3-color-warning-muted: rgba(217, 119, 6, 0.12);
+  --or3-color-warning-muted: color-mix(in srgb, var(--md-warning, #d97706) 12%, transparent);
   --or3-color-error: var(--md-error, #dc2626);
   --or3-color-error-hover: #ef4444;
   --or3-color-error-muted: rgba(220, 38, 38, 0.12);
@@ -173,7 +173,7 @@
   
   --or3-color-warning: var(--md-warning, #f59e0b);
   --or3-color-warning-hover: #fbbf24;
-  --or3-color-warning-muted: rgba(245, 158, 11, 0.15);
+  --or3-color-warning-muted: color-mix(in srgb, var(--md-warning, #f59e0b) 15%, transparent);
   
   --or3-color-error: var(--md-error, #ef4444);
   --or3-color-error-hover: #f87171;
@@ -239,7 +239,7 @@
   
   --or3-color-warning: var(--md-warning, #f59e0b);
   --or3-color-warning-hover: #fbbf24;
-  --or3-color-warning-muted: rgba(245, 158, 11, 0.15);
+  --or3-color-warning-muted: color-mix(in srgb, var(--md-warning, #f59e0b) 15%, transparent);
   
   --or3-color-error: var(--md-error, #ef4444);
   --or3-color-error-hover: #f87171;

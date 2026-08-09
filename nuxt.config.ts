@@ -66,6 +66,13 @@ const localPackageCandidates = [
         replacement: resolve(__dirname, '../or3-vsc/src/lib/index.ts'),
     },
     {
+        find: /^or3-workflow-vue\/style\.css$/,
+        replacement: resolve(
+            __dirname,
+            '../or3-workflows/packages/workflow-vue/src/styles/variables.css',
+        ),
+    },
+    {
         find: /^or3-workflow-vue$/,
         replacement: resolve(
             __dirname,

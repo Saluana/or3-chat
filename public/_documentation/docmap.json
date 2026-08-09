@@ -1102,6 +1102,18 @@
             ]
         },
         {
+            "title": "Workflows",
+            "path": "/workflows",
+            "files": [
+                {
+                    "name": "editor.md",
+                    "path": "/workflows/editor",
+                    "category": "Guide",
+                    "summary": "Build, validate, arrange, and run workflows from the node editor, including quick connected-node insertion and local package hot reload behavior."
+                }
+            ]
+        },
+        {
             "title": "Cloud",
             "path": "/cloud",
             "files": [

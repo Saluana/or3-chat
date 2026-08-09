@@ -1,6 +1,6 @@
 export const documentsOverrides = {
     'button.document': {
-        class: 'bg-[var(--md-surface-hover)] hover:bg-[var(--md-surface-active)] border-0 rounded-xl',
+        class: 'bg-[var(--md-surface-hover)] hover:bg-[var(--md-surface-active)] border-0 rounded-[var(--md-border-radius)]',
     },
 };
 export const documentsStyles = {
@@ -16,7 +16,8 @@ export const documentsStyles = {
     },
     '.document-editor-root .document-editor-toolbar': {
         style: {
-            borderBottom: '1px solid var(--md-border-color)',
+            borderBottom:
+                'max(1px, var(--md-border-width)) solid var(--md-border-color)',
             boxShadow: '0 1px 2px color-mix(in srgb, var(--md-on-surface) 4%, transparent)',
         },
     },

@@ -91,6 +91,13 @@ describe('document editor theme contract', () => {
         expect(retroCss).toContain('padding-block: var(--doc-tb-shadow-room)');
         expect(retroCss).toContain('min-height: 52px');
         expect(retroCss).toContain('.editor-toolbar--compact');
+        expect(retroCss).toContain('.workflow-app .workflow-toolbar');
+        expect(retroCss).toContain('.workflow-toolbar--compact');
+        expect(retroCss).toContain('.workflow-toolbar--mobile');
+        expect(retroCss).toContain('.workflow-validation-status');
+        expect(retroCss).toContain('.workflow-run-button');
+        expect(retroCss).toContain('display: inline-flex !important');
+        expect(retroCss).toContain('white-space: nowrap');
         expect(retroCss).toContain('--doc-tb-size: 34px');
         expect(retroCss).toContain('--doc-tb-gap: 3px');
         expect(retroCss).toContain('min-height: 50px');
@@ -124,6 +131,8 @@ describe('document editor theme contract', () => {
         expect(retroTheme.colors.dark?.primary).toBe('#5BA3D4');
         expect(retroTheme.colors.dark?.primaryTint).toBe('#8EC4E8');
         expect(retroTheme.colors.dark?.error).toBe('#FF8A8A');
+        expect(retroTheme.colors.warning).toBe('#9A4D00');
+        expect(retroTheme.colors.dark?.warning).toBe('#FFB86A');
         expect(retroCss).toContain('.settings-overlay');
         expect(retroCss).toContain("button[aria-label^='Remove']");
         expect(blankCss).not.toContain('.settings-overlay .quick-action-number');

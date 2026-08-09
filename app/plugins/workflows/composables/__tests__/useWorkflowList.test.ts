@@ -3,8 +3,10 @@ import { nextTick } from 'vue';
 
 vi.mock('or3-workflow-core', () => ({
     WorkflowEditor: class {
+        private destroyed = false;
+
         isDestroyed() {
-            return false;
+            return this.destroyed;
         }
 
         getSelected() {
@@ -18,7 +20,7 @@ vi.mock('or3-workflow-core', () => ({
         };
 
         destroy() {
-            // noop
+            this.destroyed = true;
         }
     },
     StarterKit: {
@@ -52,7 +54,13 @@ vi.mock('~/composables/posts/usePostsList', async () => {
     };
 });
 
-import { useWorkflowList } from '../useWorkflows';
+import {
+    acquireEditorForPane,
+    getLoadedWorkflowRecordForPane,
+    markEditorForPaneLoaded,
+    releaseEditorForPane,
+    useWorkflowList,
+} from '../useWorkflows';
 import * as postsListModule from '~/composables/posts/usePostsList';
 
 const usePostsList = postsListModule.usePostsList;
@@ -126,5 +134,32 @@ describe('useWorkflowList', () => {
         });
         expect(loading.value).toBe(true);
         expect(error.value).toBe('sync pull failed');
+    });
+});
+
+describe('workflow editor pane leases', () => {
+    it('keeps the editor alive when an HMR replacement reacquires it', () => {
+        vi.useFakeTimers();
+        try {
+            const paneId = 'hmr-pane';
+            const outgoing = acquireEditorForPane(paneId);
+            markEditorForPaneLoaded(paneId, outgoing, 'workflow-1');
+
+            releaseEditorForPane(paneId, outgoing);
+            const replacement = acquireEditorForPane(paneId);
+            vi.runAllTimers();
+
+            expect(replacement).toBe(outgoing);
+            expect(replacement.isDestroyed()).toBe(false);
+            expect(getLoadedWorkflowRecordForPane(paneId)).toBe('workflow-1');
+
+            releaseEditorForPane(paneId, replacement);
+            vi.runAllTimers();
+
+            expect(replacement.isDestroyed()).toBe(true);
+            expect(getLoadedWorkflowRecordForPane(paneId)).toBeUndefined();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });

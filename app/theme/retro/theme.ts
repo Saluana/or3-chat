@@ -68,7 +68,8 @@ export default defineTheme({
 
         // Semantic colors
         success: '#51cf66',
-        warning: '#ffa94d',
+        // Dark enough to remain readable as text on white warning surfaces.
+        warning: '#9A4D00',
         error: '#ff6b6b',
         onError: '#FFFFFF',
         errorHover: '#ff8787',
@@ -122,7 +123,7 @@ export default defineTheme({
             infoActive: '#0C0E10',
             onInfo: '#DDE3E8',
             success: '#51cf66',
-            warning: '#ffa94d',
+            warning: '#FFB86A',
             error: '#FF8A8A',
             onError: '#1A1E23',
             errorHover: '#FFA3A3',

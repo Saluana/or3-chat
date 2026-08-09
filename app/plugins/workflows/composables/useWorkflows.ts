@@ -22,7 +22,33 @@ const SOURCE = 'workflows-plugin';
  * Map of pane IDs to their workflow editor instances.
  * Each pane gets its own isolated editor state.
  */
-const editorInstances = new Map<string, WorkflowEditor>();
+interface WorkflowEditorRegistry {
+    // Kept on globalThis in development so the registry survives module HMR.
+    instances: Map<string, WorkflowEditor>;
+    owners: Map<string, number>;
+    pendingDestruction: Map<string, ReturnType<typeof setTimeout>>;
+    loadedRecordIds: Map<string, string | null>;
+}
+
+const workflowEditorGlobal = globalThis as typeof globalThis & {
+    __workflowEditorRegistry?: WorkflowEditorRegistry;
+    __workflowEditorInstances?: Map<string, WorkflowEditor>;
+};
+
+function createWorkflowEditorRegistry(): WorkflowEditorRegistry {
+    return {
+        instances: new Map(),
+        owners: new Map(),
+        pendingDestruction: new Map(),
+        loadedRecordIds: new Map(),
+    };
+}
+
+const editorRegistry = import.meta.dev
+    ? (workflowEditorGlobal.__workflowEditorRegistry ??=
+          createWorkflowEditorRegistry())
+    : createWorkflowEditorRegistry();
+const editorInstances = editorRegistry.instances;
 const workflowSyncState = new Map<
     string,
     { updatedAt: number; lastWriterPaneId?: string }
@@ -30,7 +56,7 @@ const workflowSyncState = new Map<
 
 // Debug logging in development
 if (import.meta.dev) {
-    (globalThis as any).__workflowEditorInstances = editorInstances;
+    workflowEditorGlobal.__workflowEditorInstances = editorInstances;
 }
 
 /**
@@ -71,6 +97,8 @@ export function getEditorForPane(paneId: string): WorkflowEditor {
     let editor = editorInstances.get(paneId);
     if (editor?.isDestroyed()) {
         editorInstances.delete(paneId);
+        editorRegistry.owners.delete(paneId);
+        editorRegistry.loadedRecordIds.delete(paneId);
         editor = undefined;
     }
     if (!editor) {
@@ -81,12 +109,85 @@ export function getEditorForPane(paneId: string): WorkflowEditor {
 }
 
 /**
- * Destroy a workflow editor instance when pane is closed.
- * Call this when a workflow pane is unmounted.
+ * Acquire ownership of a pane editor for a mounted WorkflowPane.
+ * A replacement mount cancels deferred teardown from the outgoing component.
  */
-export function destroyEditorForPane(paneId: string): void {
+export function acquireEditorForPane(paneId: string): WorkflowEditor {
+    const pending = editorRegistry.pendingDestruction.get(paneId);
+    if (pending) {
+        clearTimeout(pending);
+        editorRegistry.pendingDestruction.delete(paneId);
+    }
+
+    const editor = getEditorForPane(paneId);
+    editorRegistry.owners.set(
+        paneId,
+        (editorRegistry.owners.get(paneId) ?? 0) + 1,
+    );
+    return editor;
+}
+
+/**
+ * Release a mounted pane's ownership. Destruction waits until the next task so
+ * Vue/Vite replacement mounts can reacquire the same editor during HMR.
+ */
+export function releaseEditorForPane(
+    paneId: string,
+    expectedEditor: WorkflowEditor,
+): void {
+    if (editorInstances.get(paneId) !== expectedEditor) return;
+
+    const remainingOwners = Math.max(
+        0,
+        (editorRegistry.owners.get(paneId) ?? 1) - 1,
+    );
+    if (remainingOwners > 0) {
+        editorRegistry.owners.set(paneId, remainingOwners);
+        return;
+    }
+    editorRegistry.owners.delete(paneId);
+
+    const previous = editorRegistry.pendingDestruction.get(paneId);
+    if (previous) clearTimeout(previous);
+    const timer = setTimeout(() => {
+        editorRegistry.pendingDestruction.delete(paneId);
+        if ((editorRegistry.owners.get(paneId) ?? 0) > 0) return;
+        destroyEditorForPane(paneId, expectedEditor);
+    }, 0);
+    editorRegistry.pendingDestruction.set(paneId, timer);
+}
+
+export function getLoadedWorkflowRecordForPane(
+    paneId: string,
+): string | null | undefined {
+    return editorRegistry.loadedRecordIds.get(paneId);
+}
+
+export function markEditorForPaneLoaded(
+    paneId: string,
+    editor: WorkflowEditor,
+    recordId: string | null,
+): void {
+    if (editorInstances.get(paneId) === editor && !editor.isDestroyed()) {
+        editorRegistry.loadedRecordIds.set(paneId, recordId);
+    }
+}
+
+/**
+ * Immediately destroy a workflow editor instance.
+ * Mounted panes should normally use releaseEditorForPane instead.
+ */
+export function destroyEditorForPane(
+    paneId: string,
+    expectedEditor?: WorkflowEditor,
+): void {
     const editor = editorInstances.get(paneId);
-    if (editor) {
+    if (editor && (!expectedEditor || editor === expectedEditor)) {
+        const pending = editorRegistry.pendingDestruction.get(paneId);
+        if (pending) clearTimeout(pending);
+        editorRegistry.pendingDestruction.delete(paneId);
+        editorRegistry.owners.delete(paneId);
+        editorRegistry.loadedRecordIds.delete(paneId);
         // Call destroy() to clean up listeners and extensions
         // Do NOT load EMPTY_WORKFLOW - that would trigger update events and race with saves
         editor.destroy();

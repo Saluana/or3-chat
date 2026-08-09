@@ -112,7 +112,7 @@
 .editor-toolbar--compact .toolbar-trailing {
     gap: 0;
     padding-inline-start: 0.1rem;
-    box-shadow: -10px 0 14px -8px rgb(0 0 0 / 16%);
+    box-shadow: none;
 }
 .editor-toolbar--compact .inspector-toggle-button {
     background: transparent !important;
