@@ -40,6 +40,7 @@ vi.mock('../../../utils/rate-limit/store', () => ({
 
 vi.mock('../../../utils/net/request-identity', () => ({
     getClientIp: vi.fn(() => '127.0.0.1'),
+    getProxyRequestProtocol: vi.fn(() => 'https'),
     normalizeProxyTrustConfig: vi.fn(() => ({ trustProxy: false })),
 }));
 
