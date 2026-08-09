@@ -31,6 +31,9 @@ ENV NODE_ENV=development \
     NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
     NPM_CONFIG_FETCH_TIMEOUT=600000
 
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y g++ make python3 && \
+    rm -rf /var/lib/apt/lists/*
 RUN npm install --global npm@11.6.2
 COPY package*.json bun.lock* ./
 COPY packages/plugin-sdk ./packages/plugin-sdk
