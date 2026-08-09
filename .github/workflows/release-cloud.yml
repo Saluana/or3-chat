@@ -262,10 +262,12 @@ jobs:
         env:
           OR3_IMAGE: ${{ steps.image-plan.outputs.qualifying_image }}
         run: |
+          set -euo pipefail
+          docker image rm "$OR3_IMAGE" 2>/dev/null || true
           smoke="$RUNNER_TEMP/or3-audit-cloud-smoke"
           # The candidate was anonymously pulled above; retain the registry
           # manifest check so the CLI validates both release architectures.
-          OR3_CLOUD_TEST_IMAGE="$OR3_IMAGE" \
+          DOCKER_DEFAULT_PLATFORM=linux/amd64 OR3_CLOUD_TEST_IMAGE="$OR3_IMAGE" \
             npm exec --yes --package="${{ steps.pack.outputs.tarball }}" -- \
             or3 init "$smoke" --local --port 3017 --admin-email smoke@example.com
           for attempt in $(seq 1 120); do
@@ -274,7 +276,7 @@ jobs:
           done
           curl --fail "http://127.0.0.1:3017/api/health?deep=true"
           (cd "$smoke" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
-          (cd "$smoke" && docker compose --env-file .env -f compose.yaml restart or3)
+          (cd "$smoke" && DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose --env-file .env -f compose.yaml restart or3)
           for attempt in $(seq 1 60); do
             curl --fail --silent "http://127.0.0.1:3017/api/health?deep=true" && break
             sleep 1
@@ -291,6 +293,7 @@ jobs:
           smoke="$RUNNER_TEMP/or3-audit-cloud-smoke"
           if [ -d "$smoke" ]; then
             docker compose --project-directory "$smoke" --env-file "$smoke/.env" -f "$smoke/compose.yaml" down --volumes
+            rm -rf -- "$smoke"
           fi
       - name: Enable arm64 runtime emulation
         if: startsWith(github.ref, 'refs/tags/v')
@@ -355,10 +358,12 @@ jobs:
           smoke="$RUNNER_TEMP/or3-audit-cloud-smoke"
           if [ -d "$smoke" ]; then
             docker compose --project-directory "$smoke" --env-file "$smoke/.env" -f "$smoke/compose.yaml" down --volumes 2>/dev/null || true
+            rm -rf -- "$smoke"
           fi
           arm_smoke="$RUNNER_TEMP/or3-audit-cloud-arm64-smoke"
           if [ -d "$arm_smoke" ]; then
             docker compose --project-directory "$arm_smoke" --env-file "$arm_smoke/.env" -f "$arm_smoke/compose.yaml" down --volumes 2>/dev/null || true
+            rm -rf -- "$arm_smoke"
           fi
       - if: always()
         name: Verify named smoke resources are gone
