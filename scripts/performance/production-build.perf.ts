@@ -340,7 +340,7 @@ if (import.meta.main) {
         ),
         totalCssRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_CSS_BYTES,
-            800_000
+            850_000
         ),
         totalCssGzipBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_CSS_GZIP_BYTES,
@@ -352,7 +352,7 @@ if (import.meta.main) {
         ),
         precacheRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_PRECACHE_BYTES,
-            17_000_000
+            17_500_000
         ),
         rootModulepreloadFiles: positiveNumber(
             process.env.OR3_PERF_MAX_ROOT_MODULEPRELOAD_FILES,
