@@ -7,6 +7,7 @@ const ASSET_ROOT = resolve(import.meta.dir, '../assets');
 const RUNTIME_ENTRYPOINT = resolve(import.meta.dir, '../../../scripts/docker/runtime-entrypoint.mjs');
 const DOCKERFILE = resolve(import.meta.dir, '../../../Dockerfile');
 const CLOUD_CLI_SOURCE = resolve(import.meta.dir, '../src/cli.ts');
+const RELEASE_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/release-cloud.yml');
 
 function asset(name: string): string {
   return readFileSync(resolve(ASSET_ROOT, name), 'utf8');
@@ -78,6 +79,18 @@ test('compose failures capture redacted state before cleanup', () => {
   expect(cli).toContain("['compose logs', ['logs', '--tail=200']]");
   expect(cli).toContain("['inspect', '--format', '{{json .State}}', container]");
   expect(cli.match(/Captured Docker diagnostics:/g)?.length).toBe(2);
+});
+
+test('release smoke re-resolves amd64 after architecture-specific scans', () => {
+  const workflow = readFileSync(RELEASE_WORKFLOW, 'utf8');
+  const smoke = workflow.slice(
+    workflow.indexOf('- name: Smoke-test the qualifying image on amd64'),
+    workflow.indexOf('# Clean-browser journey'),
+  );
+  const pull = smoke.indexOf('docker pull --platform linux/amd64 "$OR3_IMAGE"');
+  const init = smoke.indexOf('or3 init "$smoke"');
+  expect(pull).toBeGreaterThan(-1);
+  expect(init).toBeGreaterThan(pull);
 });
 
 test('compose.yaml hardens the or3 container', () => {

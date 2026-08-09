@@ -259,6 +259,11 @@ jobs:
             fi
           }
           trap 'status=$?; if [ "$status" -ne 0 ]; then dump_smoke_diagnostics; fi; exit "$status"' EXIT
+          # The arm64 scanner may leave the multi-arch tag pointing at its
+          # platform in the local image store. Re-resolve amd64 explicitly
+          # before Compose so a valid candidate is never rejected as mismatched.
+          docker image rm "$OR3_IMAGE" 2>/dev/null || true
+          docker pull --platform linux/amd64 "$OR3_IMAGE"
           # The candidate was anonymously pulled above; retain the registry
           # manifest check so the CLI validates both release architectures.
           DOCKER_DEFAULT_PLATFORM=linux/amd64 OR3_CLOUD_TEST_IMAGE="$OR3_IMAGE" \
