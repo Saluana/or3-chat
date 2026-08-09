@@ -29,7 +29,7 @@ export const documentsStyles = {
     '.document-editor-root .document-ai-composer': {
         style: {
             border: '1px solid var(--md-border-color)',
-            borderRadius: '18px',
+            borderRadius: 'var(--chat-composer-border-radius, 28px)',
             boxShadow: '0 12px 36px color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
         },
     },

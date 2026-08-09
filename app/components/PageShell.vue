@@ -66,7 +66,7 @@
                 <template #sidebar>
                     <UTooltip :delay-duration="0" text="Open sidebar">
                         <UButton
-                            v-theme="'shell.split-new'"
+                            v-theme="'shell.sidebar-toggle'"
                             v-bind="sidebarToggleButtonProps"
                             :square="true"
                             aria-label="Open sidebar"
@@ -1981,7 +1981,29 @@ function toggleDashboard() {
     showDashboardModal.value = !showDashboardModal.value;
 }
 function openMobileSidebar() {
-    (layoutRef.value as any)?.openSidebar?.();
+    const layout = layoutRef.value as {
+        expand?: () => void;
+        close?: () => void;
+        openSidebar?: () => void;
+        isOpen?: { value?: boolean } | boolean;
+    } | null;
+    if (!layout) return;
+
+    const isOpen =
+        typeof layout.isOpen === 'object'
+            ? Boolean(layout.isOpen?.value)
+            : Boolean(layout.isOpen);
+
+    // Hamburger toggles on mobile; always expand so we never land on a collapsed rail.
+    if (isMobile.value && isOpen) {
+        layout.close?.();
+        return;
+    }
+    if (typeof layout.expand === 'function') {
+        layout.expand();
+        return;
+    }
+    layout.openSidebar?.();
 }
 
 async function ensureSidebarExpanded() {
@@ -2112,7 +2134,8 @@ onMounted(async () => {
     // Expose sidebar layout API globally for plugins
     const sidebarLayoutApi: SidebarLayoutApi = {
         close: () => (layoutRef.value as any)?.close?.(),
-        open: () => (layoutRef.value as any)?.openSidebar?.(),
+        // expand() opens on mobile and uncollapses on desktop — safer than open-only.
+        open: () => (layoutRef.value as any)?.expand?.(),
         toggleCollapse: () => (layoutRef.value as any)?.toggle?.(),
         expand: () => (layoutRef.value as any)?.expand?.(),
         isMobile: () => isMobile.value,

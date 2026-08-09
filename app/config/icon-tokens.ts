@@ -176,6 +176,7 @@ export const DEFAULT_ICONS = {
     'editor.insert.text': 'lucide:type',
     'editor.insert.heading-1': 'lucide:heading-1',
     'editor.insert.heading-2': 'lucide:heading-2',
+    'editor.insert.heading-3': 'lucide:heading-3',
     'editor.insert.code-block': 'lucide:square-code',
     'editor.insert.divider': 'lucide:minus',
     'editor.insert.table': 'lucide:table-2',

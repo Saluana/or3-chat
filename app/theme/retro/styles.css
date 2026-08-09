@@ -83,6 +83,370 @@
 		box-shadow: none;
 	}
 
+	/* Mobile chrome leading: breathe off the screen edge; keep hamburger unboxed. */
+	.workspace-chrome--mobile .workspace-chrome-mobile-row {
+		padding-inline: 10px 8px;
+		gap: 8px;
+	}
+
+	.workspace-chrome-mobile-leading {
+		gap: 8px;
+	}
+
+	/* Sidebar open control only — never the active-title tab button. */
+	.workspace-chrome-mobile-leading button[aria-label='Open sidebar'] {
+		box-sizing: border-box;
+		width: 36px !important;
+		min-width: 36px !important;
+		height: 36px !important;
+		min-height: 36px !important;
+		padding: 0 !important;
+		display: inline-grid !important;
+		place-items: center !important;
+		border: 0 !important;
+		box-shadow: none !important;
+		--tw-shadow: none !important;
+		background: transparent !important;
+		color: var(--md-on-surface) !important;
+	}
+
+	.workspace-chrome-mobile-leading
+		button[aria-label='Open sidebar']
+		svg {
+		width: 1.35rem !important;
+		height: 1.35rem !important;
+	}
+
+	/*
+	 * Active tab title — quiet chip beside bordered chrome actions:
+	 * navy outline (slightly thinner), soft 2px shadow, tiny radius, subtle fill.
+	 */
+	.workspace-chrome--mobile .workspace-chrome-active-title {
+		box-sizing: border-box;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		gap: 0.3rem;
+		flex: 1 1 auto;
+		min-width: 0;
+		max-width: min(42vw, 11rem);
+		width: auto;
+		height: 32px;
+		min-height: 32px;
+		padding: 0 0.4rem;
+		border: 1.5px solid var(--md-border-color);
+		border-radius: 3px;
+		background: color-mix(in srgb, var(--md-info) 55%, var(--md-surface));
+		box-shadow: 2px 2px 0
+			color-mix(in srgb, var(--md-border-color) 38%, transparent);
+		text-align: left;
+	}
+
+	.workspace-chrome--mobile .workspace-chrome-active-title:hover,
+	.workspace-chrome--mobile .workspace-chrome-active-title:focus-visible {
+		background: color-mix(in srgb, var(--md-info) 72%, var(--md-surface));
+		box-shadow: 2px 2px 0
+			color-mix(in srgb, var(--md-border-color) 55%, transparent);
+	}
+
+	.workspace-chrome--mobile .workspace-chrome-active-icon {
+		flex: none;
+		width: 0.85rem;
+		height: 0.85rem;
+		margin: 0;
+	}
+
+	.workspace-chrome--mobile .workspace-chrome-active-label {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-family: var(--font-sans);
+		font-size: 0.9rem;
+		font-weight: 700;
+		line-height: 1;
+		letter-spacing: 0.01em;
+	}
+
+	/*
+	 * Mobile Open tabs switcher — list-row composition (not form cards).
+	 * Rhythm: compact header → controls → dense rows → light utility footer.
+	 */
+	--tab-switcher-radius: 3px;
+	--tab-switcher-border-subtle: 1.5px;
+	--tab-switcher-border: 2px;
+	--tab-switcher-row-h: 4.75rem; /* 76px — within 72–84px */
+	--tab-switcher-shadow-control: 2px 2px 0
+		color-mix(in srgb, var(--md-border-color) 38%, transparent);
+	--tab-switcher-shadow-row: 2px 2px 0
+		color-mix(in srgb, var(--md-border-color) 34%, transparent);
+
+	.workspace-tab-switcher-header-slot {
+		min-height: 2.5rem !important;
+		padding-top: max(0.45rem, env(safe-area-inset-top)) !important;
+		padding-bottom: 0.35rem !important;
+		padding-inline: 0.9rem !important;
+	}
+
+	.workspace-tab-switcher-header {
+		gap: 0.45rem;
+	}
+
+	.workspace-tab-switcher-title {
+		font-size: 1.02rem !important;
+		letter-spacing: -0.01em;
+		line-height: 1.1;
+	}
+
+	.workspace-tab-switcher-count {
+		display: inline-grid;
+		place-items: center;
+		min-width: 1.2rem;
+		height: 1.2rem;
+		padding: 0 0.28rem;
+		border: var(--tab-switcher-border-subtle) solid
+			color-mix(in srgb, var(--md-primary) 40%, var(--md-border-color));
+		border-radius: var(--tab-switcher-radius);
+		background: color-mix(in srgb, var(--md-primary) 10%, var(--md-surface));
+		color: var(--md-on-surface);
+		font-size: 0.65rem;
+		font-weight: 700;
+		line-height: 1;
+		box-shadow: none;
+	}
+
+	.workspace-tab-switcher-body {
+		padding-top: 0.55rem !important;
+		padding-bottom: 0.55rem !important;
+		padding-inline: 0.9rem !important;
+	}
+
+	.workspace-tab-switcher-search {
+		margin-bottom: 0.3rem !important;
+	}
+
+	.workspace-tab-switcher-search-input {
+		box-sizing: border-box;
+		height: 44px !important;
+		min-height: 44px !important;
+		border-width: var(--tab-switcher-border) !important;
+		border-style: solid !important;
+		border-color: var(--md-border-color) !important;
+		border-radius: var(--tab-switcher-radius) !important;
+		background: var(--md-surface-variant) !important;
+		box-shadow: var(--tab-switcher-shadow-control) !important;
+	}
+
+	.workspace-tab-switcher-sort-row {
+		margin-bottom: 0.55rem !important;
+	}
+
+	.workspace-tab-switcher-sort [data-slot='base'] {
+		min-height: 2rem !important;
+		height: auto !important;
+		padding-block: 0.2rem !important;
+		padding-inline: 0.35rem !important;
+		border-width: 0 !important;
+		border-radius: var(--tab-switcher-radius) !important;
+		background: transparent !important;
+		box-shadow: none !important;
+		color: var(--md-on-surface-variant) !important;
+	}
+
+	.workspace-tab-switcher-sort [data-slot='value'] {
+		font-size: 0.74rem !important;
+		font-weight: 500;
+		color: var(--md-on-surface-variant) !important;
+	}
+
+	.workspace-tab-switcher-reopen {
+		margin-bottom: 0.4rem !important;
+		font-size: 0.74rem !important;
+	}
+
+	.workspace-tab-switcher-list {
+		gap: 0.65rem !important; /* ~10–11px */
+		align-content: start;
+		justify-items: stretch;
+		padding-bottom: 0.25rem;
+	}
+
+	/* Dense list row — fixed height kills the “empty card” feel. */
+	.workspace-tab-switcher-card {
+		box-sizing: border-box;
+		height: var(--tab-switcher-row-h) !important;
+		min-height: var(--tab-switcher-row-h) !important;
+		max-height: var(--tab-switcher-row-h) !important;
+		border-width: var(--tab-switcher-border) !important;
+		border-color: var(--md-border-color) !important;
+		border-radius: var(--tab-switcher-radius) !important;
+		background: var(--md-surface) !important;
+		box-shadow: var(--tab-switcher-shadow-row) !important;
+		--tw-shadow: 2px 2px 0
+			color-mix(in srgb, var(--md-border-color) 34%, transparent) !important;
+		overflow: hidden;
+	}
+
+	.workspace-tab-switcher-card:not(.is-active) {
+		border-color: var(--md-border-color) !important;
+		background: var(--md-surface) !important;
+	}
+
+	/* Selected: tint + left accent — not a blue CTA panel. */
+	.workspace-tab-switcher-card.is-active {
+		border-color: var(--md-border-color) !important;
+		border-left-width: 3px !important;
+		border-left-color: var(--md-primary) !important;
+		background: color-mix(
+			in srgb,
+			var(--md-primary) 8%,
+			var(--md-surface)
+		) !important;
+		box-shadow: var(--tab-switcher-shadow-row) !important;
+	}
+
+	.workspace-tab-switcher-option {
+		box-sizing: border-box;
+		height: 100% !important;
+		min-height: 0 !important;
+		max-height: none !important;
+		padding: 0 0.25rem 0 1rem !important; /* 16px left */
+		gap: 0.75rem !important; /* 12px */
+		align-items: center !important;
+	}
+
+	.workspace-tab-switcher-option-text {
+		align-self: center;
+		gap: 0.15rem !important; /* ~2–3px */
+	}
+
+	.workspace-tab-switcher-icon-wrap {
+		box-sizing: border-box;
+		width: 1.375rem !important; /* 22px */
+		height: 1.375rem !important;
+		min-width: 1.375rem !important;
+		max-width: 1.375rem !important;
+		min-height: 1.375rem !important;
+		max-height: 1.375rem !important;
+		border: 0 !important;
+		background: transparent !important;
+		color: var(--md-on-surface-variant) !important;
+	}
+
+	.workspace-tab-switcher-card.is-active .workspace-tab-switcher-icon-wrap {
+		color: var(--md-primary) !important;
+		background: transparent !important;
+	}
+
+	.workspace-tab-switcher-icon,
+	.workspace-tab-switcher-icon-wrap svg,
+	.workspace-tab-switcher-icon-wrap .iconify {
+		width: 1.25rem !important; /* 20px */
+		height: 1.25rem !important;
+		max-width: 1.25rem !important;
+		max-height: 1.25rem !important;
+	}
+
+	.workspace-tab-switcher-option-title {
+		font-size: 0.88rem !important;
+		font-weight: 700 !important;
+		line-height: 1.15 !important;
+	}
+
+	.workspace-tab-switcher-option-kind {
+		font-size: 0.64rem !important;
+		font-weight: 500;
+		line-height: 1.2 !important;
+		opacity: 0.88;
+		color: var(--md-on-surface-variant) !important;
+	}
+
+	.workspace-tab-switcher-option-opened {
+		display: none !important;
+	}
+
+	/* Quiet X — no bordered box competing with the row. */
+	.workspace-tab-switcher-card .workspace-tab-switcher-close,
+	.workspace-tab-switcher-card button.workspace-tab-switcher-close {
+		position: static !important;
+		transform: none !important;
+		margin: 0 0.7rem 0 0 !important; /* ~11px right padding feel */
+		box-sizing: border-box !important;
+		flex: none !important;
+		width: 1.5rem !important; /* 24px */
+		min-width: 1.5rem !important;
+		max-width: 1.5rem !important;
+		height: 1.5rem !important;
+		min-height: 1.5rem !important;
+		max-height: 1.5rem !important;
+		padding: 0 !important;
+		border: 0 !important;
+		border-radius: var(--tab-switcher-radius) !important;
+		background: transparent !important;
+		color: var(--md-on-surface-variant) !important;
+		box-shadow: none !important;
+		--tw-shadow: none !important;
+		opacity: 0.42;
+	}
+
+	.workspace-tab-switcher-card .workspace-tab-switcher-close svg,
+	.workspace-tab-switcher-card .workspace-tab-switcher-close .iconify,
+	.workspace-tab-switcher-card .workspace-tab-switcher-close [class*='iconify'] {
+		width: 0.7rem !important;
+		height: 0.7rem !important;
+		min-width: 0.7rem !important;
+		min-height: 0.7rem !important;
+		max-width: 0.7rem !important;
+		max-height: 0.7rem !important;
+	}
+
+	.workspace-tab-switcher-card .workspace-tab-switcher-close:hover,
+	.workspace-tab-switcher-card .workspace-tab-switcher-close:focus-visible {
+		opacity: 1;
+		color: var(--md-on-surface) !important;
+		background: color-mix(
+			in srgb,
+			var(--md-on-surface) 8%,
+			transparent
+		) !important;
+		box-shadow: none !important;
+	}
+
+	/* Utility footer — shorter, Done primary, New tab neutral. */
+	.workspace-tab-switcher-footer {
+		padding-top: 0.45rem !important;
+		padding-bottom: max(0.55rem, env(safe-area-inset-bottom)) !important;
+		padding-inline: 0.9rem !important;
+	}
+
+	.workspace-tab-switcher-actions {
+		grid-template-columns: 1.4fr 0.8fr !important;
+		gap: 0.4rem !important;
+	}
+
+	.workspace-tab-switcher-action {
+		min-height: 2.4rem !important; /* ~38px */
+		height: 2.4rem !important;
+		border-width: var(--tab-switcher-border-subtle) !important;
+		border-radius: var(--tab-switcher-radius) !important;
+		box-shadow: 2px 2px 0
+			color-mix(in srgb, var(--md-border-color) 40%, transparent) !important;
+		font-size: 0.85rem !important;
+	}
+
+	.workspace-tab-switcher-action--new {
+		background: var(--md-surface) !important;
+		border-color: var(--md-border-color) !important;
+		color: var(--md-on-surface) !important;
+	}
+
+	.workspace-tab-switcher-action--done {
+		background: var(--md-primary) !important;
+		border-color: var(--md-border-color) !important;
+		color: var(--md-on-primary) !important;
+		box-shadow: 2px 2px 0 var(--md-border-color) !important;
+	}
+
 	.workspace-chrome .workspace-chrome-actions .workspace-chrome-action:hover,
 	.workspace-chrome .workspace-chrome-actions .theme-btn:hover {
 		background: var(--md-surface-hover);
@@ -399,21 +763,518 @@
 }
 
 /*
-    '.cm-assistant': {
-        style: {
-            backgroundColor: 'transparent',
-            boxShadow: '2px 2px 0 var(--md-border-color)',
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-        },
-    },
-    '.cm-user': {
-        style: {
-            boxShadow: '2px 2px 0 var(--md-border-color)',
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            marginBottom: '20px',
-        },
-    },
-	*/
+ * Document formatting toolbar — retro polish only.
+ * Quieter idle chrome, consistent control sizing, pane-aware spacing.
+ * Do not mirror into blank / cyberpunk.
+ */
+[data-theme="retro"] {
+	.document-editor-root .editor-toolbar {
+		--doc-tb-size: 36px;
+		--doc-tb-icon: 16px;
+		--doc-tb-gap: 4px;
+		--doc-tb-group: 11px;
+		--doc-tb-border-width: 1px;
+		/* Scroll rails clip overflow-y; pad enough for the 2px hover shadow. */
+		--doc-tb-shadow-room: 3px;
+		--doc-tb-border-color: color-mix(
+			in srgb,
+			var(--md-border-color) 72%,
+			transparent
+		);
+		--doc-tb-face: color-mix(in srgb, var(--md-info) 62%, var(--md-surface));
+		--doc-tb-face-hover: var(--md-info);
+		--doc-tb-face-active: color-mix(
+			in srgb,
+			var(--md-primary) 72%,
+			var(--md-info)
+		);
+		--doc-tb-ink: var(--md-primary-shade);
+		--doc-tb-ink-active: var(--md-on-primary, #fff);
+		--doc-tb-shadow-idle: 1px 1px 0
+			color-mix(in srgb, var(--md-border-color) 48%, transparent);
+		--doc-tb-shadow-hover: 2px 2px 0 var(--md-border-color);
+		--doc-tb-shadow-pressed: 0 0 0 transparent;
+		--doc-toolbar-fade: 1rem;
+		--doc-toolbar-surface: var(--md-surface);
+
+		min-height: 52px;
+		padding-block: 5px;
+		gap: var(--doc-tb-gap);
+		overflow: visible;
+		box-shadow: none;
+	}
+
+	.document-editor-root .editor-toolbar .toolbar-primary-rail {
+		gap: var(--doc-tb-gap);
+		align-items: center;
+		/*
+		 * overflow-x:auto forces a non-visible overflow-y, which clips box-shadow.
+		 * Keep the shadow inside the padding box instead.
+		 */
+		padding-block: var(--doc-tb-shadow-room);
+		padding-inline: var(--doc-tb-shadow-room)
+			calc(var(--doc-toolbar-fade) + var(--doc-tb-shadow-room));
+		overflow-x: auto;
+		overflow-y: hidden;
+	}
+
+	.document-editor-root .editor-toolbar .toolbar-trailing {
+		gap: var(--doc-tb-gap);
+		margin-inline-start: 2px;
+		padding-block: var(--doc-tb-shadow-room);
+		padding-inline-start: calc(var(--doc-tb-group) - var(--doc-tb-gap));
+		padding-inline-end: var(--doc-tb-shadow-room);
+		overflow: visible;
+		background: var(--doc-toolbar-surface);
+		box-shadow: none;
+	}
+
+	.document-editor-root .editor-toolbar .toolbar-separator {
+		width: 1px;
+		height: 18px;
+		margin-block: 0;
+		margin-inline: calc((var(--doc-tb-group) - var(--doc-tb-gap)) / 2);
+		background: color-mix(
+			in srgb,
+			var(--md-border-color) 38%,
+			transparent
+		);
+	}
+
+	/*
+	 * Shared control face: formatting + trailing chrome.
+	 * Idle is light; hover/active regain the chunky OR3 shadow.
+	 */
+	.document-editor-root .editor-toolbar .document-toolbar-button,
+	.document-editor-root .editor-toolbar .heading-style-button,
+	.document-editor-root .editor-toolbar .more-button,
+	.document-editor-root .editor-toolbar .find-toggle-button,
+	.document-editor-root .editor-toolbar .inspector-toggle-button {
+		box-sizing: border-box;
+		width: var(--doc-tb-size) !important;
+		min-width: var(--doc-tb-size) !important;
+		height: var(--doc-tb-size) !important;
+		min-height: var(--doc-tb-size) !important;
+		padding: 0 !important;
+		display: inline-grid !important;
+		place-items: center;
+		justify-content: center;
+		border: var(--doc-tb-border-width) solid var(--doc-tb-border-color) !important;
+		border-radius: var(--md-border-radius) !important;
+		background: var(--doc-tb-face) !important;
+		color: var(--doc-tb-ink) !important;
+		opacity: 1 !important;
+		backdrop-filter: none !important;
+		-webkit-backdrop-filter: none !important;
+		--tw-shadow: var(--doc-tb-shadow-idle) !important;
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			var(--tw-shadow) !important;
+		transition:
+			transform 70ms ease,
+			box-shadow 70ms ease,
+			background-color 70ms ease,
+			border-color 70ms ease;
+	}
+
+	.document-editor-root .editor-toolbar .heading-style-button {
+		font-family: var(--font-display, inherit);
+		font-size: 0.95rem !important;
+		font-weight: 700;
+		letter-spacing: 0;
+		line-height: 1;
+		/* Compact: breathe before B/I/U without adding shared markup. */
+		margin-inline-end: calc(var(--doc-tb-group) - var(--doc-tb-gap));
+	}
+
+	.document-editor-root .editor-toolbar .block-type-select {
+		width: 6.75rem;
+		min-width: 6.75rem;
+		height: var(--doc-tb-size);
+	}
+
+	.document-editor-root .editor-toolbar .block-type-select button,
+	.document-editor-root .editor-toolbar .block-type-select [data-slot='base'] {
+		height: var(--doc-tb-size) !important;
+		min-height: var(--doc-tb-size) !important;
+		border: var(--doc-tb-border-width) solid var(--doc-tb-border-color) !important;
+		border-radius: var(--md-border-radius) !important;
+		background: var(--doc-tb-face) !important;
+		color: var(--doc-tb-ink) !important;
+		--tw-shadow: var(--doc-tb-shadow-idle) !important;
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			var(--tw-shadow) !important;
+	}
+
+	.document-editor-root .editor-toolbar .document-toolbar-button svg,
+	.document-editor-root .editor-toolbar .more-button svg,
+	.document-editor-root .editor-toolbar .find-toggle-button svg,
+	.document-editor-root .editor-toolbar .inspector-toggle-button svg {
+		width: var(--doc-tb-icon) !important;
+		height: var(--doc-tb-icon) !important;
+		flex-shrink: 0;
+	}
+
+	.document-editor-root .editor-toolbar .document-toolbar-button:hover,
+	.document-editor-root .editor-toolbar .heading-style-button:hover,
+	.document-editor-root .editor-toolbar .more-button:hover,
+	.document-editor-root .editor-toolbar .find-toggle-button:hover,
+	.document-editor-root .editor-toolbar .inspector-toggle-button:hover,
+	.document-editor-root .editor-toolbar .block-type-select button:hover,
+	.document-editor-root .editor-toolbar .block-type-select [data-slot='base']:hover {
+		background: var(--doc-tb-face-hover) !important;
+		border-color: var(--md-border-color) !important;
+		--tw-shadow: var(--doc-tb-shadow-hover) !important;
+		opacity: 1 !important;
+	}
+
+	.document-editor-root .editor-toolbar .document-toolbar-button:active,
+	.document-editor-root .editor-toolbar .heading-style-button:active,
+	.document-editor-root .editor-toolbar .more-button:active,
+	.document-editor-root .editor-toolbar .find-toggle-button:active,
+	.document-editor-root .editor-toolbar .inspector-toggle-button:active {
+		transform: translate(1px, 1px);
+		--tw-shadow: var(--doc-tb-shadow-pressed) !important;
+	}
+
+	.document-editor-root .editor-toolbar .document-toolbar-button[aria-pressed='true'],
+	.document-editor-root .editor-toolbar .heading-style-button[aria-pressed='true'],
+	.document-editor-root .editor-toolbar .find-toggle-button[aria-pressed='true'],
+	.document-editor-root .editor-toolbar .inspector-toggle-button[aria-pressed='true'] {
+		background: var(--doc-tb-face-active) !important;
+		border-color: var(--md-border-color) !important;
+		color: var(--doc-tb-ink-active) !important;
+		--tw-shadow: var(--doc-tb-shadow-hover) !important;
+		opacity: 1 !important;
+	}
+
+	/* Narrow pane / compact rail — tighten gaps first, keep controls clickable. */
+	.document-editor-root .editor-toolbar--compact {
+		--doc-tb-size: 34px;
+		--doc-tb-icon: 15px;
+		--doc-tb-gap: 3px;
+		--doc-tb-group: 9px;
+		--doc-toolbar-fade: 0.9rem;
+		min-height: 50px;
+		padding-block: 4px;
+	}
+
+	.document-editor-root .editor-toolbar--compact .toolbar-primary-rail {
+		gap: var(--doc-tb-gap);
+		padding-block: var(--doc-tb-shadow-room);
+		padding-inline: var(--doc-tb-shadow-room)
+			calc(var(--doc-toolbar-fade) + var(--doc-tb-shadow-room));
+	}
+
+	.document-editor-root .editor-toolbar--compact .toolbar-trailing {
+		gap: var(--doc-tb-gap);
+		padding-block: var(--doc-tb-shadow-room);
+		padding-inline-start: 0.35rem;
+		padding-inline-end: var(--doc-tb-shadow-room);
+		box-shadow: none;
+	}
+
+	.document-editor-root .editor-toolbar--compact .heading-style-button {
+		font-size: 0.9rem !important;
+	}
+
+	/* Beat shared compact inspector “ghost” rules — trailing stays a control. */
+	.document-editor-root .editor-toolbar--compact .inspector-toggle-button,
+	.document-editor-root .editor-toolbar--compact .inspector-toggle-button:hover,
+	.document-editor-root
+		.editor-toolbar--compact
+		.inspector-toggle-button[aria-pressed='true'] {
+		background: var(--doc-tb-face) !important;
+		box-shadow:
+			var(--tw-ring-offset-shadow, 0 0 #0000),
+			var(--tw-ring-shadow, 0 0 #0000),
+			var(--tw-shadow) !important;
+		opacity: 1 !important;
+	}
+
+	.document-editor-root
+		.editor-toolbar--compact
+		.inspector-toggle-button:hover {
+		background: var(--doc-tb-face-hover) !important;
+		--tw-shadow: var(--doc-tb-shadow-hover) !important;
+	}
+
+	.document-editor-root
+		.editor-toolbar--compact
+		.inspector-toggle-button[aria-pressed='true'] {
+		background: var(--doc-tb-face-active) !important;
+		color: var(--doc-tb-ink-active) !important;
+		--tw-shadow: var(--doc-tb-shadow-hover) !important;
+	}
+
+	/* True mobile viewport — still pane-compact, slightly roomier hit face. */
+	.document-editor-root .editor-toolbar--mobile {
+		--doc-tb-size: 36px;
+		--doc-tb-icon: 16px;
+		--doc-tb-gap: 3px;
+		--doc-tb-group: 8px;
+		min-height: 52px;
+		padding-block: 5px;
+		padding-inline: 0.3rem 0.15rem;
+	}
+
+	.document-editor-root .editor-toolbar--mobile .heading-style-button {
+		font-size: 1rem !important;
+	}
+
+	/*
+	 * Contrast: active outline markers were primary-on-primary-container
+	 * (blue on blue) in both light and dark. Use solid primary + on-primary.
+	 */
+	.document-editor-root .outline-item.active .outline-marker {
+		color: var(--md-on-primary) !important;
+		background: var(--md-primary) !important;
+	}
+
+	.document-editor-root .outline-item.active .outline-chevron {
+		color: var(--md-on-surface) !important;
+		opacity: 0.75;
+	}
+
+	/*
+	 * Selection bubble menu: same blue-on-blue active state; AI ghost icon
+	 * was nearly invisible in dark mode.
+	 */
+	.document-editor-root .selection-menu button {
+		color: var(--md-on-surface) !important;
+		opacity: 1 !important;
+	}
+
+	.document-editor-root .selection-menu button:hover,
+	.document-editor-root .selection-menu button.active {
+		color: var(--md-on-primary) !important;
+		background: var(--md-primary) !important;
+	}
+
+	.document-editor-root
+		.selection-menu
+		button[aria-label='Edit selection with AI'] {
+		color: var(--md-primary) !important;
+	}
+
+	.document-editor-root
+		.selection-menu
+		button[aria-label='Edit selection with AI']:hover {
+		color: var(--md-on-primary) !important;
+		background: var(--md-primary) !important;
+	}
+
+	/* Revision cards: primary ink on primary-container was unreadable. */
+	.document-editor-root .revision-icon {
+		color: var(--md-on-primary) !important;
+		background: var(--md-primary) !important;
+	}
+
+	/* Active inspector tab should read brighter than idle, not darker. */
+	.document-editor-root .inspector-tabs [role='tab'][data-state='active'],
+	.document-editor-root .inspector-tabs [role='tab'][aria-selected='true'] {
+		color: var(--md-primary) !important;
+	}
+}
+
+/*
+ * Dark mode document chrome — idle toolbar ink used primary-shade on a near-black
+ * info face (unreadable). Lift idle ink/face; keep bright active states.
+ */
+html[data-theme='retro'].dark .document-editor-root .editor-toolbar,
+.dark html[data-theme='retro'] .document-editor-root .editor-toolbar {
+	--doc-tb-face: color-mix(
+		in srgb,
+		var(--md-surface-variant) 55%,
+		var(--md-surface)
+	);
+	--doc-tb-face-hover: color-mix(
+		in srgb,
+		var(--md-primary) 42%,
+		var(--md-surface)
+	);
+	--doc-tb-face-active: var(--md-primary);
+	--doc-tb-ink: var(--md-on-surface);
+	--doc-tb-ink-active: #ffffff;
+	--doc-tb-border-color: color-mix(
+		in srgb,
+		var(--md-border-color) 88%,
+		transparent
+	);
+	--doc-tb-shadow-idle: 1px 1px 0
+		color-mix(in srgb, var(--md-border-color) 60%, transparent);
+	--doc-tb-shadow-hover: 2px 2px 0 var(--md-border-color);
+}
+
+html[data-theme='retro'].dark
+	.document-editor-root
+	.selection-menu
+	button[aria-label='Edit selection with AI'],
+.dark
+	html[data-theme='retro']
+	.document-editor-root
+	.selection-menu
+	button[aria-label='Edit selection with AI'] {
+	color: var(--md-primary-tint, var(--md-on-surface)) !important;
+}
+
+/* Dark: active tab + eyebrows + editor headings need lighter primary ink. */
+html[data-theme='retro'].dark .document-editor-root .inspector-tabs [role='tab'][data-state='active'],
+html[data-theme='retro'].dark .document-editor-root .inspector-tabs [role='tab'][aria-selected='true'],
+.dark html[data-theme='retro'] .document-editor-root .inspector-tabs [role='tab'][data-state='active'],
+.dark html[data-theme='retro'] .document-editor-root .inspector-tabs [role='tab'][aria-selected='true'] {
+	color: var(--md-on-surface) !important;
+}
+
+html[data-theme='retro'].dark
+	.document-editor-root
+	:is(.outline-heading, .history-heading, .info-heading)
+	> div
+	> span,
+.dark
+	html[data-theme='retro']
+	.document-editor-root
+	:is(.outline-heading, .history-heading, .info-heading)
+	> div
+	> span {
+	color: var(--md-primary-tint) !important;
+}
+
+html[data-theme='retro'].dark
+	.document-editor-root
+	.document-content
+	:is(h1, h2, h3, h4),
+.dark
+	html[data-theme='retro']
+	.document-editor-root
+	.document-content
+	:is(h1, h2, h3, h4) {
+	color: var(--md-primary-tint) !important;
+}
+
+html[data-theme='retro'].dark .document-editor-root .document-content :is(a),
+.dark html[data-theme='retro'] .document-editor-root .document-content :is(a) {
+	color: var(--md-primary-tint) !important;
+}
+
+/*
+ * Document AI settings modal (teleported to body — not under .document-editor-root).
+ * Dark-mode contrast pass only; light already reads fine.
+ */
+html[data-theme='retro'].dark .settings-overlay,
+.dark html[data-theme='retro'] .settings-overlay {
+	--doc-settings-border: color-mix(
+		in srgb,
+		var(--md-border-color) 100%,
+		var(--md-primary-tint) 18%
+	);
+}
+
+html[data-theme='retro'].dark .settings-overlay .settings-panel-shell,
+.dark html[data-theme='retro'] .settings-overlay .settings-panel-shell {
+	border-color: var(--doc-settings-border);
+	box-shadow: 3px 3px 0
+		color-mix(in srgb, var(--md-border-color) 70%, transparent);
+}
+
+html[data-theme='retro'].dark .settings-overlay .settings-intro button,
+.dark html[data-theme='retro'] .settings-overlay .settings-intro button {
+	border: 1px solid var(--doc-settings-border) !important;
+	border-radius: var(--md-border-radius) !important;
+	background: var(--md-surface-variant) !important;
+	color: var(--md-on-surface) !important;
+	--tw-shadow: 1px 1px 0
+		color-mix(in srgb, var(--md-border-color) 65%, transparent) !important;
+	box-shadow:
+		var(--tw-ring-offset-shadow, 0 0 #0000),
+		var(--tw-ring-shadow, 0 0 #0000),
+		var(--tw-shadow) !important;
+}
+
+html[data-theme='retro'].dark .settings-overlay .quick-action-row,
+html[data-theme='retro'].dark .settings-overlay .setting-card,
+.dark html[data-theme='retro'] .settings-overlay .quick-action-row,
+.dark html[data-theme='retro'] .settings-overlay .setting-card {
+	border-color: var(--doc-settings-border);
+	background: color-mix(
+		in srgb,
+		var(--md-surface-variant) 35%,
+		var(--md-surface)
+	);
+}
+
+html[data-theme='retro'].dark .settings-overlay .quick-action-number,
+.dark html[data-theme='retro'] .settings-overlay .quick-action-number {
+	color: var(--md-on-surface) !important;
+	background: var(--md-surface-container-lowest) !important;
+	border: 1px solid var(--doc-settings-border);
+}
+
+html[data-theme='retro'].dark .settings-overlay .action-copy span,
+html[data-theme='retro'].dark .settings-overlay .settings-heading span,
+html[data-theme='retro'].dark .settings-overlay .setting-card-copy span,
+html[data-theme='retro'].dark .settings-overlay .settings-note,
+html[data-theme='retro'].dark .settings-overlay .quick-action-edit-footer > span,
+.dark html[data-theme='retro'] .settings-overlay .action-copy span,
+.dark html[data-theme='retro'] .settings-overlay .settings-heading span,
+.dark html[data-theme='retro'] .settings-overlay .setting-card-copy span,
+.dark html[data-theme='retro'] .settings-overlay .settings-note,
+.dark html[data-theme='retro'] .settings-overlay .quick-action-edit-footer > span {
+	color: var(--md-on-surface-variant) !important;
+	opacity: 1 !important;
+}
+
+html[data-theme='retro'].dark .settings-overlay .action-buttons button,
+.dark html[data-theme='retro'] .settings-overlay .action-buttons button {
+	border: 1px solid var(--doc-settings-border) !important;
+	border-radius: var(--md-border-radius) !important;
+	background: var(--md-surface-container-lowest) !important;
+	color: var(--md-on-surface) !important;
+	--tw-shadow: 1px 1px 0
+		color-mix(in srgb, var(--md-border-color) 55%, transparent) !important;
+	box-shadow:
+		var(--tw-ring-offset-shadow, 0 0 #0000),
+		var(--tw-ring-shadow, 0 0 #0000),
+		var(--tw-shadow) !important;
+}
+
+/* "Use" is the first control in the summary action strip. */
+html[data-theme='retro'].dark
+	.settings-overlay
+	.quick-action-summary
+	.action-buttons
+	> button:first-child,
+.dark
+	html[data-theme='retro']
+	.settings-overlay
+	.quick-action-summary
+	.action-buttons
+	> button:first-child {
+	background: var(--md-primary) !important;
+	border-color: var(--md-border-color) !important;
+	color: #ffffff !important;
+	--tw-shadow: 2px 2px 0 var(--md-border-color) !important;
+}
+
+html[data-theme='retro'].dark
+	.settings-overlay
+	.action-buttons
+	button[aria-label^='Remove'],
+.dark
+	html[data-theme='retro']
+	.settings-overlay
+	.action-buttons
+	button[aria-label^='Remove'] {
+	color: var(--md-error) !important;
+	background: color-mix(
+		in srgb,
+		var(--md-error) 14%,
+		var(--md-surface-container-lowest)
+	) !important;
+}
 
 /* End [data-theme="retro"] */
 

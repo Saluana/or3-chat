@@ -118,14 +118,12 @@
                         </span>
                     </button>
                     <UButton
-                        v-theme="'shell.tab-close'"
                         v-bind="closeRowButtonProps"
-                        class="workspace-tab-switcher-close theme-btn"
                         square
                         :icon="closeIcon"
                         :aria-label="`Close ${workspaceTabTitle(tab)}`"
                         :title="`Close ${workspaceTabTitle(tab)}`"
-                        @click="emit('close', tab.id)"
+                        @click.stop="emit('close', tab.id)"
                     />
                 </div>
 
@@ -224,12 +222,12 @@ const switcherModalUi = {
     content:
         'workspace-tab-switcher !bg-[var(--md-surface)] !text-[var(--md-on-surface)] !divide-[color:var(--md-border-color)]',
     header:
-        'workspace-tab-switcher-header-slot relative flex w-full items-center justify-between gap-2 !border-b !border-[color:var(--md-border-color)] !bg-[var(--md-surface)] !text-[var(--md-on-surface)] px-4 sm:px-5 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[3.25rem]',
+        'workspace-tab-switcher-header-slot relative flex w-full items-center justify-between gap-2 !border-b !border-[color:var(--md-border-color)] !bg-[var(--md-surface)] !text-[var(--md-on-surface)] px-4 sm:px-5 pt-[max(0.55rem,env(safe-area-inset-top))] min-h-[2.75rem]',
     title: '!text-[var(--md-on-surface)]',
     description: '!text-[var(--md-on-surface-variant)]',
     body: 'workspace-tab-switcher-body !bg-[var(--md-surface)] !text-[var(--md-on-surface)] px-4 sm:px-5',
     footer:
-        'workspace-tab-switcher-footer !border-t !border-[color:var(--md-border-color)] !bg-[var(--md-surface)] px-4 sm:px-5 pb-[max(1rem,env(safe-area-inset-bottom))]',
+        'workspace-tab-switcher-footer !border-t !border-[color:var(--md-border-color)] !bg-[var(--md-surface)] px-4 sm:px-5 pt-2.5 pb-[max(0.7rem,env(safe-area-inset-bottom))]',
     close: '!text-[var(--md-on-surface)]',
 };
 
@@ -291,18 +289,52 @@ const closeRowOverrides = useThemeOverrides({
     identifier: 'shell.tab-close',
     isNuxtUI: true,
 });
-const closeRowButtonProps = computed(() =>
-    mergeThemeButton(
+/**
+ * Row close stays a quiet secondary action — no theme-btn chrome (border/shadow),
+ * and size forced past shell.tab-close defaults.
+ */
+const closeRowButtonProps = computed(() => {
+    const merged = mergeThemeButton(
         {
             color: 'neutral' as const,
             variant: 'ghost' as const,
-            size: 'sm' as const,
-            class: 'theme-btn',
-            ui: { base: 'theme-btn' },
+            size: 'xs' as const,
+            class: 'workspace-tab-switcher-close',
+            ui: {
+                base: 'workspace-tab-switcher-close',
+                leadingIcon: 'h-3! w-3!',
+            },
         },
         closeRowOverrides.value as Record<string, unknown>
-    )
-);
+    );
+    const mergedUi = (merged.ui || {}) as Record<string, unknown>;
+    return {
+        ...merged,
+        size: 'xs' as const,
+        square: true,
+        // Drop theme-btn / outline classes inherited from shell.tab-close.
+        class: 'workspace-tab-switcher-close',
+        ui: {
+            ...mergedUi,
+            base: [
+                'workspace-tab-switcher-close',
+                'h-6!',
+                'w-6!',
+                'min-h-6!',
+                'min-w-6!',
+                'max-h-6!',
+                'max-w-6!',
+                'p-0!',
+                'border-0!',
+                'shadow-none!',
+                'bg-transparent!',
+                '[--tw-shadow:none]!',
+                'ring-0!',
+            ].join(' '),
+            leadingIcon: 'h-3! w-3!',
+        },
+    };
+});
 
 const searchInputOverrides = useThemeOverrides({
     component: 'input',
@@ -471,7 +503,7 @@ function onNewTab(): void {
 .workspace-tab-switcher-search {
     width: 100%;
     min-width: 0;
-    margin: 0 0 0.65rem;
+    margin: 0 0 0.5rem;
 }
 .workspace-tab-switcher-search :deep([data-slot='root']),
 .workspace-tab-switcher-search :deep(.workspace-tab-switcher-search-input) {
@@ -486,7 +518,7 @@ function onNewTab(): void {
 }
 .workspace-tab-switcher-sort-row {
     width: 100%;
-    margin: 0 0 0.85rem;
+    margin: 0 0 0.65rem;
 }
 .workspace-tab-switcher-sort {
     width: 100%;
@@ -508,7 +540,7 @@ function onNewTab(): void {
     color: var(--md-on-surface);
 }
 .workspace-tab-switcher-reopen {
-    margin: -0.2rem 0.15rem 0.85rem;
+    margin: -0.15rem 0.15rem 0.55rem;
     padding: 0;
     border: 0;
     background: transparent;
@@ -519,9 +551,11 @@ function onNewTab(): void {
 }
 .workspace-tab-switcher-list {
     display: grid;
-    gap: 0.65rem;
+    gap: 0.55rem;
     min-height: 0;
+    align-content: start;
 }
+/* List-row anatomy: icon | text | close — not a floating card panel. */
 .workspace-tab-switcher-card {
     display: flex;
     align-items: center;
@@ -539,49 +573,50 @@ function onNewTab(): void {
 .workspace-tab-switcher-option {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: 0.75rem;
     min-width: 0;
-    flex: 1;
-    min-height: 4.5rem;
-    padding: 0.85rem 0.55rem 0.85rem 0.9rem;
+    flex: 1 1 auto;
+    min-height: 3.75rem;
+    padding: 0.55rem 0.35rem 0.55rem 0.9rem;
     text-align: left;
+    border: 0;
     border-radius: inherit;
+    background: transparent;
     color: inherit;
+    cursor: pointer;
 }
 .workspace-tab-switcher-icon-wrap {
     display: grid;
     place-items: center;
     flex: none;
-    width: 2.4rem;
-    height: 2.4rem;
-    border-radius: var(--md-border-radius, 0.65rem);
-    border: var(--md-border-width, 1px) solid
-        color-mix(in srgb, var(--md-border-color) 70%, transparent);
-    background: var(--md-surface-variant);
+    width: 1.35rem;
+    height: 1.35rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     color: var(--md-on-surface-variant);
 }
 .workspace-tab-switcher-card.is-active .workspace-tab-switcher-icon-wrap {
-    border-color: color-mix(in srgb, var(--md-primary) 45%, transparent);
-    background: color-mix(in srgb, var(--md-primary) 14%, var(--md-surface));
     color: var(--md-primary);
 }
 .workspace-tab-switcher-icon {
-    width: 1.15rem;
-    height: 1.15rem;
+    width: 1.2rem;
+    height: 1.2rem;
 }
 .workspace-tab-switcher-option-text {
     display: grid;
-    gap: 0.12rem;
+    gap: 0.1rem;
     min-width: 0;
     flex: 1;
+    align-content: center;
 }
 .workspace-tab-switcher-option-title {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 0.98rem;
+    font-size: 0.95rem;
     font-weight: 650;
-    line-height: 1.25;
+    line-height: 1.2;
     color: var(--md-on-surface);
 }
 .workspace-tab-switcher-option-kind,
@@ -589,13 +624,15 @@ function onNewTab(): void {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 0.75rem;
-    line-height: 1.3;
+    font-size: 0.72rem;
+    line-height: 1.25;
     color: var(--md-on-surface-variant);
 }
 .workspace-tab-switcher-close {
+    position: static;
     flex: none;
-    margin-right: 0.35rem;
+    margin: 0 0.45rem 0 0;
+    transform: none;
     color: var(--md-on-surface-variant);
 }
 .workspace-tab-switcher-empty {

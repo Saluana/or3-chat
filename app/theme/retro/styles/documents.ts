@@ -52,7 +52,8 @@ export const documentsStyles = {
     '.document-editor-root .document-editor-toolbar': {
         style: {
             borderBottom: 'var(--md-border-width) solid var(--md-border-color)',
-            boxShadow: '2px 2px 0 color-mix(in srgb, var(--md-border-color) 24%, transparent)',
+            /* Quiet chrome — control shadows live on the buttons themselves. */
+            boxShadow: 'none',
         },
     },
     '.document-editor-root .document-inspector': {

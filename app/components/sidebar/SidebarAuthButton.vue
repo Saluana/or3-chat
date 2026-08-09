@@ -43,7 +43,7 @@
                         <template v-else>Connect</template>
                     </span>
                     <span
-                        class="w-[54%] h-[3px] opacity-50"
+                        class="sidebar-connection-status-bar w-[54%] h-[3px] opacity-50"
                         :class="
                             isConnected
                                 ? 'bg-[var(--md-success)] opacity-100'
@@ -99,7 +99,7 @@
                         <template v-else>Connect</template>
                     </span>
                     <span
-                        class="w-[54%] h-[3px] opacity-50"
+                        class="sidebar-connection-status-bar w-[54%] h-[3px] opacity-50"
                         :class="
                             isConnected
                                 ? 'bg-[var(--md-success)] opacity-100'

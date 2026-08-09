@@ -190,7 +190,7 @@
 
     /* Collapsed: header is the rail top — same edge as the icon column */
     #top-header[data-sidebar-state='collapsed'] {
-        background-color: var(--md-surface-variant) !important;
+        background-color: var(--md-surface) !important;
         border-right: 1px solid
             color-mix(in srgb, var(--md-border-color) 70%, transparent) !important;
         box-sizing: border-box;
@@ -754,6 +754,36 @@
         font-size: 9px !important;
         line-height: 1.1;
         letter-spacing: 0.04em;
+        border-color: var(--md-border-color) !important;
+        color: var(--md-on-surface-variant) !important;
+    }
+
+    /* Keep OpenRouter connect status monochrome (no success/error chrome). */
+    html[data-theme="blank"] .sidebar-connection-status-bar {
+        background: var(--md-on-surface-variant) !important;
+        opacity: 0.35 !important;
+    }
+
+    html[data-theme="blank"] .mobile-nav-more-auth
+        button[data-connection-state]
+        > span
+        > :is(svg, .iconify) {
+        background: color-mix(
+            in srgb,
+            var(--md-on-surface) 6%,
+            transparent
+        ) !important;
+        color: var(--md-on-surface-variant) !important;
+    }
+
+    html[data-theme="blank"] .more-row-desc--active,
+    html[data-theme="blank"] .more-status-badge {
+        color: var(--md-on-surface-variant) !important;
+        background: color-mix(
+            in srgb,
+            var(--md-on-surface) 6%,
+            transparent
+        ) !important;
     }
 
     /* Header icon buttons share one visual and interactive size. */
@@ -883,15 +913,72 @@
         line-height: 1.4;
     }
 
+    /*
+     * Document AI composer: crush Nuxt UI / blank max-md:min-h-[44px]! so the
+     * pill height collapses. Paint ~28–30px controls; recover 44px hits via
+     * ::before (also defined in DocumentAiPanel.css).
+     */
+    html[data-theme="blank"] .document-ai-composer {
+        padding: 0.45rem 0.5rem !important;
+        min-height: 0 !important;
+        --chat-composer-editor-min-height: 1.75rem;
+    }
+
+    html[data-theme="blank"] .document-ai-composer .composer-row {
+        min-height: 1.875rem !important;
+        gap: 0.25rem !important;
+    }
+
+    html[data-theme="blank"] .document-ai-composer :is(
+        .attachment-button,
+        .settings-button
+    ) {
+        position: relative;
+        width: 1.75rem !important;
+        height: 1.75rem !important;
+        min-width: 1.75rem !important;
+        min-height: 1.75rem !important;
+        max-width: 1.75rem !important;
+        max-height: 1.75rem !important;
+        padding: 0 !important;
+    }
+
+    html[data-theme="blank"] .document-ai-composer :is(
+        .attachment-button,
+        .settings-button
+    )::before {
+        content: '';
+        position: absolute;
+        inset: -0.5rem;
+    }
+
+    html[data-theme="blank"] .document-ai-composer .send-button {
+        position: relative;
+        width: 1.875rem !important;
+        height: 1.875rem !important;
+        min-width: 1.875rem !important;
+        min-height: 1.875rem !important;
+        max-width: 1.875rem !important;
+        max-height: 1.875rem !important;
+        padding: 0 !important;
+    }
+
+    html[data-theme="blank"] .document-ai-composer .send-button::before {
+        content: '';
+        position: absolute;
+        inset: -0.4rem;
+    }
+
     html[data-theme="blank"] .document-ai-composer :is(
         .attachment-button,
         .settings-button,
         .send-button
-    ) {
-        width: var(--blank-mobile-control-min) !important;
-        height: var(--blank-mobile-control-min) !important;
-        min-width: var(--blank-mobile-control-min) !important;
-        min-height: var(--blank-mobile-control-min) !important;
+    ) .iconify {
+        width: 0.95rem !important;
+        height: 0.95rem !important;
+        min-width: 0.95rem;
+        min-height: 0.95rem;
+        font-size: 0.95rem !important;
     }
 }
 

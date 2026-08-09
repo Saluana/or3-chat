@@ -267,7 +267,7 @@
 
 [data-theme="retro"] .document-editor-root .document-editor-toolbar {
   border-bottom: var(--md-border-width) solid var(--md-border-color);
-  box-shadow: 2px 2px 0 color-mix(in srgb, var(--md-border-color) 24%, transparent);
+  box-shadow: none;
 }
 
 [data-theme="retro"] .document-editor-root .document-inspector {

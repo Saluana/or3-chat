@@ -73,7 +73,7 @@ export const sidebarOverrides = {
     'button#sidebar.project-extra-action': SidebarPopoverButtonConfig,
 
     'button#sidebar.toggle': {
-        class: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
+        class: 'border-0! shadow-none! [--tw-shadow:none]! ring-0! bg-transparent!',
     },
     /* --- Sidebar bottom nav buttons --- */
     'button#sidebar.bottom-nav.info': {

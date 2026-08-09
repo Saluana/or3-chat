@@ -1,53 +1,145 @@
 <template>
     <div ref="rootElement" v-theme="'document.editor'" class="document-editor-root" data-context="document">
-        <header v-if="!isMobile" v-theme="'document.header'" class="editor-topbar">
-            <div class="document-identity">
-                <UIcon :name="icons.document" />
-                <span class="topbar-title">{{ titleDraft || 'Untitled' }}</span>
-                <UBadge color="neutral" variant="soft" size="xs" class="save-state" :class="`is-${state.status}`" role="status" aria-live="polite"> <span class="save-dot" />{{ statusText }} </UBadge>
-            </div>
-            <div class="topbar-actions">
-                <UButton v-theme="'document.find'" :icon="icons.search" color="neutral" variant="ghost" size="sm" square aria-label="Find in document" :aria-pressed="findOpen" @click="findOpen = !findOpen" />
-                <UButton v-theme="'document.inspector-toggle'" :icon="icons.inspector" color="neutral" variant="ghost" size="sm" square aria-label="Open document inspector" :aria-pressed="inspectorOpen" @click="toggleInspector()" />
-            </div>
-        </header>
-
         <div
             v-theme="'document.toolbar'"
             class="editor-toolbar document-editor-toolbar"
-            :class="{ 'editor-toolbar--mobile': isMobile }"
+            :class="{
+                'editor-toolbar--compact': isCompactToolbar,
+                'editor-toolbar--mobile': isMobile,
+            }"
             role="toolbar"
             aria-label="Document formatting"
         >
-            <USelect
-                v-if="!isMobile"
-                :model-value="activeBlock"
-                :items="blockTypeItems"
-                value-key="value"
-                label-key="label"
-                size="sm"
-                class="block-type-select"
-                :content="{ align: 'start', sideOffset: 6 }"
-                :ui="{
-                    content: 'w-max! min-w-44!',
-                    item: 'min-h-9 px-3',
-                    itemLabel: 'whitespace-nowrap overflow-visible! text-clip!',
-                }"
-                aria-label="Text style"
-                @update:model-value="setBlockType"
-            />
-            <span v-if="!isMobile" class="toolbar-separator" />
-            <ToolbarButton v-for="button in visibleFormatButtons" :key="button.id" v-bind="button" :active="button.active?.()" @activate="button.run" />
-            <span v-if="!isMobile" class="toolbar-separator toolbar-secondary" />
-            <template v-if="!isMobile">
-                <ToolbarButton v-for="button in insertButtons" :key="button.id" v-bind="button" class="toolbar-secondary" :active="button.active?.()" @activate="button.run" />
-            </template>
-            <span v-if="!isMobile" class="toolbar-spacer" />
-            <ToolbarButton v-if="!isMobile" :icon="icons.undo" label="Undo (⌘Z)" @activate="editor?.chain().focus().undo().run()" />
-            <ToolbarButton v-if="!isMobile" :icon="icons.redo" label="Redo (⇧⌘Z)" @activate="editor?.chain().focus().redo().run()" />
-            <UDropdownMenu v-model:open="overflowOpen" :items="toolbarOverflowItems" :content="{ align: 'end' }">
-                <UButton v-theme="'document.toolbar-more'" :icon="icons.more" color="neutral" variant="ghost" size="sm" square class="more-button" aria-label="More editor tools" :aria-expanded="overflowOpen" />
-            </UDropdownMenu>
+            <div class="toolbar-primary-rail">
+                <USelect
+                    v-if="!isCompactToolbar"
+                    :model-value="activeBlock"
+                    :items="blockTypeItems"
+                    value-key="value"
+                    label-key="label"
+                    size="sm"
+                    class="block-type-select"
+                    :content="{ align: 'start', sideOffset: 6 }"
+                    :ui="{
+                        content: 'w-max! min-w-44!',
+                        item: 'min-h-9 px-3',
+                        itemLabel: 'whitespace-nowrap overflow-visible! text-clip!',
+                    }"
+                    aria-label="Text style"
+                    @update:model-value="setBlockType"
+                />
+                <UDropdownMenu
+                    v-else
+                    :items="mobileHeadingMenuItems"
+                    :content="{ align: 'start', sideOffset: 6 }"
+                >
+                    <UButton
+                        v-theme="'document.toolbar'"
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        square
+                        class="document-toolbar-button retro-document-toolbar-button heading-style-button"
+                        :class="
+                            activeBlock !== 'paragraph'
+                                ? 'bg-primary/40'
+                                : 'opacity-80 hover:opacity-100'
+                        "
+                        :aria-label="`Text style: ${mobileHeadingLabel}`"
+                        :aria-pressed="activeBlock !== 'paragraph' ? 'true' : 'false'"
+                        :title="`Text style: ${mobileHeadingLabel}`"
+                    >
+                        {{ mobileHeadingShortLabel }}
+                    </UButton>
+                </UDropdownMenu>
+                <span v-if="!isCompactToolbar" class="toolbar-separator" />
+                <ToolbarButton
+                    v-for="button in visibleFormatButtons"
+                    :key="button.id"
+                    v-bind="button"
+                    :active="button.active?.()"
+                    @activate="button.run"
+                />
+                <template v-if="!isCompactToolbar">
+                    <span class="toolbar-separator toolbar-secondary" />
+                    <ToolbarButton
+                        v-for="button in insertButtons"
+                        :key="button.id"
+                        v-bind="button"
+                        class="toolbar-secondary"
+                        :active="button.active?.()"
+                        @activate="button.run"
+                    />
+                </template>
+                <template v-else>
+                    <span class="toolbar-separator" />
+                    <ToolbarButton
+                        v-for="button in compactQuickInsertButtons"
+                        :key="button.id"
+                        v-bind="button"
+                        :active="button.active?.()"
+                        @activate="button.run"
+                    />
+                </template>
+            </div>
+            <div class="toolbar-trailing">
+                <ToolbarButton
+                    v-if="!isCompactToolbar"
+                    :icon="icons.undo"
+                    label="Undo (⌘Z)"
+                    @activate="editor?.chain().focus().undo().run()"
+                />
+                <ToolbarButton
+                    v-if="!isCompactToolbar"
+                    :icon="icons.redo"
+                    label="Redo (⇧⌘Z)"
+                    @activate="editor?.chain().focus().redo().run()"
+                />
+                <UDropdownMenu
+                    v-model:open="overflowOpen"
+                    :items="toolbarOverflowItems"
+                    :content="{ align: 'end' }"
+                >
+                    <UButton
+                        v-theme="'document.toolbar-more'"
+                        :icon="icons.more"
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        square
+                        class="more-button"
+                        aria-label="More editor tools"
+                        :aria-expanded="overflowOpen"
+                    />
+                </UDropdownMenu>
+                <UButton
+                    v-if="!isMobile"
+                    v-theme="'document.find'"
+                    :icon="icons.search"
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    square
+                    class="find-toggle-button"
+                    aria-label="Find in document"
+                    :aria-pressed="findOpen"
+                    title="Find in document"
+                    @click="findOpen = !findOpen"
+                />
+                <UButton
+                    v-theme="'document.inspector-toggle'"
+                    :icon="icons.inspector"
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    square
+                    class="inspector-toggle-button"
+                    aria-label="Outline & info"
+                    :aria-pressed="inspectorOpen"
+                    title="Outline & info"
+                    @click="toggleInspector()"
+                />
+            </div>
         </div>
 
         <div v-if="findOpen" v-theme="'document.find-bar'" class="find-bar" role="search">
@@ -135,7 +227,7 @@
                 <div v-if="inspectorOpen" class="inspector-backdrop" @click="inspectorOpen = false" />
             </Transition>
             <Transition name="document-inspector">
-                <DocumentInspector v-if="inspectorOpen" :editor="editor" :document-id="documentId" :create-checkpoint="createManualCheckpoint" :outline="outline" :active-outline-id="activeOutlineId" :stats="stats" :saved-at="state.record?.updated_at" :plugin-panels="inspectorPanels" :initial-tab="inspectorTab" @update:active-tab="inspectorTab = $event" @close="inspectorOpen = false" @outline-select="scrollTo" @restore="restoreRevision" />
+                <DocumentInspector v-if="inspectorOpen" :editor="editor" :document-id="documentId" :create-checkpoint="createManualCheckpoint" :outline="outline" :active-outline-id="activeOutlineId" :stats="stats" :saved-at="state.record?.updated_at" :plugin-panels="inspectorPanels" :initial-tab="inspectorTab" @update:active-tab="inspectorTab = $event" @close="inspectorOpen = false" @outline-select="onOutlineSelect" @restore="onInspectorRestore" />
             </Transition>
         </div>
 
@@ -204,7 +296,10 @@ import {
     type DocumentEditorFocusedRegion,
     type DocumentEditorViewState,
 } from '~/composables/documents/useDocumentEditorSessions';
-import { useDocumentInsights } from '~/composables/documents/useDocumentInsights';
+import {
+    useDocumentInsights,
+    type DocumentOutlineItem,
+} from '~/composables/documents/useDocumentInsights';
 import {
     useDocumentAiAgent,
     type DocumentAiEstimateRequest,
@@ -228,6 +323,8 @@ import type { TipTapDocument } from '~/types/database';
 import { isAllowedDocumentHref } from '~/utils/documents/document-href';
 import {
     DOCUMENT_BLOCK_TYPE_ITEMS,
+    isDocumentCompactToolbar,
+    isDocumentMobilePrimaryToolId,
     type DocumentToolbarItem,
 } from '~/core/documents/editor-toolbar';
 
@@ -238,9 +335,9 @@ const props = defineProps<{
 }>();
 const DocumentAiPanel = defineAsyncComponent(() => import('./DocumentAiPanel.vue'));
 const icons = reactive({
-    document: useIcon('editor.document'),
     search: useIcon('editor.search'),
     inspector: useIcon('editor.inspector'),
+    outline: useIcon('editor.outline'),
     more: useIcon('editor.more'),
     close: useIcon('editor.close'),
     previous: useIcon('editor.previous'),
@@ -259,6 +356,7 @@ const icons = reactive({
     text: useIcon('editor.insert.text'),
     heading1: useIcon('editor.insert.heading-1'),
     heading2: useIcon('editor.insert.heading-2'),
+    heading3: useIcon('editor.insert.heading-3'),
     code: useIcon('editor.code'),
     codeBlock: useIcon('editor.insert.code-block'),
     divider: useIcon('editor.insert.divider'),
@@ -283,6 +381,12 @@ const editorStateVersion = ref(0);
 const selectionAvailable = ref(false);
 const selectedText = ref('');
 const { isMobile, hydrated: responsiveHydrated } = useResponsiveState();
+/** Pane/container width — drives compact toolbar independently of viewport. */
+const paneWidthPx = ref(0);
+const isCompactToolbar = computed(() =>
+    isDocumentCompactToolbar(paneWidthPx.value, isMobile.value)
+);
+let paneResizeObserver: ResizeObserver | undefined;
 const inspectorOpen = ref(false);
 const inspectorTab = ref('outline');
 const aiFocusNonce = ref(0);
@@ -622,7 +726,9 @@ async function restoreDocumentViewState(
 
     suppressFindAutofocus = true;
     inspectorTab.value = saved.inspectorTab ?? 'outline';
-    inspectorOpen.value = Boolean(saved.inspectorOpen);
+    // Narrow panes use a full-stage inspector — don't restore it open over the doc.
+    inspectorOpen.value =
+        Boolean(saved.inspectorOpen) && !isCompactToolbar.value;
     findOpen.value = Boolean(saved.findOpen);
     await nextTick();
     suppressFindAutofocus = false;
@@ -686,7 +792,8 @@ watch(documentId, async (id, previous) => {
     if (revisionTimer) clearTimeout(revisionTimer);
     revisionTimer = undefined;
     lastAutomaticRevisionAt = 0;
-    inspectorOpen.value = responsiveHydrated.value && !isMobile.value;
+    inspectorOpen.value =
+        responsiveHydrated.value && !isCompactToolbar.value;
     inspectorTab.value = 'outline';
     findOpen.value = false;
     findQuery.value = '';
@@ -712,17 +819,20 @@ watch(
 );
 
 watch(
-    responsiveHydrated,
-    (ready) => {
-        if (!ready || inspectorDefaultApplied) return;
+    [responsiveHydrated, paneWidthPx, isMobile],
+    () => {
+        if (!responsiveHydrated.value || inspectorDefaultApplied) return;
+        // Wait for a real pane measurement on desktop so narrow split panes
+        // don't inherit the wide-layout "inspector open" default.
+        if (!isMobile.value && paneWidthPx.value <= 0) return;
         inspectorDefaultApplied = true;
-        inspectorOpen.value = !isMobile.value;
+        inspectorOpen.value = !isCompactToolbar.value;
     },
     { immediate: true },
 );
 
-watch(isMobile, (mobile) => {
-    if (mobile) inspectorOpen.value = false;
+watch(isCompactToolbar, (compact) => {
+    if (compact) inspectorOpen.value = false;
 });
 
 watch(
@@ -747,9 +857,22 @@ watch(findQuery, () => {
 
 onMounted(() => {
     void loadActiveDocument(props.documentId);
+    const root = rootElement.value;
+    if (root && typeof ResizeObserver !== 'undefined') {
+        const syncPaneWidth = () => {
+            paneWidthPx.value = root.getBoundingClientRect().width;
+        };
+        syncPaneWidth();
+        paneResizeObserver = new ResizeObserver(syncPaneWidth);
+        paneResizeObserver.observe(root);
+    } else if (root) {
+        paneWidthPx.value = root.getBoundingClientRect().width;
+    }
 });
 onBeforeUnmount(() => {
     didUnmount = true;
+    paneResizeObserver?.disconnect();
+    paneResizeObserver = undefined;
     ai.abort();
     unregisterSession?.();
     if (captureTimer) clearTimeout(captureTimer);
@@ -765,8 +888,6 @@ function onTitleInput(value: string | number | null) {
     titleDraft.value = String(value ?? '');
     setDocumentTitle(props.documentId, titleDraft.value);
 }
-
-const statusText = computed(() => (state.value.status === 'loading' ? 'Loading' : state.value.status === 'saving' ? 'Saving' : state.value.status === 'error' ? 'Save failed' : state.value.status === 'saved' ? 'Saved' : 'Ready'));
 
 const activeBlock = computed(() => {
     if (editor.value?.isActive('heading', { level: 1 })) return 'heading-1';
@@ -842,8 +963,9 @@ const formatButtons = computed<DocumentToolbarItem[]>(() => [
         run: editLink,
     },
 ]);
+/** Compact panes keep B/I/U in the scroll rail; advanced marks stay in overflow. */
 const visibleFormatButtons = computed(() =>
-    isMobile.value ? formatButtons.value.slice(0, 3) : formatButtons.value
+    isCompactToolbar.value ? formatButtons.value.slice(0, 3) : formatButtons.value
 );
 const insertButtons = computed<DocumentToolbarItem[]>(() => [
     {
@@ -883,6 +1005,18 @@ const insertButtons = computed<DocumentToolbarItem[]>(() => [
         },
     },
 ]);
+const imageInsertButton = computed<DocumentToolbarItem>(() => ({
+    id: 'image',
+    icon: icons.image,
+    label: 'Image',
+    run: () => imageInput.value?.click(),
+}));
+/** Notion/Docs-style essentials in the horizontally scrollable compact rail. */
+const compactQuickInsertButtons = computed<DocumentToolbarItem[]>(() => [
+    insertButtons.value[0]!,
+    insertButtons.value[1]!,
+    imageInsertButton.value,
+]);
 const overflowButtons = computed<DocumentToolbarItem[]>(() => [
     {
         id: 'codeblock',
@@ -901,19 +1035,59 @@ const overflowButtons = computed<DocumentToolbarItem[]>(() => [
         },
     },
     { id: 'table', icon: icons.table, label: 'Table', run: openTableDialog },
-    {
-        id: 'image',
-        icon: icons.image,
-        label: 'Image',
-        run: () => imageInput.value?.click(),
-    },
+    imageInsertButton.value,
+]);
+const mobileHeadingLabel = computed(() => {
+    const current = DOCUMENT_BLOCK_TYPE_ITEMS.find(
+        (item) => item.value === activeBlock.value
+    );
+    return current?.label ?? 'Text';
+});
+const mobileHeadingShortLabel = computed(() => {
+    if (activeBlock.value === 'heading-1') return 'H1';
+    if (activeBlock.value === 'heading-2') return 'H2';
+    if (activeBlock.value === 'heading-3') return 'H3';
+    return 'T';
+});
+const mobileHeadingMenuItems = computed(() => [
+    DOCUMENT_BLOCK_TYPE_ITEMS.map((item) => ({
+        label: item.label,
+        icon:
+            item.value === 'heading-1'
+                ? icons.heading1
+                : item.value === 'heading-2'
+                  ? icons.heading2
+                  : item.value === 'heading-3'
+                    ? icons.heading3
+                    : icons.text,
+        onSelect: () => setBlockType(item.value),
+    })),
 ]);
 const toolbarOverflowItems = computed(() => {
-    const mobileButtons = isMobile.value
+    const compactButtons = isCompactToolbar.value
         ? [
-              ...formatButtons.value.slice(3),
-              ...insertButtons.value,
-              ...overflowButtons.value,
+              // Find stays in overflow on true mobile (no trailing find button).
+              ...(isMobile.value
+                  ? [
+                        {
+                            id: 'find',
+                            icon: icons.search,
+                            label: 'Find in document',
+                            run: () => {
+                                findOpen.value = true;
+                            },
+                        },
+                    ]
+                  : []),
+              ...formatButtons.value.filter(
+                  (button) => !isDocumentMobilePrimaryToolId(button.id)
+              ),
+              ...insertButtons.value.filter(
+                  (button) => !isDocumentMobilePrimaryToolId(button.id)
+              ),
+              ...overflowButtons.value.filter(
+                  (button) => !isDocumentMobilePrimaryToolId(button.id)
+              ),
               {
                   id: 'undo',
                   icon: icons.undo,
@@ -928,19 +1102,12 @@ const toolbarOverflowItems = computed(() => {
               },
           ]
         : overflowButtons.value;
-    const actionItems = mobileButtons.map((button) => ({
+    const actionItems = compactButtons.map((button) => ({
         label: button.label,
         icon: button.icon || icons.plugin,
         onSelect: () => button.run(),
     }));
-    const textStyleItems = isMobile.value
-        ? DOCUMENT_BLOCK_TYPE_ITEMS.map((item) => ({
-              label: item.label,
-              onSelect: () => setBlockType(item.value),
-          }))
-        : [];
     return [
-        ...(textStyleItems.length ? [textStyleItems] : []),
         actionItems,
         ...(pluginButtons.value.length
             ? [
@@ -1165,6 +1332,16 @@ function focusCanvas(event: MouseEvent) {
 function toggleInspector(tab = inspectorTab.value) {
     inspectorTab.value = tab;
     inspectorOpen.value = !inspectorOpen.value;
+}
+
+function onOutlineSelect(item: DocumentOutlineItem) {
+    scrollTo(item);
+    if (isCompactToolbar.value) inspectorOpen.value = false;
+}
+
+async function onInspectorRestore(revision: CompleteDocumentRevision) {
+    await restoreRevision(revision);
+    if (isCompactToolbar.value) inspectorOpen.value = false;
 }
 
 function openAiForSelection() {

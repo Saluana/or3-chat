@@ -225,26 +225,54 @@ defineExpose({ focus, removeReference });
 </script>
 
 <style scoped>
-.prompt-editor-shell { min-width: 0; display: grid; gap: 0.45rem; }
+.prompt-editor-shell { min-width: 0; display: grid; gap: 0.35rem; }
 .prompt-editor-shell.disabled { opacity: 0.7; pointer-events: none; }
-.prompt-editor { min-height: 2.7rem; max-height: 11rem; overflow-y: auto; padding: 0.65rem 0.35rem; color: var(--md-on-surface); line-height: 1.45; }
-.prompt-editor :deep(.ProseMirror) { min-height: 1.4rem; outline: none; white-space: pre-wrap; }
-.prompt-editor :deep(.ProseMirror p) { margin: 0; }
+.prompt-editor {
+    min-height: 1.75rem;
+    max-height: 11rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0.2rem 0.25rem;
+    color: var(--md-on-surface);
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+/* Empty state: no scrollport under the placeholder. */
+.prompt-editor:has(.ProseMirror p.is-editor-empty:first-child) {
+    overflow-y: hidden;
+}
+.prompt-editor :deep(.ProseMirror) {
+    min-height: 1.35rem;
+    outline: none;
+    white-space: pre-wrap;
+}
+.prompt-editor :deep(.ProseMirror p) {
+    margin: 0;
+    line-height: 1.4;
+}
 .prompt-editor :deep(.ProseMirror p + p) { margin-top: 0.25rem; }
-.prompt-editor :deep(.ProseMirror p.is-editor-empty:first-child::before) { height: 0; float: left; color: color-mix(in oklab, var(--md-on-surface-variant), transparent 16%); content: attr(data-placeholder); pointer-events: none; }
+.prompt-editor :deep(.ProseMirror p.is-editor-empty:first-child::before) {
+    height: 0;
+    float: left;
+    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 16%);
+    content: attr(data-placeholder);
+    pointer-events: none;
+}
 .prompt-editor :deep(.document-ai-mention) { display: inline-flex; align-items: center; padding: 0.05rem 0.25rem; border-radius: 0.3rem; color: var(--md-primary); background: var(--md-primary-container); font-weight: 650; }
 .context-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; padding-inline: 0.25rem; }
 .context-chip { min-width: 0; max-width: 16rem; display: flex; align-items: center; gap: 0.3rem; padding: 0.18rem 0.22rem 0.18rem 0.4rem; border: var(--md-border-width) solid var(--md-border-color); border-radius: var(--md-border-radius); color: var(--md-on-surface); background: var(--md-surface-container-low); font-size: 0.66rem; }
 .context-chip > svg { width: 0.8rem; height: 0.8rem; flex: 0 0 auto; color: var(--md-on-surface-variant); }
 .context-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 600px) {
-    .prompt-editor-shell { gap: 0.25rem; }
+    .prompt-editor-shell { gap: 0.2rem; }
     .prompt-editor {
-        min-height: 2.25rem;
+        min-height: 1.75rem;
         max-height: 7rem;
-        padding: 0.4rem 0.2rem;
+        padding: 0.2rem 0.15rem;
         font-size: 1rem;
+        line-height: 1.35;
     }
     .prompt-editor :deep(.ProseMirror) { min-height: 1.35rem; }
+    .prompt-editor :deep(.ProseMirror p) { line-height: 1.35; }
 }
 </style>

@@ -121,7 +121,7 @@ export default defineTheme({
         content: {
             base: { color: 'var(--md-surface)' },
         },
-        sidebar: { color: 'var(--md-surface-variant)' },
+        sidebar: { color: 'var(--md-surface)' },
     },
 
     fonts: {

@@ -102,6 +102,17 @@ export default {
                     variant: 'soft',
                     class: 'bg-[var(--md-surface-container-lowest)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
                 },
+                // Ghost/soft error must use the error hue itself — on-error is for filled faces.
+                {
+                    color: 'error',
+                    variant: 'ghost',
+                    class: 'text-[var(--md-error)]! hover:bg-[var(--md-error)]/15 active:bg-[var(--md-error)]/25',
+                },
+                {
+                    color: 'error',
+                    variant: 'soft',
+                    class: 'bg-[var(--md-error)]/18 text-[var(--md-error)]! hover:bg-[var(--md-error)]/28',
+                },
             ],
         },
         // Global input overrides

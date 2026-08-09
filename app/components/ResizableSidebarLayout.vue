@@ -13,7 +13,7 @@
             <div
                 v-show="!isDesktop && open"
                 id="mobile-close"
-                class="absolute inset-0 bg-black/40 z-30 md:hidden"
+                class="absolute inset-0 bg-black/40 z-[60] md:hidden"
                 @click="close()"
             />
         </Transition>
@@ -23,7 +23,8 @@
             id="sidebar"
             data-testid="sidebar"
             :class="[
-                'resizable-sidebar flex z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex-col overflow-x-hidden',
+                // z-[70] on mobile so the drawer sits above workspace chrome (z-50).
+                'resizable-sidebar flex z-40 max-md:z-[70] bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex-col overflow-x-hidden',
                 'md:relative md:h-full md:shrink-0 md:border-r-[var(--md-border-width)]',
                 side === 'right' ? 'md:border-l md:border-r-0' : '',
                 // Mobile overlay responsive classes (static for SSR parity)
@@ -412,7 +413,14 @@ function expand() {
         width.value = clamp(lastExpandedWidth.value || props.defaultWidth);
     }
 }
-defineExpose({ toggle, close, openSidebar, expand, isCollapsed: collapsed });
+defineExpose({
+    toggle,
+    close,
+    openSidebar,
+    expand,
+    isCollapsed: collapsed,
+    isOpen: open,
+});
 
 const side = computed<Side>(() => (props.side === 'right' ? 'right' : 'left'));
 

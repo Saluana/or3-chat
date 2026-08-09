@@ -46,8 +46,8 @@
             <div class="composer-row">
                 <input ref="attachmentInput" class="sr-only" type="file" accept="image/*,application/pdf" multiple @change="onAttachmentInput" />
                 <div class="composer-actions composer-actions-leading">
-                    <UButton :icon="icons.plus" color="neutral" variant="ghost" size="sm" square class="attachment-button" aria-label="Add image or PDF" title="Add image or PDF" :disabled="status === 'streaming' || attachments.length >= MAX_ATTACHMENTS" @click="attachmentInput?.click()" />
-                    <UButton :icon="icons.settings" color="neutral" :variant="customizeOpen ? 'soft' : 'ghost'" size="sm" square class="settings-button" :aria-expanded="customizeOpen" aria-label="Document AI settings" @click="customizeOpen = !customizeOpen" />
+                    <UButton :icon="icons.plus" color="neutral" variant="ghost" size="xs" square class="attachment-button max-md:min-h-[1.75rem]! max-md:min-w-[1.75rem]! max-md:max-h-[1.75rem]! max-md:max-w-[1.75rem]! max-md:h-[1.75rem]! max-md:w-[1.75rem]! max-md:p-0!" aria-label="Add image or PDF" title="Add image or PDF" :disabled="status === 'streaming' || attachments.length >= MAX_ATTACHMENTS" @click="attachmentInput?.click()" />
+                    <UButton :icon="icons.settings" color="neutral" :variant="customizeOpen ? 'soft' : 'ghost'" size="xs" square class="settings-button max-md:min-h-[1.75rem]! max-md:min-w-[1.75rem]! max-md:max-h-[1.75rem]! max-md:max-w-[1.75rem]! max-md:h-[1.75rem]! max-md:w-[1.75rem]! max-md:p-0!" :aria-expanded="customizeOpen" aria-label="Document AI settings" @click="customizeOpen = !customizeOpen" />
                 </div>
                 <DocumentAiPromptEditor
                     ref="promptInput"
@@ -62,8 +62,8 @@
                     @submit="send"
                 />
                 <div class="composer-actions composer-actions-trailing">
-                    <UButton v-if="status === 'streaming'" :icon="icons.stop" color="error" size="sm" square class="send-button" aria-label="Stop AI" @click="$emit('abort')" />
-                    <UButton v-else :icon="icons.send" color="primary" size="sm" square class="send-button" aria-label="Send to document AI" :disabled="!prompt.trim() || attachments.some((attachment) => attachment.loading)" @click="send" />
+                    <UButton v-if="status === 'streaming'" :icon="icons.stop" color="error" size="xs" square class="send-button max-md:min-h-[1.875rem]! max-md:min-w-[1.875rem]! max-md:max-h-[1.875rem]! max-md:max-w-[1.875rem]! max-md:h-[1.875rem]! max-md:w-[1.875rem]! max-md:p-0!" aria-label="Stop AI" @click="$emit('abort')" />
+                    <UButton v-else :icon="icons.send" color="primary" size="xs" square class="send-button max-md:min-h-[1.875rem]! max-md:min-w-[1.875rem]! max-md:max-h-[1.875rem]! max-md:max-w-[1.875rem]! max-md:h-[1.875rem]! max-md:w-[1.875rem]! max-md:p-0!" aria-label="Send to document AI" :disabled="!prompt.trim() || attachments.some((attachment) => attachment.loading)" @click="send" />
                 </div>
             </div>
 

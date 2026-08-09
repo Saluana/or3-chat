@@ -70,6 +70,9 @@ export default defineTheme({
         success: '#51cf66',
         warning: '#ffa94d',
         error: '#ff6b6b',
+        onError: '#FFFFFF',
+        errorHover: '#ff8787',
+        errorActive: '#fa5252',
         info: '#E8F1F8',
         infoHover: '#DCEAF4',
         infoActive: '#C6DDEE',
@@ -78,15 +81,17 @@ export default defineTheme({
 
         // Dark mode overrides
         dark: {
-            primary: '#2C638B',
-            primaryTint: '#4E8FBC',
-            primaryShade: '#204968',
+            // Lifted vs surface (#1A1E23) so primary-as-text stays readable
+            // (headings, active tabs, inspector eyebrows).
+            primary: '#5BA3D4',
+            primaryTint: '#8EC4E8',
+            primaryShade: '#2C638B',
             onPrimary: '#FFFFFF',
-            primaryContainer: '#00504e',
-            onPrimaryContainer: '#b2f5ea',
-            primaryBorder: '#234E6D',
-            primaryHover: '#3978A4',
-            primaryActive: '#234C67',
+            primaryContainer: '#1E3A52',
+            onPrimaryContainer: '#D7ECF8',
+            primaryBorder: '#577a94',
+            primaryHover: '#6AADDA',
+            primaryActive: '#4A8FBC',
 
             secondary: '#ffb3b3',
             onSecondary: '#5f1314',
@@ -104,7 +109,8 @@ export default defineTheme({
             surfaceContainerLowest: '#111417',
             onSurface: '#e2e2e6',
             surfaceVariant: '#223344',
-            onSurfaceVariant: '#c3c7cf',
+            // Lifted for dense panels / modals (quick-action subcopy, notes).
+            onSurfaceVariant: '#D0D5DD',
             inverseSurface: '#e2e2e6',
             inverseOnSurface: '#2f3033',
 
@@ -117,7 +123,10 @@ export default defineTheme({
             onInfo: '#DDE3E8',
             success: '#51cf66',
             warning: '#ffa94d',
-            error: '#ff6b6b',
+            error: '#FF8A8A',
+            onError: '#1A1E23',
+            errorHover: '#FFA3A3',
+            errorActive: '#FF6B6B',
             topHeaderBg: '#1A1E23',
         },
     },

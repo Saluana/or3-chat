@@ -157,6 +157,7 @@ export default <IconMap>{
     'editor.insert.text': 'tabler:letter-t',
     'editor.insert.heading-1': 'tabler:h-1',
     'editor.insert.heading-2': 'tabler:h-2',
+    'editor.insert.heading-3': 'tabler:h-3',
     'editor.insert.code-block': 'tabler:code',
     'editor.insert.divider': 'tabler:minus',
     'editor.insert.table': 'tabler:table',

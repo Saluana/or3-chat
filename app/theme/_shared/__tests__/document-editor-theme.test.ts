@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ICONS, type IconToken } from '~/config/icon-tokens';
 import blankIcons from '../../blank/icons.config';
@@ -5,6 +8,9 @@ import blankAppConfig from '../../blank/app.config';
 import retroAppConfig from '../../retro/app.config';
 import { documentsStyles as blankDocumentStyles } from '../../blank/styles/documents';
 import { documentsStyles as retroDocumentStyles } from '../../retro/styles/documents';
+import retroTheme from '../../retro/theme';
+
+const THEME_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const editorIconTokens = [
     'editor.document',
@@ -57,6 +63,105 @@ describe('document editor theme contract', () => {
         expect(settingCard?.borderRadius).toBe('var(--md-border-radius)');
         expect(revisionItem?.border).toContain('var(--md-border-width)');
         expect(revisionItem?.borderRadius).toBe('var(--md-border-radius)');
+    });
+
+    it('blank document AI composer shares the chat composer radius token', () => {
+        const composer = blankDocumentStyles['.document-editor-root .document-ai-composer']?.style;
+        expect(composer?.borderRadius).toBe('var(--chat-composer-border-radius, 28px)');
+    });
+
+    it('retro polishes the document formatting toolbar without touching blank', () => {
+        const retroCss = readFileSync(resolve(THEME_ROOT, 'retro', 'styles.css'), 'utf8');
+        const blankCss = readFileSync(resolve(THEME_ROOT, 'blank', 'styles.css'), 'utf8');
+        const cyberpunkCssPath = resolve(THEME_ROOT, 'cyberpunk', 'styles.css');
+        let cyberpunkCss = '';
+        try {
+            cyberpunkCss = readFileSync(cyberpunkCssPath, 'utf8');
+        } catch {
+            cyberpunkCss = '';
+        }
+
+        expect(retroCss).toContain('Document formatting toolbar — retro polish only');
+        expect(retroCss).toContain('--doc-tb-size: 36px');
+        expect(retroCss).toContain('--doc-tb-gap: 4px');
+        expect(retroCss).toContain('--doc-tb-group: 11px');
+        expect(retroCss).toContain('--doc-tb-shadow-idle:');
+        expect(retroCss).toContain('--doc-tb-shadow-hover:');
+        expect(retroCss).toContain('--doc-tb-shadow-room: 3px');
+        expect(retroCss).toContain('padding-block: var(--doc-tb-shadow-room)');
+        expect(retroCss).toContain('min-height: 52px');
+        expect(retroCss).toContain('.editor-toolbar--compact');
+        expect(retroCss).toContain('--doc-tb-size: 34px');
+        expect(retroCss).toContain('--doc-tb-gap: 3px');
+        expect(retroCss).toContain('min-height: 50px');
+        expect(retroCss).toContain('.more-button');
+        expect(retroCss).toContain('.inspector-toggle-button');
+        expect(retroCss).toContain(
+            '.outline-item.active .outline-marker'
+        );
+        expect(retroCss).toContain('color: var(--md-on-primary) !important');
+        expect(retroCss).toContain('.selection-menu button.active');
+        expect(retroCss).toContain('.revision-icon');
+        expect(retroCss).toContain('.inspector-tabs');
+        expect(retroCss).toContain("html[data-theme='retro'].dark");
+        expect(retroCss).toContain('--doc-tb-ink: var(--md-on-surface)');
+        expect(retroCss).toContain(
+            '.document-content\n\t:is(h1, h2, h3, h4)'
+        );
+
+        expect(blankCss).not.toContain('Document formatting toolbar — retro polish only');
+        expect(blankCss).not.toContain('--doc-tb-size');
+        expect(blankCss).not.toContain(
+            '.outline-item.active .outline-marker'
+        );
+        expect(blankCss).not.toContain('.revision-icon');
+        expect(cyberpunkCss).not.toContain('--doc-tb-size');
+        expect(cyberpunkCss).not.toContain(
+            '.outline-item.active .outline-marker'
+        );
+
+        // Dark primary must stay lighter than the old #2C638B face-on-navy value.
+        expect(retroTheme.colors.dark?.primary).toBe('#5BA3D4');
+        expect(retroTheme.colors.dark?.primaryTint).toBe('#8EC4E8');
+        expect(retroTheme.colors.dark?.error).toBe('#FF8A8A');
+        expect(retroCss).toContain('.settings-overlay');
+        expect(retroCss).toContain("button[aria-label^='Remove']");
+        expect(blankCss).not.toContain('.settings-overlay .quick-action-number');
+        expect(blankDocumentStyles).not.toHaveProperty(
+            '.document-editor-root .editor-toolbar--compact'
+        );
+        expect(
+            retroDocumentStyles['.document-editor-root .document-editor-toolbar']
+                ?.style?.boxShadow
+        ).toBe('none');
+    });
+
+    it('retro densifies the mobile open-tabs switcher without touching blank', () => {
+        const retroCss = readFileSync(resolve(THEME_ROOT, 'retro', 'styles.css'), 'utf8');
+        const blankCss = readFileSync(resolve(THEME_ROOT, 'blank', 'styles.css'), 'utf8');
+        const retroShell = readFileSync(
+            resolve(THEME_ROOT, 'retro', 'styles', 'shell.ts'),
+            'utf8'
+        );
+
+        expect(retroCss).toContain('list-row composition');
+        expect(retroCss).toContain('--tab-switcher-radius: 3px');
+        expect(retroCss).toContain('--tab-switcher-row-h: 4.75rem');
+        expect(retroCss).toContain('height: 44px !important');
+        expect(retroCss).toContain('grid-template-columns: 1.4fr 0.8fr');
+        expect(retroCss).toContain('gap: 0.65rem !important; /* ~10–11px */');
+        expect(retroCss).toContain('gap: 0.75rem !important; /* 12px */');
+        expect(retroCss).toContain('width: 1.5rem !important; /* 24px */');
+        expect(retroCss).toContain('border-left-color: var(--md-primary)');
+        expect(retroCss).toContain('Quiet X');
+        expect(retroCss).toContain(
+            '.workspace-tab-switcher-option-opened {\n\t\tdisplay: none !important;'
+        );
+        expect(retroShell).toContain("'input#shell.tab-switcher-search'");
+        expect(retroShell).toContain("variant: 'ghost'");
+        expect(blankCss).not.toContain('list-row composition');
+        expect(blankCss).not.toContain('--tab-switcher-row-h');
+        expect(blankCss).not.toContain('Quiet X');
     });
 
     it('retro keeps chrome pixel fonts but uses a readable stack for the writing canvas', () => {

@@ -75,13 +75,13 @@ export const sidebarOverrides = {
     },
     'button#sidebar.bottom-nav.connect': {
         variant: 'ghost',
-        class: 'h-[48px]! w-[48px]! flex items-center justify-center p-0 border-0! rounded-xl text-[var(--md-on-surface-variant)]! transition-colors duration-150',
+        class: 'h-[48px]! w-[48px]! flex items-center justify-center p-0 border-0! rounded-xl text-[var(--md-on-surface-variant)]! hover:bg-[var(--md-surface-hover)]! hover:text-[var(--md-on-surface)]! active:bg-[var(--md-surface-active)]! transition-colors duration-150',
     },
     'button#sidebar.bottom-nav.connect:connected': {
-        class: 'bg-[var(--md-success)]/10 text-[var(--md-success)]! hover:bg-[var(--md-error)]/10! hover:text-[var(--md-error)]!',
+        class: 'bg-[var(--md-surface-hover)] text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-active)]! hover:text-[var(--md-on-surface)]!',
     },
     'button#sidebar.bottom-nav.connect:disconnected': {
-        class: 'hover:bg-[var(--md-success)]/10!',
+        class: 'hover:bg-[var(--md-surface-hover)]! hover:text-[var(--md-on-surface)]!',
     },
 
     'button#sidebar.bottom-nav.auth': {
@@ -124,7 +124,7 @@ export const sidebarOverrides = {
         class: 'rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] hover:text-[var(--md-on-surface)] active:bg-[var(--md-surface-active)]',
     },
     'button#sidebar.mobile-nav.item:active': {
-        class: 'rounded-xl bg-[color:var(--md-primary)]/8 text-[var(--md-primary)] hover:bg-[color:var(--md-primary)]/12 hover:text-[var(--md-primary)]',
+        class: 'rounded-xl bg-[var(--md-surface-hover)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-active)] hover:text-[var(--md-on-surface)]',
     },
     'button#sidebar.mobile-nav.create-item': {
         class: 'rounded-xl border-0 max-md:min-h-[44px]! max-md:text-[16px]!',
@@ -139,7 +139,7 @@ export const sidebarOverrides = {
     },
     'button#sidebar.collapsed-page:active': {
         ui: {
-            base: 'h-[40px] w-[40px] flex items-center justify-center bg-[color:var(--md-primary)]/10 hover:bg-[color:var(--md-primary)]/14 border-0 text-[var(--md-primary)] rounded-xl p-0! max-md:min-h-[44px]! max-md:min-w-[44px]!',
+            base: 'h-[40px] w-[40px] flex items-center justify-center bg-[var(--md-surface-hover)] hover:bg-[var(--md-surface-active)] border-0 text-[var(--md-on-surface)] rounded-xl p-0! max-md:min-h-[44px]! max-md:min-w-[44px]!',
             leadingIcon: 'w-5 h-5',
         },
     },
@@ -182,7 +182,7 @@ export const sidebarCssSelectors = {
     },
     '#top-header[data-sidebar-state="collapsed"]': {
         style: {
-            backgroundColor: 'var(--md-surface-variant)',
+            backgroundColor: 'var(--md-surface)',
             borderBottom: 'none',
             width: '64px',
             boxSizing: 'border-box',
@@ -277,7 +277,7 @@ export const sidebarCssSelectors = {
             minWidth: '64px !important',
             maxWidth: '64px !important',
             width: '64px !important',
-            backgroundColor: 'var(--md-surface-variant)',
+            backgroundColor: 'var(--md-surface)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -348,8 +348,7 @@ export const sidebarCssSelectors = {
     },
     '#mobile-bottom-nav .mobile-nav-create-fab': {
         style: {
-            boxShadow:
-                '0 6px 16px color-mix(in srgb, var(--md-primary) 28%, transparent), 0 1px 4px rgb(0 0 0 / 0.12)',
+            boxShadow: '0 6px 16px rgb(0 0 0 / 0.12), 0 1px 4px rgb(0 0 0 / 0.08)',
         },
     },
 };
