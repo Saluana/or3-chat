@@ -19,6 +19,7 @@ import {
     checkSyncRateLimit,
     recordSyncRequest,
 } from '../../utils/sync/rate-limiter';
+import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 import type { Attachment } from 'or3-workflow-core';
 
 const MAX_BACKGROUND_WORKFLOW_BODY_BYTES = 256 * 1024;
@@ -151,14 +152,7 @@ export default defineEventHandler(async (event) => {
         session.user.id,
         'workflow:background'
     );
-    if (!rateLimitResult.allowed) {
-        const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
-        setResponseHeader(event, 'Retry-After', retryAfterSec);
-        throw createError({
-            statusCode: 429,
-            statusMessage: `Rate limit exceeded. Retry after ${retryAfterSec}s`,
-        });
-    }
+    enforceRateLimit(event, rateLimitResult);
 
     const config = useRuntimeConfig(event);
     const allowUserOverride = config.openrouterAllowUserOverride !== false;

@@ -21,8 +21,16 @@ export type AdminPasswordPolicyFailure =
     | 'number';
 
 function randomIndex(limit: number): number {
+    if (!Number.isSafeInteger(limit) || limit < 1) {
+        throw new Error('Random selection limit must be a positive integer.');
+    }
+
+    const range = 0x1_0000_0000;
+    const threshold = range - (range % limit);
     const bytes = new Uint32Array(1);
-    globalThis.crypto.getRandomValues(bytes);
+    do {
+        globalThis.crypto.getRandomValues(bytes);
+    } while (bytes[0]! >= threshold);
     return bytes[0]! % limit;
 }
 

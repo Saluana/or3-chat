@@ -37,7 +37,7 @@ import type { PluginContributionSurfaceId } from '~~/shared/plugins/contribution
 
 const profiles = JSON.parse(
     readFileSync(
-        resolve(process.cwd(), 'planning/plugin-runtime-v2/compatibility-profiles.json'),
+        resolve(process.cwd(), 'planning/complete/plugin-runtime-v2/compatibility-profiles.json'),
         'utf8'
     )
 ) as CompatibilityProfileDocument;

@@ -38,7 +38,7 @@ describe('differential surface adapter harness', () => {
     it('binds a V1/V2 comparison to a frozen Compatibility Ledger profile', () => {
         const profiles = JSON.parse(
             readFileSync(
-                resolve(process.cwd(), 'planning/plugin-runtime-v2/compatibility-profiles.json'),
+                resolve(process.cwd(), 'planning/complete/plugin-runtime-v2/compatibility-profiles.json'),
                 'utf8'
             )
         ) as CompatibilityProfileDocument;

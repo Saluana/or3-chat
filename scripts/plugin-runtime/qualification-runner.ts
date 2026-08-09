@@ -89,7 +89,7 @@ function skippedCommand(command: string[]): CommandResult {
 export function runQualification(manifestFilename: string, args: readonly string[]): void {
     const manifestPath = resolve(
         repoRoot,
-        'planning/plugin-runtime-v2/qualification',
+        'planning/complete/plugin-runtime-v2/qualification',
         manifestFilename
     );
     const manifestSource = readFileSync(manifestPath, 'utf8');
@@ -98,7 +98,7 @@ export function runQualification(manifestFilename: string, args: readonly string
     const outputPath = shouldRecord
         ? resolve(
               repoRoot,
-              `planning/plugin-runtime-v2/qualification/results/${manifest.qualificationVersion}.json`
+              `planning/complete/plugin-runtime-v2/qualification/results/${manifest.qualificationVersion}.json`
           )
         : resolve(
               repoRoot,
@@ -178,4 +178,3 @@ export function runQualification(manifestFilename: string, args: readonly string
     );
     if (failed) process.exitCode = 1;
 }
-

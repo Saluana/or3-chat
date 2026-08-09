@@ -1034,15 +1034,11 @@ export class Or3CloudWizardApi implements WizardApi {
     async savePreset(id: string, name: string): Promise<void> {
         const session = await readSession(id);
         const answers = getFullAnswersForSession(session);
-        const safeAnswers: Partial<WizardAnswers> = { ...answers };
-        for (const key of SECRET_ANSWER_KEYS) {
-            delete safeAnswers[key];
-        }
 
         await saveStoredPreset({
             name,
             createdAt: nowIso(),
-            answers: safeAnswers,
+            answers: sanitizeAnswersForSession(answers, false),
         });
     }
 

@@ -1,15 +1,12 @@
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
 import { getActiveSyncGatewayAdapter } from '../../sync/gateway/registry';
+import { normalizeStorageHash } from './normalize-hash';
 
 export interface WorkspaceStorageUsageSnapshot {
     usedBytes: number;
     reservedBytes: number;
     filesByHash: Map<string, number>;
-}
-
-function normalizeHash(value: string): string {
-    return value.replace(/^sha256:/i, '').replace(/^md5:/i, '').trim().toLowerCase();
 }
 
 export async function getWorkspaceStorageUsageSnapshot(
@@ -50,7 +47,7 @@ export async function getWorkspaceStorageUsageSnapshot(
 
             for (const item of result.items) {
                 if (item.kind === 'metadata') {
-                    const key = normalizeHash(item.hash);
+                    const key = normalizeStorageHash(item.hash, ['sha256', 'md5']);
                     filesByHash.set(key, item.sizeBytes);
                     usedBytes += item.sizeBytes;
                 } else if (item.kind === 'reservation') {

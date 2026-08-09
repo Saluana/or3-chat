@@ -29,6 +29,16 @@ const providers = [
 
 const gates: Gate[] = [
     {
+        label: 'Provider version manifest drift',
+        cwd: root,
+        command: ['bun', 'run', 'provider-versions:check'],
+    },
+    {
+        label: 'Generated provider host contracts',
+        cwd: root,
+        command: ['bun', 'run', 'provider-host-contracts:check'],
+    },
+    {
         label: 'Provider compatibility matrix',
         cwd: root,
         command: ['bun', 'run', 'test:cloud:provider-compatibility'],
@@ -67,6 +77,11 @@ for (const provider of providers) {
             label: `${provider} type-check`,
             cwd,
             command: ['bun', 'run', 'type-check'],
+        },
+        {
+            label: `${provider} standalone type-check`,
+            cwd,
+            command: ['bun', 'run', 'type-check:standalone'],
         },
         {
             label: `${provider} tests`,

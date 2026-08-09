@@ -1,4 +1,4 @@
-import type { H3Event } from 'h3';
+import { createError, setResponseHeader, type H3Event } from 'h3';
 import { useRuntimeConfig } from '#imports';
 import {
     getClientIp as getProxyAwareClientIp,
@@ -245,4 +245,22 @@ export function checkGenericRateLimit(
         remaining: maxRequests - entry.count,
         resetAt: entry.windowStart + windowMs,
     };
+}
+
+/** Enforce the standard per-IP admin API budget and response shape. */
+export function enforceGenericAdminRateLimit(
+    event: H3Event,
+    category = 'admin-api',
+): void {
+    const result = checkGenericRateLimit(getClientIp(event), category);
+    if (result.allowed) return;
+    const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil((result.resetAt - Date.now()) / 1000),
+    );
+    setResponseHeader(event, 'Retry-After', retryAfterSeconds);
+    throw createError({
+        statusCode: 429,
+        statusMessage: 'Too many requests',
+    });
 }

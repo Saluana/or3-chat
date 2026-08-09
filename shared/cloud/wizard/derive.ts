@@ -28,8 +28,17 @@
  * @see WIZARD_OWNED_ENV_KEYS for the env var whitelist
  * @see deriveProviderModules for module ID resolution rules
  */
-import { LOCAL_PROVIDER_IDS, WIZARD_OWNED_ENV_KEYS } from './catalog';
+import { WIZARD_OWNED_ENV_KEYS } from './catalog';
+import { writeEnvAlias } from '../env-contract';
+import {
+    providerIdToModuleId,
+} from '../provider-compatibility';
 import { resolveEffectiveConnectProvider } from './connect-provider';
+import {
+    hasSelfHostedConvexInputs,
+    normalizeSelfHostedConvexInputs,
+} from './convex-self-hosted';
+import { usesConvexProvider, usesSqliteProvider } from './provider-usage';
 import type { WizardAnswers } from './types';
 
 function boolToEnv(value: boolean | undefined): string | undefined {
@@ -96,8 +105,8 @@ export function deriveProviderModules(answers: WizardAnswers): string[] {
     return Array.from(providerIds)
         .map((providerId) => providerId.trim())
         .filter((providerId) => providerId.length > 0)
-        .filter((providerId) => !LOCAL_PROVIDER_IDS.has(providerId))
-        .map((providerId) => `or3-provider-${providerId}/nuxt`)
+        .map(providerIdToModuleId)
+        .filter((moduleId): moduleId is string => moduleId !== null)
         .sort();
 }
 
@@ -123,9 +132,7 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
     const convexEnv: Record<string, string> = {};
 
     setEnv(env, 'SSR_AUTH_ENABLED', boolToEnv(answers.ssrAuthEnabled));
-    setEnv(env, 'AUTH_PROVIDER', answers.authProvider);
-    // Alias for forward compatibility with future naming cleanup.
-    setEnv(env, 'OR3_AUTH_PROVIDER', answers.authProvider);
+    writeEnvAlias(env, 'authProvider', answers.authProvider);
     setEnv(env, 'OR3_GUEST_ACCESS_ENABLED', boolToEnv(answers.guestAccessEnabled));
 
     // Managed-style Docker deployments get the same closed defaults as the
@@ -140,8 +147,7 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
         setEnv(env, 'OR3_ADMIN_ALLOW_REBUILD', 'false');
     }
 
-    setEnv(env, 'OR3_SYNC_ENABLED', boolToEnv(answers.syncEnabled));
-    setEnv(env, 'OR3_CLOUD_SYNC_ENABLED', boolToEnv(answers.syncEnabled));
+    writeEnvAlias(env, 'syncEnabled', boolToEnv(answers.syncEnabled));
     setEnv(env, 'OR3_SYNC_PROVIDER', answers.syncProvider);
 
     setEnv(
@@ -200,8 +206,7 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
         }
     }
 
-    setEnv(env, 'OR3_STORAGE_ENABLED', boolToEnv(answers.storageEnabled));
-    setEnv(env, 'OR3_CLOUD_STORAGE_ENABLED', boolToEnv(answers.storageEnabled));
+    writeEnvAlias(env, 'storageEnabled', boolToEnv(answers.storageEnabled));
     setEnv(env, 'NUXT_PUBLIC_STORAGE_PROVIDER', answers.storageProvider);
 
     setEnv(env, 'OR3_SITE_NAME', answers.or3SiteName);
@@ -317,10 +322,7 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
         setEnv(env, 'NUXT_CLERK_SECRET_KEY', answers.clerkSecretKey);
     }
 
-    const usesSqlite =
-        answers.syncProvider === 'sqlite' ||
-        (answers.connectEnabled &&
-            resolveEffectiveConnectProvider(answers) === 'sqlite');
+    const usesSqlite = usesSqliteProvider(answers);
     if (usesSqlite) {
         const sqliteDriver = answers.sqliteDriver ?? 'better-sqlite3';
         setEnv(env, 'OR3_SQLITE_DRIVER', sqliteDriver);
@@ -357,28 +359,25 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
         }
     }
 
-    const usesConvex =
-        (answers.syncEnabled && answers.syncProvider === 'convex') ||
-        (answers.storageEnabled && answers.storageProvider === 'convex') ||
-        (answers.connectEnabled &&
-            resolveEffectiveConnectProvider(answers) === 'convex');
+    const usesConvex = usesConvexProvider(answers);
     if (usesConvex) {
-        setEnv(env, 'VITE_CONVEX_URL', answers.convexUrl);
+        const selfHosted = normalizeSelfHostedConvexInputs(answers);
+        setEnv(env, 'VITE_CONVEX_URL', selfHosted.url ?? answers.convexUrl);
         if (usesInsecureHttp(answers.convexUrl)) {
             setEnv(env, 'OR3_CONVEX_ALLOW_INSECURE_HTTP', 'true');
         }
-        if ((answers.convexSelfHostedAdminKey?.trim() ?? '').length > 0) {
-            setEnv(env, 'CONVEX_SELF_HOSTED_URL', answers.convexUrl);
+        if (hasSelfHostedConvexInputs(selfHosted)) {
+            setEnv(env, 'CONVEX_SELF_HOSTED_URL', selfHosted.url);
         }
         setEnv(
             env,
             'CONVEX_SELF_HOSTED_ADMIN_KEY',
-            answers.convexSelfHostedAdminKey
+            selfHosted.adminKey
         );
         setEnv(
             env,
             'VITE_CONVEX_SITE_URL',
-            answers.convexSelfHostedSiteUrl
+            selfHosted.siteUrl
         );
     }
 
@@ -439,24 +438,22 @@ export function deriveEnvFromAnswers(answers: WizardAnswers): {
 export function deriveLocalDevConvexEnvLocalUpdates(
     answers: WizardAnswers
 ): Record<string, string | null> {
-    const usesConvex =
-        (answers.syncEnabled && answers.syncProvider === 'convex') ||
-        (answers.storageEnabled && answers.storageProvider === 'convex') ||
-        (answers.connectEnabled &&
-            resolveEffectiveConnectProvider(answers) === 'convex');
-    const isSelfHosted =
-        (answers.convexSelfHostedAdminKey?.trim() ?? '').length > 0 &&
-        (answers.convexUrl?.trim() ?? '').length > 0;
+    const usesConvex = usesConvexProvider(answers);
+    const selfHosted = normalizeSelfHostedConvexInputs(answers);
 
-    if (answers.deploymentTarget !== 'local-dev' || !usesConvex || !isSelfHosted) {
+    if (
+        answers.deploymentTarget !== 'local-dev' ||
+        !usesConvex ||
+        !hasSelfHostedConvexInputs(selfHosted)
+    ) {
         return {};
     }
 
     return {
-        CONVEX_SELF_HOSTED_URL: answers.convexUrl?.trim() ?? null,
-        CONVEX_SELF_HOSTED_ADMIN_KEY: answers.convexSelfHostedAdminKey?.trim() ?? null,
-        VITE_CONVEX_URL: answers.convexUrl?.trim() ?? null,
-        VITE_CONVEX_SITE_URL: answers.convexSelfHostedSiteUrl?.trim() ?? null,
+        CONVEX_SELF_HOSTED_URL: selfHosted.url,
+        CONVEX_SELF_HOSTED_ADMIN_KEY: selfHosted.adminKey,
+        VITE_CONVEX_URL: selfHosted.url,
+        VITE_CONVEX_SITE_URL: selfHosted.siteUrl ?? null,
         OR3_CONVEX_ALLOW_INSECURE_HTTP: usesInsecureHttp(answers.convexUrl) ? 'true' : null,
         CONVEX_DEPLOYMENT: null,
     };

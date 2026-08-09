@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readConfigEntries, writeConfigEntries } from '../config-manager';
 import { readEnvFile, writeEnvFile } from '../env-file';
-import { buildOr3CloudConfigFromEnv, buildOr3ConfigFromEnv } from '../resolve-config';
+import { validateEnvConfig } from '../resolve-config';
 
 vi.mock('../env-file', () => ({
     readEnvFile: vi.fn(),
@@ -9,8 +9,7 @@ vi.mock('../env-file', () => ({
 }));
 
 vi.mock('../resolve-config', () => ({
-    buildOr3ConfigFromEnv: vi.fn(),
-    buildOr3CloudConfigFromEnv: vi.fn(),
+    validateEnvConfig: vi.fn(),
 }));
 
 describe('config manager', () => {
@@ -59,8 +58,7 @@ describe('config manager', () => {
             { key: 'OPENROUTER_API_KEY', value: '******' },
         ]);
 
-        expect(buildOr3ConfigFromEnv).toHaveBeenCalled();
-        expect(buildOr3CloudConfigFromEnv).toHaveBeenCalled();
+        expect(validateEnvConfig).toHaveBeenCalled();
         expect(writeEnvFile).toHaveBeenCalledWith({
             OR3_SITE_NAME: 'New Name',
         });
@@ -77,7 +75,7 @@ describe('config manager', () => {
 
         await writeConfigEntries([{ key: 'OR3_MAX_FILE_SIZE_BYTES', value: null }]);
 
-        const validationEnv = vi.mocked(buildOr3ConfigFromEnv).mock.calls[0]?.[0] as Record<
+        const validationEnv = vi.mocked(validateEnvConfig).mock.calls[0]?.[0] as Record<
             string,
             unknown
         >;

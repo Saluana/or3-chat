@@ -33,6 +33,7 @@ import {
     restoreWizardRollbackSnapshots,
 } from '../../shared/cloud/wizard/deploy-rollback';
 import { applyConvexEnv } from '../../shared/cloud/wizard/deploy';
+import { waitForHttpReady } from '../../shared/cloud/wizard/dev-server';
 import type {
     WizardAnswers,
     WizardApplyResult,
@@ -193,29 +194,6 @@ function shouldApplyConvexEnv(answers: WizardAnswers): boolean {
     return (
         (answers.syncEnabled && answers.syncProvider === 'convex') ||
         (answers.storageEnabled && answers.storageProvider === 'convex')
-    );
-}
-
-async function waitForHttpReady(url: string, timeoutMs = 45000): Promise<void> {
-    const deadline = Date.now() + timeoutMs;
-    let lastError = '';
-
-    while (Date.now() < deadline) {
-        try {
-            const response = await fetch(url, { redirect: 'manual' });
-            await response.body?.cancel();
-            if (response.status === 0 || response.status < 600) {
-                return;
-            }
-            lastError = `HTTP ${response.status}`;
-        } catch (error) {
-            lastError = normalizeErrorMessage(error);
-        }
-        await new Promise((resolve) => setTimeout(resolve, 300));
-    }
-
-    throw new Error(
-        `Timed out waiting for ${url}${lastError ? ` (${lastError})` : ''}.`
     );
 }
 

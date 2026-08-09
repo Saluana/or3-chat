@@ -151,7 +151,7 @@ function isIdentifierUse(node: ts.Identifier): boolean {
 
 function autoImportNames(repoRoot: string): Set<string> {
     const names = new Set(CORE_NUXT_AUTO_IMPORTS);
-    const ledgerPath = resolve(repoRoot, 'planning/plugin-runtime-v2/compatibility-ledger.json');
+    const ledgerPath = resolve(repoRoot, 'planning/complete/plugin-runtime-v2/compatibility-ledger.json');
     const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as {
         modules?: Array<{ exports?: Array<{ name?: string; nuxtAutoImport?: boolean }> }>;
     };

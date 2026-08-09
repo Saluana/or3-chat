@@ -20,7 +20,7 @@
  * - Bounded LRU cache to avoid unbounded growth.
  */
 
-import { LRUCache } from 'lru-cache';
+import { createSlidingWindowRateLimiter } from '../rate-limit/sliding-window';
 
 /**
  * Purpose:
@@ -49,17 +49,11 @@ export interface LlmRateLimitResult {
     retryAfterMs?: number;
 }
 
-interface RateLimitEntry {
-    timestamps: number[];
-}
-
 const MAX_ENTRY_AGE_MS = 10 * 60 * 1000;
 
-const rateLimitStore = new LRUCache<string, RateLimitEntry>({
-    max: 20_000,
-    ttl: MAX_ENTRY_AGE_MS,
-    updateAgeOnGet: false,
-    updateAgeOnHas: false,
+const rateLimitStore = createSlidingWindowRateLimiter({
+    maxEntries: 20_000,
+    entryTtlMs: MAX_ENTRY_AGE_MS,
 });
 
 /**
@@ -87,39 +81,7 @@ export function checkAndRecordLlmRequest(
     key: string,
     config: LlmRateLimitConfig
 ): LlmRateLimitResult {
-    const now = Date.now();
-    const windowStart = now - config.windowMs;
-
-    let entry = rateLimitStore.get(key);
-
-    // Initialize or prune expired timestamps
-    if (!entry) {
-        entry = { timestamps: [] };
-    } else {
-        entry.timestamps = entry.timestamps.filter((ts) => ts > windowStart);
-    }
-
-    const requestCount = entry.timestamps.length;
-
-    // CHECK: If at limit, reject
-    if (requestCount >= config.maxRequests) {
-        const oldestInWindow = entry.timestamps[0]!;
-        const retryAfterMs = oldestInWindow + config.windowMs - now;
-        return {
-            allowed: false,
-            remaining: 0,
-            retryAfterMs: Math.max(0, retryAfterMs),
-        };
-    }
-
-    // RECORD: Atomic with check - add timestamp before returning
-    entry.timestamps.push(now);
-    rateLimitStore.set(key, entry);
-
-    return {
-        allowed: true,
-        remaining: config.maxRequests - entry.timestamps.length,
-    };
+    return rateLimitStore.checkAndRecord(key, config);
 }
 
 /**
@@ -130,29 +92,7 @@ function checkLlmRateLimitInternal(
     key: string,
     config: LlmRateLimitConfig
 ): LlmRateLimitResult {
-    const entry = rateLimitStore.get(key);
-    const now = Date.now();
-    const windowStart = now - config.windowMs;
-
-    if (!entry) {
-        return { allowed: true, remaining: config.maxRequests };
-    }
-
-    const recentRequests = entry.timestamps.filter((ts) => ts > windowStart);
-    const requestCount = recentRequests.length;
-    const remaining = Math.max(0, config.maxRequests - requestCount);
-
-    if (requestCount >= config.maxRequests) {
-        const oldestInWindow = recentRequests[0]!;
-        const retryAfterMs = oldestInWindow + config.windowMs - now;
-        return {
-            allowed: false,
-            remaining: 0,
-            retryAfterMs: Math.max(0, retryAfterMs),
-        };
-    }
-
-    return { allowed: true, remaining };
+    return rateLimitStore.check(key, config);
 }
 
 /**
@@ -188,7 +128,7 @@ export function getLlmRateLimitStats(
  */
 export function resetLlmRateLimits(key?: string): void {
     if (key) {
-        rateLimitStore.delete(key);
+        rateLimitStore.clear(key);
     } else {
         rateLimitStore.clear();
     }

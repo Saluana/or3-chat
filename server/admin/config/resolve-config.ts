@@ -52,23 +52,27 @@ import {
     DEFAULT_WEBHOOKS_MAX_RETRY_HOURS,
     DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS,
 } from '../../../shared/config/constants';
+import {
+    readEnvAlias,
+    readEnvBoolean,
+    readEnvFeature,
+    resolveStrictMode,
+} from '../../../shared/cloud/env-contract';
 
-export type EnvMap = Record<string, string | undefined>;
+export type { EnvMap } from '../../../shared/cloud/env-contract';
+import type { EnvMap } from '../../../shared/cloud/env-contract';
 export type BuildOr3CloudConfigFromEnvOptions = {
     strict?: boolean;
 };
 
-/**
- * Safely converts an environment variable string to a boolean.
- *
- * Behavior:
- * Interprets 'true', '1', 'yes', and 'on' as `true`. All other values,
- * including mixed case variations, are interpreted as `false` if `defaultValue`
- * is not provided.
- */
-function envBool(val: string | undefined, defaultValue: boolean): boolean {
-    if (val === undefined) return defaultValue;
-    return ['true', '1', 'yes', 'on'].includes(val.toLowerCase());
+export function validateEnvConfig(
+    env: EnvMap,
+    options: BuildOr3CloudConfigFromEnvOptions = {},
+) {
+    return {
+        or3Config: buildOr3ConfigFromEnv(env),
+        cloudConfig: buildOr3CloudConfigFromEnv(env, options),
+    };
 }
 
 /**
@@ -85,27 +89,6 @@ function envNum(
     if (val === undefined) return fallback;
     const parsed = Number(val);
     return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-/**
- * Helper for feature toggles that default to true unless explicitly disabled.
- *
- * Behavior:
- * Returns `false` ONLY if the input is the literal string 'false'. For all other
- * string values or `undefined`, it returns `true` (or remains `undefined` if
- * downstream logic handles the default).
- */
-function envFeature(val: string | undefined): boolean | undefined {
-    if (val === undefined) return undefined;
-    return val !== 'false';
-}
-
-function envFirst(env: EnvMap, ...keys: string[]): string | undefined {
-    for (const key of keys) {
-        const value = env[key];
-        if (value !== undefined) return value;
-    }
-    return undefined;
 }
 
 function parseSessionProvisioningFailureMode(
@@ -191,24 +174,24 @@ export function buildOr3ConfigFromEnv(env: EnvMap) {
         },
         features: {
             workflows: {
-                enabled: envFeature(env.OR3_WORKFLOWS_ENABLED),
-                editor: envFeature(env.OR3_WORKFLOWS_EDITOR),
-                slashCommands: envFeature(env.OR3_WORKFLOWS_SLASH_COMMANDS),
-                execution: envFeature(env.OR3_WORKFLOWS_EXECUTION),
+                enabled: readEnvFeature(env.OR3_WORKFLOWS_ENABLED),
+                editor: readEnvFeature(env.OR3_WORKFLOWS_EDITOR),
+                slashCommands: readEnvFeature(env.OR3_WORKFLOWS_SLASH_COMMANDS),
+                execution: readEnvFeature(env.OR3_WORKFLOWS_EXECUTION),
             },
             documents: {
-                enabled: envFeature(env.OR3_DOCUMENTS_ENABLED),
+                enabled: readEnvFeature(env.OR3_DOCUMENTS_ENABLED),
             },
             backup: {
-                enabled: envFeature(env.OR3_BACKUP_ENABLED),
+                enabled: readEnvFeature(env.OR3_BACKUP_ENABLED),
             },
             mentions: {
-                enabled: envFeature(env.OR3_MENTIONS_ENABLED),
-                documents: envFeature(env.OR3_MENTIONS_DOCUMENTS),
-                conversations: envFeature(env.OR3_MENTIONS_CONVERSATIONS),
+                enabled: readEnvFeature(env.OR3_MENTIONS_ENABLED),
+                documents: readEnvFeature(env.OR3_MENTIONS_DOCUMENTS),
+                conversations: readEnvFeature(env.OR3_MENTIONS_CONVERSATIONS),
             },
             dashboard: {
-                enabled: envFeature(env.OR3_DASHBOARD_ENABLED),
+                enabled: readEnvFeature(env.OR3_DASHBOARD_ENABLED),
             },
         },
         limits: {
@@ -250,29 +233,22 @@ export function buildOr3CloudConfigFromEnv(
     options: BuildOr3CloudConfigFromEnvOptions = {},
 ) {
     const authEnabled = env.SSR_AUTH_ENABLED === 'true';
-    const syncEnabledFlag = envFirst(
-        env,
-        'OR3_CLOUD_SYNC_ENABLED',
-        'OR3_SYNC_ENABLED',
-    );
-    const storageEnabledFlag = envFirst(
-        env,
-        'OR3_CLOUD_STORAGE_ENABLED',
-        'OR3_STORAGE_ENABLED',
-    );
+    const syncEnabledFlag = readEnvAlias(env, 'syncEnabled');
+    const storageEnabledFlag = readEnvAlias(env, 'storageEnabled');
     const syncEnabled = authEnabled && syncEnabledFlag !== 'false';
     const storageEnabled = authEnabled && storageEnabledFlag !== 'false';
     const authProvider =
-        envFirst(env, 'OR3_AUTH_PROVIDER', 'AUTH_PROVIDER') ??
+        readEnvAlias(env, 'authProvider') ??
         AUTH_PROVIDER_IDS.clerk;
     const syncProvider = env.OR3_SYNC_PROVIDER ?? DEFAULT_SYNC_PROVIDER_ID;
     const storageProvider =
         env.NUXT_PUBLIC_STORAGE_PROVIDER ?? DEFAULT_STORAGE_PROVIDER_ID;
-    const strict =
-        options.strict ??
-        ((env.NODE_ENV ?? process.env.NODE_ENV) === 'production' ||
-            (env.OR3_STRICT_CONFIG ?? process.env.OR3_STRICT_CONFIG) ===
-                'true');
+    const strict = resolveStrictMode({
+        env,
+        explicit: options.strict,
+        nodeEnv: env.NODE_ENV ?? process.env.NODE_ENV,
+        strictEnv: env.OR3_STRICT_CONFIG ?? process.env.OR3_STRICT_CONFIG,
+    });
 
     const config: Or3CloudConfig = {
         auth: {
@@ -287,7 +263,7 @@ export function buildOr3CloudConfigFromEnv(
                 env.OR3_SESSION_PROVISIONING_FAILURE,
             ),
             lockPage: {
-                enabled: envBool(env.OR3_AUTH_LOCK_PAGE_ENABLED, false),
+                enabled: readEnvBoolean(env.OR3_AUTH_LOCK_PAGE_ENABLED, false),
                 adapter: env.OR3_AUTH_LOCK_PAGE_ADAPTER || undefined,
             },
             clerk: {
@@ -359,7 +335,7 @@ export function buildOr3CloudConfigFromEnv(
                       .map((origin) => origin.trim())
                       .filter(Boolean)
                 : [],
-            forceHttps: envBool(
+            forceHttps: readEnvBoolean(
                 env.OR3_FORCE_HTTPS,
                 env.NODE_ENV === 'production',
             ),
@@ -381,19 +357,19 @@ export function buildOr3CloudConfigFromEnv(
                 : [],
             allowRestart: env.OR3_ADMIN_ALLOW_RESTART === 'true',
             allowRebuild: env.OR3_ADMIN_ALLOW_REBUILD === 'true',
-            disableNonCorePlugins: envBool(
+            disableNonCorePlugins: readEnvBoolean(
                 env.OR3_DISABLE_NON_CORE_PLUGINS,
                 false,
             ),
-            pluginZipInstallEnabled: envBool(
+            pluginZipInstallEnabled: readEnvBoolean(
                 env.OR3_PLUGIN_ZIP_INSTALL_ENABLED,
                 true,
             ),
-            pluginRuntimeShadowEnabled: envBool(
+            pluginRuntimeShadowEnabled: readEnvBoolean(
                 env.OR3_PLUGIN_RUNTIME_SHADOW_ENABLED,
                 true,
             ),
-            pluginRuntimeV2Enabled: envBool(
+            pluginRuntimeV2Enabled: readEnvBoolean(
                 env.OR3_PLUGIN_RUNTIME_V2_ENABLED,
                 true,
             ),
@@ -408,8 +384,8 @@ export function buildOr3CloudConfigFromEnv(
                           .map((surface) => surface.trim())
                           .filter(Boolean)
                     : [],
-            hookEngineV2Enabled: envBool(env.OR3_HOOK_ENGINE_V2_ENABLED, false),
-            pluginModuleLoaderV2Enabled: envBool(
+            hookEngineV2Enabled: readEnvBoolean(env.OR3_HOOK_ENGINE_V2_ENABLED, false),
+            pluginModuleLoaderV2Enabled: readEnvBoolean(
                 env.OR3_PLUGIN_MODULE_LOADER_V2_ENABLED,
                 false,
             ),
@@ -419,7 +395,7 @@ export function buildOr3CloudConfigFromEnv(
                           .map((workspaceId) => workspaceId.trim())
                           .filter(Boolean)
                     : [],
-            pluginIsolationEnabled: envBool(
+            pluginIsolationEnabled: readEnvBoolean(
                 env.OR3_PLUGIN_ISOLATION_ENABLED,
                 false,
             ),
@@ -490,7 +466,7 @@ export function buildOr3CloudConfigFromEnv(
                     env.OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS,
                     DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
                 ) ?? DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
-            blockPrivateIps: envBool(env.OR3_WEBHOOKS_BLOCK_PRIVATE_IPS, false),
+            blockPrivateIps: readEnvBoolean(env.OR3_WEBHOOKS_BLOCK_PRIVATE_IPS, false),
             encryptionKey:
                 env.OR3_WEBHOOKS_ENCRYPTION_KEY ||
                 env.OR3_ADMIN_JWT_SECRET ||

@@ -14,7 +14,7 @@
  * - Uses SSR Auth Gateway pattern.
  * - Backend agnostic (delegates via registry).
  */
-import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
+import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { resolveSessionContext } from '../../auth/session';
 import { requireCan } from '../../auth/can';
@@ -26,6 +26,7 @@ import {
     checkSyncRateLimit,
     recordSyncRequest,
 } from '../../utils/sync/rate-limiter';
+import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -82,14 +83,7 @@ export default defineEventHandler(async (event) => {
 
     // Rate limiting
     const rateLimitResult = checkSyncRateLimit(userId, 'storage:commit');
-    if (!rateLimitResult.allowed) {
-        const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
-        setResponseHeader(event, 'Retry-After', retryAfterSec);
-        throw createError({
-            statusCode: 429,
-            statusMessage: `Rate limit exceeded. Retry after ${retryAfterSec}s`,
-        });
-    }
+    enforceRateLimit(event, rateLimitResult);
 
     // Get storage gateway adapter from registry
     const adapter = getActiveStorageGatewayAdapter();

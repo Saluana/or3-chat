@@ -32,7 +32,12 @@ import {
     checkAndRecordLlmRequest,
 } from '../../utils/llm/rate-limiter';
 import { getRateLimitProvider } from '../../utils/rate-limit/store';
-import { getClientIp, normalizeProxyTrustConfig } from '../../utils/net/request-identity';
+import {
+    getClientIp,
+    getProxyRequestProtocol,
+    normalizeProxyTrustConfig,
+} from '../../utils/net/request-identity';
+import { normalizeHost } from '../../utils/normalize-host';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
 import {
     isBackgroundModeRequest,
@@ -68,26 +73,6 @@ function getOptionalBodyString(
 ): string | null {
     const value = body[key];
     return typeof value === 'string' && value.trim().length > 0 ? value : null;
-}
-
-function parseForwardedProto(raw: string | undefined): 'http' | 'https' | null {
-    if (!raw) return null;
-    const first = raw.split(',')[0]?.trim().toLowerCase();
-    if (first === 'http' || first === 'https') return first;
-    return null;
-}
-
-function resolveRequestProto(host: string, forwardedProto: string | undefined): 'http' | 'https' {
-    const trustedProto = parseForwardedProto(forwardedProto);
-    if (trustedProto) return trustedProto;
-
-    const normalizedHost = host.toLowerCase();
-    const isLocal =
-        /^localhost(?::\d+)?$/.test(normalizedHost) ||
-        /^127\.0\.0\.1(?::\d+)?$/.test(normalizedHost) ||
-        /^\[::1\](?::\d+)?$/.test(normalizedHost);
-
-    return isLocal ? 'http' : 'https';
 }
 
 export default defineEventHandler(async (event) => {
@@ -332,7 +317,10 @@ export default defineEventHandler(async (event) => {
         }
 
         const host = getHeader(event, 'host') || 'localhost';
-        const proto = resolveRequestProto(host, getHeader(event, 'x-forwarded-proto'));
+        const proto = getProxyRequestProtocol(
+            event,
+            normalizeProxyTrustConfig(config.security.proxy),
+        ) ?? (normalizeHost(host) === 'localhost' ? 'http' : 'https');
 
         try {
             logBgStream('api-stream-background-start-attempt', {
@@ -397,7 +385,10 @@ export default defineEventHandler(async (event) => {
     let upstream: Response;
     try {
         const host = getHeader(event, 'host') || 'localhost';
-        const proto = resolveRequestProto(host, getHeader(event, 'x-forwarded-proto'));
+        const proto = getProxyRequestProtocol(
+            event,
+            normalizeProxyTrustConfig(config.security.proxy),
+        ) ?? (normalizeHost(host) === 'localhost' ? 'http' : 'https');
 
         upstream = await fetchWithResponseDeadline(openRouterUrl, {
             method: 'POST',

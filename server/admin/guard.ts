@@ -21,13 +21,9 @@
 import { createError } from 'h3';
 import type { H3Event } from 'h3';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
-import { normalizeHost } from '../utils/normalize-host';
 import { useRuntimeConfig } from '#imports';
 import { requireSameOriginMutation } from '../utils/security/mutation-guard';
-import {
-    getProxyRequestHost,
-    normalizeProxyTrustConfig,
-} from '../utils/net/request-identity';
+import { requireAllowedAdminHost } from '../utils/security/admin-host-allowlist';
 
 /**
  * Purpose:
@@ -47,26 +43,7 @@ export function requireAdminRequest(event: H3Event): void {
 
     const config = useRuntimeConfig(event);
     
-    // Normalize and filter allowed hosts
-    const allowedHosts = config.admin.allowedHosts
-        .map((host) => host.trim())
-        .filter(Boolean)
-        .map((host) => normalizeHost(host));
-
-    if (allowedHosts.length === 0) return;
-
-    // Resolve true request host (handling proxies)
-    const proxyConfig = normalizeProxyTrustConfig(config.security.proxy);
-    const requestHost = getProxyRequestHost(event, proxyConfig);
-
-    if (!requestHost) {
-        throw createError({ statusCode: 404, statusMessage: 'Not Found' });
-    }
-
-    const normalizedHost = normalizeHost(requestHost);
-    if (!allowedHosts.includes(normalizedHost)) {
-        throw createError({ statusCode: 404, statusMessage: 'Not Found' });
-    }
+    requireAllowedAdminHost(event, config.admin.allowedHosts, config.security.proxy);
 }
 
 /**

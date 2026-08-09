@@ -44,140 +44,6 @@ const STEP_STORAGE_KEY = 'or3:wizard:step-id';
 const SESSION_STORAGE_KEY = 'or3:wizard:session-id';
 const WIZARD_TOKEN_KEY = 'or3:wizard:token';
 
-const FIELD_ERROR_RULES: Array<{
-    key: keyof WizardAnswers;
-    patterns: string[];
-}> = [
-    { key: 'instanceDir', patterns: ['INSTANCEDIR', 'PROJECT FOLDER'] },
-    { key: 'publicDomain', patterns: ['PUBLIC DOMAIN', 'OR3_PUBLIC_DOMAIN'] },
-    { key: 'or3SiteName', patterns: ['OR3_SITE_NAME'] },
-    { key: 'or3DefaultTheme', patterns: ['OR3_DEFAULT_THEME'] },
-    { key: 'basicAuthJwtSecret', patterns: ['OR3_BASIC_AUTH_JWT_SECRET'] },
-    {
-        key: 'basicAuthBootstrapEmail',
-        patterns: ['OR3_BASIC_AUTH_BOOTSTRAP_EMAIL'],
-    },
-    {
-        key: 'basicAuthBootstrapPassword',
-        patterns: ['OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD'],
-    },
-    { key: 'clerkPublishableKey', patterns: ['NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY'] },
-    { key: 'clerkSecretKey', patterns: ['NUXT_CLERK_SECRET_KEY'] },
-    { key: 'sqliteDriver', patterns: ['OR3_SQLITE_DRIVER'] },
-    { key: 'sqliteDbPath', patterns: ['OR3_SQLITE_DB_PATH'] },
-    { key: 'sqliteTursoUrl', patterns: ['OR3_SQLITE_TURSO_URL'] },
-    {
-        key: 'sqliteTursoAuthToken',
-        patterns: ['OR3_SQLITE_TURSO_AUTH_TOKEN'],
-    },
-    { key: 'sqliteD1Binding', patterns: ['OR3_SQLITE_D1_BINDING'] },
-    { key: 'convexUrl', patterns: ['VITE_CONVEX_URL'] },
-    { key: 'connectPublicUrl', patterns: ['OR3_CONNECT_PUBLIC_URL'] },
-    {
-        key: 'connectEncryptionKey',
-        patterns: ['OR3_CONNECT_ENCRYPTION_KEY'],
-    },
-    {
-        key: 'connectMaxComputers',
-        patterns: ['OR3_CONNECT_MAX_COMPUTERS'],
-    },
-    {
-        key: 'connectCloudflareApiToken',
-        patterns: ['OR3_CONNECT_CLOUDFLARE_API_TOKEN'],
-    },
-    {
-        key: 'connectHostnameSuffix',
-        patterns: ['OR3_CONNECT_HOSTNAME_SUFFIX'],
-    },
-    { key: 'fsRoot', patterns: ['OR3_STORAGE_FS_ROOT'] },
-    { key: 'fsTokenSecret', patterns: ['OR3_STORAGE_FS_TOKEN_SECRET'] },
-    { key: 's3Endpoint', patterns: ['OR3_STORAGE_S3_ENDPOINT'] },
-    { key: 's3Region', patterns: ['OR3_STORAGE_S3_REGION'] },
-    { key: 's3Bucket', patterns: ['OR3_STORAGE_S3_BUCKET'] },
-    { key: 's3AccessKeyId', patterns: ['OR3_STORAGE_S3_ACCESS_KEY_ID'] },
-    { key: 's3SecretAccessKey', patterns: ['OR3_STORAGE_S3_SECRET_ACCESS_KEY'] },
-    { key: 'openrouterInstanceApiKey', patterns: ['OPENROUTER_API_KEY'] },
-    {
-        key: 'openrouterAllowUserOverride',
-        patterns: ['OR3_OPENROUTER_ALLOW_USER_OVERRIDE'],
-    },
-    {
-        key: 'openrouterRequireUserKey',
-        patterns: ['OR3_OPENROUTER_REQUIRE_USER_KEY'],
-    },
-    { key: 'requestsPerMinute', patterns: ['OR3_REQUESTS_PER_MINUTE'] },
-    { key: 'maxConversations', patterns: ['OR3_MAX_CONVERSATIONS'] },
-    { key: 'maxMessagesPerDay', patterns: ['OR3_MAX_MESSAGES_PER_DAY'] },
-    { key: 'allowedOrigins', patterns: ['OR3_ALLOWED_ORIGINS'] },
-    { key: 'trustProxy', patterns: ['OR3_TRUST_PROXY'] },
-    { key: 'forwardedForHeader', patterns: ['OR3_FORWARDED_FOR_HEADER'] },
-    { key: 'strictConfig', patterns: ['OR3_STRICT_CONFIG'] },
-    { key: 'adminUsername', patterns: ['OR3_ADMIN_USERNAME'] },
-    { key: 'adminPassword', patterns: ['OR3_ADMIN_PASSWORD'] },
-];
-
-const STEP_ERROR_RULES: Array<{
-    stepId: string;
-    patterns: string[];
-}> = [
-    { stepId: 'target', patterns: ['INSTANCEDIR', 'ENV'] },
-    {
-        stepId: 'branding',
-        patterns: ['OR3_SITE_NAME', 'OR3_LOGO_URL', 'OR3_FAVICON_URL'],
-    },
-    { stepId: 'themes', patterns: ['OR3_DEFAULT_THEME'] },
-    {
-        stepId: 'providers',
-        patterns: [
-            'SSR_AUTH_ENABLED',
-            'AUTH_PROVIDER',
-            'OR3_AUTH_PROVIDER',
-            'OR3_SYNC_PROVIDER',
-            'NUXT_PUBLIC_STORAGE_PROVIDER',
-            'OR3_CLOUD_SYNC_ENABLED',
-            'OR3_CLOUD_STORAGE_ENABLED',
-        ],
-    },
-    {
-        stepId: 'provider-auth',
-        patterns: ['OR3_BASIC_AUTH_', 'NUXT_PUBLIC_CLERK_', 'NUXT_CLERK_SECRET_'],
-    },
-    {
-        stepId: 'provider-sync',
-        patterns: ['OR3_SQLITE_', 'VITE_CONVEX_URL', 'CONVEX_SELF_HOSTED_'],
-    },
-    {
-        stepId: 'provider-storage',
-        patterns: ['OR3_STORAGE_FS_', 'OR3_STORAGE_S3_'],
-    },
-    {
-        stepId: 'connect',
-        patterns: ['OR3_CONNECT_'],
-    },
-    {
-        stepId: 'openrouter-limits-security',
-        patterns: [
-            'OPENROUTER_',
-            'OR3_OPENROUTER_',
-            'OR3_REQUESTS_PER_MINUTE',
-            'OR3_MAX_CONVERSATIONS',
-            'OR3_MAX_MESSAGES_PER_DAY',
-            'OR3_ALLOWED_ORIGINS',
-            'OR3_TRUST_PROXY',
-            'OR3_FORWARDED_FOR_HEADER',
-            'OR3_STRICT_CONFIG',
-        ],
-    },
-    {
-        stepId: 'convex-env',
-        patterns: ['CLERK_ISSUER_URL', 'OR3_ADMIN_JWT_SECRET'],
-    },
-    {
-        stepId: 'admin-dashboard',
-        patterns: ['OR3_ADMIN_USERNAME', 'OR3_ADMIN_PASSWORD'],
-    },
-];
-
 function normalizeAnswers(input: Partial<WizardAnswers>): WizardAnswers {
     const defaults = createDefaultAnswers({
         instanceDir: input.instanceDir ?? '/',
@@ -312,7 +178,11 @@ function normalizeErrorMessage(error: unknown): string {
 function isWizardValidationResult(value: unknown): value is WizardValidationResult {
     if (!value || typeof value !== 'object') return false;
     const candidate = value as Partial<WizardValidationResult>;
-    return Array.isArray(candidate.errors) && Array.isArray(candidate.warnings);
+    return (
+        Array.isArray(candidate.errors) &&
+        Array.isArray(candidate.issues) &&
+        Array.isArray(candidate.warnings)
+    );
 }
 
 function extractDeployErrorPayload(error: unknown): DeployResponse | null {
@@ -770,30 +640,11 @@ export function useWizardSession() {
         const nextInvalidSteps = new Set<string>();
         let firstStepId: string | null = null;
 
-        for (const errorMessage of validation.errors) {
-            const upper = errorMessage.toUpperCase();
-            let matchedFieldKey: keyof WizardAnswers | null = null;
-
-            for (const rule of FIELD_ERROR_RULES) {
-                if (rule.patterns.some((pattern) => upper.includes(pattern))) {
-                    matchedFieldKey = rule.key;
-                    if (!nextFieldErrors[rule.key]) {
-                        nextFieldErrors[rule.key] = errorMessage;
-                    }
-                    break;
-                }
+        for (const issue of validation.issues) {
+            if (issue.field && !nextFieldErrors[issue.field]) {
+                nextFieldErrors[issue.field] = issue.message;
             }
-
-            let stepId = matchedFieldKey ? findStepIdForField(matchedFieldKey) : null;
-            if (!stepId) {
-                for (const rule of STEP_ERROR_RULES) {
-                    if (rule.patterns.some((pattern) => upper.includes(pattern))) {
-                        stepId = rule.stepId;
-                        break;
-                    }
-                }
-            }
-
+            const stepId = issue.stepId;
             if (stepId && visibleSteps.value.some((step) => step.id === stepId)) {
                 nextInvalidSteps.add(stepId);
                 if (!firstStepId) firstStepId = stepId;

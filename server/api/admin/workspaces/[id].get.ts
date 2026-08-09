@@ -11,7 +11,7 @@ import {
     getWorkspaceSettingsStore,
 } from '../../../admin/stores/registry';
 import { isAdminEnabled } from '../../../utils/admin/is-admin-enabled';
-import { checkGenericRateLimit, getClientIp } from '../../../admin/auth/rate-limit';
+import { enforceGenericAdminRateLimit } from '../../../admin/auth/rate-limit';
 
 /**
  * GET /api/admin/workspaces/:id
@@ -34,15 +34,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Rate limit check
-    const clientIp = getClientIp(event);
-    const rateLimit = checkGenericRateLimit(clientIp, 'admin-api');
-    
-    if (!rateLimit.allowed) {
-        throw createError({
-            statusCode: 429,
-            statusMessage: 'Too many requests',
-        });
-    }
+    enforceGenericAdminRateLimit(event);
 
     // Require admin context
     await requireAdminApiContext(event, { superAdminOnly: true });

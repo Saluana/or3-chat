@@ -13,8 +13,8 @@ interface LedgerConfig {
 }
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const configPath = resolve(repoRoot, 'planning/plugin-runtime-v2/compatibility-ledger.modules.json');
-const snapshotDir = resolve(repoRoot, 'planning/plugin-runtime-v2/snapshots');
+const configPath = resolve(repoRoot, 'planning/complete/plugin-runtime-v2/compatibility-ledger.modules.json');
+const snapshotDir = resolve(repoRoot, 'planning/complete/plugin-runtime-v2/snapshots');
 const publicApiSnapshot = resolve(snapshotDir, 'public-api.d.ts');
 const nuxtImportsSnapshot = resolve(snapshotDir, 'nuxt-auto-imports.d.ts');
 const tsconfigPath = resolve(repoRoot, '.nuxt/tsconfig.app.json');

@@ -9,7 +9,7 @@
  * - Checks rate limits (`auth:session`) by IP to prevent enumeration.
  * - Disables caching (`Cache-Control: no-store`) to prevent leakage.
  */
-import { defineEventHandler, createError, setResponseHeader } from 'h3';
+import { defineEventHandler, setResponseHeader } from 'h3';
 import { resolveSessionContext } from '../../auth/session';
 import { resolveEntitlements } from '../../auth/entitlements/registry';
 import { can } from '../../auth/can';
@@ -20,6 +20,7 @@ import {
     getSyncRateLimitStats,
 } from '../../utils/sync/rate-limiter';
 import { getClientIp, normalizeProxyTrustConfig } from '../../utils/net/request-identity';
+import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 
 /**
  * GET /api/auth/session
@@ -54,14 +55,7 @@ export default defineEventHandler(async (event) => {
     // Rate limit per IP to prevent session enumeration and DOS
     const rateLimitResult = checkSyncRateLimit(clientIP, 'auth:session');
     
-    if (!rateLimitResult.allowed) {
-        const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
-        setResponseHeader(event, 'Retry-After', retryAfterSec);
-        throw createError({
-            statusCode: 429,
-            statusMessage: `Rate limit exceeded. Retry after ${retryAfterSec}s`,
-        });
-    }
+    enforceRateLimit(event, rateLimitResult);
 
     // Add rate limit headers for client visibility
     const stats = getSyncRateLimitStats(clientIP, 'auth:session');

@@ -19,6 +19,7 @@ import {
     SYNC_HISTORY_GC_POLICY,
     supportsSyncHistoryRetention,
 } from '~~/shared/sync/history-gc-policy';
+import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 
 const GcRequestSchema = z.object({
     scope: SyncScopeSchema,
@@ -72,12 +73,11 @@ export default defineEventHandler(async (event) => {
     // Rate limiting for GC operations (even admins need limits)
     const { checkSyncRateLimit, recordSyncRequest } = await import('../../utils/sync/rate-limiter');
     const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:gc');
-    if (!rateLimitResult.allowed) {
-        throw createError({
-            statusCode: 429,
-            statusMessage: 'Too many GC requests. Please wait before retrying.',
-        });
-    }
+    enforceRateLimit(
+        event,
+        rateLimitResult,
+        'Too many GC requests. Please wait before retrying.'
+    );
 
     // Get sync gateway adapter from registry
     const adapter = getActiveSyncGatewayAdapter();

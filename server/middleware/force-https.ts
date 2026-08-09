@@ -1,5 +1,10 @@
 import { defineEventHandler, getHeader, sendRedirect } from 'h3';
 import { useRuntimeConfig } from '#imports';
+import { normalizeHost } from '../utils/normalize-host';
+import {
+    getProxyRequestProtocol,
+    normalizeProxyTrustConfig,
+} from '../utils/net/request-identity';
 
 /**
  * @module server/middleware/force-https
@@ -45,38 +50,15 @@ export default defineEventHandler((event) => {
 
     const host = getHeader(event, 'host');
     if (!host) return;
-    if (isLoopbackHost(host)) return;
+    if (normalizeHost(host) === 'localhost') return;
 
-    const trustProxy = config.security.proxy.trustProxy === true;
-    const xfProto = trustProxy ? parseForwardedProto(getHeader(event, 'x-forwarded-proto')) : null;
-    const socket = event.node.req.socket as (typeof event.node.req.socket & {
-        encrypted?: boolean;
-    });
-    const proto = xfProto ?? (socket.encrypted ? 'https' : 'http');
+    const proto = getProxyRequestProtocol(
+        event,
+        normalizeProxyTrustConfig(config.security.proxy),
+    );
 
     if (proto === 'https') return;
 
     const target = `https://${host}${event.node.req.url || ''}`;
     return sendRedirect(event, target, 301);
 });
-
-function parseForwardedProto(raw: string | undefined): 'http' | 'https' | null {
-    if (!raw) return null;
-    const first = raw.split(',')[0]?.trim().toLowerCase();
-    if (first === 'http' || first === 'https') return first;
-    return null;
-}
-
-function normalizeHost(rawHost: string): string {
-    const host = rawHost.trim().toLowerCase();
-    if (host.startsWith('[')) {
-        const end = host.indexOf(']');
-        return end > 0 ? host.slice(1, end) : host;
-    }
-    return host.split(':')[0] ?? host;
-}
-
-function isLoopbackHost(rawHost: string): boolean {
-    const host = normalizeHost(rawHost);
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
-}

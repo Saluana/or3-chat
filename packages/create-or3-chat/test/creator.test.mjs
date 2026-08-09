@@ -166,7 +166,7 @@ test('Docker manifest preparation prunes inactive providers and replaces pinned 
         },
     });
 
-    assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.7');
+    assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.8');
     assert.equal(manifest.dependencies['or3-provider-clerk'], undefined);
     assert.equal(manifest.dependencies['or3-provider-convex'], undefined);
     assert.equal(manifest.dependencies['or3-provider-s3'], undefined);
@@ -204,11 +204,11 @@ test('generated template has registry-clean first-party dependencies', async () 
     const providerVersions = JSON.parse(
         await readFile(new URL('packages/create-or3-chat/first-party-versions.json', templateUrl), 'utf8')
     );
-    assert.equal(providerVersions['or3-provider-basic-auth'], '0.0.7');
+    assert.equal(providerVersions['or3-provider-basic-auth'], '0.0.8');
     const dockerignore = await readFile(new URL('.dockerignore', templateUrl), 'utf8');
     assert.match(dockerignore, /^\.or3-initial-credentials$/m);
     assert.equal(manifest.dependencies['@or3/intern-client'], '0.1.1');
-    assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.7');
+    assert.equal(manifest.dependencies['or3-provider-basic-auth'], '0.0.8');
     for (const [name, version] of Object.entries(manifest.dependencies)) {
         if (String(version).startsWith('file:')) {
             assert.equal(name, '@or3/plugin-sdk');

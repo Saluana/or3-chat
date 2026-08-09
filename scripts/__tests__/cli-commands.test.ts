@@ -11,7 +11,10 @@ import { readFile, rm, mkdir, mkdtemp, stat, writeFile } from 'node:fs/promises'
 import { join } from 'path';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
-import { writeInitialCredentialsFile } from '../cli/or3-cloud';
+import {
+    serializeInitialCredentials,
+    writeInitialCredentialsFile,
+} from '../cli/or3-cloud';
 
 type CliRunResult = {
     exitCode: number;
@@ -105,6 +108,38 @@ describe('CLI Commands', () => {
             } finally {
                 await rm(workspaceDir, { recursive: true, force: true });
             }
+        });
+
+        it('uses the documented KEY=value initial-credentials format', () => {
+            expect(
+                serializeInitialCredentials({
+                    bootstrapEmail: 'admin@example.com',
+                    bootstrapPassword: 'GeneratedPassword123',
+                    adminUsername: 'admin@example.com',
+                    adminPassword: 'GeneratedPassword123',
+                })
+            ).toBe(
+                '# OR3 first-run credentials — move to a password manager, then delete this file.\n' +
+                    'OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=admin@example.com\n' +
+                    'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=GeneratedPassword123\n' +
+                    'OR3_ADMIN_USERNAME=admin@example.com\n' +
+                    'OR3_ADMIN_PASSWORD=GeneratedPassword123\n'
+            );
+        });
+
+        it('quotes unsafe credential values and rejects line injection', () => {
+            expect(
+                serializeInitialCredentials({
+                    bootstrapPassword: "A$word with \\slashes and 'quotes' 123",
+                })
+            ).toContain(
+                "OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD='A$word with \\\\slashes and \\'quotes\\' 123'"
+            );
+            expect(() =>
+                serializeInitialCredentials({
+                    adminPassword: 'AValidPassword123\nOR3_ADMIN_PASSWORD=injected',
+                })
+            ).toThrow('newline');
         });
 
         it('keeps fast-setup passwords out of terminal output', async () => {

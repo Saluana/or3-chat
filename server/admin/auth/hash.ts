@@ -3,6 +3,7 @@
  * Server-side only.
  */
 import bcrypt from 'bcryptjs';
+import { getAdminPasswordPolicyFailures } from '../../../shared/cloud/wizard/admin-dashboard';
 
 /**
  * Hash a password using bcrypt with cost factor 12.
@@ -39,23 +40,18 @@ export function validatePasswordStrength(password: string): {
     valid: boolean;
     errors: string[];
 } {
-    const errors: string[] = [];
-
-    if (password.length < 12) {
-        errors.push('Password must be at least 12 characters long');
-    }
-
-    if (!/[A-Z]/.test(password)) {
-        errors.push('Password must contain at least one uppercase letter');
-    }
-
-    if (!/[a-z]/.test(password)) {
-        errors.push('Password must contain at least one lowercase letter');
-    }
-
-    if (!/[0-9]/.test(password)) {
-        errors.push('Password must contain at least one number');
-    }
+    const errors = getAdminPasswordPolicyFailures(password).map((failure) => {
+        if (failure === 'minLength') {
+            return 'Password must be at least 12 characters long';
+        }
+        if (failure === 'uppercase') {
+            return 'Password must contain at least one uppercase letter';
+        }
+        if (failure === 'lowercase') {
+            return 'Password must contain at least one lowercase letter';
+        }
+        return 'Password must contain at least one number';
+    });
 
     return {
         valid: errors.length === 0,

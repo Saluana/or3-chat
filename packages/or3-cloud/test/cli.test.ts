@@ -18,10 +18,14 @@ import {
   redact,
   requiredArchiveSpace,
   selectPruneTargets,
+  serializeInitialCredentials,
   serializeEnv,
   stateFromEnv,
   supportedImageArchitectures,
+  validatePassword,
 } from '../src/cli';
+import { ADMIN_PASSWORD_POLICY_VECTORS } from '../../../shared/cloud/wizard/admin-password-policy-vectors';
+import { MANAGED_PROFILE_SHARED_ENV } from '../../../shared/cloud/wizard/managed-profile-contract';
 
 test('round trips the generated env format without losing values', () => {
   const source = {
@@ -30,6 +34,50 @@ test('round trips the generated env format without losing values', () => {
     OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD: 'A secret with no newline',
   };
   expect(parseEnv(serializeEnv(source))).toEqual(source);
+});
+
+test('serializes first-run credentials as documented KEY=value lines', () => {
+  expect(serializeInitialCredentials({
+    bootstrapEmail: 'admin@example.com',
+    bootstrapPassword: 'GeneratedPassword123',
+    adminUsername: 'admin@example.com',
+    adminPassword: 'GeneratedPassword123',
+  })).toBe(
+    '# OR3 first-run credentials — move to a password manager, then delete this file.\n' +
+      'OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=admin@example.com\n' +
+      'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=GeneratedPassword123\n' +
+      'OR3_ADMIN_USERNAME=admin@example.com\n' +
+      'OR3_ADMIN_PASSWORD=GeneratedPassword123\n',
+  );
+});
+
+test('serializes special credential values safely and rejects line injection', () => {
+  const password = "A$word with \\slashes and 'quotes' 123";
+  expect(parseEnv(serializeInitialCredentials({
+    bootstrapEmail: 'admin@example.com',
+    bootstrapPassword: password,
+    adminUsername: 'admin@example.com',
+    adminPassword: password,
+  }))).toMatchObject({
+    OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD: password,
+    OR3_ADMIN_PASSWORD: password,
+  });
+  expect(() => serializeInitialCredentials({
+    bootstrapEmail: 'admin@example.com',
+    bootstrapPassword: 'AValidPassword123\nOR3_ADMIN_PASSWORD=injected',
+    adminUsername: 'admin@example.com',
+    adminPassword: 'AValidPassword123',
+  })).toThrow('newline');
+});
+
+test('uses the canonical administrator password policy vectors', () => {
+  for (const vector of ADMIN_PASSWORD_POLICY_VECTORS) {
+    if (vector.valid) {
+      expect(() => validatePassword(vector.value)).not.toThrow();
+    } else {
+      expect(() => validatePassword(vector.value)).toThrow();
+    }
+  }
 });
 
 test('serializes Compose-sensitive values literally and rejects newlines', () => {
@@ -47,9 +95,9 @@ test('builds the fixed local cloud profile with persistent paths', () => {
     password: 'AValidPassword123',
     port: 3000,
   });
-  expect(env.AUTH_PROVIDER).toBe('basic-auth');
-  expect(env.OR3_SYNC_PROVIDER).toBe('sqlite');
-  expect(env.NUXT_PUBLIC_STORAGE_PROVIDER).toBe('fs');
+  for (const [key, value] of Object.entries(MANAGED_PROFILE_SHARED_ENV)) {
+    expect(env[key]).toBe(value);
+  }
   expect(env.OR3_BASIC_AUTH_DB_PATH).toBe('/data/auth.sqlite');
   expect(env.OR3_SQLITE_DB_PATH).toBe('/data/sync.sqlite');
   expect(env.OR3_STORAGE_FS_ROOT).toBe('/data/storage');

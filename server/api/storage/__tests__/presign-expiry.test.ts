@@ -4,6 +4,7 @@ import {
     DEFAULT_PRESIGN_EXPIRY_MS,
     MAX_PRESIGN_EXPIRY_MS,
     clampPresignExpiryMs,
+    resolvePresignExpiresAt,
 } from '../../../utils/storage/presign-expiry';
 
 const readBodyMock = vi.fn();
@@ -104,6 +105,25 @@ describe('presign expiry handling', () => {
         expect(clampPresignExpiryMs(MAX_PRESIGN_EXPIRY_MS * 2)).toBe(
             MAX_PRESIGN_EXPIRY_MS
         );
+    });
+
+    it('prefers a provider expiry, including the legacy snake_case field', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
+
+        expect(
+            resolvePresignExpiresAt({ expiresAt: 1_234 }, MAX_PRESIGN_EXPIRY_MS)
+        ).toBe(1_234);
+        expect(
+            resolvePresignExpiresAt({ expires_at: '2025-01-01T00:10:00.000Z' })
+        ).toBe(new Date('2025-01-01T00:10:00.000Z').getTime());
+        expect(
+            resolvePresignExpiresAt({
+                expiresAt: Date.now() + MAX_PRESIGN_EXPIRY_MS * 2,
+            })
+        ).toBe(Date.now() + MAX_PRESIGN_EXPIRY_MS);
+
+        vi.useRealTimers();
     });
 
     it('uses provider expiry when available (upload)', async () => {

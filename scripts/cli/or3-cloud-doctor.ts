@@ -4,8 +4,9 @@
  */
 import { accessSync, constants, existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { createServer } from 'node:net';
 import { preflightConvex } from '../../shared/cloud/wizard/deploy';
+import { isPortAvailable as sharedIsPortAvailable } from '../../shared/cloud/wizard/dev-server';
+import { LOCAL_PROVIDER_IDS } from '../../shared/cloud/provider-compatibility';
 import type { Or3CloudConfig } from '../../types/or3-cloud-config';
 
 export type DoctorCheckResult = {
@@ -13,13 +14,6 @@ export type DoctorCheckResult = {
     /** Hard failures (missing required packages). Warnings do not flip this. */
     exitCode: number;
 };
-
-const LOCAL_PROVIDER_IDS = new Set([
-    'custom',
-    'memory',
-    'redis',
-    'postgres',
-]);
 
 export function providerPackageInstalled(
     providerId: string,
@@ -58,20 +52,7 @@ export function checkWritableDir(pathValue: string): boolean {
     }
 }
 
-export async function isPortAvailable(port: number): Promise<boolean> {
-    if (!Number.isInteger(port) || port < 1 || port > 65535) {
-        return false;
-    }
-
-    return new Promise((resolvePromise) => {
-        const server = createServer();
-        server.once('error', () => resolvePromise(false));
-        server.once('listening', () => {
-            server.close(() => resolvePromise(true));
-        });
-        server.listen(port, '127.0.0.1');
-    });
-}
+export const isPortAvailable = sharedIsPortAvailable;
 
 export async function runDoctorChecks(input: {
     config: Or3CloudConfig;
@@ -176,7 +157,10 @@ export async function runDoctorChecks(input: {
             : `  ⚠️  Port ${port} is already in use — another dev server may fail to start.`
     );
 
-    if (syncProvider === 'convex' && config.sync.enabled) {
+    if (
+        (syncProvider === 'convex' && config.sync.enabled) ||
+        (storageProvider === 'convex' && config.storage.enabled)
+    ) {
         const convexWarnings = await preflightConvex(cwd);
         if (convexWarnings.length === 0) {
             lines.push('  ✅ Convex CLI is accessible and project detected');

@@ -12,12 +12,13 @@ import { listConnectStoreIds } from '../connect/store/registry';
 import { listConnectRelayIds } from '../connect/relay/registry';
 import { parseConnectMaxComputers } from '../connect/config';
 import { useRuntimeConfig } from '#imports';
+import { resolveStrictMode } from '../../shared/cloud/env-contract';
 
 function isStrictMode(): boolean {
-    return (
-        process.env.NODE_ENV === 'production' ||
-        process.env.OR3_STRICT_CONFIG === 'true'
-    );
+    return resolveStrictMode({
+        nodeEnv: process.env.NODE_ENV,
+        strictEnv: process.env.OR3_STRICT_CONFIG,
+    });
 }
 
 export default defineNitroPlugin(() => {

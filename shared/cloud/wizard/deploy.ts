@@ -31,11 +31,16 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import crossSpawn from 'cross-spawn';
 import { deriveEnvFromAnswers } from './derive';
-import { resolveEffectiveConnectProvider } from './connect-provider';
+import {
+    hasSelfHostedConvexInputs,
+    normalizeSelfHostedConvexInputs,
+} from './convex-self-hosted';
+import { usesConvexProvider } from './provider-usage';
 import {
     execPackageCommand,
     formatCommand,
     installCommand,
+    runForegroundCommand,
     runScriptCommand,
     type PackageManager,
 } from './package-manager';
@@ -49,85 +54,23 @@ type CommandSpec = {
     env?: NodeJS.ProcessEnv;
 };
 
-function usesConvexProvider(
-    answers: Pick<
-        WizardAnswers,
-        | 'syncEnabled'
-        | 'syncProvider'
-        | 'storageEnabled'
-        | 'storageProvider'
-        | 'connectEnabled'
-        | 'connectProvider'
-        | 'allAdvancedEnabled'
-        | 'connectAdvancedEnabled'
-    >
-): boolean {
-    return (
-        (answers.syncEnabled && answers.syncProvider === 'convex') ||
-        (answers.storageEnabled && answers.storageProvider === 'convex') ||
-        (answers.connectEnabled &&
-            resolveEffectiveConnectProvider(answers) === 'convex')
-    );
-}
-
-function isSelfHostedConvex(
-    answers: Pick<WizardAnswers, 'convexSelfHostedAdminKey' | 'convexUrl'>
-): boolean {
-    return (
-        (answers.convexSelfHostedAdminKey?.trim() ?? '').length > 0 &&
-        (answers.convexUrl?.trim() ?? '').length > 0
-    );
-}
-
 function buildConvexCliEnv(answers: WizardAnswers): NodeJS.ProcessEnv {
     const nextEnv: NodeJS.ProcessEnv = { ...process.env };
-    if (!isSelfHostedConvex(answers)) {
+    const selfHosted = normalizeSelfHostedConvexInputs(answers);
+    if (!hasSelfHostedConvexInputs(selfHosted)) {
         return nextEnv;
     }
 
-    nextEnv.CONVEX_SELF_HOSTED_URL = answers.convexUrl!.trim();
-    nextEnv.CONVEX_SELF_HOSTED_ADMIN_KEY = answers.convexSelfHostedAdminKey!.trim();
-    nextEnv.VITE_CONVEX_URL = answers.convexUrl!.trim();
-    if ((answers.convexSelfHostedSiteUrl?.trim() ?? '').length > 0) {
-        nextEnv.VITE_CONVEX_SITE_URL = answers.convexSelfHostedSiteUrl!.trim();
+    nextEnv.CONVEX_SELF_HOSTED_URL = selfHosted.url;
+    nextEnv.CONVEX_SELF_HOSTED_ADMIN_KEY = selfHosted.adminKey;
+    nextEnv.VITE_CONVEX_URL = selfHosted.url;
+    if (selfHosted.siteUrl) {
+        nextEnv.VITE_CONVEX_SITE_URL = selfHosted.siteUrl;
     }
     // Prevent mixed-mode conflict when a stale deployment value exists.
     delete nextEnv.CONVEX_DEPLOYMENT;
 
     return nextEnv;
-}
-
-function runCommand(spec: CommandSpec, cwd: string): Promise<void> {
-    return new Promise((resolvePromise, rejectPromise) => {
-        const child = crossSpawn(spec.command, spec.args, {
-            cwd,
-            stdio: 'inherit',
-            shell: false,
-            env: spec.env ?? process.env,
-        });
-
-        child.on('error', (error) => {
-            rejectPromise(
-                new Error(
-                    `${spec.step} failed: "${spec.command} ${spec.args.join(' ')}" (${error.message})`
-                )
-            );
-        });
-
-        child.on('exit', (code) => {
-            if (code === 0) {
-                resolvePromise();
-                return;
-            }
-            rejectPromise(
-                new Error(
-                    `${spec.step} failed with exit code ${code}: "${spec.command} ${spec.args.join(
-                        ' '
-                    )}"`
-                )
-            );
-        });
-    });
 }
 
 function runCommandCapture(
@@ -165,11 +108,15 @@ function runCommandCapture(
     });
 }
 
-function hasConvexProject(instanceDir: string): boolean {
+export function hasConvexProject(instanceDir: string): boolean {
     return (
         existsSync(resolve(instanceDir, 'convex')) ||
         existsSync(resolve(instanceDir, 'convex.json'))
     );
+}
+
+export function createConvexInitCommand(packageManager: PackageManager) {
+    return execPackageCommand(packageManager, ['or3-provider-convex', 'init']);
 }
 
 /**
@@ -199,10 +146,7 @@ export async function preflightConvex(
     }
 
     if (!hasConvexProject(instanceDir)) {
-        const initCommand = execPackageCommand(packageManager, [
-            'or3-provider-convex',
-            'init',
-        ]);
+        const initCommand = createConvexInitCommand(packageManager);
         warnings.push(
             `No Convex project detected in instance directory (missing \`convex/\` or \`convex.json\`). Run \`${formatCommand(initCommand)}\` to scaffold it.`
         );
@@ -239,21 +183,14 @@ export async function applyConvexEnv(
     const convexCliEnv = buildConvexCliEnv(answers);
 
     if (!hasConvexProject(answers.instanceDir)) {
-        const initArgs = ['or3-provider-convex', 'init'];
-        const initCommand = execPackageCommand(
-            answers.packageManager,
-            initArgs
-        );
+        const initCommand = createConvexInitCommand(answers.packageManager);
         commands.push(formatCommand(initCommand));
         if (!dryRun) {
-            await runCommand(
-                {
-                    step: 'Initialize Convex scaffold',
-                    ...initCommand,
-                    env: convexCliEnv,
-                },
-                answers.instanceDir
-            );
+            await runForegroundCommand(initCommand, {
+                cwd: answers.instanceDir,
+                label: 'Initialize Convex scaffold',
+                env: convexCliEnv,
+            });
         }
     }
 
@@ -267,14 +204,11 @@ export async function applyConvexEnv(
         const printable = formatCommand(convexCommand);
         commands.push(printable);
         if (!dryRun) {
-            await runCommand(
-                {
-                    step: `Set Convex env ${key}`,
-                    ...convexCommand,
-                    env: convexCliEnv,
-                },
-                answers.instanceDir
-            );
+            await runForegroundCommand(convexCommand, {
+                cwd: answers.instanceDir,
+                label: `Set Convex env ${key}`,
+                env: convexCliEnv,
+            });
         }
     }
 
@@ -317,13 +251,12 @@ export function buildDeployPlan(answers: WizardAnswers): CommandSpec[] {
         { step: 'Install dependencies', ...install },
     ];
     const convexEnabled = usesConvexProvider(answers);
-    const selfHostedConvex = isSelfHostedConvex(answers);
+    const selfHostedConvex = hasSelfHostedConvexInputs(
+        normalizeSelfHostedConvexInputs(answers)
+    );
 
     if (convexEnabled) {
-        const initCommand = execPackageCommand(answers.packageManager, [
-            'or3-provider-convex',
-            'init',
-        ]);
+        const initCommand = createConvexInitCommand(answers.packageManager);
         commands.push({
             step: 'Initialize Convex scaffold',
             ...initCommand,
@@ -383,7 +316,11 @@ export async function deployAnswers(
 
     for (const command of commands) {
         try {
-            await runCommand(command, answers.instanceDir);
+            await runForegroundCommand(command, {
+                cwd: answers.instanceDir,
+                label: command.step,
+                env: command.env,
+            });
         } catch (error) {
             if (command.optional) {
                 const message = error instanceof Error ? error.message : String(error);
@@ -538,7 +475,8 @@ export async function deployAnswers(
         commands: printableCommands,
         instructions: optionalStepFailures.length
             ? `Local dev is running. Convex backend sync failed; run \`${convexRetryCommand}\` manually after fixing Convex deployment access.`
-            : usesConvexProvider(answers) && !isSelfHostedConvex(answers)
+            : usesConvexProvider(answers) &&
+              !hasSelfHostedConvexInputs(normalizeSelfHostedConvexInputs(answers))
                 ? `Local dev is running. Re-run \`${convexRetryCommand}\` after editing Convex functions.`
                 : 'Local dev is running.',
         accessUrl: 'http://localhost:3000',

@@ -27,17 +27,18 @@
  * @see providerCatalog for dependency declarations
  * @see DependencyInstallPlan for the plan structure
  */
-import crossSpawn from 'cross-spawn';
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { getProviderDescriptor } from './catalog';
 import { resolveEffectiveConnectProvider } from './connect-provider';
+import { usesSqliteProvider } from './provider-usage';
 import { QUALIFIED_PROVIDER_VERSIONS } from './provider-versions';
 import {
     formatCommand,
     installCommand,
     isPackageManager,
     parsePackageManager,
+    runForegroundCommand,
     type PackageManager,
 } from './package-manager';
 import type { WizardAnswers } from './types';
@@ -263,10 +264,7 @@ export function createDependencyInstallPlan(
             });
         }
 
-        const usesSqlite =
-            (answers.syncEnabled && answers.syncProvider === 'sqlite') ||
-            (answers.connectEnabled &&
-                resolveEffectiveConnectProvider(answers) === 'sqlite');
+        const usesSqlite = usesSqliteProvider(answers);
         if (usesSqlite) {
             const sqliteDriver = answers.sqliteDriver ?? 'better-sqlite3';
             if (sqliteDriver === 'better-sqlite3') {
@@ -300,38 +298,6 @@ export function createDependencyInstallPlan(
         answers.instanceDir,
         themeArtifacts
     );
-}
-
-function runCommand(
-    command: string,
-    args: string[],
-    cwd: string
-): Promise<void> {
-    return new Promise((resolvePromise, rejectPromise) => {
-        const child = crossSpawn(command, args, {
-            cwd,
-            stdio: 'inherit',
-            env: process.env,
-            shell: false,
-        });
-
-        child.on('error', (error) => {
-            rejectPromise(error);
-        });
-        child.on('exit', (code) => {
-            if (code === 0) {
-                resolvePromise();
-                return;
-            }
-            rejectPromise(
-                new Error(
-                    `Install command failed with exit code ${code}: ${command} ${args.join(
-                        ' '
-                    )}`
-                )
-            );
-        });
-    });
 }
 
 function patchNitroPluginImports(filePath: string): void {
@@ -452,6 +418,9 @@ export async function executeDependencyInstallPlan(
     }
 
     const command = installCommand(options.packageManager, specsToInstall);
-    await runCommand(command.command, command.args, answers.instanceDir);
+    await runForegroundCommand(command, {
+        cwd: answers.instanceDir,
+        label: 'Install dependencies',
+    });
     patchInstalledProviderPlugins(answers.instanceDir, providerPackages);
 }

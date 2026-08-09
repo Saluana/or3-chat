@@ -36,8 +36,8 @@ interface BehaviorProfileCatalog {
 }
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const configPath = resolve(repoRoot, 'planning/plugin-runtime-v2/compatibility-ledger.modules.json');
-const outputPath = resolve(repoRoot, 'planning/plugin-runtime-v2/compatibility-ledger.json');
+const configPath = resolve(repoRoot, 'planning/complete/plugin-runtime-v2/compatibility-ledger.modules.json');
+const outputPath = resolve(repoRoot, 'planning/complete/plugin-runtime-v2/compatibility-ledger.json');
 const tsconfigPath = resolve(repoRoot, '.nuxt/tsconfig.app.json');
 const checkOnly = process.argv.includes('--check');
 

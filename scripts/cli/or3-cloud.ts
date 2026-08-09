@@ -2,7 +2,6 @@
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { isAbsolute, resolve } from 'node:path';
-import { createServer } from 'node:net';
 import { existsSync } from 'node:fs';
 import { chmod, readFile, writeFile } from 'node:fs/promises';
 import crossSpawn from 'cross-spawn';
@@ -25,11 +24,14 @@ import { getWizardSteps } from '../../shared/cloud/wizard/steps';
 import { buildCheatSheetLines } from '../../shared/cloud/wizard/next-steps';
 import { readEnvFile } from '../../server/admin/config/env-file';
 import {
-    buildOr3CloudConfigFromEnv,
-    buildOr3ConfigFromEnv,
+    validateEnvConfig,
 } from '../../server/admin/config/resolve-config';
 import { applyConvexEnv } from '../../shared/cloud/wizard/deploy';
 import { generateAdminPassword } from '../../shared/cloud/wizard/admin-dashboard';
+import {
+    isPortAvailable,
+    waitForHttpReady,
+} from '../../shared/cloud/wizard/dev-server';
 import {
     createDependencyInstallPlan,
     executeDependencyInstallPlan,
@@ -142,21 +144,6 @@ function normalizeErrorMessage(error: unknown): string {
     return String(error);
 }
 
-async function isPortAvailable(port: number): Promise<boolean> {
-    if (!Number.isInteger(port) || port < 1 || port > 65535) {
-        return false;
-    }
-
-    return new Promise((resolve) => {
-        const server = createServer();
-        server.once('error', () => resolve(false));
-        server.once('listening', () => {
-            server.close(() => resolve(true));
-        });
-        server.listen(port, '127.0.0.1');
-    });
-}
-
 async function pickAvailablePort(start = 4173): Promise<number> {
     for (let port = start; port < start + 1000; port += 1) {
         if (await isPortAvailable(port)) {
@@ -164,30 +151,6 @@ async function pickAvailablePort(start = 4173): Promise<number> {
         }
     }
     throw new Error(`Could not find an available port in range ${start}-${start + 999}.`);
-}
-
-async function waitForHttpReady(url: string, timeoutMs = 45000): Promise<void> {
-    const deadline = Date.now() + timeoutMs;
-    let lastError = '';
-    while (Date.now() < deadline) {
-        try {
-            const response = await fetch(url, { redirect: 'manual' });
-            await response.body?.cancel();
-            // Any HTTP response (including redirects) means the server is up.
-            // Only a connection error (caught below) means it is not ready yet.
-            if (response.status === 0 || response.status < 600) {
-                return;
-            }
-            lastError = `HTTP ${response.status}`;
-        } catch (error) {
-            lastError = normalizeErrorMessage(error);
-        }
-        await new Promise((resolvePromise) => setTimeout(resolvePromise, 300));
-    }
-
-    throw new Error(
-        `Timed out waiting for ${url}${lastError ? ` (${lastError})` : ''}.`
-    );
 }
 
 function openDefaultBrowser(url: string): void {
@@ -864,6 +827,37 @@ type InitialCredentials = {
     adminPassword?: string;
 };
 
+export function serializeInitialCredentials(
+    credentials: InitialCredentials
+): string | null {
+    const lines = ['# OR3 first-run credentials — move to a password manager, then delete this file.'];
+    if (credentials.bootstrapEmail) {
+        lines.push(
+            `OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=${serializeCredentialValue(credentials.bootstrapEmail)}`
+        );
+    }
+    if (credentials.bootstrapPassword) {
+        lines.push(
+            `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=${serializeCredentialValue(credentials.bootstrapPassword)}`
+        );
+    }
+    if (credentials.adminUsername) {
+        lines.push(`OR3_ADMIN_USERNAME=${serializeCredentialValue(credentials.adminUsername)}`);
+    }
+    if (credentials.adminPassword) {
+        lines.push(`OR3_ADMIN_PASSWORD=${serializeCredentialValue(credentials.adminPassword)}`);
+    }
+    return lines.length === 1 ? null : `${lines.join('\n')}\n`;
+}
+
+function serializeCredentialValue(value: string): string {
+    if (value.includes('\0') || /\r|\n/.test(value)) {
+        throw new Error('Credential values may not contain NUL or newline characters.');
+    }
+    if (/^[A-Za-z0-9._:@%+=/-]+$/.test(value)) return value;
+    return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+}
+
 /**
  * Writes generated first-run credentials without exposing them in terminal
  * scrollback or redirected setup logs. Callers must tell the user where the
@@ -873,25 +867,11 @@ export async function writeInitialCredentialsFile(
     instanceDir: string,
     credentials: InitialCredentials
 ): Promise<string | null> {
-    const lines = ['# OR3 first-run credentials — move to a password manager, then delete this file.'];
-    if (credentials.bootstrapEmail) {
-        lines.push(`OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=${credentials.bootstrapEmail}`);
-    }
-    if (credentials.bootstrapPassword) {
-        lines.push(
-            `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=${credentials.bootstrapPassword}`
-        );
-    }
-    if (credentials.adminUsername) {
-        lines.push(`OR3_ADMIN_USERNAME=${credentials.adminUsername}`);
-    }
-    if (credentials.adminPassword) {
-        lines.push(`OR3_ADMIN_PASSWORD=${credentials.adminPassword}`);
-    }
-    if (lines.length === 1) return null;
+    const content = serializeInitialCredentials(credentials);
+    if (!content) return null;
 
     const path = resolve(instanceDir, '.or3-initial-credentials');
-    await writeFile(path, `${lines.join('\n')}\n`, { mode: 0o600 });
+    await writeFile(path, content, { mode: 0o600 });
     await chmod(path, 0o600);
     return path;
 }
@@ -1845,12 +1825,14 @@ async function runValidate(flags: CliFlags, isDoctor = false): Promise<void> {
         envFile,
     });
     const strict = hasFlag(flags, 'strict') ? toBooleanFlag(flags, 'strict') : undefined;
-    let config: ReturnType<typeof buildOr3CloudConfigFromEnv> | null = null;
+    let config: ReturnType<typeof validateEnvConfig>['cloudConfig'] | null = null;
     let configOk = true;
 
     try {
-        buildOr3ConfigFromEnv(map);
-        config = buildOr3CloudConfigFromEnv(map, strict === undefined ? {} : { strict });
+        config = validateEnvConfig(
+            map,
+            strict === undefined ? {} : { strict },
+        ).cloudConfig;
     } catch (error) {
         configOk = false;
         console.log(`\n  ❌ Config validation failed for ${envFile}:`);

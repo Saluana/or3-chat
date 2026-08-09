@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { hashPassword, verifyPassword, validatePasswordStrength } from '../../server/admin/auth/hash';
+import { ADMIN_PASSWORD_POLICY_VECTORS } from '../../shared/cloud/wizard/admin-password-policy-vectors';
 
 describe('Admin Auth - Password Hashing', () => {
     it('hashes once and verifies correct and incorrect passwords', async () => {
@@ -13,6 +14,12 @@ describe('Admin Auth - Password Hashing', () => {
     });
 
     describe('validatePasswordStrength', () => {
+        it('uses the canonical policy vectors', () => {
+            for (const vector of ADMIN_PASSWORD_POLICY_VECTORS) {
+                expect(validatePasswordStrength(vector.value).valid).toBe(vector.valid);
+            }
+        });
+
         it('should accept strong password', () => {
             const result = validatePasswordStrength('TestPassword123');
             expect(result.valid).toBe(true);

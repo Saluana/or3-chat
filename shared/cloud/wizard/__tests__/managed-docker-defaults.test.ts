@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultAnswers } from '../catalog';
 import { deriveEnvFromAnswers } from '../derive';
+import { MANAGED_PROFILE_SHARED_ENV } from '../managed-profile-contract';
 
 describe('wizard: managed docker deployment defaults', () => {
     it('emits closed registration and extension defaults for docker deployments', () => {
@@ -18,10 +19,9 @@ describe('wizard: managed docker deployment defaults', () => {
 
         const { env } = deriveEnvFromAnswers(answers);
 
-        expect(env.OR3_AUTH_REGISTRATION_MODE).toBe('invite_only');
-        expect(env.OR3_AUTH_AUTO_PROVISION).toBe('false');
-        expect(env.OR3_PLUGIN_ZIP_INSTALL_ENABLED).toBe('false');
-        expect(env.OR3_ADMIN_ALLOW_REBUILD).toBe('false');
+        for (const [key, value] of Object.entries(MANAGED_PROFILE_SHARED_ENV)) {
+            expect(env[key]).toBe(value);
+        }
         expect(env.OR3_AUTH_INVITE_TOKEN_SECRET).toBe('invite-secret-abc');
     });
 

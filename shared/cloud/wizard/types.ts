@@ -540,6 +540,8 @@ export interface WizardValidationResult {
     ok: boolean;
     /** Blocking issues that prevent apply. */
     errors: string[];
+    /** Blocking errors with stable field and step identifiers for UI clients. */
+    issues: WizardValidationIssue[];
     /** Non-blocking advisories. */
     warnings: string[];
     /** Derived outputs computed from the answers. */
@@ -551,6 +553,13 @@ export interface WizardValidationResult {
         /** Nuxt module IDs for `or3.providers.generated.ts`. */
         providerModules: string[];
     };
+}
+
+/** A blocking wizard validation error with optional UI placement metadata. */
+export interface WizardValidationIssue {
+    message: string;
+    field?: keyof WizardAnswers;
+    stepId?: string;
 }
 
 /**

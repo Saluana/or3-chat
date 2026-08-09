@@ -12,8 +12,10 @@
  * - If the port is busy, explains what is likely wrong and offers to start
  *   on the next free port (interactive) or exits with instructions (CI).
  */
-import { createServer } from 'node:net';
 import crossSpawn from 'cross-spawn';
+import 'dotenv/config';
+import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { resolve } from 'node:path';
@@ -21,9 +23,186 @@ import { fileURLToPath } from 'node:url';
 import {
     detectPackageManager,
     execPackageCommand,
+    runForegroundCommand,
+    type PackageManager,
+    type PackageManagerCommand,
 } from '../../shared/cloud/wizard/package-manager';
+import { isPortAvailable } from '../../shared/cloud/wizard/dev-server';
 
 export const DEFAULT_PORT = 3000;
+
+export type NativeSqliteDependencyTarget = {
+    cwd: string;
+    label: string;
+};
+
+type NativeSqliteDependencyHooks = {
+    verify?: (target: NativeSqliteDependencyTarget) => void;
+    repair?: (
+        target: NativeSqliteDependencyTarget,
+        packageManager: PackageManager,
+    ) => Promise<void>;
+};
+
+function enabled(value: string | undefined): boolean {
+    return value?.trim().toLowerCase() === 'true';
+}
+
+/** Whether the active configuration needs the native better-sqlite3 binding. */
+export function usesNativeSqlite(
+    env: NodeJS.ProcessEnv = process.env,
+): boolean {
+    if (!enabled(env.SSR_AUTH_ENABLED)) return false;
+
+    const authProvider =
+        env.OR3_AUTH_PROVIDER?.trim().toLowerCase() ||
+        env.AUTH_PROVIDER?.trim().toLowerCase();
+    if (authProvider === 'basic-auth') return true;
+
+    const syncEnabled = env.OR3_CLOUD_SYNC_ENABLED ?? env.OR3_SYNC_ENABLED;
+    const syncProvider = env.OR3_SYNC_PROVIDER?.trim().toLowerCase();
+    const sqliteDriver =
+        env.OR3_SQLITE_DRIVER?.trim().toLowerCase() || 'better-sqlite3';
+    return (
+        enabled(syncEnabled) &&
+        syncProvider === 'sqlite' &&
+        sqliteDriver === 'better-sqlite3'
+    );
+}
+
+/**
+ * Find all copies that can be resolved by a source checkout. Published installs
+ * only have the first target; contributor checkouts can also link provider repos.
+ */
+export function nativeSqliteDependencyTargets(
+    env: NodeJS.ProcessEnv = process.env,
+    projectRoot = process.cwd(),
+): NativeSqliteDependencyTarget[] {
+    if (!usesNativeSqlite(env)) return [];
+
+    const targets: NativeSqliteDependencyTarget[] = [
+        { cwd: projectRoot, label: 'OR3 Chat' },
+    ];
+    const authProvider =
+        env.OR3_AUTH_PROVIDER?.trim().toLowerCase() ||
+        env.AUTH_PROVIDER?.trim().toLowerCase();
+    const syncEnabled = env.OR3_CLOUD_SYNC_ENABLED ?? env.OR3_SYNC_ENABLED;
+    const syncProvider = env.OR3_SYNC_PROVIDER?.trim().toLowerCase();
+    const sqliteDriver =
+        env.OR3_SQLITE_DRIVER?.trim().toLowerCase() || 'better-sqlite3';
+
+    if (authProvider === 'basic-auth') {
+        targets.push({
+            cwd: resolve(projectRoot, '..', 'or3-provider-basic-auth'),
+            label: 'or3-provider-basic-auth',
+        });
+    }
+    if (
+        enabled(syncEnabled) &&
+        syncProvider === 'sqlite' &&
+        sqliteDriver === 'better-sqlite3'
+    ) {
+        targets.push({
+            cwd: resolve(projectRoot, '..', 'or3-provider-sqlite'),
+            label: 'or3-provider-sqlite',
+        });
+    }
+
+    return targets;
+}
+
+/** True only for the ABI drift error produced by a stale native addon. */
+export function isNativeAddonAbiMismatch(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+    const moduleVersions = error.message.match(/NODE_MODULE_VERSION\s+\d+/g);
+    return (
+        moduleVersions !== null &&
+        moduleVersions.length >= 2 &&
+        /compiled against/.test(error.message) &&
+        /\brequires\b/.test(error.message)
+    );
+}
+
+function verifyNativeSqliteDependency(target: NativeSqliteDependencyTarget): void {
+    const dependency = resolve(
+        target.cwd,
+        'node_modules',
+        'better-sqlite3',
+        'package.json',
+    );
+    if (!existsSync(dependency)) return;
+
+    const requireFromTarget = createRequire(resolve(target.cwd, 'package.json'));
+    const Database = requireFromTarget('better-sqlite3') as new (
+        filename: string,
+    ) => { close: () => void };
+    const database = new Database(':memory:');
+    database.close();
+}
+
+function nativeSqliteRepairCommand(
+    packageManager: PackageManager,
+): PackageManagerCommand {
+    if (packageManager === 'bun') {
+        return {
+            command: 'bun',
+            args: ['install', '--force', '--frozen-lockfile'],
+        };
+    }
+    return { command: 'npm', args: ['rebuild', 'better-sqlite3'] };
+}
+
+async function repairNativeSqliteDependency(
+    target: NativeSqliteDependencyTarget,
+    packageManager: PackageManager,
+): Promise<void> {
+    await runForegroundCommand(nativeSqliteRepairCommand(packageManager), {
+        cwd: target.cwd,
+        label: `Native SQLite repair for ${target.label}`,
+    });
+}
+
+/**
+ * Rebuild stale better-sqlite3 bindings before Nuxt can fail on their ABI.
+ * Nothing runs when the active configuration does not use native SQLite.
+ */
+export async function ensureNativeSqliteDependencies(
+    targets = nativeSqliteDependencyTargets(),
+    packageManager = detectPackageManager(),
+    hooks: NativeSqliteDependencyHooks = {},
+): Promise<void> {
+    const verify = hooks.verify ?? verifyNativeSqliteDependency;
+    const repair = hooks.repair ?? repairNativeSqliteDependency;
+    const staleTargets: NativeSqliteDependencyTarget[] = [];
+
+    for (const target of targets) {
+        try {
+            verify(target);
+        } catch (error) {
+            if (!isNativeAddonAbiMismatch(error)) throw error;
+            staleTargets.push(target);
+        }
+    }
+
+    if (staleTargets.length === 0) return;
+
+    console.log('');
+    console.log('  Repairing native SQLite bindings for this runtime…');
+    for (const target of staleTargets) {
+        await repair(target, packageManager);
+        try {
+            verify(target);
+        } catch (error) {
+            throw new Error(
+                `Native SQLite repair completed but ${target.label} still cannot load: ${
+                    error instanceof Error ? error.message : String(error)
+                }`,
+            );
+        }
+        console.log(`  ✓ Repaired better-sqlite3 in ${target.label}`);
+    }
+    console.log('');
+}
 
 export function parsePort(argv: string[], env: NodeJS.ProcessEnv = process.env): number {
     for (let index = 0; index < argv.length; index += 1) {
@@ -56,27 +235,7 @@ export function parseHost(argv: string[], env: NodeJS.ProcessEnv = process.env):
     return env.HOST || '127.0.0.1';
 }
 
-function canBind(port: number, host: string): Promise<boolean> {
-    return new Promise((resolvePromise) => {
-        const server = createServer();
-        server.once('error', () => resolvePromise(false));
-        server.once('listening', () => {
-            server.close(() => resolvePromise(true));
-        });
-        server.listen(port, host);
-    });
-}
-
-export async function isPortAvailable(port: number, host: string): Promise<boolean> {
-    // Dev servers may bind to IPv4 (127.0.0.1) or IPv6 (::1) loopback — a
-    // server on one family does not block binding the other, so check both.
-    // This is what catches "stale Nuxt dev server on localhost:3000".
-    const hosts = new Set<string>([host, '127.0.0.1', '::1']);
-    for (const candidate of hosts) {
-        if (!(await canBind(port, candidate))) return false;
-    }
-    return true;
-}
+export { isPortAvailable };
 
 export async function findFreePort(start: number, host: string): Promise<number | null> {
     for (let port = start + 1; port < start + 50; port += 1) {
@@ -153,6 +312,8 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     } else if (ssr) {
         process.env.SSR_AUTH_ENABLED = 'true';
     }
+
+    await ensureNativeSqliteDependencies();
 
     const port = parsePort(nuxtArgs);
     const host = parseHost(nuxtArgs);

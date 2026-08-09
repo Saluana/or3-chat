@@ -53,6 +53,10 @@ vi.mock('../../../utils/storage/metrics', () => ({
 
 vi.mock('../../../utils/storage/presign-expiry', () => ({
     DEFAULT_PRESIGN_EXPIRY_MS: 60_000,
+    resolvePresignExpiresAt: (result: { expiresAt?: unknown }) =>
+        typeof result.expiresAt === 'number'
+            ? result.expiresAt
+            : Date.now() + 60_000,
 }));
 
 const presignDownloadMock = vi.fn();

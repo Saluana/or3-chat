@@ -75,11 +75,11 @@ interface BenchmarkArtifact {
 const repoRoot = resolve(import.meta.dirname, '../..');
 const budgetPath = resolve(
     repoRoot,
-    'planning/plugin-runtime-v2/benchmarks/budgets.json',
+    'planning/complete/plugin-runtime-v2/benchmarks/budgets.json',
 );
 const baselinePath = resolve(
     repoRoot,
-    'planning/plugin-runtime-v2/benchmarks/milestone-0-v1.json',
+    'planning/complete/plugin-runtime-v2/benchmarks/milestone-0-v1.json',
 );
 const budgetSource = readFileSync(budgetPath, 'utf8');
 const budgets = JSON.parse(budgetSource) as Budgets;

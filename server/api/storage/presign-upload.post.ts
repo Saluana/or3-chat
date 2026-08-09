@@ -10,7 +10,7 @@
  * - Enforces rate limits (`storage:upload`).
  * - Dispatches to registered StorageGatewayAdapter.
  */
-import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
+import { defineEventHandler, readBody, createError } from 'h3';
 import { z } from 'zod';
 import { useRuntimeConfig } from '#imports';
 import { resolveSessionContext } from '../../auth/session';
@@ -24,9 +24,11 @@ import {
     checkSyncRateLimit,
     recordSyncRequest,
 } from '../../utils/sync/rate-limiter';
+import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 import { recordUploadStart } from '../../utils/storage/metrics';
 import { setNoCacheHeaders } from '../../utils/headers';
 import { getWorkspaceStorageUsageSnapshot } from '../../utils/storage/quota';
+import { normalizeStorageHash } from '../../utils/storage/normalize-hash';
 
 const BodySchema = z.object({
     workspace_id: z.string().trim().min(1).max(256),
@@ -39,10 +41,6 @@ const BodySchema = z.object({
 
 function normalizeMimeType(value: string): string {
     return value.split(';', 1)[0]?.trim().toLowerCase() || '';
-}
-
-function normalizeHash(value: string): string {
-    return value.replace(/^sha256:/i, '').trim().toLowerCase();
 }
 
 function toPositiveFiniteNumber(value: unknown): number | undefined {
@@ -107,14 +105,7 @@ export default defineEventHandler(async (event) => {
     // Rate limiting
     const userId = session.user.id;
     const rateLimitResult = checkSyncRateLimit(userId, 'storage:upload');
-    if (!rateLimitResult.allowed) {
-        const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
-        setResponseHeader(event, 'Retry-After', retryAfterSec);
-        throw createError({
-            statusCode: 429,
-            statusMessage: `Rate limit exceeded. Retry after ${retryAfterSec}s`,
-        });
-    }
+    enforceRateLimit(event, rateLimitResult);
 
     // Size limit check (from config)
     const MAX_FILE_SIZE = or3Config.limits.maxCloudFileSizeBytes;
@@ -152,7 +143,7 @@ export default defineEventHandler(async (event) => {
             event,
             body.data.workspace_id
         );
-        const hashKey = normalizeHash(body.data.hash);
+        const hashKey = normalizeStorageHash(body.data.hash, ['sha256']);
         const alreadyStored = usage.filesByHash.has(hashKey);
         const committedAndReservedBytes = usage.usedBytes + usage.reservedBytes;
         const projectedBytes = alreadyStored

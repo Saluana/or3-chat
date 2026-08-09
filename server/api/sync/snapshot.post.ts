@@ -21,6 +21,7 @@ import {
     getSyncRateLimitStats,
     recordSyncRequest,
 } from '../../utils/sync/rate-limiter';
+import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 import { setNoCacheHeaders } from '../../utils/headers';
 
 export default defineEventHandler(async (event) => {
@@ -44,14 +45,7 @@ export default defineEventHandler(async (event) => {
     });
 
     const rateLimit = checkSyncRateLimit(session.user.id, 'sync:snapshot');
-    if (!rateLimit.allowed) {
-        const retryAfterSec = Math.ceil((rateLimit.retryAfterMs ?? 1000) / 1000);
-        setResponseHeader(event, 'Retry-After', retryAfterSec);
-        throw createError({
-            statusCode: 429,
-            statusMessage: `Rate limit exceeded. Retry after ${retryAfterSec}s`,
-        });
-    }
+    enforceRateLimit(event, rateLimit);
 
     const stats = getSyncRateLimitStats(session.user.id, 'sync:snapshot');
     if (stats) {

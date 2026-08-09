@@ -29,10 +29,7 @@
  * @see buildRedactedSummary for review output format
  */
 import { isAbsolute } from 'node:path';
-import {
-    buildOr3CloudConfigFromEnv,
-    buildOr3ConfigFromEnv,
-} from '../../../server/admin/config/resolve-config';
+import { validateEnvConfig } from '../../../server/admin/config/resolve-config';
 import {
     applySkippedAdvancedDefaults,
     normalizeAdvancedToggles,
@@ -44,8 +41,10 @@ import {
     getAdminPasswordPolicyFailures,
 } from './admin-dashboard';
 import { deriveEnvFromAnswers } from './derive';
-import { resolveEffectiveConnectProvider } from './connect-provider';
+import { resolveStrictMode } from '../env-contract';
+import { usesConvexProvider, usesSqliteProvider } from './provider-usage';
 import { validateCloudflareValidationAttestation } from './cloudflare-attestation';
+import { createWizardValidationIssues } from './validation-issues';
 import type { WizardAnswers, WizardValidationResult } from './types';
 
 function isEmail(value: string): boolean {
@@ -150,11 +149,7 @@ function validateFieldLevel(answers: WizardAnswers): {
 } {
     const errors: string[] = [];
     const warnings: string[] = [];
-    const usesConvex =
-        (answers.syncEnabled && answers.syncProvider === 'convex') ||
-        (answers.storageEnabled && answers.storageProvider === 'convex') ||
-        (answers.connectEnabled &&
-            resolveEffectiveConnectProvider(answers) === 'convex');
+    const usesConvex = usesConvexProvider(answers);
 
     if (!answers.instanceDir.trim()) {
         errors.push('instanceDir is required.');
@@ -232,12 +227,9 @@ function validateFieldLevel(answers: WizardAnswers): {
         }
     }
 
-    const usesSqlite =
-        (answers.ssrAuthEnabled &&
-            answers.syncEnabled &&
-            answers.syncProvider === 'sqlite') ||
-        (answers.connectEnabled &&
-            resolveEffectiveConnectProvider(answers) === 'sqlite');
+    const usesSqlite = usesSqliteProvider(answers, {
+        requireSsrAuthForSync: true,
+    });
     if (usesSqlite) {
         const sqliteDriver = answers.sqliteDriver ?? 'better-sqlite3';
         if (sqliteDriver === 'better-sqlite3' || sqliteDriver === 'bun') {
@@ -574,21 +566,15 @@ export function validateAnswers(
     );
     const { errors, warnings } = validateFieldLevel(effectiveAnswers);
     const derived = deriveEnvFromAnswers(effectiveAnswers);
-    const strict =
-        options.strict ??
-        (effectiveAnswers.strictConfig ||
-            effectiveAnswers.deploymentTarget === 'prod-build' ||
-            effectiveAnswers.deploymentTarget === 'docker' ||
-            process.env.NODE_ENV === 'production');
+    const strict = resolveStrictMode({
+        explicit: options.strict,
+        deploymentTarget: effectiveAnswers.deploymentTarget,
+        nodeEnv: process.env.NODE_ENV,
+        strictEnv: effectiveAnswers.strictConfig ? 'true' : undefined,
+    });
 
     try {
-        buildOr3ConfigFromEnv(derived.env);
-    } catch (error) {
-        errors.push((error as Error).message);
-    }
-
-    try {
-        buildOr3CloudConfigFromEnv(derived.env, { strict });
+        validateEnvConfig(derived.env, { strict });
     } catch (error) {
         errors.push((error as Error).message);
     }
@@ -596,6 +582,7 @@ export function validateAnswers(
     return {
         ok: errors.length === 0,
         errors,
+        issues: createWizardValidationIssues(errors),
         warnings,
         derived,
     };

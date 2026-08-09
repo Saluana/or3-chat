@@ -20,18 +20,13 @@
  * - LRU cache bounds memory usage.
  */
 
-import { LRUCache } from 'lru-cache';
 import { useRuntimeConfig } from '#imports';
 
 import type {
     RateLimitConfig,
     RateLimitResult,
 } from '../rate-limit/types';
-
-interface RateLimitEntry {
-    /** Timestamps of requests in the current window */
-    timestamps: number[];
-}
+import { createSlidingWindowRateLimiter } from '../rate-limit/sliding-window';
 
 /**
  * Purpose:
@@ -144,11 +139,9 @@ function isRateLimitingDisabled(): boolean {
 /**
  * Rate limit store using LRU cache to prevent unbounded growth.
  */
-const rateLimitStore = new LRUCache<string, RateLimitEntry>({
-    max: 10_000,
-    ttl: MAX_ENTRY_AGE_MS,
-    updateAgeOnGet: false,
-    updateAgeOnHas: false,
+const rateLimitStore = createSlidingWindowRateLimiter({
+    maxEntries: 10_000,
+    entryTtlMs: MAX_ENTRY_AGE_MS,
 });
 
 /**
@@ -181,33 +174,7 @@ export function checkSyncRateLimit(subjectKey: string, operation: string): RateL
         return { allowed: true, remaining: Infinity };
     }
 
-    const key = getRateLimitKey(subjectKey, operation);
-    const entry = rateLimitStore.get(key);
-    const now = Date.now();
-    const windowStart = now - config.windowMs;
-
-    if (!entry) {
-        return { allowed: true, remaining: config.maxRequests };
-    }
-
-    // Filter to only requests within the current window
-    const recentRequests = entry.timestamps.filter((ts) => ts > windowStart);
-    const requestCount = recentRequests.length;
-    const remaining = Math.max(0, config.maxRequests - requestCount);
-
-    if (requestCount >= config.maxRequests) {
-        // Find when the oldest request in the window will expire
-        const oldestInWindow = recentRequests[0]!;
-        const retryAfterMs = oldestInWindow + config.windowMs - now;
-
-        return {
-            allowed: false,
-            remaining: 0,
-            retryAfterMs: Math.max(0, retryAfterMs),
-        };
-    }
-
-    return { allowed: true, remaining };
+    return rateLimitStore.check(getRateLimitKey(subjectKey, operation), config);
 }
 
 /**
@@ -227,22 +194,7 @@ export function recordSyncRequest(subjectKey: string, operation: string): void {
         return;
     }
 
-    const key = getRateLimitKey(subjectKey, operation);
-    const now = Date.now();
-    const windowStart = now - config.windowMs;
-
-    let entry = rateLimitStore.get(key);
-    if (!entry) {
-        entry = { timestamps: [] };
-    }
-
-    // Add current request timestamp
-    entry.timestamps.push(now);
-
-    // Prune old timestamps outside the window
-    entry.timestamps = entry.timestamps.filter((ts) => ts > windowStart);
-
-    rateLimitStore.set(key, entry);
+    rateLimitStore.record(getRateLimitKey(subjectKey, operation), config);
 }
 
 /**
@@ -256,7 +208,7 @@ export function recordSyncRequest(subjectKey: string, operation: string): void {
 export function resetSyncRateLimits(subjectKey?: string): void {
     if (subjectKey) {
         for (const operation of Object.keys(ALL_RATE_LIMITS)) {
-            rateLimitStore.delete(getRateLimitKey(subjectKey, operation));
+            rateLimitStore.clear(getRateLimitKey(subjectKey, operation));
         }
     } else {
         rateLimitStore.clear();

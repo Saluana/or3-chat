@@ -33,7 +33,7 @@ const profiles = JSON.parse(
     readFileSync(
         resolve(
             process.cwd(),
-            'planning/plugin-runtime-v2/compatibility-profiles.json'
+            'planning/complete/plugin-runtime-v2/compatibility-profiles.json'
         ),
         'utf8'
     )

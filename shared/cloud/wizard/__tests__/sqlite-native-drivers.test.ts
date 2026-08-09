@@ -147,6 +147,23 @@ describe('wizard: native SQLite drivers', () => {
         );
     });
 
+    it('does not validate an inactive no-SSR sync provider', () => {
+        const noSsrSync = validateAnswers({
+            ...answers(),
+            ssrAuthEnabled: false,
+            syncEnabled: true,
+            syncProvider: 'sqlite',
+            sqliteDriver: 'turso',
+            sqliteTursoUrl: '',
+            sqliteTursoAuthToken: '',
+            connectEnabled: false,
+        });
+
+        expect(
+            noSsrSync.errors.filter((error) => error.includes('OR3_SQLITE_'))
+        ).toEqual([]);
+    });
+
     it('loads native runtime settings from an existing environment', () => {
         expect(
             mapEnvToWizardAnswers({

@@ -18,6 +18,7 @@ import {
     recordSyncRequest,
     getSyncRateLimitStats,
 } from '../../utils/sync/rate-limiter';
+import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 
 const UpdateCursorSchema = z.object({
     scope: SyncScopeSchema,
@@ -58,14 +59,7 @@ export default defineEventHandler(async (event) => {
 
     // Rate limiting (per-user)
     const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:cursor');
-    if (!rateLimitResult.allowed) {
-        const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
-        setResponseHeader(event, 'Retry-After', retryAfterSec);
-        throw createError({
-            statusCode: 429,
-            statusMessage: `Rate limit exceeded. Retry after ${retryAfterSec}s`,
-        });
-    }
+    enforceRateLimit(event, rateLimitResult);
 
     // Add rate limit headers
     const stats = getSyncRateLimitStats(session.user.id, 'sync:cursor');

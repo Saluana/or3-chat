@@ -5,9 +5,8 @@ import {
 } from 'h3';
 import { useRuntimeConfig } from '#imports';
 import { isAdminEnabled } from '../utils/admin/is-admin-enabled';
-import { normalizeHost } from '../utils/normalize-host';
 import { resolveAdminRequestContext } from '../admin/context';
-import { getProxyRequestHost, normalizeProxyTrustConfig } from '../utils/net/request-identity';
+import { requireAllowedAdminHost } from '../utils/security/admin-host-allowlist';
 
 /**
  * @module server/middleware/admin-gate
@@ -143,24 +142,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Check allowed hosts
-    const allowedHosts = (adminConfig?.allowedHosts || [])
-        .map((host) => host.trim())
-        .filter(Boolean)
-        .map((host) => normalizeHost(host));
-
-    if (allowedHosts.length > 0) {
-        const proxyConfig = normalizeProxyTrustConfig(config.security.proxy);
-        const requestHost = getProxyRequestHost(event, proxyConfig);
-
-        if (!requestHost) {
-            throw createError({ statusCode: 404, statusMessage: 'Not Found' });
-        }
-
-        const normalizedHost = normalizeHost(requestHost);
-        if (!allowedHosts.includes(normalizedHost)) {
-            throw createError({ statusCode: 404, statusMessage: 'Not Found' });
-        }
-    }
+    requireAllowedAdminHost(event, adminConfig?.allowedHosts, config.security.proxy);
 
     // Allow unauthenticated access to login paths (checked after rewrite)
     if (isLoginPath(event.path)) {

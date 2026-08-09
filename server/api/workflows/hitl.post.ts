@@ -15,6 +15,7 @@ import {
     checkSyncRateLimit,
     recordSyncRequest,
 } from '../../utils/sync/rate-limiter';
+import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event)) {
@@ -55,14 +56,7 @@ export default defineEventHandler(async (event) => {
     });
 
     const rateLimitResult = checkSyncRateLimit(session.user.id, 'workflow:hitl');
-    if (!rateLimitResult.allowed) {
-        const retryAfterSec = Math.ceil((rateLimitResult.retryAfterMs ?? 1000) / 1000);
-        setResponseHeader(event, 'Retry-After', retryAfterSec);
-        throw createError({
-            statusCode: 429,
-            statusMessage: `Rate limit exceeded. Retry after ${retryAfterSec}s`,
-        });
-    }
+    enforceRateLimit(event, rateLimitResult);
 
     const response: HITLResponse = {
         requestId,

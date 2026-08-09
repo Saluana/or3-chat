@@ -1,3 +1,5 @@
+import crossSpawn from 'cross-spawn';
+
 /**
  * Package-manager command resolution shared by the creator, CLI, and web wizard.
  *
@@ -84,4 +86,41 @@ export function execPackageCommand(
 
 export function formatCommand(command: PackageManagerCommand): string {
     return [command.command.replace(/\.cmd$/i, ''), ...command.args].join(' ');
+}
+
+export function runForegroundCommand(
+    command: PackageManagerCommand,
+    input: {
+        cwd: string;
+        label: string;
+        env?: NodeJS.ProcessEnv;
+    },
+): Promise<void> {
+    return new Promise((resolvePromise, rejectPromise) => {
+        const child = crossSpawn(command.command, command.args, {
+            cwd: input.cwd,
+            stdio: 'inherit',
+            env: input.env ?? process.env,
+            shell: false,
+        });
+
+        child.on('error', (error) => {
+            rejectPromise(
+                new Error(
+                    `${input.label} failed: "${formatCommand(command)}" (${error.message})`,
+                ),
+            );
+        });
+        child.on('exit', (code) => {
+            if (code === 0) {
+                resolvePromise();
+                return;
+            }
+            rejectPromise(
+                new Error(
+                    `${input.label} failed with exit code ${code ?? 'unknown'}: "${formatCommand(command)}"`,
+                ),
+            );
+        });
+    });
 }

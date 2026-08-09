@@ -28,7 +28,7 @@ import { createGunzip } from 'node:zlib';
 
 const execFile = promisify(execFileCallback);
 
-export const PACKAGE_VERSION = '0.1.18';
+export const PACKAGE_VERSION = '0.1.23';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -192,7 +192,23 @@ function randomPassword() {
   return `A${randomBytes(20).toString('base64url')}a1`;
 }
 
-function validatePassword(password: string) {
+export function serializeInitialCredentials(input: {
+  bootstrapEmail: string;
+  bootstrapPassword: string;
+  adminUsername: string;
+  adminPassword: string;
+}) {
+  return [
+    '# OR3 first-run credentials — move to a password manager, then delete this file.',
+    `OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=${serializeCredentialValue(input.bootstrapEmail)}`,
+    `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=${serializeCredentialValue(input.bootstrapPassword)}`,
+    `OR3_ADMIN_USERNAME=${serializeCredentialValue(input.adminUsername)}`,
+    `OR3_ADMIN_PASSWORD=${serializeCredentialValue(input.adminPassword)}`,
+    '',
+  ].join('\n');
+}
+
+export function validatePassword(password: string) {
   if (password.length < 12 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
     throw new Error('The administrator password must be at least 12 characters and contain uppercase, lowercase, and numeric characters.');
   }
@@ -438,6 +454,11 @@ function serializeEnvValue(value: string) {
     throw new Error('Environment values may not contain NUL or newline characters.');
   }
   return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+}
+
+function serializeCredentialValue(value: string) {
+  if (/^[A-Za-z0-9._:@%+=/-]+$/.test(value)) return value;
+  return serializeEnvValue(value);
 }
 
 export function serializeEnv(values: Record<string, string>) {
@@ -1474,7 +1495,12 @@ async function initCommand(positionals: string[], flags: Flags) {
   await copyAssets(directory, mode);
   const env = buildEnv({ mode, version, directory, email, password, domain, port });
   await writeSecure(deploymentPaths(directory).env, serializeEnv(env));
-  await writeSecure(join(directory, '.or3-initial-credentials'), `email=${email}\npassword=${password}\n`);
+  await writeSecure(join(directory, '.or3-initial-credentials'), serializeInitialCredentials({
+    bootstrapEmail: email,
+    bootstrapPassword: password,
+    adminUsername: email,
+    adminPassword: password,
+  }));
   const digest = await imageDigest(image);
   const state = stateFromEnv(directory, env, mode, 'init', digest);
   await markPending(directory, state, {
@@ -2229,7 +2255,12 @@ async function adoptCommand(positionals: string[], flags: Flags) {
     if (existing.ok) throw new Error(`Docker volume ${volume} already exists. Choose a new adoption target directory.`);
   }
   await writeSecure(deploymentPaths(targetDirectory).env, serializeEnv(targetEnv));
-  await writeSecure(join(targetDirectory, '.or3-initial-credentials'), `email=${email}\npassword=${password}\n`);
+  await writeSecure(join(targetDirectory, '.or3-initial-credentials'), serializeInitialCredentials({
+    bootstrapEmail: email,
+    bootstrapPassword: password,
+    adminUsername: email,
+    adminPassword: password,
+  }));
   const digest = await imageDigest(image);
   const state = stateFromEnv(targetDirectory, targetEnv, mode, 'adopt', digest);
   await markPending(targetDirectory, state, {
@@ -2514,7 +2545,12 @@ async function applyCredentialReset(directory: string, state: ManagedState, next
   await writeSecure(deploymentPaths(directory).env, serializeEnv(nextEnv));
   const initialCredentials = join(directory, '.or3-initial-credentials');
   if (await fileExists(initialCredentials)) {
-    await writeSecure(initialCredentials, `email=${values.ownerEmail}\npassword=${values.ownerPassword}\n`);
+    await writeSecure(initialCredentials, serializeInitialCredentials({
+      bootstrapEmail: values.ownerEmail,
+      bootstrapPassword: values.ownerPassword,
+      adminUsername: values.adminUsername,
+      adminPassword: values.adminPassword,
+    }));
   }
   await stopProject(directory, state.mode);
   await startProject(directory, state.mode, nextEnv);

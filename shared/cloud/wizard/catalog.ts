@@ -28,6 +28,12 @@
  * @see planning/or3-cloud-launch-wizard/design.md for catalog design rationale
  */
 import { resolve as resolvePath } from 'node:path';
+import {
+    ENV_ALIASES,
+    parseEnvBoolean,
+    WIZARD_OWNED_ENV_KEYS,
+} from '../env-contract';
+import { LOCAL_PROVIDER_IDS } from '../provider-compatibility';
 import type {
     WizardAnswers,
     WizardMode,
@@ -35,6 +41,7 @@ import type {
     WizardProviderDescriptor,
 } from './types';
 import { detectPackageManager } from './package-manager';
+import { resolveEffectiveConnectProvider } from './connect-provider';
 
 /** Recommended self-hosted modes. The legacy fast mode stays readable. */
 export function isRecommendedSelfHostMode(mode: WizardMode): boolean {
@@ -78,12 +85,7 @@ export const SECRET_ANSWER_KEYS: Array<keyof WizardAnswers> = [
  * `or3-provider-${id}` package. These are excluded from
  * `or3.providers.generated.ts` module list generation.
  */
-export const LOCAL_PROVIDER_IDS = new Set([
-    'custom',
-    'memory',
-    'redis',
-    'postgres',
-]);
+export { LOCAL_PROVIDER_IDS };
 
 /**
  * Complete whitelist of env var keys that the wizard is allowed to write.
@@ -92,97 +94,7 @@ export const LOCAL_PROVIDER_IDS = new Set([
  *
  * @see deriveWizardOwnedEnvUpdates for the merge logic
  */
-export const WIZARD_OWNED_ENV_KEYS = [
-    'SSR_AUTH_ENABLED',
-    'AUTH_PROVIDER',
-    'OR3_AUTH_PROVIDER',
-    'OR3_GUEST_ACCESS_ENABLED',
-    'OR3_AUTH_LOCK_PAGE_ENABLED',
-    'OR3_AUTH_LOCK_PAGE_ADAPTER',
-    'OR3_SYNC_ENABLED',
-    'OR3_CLOUD_SYNC_ENABLED',
-    'OR3_SYNC_PROVIDER',
-    'VITE_CONVEX_URL',
-    'OR3_CONVEX_ALLOW_INSECURE_HTTP',
-    'CONVEX_SELF_HOSTED_URL',
-    'CONVEX_SELF_HOSTED_ADMIN_KEY',
-    'VITE_CONVEX_SITE_URL',
-    'OR3_STORAGE_ENABLED',
-    'OR3_CLOUD_STORAGE_ENABLED',
-    'NUXT_PUBLIC_STORAGE_PROVIDER',
-    'OR3_BASIC_AUTH_JWT_SECRET',
-    'OR3_BASIC_AUTH_REFRESH_SECRET',
-    'OR3_AUTH_INVITE_TOKEN_SECRET',
-    'OR3_BASIC_AUTH_ACCESS_TTL_SECONDS',
-    'OR3_BASIC_AUTH_REFRESH_TTL_SECONDS',
-    'OR3_BASIC_AUTH_DB_PATH',
-    'OR3_BASIC_AUTH_BOOTSTRAP_EMAIL',
-    'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD',
-    'OR3_AUTH_REGISTRATION_MODE',
-    'OR3_AUTH_AUTO_PROVISION',
-    'OR3_PLUGIN_ZIP_INSTALL_ENABLED',
-    'OR3_ADMIN_ALLOW_REBUILD',
-    'OR3_SQLITE_DB_PATH',
-    'OR3_SQLITE_DRIVER',
-    'OR3_SQLITE_PRAGMA_JOURNAL_MODE',
-    'OR3_SQLITE_PRAGMA_SYNCHRONOUS',
-    'OR3_SQLITE_ALLOW_IN_MEMORY',
-    'OR3_SQLITE_STRICT',
-    'OR3_SQLITE_TURSO_URL',
-    'OR3_SQLITE_TURSO_AUTH_TOKEN',
-    'OR3_SQLITE_D1_BINDING',
-    'OR3_CONNECT_ENABLED',
-    'OR3_CONNECT_PROVIDER',
-    'OR3_CONNECT_RELAY_PROVIDER',
-    'OR3_CONNECT_PUBLIC_URL',
-    'OR3_CONNECT_ENCRYPTION_KEY',
-    'OR3_CONNECT_MAX_COMPUTERS',
-    'OR3_CONNECT_CLOUDFLARE_ACCOUNT_ID',
-    'OR3_CONNECT_CLOUDFLARE_ZONE_ID',
-    'OR3_CONNECT_CLOUDFLARE_API_TOKEN',
-    'OR3_CONNECT_CLOUDFLARE_VALIDATION_ATTESTATION',
-    'OR3_CONNECT_HOSTNAME_SUFFIX',
-    'OR3_STORAGE_FS_ROOT',
-    'OR3_STORAGE_FS_TOKEN_SECRET',
-    'OR3_STORAGE_FS_URL_TTL_SECONDS',
-    'OR3_STORAGE_S3_ENDPOINT',
-    'OR3_STORAGE_S3_REGION',
-    'OR3_STORAGE_S3_BUCKET',
-    'OR3_STORAGE_S3_ACCESS_KEY_ID',
-    'OR3_STORAGE_S3_SECRET_ACCESS_KEY',
-    'OR3_STORAGE_S3_SESSION_TOKEN',
-    'OR3_STORAGE_S3_FORCE_PATH_STYLE',
-    'OR3_STORAGE_S3_KEY_PREFIX',
-    'OR3_STORAGE_S3_URL_TTL_SECONDS',
-    'OR3_STORAGE_S3_REQUIRE_CHECKSUM',
-    'NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-    'NUXT_CLERK_SECRET_KEY',
-    'OPENROUTER_API_KEY',
-    'OR3_OPENROUTER_ALLOW_USER_OVERRIDE',
-    'OR3_OPENROUTER_REQUIRE_USER_KEY',
-    'OR3_SITE_NAME',
-    'OR3_DEFAULT_THEME',
-    'OR3_LOGO_URL',
-    'OR3_FAVICON_URL',
-    'OR3_WORKFLOWS_ENABLED',
-    'OR3_DOCUMENTS_ENABLED',
-    'OR3_BACKUP_ENABLED',
-    'OR3_MENTIONS_ENABLED',
-    'OR3_DASHBOARD_ENABLED',
-    'OR3_LIMITS_ENABLED',
-    'OR3_REQUESTS_PER_MINUTE',
-    'OR3_MAX_CONVERSATIONS',
-    'OR3_MAX_MESSAGES_PER_DAY',
-    'OR3_LIMITS_STORAGE_PROVIDER',
-    'OR3_PUBLIC_DOMAIN',
-    'OR3_ALLOWED_ORIGINS',
-    'OR3_FORCE_HTTPS',
-    'OR3_STRICT_CONFIG',
-    'OR3_TRUST_PROXY',
-    'OR3_FORWARDED_FOR_HEADER',
-    'OR3_ADMIN_USERNAME',
-    'OR3_ADMIN_PASSWORD',
-] as const;
+export { WIZARD_OWNED_ENV_KEYS };
 
 /**
  * Static provider catalog. Drives selection lists, provider-scoped
@@ -955,8 +867,7 @@ export function applySkippedAdvancedDefaults(
     }
     if (!next.connectAdvancedEnabled) {
         next = resetAdvancedSectionToDefaults(next, defaults, 'connect');
-        next.connectProvider =
-            next.syncProvider === 'convex' ? 'convex' : 'sqlite';
+        next.connectProvider = resolveEffectiveConnectProvider(next);
     }
 
     return next;
@@ -1002,14 +913,7 @@ function readEnvBoolean(
     if (value === undefined) return undefined;
     if (value === '') return undefined;
 
-    const normalized = value.toLowerCase();
-    if (normalized === 'true' || normalized === '1' || normalized === 'yes') {
-        return true;
-    }
-    if (normalized === 'false' || normalized === '0' || normalized === 'no') {
-        return false;
-    }
-    return undefined;
+    return parseEnvBoolean(value);
 }
 
 function readEnvNumber(
@@ -1092,15 +996,14 @@ export function mapEnvToWizardAnswers(
     };
 
     assignBoolean('ssrAuthEnabled', 'SSR_AUTH_ENABLED');
-    assignString('authProvider', 'OR3_AUTH_PROVIDER', 'AUTH_PROVIDER');
+    assignString('authProvider', ...ENV_ALIASES.authProvider);
     assignBoolean('guestAccessEnabled', 'OR3_GUEST_ACCESS_ENABLED');
 
-    assignBoolean('syncEnabled', 'OR3_CLOUD_SYNC_ENABLED', 'OR3_SYNC_ENABLED');
+    assignBoolean('syncEnabled', ...ENV_ALIASES.syncEnabled);
     assignString('syncProvider', 'OR3_SYNC_PROVIDER');
     assignBoolean(
         'storageEnabled',
-        'OR3_CLOUD_STORAGE_ENABLED',
-        'OR3_STORAGE_ENABLED'
+        ...ENV_ALIASES.storageEnabled
     );
     assignString('storageProvider', 'NUXT_PUBLIC_STORAGE_PROVIDER');
 
