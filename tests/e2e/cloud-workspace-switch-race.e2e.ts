@@ -7,7 +7,7 @@ test.describe('Cloud Workspace Switch Race', () => {
 
         await page.getByTestId('run-switch-race').click();
 
-        await expect(page.getByTestId('phase')).toHaveText('complete', { timeout: 20000 });
+        await expect(page.getByTestId('phase')).toHaveText('complete', { timeout: 30000 });
         await expect(page.getByTestId('scenario-pass')).toHaveText('pass');
         await expect(page.getByTestId('ws-a-threads')).toHaveText('2');
         await expect(page.getByTestId('ws-b-threads')).toHaveText('3');

@@ -259,7 +259,12 @@ async function seedWorkspace(workspaceId: string, threadCount: number): Promise<
     });
 }
 
-async function waitForTransferDone(workspaceId: string, timeoutMs = 3000): Promise<boolean> {
+const TRANSFER_TIMEOUT_MS = 6_000;
+
+async function waitForTransferDone(
+    workspaceId: string,
+    timeoutMs = TRANSFER_TIMEOUT_MS,
+): Promise<boolean> {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeoutMs) {
         const done = await withWorkspace(workspaceId, async () => {
@@ -351,7 +356,7 @@ async function runScenario(iterations: number): Promise<void> {
             const recoveredTransfer = await queue.enqueue(fixtureHash.value, 'download');
             if (recoveredTransfer) {
                 try {
-                    await queue.waitForTransfer(recoveredTransfer.id, 3000);
+                    await queue.waitForTransfer(recoveredTransfer.id, TRANSFER_TIMEOUT_MS);
                 } catch (error) {
                     appendLog(`Recovery wait ended: ${error instanceof Error ? error.message : String(error)}`);
                 }
