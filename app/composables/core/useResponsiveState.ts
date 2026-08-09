@@ -1,4 +1,11 @@
-import { ref, onScopeDispose, type Ref, getCurrentScope } from 'vue';
+import {
+    ref,
+    onMounted,
+    onScopeDispose,
+    type Ref,
+    getCurrentInstance,
+    getCurrentScope,
+} from 'vue';
 import { isMobile as globalIsMobile } from '~/state/global';
 
 /**
@@ -69,10 +76,16 @@ function createResponsiveState(): ResponsiveState {
     registry.desktopQuery = desktopQuery;
     registry.updateBreakpoints = updateBreakpoints;
 
-    // Delay initial update until after Vue hydration to prevent mismatch
-    // Use nextTick + requestAnimationFrame to ensure DOM is fully hydrated
-    if (typeof window !== 'undefined') {
-        // Schedule update after current render cycle
+    // Keep the SSR-safe desktop state through hydration. A frame callback can
+    // run while lazy async components are still hydrating, which makes their
+    // v-if branches disagree with the server DOM on mobile. Outside a Vue
+    // component (primarily direct utility tests), retain the frame fallback.
+    if (getCurrentInstance()) {
+        onMounted(() => {
+            updateBreakpoints();
+            hydrated.value = true;
+        });
+    } else {
         requestAnimationFrame(() => {
             updateBreakpoints();
             hydrated.value = true;

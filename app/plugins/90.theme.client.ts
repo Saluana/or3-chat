@@ -1,5 +1,10 @@
 import { ref, shallowRef } from 'vue';
-import { defineNuxtPlugin, useAppConfig, useRuntimeConfig } from '#imports';
+import {
+    defineNuxtPlugin,
+    onNuxtReady,
+    useAppConfig,
+    useRuntimeConfig,
+} from '#imports';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import type { CompiledTheme, ThemePlugin } from '~/theme/_shared/types';
 import {
@@ -315,8 +320,14 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         readActiveTheme();
     const storedTheme = sanitizeTheme(rawStoredTheme);
 
-    // Active theme name (for refined theme system)
-    const activeTheme = ref<string>(DEFAULT_THEME);
+    // Hydrate with the exact theme emitted by SSR. Persisted client state can
+    // differ on a first request (for example, legacy localStorage exists but
+    // its cookie has not been sent yet). Activating that preference here would
+    // change component implementations and app config underneath hydration.
+    const renderedTheme =
+        sanitizeTheme(document.documentElement.getAttribute('data-theme')) ??
+        DEFAULT_THEME;
+    const activeTheme = ref<string>(renderedTheme);
     const activeComponents = shallowRef({
         ...CORE_APP_COMPONENT_DEFAULTS,
     });
@@ -568,25 +579,20 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const effectiveStoredTheme = shouldMigrateDefault
         ? null
         : sanitizedStoredTheme;
+    let preferredTheme = DEFAULT_THEME;
 
     if (effectiveStoredTheme && effectiveStoredTheme !== DEFAULT_THEME) {
         try {
             const available = await ensureThemeLoaded(effectiveStoredTheme);
 
             if (available) {
-                activeTheme.value = effectiveStoredTheme;
-                localStorage.setItem(
-                    activeThemeStorageKey,
-                    effectiveStoredTheme
-                );
-                writeActiveThemeCookie(effectiveStoredTheme);
+                preferredTheme = effectiveStoredTheme;
             } else {
                 if (import.meta.dev) {
                     console.warn(
                         `[theme] Stored theme "${rawStoredTheme}" unavailable. Falling back to "${DEFAULT_THEME}".`
                     );
                 }
-                activeTheme.value = DEFAULT_THEME;
                 localStorage.setItem(activeThemeStorageKey, DEFAULT_THEME);
                 writeActiveThemeCookie(DEFAULT_THEME);
             }
@@ -597,7 +603,6 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     error
                 );
             }
-            activeTheme.value = DEFAULT_THEME;
             localStorage.setItem(activeThemeStorageKey, DEFAULT_THEME);
             writeActiveThemeCookie(DEFAULT_THEME);
         }
@@ -632,12 +637,16 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     nuxtApp.provide('theme', themeApi);
 
-    // Ensure the determined active theme is applied on first load
+    // Apply only the server-rendered theme before hydration. Once Nuxt has
+    // resolved the root suspense boundary, switch to a differing client
+    // preference without corrupting the DOM Vue is hydrating.
     try {
-        const currentAttr = document.documentElement.getAttribute('data-theme');
-        // Always re-apply the theme on hydration to keep UI/app config in sync
-        const initialTheme = activeTheme.value || currentAttr || DEFAULT_THEME;
-        await themeApi.setActiveTheme(initialTheme);
+        await themeApi.setActiveTheme(renderedTheme);
+        if (preferredTheme !== renderedTheme) {
+            onNuxtReady(() => {
+                void themeApi.setActiveTheme(preferredTheme);
+            });
+        }
     } catch (e) {
         if (import.meta.dev) {
             console.warn(

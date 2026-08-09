@@ -1114,6 +1114,42 @@ export default defineNuxtConfig({
             alias: localPackageAliases,
         },
         optimizeDeps: {
+            // These packages are reached through lazy theme/editor/search
+            // components. Without an explicit include Vite discovers them
+            // after the browser has already requested those chunks, then
+            // invalidates the generated URLs while re-optimizing. The 504
+            // responses make Vue's async ChatInput component fail fatally on
+            // a cold dev-server start.
+            include: [
+                '@noble/hashes/sha2.js',
+                '@noble/hashes/utils.js',
+                '@openrouter/sdk',
+                '@openrouter/sdk/models/errors',
+                '@orama/orama',
+                '@or3/intern-client',
+                '@tiptap/core',
+                '@tiptap/extension-mention',
+                '@tiptap/extensions/placeholder',
+                '@tiptap/pm/state',
+                '@tiptap/starter-kit',
+                '@tiptap/suggestion',
+                '@tiptap/vue-3',
+                '@vue/devtools-core',
+                '@vue/devtools-kit',
+                '@vue-flow/background',
+                '@vue-flow/controls',
+                '@vue-flow/core',
+                '@vue-flow/minimap',
+                '@vueuse/core',
+                'ajv',
+                'ajv/dist/2020.js',
+                'dexie',
+                'gpt-tokenizer',
+                'lru-cache',
+                'spark-md5',
+                'tiptap-markdown',
+                'zod',
+            ],
             exclude: [
                 'or3-scroll',
                 'or3-workflow-core',
