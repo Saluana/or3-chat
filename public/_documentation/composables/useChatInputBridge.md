@@ -1,6 +1,6 @@
 # useChatInputBridge
 
-Lightweight registry that lets external features (pane plugins, slash commands, automation) inject chat messages into an existing chat input without duplicating business logic.
+Lightweight registry that lets external features (pane plugins, slash commands, automation) prefill or send through an existing chat input without duplicating business logic.
 
 ---
 
@@ -17,18 +17,20 @@ Lightweight registry that lets external features (pane plugins, slash commands, 
 
 ## Surface area
 
-| Function              | Signature                                               | Purpose                                                                                                    |
-| --------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `registerPaneInput`   | `(paneId: string, api: ChatInputImperativeApi) => void` | Register or update the imperative API for a pane. Called by the chat input component on mount/HMR.         |
-| `unregisterPaneInput` | `(paneId: string) => void`                              | Remove the pane entry on unmount.                                                                          |
-| `programmaticSend`    | `(paneId: string, text: string) => Promise<SendResult>` | Push text into the pane input, await native admission, and return its exact typed result.                   |
-| `hasPane`             | `(paneId: string) => boolean`                           | Test whether a pane is currently registered.                                                               |
+| Function              | Signature                                               | Purpose                                                                                            |
+| --------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `registerPaneInput`   | `(paneId: string, api: ChatInputImperativeApi) => void` | Register or update the imperative API for a pane. Called by the chat input component on mount/HMR. |
+| `unregisterPaneInput` | `(paneId: string) => void`                              | Remove the pane entry on unmount.                                                                  |
+| `programmaticPrefill` | `(paneId: string, text: string) => { status: 'ready' } \| { status: 'unavailable' }` | Put text in the composer and focus it without submitting. |
+| `programmaticSend`    | `(paneId: string, text: string) => Promise<SendResult>` | Push text into the pane input, await native admission, and return its exact typed result.           |
+| `hasPane`             | `(paneId: string) => boolean`                           | Test whether a pane is currently registered.                                                       |
 
 ### `ChatInputImperativeApi`
 
 ```ts
 interface ChatInputImperativeApi {
     setText(t: string): void;
+    focus(): void;
     triggerSend(): Promise<SendResult>;
 }
 ```
@@ -51,6 +53,7 @@ const paneId = usePaneId();
 onMounted(() => {
     registerPaneInput(paneId, {
         setText: (value) => (messageInput.value = value),
+        focus: () => editor.value?.commands.focus('end'),
         triggerSend: () => sendMessage(),
     });
 });
@@ -70,6 +73,14 @@ const result = await programmaticSend(activePaneId, '/imagine neon city at dusk'
 if (result.status === 'rejected') {
     console.warn('Message rejected:', result.reason);
 }
+```
+
+### Prefilling without sending
+
+```ts
+import { programmaticPrefill } from '~/composables/chat/useChatInputBridge';
+
+programmaticPrefill(activePaneId, '/"Fact checker" ');
 ```
 
 ---

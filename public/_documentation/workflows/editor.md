@@ -9,8 +9,14 @@ The toolbar follows the document editor's sizing and responsive contract: shared
 - **Pan / Select** switches between dragging the canvas and marquee-selecting nodes. In Pan mode, hold Shift while dragging to marquee-select. In Select mode, switch back to Pan or hold Space while dragging to move the canvas.
 - **Delete** removes selected nodes or connections and is disabled when nothing deletable is selected. The Start trigger cannot be deleted.
 - **Validation** updates automatically. Select its status to open the issue list; **Open node** selects the affected node and opens its inspector.
-- **Run** saves the workflow, reuses or opens a chat pane, and executes through the normal chat workflow pipeline. Validation errors disable Run; warnings do not.
+- **Run** saves the workflow, opens a new chat, and prefills the workflow slash command without sending it. Add the workflow input in the composer and send when ready. Validation errors disable Run; warnings do not.
 - **More** contains export and whole-canvas clearing actions.
+
+## Workflow browser
+
+The Workflows sidebar groups saved workflows by update date using the same row, timestamp, selection, and overflow-action patterns as Home. Each row shows the workflow name and a short description so its purpose is visible before opening it.
+
+Use **New workflow** to provide a name and optional description. Open a workflow's overflow menu and select **Edit details** to change either value. Descriptions are stored in the workflow's existing `meta.description` field, included in imports and exports, and require no data migration.
 
 ## Canvas interaction
 

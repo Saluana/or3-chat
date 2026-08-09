@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     hasPane,
+    programmaticPrefill,
     programmaticSend,
     registerPaneInput,
     unregisterPaneInput,
@@ -27,6 +28,7 @@ describe('useChatInputBridge', () => {
         });
         registerPaneInput('pane-1', {
             setText,
+            focus: vi.fn(),
             triggerSend: () => resultPromise,
         });
 
@@ -54,6 +56,7 @@ describe('useChatInputBridge', () => {
         ] as const) {
             registerPaneInput('pane-1', {
                 setText: vi.fn(),
+                focus: vi.fn(),
                 triggerSend: async () => ({ status: 'rejected', reason }),
             });
             await expect(programmaticSend('pane-1', 'hello')).resolves.toEqual({
@@ -70,5 +73,19 @@ describe('useChatInputBridge', () => {
             status: 'rejected',
             reason: 'unavailable',
         });
+    });
+
+    it('prefills and focuses the composer without sending', () => {
+        const setText = vi.fn();
+        const focus = vi.fn();
+        const triggerSend = vi.fn();
+        registerPaneInput('pane-1', { setText, focus, triggerSend });
+
+        expect(programmaticPrefill('pane-1', '/"Fact checker" ')).toEqual({
+            status: 'ready',
+        });
+        expect(setText).toHaveBeenCalledWith('/"Fact checker" ');
+        expect(focus).toHaveBeenCalledOnce();
+        expect(triggerSend).not.toHaveBeenCalled();
     });
 });

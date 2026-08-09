@@ -1,4 +1,5 @@
 import {
+    DEFAULT_WORKFLOW_MODEL,
     WorkflowEditor,
     StarterKit,
     type WorkflowData,
@@ -83,7 +84,7 @@ function createDefaultEditorOptions() {
         extensions: StarterKit.configure({
             // Configure specific nodes
             agent: {
-                defaultModel: 'anthropic/claude-3.5-sonnet',
+                defaultModel: DEFAULT_WORKFLOW_MODEL,
             },
         }),
     };
@@ -302,18 +303,30 @@ export function useWorkflowsCrud(postApi: PanePluginApi['posts'] | null) {
      */
     async function createWorkflow(
         title: string,
-        data?: WorkflowData
+        data?: WorkflowData,
+        description?: string
     ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
         if (!postApi) {
             return { ok: false, error: 'Posts API not available' };
         }
 
         try {
+            const baseData = data ?? EMPTY_WORKFLOW;
+            const workflowData: WorkflowData = {
+                ...baseData,
+                meta: {
+                    ...baseData.meta,
+                    name: title,
+                    ...(description !== undefined && {
+                        description: description.trim() || undefined,
+                    }),
+                },
+            };
             const result = await postApi.create({
                 postType: POST_TYPE,
                 title,
                 content: '',
-                meta: data ?? EMPTY_WORKFLOW,
+                meta: workflowData,
                 source: SOURCE,
             });
 

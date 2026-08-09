@@ -750,6 +750,51 @@
    Target globally since NodeInspector may be outside .workflow-app
    ═══════════════════════════════════════════════════════ */
 
+/* The inspector lives in the app sidebar rather than inside .workflow-app.
+   Scope dark tokens here so a retained host .light class cannot win the
+   cascade when the active color mode is dark. */
+.dark .node-inspector {
+  --or3-color-bg-primary: var(--md-surface, #09090c);
+  --or3-color-bg-secondary: var(--md-surface-variant, #111115);
+  --or3-color-bg-tertiary: var(--md-surface-variant, #18181d);
+  --or3-color-bg-elevated: var(--md-surface, #1f1f26);
+  --or3-color-surface: var(--md-surface, rgba(24, 24, 29, 0.9));
+  --or3-color-surface-hover: var(--md-surface-variant, rgba(31, 31, 38, 0.95));
+  --or3-color-surface-glass: rgba(255, 255, 255, 0.04);
+  --or3-color-surface-subtle: rgba(255, 255, 255, 0.06);
+  --or3-color-border: var(--md-border-color, rgba(255, 255, 255, 0.12));
+  --or3-color-border-hover: var(--md-border-color, rgba(255, 255, 255, 0.2));
+  --or3-color-border-subtle: rgba(255, 255, 255, 0.06);
+  --or3-color-text-primary: var(--md-on-surface, rgba(255, 255, 255, 0.95));
+  --or3-color-text-secondary: var(--md-on-surface-variant, rgba(255, 255, 255, 0.72));
+  --or3-color-text-muted: color-mix(in srgb, var(--md-on-surface, #ffffff) 52%, transparent);
+  --or3-color-accent: var(--md-primary, #4e8fbc);
+  --or3-color-accent-hover: var(--md-primary-tint, #70a9cf);
+  --or3-color-accent-muted: color-mix(in srgb, var(--md-primary, #4e8fbc) 20%, transparent);
+  --or3-color-accent-subtle: color-mix(in srgb, var(--md-primary, #4e8fbc) 12%, transparent);
+  --or3-color-success: var(--md-success, #10b981);
+  --or3-color-success-muted: color-mix(in srgb, var(--md-success, #10b981) 16%, transparent);
+  --or3-color-warning: var(--md-warning, #f59e0b);
+  --or3-color-warning-muted: color-mix(in srgb, var(--md-warning, #f59e0b) 16%, transparent);
+  --or3-color-error: var(--md-error, #ef4444);
+  --or3-color-error-muted: color-mix(in srgb, var(--md-error, #ef4444) 16%, transparent);
+  background: var(--md-surface, #09090c);
+  color: var(--md-on-surface, rgba(255, 255, 255, 0.95));
+}
+
+.dark .node-inspector .mode-button,
+.dark .node-inspector .checkbox-item {
+  background-color: var(--md-surface-variant, #18181d) !important;
+  border-color: var(--md-border-color, rgba(255, 255, 255, 0.12)) !important;
+  color: var(--md-on-surface-variant, rgba(255, 255, 255, 0.72)) !important;
+}
+
+.dark .node-inspector .mode-button.active {
+  background-color: color-mix(in srgb, var(--md-primary, #4e8fbc) 16%, transparent) !important;
+  border-color: var(--md-primary, #4e8fbc) !important;
+  color: var(--md-on-surface, #ffffff) !important;
+}
+
 /* Inspector empty state */
 .light .node-inspector.empty,
 :root:not(.dark) .node-inspector.empty {

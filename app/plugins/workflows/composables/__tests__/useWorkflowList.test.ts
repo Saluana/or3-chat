@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 
 vi.mock('or3-workflow-core', () => ({
+    DEFAULT_WORKFLOW_MODEL: 'deepseek/deepseek-v4-flash-latest',
     WorkflowEditor: class {
         private destroyed = false;
 
@@ -59,6 +60,7 @@ import {
     getLoadedWorkflowRecordForPane,
     markEditorForPaneLoaded,
     releaseEditorForPane,
+    useWorkflowsCrud,
     useWorkflowList,
 } from '../useWorkflows';
 import * as postsListModule from '~/composables/posts/usePostsList';
@@ -134,6 +136,33 @@ describe('useWorkflowList', () => {
         });
         expect(loading.value).toBe(true);
         expect(error.value).toBe('sync pull failed');
+    });
+});
+
+describe('useWorkflowsCrud', () => {
+    it('stores a new workflow description in workflow metadata', async () => {
+        const create = vi.fn(async () => ({ ok: true, id: 'wf-1' }));
+        const { createWorkflow } = useWorkflowsCrud({ create } as any);
+
+        await expect(
+            createWorkflow(
+                'Fact checker',
+                undefined,
+                'Checks claims against current sources.',
+            ),
+        ).resolves.toEqual({ ok: true, id: 'wf-1' });
+
+        expect(create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                title: 'Fact checker',
+                meta: expect.objectContaining({
+                    meta: expect.objectContaining({
+                        name: 'Fact checker',
+                        description: 'Checks claims against current sources.',
+                    }),
+                }),
+            }),
+        );
     });
 });
 

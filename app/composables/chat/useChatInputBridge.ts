@@ -9,6 +9,7 @@
  * **Responsibilities**
  * - Maintain registry of chat input instances keyed by paneId
  * - Allow registration/unregistration of input APIs
+ * - Provide `programmaticPrefill()` to inject text without sending
  * - Provide `programmaticSend()` to inject text and trigger send
  * - Check for pane existence via `hasPane()`
  *
@@ -63,7 +64,8 @@
  * Contract:
  * registerPaneInput(paneId, api)   -> called by ChatContainer (client only)
  * unregisterPaneInput(paneId)      -> cleanup (HMR / pane close)
- * programmaticSend(paneId, text)   -> sets editor text + triggers native send
+ * programmaticPrefill(paneId, text) -> sets and focuses editor text only
+ * programmaticSend(paneId, text)    -> sets editor text + triggers native send
  * hasPane(paneId)                  -> helper
  *
  * The ChatInputDropper exposes a minimal imperative API (setText, send). We attach it via ref binding.
@@ -74,6 +76,7 @@ import type { SendResult } from '~/utils/chat/types';
 
 interface ChatInputImperativeApi {
     setText(t: string): void;
+    focus(): void;
     triggerSend(): Promise<SendResult>; // send current text/attachments
 }
 
@@ -161,6 +164,23 @@ export async function programmaticSend(
             error: e instanceof Error ? e.message : String(e),
         };
     }
+}
+
+/**
+ * Places text in a pane's composer without submitting it.
+ *
+ * This is used when another surface wants to start a chat for the user while
+ * still leaving them in control of the message they send.
+ */
+export function programmaticPrefill(
+    paneId: string,
+    text: string
+): { status: 'ready' } | { status: 'unavailable' } {
+    const registered = find(paneId);
+    if (!registered) return { status: 'unavailable' };
+    registered.api.setText(text);
+    registered.api.focus();
+    return { status: 'ready' };
 }
 
 /**

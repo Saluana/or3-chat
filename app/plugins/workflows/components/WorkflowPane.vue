@@ -31,7 +31,8 @@ import { EMPTY_WORKFLOW, resolveWorkflowData } from './pane/workflowLoad';
 import { useWorkflowSidebarControls } from '../composables/useWorkflowSidebarControls';
 import { useOr3Config } from '~/composables/useOr3Config';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
-import { programmaticSend } from '~/composables/chat/useChatInputBridge';
+import { programmaticPrefill } from '~/composables/chat/useChatInputBridge';
+import { getWorkspaceResourceNavigationApi } from '~/utils/workspaceResourceNavigation';
 import { DOCUMENT_COMPACT_TOOLBAR_MAX_PX } from '~/core/documents/editor-toolbar';
 
 // Standard pane app props
@@ -544,18 +545,14 @@ function workflowCommand(title: string) {
     return `/${trimmed}`;
 }
 
-async function sendToChatPane(paneId: string, command: string) {
+async function prefillChatPane(paneId: string, command: string) {
     for (let attempt = 0; attempt < 12; attempt++) {
         await nextTick();
-        const result = await programmaticSend(paneId, command);
-        if (
-            !(result.status === 'rejected' && result.reason === 'unavailable')
-        ) {
-            return result;
-        }
+        const result = programmaticPrefill(paneId, command);
+        if (result.status === 'ready') return true;
         await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    return { status: 'rejected', reason: 'unavailable' } as const;
+    return false;
 }
 
 async function handleRun() {
@@ -578,41 +575,42 @@ async function handleRun() {
 
         const api = multiPaneApi;
         if (!api) throw new Error('Chat panes are unavailable');
-        let chatPane = api.panes.value.find((pane) => pane.mode === 'chat');
-        if (!chatPane) {
-            const paneId = api.addPane();
-            if (!paneId) {
-                toast.add({
-                    title: 'No room for a run pane',
-                    description: 'Close a pane, then run the workflow again.',
-                    color: 'warning',
-                });
-                return;
-            }
-            chatPane = api.getPaneById(paneId);
-        }
-        if (!chatPane) throw new Error('Could not open a chat pane');
-
         const title =
             workflowTitle.value?.trim() ||
             editor.value.getJSON().meta?.name ||
             'Untitled workflow';
-        const result = await sendToChatPane(
-            chatPane.id,
-            workflowCommand(title),
-        );
-        if (result.status === 'failed' || result.status === 'rejected') {
-            throw new Error(
-                result.status === 'failed'
-                    ? result.error
-                    : 'The chat composer was not ready',
+        const command = `${workflowCommand(title)} `;
+        const navigation = getWorkspaceResourceNavigationApi();
+        let chatPaneId: string | null = null;
+        if (navigation?.canOpenInNewTab()) {
+            const opened = await navigation.openResource(
+                { kind: 'chat', threadId: null },
+                'new-tab',
             );
+            if (!opened) throw new Error('Could not open a new chat');
+            chatPaneId =
+                api.panes.value[api.activePaneIndex.value]?.id ?? null;
+        } else {
+            const paneId = api.addPane();
+            if (!paneId) {
+                toast.add({
+                    title: 'No room for a new chat',
+                    description: 'Close a pane, then try again.',
+                    color: 'warning',
+                });
+                return;
+            }
+            chatPaneId = paneId;
         }
-        const chatIndex = api.getPaneIndexById(chatPane.id);
+        if (!chatPaneId) throw new Error('Could not open a new chat');
+
+        const ready = await prefillChatPane(chatPaneId, command);
+        if (!ready) throw new Error('The chat composer was not ready');
+        const chatIndex = api.getPaneIndexById(chatPaneId);
         if (chatIndex >= 0) api.setActive(chatIndex);
     } catch (runError) {
         toast.add({
-            title: 'Could not run workflow',
+            title: 'Could not open workflow chat',
             description:
                 runError instanceof Error ? runError.message : String(runError),
             color: 'error',
@@ -896,7 +894,7 @@ watch(
                     :text="
                         validation.errors.length
                             ? 'Fix validation errors before running'
-                            : 'Run workflow in chat'
+                            : 'Start a new chat with this workflow'
                     "
                 >
                     <UButton

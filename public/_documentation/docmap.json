@@ -1109,7 +1109,7 @@
                     "name": "editor.md",
                     "path": "/workflows/editor",
                     "category": "Guide",
-                    "summary": "Build, validate, arrange, and run workflows from the node editor, including quick connected-node insertion and local package hot reload behavior."
+                    "summary": "Browse, describe, build, validate, arrange, and prepare workflows from the node editor, including quick connected-node insertion and local package hot reload behavior."
                 }
             ]
         },

@@ -956,14 +956,17 @@ function setText(t: string) {
     } catch {}
     autoResize();
 }
+function focus() {
+    editor.value?.commands.focus('end');
+}
 function triggerSend(): Promise<SendResult> {
     return handleSend();
 }
-defineExpose({ setText, triggerSend });
+defineExpose({ setText, focus, triggerSend });
 
 onMounted(() => {
     if (props.paneId) {
-        registerPaneInput(props.paneId, { setText, triggerSend });
+        registerPaneInput(props.paneId, { setText, focus, triggerSend });
     }
 });
 onBeforeUnmount(() => {

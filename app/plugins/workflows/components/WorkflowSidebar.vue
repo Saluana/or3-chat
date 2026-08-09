@@ -18,12 +18,6 @@ import WorkflowsTab from './sidebar/WorkflowsTab.vue';
 import { closeSidebarIfMobile } from '~/utils/sidebarLayoutApi';
 import { useOr3Config } from '~/composables/useOr3Config';
 
-/** Extended meta type that includes optional description field */
-interface WorkflowMetaWithDescription {
-    description?: string;
-    [key: string]: unknown;
-}
-
 const multiPane = useSidebarMultiPane();
 const { activePanel, setPanel } = useWorkflowSidebarControls();
 const toolRegistry = useToolRegistry();
@@ -92,9 +86,7 @@ const availableSubflows = computed(() =>
     subflowWorkflows.value.map((workflow) => ({
         id: workflow.id,
         name: workflow.title,
-        description:
-            (workflow.meta as WorkflowMetaWithDescription | null)
-                ?.description || undefined,
+        description: workflow.meta?.meta?.description || undefined,
     }))
 );
 
@@ -132,7 +124,7 @@ function handlePaletteQuickAdd() {
     <aside
         class="flex flex-col h-full w-full p-3 pr-0.5 justify-between overflow-hidden"
     >
-        <div class="flex flex-col h-full gap-4 overflow-y-auto">
+        <div class="flex flex-col h-full min-h-0 gap-4 overflow-hidden">
             <!-- Tabs -->
             <div v-if="canEdit" class="flex">
                 <UTabs
