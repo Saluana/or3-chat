@@ -873,8 +873,10 @@
 
 	.unified-sb-item {
 		@apply transition-all ease-in-out duration-200;
+		/* Reserve room for the hard 3px offset shadow (right + bottom). */
+		margin-right: 3px;
 		margin-bottom: 12px;
-		 border-radius: 3px;
+		border-radius: 3px;
 		box-shadow: 3px 3px 0px 0px var(--md-surface-variant);
 	}
 
@@ -1098,6 +1100,21 @@
 
 .sidebar-scroll {
 	@apply pr-3 pt-5;
+}
+
+/*
+ * Or3Scroll rows default to overflow:hidden, which clips retro offset
+ * shadows on .unified-sb-item. Allow the hard shadow to paint, and lift
+ * the hovered row above neighbors so the right/bottom edge stays intact.
+ */
+[data-theme='retro'] .sidebar-scroll.or3-scroll .or3-scroll-item {
+	overflow: visible;
+	position: relative;
+}
+
+[data-theme='retro'] .sidebar-scroll.or3-scroll .or3-scroll-item:hover,
+[data-theme='retro'] .sidebar-scroll.or3-scroll .or3-scroll-item:focus-within {
+	z-index: 2;
 }
 
 /*
@@ -1933,6 +1950,75 @@ html[data-theme='retro'].dark
 /* End [data-theme="retro"] */
 
 /*
+ * Agent unlock prompts — retro dark.
+ * surface-container-lowest (#111417) reads as a near-black well against
+ * page surface (#1A1E23). Lift to the same raised charcoal used by other
+ * dark retro chrome (tab switcher cards, etc.).
+ */
+html[data-theme='retro'].dark .agent-connection-notice,
+.dark html[data-theme='retro'] .agent-connection-notice {
+	--agent-unlock-raised: #222a34;
+	--agent-unlock-border: #3a4656;
+	border: 1.5px solid var(--agent-unlock-border) !important;
+	border-radius: 3px !important;
+	background: var(--agent-unlock-raised) !important;
+	box-shadow: 2px 2px 0 #080a0d !important;
+	color: #d2d8e0 !important;
+}
+
+html[data-theme='retro'].dark .agent-connection-notice-copy,
+.dark html[data-theme='retro'] .agent-connection-notice-copy {
+	color: #c5ccd6 !important;
+}
+
+html[data-theme='retro'].dark [data-testid='external-agent-recovery'],
+html[data-theme='retro'].dark
+	[aria-label='Unlock agent conversation'],
+.dark html[data-theme='retro'] [data-testid='external-agent-recovery'],
+.dark
+	html[data-theme='retro']
+	[aria-label='Unlock agent conversation'] {
+	--agent-unlock-raised: #222a34;
+	--agent-unlock-border: #3a4656;
+	border: 2px solid var(--agent-unlock-border) !important;
+	border-radius: 3px !important;
+	background: var(--agent-unlock-raised) !important;
+	box-shadow: 3px 3px 0 #080a0d !important;
+	color: #d2d8e0 !important;
+}
+
+html[data-theme='retro'].dark [data-testid='external-agent-recovery'] > span,
+html[data-theme='retro'].dark
+	[aria-label='Unlock agent conversation']
+	> span:first-child,
+.dark html[data-theme='retro'] [data-testid='external-agent-recovery'] > span,
+.dark
+	html[data-theme='retro']
+	[aria-label='Unlock agent conversation']
+	> span:first-child {
+	border-radius: 3px !important;
+	border: 1.5px solid #3a4656 !important;
+	background: color-mix(in srgb, var(--md-primary) 12%, #243040) !important;
+	color: color-mix(
+		in srgb,
+		var(--md-primary) 55%,
+		var(--md-on-surface-variant)
+	) !important;
+}
+
+html[data-theme='retro'].dark [data-testid='external-agent-recovery'] h2,
+html[data-theme='retro'].dark
+	[aria-label='Unlock agent conversation']
+	h1,
+.dark html[data-theme='retro'] [data-testid='external-agent-recovery'] h2,
+.dark
+	html[data-theme='retro']
+	[aria-label='Unlock agent conversation']
+	h1 {
+	color: #d5dbe3 !important;
+}
+
+/*
  * Agent connections modal (teleported to body).
  * Hard-edge retro polish: squared chips/tiles, navy selection, denser rows.
  */
@@ -2391,6 +2477,363 @@ html[data-theme='retro']
 	.agent-conn-sidebar
 	.border:not(.agent-conn-host):not(.agent-conn-add) {
 	border-radius: var(--agent-conn-radius) !important;
+}
+
+/*
+ * Agent connections — dark mode.
+ * Lifted charcoal surfaces, muted slate borders, deeper header blue.
+ * Bright cyan reserved for selection accent / focus / button hover.
+ */
+html[data-theme='retro'].dark .agent-connections-dialog,
+.dark html[data-theme='retro'] .agent-connections-dialog {
+	--agent-conn-page: #1d232b;
+	--agent-conn-raised: #202730;
+	--agent-conn-sidebar-bg: #1f262f;
+	--agent-conn-card: #242b35;
+	--agent-conn-selected-bg: color-mix(in srgb, var(--md-primary) 12%, #243040);
+	--agent-conn-unlock-bg: #252c36;
+	--agent-conn-input-bg: #2a3340;
+	--agent-conn-notice-bg: #222933;
+	--agent-conn-border-strong: #3a4656;
+	--agent-conn-border-soft: #2f3a48;
+	--agent-conn-divider-color: #2a3440;
+	--agent-conn-header: #2c638b;
+	--agent-conn-btn: color-mix(in srgb, var(--md-primary) 58%, #0c1822);
+	--agent-conn-btn-hover: color-mix(in srgb, var(--md-primary) 88%, #102030);
+	--agent-conn-shadow: 2px 2px 0 #080a0d;
+	--agent-conn-ink: #d5dbe3;
+	--agent-conn-muted: #a8b0bc;
+	--agent-conn-icon: color-mix(
+		in srgb,
+		var(--md-primary) 52%,
+		var(--md-on-surface-variant)
+	);
+	--agent-conn-accent: var(--md-primary);
+	--agent-conn-border: 1px solid var(--agent-conn-border-soft);
+	--agent-conn-divider: 1px solid var(--agent-conn-divider-color);
+	border: 1px solid var(--agent-conn-border-strong) !important;
+	box-shadow: 3px 3px 0 #080a0d !important;
+	background: var(--agent-conn-page) !important;
+	color: var(--agent-conn-ink) !important;
+}
+
+html[data-theme='retro'].dark .agent-connections-dialog-header,
+.dark html[data-theme='retro'] .agent-connections-dialog-header {
+	background: var(--agent-conn-header) !important;
+	border-bottom: 1px solid #1a3a55 !important;
+	color: #e8eef4 !important;
+}
+
+html[data-theme='retro'].dark
+	.agent-connections-dialog-header
+	.agent-conn-icon-tile,
+.dark
+	html[data-theme='retro']
+	.agent-connections-dialog-header
+	.agent-conn-icon-tile {
+	background: color-mix(in srgb, #fff 10%, transparent) !important;
+	border-color: color-mix(in srgb, #fff 28%, transparent) !important;
+	color: #e8eef4 !important;
+}
+
+html[data-theme='retro'].dark .agent-connections-dialog .agent-conn-close,
+.dark html[data-theme='retro'] .agent-connections-dialog .agent-conn-close {
+	border: 1px solid var(--agent-conn-border-strong) !important;
+	background: var(--agent-conn-raised) !important;
+	color: var(--agent-conn-ink) !important;
+	box-shadow: var(--agent-conn-shadow) !important;
+	--tw-shadow: 2px 2px 0 #080a0d !important;
+}
+
+html[data-theme='retro'].dark .agent-connections-dialog .agent-conn-close:hover,
+.dark
+	html[data-theme='retro']
+	.agent-connections-dialog
+	.agent-conn-close:hover {
+	background: color-mix(
+		in srgb,
+		var(--md-primary) 14%,
+		var(--agent-conn-raised)
+	) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-primary) 45%,
+		var(--agent-conn-border-strong)
+	) !important;
+}
+
+html[data-theme='retro'].dark [data-testid='agent-connections-modal'],
+.dark html[data-theme='retro'] [data-testid='agent-connections-modal'] {
+	background: var(--agent-conn-page) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-sidebar,
+.dark html[data-theme='retro'] .agent-conn-sidebar {
+	background: var(--agent-conn-sidebar-bg) !important;
+	border-color: var(--agent-conn-divider-color) !important;
+	border-right-width: 1px !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-detail,
+.dark html[data-theme='retro'] .agent-conn-detail {
+	background: var(--agent-conn-page) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-sidebar-head h3,
+.dark html[data-theme='retro'] .agent-conn-sidebar-head h3,
+html[data-theme='retro'].dark .agent-conn-title,
+.dark html[data-theme='retro'] .agent-conn-title,
+html[data-theme='retro'].dark .agent-conn-host-name,
+.dark html[data-theme='retro'] .agent-conn-host-name,
+html[data-theme='retro'].dark .agent-conn-remote-title,
+.dark html[data-theme='retro'] .agent-conn-remote-title,
+html[data-theme='retro'].dark .agent-conn-advanced-summary,
+.dark html[data-theme='retro'] .agent-conn-advanced-summary {
+	color: var(--agent-conn-ink) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-muted,
+.dark html[data-theme='retro'] .agent-conn-muted {
+	color: var(--agent-conn-muted) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-add,
+.dark html[data-theme='retro'] .agent-conn-add {
+	border: 1px solid var(--agent-conn-border-strong) !important;
+	background: var(--agent-conn-card) !important;
+	color: var(--agent-conn-ink) !important;
+	box-shadow: var(--agent-conn-shadow) !important;
+	--tw-shadow: 2px 2px 0 #080a0d !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-badge,
+.dark html[data-theme='retro'] .agent-conn-badge {
+	border-width: 1px !important;
+	border-color: var(--agent-conn-border-soft) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-badge--active,
+.dark html[data-theme='retro'] .agent-conn-badge--active {
+	background: color-mix(in srgb, #2f9e44 42%, #1a2420) !important;
+	border-color: color-mix(in srgb, #2f9e44 35%, var(--agent-conn-border-soft)) !important;
+	color: #9ddeab !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-badge--online,
+.dark html[data-theme='retro'] .agent-conn-badge--online {
+	background: color-mix(in srgb, #2f9e44 16%, var(--agent-conn-card)) !important;
+	border-color: color-mix(in srgb, #2f9e44 30%, var(--agent-conn-border-soft)) !important;
+	color: #8fd19e !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-badge--locked,
+.dark html[data-theme='retro'] .agent-conn-badge--locked {
+	background: color-mix(
+		in srgb,
+		var(--md-secondary, #ffb3b3) 12%,
+		var(--agent-conn-card)
+	) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-secondary, #ffb3b3) 28%,
+		var(--agent-conn-border-soft)
+	) !important;
+	color: color-mix(
+		in srgb,
+		var(--md-secondary, #ffb3b3) 72%,
+		#e8d0d0
+	) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-icon-tile,
+.dark html[data-theme='retro'] .agent-conn-icon-tile {
+	border: 1px solid var(--agent-conn-border-soft) !important;
+	background: color-mix(
+		in srgb,
+		var(--md-primary) 8%,
+		var(--agent-conn-card)
+	) !important;
+	color: var(--agent-conn-icon) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-host--selected .agent-conn-icon-tile,
+.dark
+	html[data-theme='retro']
+	.agent-conn-host--selected
+	.agent-conn-icon-tile {
+	color: var(--agent-conn-accent) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-primary) 35%,
+		var(--agent-conn-border-soft)
+	) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-host,
+.dark html[data-theme='retro'] .agent-conn-host {
+	border: 1px solid var(--agent-conn-border-soft) !important;
+	background: var(--agent-conn-card) !important;
+	box-shadow: var(--agent-conn-shadow) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-host:hover,
+.dark html[data-theme='retro'] .agent-conn-host:hover {
+	background: color-mix(
+		in srgb,
+		var(--md-primary) 6%,
+		var(--agent-conn-card)
+	) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-primary) 28%,
+		var(--agent-conn-border-soft)
+	) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-host--selected,
+.dark html[data-theme='retro'] .agent-conn-host--selected {
+	border-color: var(--agent-conn-border-soft) !important;
+	background: var(--agent-conn-selected-bg) !important;
+	box-shadow:
+		var(--agent-conn-shadow),
+		inset 3px 0 0 var(--agent-conn-accent) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-host--selected:active,
+.dark html[data-theme='retro'] .agent-conn-host--selected:active {
+	box-shadow:
+		var(--agent-conn-shadow),
+		inset 3px 0 0 var(--agent-conn-accent) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-status-dot--online,
+.dark html[data-theme='retro'] .agent-conn-status-dot--online {
+	background: #3d8f52 !important;
+	border-color: color-mix(in srgb, #3d8f52 50%, #1a2420) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-section,
+.dark html[data-theme='retro'] .agent-conn-section {
+	border-bottom-color: var(--agent-conn-divider-color) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-unlock,
+.dark html[data-theme='retro'] .agent-conn-unlock {
+	border: none !important;
+	background: var(--agent-conn-unlock-bg) !important;
+	box-shadow: var(--agent-conn-shadow) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-unlock-actions,
+.dark html[data-theme='retro'] .agent-conn-unlock-actions {
+	border-top-color: var(--agent-conn-divider-color) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-pin-input [data-slot='base'],
+.dark html[data-theme='retro'] .agent-conn-pin-input [data-slot='base'] {
+	border: 1px solid var(--agent-conn-border-strong) !important;
+	background: var(--agent-conn-input-bg) !important;
+	color: var(--agent-conn-ink) !important;
+}
+
+html[data-theme='retro'].dark
+	.agent-conn-pin-input
+	[data-slot='base']:focus-within,
+.dark
+	html[data-theme='retro']
+	.agent-conn-pin-input
+	[data-slot='base']:focus-within {
+	border-color: color-mix(
+		in srgb,
+		var(--md-primary) 70%,
+		var(--agent-conn-border-strong)
+	) !important;
+	border-width: 2px !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-pin-input input,
+.dark html[data-theme='retro'] .agent-conn-pin-input input {
+	color: var(--agent-conn-ink) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-pin-input input::placeholder,
+.dark html[data-theme='retro'] .agent-conn-pin-input input::placeholder {
+	color: color-mix(in srgb, var(--agent-conn-muted) 85%, transparent) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-pin-input svg,
+html[data-theme='retro'].dark .agent-conn-pin-input .iconify,
+.dark html[data-theme='retro'] .agent-conn-pin-input svg,
+.dark html[data-theme='retro'] .agent-conn-pin-input .iconify {
+	color: var(--agent-conn-icon) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-primary-btn,
+html[data-theme='retro'].dark
+	.agent-connections-dialog
+	.agent-conn-primary-btn,
+.dark html[data-theme='retro'] .agent-conn-primary-btn,
+.dark
+	html[data-theme='retro']
+	.agent-connections-dialog
+	.agent-conn-primary-btn {
+	border: 1px solid color-mix(in srgb, var(--agent-conn-btn) 70%, #080a0d) !important;
+	background: var(--agent-conn-btn) !important;
+	color: #e8eef4 !important;
+	box-shadow: var(--agent-conn-shadow) !important;
+	--tw-shadow: 2px 2px 0 #080a0d !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-primary-btn:hover,
+html[data-theme='retro'].dark
+	.agent-connections-dialog
+	.agent-conn-primary-btn:hover,
+.dark html[data-theme='retro'] .agent-conn-primary-btn:hover,
+.dark
+	html[data-theme='retro']
+	.agent-connections-dialog
+	.agent-conn-primary-btn:hover {
+	background: var(--agent-conn-btn-hover) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-primary) 55%,
+		#080a0d
+	) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-forget,
+.dark html[data-theme='retro'] .agent-conn-forget {
+	border: 1px solid color-mix(in srgb, var(--md-error) 40%, var(--agent-conn-border-soft)) !important;
+	background: var(--agent-conn-card) !important;
+	box-shadow: var(--agent-conn-shadow) !important;
+	--tw-shadow: 2px 2px 0 #080a0d !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-notice,
+.dark html[data-theme='retro'] .agent-conn-notice {
+	border: 1px solid var(--agent-conn-border-soft) !important;
+	background: var(--agent-conn-notice-bg) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-notice-icon,
+.dark html[data-theme='retro'] .agent-conn-notice-icon {
+	color: var(--agent-conn-icon) !important;
+}
+
+html[data-theme='retro'].dark .agent-conn-sidebar .border-dashed,
+.dark html[data-theme='retro'] .agent-conn-sidebar .border-dashed {
+	border-color: var(--agent-conn-border-soft) !important;
+	background: var(--agent-conn-card) !important;
+}
+
+html[data-theme='retro'].dark
+	.agent-conn-sidebar
+	.border:not(.agent-conn-host):not(.agent-conn-add):not(.agent-conn-notice),
+.dark
+	html[data-theme='retro']
+	.agent-conn-sidebar
+	.border:not(.agent-conn-host):not(.agent-conn-add):not(.agent-conn-notice) {
+	border-color: var(--agent-conn-border-soft) !important;
 }
 
 /*

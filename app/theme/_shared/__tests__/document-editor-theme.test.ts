@@ -173,9 +173,76 @@ describe('document editor theme contract', () => {
         expect(retroCss).toContain('.agent-conn-forget');
         expect(retroCss).toContain('.agent-conn-unlock');
         expect(retroCss).toContain('.agent-conn-remote-title');
-        expect(blankCss).not.toContain('Agent connections modal');
-        expect(blankCss).not.toContain('--agent-conn-radius');
-        expect(blankCss).not.toContain('.agent-conn-host--active');
+        expect(retroCss).toContain('Agent connections — dark mode');
+        expect(retroCss).toContain('--agent-conn-page: #1d232b');
+        expect(retroCss).toContain('--agent-conn-header: #2c638b');
+        expect(retroCss).toContain('--agent-conn-shadow: 2px 2px 0 #080a0d');
+        expect(retroCss).toContain('--agent-conn-input-bg: #2a3340');
+        expect(retroCss).toContain('--agent-conn-btn-hover:');
+        expect(blankCss).not.toContain('--agent-conn-radius: 3px');
+        expect(blankCss).not.toContain('--agent-conn-page: #1d232b');
+        expect(blankCss).not.toContain('Agent connections — dark mode');
+    });
+
+    it('retro lifts dark agent unlock prompts off near-black wells', () => {
+        const retroCss = readFileSync(resolve(THEME_ROOT, 'retro', 'styles.css'), 'utf8');
+        const blankCss = readFileSync(resolve(THEME_ROOT, 'blank', 'styles.css'), 'utf8');
+
+        expect(retroCss).toContain('Agent unlock prompts — retro dark');
+        expect(retroCss).toContain('--agent-unlock-raised: #222a34');
+        expect(retroCss).toContain("[data-testid='external-agent-recovery']");
+        expect(retroCss).toContain('.agent-connection-notice');
+        expect(blankCss).not.toContain('Agent unlock prompts — retro dark');
+        expect(blankCss).not.toContain('--agent-unlock-raised: #222a34');
+    });
+
+    it('retro keeps home sidebar item offset shadows from being clipped by Or3Scroll', () => {
+        const retroCss = readFileSync(resolve(THEME_ROOT, 'retro', 'styles.css'), 'utf8');
+        const blankCss = readFileSync(resolve(THEME_ROOT, 'blank', 'styles.css'), 'utf8');
+
+        expect(retroCss).toContain(
+            ".sidebar-scroll.or3-scroll .or3-scroll-item {\n\toverflow: visible;"
+        );
+        expect(retroCss).toContain('margin-right: 3px;');
+        expect(retroCss).toContain(
+            '.sidebar-scroll.or3-scroll .or3-scroll-item:hover'
+        );
+        expect(blankCss).not.toContain(
+            '.sidebar-scroll.or3-scroll .or3-scroll-item'
+        );
+    });
+
+    it('blank polishes the agent connections modal without touching retro hard-edge', () => {
+        const blankCss = readFileSync(resolve(THEME_ROOT, 'blank', 'styles.css'), 'utf8');
+        const retroCss = readFileSync(resolve(THEME_ROOT, 'retro', 'styles.css'), 'utf8');
+
+        expect(blankCss).toContain('Agent connections modal (teleported) — blank polish');
+        expect(blankCss).toContain('--agent-conn-radius: 12px');
+        expect(blankCss).toContain('--agent-conn-radius-md: 9px');
+        expect(blankCss).toContain('--agent-conn-sidebar: #f2f4f7');
+        expect(blankCss).toContain('--agent-conn-selected:');
+        expect(blankCss).toContain('--agent-conn-btn: #2a2a2e');
+        expect(blankCss).toContain('--agent-conn-hover: #ffffff');
+        expect(blankCss).toContain('--agent-conn-selected: #e4e9ef');
+        expect(blankCss).toContain('.agent-conn-host--selected');
+        expect(blankCss).toContain('inset 2px 0 0');
+        expect(blankCss).toContain('.agent-conn-badge--locked');
+        expect(blankCss).toContain('.agent-conn-forget');
+        expect(blankCss).toContain('Override blank\'s global rounded-full buttons');
+        expect(blankCss).toContain('Agent connections — blank dark mode');
+        expect(blankCss).toContain('--agent-conn-page: #212121');
+        expect(blankCss).toContain('--agent-conn-sidebar: #191919');
+        expect(blankCss).toContain('--agent-conn-btn: #ececec');
+        expect(blankCss).toContain('Agent unlock prompts');
+        expect(blankCss).toContain('--md-surface-container-lowest: #1c1c1c');
+        expect(blankCss).toContain('--md-surface-container-low: #2a2a2a');
+        expect(blankCss).toContain('.agent-connection-notice');
+        expect(blankCss).toContain("[data-testid='external-agent-recovery']");
+        expect(retroCss).not.toContain('blank polish');
+        expect(retroCss).not.toContain('--agent-conn-radius: 12px');
+        expect(retroCss).not.toContain('--agent-conn-btn: #2a2a2e');
+        expect(retroCss).not.toContain('Agent connections — blank dark mode');
+        expect(retroCss).not.toContain('--md-surface-container-lowest: #1c1c1c');
     });
 
     it('retro densifies the mobile open-tabs switcher without touching blank', () => {

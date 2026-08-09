@@ -484,15 +484,15 @@
             </div>
 
             <div
-              class="mt-4 hidden rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-3 md:block"
+              class="agent-conn-notice mt-4 hidden rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-3 md:block"
             >
               <div class="flex items-start gap-2">
                 <UIcon
                   :name="iconShieldCheck"
-                  class="mt-0.5 size-4 shrink-0 text-[var(--md-primary)]"
+                  class="agent-conn-notice-icon mt-0.5 size-4 shrink-0 text-[var(--md-primary)]"
                 />
                 <p
-                  class="text-[11px] leading-relaxed text-[var(--md-on-surface-variant)]"
+                  class="agent-conn-muted text-[11px] leading-relaxed text-[var(--md-on-surface-variant)]"
                 >
                   Tokens stay on this device and are never included in chats or
                   Activity.
@@ -532,7 +532,7 @@
                   <div class="flex flex-wrap items-center gap-2">
                     <h3
                       id="current-connection-title"
-                      class="truncate text-sm font-semibold"
+                      class="agent-conn-title truncate text-sm font-semibold"
                     >
                       {{ detailHost.name }}
                     </h3>

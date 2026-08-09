@@ -358,7 +358,22 @@
 }
 
 /* ── Dark mode overrides ── */
-[data-theme="blank"].dark {
+html[data-theme='blank'].dark,
+[data-theme='blank'].dark,
+.dark html[data-theme='blank'] {
+    /*
+     * Replace global Material dark container ladder (cool navy-black from
+     * dark.css) with blank's neutral charcoal stack so raised prompts/cards
+     * match the sidebar and content surfaces.
+     */
+    --md-surface-container-lowest: #1c1c1c;
+    --md-surface-container-low: #2a2a2a;
+    --md-surface-container: #2f2f2f;
+    --md-surface-container-high: #333333;
+    --md-surface-container-highest: #383838;
+    --md-surface-dim: #171717;
+    --md-surface-bright: #2f2f2f;
+
     * {
         scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
     }
@@ -373,6 +388,99 @@
     .cm-user {
         background: var(--md-surface-hover) !important;
     }
+}
+
+/*
+ * Agent unlock prompts (sidebar banner + locked launcher/session cards).
+ * Keep them on blank charcoal, not the leftover Material navy wells.
+ */
+html[data-theme='blank'] .agent-connection-notice {
+	border: 1px solid
+		color-mix(in srgb, var(--md-border-color) 85%, transparent);
+	background: color-mix(
+		in srgb,
+		var(--md-surface-hover) 88%,
+		var(--md-surface)
+	) !important;
+	border-radius: 8px !important;
+}
+
+html[data-theme='blank'].dark .agent-connection-notice,
+.dark html[data-theme='blank'] .agent-connection-notice {
+	border-color: #3a3a3a !important;
+	background: #2a2a2a !important;
+	color: #ececec !important;
+}
+
+html[data-theme='blank'] .agent-connection-notice-copy {
+	color: var(--md-on-surface) !important;
+}
+
+html[data-theme='blank'].dark .agent-connection-notice-copy,
+.dark html[data-theme='blank'] .agent-connection-notice-copy {
+	color: #d6d6d6 !important;
+}
+
+html[data-theme='blank'] .agent-connection-fix {
+	border-radius: 6px !important;
+	font-weight: 600 !important;
+}
+
+html[data-theme='blank'] [data-testid='external-agent-recovery'],
+html[data-theme='blank']
+	[aria-label='Unlock agent conversation'] {
+	border: 1px solid
+		color-mix(in srgb, var(--md-border-color) 90%, transparent) !important;
+	border-radius: 10px !important;
+	background: var(--md-surface-hover) !important;
+	box-shadow: none !important;
+}
+
+html[data-theme='blank'].dark [data-testid='external-agent-recovery'],
+html[data-theme='blank'].dark
+	[aria-label='Unlock agent conversation'],
+.dark html[data-theme='blank'] [data-testid='external-agent-recovery'],
+.dark
+	html[data-theme='blank']
+	[aria-label='Unlock agent conversation'] {
+	border-color: #3a3a3a !important;
+	background: #2a2a2a !important;
+	color: #ececec !important;
+}
+
+html[data-theme='blank'] [data-testid='external-agent-recovery'] > span,
+html[data-theme='blank']
+	[aria-label='Unlock agent conversation']
+	> span:first-child {
+	border-radius: 8px !important;
+	background: color-mix(
+		in srgb,
+		var(--md-on-surface) 8%,
+		var(--md-surface)
+	) !important;
+	color: var(--md-on-surface-variant) !important;
+}
+
+html[data-theme='blank'].dark [data-testid='external-agent-recovery'] > span,
+html[data-theme='blank'].dark
+	[aria-label='Unlock agent conversation']
+	> span:first-child,
+.dark html[data-theme='blank'] [data-testid='external-agent-recovery'] > span,
+.dark
+	html[data-theme='blank']
+	[aria-label='Unlock agent conversation']
+	> span:first-child {
+	background: #333333 !important;
+	color: #c8c8c8 !important;
+}
+
+/* Blank buttons are rounded-full globally — square these unlock CTAs a bit */
+html[data-theme='blank'] [data-testid='external-agent-recovery'] .btn,
+html[data-theme='blank'] [data-testid='external-agent-recovery'] button,
+html[data-theme='blank']
+	[aria-label='Unlock agent conversation']
+	button {
+	border-radius: 9px !important;
 }
 
 /*
@@ -937,4 +1045,641 @@
     html[data-theme="blank"] .chat-input-wrapper {
         padding-bottom: max(34px, env(safe-area-inset-bottom)) !important;
     }
+}
+
+/*
+ * Agent connections modal (teleported) — blank polish.
+ * Soft radii, denser layout, cooler neutrals. Do not mirror retro hard-edge.
+ */
+html[data-theme='blank'] .agent-connections-dialog {
+	--agent-conn-radius: 12px;
+	--agent-conn-radius-md: 9px;
+	--agent-conn-radius-sm: 8px;
+	--agent-conn-radius-xs: 6px;
+	--agent-conn-border: #e2e5ea;
+	--agent-conn-border-soft: #e8ebf0;
+	--agent-conn-divider: #eceff3;
+	--agent-conn-sidebar: #f2f4f7;
+	--agent-conn-page: #ffffff;
+	/* Strong enough to read against the cooler sidebar, not a near-match tint */
+	--agent-conn-hover: #ffffff;
+	--agent-conn-selected: #e4e9ef;
+	--agent-conn-unlock: #f5f6f8;
+	--agent-conn-icon-well: #eef0f3;
+	--agent-conn-icon: #525860;
+	--agent-conn-muted: #5c6570;
+	--agent-conn-btn: #2a2a2e;
+	--agent-conn-btn-hover: #1a1a1d;
+	--agent-conn-gap: 0.65rem;
+	border-radius: var(--agent-conn-radius) !important;
+	border: 1px solid var(--agent-conn-border) !important;
+	background: var(--agent-conn-page) !important;
+	box-shadow:
+		0 18px 48px color-mix(in srgb, #0d0d0d 12%, transparent),
+		0 2px 8px color-mix(in srgb, #0d0d0d 6%, transparent) !important;
+	overflow: hidden !important;
+}
+
+html[data-theme='blank'] .agent-connections-dialog-header {
+	border-bottom: 1px solid var(--agent-conn-divider) !important;
+	padding: 0.8rem 1rem !important;
+	background: var(--agent-conn-page) !important;
+}
+
+html[data-theme='blank'] .agent-connections-dialog .agent-conn-close {
+	box-sizing: border-box !important;
+	width: 1.65rem !important;
+	height: 1.65rem !important;
+	min-width: 1.65rem !important;
+	min-height: 1.65rem !important;
+	padding: 0 !important;
+	border: none !important;
+	border-radius: var(--agent-conn-radius-sm) !important;
+	background: transparent !important;
+	color: color-mix(in srgb, var(--md-on-surface) 45%, transparent) !important;
+	box-shadow: none !important;
+	--tw-shadow: 0 0 #0000 !important;
+	opacity: 0.85;
+}
+
+html[data-theme='blank'] .agent-connections-dialog .agent-conn-close:hover {
+	background: var(--agent-conn-icon-well) !important;
+	color: var(--md-on-surface) !important;
+	opacity: 1;
+}
+
+html[data-theme='blank'] [data-testid='agent-connections-modal'] {
+	background: var(--agent-conn-page);
+}
+
+html[data-theme='blank'] .agent-conn-sidebar {
+	background: var(--agent-conn-sidebar) !important;
+	border-color: var(--agent-conn-divider) !important;
+	border-right-width: 1px !important;
+	padding: 0.75rem !important;
+}
+
+html[data-theme='blank'] .agent-conn-detail {
+	background: var(--agent-conn-page) !important;
+}
+
+html[data-theme='blank'] .agent-conn-sidebar-head {
+	align-items: center !important;
+	gap: 0.5rem !important;
+	margin-bottom: 0.55rem !important;
+}
+
+html[data-theme='blank'] .agent-conn-sidebar-head h3 {
+	letter-spacing: 0.06em !important;
+	font-size: 11px !important;
+	line-height: 1.2 !important;
+	color: var(--md-on-surface) !important;
+}
+
+html[data-theme='blank'] .agent-conn-sidebar-head .agent-conn-muted {
+	margin-top: 0.15rem !important;
+}
+
+html[data-theme='blank'] .agent-conn-muted {
+	color: var(--agent-conn-muted) !important;
+	opacity: 1 !important;
+}
+
+html[data-theme='blank'] .agent-conn-add {
+	border: 1px solid var(--agent-conn-border) !important;
+	border-radius: var(--agent-conn-radius-sm) !important;
+	background: var(--agent-conn-page) !important;
+	color: var(--md-on-surface) !important;
+	box-shadow: none !important;
+	--tw-shadow: 0 0 #0000 !important;
+	width: 1.75rem !important;
+	height: 1.75rem !important;
+	min-width: 1.75rem !important;
+	min-height: 1.75rem !important;
+}
+
+html[data-theme='blank'] .agent-conn-host-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	width: 100%;
+	min-width: 0;
+}
+
+/* Shared status chip — Active / Locked / Recommended share one anatomy */
+html[data-theme='blank'] .agent-conn-badge {
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	min-height: 1.25rem !important;
+	padding: 0.12rem 0.45rem !important;
+	border: 1px solid transparent !important;
+	border-radius: var(--agent-conn-radius-xs) !important;
+	font-size: 10px !important;
+	font-weight: 600 !important;
+	letter-spacing: 0.02em !important;
+	line-height: 1.1 !important;
+	text-transform: none !important;
+}
+
+html[data-theme='blank'] .agent-conn-badge--active {
+	background: color-mix(in srgb, #10a37f 88%, #0b7a5e) !important;
+	border-color: color-mix(in srgb, #0b7a5e 40%, transparent) !important;
+	color: #fff !important;
+}
+
+html[data-theme='blank'] .agent-conn-badge--locked {
+	background: color-mix(in srgb, #ef4444 10%, #f3f4f6) !important;
+	border-color: color-mix(in srgb, #ef4444 28%, var(--agent-conn-border)) !important;
+	color: color-mix(in srgb, #b91c1c 70%, #334155) !important;
+}
+
+html[data-theme='blank'] .agent-conn-badge--online {
+	background: color-mix(in srgb, #10a37f 12%, #fff) !important;
+	border-color: color-mix(in srgb, #10a37f 28%, var(--agent-conn-border)) !important;
+	color: #0b7a5e !important;
+}
+
+html[data-theme='blank'] .agent-conn-badge--pending,
+html[data-theme='blank'] .agent-conn-badge--idle {
+	background: #f0f2f5 !important;
+	border-color: var(--agent-conn-border) !important;
+	color: #3f4650 !important;
+}
+
+html[data-theme='blank'] .agent-conn-icon-tile {
+	border-radius: var(--agent-conn-radius-sm) !important;
+	border: 1px solid var(--agent-conn-border) !important;
+	background: var(--agent-conn-icon-well) !important;
+	color: var(--agent-conn-icon) !important;
+	box-shadow: none !important;
+}
+
+html[data-theme='blank']
+	.agent-connections-dialog-header
+	.agent-conn-icon-tile {
+	background: var(--agent-conn-icon-well) !important;
+	color: var(--agent-conn-icon) !important;
+}
+
+/* Equal row geometry — selection is tint/accent, not a floating card jump */
+html[data-theme='blank'] .agent-conn-host {
+	box-sizing: border-box !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	min-height: 3.65rem !important;
+	padding: 0.6rem 0.7rem !important;
+	border: 1px solid transparent !important;
+	border-radius: var(--agent-conn-radius-sm) !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	outline: none !important;
+}
+
+html[data-theme='blank'] .agent-conn-host:hover:not(.agent-conn-host--selected) {
+	background: var(--agent-conn-hover) !important;
+	border-color: var(--agent-conn-border) !important;
+}
+
+html[data-theme='blank'] .agent-conn-host--selected {
+	background: var(--agent-conn-selected) !important;
+	border-color: color-mix(in srgb, #64748b 22%, var(--agent-conn-border)) !important;
+	box-shadow: inset 2px 0 0 color-mix(in srgb, #64748b 62%, #64748b) !important;
+}
+
+html[data-theme='blank'] .agent-conn-host--selected:hover {
+	background: color-mix(in srgb, #64748b 6%, var(--agent-conn-selected)) !important;
+}
+
+html[data-theme='blank'] .agent-conn-host-name {
+	font-weight: 600 !important;
+	font-size: 0.875rem !important;
+	color: var(--md-on-surface) !important;
+}
+
+html[data-theme='blank'] .agent-conn-host-meta {
+	font-size: 0.6875rem !important;
+	padding-left: 1.05rem !important;
+}
+
+html[data-theme='blank'] .agent-conn-status-dot {
+	width: 0.4rem !important;
+	height: 0.4rem !important;
+	border-radius: 999px !important;
+	opacity: 1 !important;
+}
+
+html[data-theme='blank'] .agent-conn-notice {
+	margin-top: 0.75rem !important;
+	padding: 0.65rem 0.7rem !important;
+	border: 1px solid var(--agent-conn-border-soft) !important;
+	border-radius: var(--agent-conn-radius-sm) !important;
+	background: color-mix(in srgb, #fff 70%, var(--agent-conn-sidebar)) !important;
+}
+
+html[data-theme='blank'] .agent-conn-notice .flex {
+	gap: var(--agent-conn-gap) !important;
+}
+
+html[data-theme='blank'] .agent-conn-notice-icon {
+	color: var(--agent-conn-icon) !important;
+}
+
+html[data-theme='blank'] .agent-conn-section {
+	border-bottom: 1px solid var(--agent-conn-divider) !important;
+	padding: 0.85rem 1rem !important;
+}
+
+html[data-theme='blank'] .agent-conn-section > .flex {
+	gap: var(--agent-conn-gap) !important;
+}
+
+html[data-theme='blank'] .agent-conn-remote {
+	padding-top: 0.75rem !important;
+	padding-bottom: 0.75rem !important;
+}
+
+html[data-theme='blank'] .agent-conn-remote > .flex {
+	gap: var(--agent-conn-gap) !important;
+}
+
+html[data-theme='blank'] .agent-conn-remote-title {
+	font-size: 0.875rem !important;
+	font-weight: 600 !important;
+}
+
+html[data-theme='blank'] .agent-conn-unlock {
+	margin-top: 0.65rem !important;
+	border: 1px solid var(--agent-conn-border-soft) !important;
+	border-radius: var(--agent-conn-radius-sm) !important;
+	background: var(--agent-conn-unlock) !important;
+	box-shadow: none !important;
+}
+
+html[data-theme='blank'] .agent-conn-unlock > .flex {
+	gap: var(--agent-conn-gap) !important;
+	padding: 0.7rem 0.8rem 0.55rem !important;
+}
+
+html[data-theme='blank'] .agent-conn-unlock > .flex p.text-sm {
+	font-size: 0.875rem !important;
+	line-height: 1.25 !important;
+}
+
+html[data-theme='blank'] .agent-conn-unlock > .flex .agent-conn-muted,
+html[data-theme='blank'] .agent-conn-unlock > .flex p.text-xs {
+	margin-top: 0.15rem !important;
+	line-height: 1.35 !important;
+}
+
+html[data-theme='blank'] .agent-conn-unlock-actions {
+	border-top: 1px solid var(--agent-conn-divider) !important;
+	background: transparent !important;
+	gap: 0.4rem !important;
+	padding: 0.55rem 0.8rem 0.65rem !important;
+}
+
+html[data-theme='blank'] .agent-conn-pin-input {
+	border: none !important;
+	box-shadow: none !important;
+	background: transparent !important;
+}
+
+html[data-theme='blank'] .agent-conn-pin-input [data-slot='base'] {
+	border: 1px solid var(--agent-conn-border) !important;
+	border-radius: var(--agent-conn-radius-sm) !important;
+	background: #fff !important;
+	color: var(--md-on-surface) !important;
+	box-shadow: none !important;
+	--tw-ring-shadow: 0 0 #0000 !important;
+}
+
+html[data-theme='blank'] .agent-conn-pin-input input {
+	border: none !important;
+	background: transparent !important;
+	color: var(--md-on-surface) !important;
+}
+
+html[data-theme='blank'] .agent-conn-pin-input input::placeholder {
+	color: color-mix(in srgb, var(--md-on-surface) 48%, transparent) !important;
+	opacity: 1 !important;
+}
+
+html[data-theme='blank'] .agent-conn-pin-input svg,
+html[data-theme='blank'] .agent-conn-pin-input .iconify {
+	color: color-mix(in srgb, var(--md-on-surface) 58%, transparent) !important;
+	opacity: 1 !important;
+}
+
+/* Override blank's global rounded-full buttons inside this modal */
+html[data-theme='blank'] .agent-conn-primary-btn,
+html[data-theme='blank'] .agent-connections-dialog .agent-conn-primary-btn {
+	border: none !important;
+	border-radius: var(--agent-conn-radius-md) !important;
+	background: var(--agent-conn-btn) !important;
+	color: #fff !important;
+	box-shadow: none !important;
+	--tw-shadow: 0 0 #0000 !important;
+	font-weight: 600 !important;
+	padding-inline: 0.9rem !important;
+	min-height: 2.15rem !important;
+}
+
+html[data-theme='blank'] .agent-conn-primary-btn:hover,
+html[data-theme='blank']
+	.agent-connections-dialog
+	.agent-conn-primary-btn:hover {
+	background: var(--agent-conn-btn-hover) !important;
+}
+
+html[data-theme='blank'] .agent-conn-forget {
+	border: none !important;
+	border-radius: var(--agent-conn-radius-xs) !important;
+	background: transparent !important;
+	color: #dc2626 !important;
+	font-weight: 500 !important;
+	font-size: 0.75rem !important;
+	padding: 0.15rem 0.1rem !important;
+	min-height: auto !important;
+	height: auto !important;
+	box-shadow: none !important;
+	--tw-shadow: 0 0 #0000 !important;
+	text-decoration: none !important;
+	justify-self: start !important;
+}
+
+html[data-theme='blank'] .agent-conn-forget:hover {
+	background: color-mix(in srgb, #ef4444 8%, transparent) !important;
+	color: #b91c1c !important;
+}
+
+html[data-theme='blank'] .agent-conn-advanced {
+	padding: 0.45rem 1rem 0.65rem !important;
+}
+
+html[data-theme='blank'] .agent-conn-advanced-summary {
+	min-height: 2rem !important;
+	padding: 0.3rem 0.35rem !important;
+	border-radius: var(--agent-conn-radius-sm) !important;
+	font-size: 0.8125rem !important;
+	font-weight: 500 !important;
+}
+
+html[data-theme='blank'] .agent-conn-advanced-summary:hover {
+	background: color-mix(in srgb, #64748b 5%, transparent) !important;
+}
+
+html[data-theme='blank'] .agent-conn-sidebar .border-dashed {
+	border-radius: var(--agent-conn-radius-sm) !important;
+	border-color: var(--agent-conn-border) !important;
+}
+
+/*
+ * Agent connections — blank dark mode.
+ * Light-token !important polish above would otherwise pin the modal white.
+ */
+html[data-theme='blank'].dark .agent-connections-dialog,
+.dark html[data-theme='blank'] .agent-connections-dialog {
+	--agent-conn-border: #424242;
+	--agent-conn-border-soft: #383838;
+	--agent-conn-divider: #2f2f2f;
+	--agent-conn-sidebar: #191919;
+	--agent-conn-page: #212121;
+	--agent-conn-hover: #2a2a2a;
+	--agent-conn-selected: #2f2f2f;
+	--agent-conn-unlock: #2a2a2a;
+	--agent-conn-icon-well: #2f2f2f;
+	--agent-conn-icon: #b0b0b0;
+	--agent-conn-muted: #b0b0b0;
+	--agent-conn-btn: #ececec;
+	--agent-conn-btn-hover: #ffffff;
+	--agent-conn-ink: #ececec;
+	border-color: var(--agent-conn-border) !important;
+	background: var(--agent-conn-page) !important;
+	color: var(--agent-conn-ink) !important;
+	box-shadow:
+		0 18px 48px color-mix(in srgb, #000 45%, transparent),
+		0 2px 8px color-mix(in srgb, #000 30%, transparent) !important;
+}
+
+html[data-theme='blank'].dark .agent-connections-dialog-header,
+.dark html[data-theme='blank'] .agent-connections-dialog-header {
+	background: var(--agent-conn-page) !important;
+	border-bottom-color: var(--agent-conn-divider) !important;
+	color: var(--agent-conn-ink) !important;
+}
+
+html[data-theme='blank'].dark .agent-connections-dialog-header :is(h2, h3, span),
+.dark
+	html[data-theme='blank']
+	.agent-connections-dialog-header
+	:is(h2, h3, span) {
+	color: inherit !important;
+}
+
+html[data-theme='blank'].dark .agent-connections-dialog .agent-conn-close,
+.dark html[data-theme='blank'] .agent-connections-dialog .agent-conn-close {
+	color: color-mix(in srgb, var(--agent-conn-ink) 55%, transparent) !important;
+}
+
+html[data-theme='blank'].dark .agent-connections-dialog .agent-conn-close:hover,
+.dark
+	html[data-theme='blank']
+	.agent-connections-dialog
+	.agent-conn-close:hover {
+	background: var(--agent-conn-icon-well) !important;
+	color: var(--agent-conn-ink) !important;
+}
+
+html[data-theme='blank'].dark [data-testid='agent-connections-modal'],
+.dark html[data-theme='blank'] [data-testid='agent-connections-modal'] {
+	background: var(--agent-conn-page) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-sidebar,
+.dark html[data-theme='blank'] .agent-conn-sidebar {
+	background: var(--agent-conn-sidebar) !important;
+	border-color: var(--agent-conn-divider) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-detail,
+.dark html[data-theme='blank'] .agent-conn-detail {
+	background: var(--agent-conn-page) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-sidebar-head h3,
+.dark html[data-theme='blank'] .agent-conn-sidebar-head h3,
+html[data-theme='blank'].dark .agent-conn-title,
+.dark html[data-theme='blank'] .agent-conn-title,
+html[data-theme='blank'].dark .agent-conn-host-name,
+.dark html[data-theme='blank'] .agent-conn-host-name,
+html[data-theme='blank'].dark .agent-conn-remote-title,
+.dark html[data-theme='blank'] .agent-conn-remote-title,
+html[data-theme='blank'].dark .agent-conn-advanced-summary,
+.dark html[data-theme='blank'] .agent-conn-advanced-summary,
+html[data-theme='blank'].dark .agent-conn-unlock > .flex p.text-sm,
+.dark html[data-theme='blank'] .agent-conn-unlock > .flex p.text-sm {
+	color: var(--agent-conn-ink) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-muted,
+.dark html[data-theme='blank'] .agent-conn-muted {
+	color: var(--agent-conn-muted) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-add,
+.dark html[data-theme='blank'] .agent-conn-add {
+	border-color: var(--agent-conn-border) !important;
+	background: var(--agent-conn-page) !important;
+	color: var(--agent-conn-ink) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-badge--active,
+.dark html[data-theme='blank'] .agent-conn-badge--active {
+	background: color-mix(in srgb, #10a37f 72%, #0a5c48) !important;
+	border-color: color-mix(in srgb, #10a37f 35%, transparent) !important;
+	color: #fff !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-badge--locked,
+.dark html[data-theme='blank'] .agent-conn-badge--locked {
+	background: color-mix(in srgb, #ef4444 16%, #2a2a2a) !important;
+	border-color: color-mix(in srgb, #ef4444 32%, var(--agent-conn-border)) !important;
+	color: #f5a8a8 !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-badge--online,
+.dark html[data-theme='blank'] .agent-conn-badge--online {
+	background: color-mix(in srgb, #10a37f 16%, #2a2a2a) !important;
+	border-color: color-mix(in srgb, #10a37f 30%, var(--agent-conn-border)) !important;
+	color: #6fd4b4 !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-badge--pending,
+html[data-theme='blank'].dark .agent-conn-badge--idle,
+.dark html[data-theme='blank'] .agent-conn-badge--pending,
+.dark html[data-theme='blank'] .agent-conn-badge--idle {
+	background: #2f2f2f !important;
+	border-color: var(--agent-conn-border) !important;
+	color: #d0d0d0 !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-icon-tile,
+.dark html[data-theme='blank'] .agent-conn-icon-tile {
+	border-color: var(--agent-conn-border) !important;
+	background: var(--agent-conn-icon-well) !important;
+	color: var(--agent-conn-icon) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-host:hover:not(.agent-conn-host--selected),
+.dark
+	html[data-theme='blank']
+	.agent-conn-host:hover:not(.agent-conn-host--selected) {
+	background: var(--agent-conn-hover) !important;
+	border-color: var(--agent-conn-border) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-host--selected,
+.dark html[data-theme='blank'] .agent-conn-host--selected {
+	background: var(--agent-conn-selected) !important;
+	border-color: #555555 !important;
+	box-shadow: inset 2px 0 0 #9e9e9e !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-host--selected:hover,
+.dark html[data-theme='blank'] .agent-conn-host--selected:hover {
+	background: #333333 !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-notice,
+.dark html[data-theme='blank'] .agent-conn-notice {
+	border-color: var(--agent-conn-border-soft) !important;
+	background: #1c1c1c !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-section,
+.dark html[data-theme='blank'] .agent-conn-section {
+	border-bottom-color: var(--agent-conn-divider) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-unlock,
+.dark html[data-theme='blank'] .agent-conn-unlock {
+	border-color: var(--agent-conn-border-soft) !important;
+	background: var(--agent-conn-unlock) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-unlock-actions,
+.dark html[data-theme='blank'] .agent-conn-unlock-actions {
+	border-top-color: var(--agent-conn-divider) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-pin-input [data-slot='base'],
+.dark html[data-theme='blank'] .agent-conn-pin-input [data-slot='base'] {
+	border-color: var(--agent-conn-border) !important;
+	background: #2f2f2f !important;
+	color: var(--agent-conn-ink) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-pin-input input,
+.dark html[data-theme='blank'] .agent-conn-pin-input input {
+	color: var(--agent-conn-ink) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-pin-input input::placeholder,
+.dark html[data-theme='blank'] .agent-conn-pin-input input::placeholder {
+	color: color-mix(in srgb, var(--agent-conn-muted) 80%, transparent) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-pin-input svg,
+html[data-theme='blank'].dark .agent-conn-pin-input .iconify,
+.dark html[data-theme='blank'] .agent-conn-pin-input svg,
+.dark html[data-theme='blank'] .agent-conn-pin-input .iconify {
+	color: var(--agent-conn-icon) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-primary-btn,
+html[data-theme='blank'].dark
+	.agent-connections-dialog
+	.agent-conn-primary-btn,
+.dark html[data-theme='blank'] .agent-conn-primary-btn,
+.dark
+	html[data-theme='blank']
+	.agent-connections-dialog
+	.agent-conn-primary-btn {
+	background: var(--agent-conn-btn) !important;
+	color: #0d0d0d !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-primary-btn:hover,
+html[data-theme='blank'].dark
+	.agent-connections-dialog
+	.agent-conn-primary-btn:hover,
+.dark html[data-theme='blank'] .agent-conn-primary-btn:hover,
+.dark
+	html[data-theme='blank']
+	.agent-connections-dialog
+	.agent-conn-primary-btn:hover {
+	background: var(--agent-conn-btn-hover) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-forget,
+.dark html[data-theme='blank'] .agent-conn-forget {
+	color: #f87171 !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-forget:hover,
+.dark html[data-theme='blank'] .agent-conn-forget:hover {
+	background: color-mix(in srgb, #ef4444 12%, transparent) !important;
+	color: #fca5a5 !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-advanced-summary:hover,
+.dark html[data-theme='blank'] .agent-conn-advanced-summary:hover {
+	background: color-mix(in srgb, #fff 4%, transparent) !important;
+}
+
+html[data-theme='blank'].dark .agent-conn-sidebar .border-dashed,
+.dark html[data-theme='blank'] .agent-conn-sidebar .border-dashed {
+	border-color: var(--agent-conn-border) !important;
+	background: var(--agent-conn-selected) !important;
 }
