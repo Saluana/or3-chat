@@ -11,8 +11,8 @@
                     Semantic color tokens
                 </h2>
                 <p class="supporting-text mt-1">
-                    Override Material Design 3 roles for this mode. Components
-                    consume these roles instead of page-specific colors.
+                    Customize the colors with the broadest effect. Detailed
+                    Material roles remain available under Advanced colors.
                 </p>
             </div>
             <label class="palette-toggle">
@@ -25,13 +25,24 @@
             </label>
         </div>
 
+        <p class="supporting-text text-xs">
+            Overrides affect only this color mode and only while enabled. Your
+            installed theme remains unchanged.
+        </p>
+
         <div class="palette-groups">
             <div
-                v-for="group in colorGroups"
+                v-for="group in visibleColorGroups"
                 :key="group.label"
                 class="palette-group"
             >
                 <h3 class="palette-group-title">{{ group.label }}</h3>
+                <p
+                    v-if="group.description"
+                    class="palette-group-description"
+                >
+                    {{ group.description }}
+                </p>
                 <div class="divide-y divide-[var(--md-outline-variant)]">
                     <div
                         v-for="color in group.colors"
@@ -61,12 +72,7 @@
                                 "
                                 @update:model-value="
                                     (c: string | undefined) => {
-                                        if (c)
-                                            set({
-                                                colors: {
-                                                    [color.key as ColorKey]: c,
-                                                },
-                                            });
+                                        if (c) setColor(color, c);
                                     }
                                 "
                                 :aria-label="`${color.label} color picker`"
@@ -85,7 +91,7 @@
                                         (v) => {
                                             localHex[color.key as ColorKey] =
                                                 String(v ?? '');
-                                            onHexInput(color.key as ColorKey);
+                                            onHexInput(color);
                                         }
                                     "
                                     :disabled="
@@ -114,31 +120,151 @@
                 </div>
             </div>
         </div>
+
+        <div class="flex justify-center">
+            <UButton
+                type="button"
+                color="neutral"
+                variant="soft"
+                size="sm"
+                :aria-expanded="showAdvanced"
+                @click="showAdvanced = !showAdvanced"
+            >
+                {{
+                    showAdvanced
+                        ? 'Hide advanced colors'
+                        : 'Show advanced colors'
+                }}
+            </UButton>
+        </div>
     </section>
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch } from 'vue';
+import { reactive, computed, ref, watch } from 'vue';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useClipboard } from '@vueuse/core';
 import { isBrowser } from '~/utils/env';
 import type { ColorKey } from './types';
-import { COLOR_TOKEN_REGISTRY } from '~/theme/_shared/design-token-registry';
+import {
+    COLOR_TOKEN_ALIASES,
+    COLOR_TOKEN_REGISTRY,
+} from '~/theme/_shared/design-token-registry';
 
 const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides;
 const set = themeApi.set;
 
-// Color groups for organized UI
-const colorGroups = [
+interface PaletteColorControl {
+    key: ColorKey;
+    label: string;
+    linkedKeys?: ColorKey[];
+    contrastKey?: ColorKey;
+}
+
+interface PaletteColorGroup {
+    label: string;
+    description?: string;
+    colors: PaletteColorControl[];
+}
+
+const showAdvanced = ref(false);
+
+const basicColorGroups: PaletteColorGroup[] = [
     {
-        label: 'Primary Colors',
+        label: 'Accent',
+        description:
+            'Primary actions and highlighted surfaces. Text contrast is chosen automatically.',
         colors: [
-            { key: 'primary', label: 'Primary' },
-            { key: 'onPrimary', label: 'On Primary' },
-            { key: 'primaryContainer', label: 'Primary Container' },
-            { key: 'onPrimaryContainer', label: 'On Primary Container' },
+            {
+                key: 'primary',
+                label: 'Primary accent',
+                contrastKey: 'onPrimary',
+            },
+            {
+                key: 'primaryContainer',
+                label: 'Accent surface',
+                contrastKey: 'onPrimaryContainer',
+            },
+        ],
+    },
+    {
+        label: 'Backgrounds & Text',
+        colors: [
+            { key: 'surface', label: 'App background' },
+            {
+                key: 'surfaceContainerLow',
+                label: 'Panel background',
+                linkedKeys: ['surfaceContainer'],
+            },
+            {
+                key: 'surfaceContainerHigh',
+                label: 'Elevated background',
+                linkedKeys: ['surfaceContainerHighest'],
+            },
+            { key: 'onSurface', label: 'Primary text' },
+            { key: 'onSurfaceVariant', label: 'Muted text' },
+        ],
+    },
+    {
+        label: 'Structure & States',
+        description:
+            'Border also updates the common subtle-outline role used by component libraries.',
+        colors: [
+            {
+                key: 'borderColor',
+                label: 'Borders',
+                linkedKeys: ['outlineVariant'],
+            },
+            { key: 'outline', label: 'Outline color' },
+            { key: 'surfaceHover', label: 'Hover surface' },
+            { key: 'surfaceActive', label: 'Pressed / selected surface' },
+        ],
+    },
+    {
+        label: 'Status',
+        colors: [
+            { key: 'error', label: 'Error' },
+            { key: 'success', label: 'Success' },
+            { key: 'warning', label: 'Warning' },
+        ],
+    },
+];
+
+const advancedColorGroups: PaletteColorGroup[] = [
+    {
+        label: 'Advanced Accent States',
+        colors: [
+            { key: 'onPrimary', label: 'Text on primary' },
+            { key: 'onPrimaryContainer', label: 'Text on accent surface' },
+            { key: 'primaryHover', label: 'Primary hover' },
+            { key: 'primaryActive', label: 'Primary pressed' },
+        ],
+    },
+    {
+        label: 'Advanced Surface Roles',
+        colors: [
+            {
+                key: 'surfaceContainerLowest',
+                label: 'Surface container lowest',
+            },
+            { key: 'surfaceContainerLow', label: 'Surface container low' },
+            { key: 'surfaceContainer', label: 'Surface container' },
+            { key: 'surfaceContainerHigh', label: 'Surface container high' },
+            {
+                key: 'surfaceContainerHighest',
+                label: 'Surface container highest',
+            },
+            { key: 'surfaceVariant', label: 'Surface Variant' },
+            { key: 'inverseSurface', label: 'Inverse Surface' },
+            { key: 'inverseOnSurface', label: 'Inverse On Surface' },
+        ],
+    },
+    {
+        label: 'Advanced Borders',
+        colors: [
+            { key: 'outlineVariant', label: 'Outline Variant' },
         ],
     },
     {
@@ -160,44 +286,42 @@ const colorGroups = [
         ],
     },
     {
-        label: 'Error Colors',
+        label: 'Advanced Error Colors',
         colors: [
-            { key: 'error', label: 'Error' },
-            { key: 'onError', label: 'On Error' },
-            { key: 'errorContainer', label: 'Error Container' },
-            { key: 'onErrorContainer', label: 'On Error Container' },
+            { key: 'onError', label: 'Text on error' },
+            { key: 'errorContainer', label: 'Error container' },
+            { key: 'onErrorContainer', label: 'Text on error container' },
+            { key: 'errorHover', label: 'Error hover' },
+            { key: 'errorActive', label: 'Error pressed' },
         ],
     },
     {
-        label: 'Surface Colors',
+        label: 'Info Colors',
         colors: [
-            { key: 'surface', label: 'Surface' },
-            { key: 'onSurface', label: 'On Surface' },
-            { key: 'surfaceVariant', label: 'Surface Variant' },
-            { key: 'onSurfaceVariant', label: 'On Surface Variant' },
-            { key: 'inverseSurface', label: 'Inverse Surface' },
-            { key: 'inverseOnSurface', label: 'Inverse On Surface' },
-        ],
-    },
-    {
-        label: 'Outline',
-        colors: [
-            { key: 'outline', label: 'Outline' },
-            { key: 'outlineVariant', label: 'Outline Variant' },
-        ],
-    },
-    {
-        label: 'Semantic Colors',
-        colors: [
-            { key: 'success', label: 'Success' },
-            { key: 'warning', label: 'Warning' },
+            { key: 'info', label: 'Info' },
+            { key: 'infoHover', label: 'Info hover' },
+            { key: 'infoActive', label: 'Info pressed' },
         ],
     },
 ];
 
-const allColorKeys = colorGroups.flatMap((group) =>
-    group.colors.map((color) => color.key as ColorKey)
+const visibleColorGroups = computed(() =>
+    showAdvanced.value
+        ? [...basicColorGroups, ...advancedColorGroups]
+        : basicColorGroups
 );
+
+const allColorKeys = [
+    ...new Set(
+        [...basicColorGroups, ...advancedColorGroups].flatMap((group) =>
+            group.colors.flatMap((color) => [
+                color.key,
+                ...(color.linkedKeys ?? []),
+                ...(color.contrastKey ? [color.contrastKey] : []),
+            ])
+        )
+    ),
+];
 
 const colorCssVarMap = COLOR_TOKEN_REGISTRY as Record<ColorKey, string>;
 
@@ -274,6 +398,18 @@ function getCurrentThemeColor(cssVar: string): string {
     return value.startsWith('#') ? value : '';
 }
 
+function getCurrentTokenColor(key: ColorKey): string {
+    const cssVariables = [
+        colorCssVarMap[key],
+        ...(COLOR_TOKEN_ALIASES[key] ?? []),
+    ].filter((value): value is string => Boolean(value));
+    for (const cssVariable of cssVariables) {
+        const color = getCurrentThemeColor(cssVariable);
+        if (color) return color;
+    }
+    return '';
+}
+
 function togglePaletteOverrides() {
     const currentlyEnabled = overrides.value.colors?.enabled ?? false;
 
@@ -283,9 +419,11 @@ function togglePaletteOverrides() {
             enabled: boolean;
         } = { enabled: true };
         for (const key of allColorKeys) {
-            const cssVar = colorCssVarMap[key];
-            if (!cssVar) continue;
-            const color = getCurrentThemeColor(cssVar);
+            const savedColor = overrides.value.colors?.[key];
+            const color =
+                typeof savedColor === 'string' && savedColor.length > 0
+                    ? savedColor
+                    : getCurrentTokenColor(key);
             if (color) {
                 initialColors[key] = color;
             }
@@ -309,12 +447,52 @@ function ensureHash(v: string) {
     return v.startsWith('#') ? v : `#${v}`;
 }
 
-function onHexInput(key: ColorKey) {
-    const raw = localHex[key];
+function contrastingTextColor(color: string): '#000000' | '#ffffff' {
+    const hex = color.slice(1);
+    const expanded =
+        hex.length === 3 || hex.length === 4
+            ? hex
+                  .slice(0, 3)
+                  .split('')
+                  .map((part) => part + part)
+                  .join('')
+            : hex.slice(0, 6);
+    const channels = [0, 2, 4].map((offset) =>
+        Number.parseInt(expanded.slice(offset, offset + 2), 16) / 255
+    );
+    const luminance = channels
+        .map((channel) =>
+            channel <= 0.04045
+                ? channel / 12.92
+                : ((channel + 0.055) / 1.055) ** 2.4
+        )
+        .reduce(
+            (total, channel, index) =>
+                total + channel * [0.2126, 0.7152, 0.0722][index]!,
+            0
+        );
+    return luminance > 0.179 ? '#000000' : '#ffffff';
+}
+
+function setColor(control: PaletteColorControl, color: string) {
+    const colors: Partial<Record<ColorKey, string>> = {
+        [control.key]: color,
+    };
+    for (const linkedKey of control.linkedKeys ?? []) {
+        colors[linkedKey] = color;
+    }
+    if (control.contrastKey) {
+        colors[control.contrastKey] = contrastingTextColor(color);
+    }
+    set({ colors });
+}
+
+function onHexInput(control: PaletteColorControl) {
+    const raw = localHex[control.key];
     if (!raw) return;
     const candidate = ensureHash(raw.trim());
     if (isValidHex(candidate)) {
-        set({ colors: { [key]: candidate.toLowerCase() } });
+        setColor(control, candidate.toLowerCase());
     }
 }
 
@@ -383,6 +561,12 @@ watch(
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+}
+.palette-group-description {
+    padding: 0.55rem 0.75rem;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    font-size: 0.68rem;
+    line-height: 1.35;
 }
 .palette-token-row {
     display: flex;

@@ -79,6 +79,44 @@ describe('applyMergedTheme', () => {
         );
     });
 
+    it('applies and removes shared shape overrides', async () => {
+        const style = document.documentElement.style;
+
+        await applyMergedTheme(
+            'light',
+            {
+                shape: {
+                    enabled: true,
+                    borderWidthPx: 2.5,
+                    borderRadiusPx: 18,
+                },
+                colors: { enabled: false },
+                backgrounds: { enabled: false },
+                typography: {},
+                ui: {},
+            },
+            mockThemePlugin as any
+        );
+
+        expect(style.getPropertyValue('--md-border-width')).toBe('2.5px');
+        expect(style.getPropertyValue('--md-border-radius')).toBe('18px');
+
+        await applyMergedTheme(
+            'light',
+            {
+                shape: { enabled: false },
+                colors: { enabled: false },
+                backgrounds: { enabled: false },
+                typography: {},
+                ui: {},
+            },
+            mockThemePlugin as any
+        );
+
+        expect(style.getPropertyValue('--md-border-width')).toBe('');
+        expect(style.getPropertyValue('--md-border-radius')).toBe('');
+    });
+
     it('should apply color palette overrides when enabled', async () => {
         const overrides: UserThemeOverrides = {
             colors: {
@@ -96,6 +134,37 @@ describe('applyMergedTheme', () => {
         const style = document.documentElement.style;
         expect(style.getPropertyValue('--md-primary')).toBe('#ff0000');
         expect(style.getPropertyValue('--md-secondary')).toBe('#00ff00');
+    });
+
+    it('applies interaction, border, and semantic compatibility variables', async () => {
+        const overrides: UserThemeOverrides = {
+            colors: {
+                enabled: true,
+                borderColor: '#111111',
+                surfaceHover: '#222222',
+                surfaceActive: '#333333',
+                success: '#44aa66',
+                warning: '#cc8800',
+            },
+            backgrounds: { enabled: false },
+            typography: {},
+            ui: {},
+        };
+
+        await applyMergedTheme('light', overrides, mockThemePlugin as any);
+
+        const style = document.documentElement.style;
+        expect(style.getPropertyValue('--md-border-color')).toBe('#111111');
+        expect(style.getPropertyValue('--md-surface-hover')).toBe('#222222');
+        expect(style.getPropertyValue('--md-surface-active')).toBe('#333333');
+        expect(style.getPropertyValue('--md-success')).toBe('#44aa66');
+        expect(
+            style.getPropertyValue('--md-extended-color-success-color')
+        ).toBe('#44aa66');
+        expect(style.getPropertyValue('--md-warning')).toBe('#cc8800');
+        expect(
+            style.getPropertyValue('--md-extended-color-warning-color')
+        ).toBe('#cc8800');
     });
 
     it('should remove color palette when disabled', async () => {
@@ -126,6 +195,34 @@ describe('applyMergedTheme', () => {
         await applyMergedTheme('light', disabledOverrides, mockThemePlugin as any);
 
         expect(style.getPropertyValue('--md-primary')).toBe('');
+    });
+
+    it('removes semantic compatibility variables when colors are disabled', async () => {
+        const style = document.documentElement.style;
+        style.setProperty('--md-success', '#44aa66');
+        style.setProperty('--md-extended-color-success-color', '#44aa66');
+        style.setProperty('--md-warning', '#cc8800');
+        style.setProperty('--md-extended-color-warning-color', '#cc8800');
+
+        await applyMergedTheme(
+            'light',
+            {
+                colors: { enabled: false },
+                backgrounds: { enabled: false },
+                typography: {},
+                ui: {},
+            },
+            mockThemePlugin as any
+        );
+
+        expect(style.getPropertyValue('--md-success')).toBe('');
+        expect(
+            style.getPropertyValue('--md-extended-color-success-color')
+        ).toBe('');
+        expect(style.getPropertyValue('--md-warning')).toBe('');
+        expect(
+            style.getPropertyValue('--md-extended-color-warning-color')
+        ).toBe('');
     });
 
     it('removes an omitted color while user colors remain enabled', async () => {

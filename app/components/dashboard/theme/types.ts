@@ -2,15 +2,10 @@
  * Shared types for theme settings components
  */
 
-/** Material Design 3 color keys */
-export type ColorKey = 
-  | 'primary' | 'onPrimary' | 'primaryContainer' | 'onPrimaryContainer'
-  | 'secondary' | 'onSecondary' | 'secondaryContainer' | 'onSecondaryContainer'
-  | 'tertiary' | 'onTertiary' | 'tertiaryContainer' | 'onTertiaryContainer'
-  | 'error' | 'onError' | 'errorContainer' | 'onErrorContainer'
-  | 'surface' | 'onSurface' | 'surfaceVariant' | 'onSurfaceVariant'
-  | 'inverseSurface' | 'inverseOnSurface' | 'outline' | 'outlineVariant'
-  | 'success' | 'warning';
+import type { RegisteredColorToken } from '~/theme/_shared/design-token-registry';
+
+/** User-overridable theme color keys. */
+export type ColorKey = RegisteredColorToken;
 
 /** Local hex input keys (includes background colors and palette colors) */
 export type LocalHexKeys = ColorKey | 'contentBg1Color' | 'contentBg2Color' | 'sidebarBgColor';

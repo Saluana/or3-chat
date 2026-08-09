@@ -220,6 +220,24 @@ describe('useUserThemeOverrides', () => {
         expect(overrides.value.typography?.baseFontPx).toBe(18); // valid value
     });
 
+    it('validates shared shape ranges', () => {
+        const { set, overrides } = useUserThemeOverrides();
+
+        set({
+            shape: {
+                enabled: true,
+                borderWidthPx: 20,
+                borderRadiusPx: 80,
+            },
+        });
+        expect(overrides.value.shape?.borderWidthPx).toBe(6);
+        expect(overrides.value.shape?.borderRadiusPx).toBe(32);
+
+        set({ shape: { borderWidthPx: -1, borderRadiusPx: -4 } });
+        expect(overrides.value.shape?.borderWidthPx).toBe(0);
+        expect(overrides.value.shape?.borderRadiusPx).toBe(0);
+    });
+
     it('validates opacity range (0-1)', () => {
         const { set, overrides } = useUserThemeOverrides();
 

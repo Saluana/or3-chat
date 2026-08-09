@@ -56,14 +56,30 @@ export interface UserThemeOverrides {
         onSurface?: string;
         surfaceVariant?: string;
         onSurfaceVariant?: string;
+        surfaceContainerLowest?: string;
+        surfaceContainerLow?: string;
+        surfaceContainer?: string;
+        surfaceContainerHigh?: string;
+        surfaceContainerHighest?: string;
+        surfaceHover?: string;
+        surfaceActive?: string;
         inverseSurface?: string;
         inverseOnSurface?: string;
         // Outline
         outline?: string;
         outlineVariant?: string;
+        borderColor?: string;
+        // Interactive states
+        primaryHover?: string;
+        primaryActive?: string;
+        errorHover?: string;
+        errorActive?: string;
         // Semantic (app-specific)
         success?: string;
         warning?: string;
+        info?: string;
+        infoHover?: string;
+        infoActive?: string;
     };
 
     /** Background layer overrides */
@@ -89,6 +105,16 @@ export interface UserThemeOverrides {
         baseFontPx?: number;
         /** Use system fonts instead of theme fonts */
         useSystemFont?: boolean;
+    };
+
+    /** High-impact shape tokens shared by app components */
+    shape?: {
+        /** Master toggle for border width and radius overrides */
+        enabled?: boolean;
+        /** Global border thickness in pixels (0-6) */
+        borderWidthPx?: number;
+        /** Global corner radius in pixels (0-32) */
+        borderRadiusPx?: number;
     };
 
     /** UI-specific settings (not in theme DSL) */
@@ -128,6 +154,7 @@ export interface UserBackgroundLayer {
 export const EMPTY_USER_OVERRIDES: UserThemeOverrides = {
     colors: { enabled: false },
     backgrounds: { enabled: false },
+    shape: { enabled: false },
     typography: {},
     ui: {},
 };

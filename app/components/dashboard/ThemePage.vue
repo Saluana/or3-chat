@@ -9,7 +9,7 @@
                 <h1 class="dashboard-page-title">Theme studio</h1>
                 <p class="dashboard-page-description">
                     Start with a theme, then customize one part of its
-                    appearance at a time. Changes preview live as you work.
+                    appearance at a time. Changes apply live as you work.
                 </p>
             </div>
         </header>
@@ -52,49 +52,6 @@
                     <DashboardThemeSelector />
                     <DashboardThemeModeToggle />
                 </div>
-
-                <section
-                    class="section-card space-y-4"
-                    aria-labelledby="theme-preview-heading"
-                >
-                    <div>
-                        <h2
-                            id="theme-preview-heading"
-                            class="dashboard-section-title"
-                        >
-                            Live preview
-                        </h2>
-                        <p class="supporting-text">
-                            These components use the same semantic tokens as the
-                            rest of the workspace.
-                        </p>
-                    </div>
-                    <div class="theme-preview-grid">
-                        <UButton color="primary" variant="solid">
-                            Primary action
-                        </UButton>
-                        <UButton color="primary" variant="outline">
-                            Secondary action
-                        </UButton>
-                        <a
-                            href="#"
-                            class="text-[var(--md-primary)]"
-                            @click.prevent
-                        >
-                            Text link
-                        </a>
-                        <UInput
-                            aria-label="Theme preview input"
-                            placeholder="Sample input"
-                        />
-                        <div class="theme-preview-surface">
-                            <strong>Surface card</strong>
-                            <span>
-                                Supporting content on a themed surface.
-                            </span>
-                        </div>
-                    </div>
-                </section>
             </template>
 
             <DashboardThemeColorPaletteSection
@@ -103,6 +60,10 @@
 
             <DashboardThemeTypographySection
                 v-else-if="activeSection === 'typography'"
+            />
+
+            <DashboardThemeShapeSection
+                v-else-if="activeSection === 'shape'"
             />
 
             <template v-else-if="activeSection === 'backgrounds'">
@@ -128,6 +89,7 @@ type ThemeSectionId =
     | 'theme'
     | 'colors'
     | 'typography'
+    | 'shape'
     | 'backgrounds'
     | 'advanced';
 
@@ -146,6 +108,11 @@ const sections: Array<{
         id: 'typography',
         label: 'Typography',
         icon: useIcon('editor.insert.text').value,
+    },
+    {
+        id: 'shape',
+        label: 'Shape',
+        icon: useIcon('ui.settings').value,
     },
     {
         id: 'backgrounds',
@@ -261,29 +228,6 @@ async function handleTabKeydown(
     min-width: 0;
     max-width: 100%;
 }
-.theme-preview-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: center;
-    gap: 0.75rem;
-}
-.theme-preview-surface {
-    grid-column: 1 / -1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    min-height: 4.5rem;
-    padding: 0.9rem;
-    color: var(--md-on-surface);
-    background: var(--md-surface-container-low);
-    border: var(--md-border-width) solid var(--md-border-color);
-    border-radius: var(--md-border-radius);
-}
-.theme-preview-surface span {
-    color: var(--md-on-surface-variant, var(--md-on-surface));
-    font-size: 0.75rem;
-    opacity: 0.72;
-}
 @media (max-width: 759px) {
     .theme-studio-tabs {
         display: grid;
@@ -293,23 +237,10 @@ async function handleTabKeydown(
     .theme-studio-tab {
         min-width: 0;
     }
-    .theme-studio-tab:last-child {
-        grid-column: 1 / -1;
-    }
 }
 @media (min-width: 760px) {
     .theme-studio-tab {
         flex-basis: 0;
-    }
-}
-@media (min-width: 1024px) {
-    .theme-preview-grid {
-        grid-template-columns:
-            auto auto minmax(5rem, 0.45fr) minmax(12rem, 1fr)
-            minmax(14rem, 1fr);
-    }
-    .theme-preview-surface {
-        grid-column: auto;
     }
 }
 </style>

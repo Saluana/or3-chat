@@ -69,11 +69,35 @@ Activating a theme does the following:
 ### User theme overrides
 
 Per-user overrides (`app/core/theme/useUserThemeOverrides.ts`) sit on top of
-the active theme. Users can change colors, background layers, and base font
-size without editing the theme. Overrides are stored per color mode in
-localStorage (`or3:user-theme-overrides:light` / `:dark`) and merged into the
-DOM at runtime. Each group has an `enabled` toggle, and values are clamped
-(font size 14-24px, opacity 0-1). See the capability table below.
+the active theme. Users can change colors, shared shape tokens, background
+layers, and base font size without editing the theme. Overrides are stored per
+color mode in localStorage (`or3:user-theme-overrides:light` / `:dark`) and
+merged into the DOM at runtime. Each group has an `enabled` toggle, and values
+are clamped (font size 14-24px, opacity 0-1). See the capability table below.
+
+The color editor presents the highest-impact roles first: accent, app and panel
+surfaces, text, borders, hover/selected states, and status colors. Less common
+Material roles and individual surface levels remain available in a collapsed
+Advanced section. Basic panel/elevated controls update their paired surface
+levels, the Borders control also updates the subtle outline role, and primary
+accent text is assigned a readable black or white contrast color. The exact
+outline role remains independently editable for stronger component outlines.
+Success and warning overrides also feed Nuxt UI's extended semantic color
+variables.
+
+These mappings are user-override behavior only. With color overrides disabled,
+the active theme's authored variables—including custom state tokens—continue to
+cascade unchanged. Existing saved detailed values remain supported and editable
+under Advanced colors, and disabling then re-enabling colors preserves those
+saved values.
+
+The Shape section exposes `--md-border-width` and `--md-border-radius`. These
+are the two broadly consumed non-color design tokens: they control shared
+borders, dividers, inputs, cards, panels, and interactive-surface rounding.
+Shape overrides have their own enabled toggle and restore the active theme's
+authored values when disabled. Shadows are intentionally not exposed because
+most current shadows are component- or theme-specific rather than consumers of
+one reliable shared elevation token.
 
 The signed-in preference repository is canonical once account storage is
 ready. The SSR cookie supplies first paint, and localStorage is a migration and

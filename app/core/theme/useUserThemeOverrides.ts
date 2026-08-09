@@ -242,6 +242,18 @@ function validatePatch(patch: Partial<UserThemeOverrides>): Partial<UserThemeOve
             Math.min(24, result.typography.baseFontPx)
         );
     }
+    if (result.shape?.borderWidthPx !== undefined) {
+        result.shape.borderWidthPx = Math.max(
+            0,
+            Math.min(6, result.shape.borderWidthPx)
+        );
+    }
+    if (result.shape?.borderRadiusPx !== undefined) {
+        result.shape.borderRadiusPx = Math.max(
+            0,
+            Math.min(32, result.shape.borderRadiusPx)
+        );
+    }
     for (const layer of [
         result.backgrounds?.content?.base,
         result.backgrounds?.content?.overlay,

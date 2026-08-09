@@ -34,7 +34,10 @@ import type {
     ThemeBackgroundSlots,
 } from '../../theme/_shared/types';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
-import { COLOR_TOKEN_REGISTRY } from '~/theme/_shared/design-token-registry';
+import {
+    COLOR_TOKEN_ALIASES,
+    COLOR_TOKEN_REGISTRY,
+} from '~/theme/_shared/design-token-registry';
 import {
     applyThemeBackgrounds,
     createThemeBackgroundTokenResolver,
@@ -121,21 +124,55 @@ export async function applyMergedTheme(
         r.removeProperty('--app-font-heading-current');
     }
 
-    // 2. Apply color palette overrides
+    // 2. Apply shared shape overrides
+    if (overrides.shape?.enabled) {
+        if (overrides.shape.borderWidthPx !== undefined) {
+            r.setProperty(
+                '--md-border-width',
+                `${overrides.shape.borderWidthPx}px`
+            );
+        } else r.removeProperty('--md-border-width');
+
+        if (overrides.shape.borderRadiusPx !== undefined) {
+            r.setProperty(
+                '--md-border-radius',
+                `${overrides.shape.borderRadiusPx}px`
+            );
+        } else r.removeProperty('--md-border-radius');
+    } else {
+        r.removeProperty('--md-border-width');
+        r.removeProperty('--md-border-radius');
+    }
+
+    // 3. Apply color palette overrides
     if (overrides.colors?.enabled) {
         for (const [key, cssVar] of Object.entries(COLOR_TOKEN_REGISTRY)) {
             const val = (overrides.colors as Record<string, unknown>)[key];
-            if (val && typeof val === 'string') r.setProperty(cssVar, val);
-            else r.removeProperty(cssVar);
+            const targets = [
+                cssVar,
+                ...(COLOR_TOKEN_ALIASES[
+                    key as keyof typeof COLOR_TOKEN_REGISTRY
+                ] ?? []),
+            ];
+            for (const target of targets) {
+                if (val && typeof val === 'string') r.setProperty(target, val);
+                else r.removeProperty(target);
+            }
         }
     } else {
         // Remove overrides to let base theme values cascade
-        for (const cssVar of Object.values(COLOR_TOKEN_REGISTRY)) {
+        const overrideVariables = new Set([
+            ...Object.values(COLOR_TOKEN_REGISTRY),
+            ...Object.values(COLOR_TOKEN_ALIASES).flatMap(
+                (aliases) => aliases ?? []
+            ),
+        ]);
+        for (const cssVar of overrideVariables) {
             r.removeProperty(cssVar);
         }
     }
 
-    // 3. Build merged backgrounds
+    // 4. Build merged backgrounds
     const mergedBackgrounds = buildMergedBackgrounds(
         baseBackgrounds,
         overrides
@@ -145,7 +182,7 @@ export async function applyMergedTheme(
         shouldCommit,
     });
 
-    // 4. Apply background color overrides (if enabled)
+    // 5. Apply background color overrides (if enabled)
     const themeBaseColor = mergedBackgrounds.content?.base?.color;
     const themeOverlayColor = mergedBackgrounds.content?.overlay?.color;
     const themeSidebarColor = mergedBackgrounds.sidebar?.color;
@@ -180,7 +217,7 @@ export async function applyMergedTheme(
         }
     }
 
-    // 5. Handle gradient visibility (UI-specific)
+    // 6. Handle gradient visibility (UI-specific)
     if (overrides.backgrounds?.headerGradient?.enabled !== undefined) {
         r.setProperty(
             '--app-header-gradient-display',
