@@ -453,6 +453,7 @@ import {
     setGlobalSidebarLayoutApi,
     type SidebarLayoutApi,
 } from '~/utils/sidebarLayoutApi';
+import { setWorkspaceResourceNavigationApi } from '~/utils/workspaceResourceNavigation';
 import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
 import {
     setPaletteHostContext,
@@ -1241,7 +1242,10 @@ let applyingInitialPaneToken: number | null = null;
 
 function resourceForPane(pane: PaneState) {
     if (pane.mode === 'chat') {
-        return { kind: 'chat' as const, threadId: pane.threadId || null };
+        return {
+            kind: 'chat' as const,
+            threadId: (pane.pendingThreadId ?? pane.threadId) || null,
+        };
     }
     if (pane.mode === 'doc') {
         return pane.documentId
@@ -1275,7 +1279,13 @@ function reconcileWorkspaceTabsWithPanes(): void {
 watch(
     () =>
         panes.value.map((pane) =>
-            [pane.id, pane.mode, pane.threadId, pane.documentId ?? ''].join(':')
+            [
+                pane.id,
+                pane.mode,
+                pane.threadId,
+                pane.pendingThreadId ?? '',
+                pane.documentId ?? '',
+            ].join(':')
         ),
     () => {
         if (!workspaceTabsReady.value || !workspaceTabsEnabled.value) return;
@@ -1707,6 +1717,54 @@ function onNewChat() {
     closeSidebarIfMobile();
 }
 
+async function openWorkspaceResource(
+    resource: WorkspaceResource,
+    destination: 'new-tab' | 'new-pane'
+): Promise<boolean> {
+    if (destination === 'new-tab') {
+        if (!workspaceTabsEnabled.value) return false;
+        return !!(await workspaceTabs.openResource(resource, {
+            target: 'active',
+            allowDuplicate: true,
+            reuseActiveBlank: false,
+        }));
+    }
+
+    if (workspaceTabsEnabled.value) {
+        return !!(await workspaceTabs.openResource(resource, {
+            target: 'split',
+            allowDuplicate: true,
+        }));
+    }
+
+    if (!canAddPane.value) return false;
+    const index = panes.value.length;
+    if (!addPane()) return false;
+
+    if (resource.kind === 'chat') {
+        updatePane(index, {
+            mode: 'chat',
+            documentId: undefined,
+            messages: [],
+        });
+        await setPaneThread(index, resource.threadId ?? '');
+        return true;
+    }
+
+    if (resource.kind === 'document') {
+        updatePane(index, {
+            mode: 'doc',
+            documentId: resource.documentId,
+            threadId: '',
+            messages: [],
+        });
+        return true;
+    }
+
+    await setPaneApp(index, resource.appId, { recordId: resource.recordId });
+    return true;
+}
+
 // --------------- Theme ---------------
 const nuxtApp = useNuxtApp();
 const getThemeSafe = () => {
@@ -1773,6 +1831,7 @@ const {
 } = useSystemPromptsModal();
 let disposePaletteHostContext: (() => void) | null = null;
 let disposeWorkspaceTabPaletteProvider: (() => void) | null = null;
+let disposeWorkspaceResourceNavigation: (() => void) | null = null;
 
 watch(
     () =>
@@ -1823,6 +1882,12 @@ async function openNewProjectModal() {
 }
 
 onMounted(() => {
+    disposeWorkspaceResourceNavigation?.();
+    disposeWorkspaceResourceNavigation = setWorkspaceResourceNavigationApi({
+        canOpenInNewTab: () => workspaceTabsEnabled.value,
+        canOpenInNewPane: () => canAddPane.value,
+        openResource: openWorkspaceResource,
+    });
     disposeWorkspaceTabPaletteProvider?.();
     disposeWorkspaceTabPaletteProvider = setWorkspaceTabPaletteProvider(
         () => workspaceTabs.tabs.value
@@ -1887,6 +1952,8 @@ onUnmounted(() => {
     disposeWorkspaceScopeSubscription();
     disposePaletteHostContext?.();
     disposePaletteHostContext = null;
+    disposeWorkspaceResourceNavigation?.();
+    disposeWorkspaceResourceNavigation = null;
     disposeWorkspaceTabPaletteProvider?.();
     disposeWorkspaceTabPaletteProvider = null;
 });

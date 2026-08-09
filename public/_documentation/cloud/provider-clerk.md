@@ -8,6 +8,12 @@ Dedicated install and wiring guide for the Clerk auth provider package.
 - Server auth provider registration
 - Server `ProviderTokenBroker` registration
 - Client auth token broker plugin for direct-mode providers
+- Client auth UI adapter for the sidebar rail and mobile More sheet
+
+The mobile More sheet requests `layout="more-sheet"`, which renders Account or
+Login as the same full-width row used by Connect and the System actions. The
+signed-in Account row opens the Clerk user profile; rail usage keeps the compact
+avatar trigger.
 
 ## Install
 

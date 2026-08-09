@@ -3,7 +3,7 @@
         ref="el"
         role="button"
         tabindex="0"
-        class="w-full group flex items-center gap-2.5 px-2.5 py-2.5 group relative transition-colors duration-200 rounded-[var(--md-border-radius)] cursor-pointer animate-sidebar-item-enter unified-sb-item theme-btn retro-press"
+        class="min-w-0 group flex items-center gap-2.5 px-2.5 py-2.5 group relative transition-colors duration-200 rounded-[var(--md-border-radius)] cursor-pointer animate-sidebar-item-enter unified-sb-item theme-btn retro-press"
         :class="{
             'bg-[color:var(--md-primary)]/12 dark:bg-[color:var(--md-primary)]/20 text-[color:var(--md-primary)] unified-sb-item-active':
                 active,
@@ -64,6 +64,28 @@
                 <template #content>
                     <div class="p-1 w-44 space-y-1">
                         <UButton
+                            v-if="canOpenInNewTab"
+                            v-bind="actionButtonProps('open-tab')"
+                            class="w-full justify-start"
+                            @click.stop="openInNewTab"
+                        >
+                            Open in new tab
+                        </UButton>
+                        <UButton
+                            v-if="!isMobile"
+                            v-bind="actionButtonProps('open-pane')"
+                            class="w-full justify-start"
+                            :disabled="!canOpenInNewPane"
+                            :title="
+                                canOpenInNewPane
+                                    ? 'Open in new pane'
+                                    : 'Maximum pane limit reached'
+                            "
+                            @click.stop="openInNewPane"
+                        >
+                            Open in new pane
+                        </UButton>
+                        <UButton
                             v-bind="actionButtonProps('rename')"
                             class="w-full justify-start"
                             @click="emit('rename', item)"
@@ -117,6 +139,8 @@ import { getDb } from '~/db/client';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
+import { useWorkspaceResourceActions } from '~/composables/core/useWorkspaceResourceActions';
+import { isMobile } from '~/state/global';
 import {
     useThreadHistoryActions,
     type ThreadHistoryAction,
@@ -150,6 +174,8 @@ const iconMore = useIcon('ui.more');
 const iconEdit = useIcon('ui.edit');
 const iconTrash = useIcon('ui.trash');
 const iconFolder = useIcon('sidebar.new_folder');
+const iconOpenTab = useIcon('ui.open_tab');
+const iconOpenPane = useIcon('ui.open_pane');
 
 const threadActions = useThreadHistoryActions();
 const documentActions = useDocumentHistoryActions();
@@ -178,6 +204,18 @@ const actionButtonOverridesMap = {
         component: 'button',
         context: 'sidebar',
         identifier: 'sidebar.unified-item.add-to-project',
+        isNuxtUI: true,
+    }),
+    'open-tab': useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.unified-item.open-tab',
+        isNuxtUI: true,
+    }),
+    'open-pane': useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.unified-item.open-pane',
         isNuxtUI: true,
     }),
     extra: useThemeOverrides({
@@ -210,6 +248,8 @@ const actionButtonProps = (id: ActionButtonId) => {
     if (id === 'rename') icon = iconEdit;
     if (id === 'delete') icon = iconTrash;
     if (id === 'add-to-project') icon = iconFolder;
+    if (id === 'open-tab') icon = iconOpenTab;
+    if (id === 'open-pane') icon = iconOpenPane;
 
     return {
         color: 'neutral' as const,
@@ -219,6 +259,18 @@ const actionButtonProps = (id: ActionButtonId) => {
         ...overrides,
     };
 };
+
+const workspaceResource = computed(() =>
+    props.item.type === 'thread'
+        ? { kind: 'chat' as const, threadId: props.item.id }
+        : { kind: 'document' as const, documentId: props.item.id }
+);
+const {
+    canOpenInNewTab,
+    canOpenInNewPane,
+    openInNewTab,
+    openInNewPane,
+} = useWorkspaceResourceActions(workspaceResource);
 
 const extraActions = computed<readonly ExtraAction[]>(() =>
     props.item.type === 'thread' ? threadActions.value : documentActions.value

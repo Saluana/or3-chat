@@ -10,6 +10,11 @@ Setup and operating guide for the default-stack auth provider.
 - Session tokens for server-gated routes (`can()` enforcement remains in core routes).
 - Provider auth UI adapter registration (when the provider package is installed).
 
+The auth UI adapter supports both sidebar surfaces. Desktop/rail usage keeps
+the compact Account/Login tile; the mobile More sheet requests
+`layout="more-sheet"` and receives a full-width row matching Connect and the
+System actions. The signed-in Account row still opens the provider menu.
+
 ## Install
 
 ```bash

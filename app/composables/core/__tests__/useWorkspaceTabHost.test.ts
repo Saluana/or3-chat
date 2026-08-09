@@ -81,4 +81,52 @@ describe('useWorkspaceTabHost', () => {
 
         expect(setPaneThread).toHaveBeenCalledWith(0, 'chat-b');
     });
+
+    it('publishes the target chat while replacing a document', async () => {
+        const pane = {
+            id: 'pane-a',
+            mode: 'doc',
+            documentId: 'doc-a',
+            threadId: '',
+            messages: [],
+        };
+        const panes = ref([pane]);
+        const updatePane = vi.fn((_: number, updates: Record<string, unknown>) => {
+            Object.assign(pane, updates);
+        });
+        const setPaneThread = vi.fn(async () => {
+            expect(pane.mode).toBe('chat');
+            expect((pane as { pendingThreadId?: string }).pendingThreadId).toBe(
+                'chat-a'
+            );
+            pane.threadId = 'chat-a';
+        });
+        const api = {
+            panes,
+            activePaneId: ref('pane-a'),
+            getPaneIndexById: () => 0,
+            setActive: vi.fn(),
+            addPane: vi.fn(),
+            closePane: vi.fn(),
+            updatePane,
+            setPaneThread,
+            setPaneApp: vi.fn(),
+        };
+        const host = useWorkspaceTabHost(api as never);
+
+        await host.bindResourceToPane(
+            'pane-a',
+            { kind: 'chat', threadId: 'chat-a' },
+            activation
+        );
+
+        expect(updatePane).toHaveBeenCalledWith(0, {
+            mode: 'chat',
+            documentId: undefined,
+            pendingThreadId: 'chat-a',
+            messages: [],
+        });
+        expect(pane.threadId).toBe('chat-a');
+        expect((pane as { pendingThreadId?: string }).pendingThreadId).toBeUndefined();
+    });
 });

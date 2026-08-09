@@ -65,6 +65,8 @@ export const DEFAULT_ICONS = {
     'ui.check': 'pixelarticons:check',
     'ui.close': 'pixelarticons:close',
     'ui.copy': 'pixelarticons:copy',
+    'ui.open_tab': 'pixelarticons:open',
+    'ui.open_pane': 'pixelarticons:layout',
     'ui.trash': 'pixelarticons:trash',
     'ui.edit': 'pixelarticons:edit',
     'ui.warning': 'pixelarticons:warning-box',

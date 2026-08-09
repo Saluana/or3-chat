@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ref } from 'vue';
+import { defineComponent, ref, type Component } from 'vue';
 import SideMobileBottomNav from '../SideMobileBottomNav.vue';
 import {
     DEFAULT_WORKSPACE_PROFILE_INVENTORY,
@@ -40,10 +40,19 @@ const mockSetActivePage = vi.fn().mockResolvedValue(true);
 const mockToastAdd = vi.fn();
 const mockNavigateTo = vi.fn();
 const mockCloseSidebarIfMobile = vi.fn();
+const mockResolveAuthUiAdapter = vi.hoisted(() =>
+    vi.fn<() => { id: string; component: Component } | null>(() => null)
+);
 
 const testConfig = {
     public: {
         ssrAuthEnabled: false,
+        authProvider: 'basic-auth',
+        openRouter: {
+            allowUserOverride: true,
+            hasInstanceKey: false,
+            requireUserKey: false,
+        },
         features: {},
         or3: {
             site: {},
@@ -65,6 +74,18 @@ vi.mock('~/composables/sidebar/useActiveSidebarPage', () => ({
         activePageId: mockActivePageId,
         setActivePage: mockSetActivePage,
     }),
+}));
+
+vi.mock('~/core/auth/useOpenrouter', () => ({
+    useOpenRouterAuth: () => ({
+        startLogin: vi.fn(),
+        logoutOpenRouter: vi.fn(),
+        isLoggingIn: ref(false),
+    }),
+}));
+
+vi.mock('~/core/auth-ui/registry', () => ({
+    resolveAuthUiAdapter: mockResolveAuthUiAdapter,
 }));
 
 vi.mock('#imports', async (importOriginal) => {
@@ -132,7 +153,7 @@ function mountComponent() {
                     template:
                         '<div class="u-popover-stub"><slot /><slot name="content" /></div>',
                 },
-                SidebarAuthButton: {
+                SidebarAuthButtonFallback: {
                     template: '<div class="auth-button-stub" />',
                 },
                 NuxtLink: { template: '<a><slot /></a>' },
@@ -156,6 +177,7 @@ describe('SideMobileBottomNav', () => {
         mockActivePageId.value = 'sidebar-home';
         mockSetActivePage.mockResolvedValue(true);
         testConfig.public.ssrAuthEnabled = false;
+        mockResolveAuthUiAdapter.mockReturnValue(null);
         setGlobalSidebarLayoutApi({
             close: vi.fn(),
             open: vi.fn(),
@@ -319,6 +341,27 @@ describe('SideMobileBottomNav', () => {
         const wrapper = mountComponent();
         await openMoreSheet(wrapper);
         expect(wrapper.find('#mobile-nav-info').exists()).toBe(false);
+    });
+
+    it('requests the provider account adapter in more-sheet layout', async () => {
+        testConfig.public.ssrAuthEnabled = true;
+        mockResolveAuthUiAdapter.mockReturnValue({
+            id: 'basic-auth',
+            component: defineComponent({
+                props: {
+                    layout: { type: String, default: 'rail' },
+                },
+                template:
+                    '<button class="more-row provider-account-row" :data-layout="layout">Account</button>',
+            }),
+        });
+
+        const wrapper = mountComponent();
+        await openMoreSheet(wrapper);
+
+        const account = wrapper.get('.provider-account-row');
+        expect(account.attributes('data-layout')).toBe('more-sheet');
+        expect(account.classes()).toContain('more-row');
     });
 
     it('opens More as a bottom sheet with workspace cards', async () => {

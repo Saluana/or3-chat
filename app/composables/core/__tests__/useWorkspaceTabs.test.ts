@@ -66,6 +66,33 @@ describe('useWorkspaceTabs', () => {
         expect(new Set(tabs.tabs.value.map((tab) => tab.id))).toHaveLength(3);
     });
 
+    it('preserves an active blank tab when explicitly opening a duplicate tab', async () => {
+        const fake = createHost();
+        const tabs = useWorkspaceTabs({
+            host: fake.host,
+            paneLimit: computed(() => 3),
+            isMobile: ref(false),
+            workspaceId: () => 'local',
+            profileId: () => 'standard',
+            storage: null,
+        });
+
+        await tabs.openResource(
+            { kind: 'chat', threadId: 'chat-a' },
+            { allowDuplicate: true, reuseActiveBlank: false }
+        );
+
+        expect(tabs.tabs.value).toHaveLength(2);
+        expect(tabs.tabs.value[0]?.resource).toEqual({
+            kind: 'chat',
+            threadId: null,
+        });
+        expect(tabs.tabs.value[1]?.resource).toEqual({
+            kind: 'chat',
+            threadId: 'chat-a',
+        });
+    });
+
     it('routes open/new/split actions through one tab session and host', async () => {
         const fake = createHost();
         const tabs = useWorkspaceTabs({

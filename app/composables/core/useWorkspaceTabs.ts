@@ -226,6 +226,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         options_: {
             target?: 'active' | 'background' | 'split';
             allowDuplicate?: boolean;
+            reuseActiveBlank?: boolean;
         } = {}
     ): Promise<string | null> {
         const finishMeasure = measureWorkspaceTabAction('open');
@@ -233,6 +234,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         if (options_.target === 'split') return openInSplit(resource, options_);
         const opened = openTab(state.value, resource, {
             allowDuplicate: options_.allowDuplicate,
+            reuseActiveBlank: options_.reuseActiveBlank,
         });
         commit(opened.state);
         if (!opened.tabId || options_.target === 'background') return opened.tabId;

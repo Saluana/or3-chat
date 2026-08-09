@@ -136,6 +136,48 @@ describe('document editor theme contract', () => {
         ).toBe('none');
     });
 
+    it('retro polishes the mobile More sheet without touching blank', () => {
+        const retroCss = readFileSync(resolve(THEME_ROOT, 'retro', 'styles.css'), 'utf8');
+        const blankCss = readFileSync(resolve(THEME_ROOT, 'blank', 'styles.css'), 'utf8');
+
+        expect(retroCss).toContain('Mobile More sheet');
+        expect(retroCss).toContain('--more-radius: 3px');
+        expect(retroCss).toContain('--more-icon: 1.85rem');
+        expect(retroCss).toContain('--more-shadow-card: 3px 3px 0');
+        expect(retroCss).toContain('--more-card-face:');
+        expect(retroCss).toContain('border-radius: 6px 6px 0 0');
+        expect(retroCss).toContain('.more-status-badge::before');
+        expect(retroCss).toContain('repeating-linear-gradient');
+        expect(retroCss).toContain('.mobile-nav-more-auth .more-row');
+        expect(blankCss).not.toContain('Mobile More sheet');
+        expect(blankCss).not.toContain('--more-radius');
+        expect(blankCss).not.toContain('--more-shadow-card');
+    });
+
+    it('retro polishes the agent connections modal without touching blank', () => {
+        const retroCss = readFileSync(resolve(THEME_ROOT, 'retro', 'styles.css'), 'utf8');
+        const blankCss = readFileSync(resolve(THEME_ROOT, 'blank', 'styles.css'), 'utf8');
+
+        expect(retroCss).toContain('Agent connections modal');
+        expect(retroCss).toContain('--agent-conn-radius: 3px');
+        expect(retroCss).toContain('--agent-conn-header: var(--md-primary)');
+        expect(retroCss).toContain('.agent-conn-badge--active');
+        expect(retroCss).toContain('.agent-conn-badge--locked');
+        expect(retroCss).toContain('.agent-conn-host--selected');
+        expect(retroCss).toContain('inset 3px 0 0 var(--md-primary)');
+        expect(retroCss).toContain('.agent-conn-host-list');
+        expect(retroCss).toContain(
+            "/* One border on the Nuxt UI base slot — never stack on the inner input */"
+        );
+        expect(retroCss).toContain('.agent-conn-icon-tile');
+        expect(retroCss).toContain('.agent-conn-forget');
+        expect(retroCss).toContain('.agent-conn-unlock');
+        expect(retroCss).toContain('.agent-conn-remote-title');
+        expect(blankCss).not.toContain('Agent connections modal');
+        expect(blankCss).not.toContain('--agent-conn-radius');
+        expect(blankCss).not.toContain('.agent-conn-host--active');
+    });
+
     it('retro densifies the mobile open-tabs switcher without touching blank', () => {
         const retroCss = readFileSync(resolve(THEME_ROOT, 'retro', 'styles.css'), 'utf8');
         const blankCss = readFileSync(resolve(THEME_ROOT, 'blank', 'styles.css'), 'utf8');
@@ -146,7 +188,7 @@ describe('document editor theme contract', () => {
 
         expect(retroCss).toContain('list-row composition');
         expect(retroCss).toContain('--tab-switcher-radius: 3px');
-        expect(retroCss).toContain('--tab-switcher-row-h: 4.75rem');
+        expect(retroCss).toContain('--tab-switcher-row-h: 4.25rem');
         expect(retroCss).toContain('height: 44px !important');
         expect(retroCss).toContain('grid-template-columns: 1.4fr 0.8fr');
         expect(retroCss).toContain('gap: 0.65rem !important; /* ~10–11px */');
@@ -157,11 +199,23 @@ describe('document editor theme contract', () => {
         expect(retroCss).toContain(
             '.workspace-tab-switcher-option-opened {\n\t\tdisplay: none !important;'
         );
+        expect(retroCss).toContain('Open tabs switcher — dark mode hierarchy');
+        expect(retroCss).toContain('--ts-page: #101418');
+        expect(retroCss).toContain('--ts-raised: #222a34');
+        expect(retroCss).toContain('--ts-new: #2a3340');
+        expect(retroCss).toContain('--ts-sort: #d2d8e0');
+        expect(retroCss).toContain('--ts-border: #3a4656');
+        expect(retroCss).toContain('--ts-border-muted: #2f3a48');
+        expect(retroCss).toContain('--ts-shadow: 2px 2px 0 #080a0d');
+        expect(retroCss).toContain('--ts-done:');
+        expect(retroCss).toContain('--ts-done-hover:');
+        expect(retroCss).toContain('border-left-width: 4px');
         expect(retroShell).toContain("'input#shell.tab-switcher-search'");
         expect(retroShell).toContain("variant: 'ghost'");
         expect(blankCss).not.toContain('list-row composition');
         expect(blankCss).not.toContain('--tab-switcher-row-h');
         expect(blankCss).not.toContain('Quiet X');
+        expect(blankCss).not.toContain('Open tabs switcher — dark mode hierarchy');
     });
 
     it('retro keeps chrome pixel fonts but uses a readable stack for the writing canvas', () => {

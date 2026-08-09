@@ -19,6 +19,8 @@ await workspaceTabs.openResource(
 
 The command deduplicates chats, documents, and app records by default, reuses an untouched blank chat, and focuses an already-visible tab in its existing split. Pass `allowDuplicate: true` only when an explicit duplicate view is intended. Legacy plugin pane mutations remain supported: `PageShell` reconciles them into the local tab session.
 
+Sidebar and plugin surfaces can use `useWorkspaceResourceActions(resource)` for the same explicit duplicate views. It accepts any `WorkspaceResource` (chat, document, or pane app) and exposes `openInNewTab()` and `openInNewPane()`. The latter reports unavailable when the workspace profile’s pane limit has been reached; callers should hide that action on mobile.
+
 `useWorkspaceTabHost()` is deliberately narrow. It translates stable pane IDs to the existing index-based `useMultiPane` methods, binds the resource, and leaves chat loading and document storage in their current owners.
 
 ## State and persistence

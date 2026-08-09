@@ -175,7 +175,7 @@
 	--tab-switcher-radius: 3px;
 	--tab-switcher-border-subtle: 1.5px;
 	--tab-switcher-border: 2px;
-	--tab-switcher-row-h: 4.75rem; /* 76px — within 72–84px */
+	--tab-switcher-row-h: 4.25rem; /* 68px — shave ~8px from prior 76px */
 	--tab-switcher-shadow-control: 2px 2px 0
 		color-mix(in srgb, var(--md-border-color) 38%, transparent);
 	--tab-switcher-shadow-row: 2px 2px 0
@@ -256,7 +256,21 @@
 	.workspace-tab-switcher-sort [data-slot='value'] {
 		font-size: 0.74rem !important;
 		font-weight: 500;
-		color: var(--md-on-surface-variant) !important;
+		color: color-mix(
+			in srgb,
+			var(--md-on-surface) 55%,
+			var(--md-on-surface-variant)
+		) !important;
+	}
+
+	.workspace-tab-switcher-sort [data-slot='base'] svg,
+	.workspace-tab-switcher-sort [data-slot='base'] .iconify {
+		color: color-mix(
+			in srgb,
+			var(--md-on-surface) 50%,
+			var(--md-on-surface-variant)
+		) !important;
+		opacity: 0.95;
 	}
 
 	.workspace-tab-switcher-reopen {
@@ -365,13 +379,16 @@
 		display: none !important;
 	}
 
-	/* Quiet X — no bordered box competing with the row. */
+	/* Quiet X — secondary, but optically centered with the row content. */
 	.workspace-tab-switcher-card .workspace-tab-switcher-close,
 	.workspace-tab-switcher-card button.workspace-tab-switcher-close {
 		position: static !important;
 		transform: none !important;
-		margin: 0 0.7rem 0 0 !important; /* ~11px right padding feel */
+		align-self: center !important;
+		margin: 0 0.65rem 0 0.15rem !important;
 		box-sizing: border-box !important;
+		display: inline-grid !important;
+		place-items: center !important;
 		flex: none !important;
 		width: 1.5rem !important; /* 24px */
 		min-width: 1.5rem !important;
@@ -386,7 +403,7 @@
 		color: var(--md-on-surface-variant) !important;
 		box-shadow: none !important;
 		--tw-shadow: none !important;
-		opacity: 0.42;
+		opacity: 0.58;
 	}
 
 	.workspace-tab-switcher-card .workspace-tab-switcher-close svg,
@@ -435,7 +452,11 @@
 	}
 
 	.workspace-tab-switcher-action--new {
-		background: var(--md-surface) !important;
+		background: color-mix(
+			in srgb,
+			var(--md-surface-variant) 35%,
+			var(--md-surface)
+		) !important;
 		border-color: var(--md-border-color) !important;
 		color: var(--md-on-surface) !important;
 	}
@@ -445,6 +466,323 @@
 		border-color: var(--md-border-color) !important;
 		color: var(--md-on-primary) !important;
 		box-shadow: 2px 2px 0 var(--md-border-color) !important;
+	}
+
+	/*
+	 * Mobile More sheet — System row is the gold standard (do not enlarge it).
+	 * Only force Account/Connect auth rows to match that icon well + alignment.
+	 */
+	--more-radius: 3px;
+	--more-border: 2px solid var(--md-border-color);
+	--more-shadow-card: 3px 3px 0
+		color-mix(in srgb, var(--md-border-color) 58%, transparent);
+	--more-shadow-press: 1px 1px 0
+		color-mix(in srgb, var(--md-border-color) 50%, transparent);
+	--more-row-h: 3.25rem;
+	--more-icon: 1.85rem; /* System / Workspace gold-standard well */
+	--more-glyph: 0.95rem;
+	--more-card-face: color-mix(in srgb, var(--md-info) 55%, var(--md-surface));
+
+	.more-sheet-panel {
+		border-radius: 6px 6px 0 0 !important;
+		border-top: var(--more-border);
+		border-left: var(--more-border);
+		border-right: var(--more-border);
+		box-shadow: 0 -2px 0
+			color-mix(in srgb, var(--md-border-color) 35%, transparent) !important;
+		background: var(--md-surface) !important;
+	}
+
+	/* Squared pixel grip — not an iOS pill. */
+	.more-sheet-handle {
+		width: 1.15rem !important;
+		height: 2px !important;
+		border-radius: 0 !important;
+		background: repeating-linear-gradient(
+			90deg,
+			var(--md-border-color) 0 2px,
+			transparent 2px 3px
+		) !important;
+		opacity: 0.7;
+	}
+
+	.more-sheet-handle-hit {
+		min-height: 1.2rem !important;
+		padding-top: 0.3rem !important;
+	}
+
+	.more-sheet-header {
+		gap: 0.15rem !important;
+		padding: 0.1rem 1rem 0.5rem !important;
+		border-bottom: 1.5px solid var(--md-border-color);
+	}
+
+	.more-sheet-title {
+		font-size: 1.15rem !important;
+		line-height: 1.15 !important;
+	}
+
+	.more-sheet-description {
+		font-size: 0.75rem !important;
+		opacity: 0.78 !important;
+	}
+
+	.more-sheet-body {
+		padding: 0.4rem 0.85rem 0.3rem !important;
+	}
+
+	.more-sheet-footer {
+		padding: 0.2rem 0.85rem 0.15rem !important;
+	}
+
+	.mobile-nav-more-sheet {
+		gap: 0.55rem !important;
+	}
+
+	.more-section,
+	.more-system {
+		gap: 0.22rem !important; /* labels sit closer to content */
+	}
+
+	.more-section-label {
+		font-size: 10px !important;
+		font-weight: 700 !important;
+		letter-spacing: 0.12em !important;
+		opacity: 0.9 !important;
+		color: var(--md-on-surface-variant) !important;
+		padding-inline: 0.05rem !important;
+	}
+
+	/* Major cards: 3px elevation + subtle off-white face. */
+	.more-tile,
+	.more-list,
+	.more-system-card {
+		border: var(--more-border) !important;
+		border-radius: var(--more-radius) !important;
+		background: var(--more-card-face) !important;
+		box-shadow: var(--more-shadow-card) !important;
+		--tw-shadow: 3px 3px 0
+			color-mix(in srgb, var(--md-border-color) 58%, transparent) !important;
+	}
+
+	/* Normal navy divider — not a stacked-window shelf. */
+	.more-list > * + *,
+	.mobile-nav-more-auth > * + *,
+	.more-system-card > * + * {
+		border-top: 1px solid var(--md-border-color) !important;
+		box-shadow: none !important;
+	}
+
+	.more-tile {
+		gap: 0.35rem !important;
+		min-height: 0 !important;
+		padding: 0.5rem 0.55rem 0.55rem !important;
+		transition:
+			background 100ms ease,
+			box-shadow 80ms ease,
+			transform 80ms ease;
+	}
+
+	.more-tile:hover {
+		background: color-mix(
+			in srgb,
+			var(--md-primary) 6%,
+			var(--more-card-face)
+		) !important;
+	}
+
+	.more-tile:active {
+		transform: translate(2px, 2px) !important;
+		box-shadow: var(--more-shadow-press) !important;
+		--tw-shadow: 1px 1px 0
+			color-mix(in srgb, var(--md-border-color) 50%, transparent) !important;
+		background: color-mix(
+			in srgb,
+			var(--md-primary) 9%,
+			var(--more-card-face)
+		) !important;
+	}
+
+	.more-tile--active {
+		background: color-mix(
+			in srgb,
+			var(--md-primary) 9%,
+			var(--more-card-face)
+		) !important;
+		border-color: var(--md-border-color) !important;
+		box-shadow:
+			var(--more-shadow-card),
+			inset 3px 0 0 var(--md-primary) !important;
+	}
+
+	.more-tile--active:active {
+		box-shadow:
+			var(--more-shadow-press),
+			inset 3px 0 0 var(--md-primary) !important;
+	}
+
+	/* System / Workspace icon wells — keep the gold-standard size. */
+	.more-tile-icon,
+	.more-row-icon {
+		box-sizing: border-box !important;
+		display: grid !important;
+		place-items: center !important;
+		flex: none !important;
+		width: var(--more-icon) !important;
+		height: var(--more-icon) !important;
+		min-width: var(--more-icon) !important;
+		min-height: var(--more-icon) !important;
+		max-width: var(--more-icon) !important;
+		max-height: var(--more-icon) !important;
+		border-radius: var(--more-radius) !important;
+		border: 1.5px solid
+			color-mix(in srgb, var(--md-border-color) 72%, transparent) !important;
+		background: color-mix(
+			in srgb,
+			var(--md-on-surface) 3.5%,
+			var(--md-surface)
+		) !important;
+	}
+
+	.more-tile-icon {
+		color: var(--more-tile-accent) !important;
+		background: color-mix(
+			in srgb,
+			var(--more-tile-accent) 8%,
+			var(--md-surface)
+		) !important;
+	}
+
+	.more-row-icon--info,
+	.more-row-icon--mode {
+		color: var(--md-primary) !important;
+		background: color-mix(
+			in srgb,
+			var(--md-primary) 8%,
+			var(--md-surface)
+		) !important;
+	}
+
+	.more-row-icon--admin {
+		color: var(--md-secondary, var(--md-primary)) !important;
+		background: color-mix(
+			in srgb,
+			var(--md-secondary, var(--md-primary)) 8%,
+			var(--md-surface)
+		) !important;
+	}
+
+	.more-tile-icon .iconify,
+	.more-tile-icon svg,
+	.more-row-icon .iconify,
+	.more-row-icon svg {
+		width: var(--more-glyph) !important;
+		height: var(--more-glyph) !important;
+		min-width: var(--more-glyph) !important;
+		min-height: var(--more-glyph) !important;
+		max-width: var(--more-glyph) !important;
+		max-height: var(--more-glyph) !important;
+	}
+
+	.more-tile-label,
+	.more-row-label {
+		font-size: 0.88rem !important;
+		font-weight: 700 !important;
+	}
+
+	.more-tile-desc,
+	.more-row-desc {
+		font-size: 0.66rem !important;
+		line-height: 1.25 !important;
+		opacity: 0.72 !important;
+		color: var(--md-on-surface-variant) !important;
+	}
+
+	.more-row,
+	.more-system-mode,
+	.more-system-admin {
+		min-height: var(--more-row-h) !important;
+		padding: 0.45rem 0.7rem !important;
+		gap: 0.65rem !important;
+		text-align: left !important;
+		align-items: center !important;
+	}
+
+	.more-row:hover,
+	.more-system-admin:hover {
+		background: color-mix(
+			in srgb,
+			var(--md-primary) 6%,
+			transparent
+		) !important;
+	}
+
+	.more-row:active,
+	.more-system-admin:active {
+		background: color-mix(
+			in srgb,
+			var(--md-primary) 10%,
+			transparent
+		) !important;
+	}
+
+	.more-row-chevron {
+		opacity: 0.62 !important;
+		color: var(--md-on-surface) !important;
+		width: 0.9rem !important;
+		height: 0.9rem !important;
+	}
+
+	.more-status-badge {
+		display: inline-flex !important;
+		align-items: center !important;
+		gap: 0.25rem !important;
+		padding: 0.08rem 0.32rem !important;
+		border-radius: var(--more-radius) !important;
+		border: 1.5px solid
+			color-mix(
+				in srgb,
+				var(--md-success, var(--md-primary)) 55%,
+				var(--md-border-color)
+			) !important;
+		background: color-mix(
+			in srgb,
+			var(--md-success, var(--md-primary)) 14%,
+			var(--md-surface)
+		) !important;
+		color: var(--md-success, var(--md-primary)) !important;
+		font-size: 0.56rem !important;
+		letter-spacing: 0.04em !important;
+		text-transform: uppercase !important;
+	}
+
+	.more-status-badge::before {
+		content: '';
+		width: 0.3rem;
+		height: 0.3rem;
+		background: currentColor;
+		border-radius: 1px;
+		flex-shrink: 0;
+	}
+
+	/*
+	 * Account adapters render the same real .more-row markup as System.
+	 * Keep only the Retro row metrics here; no rail-button reshaping.
+	 */
+	.mobile-nav-more-auth .more-row {
+		min-height: var(--more-row-h) !important;
+		padding: 0.45rem 0.7rem !important;
+		gap: 0.65rem !important;
+		border: 0 !important;
+		border-radius: 0 !important;
+		box-shadow: none !important;
+		--tw-shadow: none !important;
+	}
+
+	/* Account card radius must match System card. */
+	.more-section .more-list,
+	.more-system-card {
+		border-radius: var(--more-radius) !important;
 	}
 
 	.workspace-chrome .workspace-chrome-actions .workspace-chrome-action:hover,
@@ -1081,6 +1419,322 @@
 }
 
 /*
+ * Open tabs switcher — dark mode hierarchy (rebalanced).
+ * Muted navy chrome by default; cyan for selected accent + focus + Done hover.
+ */
+html[data-theme='retro'].dark .workspace-tab-switcher,
+html[data-theme='retro'].dark .workspace-tab-switcher-header-slot,
+html[data-theme='retro'].dark .workspace-tab-switcher-body,
+html[data-theme='retro'].dark .workspace-tab-switcher-footer,
+.dark html[data-theme='retro'] .workspace-tab-switcher,
+.dark html[data-theme='retro'] .workspace-tab-switcher-header-slot,
+.dark html[data-theme='retro'] .workspace-tab-switcher-body,
+.dark html[data-theme='retro'] .workspace-tab-switcher-footer {
+	--ts-page: #101418;
+	--ts-raised: #222a34; /* clearer step above page */
+	--ts-new: #2a3340; /* New tab slightly above card/page */
+	--ts-selected: color-mix(in srgb, var(--md-primary) 16%, #243040);
+	--ts-footer: #1a222c;
+	--ts-border: #3a4656; /* readable perimeter, not cyan */
+	--ts-border-muted: #2f3a48; /* search idle + sort */
+	--ts-divider: #2a3440; /* quieter header/footer lines */
+	--ts-muted: #c5ccd6;
+	--ts-sort: #d2d8e0; /* one step above muted — not disabled */
+	--ts-shadow: 2px 2px 0 #080a0d;
+	--ts-reopen: color-mix(
+		in srgb,
+		var(--md-primary) 55%,
+		var(--md-on-surface-variant)
+	);
+	/* Idle Done ~10% darker; bright blue reserved for hover/press. */
+	--ts-done: color-mix(in srgb, var(--md-primary) 62%, #0c1822);
+	--ts-done-hover: color-mix(in srgb, var(--md-primary) 88%, #102030);
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher,
+html[data-theme='retro'].dark .workspace-tab-switcher-header-slot,
+html[data-theme='retro'].dark .workspace-tab-switcher-body,
+.dark html[data-theme='retro'] .workspace-tab-switcher,
+.dark html[data-theme='retro'] .workspace-tab-switcher-header-slot,
+.dark html[data-theme='retro'] .workspace-tab-switcher-body {
+	background: var(--ts-page) !important;
+	color: var(--md-on-surface) !important;
+	border-color: var(--ts-divider) !important;
+	--tw-divide-opacity: 1;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher,
+.dark html[data-theme='retro'] .workspace-tab-switcher {
+	--md-border-color: var(--ts-divider);
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-header-slot,
+.dark html[data-theme='retro'] .workspace-tab-switcher-header-slot {
+	border-bottom-color: var(--ts-divider) !important;
+	border-bottom-width: 1px !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-count,
+.dark html[data-theme='retro'] .workspace-tab-switcher-count {
+	border-color: color-mix(
+		in srgb,
+		var(--md-primary) 42%,
+		var(--ts-border)
+	) !important;
+	background: color-mix(
+		in srgb,
+		var(--md-primary) 10%,
+		var(--ts-raised)
+	) !important;
+	color: var(--ts-muted) !important;
+}
+
+/* Header dismiss — readable control, still secondary to the title. */
+html[data-theme='retro'].dark
+	.workspace-tab-switcher-header
+	button[aria-label='Close'],
+.dark
+	html[data-theme='retro']
+	.workspace-tab-switcher-header
+	button[aria-label='Close'] {
+	border-color: var(--ts-border) !important;
+	border-width: 1.5px !important;
+	background: transparent !important;
+	color: var(--ts-muted) !important;
+	box-shadow: none !important;
+	--tw-shadow: none !important;
+	opacity: 0.9;
+}
+
+html[data-theme='retro'].dark
+	.workspace-tab-switcher-header
+	button[aria-label='Close']:hover,
+html[data-theme='retro'].dark
+	.workspace-tab-switcher-header
+	button[aria-label='Close']:focus-visible,
+.dark
+	html[data-theme='retro']
+	.workspace-tab-switcher-header
+	button[aria-label='Close']:hover,
+.dark
+	html[data-theme='retro']
+	.workspace-tab-switcher-header
+	button[aria-label='Close']:focus-visible {
+	opacity: 1;
+	border-color: color-mix(
+		in srgb,
+		var(--md-primary) 35%,
+		var(--ts-border)
+	) !important;
+	color: var(--md-on-surface) !important;
+	background: var(--ts-raised) !important;
+}
+
+/* Search idle = sort border; cyan only when focused. */
+html[data-theme='retro'].dark .workspace-tab-switcher-search-input,
+html[data-theme='retro'].dark
+	.workspace-tab-switcher-search
+	.workspace-tab-switcher-search-input,
+.dark html[data-theme='retro'] .workspace-tab-switcher-search-input,
+.dark
+	html[data-theme='retro']
+	.workspace-tab-switcher-search
+	.workspace-tab-switcher-search-input {
+	background: color-mix(in srgb, var(--ts-raised) 70%, var(--ts-page)) !important;
+	border-color: var(--ts-border-muted) !important;
+	color: var(--md-on-surface) !important;
+	box-shadow: var(--ts-shadow) !important;
+	--tw-shadow: 2px 2px 0 #080a0d !important;
+	--tw-ring-color: transparent !important;
+	outline-color: transparent !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-search-input::placeholder,
+.dark html[data-theme='retro'] .workspace-tab-switcher-search-input::placeholder {
+	color: var(--ts-muted) !important;
+	opacity: 1;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-search-input svg,
+html[data-theme='retro'].dark .workspace-tab-switcher-search-input .iconify,
+.dark html[data-theme='retro'] .workspace-tab-switcher-search-input svg,
+.dark html[data-theme='retro'] .workspace-tab-switcher-search-input .iconify {
+	color: var(--ts-muted) !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-search-input:focus,
+html[data-theme='retro'].dark .workspace-tab-switcher-search-input:focus-visible,
+html[data-theme='retro'].dark
+	.workspace-tab-switcher-search:focus-within
+	.workspace-tab-switcher-search-input,
+.dark html[data-theme='retro'] .workspace-tab-switcher-search-input:focus,
+.dark html[data-theme='retro'] .workspace-tab-switcher-search-input:focus-visible,
+.dark
+	html[data-theme='retro']
+	.workspace-tab-switcher-search:focus-within
+	.workspace-tab-switcher-search-input {
+	border-color: var(--md-primary) !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-sort [data-slot='base'],
+.dark html[data-theme='retro'] .workspace-tab-switcher-sort [data-slot='base'] {
+	border-width: 1.5px !important;
+	border-style: solid !important;
+	border-color: var(--ts-border-muted) !important;
+	background: transparent !important;
+	color: var(--ts-sort) !important;
+	box-shadow: none !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-sort [data-slot='value'],
+.dark html[data-theme='retro'] .workspace-tab-switcher-sort [data-slot='value'] {
+	color: var(--ts-sort) !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-sort [data-slot='base'] svg,
+html[data-theme='retro'].dark .workspace-tab-switcher-sort [data-slot='base'] .iconify,
+.dark html[data-theme='retro'] .workspace-tab-switcher-sort [data-slot='base'] svg,
+.dark
+	html[data-theme='retro']
+	.workspace-tab-switcher-sort
+	[data-slot='base']
+	.iconify {
+	color: var(--ts-sort) !important;
+	opacity: 1;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-reopen,
+.dark html[data-theme='retro'] .workspace-tab-switcher-reopen {
+	color: var(--ts-reopen) !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-card,
+.dark html[data-theme='retro'] .workspace-tab-switcher-card {
+	background: var(--ts-raised) !important;
+	border-width: 2px !important;
+	border-color: var(--ts-border) !important;
+	box-shadow: 2px 2px 0 #080a0d !important;
+	--tw-shadow: 2px 2px 0 #080a0d !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-card:not(.is-active),
+.dark html[data-theme='retro'] .workspace-tab-switcher-card:not(.is-active) {
+	background: var(--ts-raised) !important;
+	border-color: var(--ts-border) !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-card.is-active,
+.dark html[data-theme='retro'] .workspace-tab-switcher-card.is-active {
+	background: var(--ts-selected) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-primary) 28%,
+		var(--ts-border)
+	) !important;
+	border-left-color: var(--md-primary) !important;
+	border-left-width: 4px !important;
+	box-shadow: 2px 2px 0 #080a0d !important;
+}
+
+html[data-theme='retro'].dark
+	.workspace-tab-switcher-card.is-active
+	.workspace-tab-switcher-icon-wrap,
+.dark
+	html[data-theme='retro']
+	.workspace-tab-switcher-card.is-active
+	.workspace-tab-switcher-icon-wrap {
+	color: color-mix(
+		in srgb,
+		var(--md-primary) 75%,
+		var(--md-on-surface)
+	) !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-option-title,
+.dark html[data-theme='retro'] .workspace-tab-switcher-option-title {
+	color: #eef1f5 !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-option-kind,
+.dark html[data-theme='retro'] .workspace-tab-switcher-option-kind {
+	color: var(--ts-muted) !important;
+	opacity: 1;
+}
+
+html[data-theme='retro'].dark
+	.workspace-tab-switcher-card
+	.workspace-tab-switcher-close,
+.dark
+	html[data-theme='retro']
+	.workspace-tab-switcher-card
+	.workspace-tab-switcher-close {
+	align-self: center !important;
+	color: #d0d6de !important;
+	opacity: 0.82;
+}
+
+html[data-theme='retro'].dark
+	.workspace-tab-switcher-card
+	.workspace-tab-switcher-close:hover,
+html[data-theme='retro'].dark
+	.workspace-tab-switcher-card
+	.workspace-tab-switcher-close:focus-visible,
+.dark
+	html[data-theme='retro']
+	.workspace-tab-switcher-card
+	.workspace-tab-switcher-close:hover,
+.dark
+	html[data-theme='retro']
+	.workspace-tab-switcher-card
+	.workspace-tab-switcher-close:focus-visible {
+	opacity: 1;
+	color: var(--md-on-surface) !important;
+	background: color-mix(in srgb, var(--md-on-surface) 10%, transparent) !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-footer,
+.dark html[data-theme='retro'] .workspace-tab-switcher-footer {
+	background: var(--ts-footer) !important;
+	border-top-color: var(--ts-divider) !important;
+	border-top-width: 1px !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-action,
+.dark html[data-theme='retro'] .workspace-tab-switcher-action {
+	box-shadow: 2px 2px 0 #080a0d !important;
+	--tw-shadow: 2px 2px 0 #080a0d !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-action--new,
+.dark html[data-theme='retro'] .workspace-tab-switcher-action--new {
+	background: var(--ts-new) !important;
+	border-color: var(--ts-border) !important;
+	color: var(--md-on-surface) !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-action--done,
+.dark html[data-theme='retro'] .workspace-tab-switcher-action--done {
+	background: var(--ts-done) !important;
+	border-color: color-mix(in srgb, var(--ts-done) 65%, #080a0d) !important;
+	color: var(--md-on-primary) !important;
+	box-shadow: 2px 2px 0 #080a0d !important;
+}
+
+html[data-theme='retro'].dark .workspace-tab-switcher-action--done:hover,
+html[data-theme='retro'].dark .workspace-tab-switcher-action--done:focus-visible,
+.dark html[data-theme='retro'] .workspace-tab-switcher-action--done:hover,
+.dark
+	html[data-theme='retro']
+	.workspace-tab-switcher-action--done:focus-visible {
+	background: var(--ts-done-hover) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-primary) 55%,
+		var(--ts-border)
+	) !important;
+}
+
+/*
  * Dark mode document chrome — idle toolbar ink used primary-shade on a near-black
  * info face (unreadable). Lift idle ink/face; keep bright active states.
  */
@@ -1277,6 +1931,467 @@ html[data-theme='retro'].dark
 }
 
 /* End [data-theme="retro"] */
+
+/*
+ * Agent connections modal (teleported to body).
+ * Hard-edge retro polish: squared chips/tiles, navy selection, denser rows.
+ */
+html[data-theme='retro'] .agent-connections-dialog {
+	--agent-conn-radius: 3px;
+	--agent-conn-border: 2px solid var(--md-border-color);
+	--agent-conn-shadow: 3px 3px 0
+		color-mix(in srgb, var(--md-border-color) 55%, transparent);
+	--agent-conn-divider: 1px solid
+		color-mix(in srgb, var(--md-border-color) 55%, transparent);
+	/* Match app primary (#086DB8), not the darker shade used for text emphasis */
+	--agent-conn-header: var(--md-primary);
+	--agent-conn-muted: color-mix(
+		in srgb,
+		var(--md-on-surface) 72%,
+		transparent
+	);
+	border-radius: var(--agent-conn-radius) !important;
+	border: var(--agent-conn-border) !important;
+	box-shadow: var(--agent-conn-shadow) !important;
+	background: var(--md-surface) !important;
+	overflow: hidden !important;
+}
+
+html[data-theme='retro'] .agent-connections-dialog-header {
+	background: var(--agent-conn-header) !important;
+	border-bottom: var(--agent-conn-border) !important;
+	color: var(--md-on-primary, #fff) !important;
+	padding: 0.7rem 0.85rem !important;
+	gap: 0.55rem !important;
+}
+
+html[data-theme='retro'] .agent-connections-dialog-header :is(h2, h3, span) {
+	color: inherit !important;
+}
+
+html[data-theme='retro']
+	.agent-connections-dialog-header
+	.agent-conn-icon-tile {
+	background: color-mix(in srgb, #fff 14%, transparent) !important;
+	color: #fff !important;
+	border: 1.5px solid color-mix(in srgb, #fff 45%, transparent) !important;
+}
+
+html[data-theme='retro']
+	.agent-connections-dialog-header
+	[class*='text-[var(--md-on-surface-variant)]'],
+html[data-theme='retro'] .agent-connections-dialog-header .text-xs {
+	color: color-mix(in srgb, #fff 82%, transparent) !important;
+}
+
+html[data-theme='retro'] .agent-connections-dialog .agent-conn-close {
+	box-sizing: border-box !important;
+	width: 1.85rem !important;
+	height: 1.85rem !important;
+	min-width: 1.85rem !important;
+	min-height: 1.85rem !important;
+	padding: 0 !important;
+	border: var(--agent-conn-border) !important;
+	border-radius: var(--agent-conn-radius) !important;
+	background: var(--md-surface) !important;
+	color: var(--md-border-color) !important;
+	box-shadow: 2px 2px 0
+		color-mix(in srgb, var(--md-border-color) 45%, transparent) !important;
+	--tw-shadow: 2px 2px 0
+		color-mix(in srgb, var(--md-border-color) 45%, transparent) !important;
+}
+
+html[data-theme='retro'] .agent-connections-dialog .agent-conn-close:hover {
+	background: var(--md-surface-hover) !important;
+}
+
+html[data-theme='retro'] .agent-connections-dialog .agent-conn-close:active {
+	transform: translate(1px, 1px);
+	box-shadow: 1px 1px 0
+		color-mix(in srgb, var(--md-border-color) 40%, transparent) !important;
+}
+
+html[data-theme='retro'] [data-testid='agent-connections-modal'] {
+	background: var(--md-surface);
+}
+
+html[data-theme='retro'] .agent-conn-sidebar {
+	background: color-mix(
+		in srgb,
+		var(--md-primary) 6%,
+		var(--md-surface)
+	) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-border-color) 55%,
+		transparent
+	) !important;
+	border-right-width: 2px !important;
+	padding: 0.85rem !important;
+}
+
+html[data-theme='retro'] .agent-conn-host-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	width: 100%;
+	min-width: 0;
+}
+
+html[data-theme='retro'] .agent-conn-detail {
+	background: var(--md-surface) !important;
+}
+
+html[data-theme='retro'] .agent-conn-sidebar-head {
+	align-items: flex-start !important;
+	gap: 0.65rem !important;
+	margin-bottom: 0.75rem !important;
+}
+
+html[data-theme='retro'] .agent-conn-sidebar-head h3 {
+	letter-spacing: 0.08em !important;
+	font-size: 10px !important;
+	line-height: 1.2 !important;
+}
+
+html[data-theme='retro'] .agent-conn-muted {
+	color: var(--agent-conn-muted) !important;
+	opacity: 1 !important;
+}
+
+html[data-theme='retro'] .agent-conn-add {
+	border: var(--agent-conn-border) !important;
+	border-radius: var(--agent-conn-radius) !important;
+	background: var(--md-surface) !important;
+	color: var(--md-on-surface) !important;
+	box-shadow: 2px 2px 0
+		color-mix(in srgb, var(--md-border-color) 48%, transparent) !important;
+	--tw-shadow: 2px 2px 0
+		color-mix(in srgb, var(--md-border-color) 48%, transparent) !important;
+}
+
+html[data-theme='retro'] .agent-conn-add:active {
+	transform: translate(1px, 1px);
+	box-shadow: 1px 1px 0
+		color-mix(in srgb, var(--md-border-color) 40%, transparent) !important;
+}
+
+/* Shared status chip anatomy — Active / Locked / Recommended / Connected */
+html[data-theme='retro'] .agent-conn-badge {
+	display: inline-flex !important;
+	align-items: center !important;
+	min-height: 1.2rem !important;
+	padding: 0.1rem 0.4rem !important;
+	border: 1.5px solid var(--md-border-color) !important;
+	border-radius: var(--agent-conn-radius) !important;
+	font-size: 10px !important;
+	font-weight: 700 !important;
+	letter-spacing: 0.04em !important;
+	text-transform: uppercase !important;
+	line-height: 1.1 !important;
+}
+
+html[data-theme='retro'] .agent-conn-badge--active {
+	background: var(--md-extended-color-success-color, #2f9e44) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-border-color) 70%,
+		var(--md-extended-color-success-color, #2f9e44)
+	) !important;
+	color: #fff !important;
+}
+
+html[data-theme='retro'] .agent-conn-badge--online {
+	background: color-mix(
+		in srgb,
+		var(--md-extended-color-success-color, #2f9e44) 18%,
+		var(--md-surface)
+	) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-extended-color-success-color, #2f9e44) 55%,
+		var(--md-border-color)
+	) !important;
+	color: color-mix(
+		in srgb,
+		var(--md-extended-color-success-color, #2f9e44) 75%,
+		var(--md-border-color)
+	) !important;
+}
+
+html[data-theme='retro'] .agent-conn-badge--locked {
+	background: color-mix(
+		in srgb,
+		var(--md-secondary, #ff6b6b) 14%,
+		var(--md-surface)
+	) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-secondary, #ff6b6b) 55%,
+		var(--md-border-color)
+	) !important;
+	color: color-mix(
+		in srgb,
+		var(--md-secondary, #ff6b6b) 55%,
+		var(--md-border-color)
+	) !important;
+}
+
+html[data-theme='retro'] .agent-conn-badge--pending,
+html[data-theme='retro'] .agent-conn-badge--idle {
+	background: color-mix(
+		in srgb,
+		var(--md-primary) 10%,
+		var(--md-surface)
+	) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-border-color) 70%,
+		transparent
+	) !important;
+	color: var(--md-on-surface) !important;
+}
+
+html[data-theme='retro'] .agent-conn-icon-tile {
+	border-radius: var(--agent-conn-radius) !important;
+	border: 1.5px solid
+		color-mix(in srgb, var(--md-border-color) 70%, transparent) !important;
+	background: color-mix(
+		in srgb,
+		var(--md-primary) 10%,
+		var(--md-surface)
+	) !important;
+	color: var(--md-primary) !important;
+	box-shadow: none !important;
+}
+
+html[data-theme='retro'] .agent-conn-host {
+	box-sizing: border-box !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	border: var(--agent-conn-border) !important;
+	border-radius: var(--agent-conn-radius) !important;
+	background: var(--md-surface) !important;
+	/* Same shadow footprint for every card so widths stay aligned */
+	box-shadow: 2px 2px 0
+		color-mix(in srgb, var(--md-border-color) 35%, transparent) !important;
+	outline: none !important;
+}
+
+html[data-theme='retro'] .agent-conn-host:hover {
+	background: color-mix(
+		in srgb,
+		var(--md-primary) 5%,
+		var(--md-surface)
+	) !important;
+}
+
+html[data-theme='retro'] .agent-conn-host:active {
+	transform: translate(1px, 1px);
+	box-shadow: 1px 1px 0
+		color-mix(in srgb, var(--md-border-color) 30%, transparent) !important;
+}
+
+html[data-theme='retro'] .agent-conn-host--selected {
+	border-color: var(--md-border-color) !important;
+	background: color-mix(
+		in srgb,
+		var(--md-primary) 12%,
+		var(--md-surface)
+	) !important;
+	box-shadow:
+		2px 2px 0 color-mix(in srgb, var(--md-border-color) 50%, transparent),
+		inset 3px 0 0 var(--md-primary) !important;
+}
+
+html[data-theme='retro'] .agent-conn-host--selected:active {
+	transform: none;
+	box-shadow:
+		2px 2px 0 color-mix(in srgb, var(--md-border-color) 50%, transparent),
+		inset 3px 0 0 var(--md-primary) !important;
+}
+
+html[data-theme='retro'] .agent-conn-host-name {
+	font-weight: 700 !important;
+	font-size: 0.88rem !important;
+	color: var(--md-on-surface) !important;
+}
+
+html[data-theme='retro'] .agent-conn-host-meta {
+	font-size: 0.68rem !important;
+	padding-left: 1.05rem !important;
+}
+
+html[data-theme='retro'] .agent-conn-status-dot {
+	width: 0.45rem !important;
+	height: 0.45rem !important;
+	border-radius: 1px !important;
+	opacity: 1 !important;
+	border: 1px solid
+		color-mix(in srgb, var(--md-border-color) 40%, transparent);
+}
+
+html[data-theme='retro'] .agent-conn-status-dot--online {
+	background: var(--md-extended-color-success-color, #2f9e44) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-extended-color-success-color, #2f9e44) 40%,
+		var(--md-border-color)
+	) !important;
+}
+
+html[data-theme='retro'] .agent-conn-status-dot--idle {
+	background: color-mix(
+		in srgb,
+		var(--md-on-surface) 35%,
+		transparent
+	) !important;
+}
+
+html[data-theme='retro'] .agent-conn-section {
+	border-bottom: var(--agent-conn-divider) !important;
+	padding: 0.85rem 1rem !important;
+}
+
+html[data-theme='retro'] .agent-conn-remote-title {
+	font-size: 0.82rem !important;
+	font-weight: 700 !important;
+}
+
+html[data-theme='retro'] .agent-conn-unlock {
+	/* Surface tint only — the PIN field owns the hard border */
+	border: none !important;
+	border-radius: var(--agent-conn-radius) !important;
+	background: color-mix(
+		in srgb,
+		var(--md-primary) 8%,
+		var(--md-surface)
+	) !important;
+	box-shadow: 2px 2px 0
+		color-mix(in srgb, var(--md-border-color) 42%, transparent) !important;
+}
+
+html[data-theme='retro'] .agent-conn-unlock-actions {
+	border-top: var(--agent-conn-divider) !important;
+	background: transparent !important;
+	gap: 0.45rem !important;
+	padding: 0.65rem !important;
+}
+
+/* One border on the Nuxt UI base slot — never stack on the inner input */
+html[data-theme='retro'] .agent-conn-pin-input {
+	border: none !important;
+	box-shadow: none !important;
+	background: transparent !important;
+}
+
+html[data-theme='retro'] .agent-conn-pin-input [data-slot='base'] {
+	border: 2px solid var(--md-border-color) !important;
+	border-radius: var(--agent-conn-radius) !important;
+	color: var(--md-on-surface) !important;
+	background: var(--md-surface) !important;
+	box-shadow: none !important;
+	--tw-ring-shadow: 0 0 #0000 !important;
+	--tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+html[data-theme='retro'] .agent-conn-pin-input input {
+	border: none !important;
+	border-width: 0 !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	outline: none !important;
+	--tw-ring-shadow: 0 0 #0000 !important;
+	--tw-ring-offset-shadow: 0 0 #0000 !important;
+	color: var(--md-on-surface) !important;
+	background: transparent !important;
+}
+
+html[data-theme='retro'] .agent-conn-pin-input input::placeholder {
+	color: color-mix(in srgb, var(--md-on-surface) 55%, transparent) !important;
+	opacity: 1 !important;
+}
+
+html[data-theme='retro'] .agent-conn-pin-input svg,
+html[data-theme='retro'] .agent-conn-pin-input .iconify {
+	color: color-mix(in srgb, var(--md-on-surface) 70%, transparent) !important;
+	opacity: 1 !important;
+}
+
+html[data-theme='retro'] .agent-conn-primary-btn,
+html[data-theme='retro'] .agent-connections-dialog .agent-conn-primary-btn {
+	border: var(--agent-conn-border) !important;
+	border-radius: var(--agent-conn-radius) !important;
+	background: var(--md-primary) !important;
+	color: var(--md-on-primary, #fff) !important;
+	box-shadow: 2px 2px 0
+		color-mix(in srgb, var(--md-border-color) 50%, transparent) !important;
+	--tw-shadow: 2px 2px 0
+		color-mix(in srgb, var(--md-border-color) 50%, transparent) !important;
+}
+
+html[data-theme='retro'] .agent-conn-forget {
+	border: var(--agent-conn-border) !important;
+	border-radius: var(--agent-conn-radius) !important;
+	background: var(--md-surface) !important;
+	color: var(--md-error) !important;
+	font-weight: 700 !important;
+	padding: 0.3rem 0.55rem !important;
+	box-shadow: 2px 2px 0
+		color-mix(in srgb, var(--md-border-color) 42%, transparent) !important;
+	--tw-shadow: 2px 2px 0
+		color-mix(in srgb, var(--md-border-color) 42%, transparent) !important;
+	text-decoration: none !important;
+}
+
+html[data-theme='retro'] .agent-conn-forget:hover {
+	background: color-mix(
+		in srgb,
+		var(--md-error) 10%,
+		var(--md-surface)
+	) !important;
+}
+
+html[data-theme='retro'] .agent-conn-advanced {
+	padding: 0.55rem 1rem 0.75rem !important;
+}
+
+html[data-theme='retro'] .agent-conn-advanced-summary {
+	min-height: 2.15rem !important;
+	padding: 0.35rem 0.45rem !important;
+	border: 1.5px solid transparent !important;
+	border-radius: var(--agent-conn-radius) !important;
+	font-size: 0.8rem !important;
+	font-weight: 600 !important;
+}
+
+html[data-theme='retro'] .agent-conn-advanced-summary:hover {
+	background: color-mix(
+		in srgb,
+		var(--md-primary) 5%,
+		transparent
+	) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-border-color) 35%,
+		transparent
+	) !important;
+}
+
+html[data-theme='retro'] .agent-conn-sidebar .border-dashed {
+	border-radius: var(--agent-conn-radius) !important;
+	border-color: color-mix(
+		in srgb,
+		var(--md-border-color) 55%,
+		transparent
+	) !important;
+}
+
+html[data-theme='retro']
+	.agent-conn-sidebar
+	.border:not(.agent-conn-host):not(.agent-conn-add) {
+	border-radius: var(--agent-conn-radius) !important;
+}
 
 /*
  * iOS and other mobile browsers zoom focused text controls below 16px.

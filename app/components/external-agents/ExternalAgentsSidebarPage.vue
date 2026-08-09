@@ -363,16 +363,17 @@
       :ui="{
         overlay: 'bg-black/35 backdrop-blur-[3px]',
         content:
-          'w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] min-w-0 overflow-hidden border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] shadow-2xl sm:max-w-[900px]',
-        header: 'border-b border-[var(--md-outline-variant)] px-5 py-4 sm:px-6',
+          'agent-connections-dialog w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] min-w-0 overflow-hidden border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] shadow-2xl sm:max-w-[900px]',
+        header:
+          'agent-connections-dialog-header border-b border-[var(--md-outline-variant)] px-5 py-4 sm:px-6',
         body: 'p-0 sm:p-0',
-        close: 'top-4 end-4',
+        close: 'agent-conn-close top-4 end-4',
       }"
     >
       <template #title>
         <span class="flex min-w-0 items-center gap-2">
           <span
-            class="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
+            class="agent-conn-icon-tile grid size-8 shrink-0 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
           >
             <UIcon :name="iconNetwork" class="size-4" />
           </span>
@@ -395,22 +396,23 @@
           data-testid="agent-connections-modal"
         >
           <aside
-            class="min-w-0 overflow-hidden border-b border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-4 md:border-b-0 md:border-r md:p-5"
+            class="agent-conn-sidebar min-w-0 overflow-hidden border-b border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-4 md:border-b-0 md:border-r md:p-5"
             aria-label="Saved hosts"
           >
-            <div class="mb-3 flex items-center justify-between">
-              <div>
+            <div class="agent-conn-sidebar-head mb-3 flex items-start justify-between gap-3">
+              <div class="min-w-0">
                 <h3 class="text-xs font-semibold uppercase tracking-wider">
                   Trusted hosts
                 </h3>
                 <p
-                  class="mt-0.5 text-[11px] text-[var(--md-on-surface-variant)]"
+                  class="agent-conn-muted mt-1 text-[11px] text-[var(--md-on-surface-variant)]"
                 >
                   {{ hostItems.length }}
                   {{ hostItems.length === 1 ? "connection" : "connections" }}
                 </p>
               </div>
               <UButton
+                class="agent-conn-add"
                 size="xs"
                 variant="outline"
                 color="neutral"
@@ -421,41 +423,43 @@
               />
             </div>
 
-            <div v-if="hostItems.length" class="space-y-1.5">
+            <div v-if="hostItems.length" class="agent-conn-host-list">
               <button
                 v-for="host in hostItems"
                 :key="host.value"
                 type="button"
-                class="group min-w-0 max-w-full rounded-[var(--md-border-radius)] border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
+                class="agent-conn-host group min-w-0 max-w-full rounded-[var(--md-border-radius)] border p-3 text-left transition-colors"
                 :class="
-                  host.value === snapshot?.activeHostId
-                    ? 'border-[var(--md-primary)] bg-[var(--md-surface-container-lowest)] shadow-sm'
+                  host.value === selectedHostId
+                    ? 'agent-conn-host--selected agent-conn-host--active border-[var(--md-outline)] bg-[var(--md-surface-container-lowest)]'
                     : 'border-transparent hover:border-[var(--md-outline-variant)] hover:bg-[var(--md-surface-container-lowest)]'
                 "
-                :aria-pressed="host.value === snapshot?.activeHostId"
-                @click="switchHost(host.value)"
+                :aria-pressed="host.value === selectedHostId"
+                @click="selectHost(host.value)"
               >
                 <div class="flex min-w-0 items-center gap-2">
                   <span
-                    class="size-2 shrink-0 rounded-full"
+                    class="agent-conn-status-dot size-2 shrink-0 rounded-full"
                     :class="
                       host.value === snapshot?.activeHostId && connected
-                        ? 'bg-[var(--md-extended-color-success-color)]'
-                        : 'bg-[var(--md-on-surface-variant)] opacity-45'
+                        ? 'agent-conn-status-dot--online bg-[var(--md-extended-color-success-color)]'
+                        : 'agent-conn-status-dot--idle bg-[var(--md-on-surface-variant)] opacity-45'
                     "
                   />
-                  <span class="min-w-0 flex-1 truncate text-sm font-medium">
+                  <span
+                    class="agent-conn-host-name min-w-0 flex-1 truncate text-sm font-medium"
+                  >
                     {{ host.label }}
                   </span>
                   <span
                     v-if="host.value === snapshot?.activeHostId"
-                    class="max-w-[40%] shrink-0 truncate rounded-full bg-[var(--md-primary-container)] px-2 py-0.5 text-[10px] font-semibold text-[var(--md-on-primary-container)]"
+                    class="agent-conn-badge agent-conn-badge--active max-w-[40%] shrink-0 truncate bg-[var(--md-extended-color-success-color)] px-2 py-0.5 text-[10px] font-semibold text-white"
                   >
                     Active
                   </span>
                 </div>
                 <p
-                  class="mt-1 min-w-0 truncate pl-4 text-[11px] text-[var(--md-on-surface-variant)]"
+                  class="agent-conn-host-meta agent-conn-muted mt-1 min-w-0 truncate pl-4 text-[11px] text-[var(--md-on-surface-variant)]"
                 >
                   {{ host.description }}
                 </p>
@@ -467,7 +471,7 @@
               class="rounded-[var(--md-border-radius)] border border-dashed border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-4 text-center"
             >
               <span
-                class="mx-auto grid size-9 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
+                class="agent-conn-icon-tile mx-auto grid size-9 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
               >
                 <UIcon :name="iconServer" class="size-4" />
               </span>
@@ -498,25 +502,29 @@
           </aside>
 
           <div
-            class="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto"
+            class="agent-conn-detail min-h-0 min-w-0 overflow-x-hidden overflow-y-auto"
             :aria-busy="hostActionPending"
           >
             <section
-              v-if="activeHost"
-              class="border-b border-[var(--md-outline-variant)] p-4 sm:p-5"
+              v-if="detailHost"
+              class="agent-conn-section border-b border-[var(--md-outline-variant)] p-4 sm:p-5"
               aria-labelledby="current-connection-title"
             >
               <div class="flex min-w-0 flex-wrap items-start gap-3">
                 <span
-                  class="grid size-10 shrink-0 place-items-center rounded-[var(--md-border-radius)]"
+                  class="agent-conn-icon-tile grid size-10 shrink-0 place-items-center rounded-[var(--md-border-radius)]"
                   :class="
-                    connected
+                    detailHostIsActive && connected
                       ? 'bg-[color-mix(in_srgb,var(--md-extended-color-success-color)_14%,transparent)] text-[var(--md-extended-color-success-color)]'
                       : 'bg-[var(--md-surface-container)] text-[var(--md-on-surface-variant)]'
                   "
                 >
                   <UIcon
-                    :name="connected ? iconCheck : iconServerOff"
+                    :name="
+                      detailHostIsActive && connected
+                        ? iconCheck
+                        : iconServerOff
+                    "
                     class="size-5"
                   />
                 </span>
@@ -526,28 +534,30 @@
                       id="current-connection-title"
                       class="truncate text-sm font-semibold"
                     >
-                      {{ activeHost.name }}
+                      {{ detailHost.name }}
                     </h3>
                     <span
-                      class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                      class="agent-conn-badge px-2 py-0.5 text-[10px] font-semibold"
                       :class="connectionStatusClasses"
                     >
                       {{ connectionStatusLabel }}
                     </span>
                   </div>
                   <p
-                    class="mt-0.5 truncate text-xs text-[var(--md-on-surface-variant)]"
+                    class="agent-conn-muted mt-0.5 truncate text-xs text-[var(--md-on-surface-variant)]"
                   >
-                    {{ activeHost.baseUrl }}
+                    {{ detailHost.baseUrl }}
                   </p>
                   <p
-                    class="mt-1 text-[11px] text-[var(--md-on-surface-variant)]"
+                    class="agent-conn-muted mt-1 text-[11px] text-[var(--md-on-surface-variant)]"
                   >
                     {{ activeRuntimeLabel }} · {{ activeDriverLabel }}
                   </p>
                   <p
                     v-if="
-                      snapshot?.connectionError && !pinCredentialStatus.locked
+                      detailHostIsActive &&
+                      snapshot?.connectionError &&
+                      !pinCredentialStatus.locked
                     "
                     class="mt-2 text-xs text-[var(--md-error)]"
                     role="status"
@@ -555,10 +565,17 @@
                     {{ snapshot.connectionError }}
                   </p>
                   <p
-                    v-else-if="connected"
+                    v-else-if="detailHostIsActive && connected"
                     class="mt-2 text-xs text-[var(--md-on-surface-variant)]"
                   >
                     Connected and ready to start agent sessions.
+                  </p>
+                  <p
+                    v-else-if="!detailHostIsActive && !pinCredentialStatus.locked"
+                    class="mt-2 text-xs text-[var(--md-on-surface-variant)]"
+                  >
+                    Selected for management. Unlock or reconnect to make this
+                    the active host.
                   </p>
                   <p
                     v-if="activeHostIsCloud"
@@ -660,13 +677,13 @@
               </div>
 
               <div
-                v-if="activeHostIsCloud && cloudRemovalHostId === activeHost.id"
+                v-if="activeHostIsCloud && cloudRemovalHostId === detailHost.id"
                 class="mt-4 rounded-[var(--md-border-radius)] border border-[var(--md-error)] bg-[color-mix(in_srgb,var(--md-error)_6%,var(--md-surface-container-lowest))] p-4"
                 data-testid="cloud-computer-removal-confirmation"
                 role="alert"
               >
                 <p class="text-sm font-semibold">
-                  Remove {{ activeHost.name }}?
+                  Remove {{ detailHost.name }}?
                 </p>
                 <p
                   class="mt-1 text-xs leading-relaxed text-[var(--md-on-surface-variant)]"
@@ -706,20 +723,20 @@
 
               <div
                 v-if="pinCredentialStatus.locked"
-                class="mt-4 overflow-hidden rounded-[var(--md-border-radius)] border border-[var(--md-primary)] bg-[color-mix(in_srgb,var(--md-primary)_5%,var(--md-surface-container-lowest))]"
+                class="agent-conn-unlock mt-4 overflow-hidden rounded-[var(--md-border-radius)] bg-[color-mix(in_srgb,var(--md-primary)_5%,var(--md-surface-container-lowest))]"
               >
                 <div class="flex items-start gap-3 p-4">
                   <span
-                    class="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
+                    class="agent-conn-icon-tile grid size-9 shrink-0 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
                   >
                     <UIcon :name="iconLock" class="size-4" />
                   </span>
                   <div>
                     <p class="text-sm font-semibold">
-                      Unlock {{ activeHost.name }}
+                      Unlock {{ detailHost.name }}
                     </p>
                     <p
-                      class="mt-0.5 text-xs leading-relaxed text-[var(--md-on-surface-variant)]"
+                      class="agent-conn-muted mt-0.5 text-xs leading-relaxed text-[var(--md-on-surface-variant)]"
                     >
                       Enter your device PIN to decrypt the token for this
                       browser session.
@@ -727,10 +744,11 @@
                   </div>
                 </div>
                 <div
-                  class="grid gap-2 border-t border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+                  class="agent-conn-unlock-actions grid gap-2 border-t border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
                 >
                   <UInput
                     v-model="unlockPin"
+                    class="agent-conn-pin-input"
                     type="password"
                     inputmode="numeric"
                     autocomplete="current-password"
@@ -740,16 +758,17 @@
                     @keyup.enter="unlockAndReconnect"
                   />
                   <UButton
+                    class="agent-conn-primary-btn"
                     :icon="iconUnlock"
                     :loading="hostActionPending"
                     @click="unlockAndReconnect"
                   >
-                    Unlock {{ activeHost.name }}
+                    Unlock {{ detailHost.name }}
                   </UButton>
                   <UButton
-                    class="justify-self-start sm:col-span-2"
+                    class="agent-conn-forget justify-self-start sm:col-span-2"
                     size="xs"
-                    variant="link"
+                    variant="outline"
                     color="error"
                     @click="clearSavedCredential"
                   >
@@ -760,19 +779,19 @@
 
               <form
                 v-else-if="activeHostNeedsCredential"
-                class="mt-4 overflow-hidden rounded-[var(--md-border-radius)] border border-[var(--md-primary)] bg-[color-mix(in_srgb,var(--md-primary)_5%,var(--md-surface-container-lowest))]"
+                class="agent-conn-unlock mt-4 overflow-hidden rounded-[var(--md-border-radius)] bg-[color-mix(in_srgb,var(--md-primary)_5%,var(--md-surface-container-lowest))]"
                 aria-label="Reconnect trusted host"
                 @submit.prevent="saveAndReconnect"
               >
                 <div class="flex items-start gap-3 p-4">
                   <span
-                    class="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
+                    class="agent-conn-icon-tile grid size-9 shrink-0 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
                   >
                     <UIcon :name="iconKey" class="size-4" />
                   </span>
                   <div>
                     <p class="text-sm font-semibold">
-                      Enter the token for {{ activeHost.name }}
+                      Enter the token for {{ detailHost.name }}
                     </p>
                     <p
                       class="mt-0.5 text-xs leading-relaxed text-[var(--md-on-surface-variant)]"
@@ -857,12 +876,12 @@
             </section>
 
             <section
-              class="border-b border-[var(--md-outline-variant)] p-4 sm:p-5"
+              class="agent-conn-section agent-conn-remote border-b border-[var(--md-outline-variant)] p-4 sm:p-5"
               aria-labelledby="connect-computer-title"
             >
               <div class="flex items-start gap-3">
                 <span
-                  class="grid size-9 shrink-0 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
+                  class="agent-conn-icon-tile grid size-9 shrink-0 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
                 >
                   <UIcon :name="iconInstall" class="size-4" />
                 </span>
@@ -870,7 +889,7 @@
                   <div class="flex flex-wrap items-center gap-2">
                     <h3
                       id="connect-computer-title"
-                      class="text-sm font-semibold"
+                      class="agent-conn-remote-title text-sm font-semibold"
                     >
                       {{
                         connectEnabled
@@ -880,21 +899,21 @@
                     </h3>
                     <span
                       v-if="connectEnabled"
-                      class="rounded-full bg-[var(--md-primary-container)] px-2 py-0.5 text-[10px] font-semibold text-[var(--md-on-primary-container)]"
+                      class="agent-conn-badge agent-conn-badge--pending bg-[var(--md-primary-container)] px-2 py-0.5 text-[10px] font-semibold text-[var(--md-on-primary-container)]"
                     >
                       Recommended
                     </span>
                   </div>
                   <p
                     v-if="connectEnabled"
-                    class="mt-0.5 text-xs text-[var(--md-on-surface-variant)]"
+                    class="agent-conn-muted mt-0.5 text-xs text-[var(--md-on-surface-variant)]"
                   >
                     Once OR3 Connect is enabled, start a new agent session to
                     copy the one-command setup for this OR3 workspace.
                   </p>
                   <p
                     v-else
-                    class="mt-0.5 text-xs text-[var(--md-on-surface-variant)]"
+                    class="agent-conn-muted mt-0.5 text-xs text-[var(--md-on-surface-variant)]"
                   >
                     Remote Connect is withheld until its managed staging flow
                     is ready. Local Intern hosts remain available below.
@@ -902,7 +921,7 @@
                 </div>
               </div>
               <p
-                class="mt-2 text-[11px] text-[var(--md-on-surface-variant)]"
+                class="agent-conn-muted mt-2 text-[11px] text-[var(--md-on-surface-variant)]"
                 aria-live="polite"
               >
                 {{
@@ -915,11 +934,11 @@
 
             <details
               ref="addHostDisclosure"
-              class="group p-4 sm:p-5"
+              class="agent-conn-advanced group p-4 sm:p-5"
               data-testid="advanced-host-enrollment"
             >
               <summary
-                class="cursor-pointer list-none rounded-[var(--md-border-radius)] font-medium focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
+                class="agent-conn-advanced-summary cursor-pointer list-none rounded-[var(--md-border-radius)] font-medium focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
               >
                 <span class="flex items-center gap-2 text-sm">
                   <UIcon
@@ -1080,7 +1099,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useRuntimeConfig } from "#imports";
 import type {
   ExternalAgentRunStatus,
@@ -1161,6 +1187,8 @@ const usesTexturedSidebarTreatment = computed(
 );
 const query = ref("");
 const showConnections = ref(false);
+/** Modal list/detail selection — updates immediately even when switchHost cannot. */
+const selectedHostId = ref<string | null>(null);
 const hostName = ref("");
 const hostUrl = ref("http://127.0.0.1:9100");
 const hostToken = ref("");
@@ -1226,13 +1254,25 @@ const activeHost = computed(
       (host) => host.id === snapshot.value?.activeHostId,
     ) ?? null,
 );
+/** Host shown in the connections modal detail pane (local selection). */
+const detailHost = computed(
+  () =>
+    snapshot.value?.hosts.find((host) => host.id === selectedHostId.value) ??
+    activeHost.value,
+);
+const detailHostIsActive = computed(
+  () =>
+    Boolean(detailHost.value) &&
+    detailHost.value?.id === snapshot.value?.activeHostId,
+);
 const activeHostIsCloud = computed(
-  () => activeHost.value?.id.startsWith("or3-connect:") === true,
+  () => detailHost.value?.id.startsWith("or3-connect:") === true,
 );
 const activeDriverLabel = computed(() =>
-  activeHost.value?.driver === "runs" ? "Sessions + Runs" : "OR3 Intern",
+  detailHost.value?.driver === "runs" ? "Sessions + Runs" : "OR3 Intern",
 );
 const activeRuntimeLabel = computed(() => {
+  if (!detailHostIsActive.value) return "Agent service";
   const displayName = snapshot.value?.capabilities?.runtimeDisplayName;
   if (typeof displayName === "string" && displayName.trim()) return displayName;
   const product = snapshot.value?.capabilities?.runtimeProduct;
@@ -1245,15 +1285,16 @@ const activeRuntimeLabel = computed(() => {
 });
 const activeHostNeedsCredential = computed(
   () =>
-    Boolean(activeHost.value) &&
+    Boolean(detailHost.value) &&
     !pinCredentialStatus.value.locked &&
-    !connected.value &&
+    (!detailHostIsActive.value || !connected.value) &&
     /credential|required|access token|unauthori[sz]ed/i.test(
       snapshot.value?.connectionError ?? "",
     ),
 );
 const connectionStatusLabel = computed(() => {
   if (pinCredentialStatus.value.locked) return "Locked";
+  if (!detailHostIsActive.value) return "Inactive";
   if (snapshot.value?.connectionState === "connecting") return "Connecting";
   if (snapshot.value?.connectionState === "degraded") return "Limited";
   if (snapshot.value?.connectionState === "online") return "Connected";
@@ -1261,13 +1302,41 @@ const connectionStatusLabel = computed(() => {
   return "Disconnected";
 });
 const connectionStatusClasses = computed(() => {
+  if (pinCredentialStatus.value.locked) {
+    return "agent-conn-badge--locked bg-[color-mix(in_srgb,var(--md-secondary)_14%,var(--md-surface))] text-[color-mix(in_srgb,var(--md-secondary)_55%,var(--md-on-surface))]";
+  }
+  if (!detailHostIsActive.value) {
+    return "agent-conn-badge--idle bg-[var(--md-surface-container)] text-[var(--md-on-surface-variant)]";
+  }
   if (connected.value) {
-    return "bg-[color-mix(in_srgb,var(--md-extended-color-success-color)_14%,transparent)] text-[var(--md-extended-color-success-color)]";
+    return "agent-conn-badge--online bg-[color-mix(in_srgb,var(--md-extended-color-success-color)_14%,transparent)] text-[var(--md-extended-color-success-color)]";
   }
   if (snapshot.value?.connectionState === "connecting") {
-    return "bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]";
+    return "agent-conn-badge--pending bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]";
   }
-  return "bg-[var(--md-surface-container)] text-[var(--md-on-surface-variant)]";
+  return "agent-conn-badge--idle bg-[var(--md-surface-container)] text-[var(--md-on-surface-variant)]";
+});
+
+watch(
+  () => snapshot.value?.activeHostId ?? null,
+  (hostId) => {
+    if (!hostId) return;
+    // Follow controller changes outside the modal, or when selection already matches.
+    if (
+      !showConnections.value ||
+      selectedHostId.value == null ||
+      selectedHostId.value === hostId
+    ) {
+      selectedHostId.value = hostId;
+    }
+  },
+  { immediate: true },
+);
+
+watch(showConnections, (open) => {
+  if (open) {
+    selectedHostId.value = snapshot.value?.activeHostId ?? selectedHostId.value;
+  }
 });
 const activeHostName = computed(
   () =>
@@ -1577,8 +1646,8 @@ function goOfflineForNow() {
 }
 
 function requestCloudComputerRemoval() {
-  if (!activeHostIsCloud.value || !activeHost.value) return;
-  cloudRemovalHostId.value = activeHost.value.id;
+  if (!activeHostIsCloud.value || !detailHost.value) return;
+  cloudRemovalHostId.value = detailHost.value.id;
   cloudRemovalError.value = null;
 }
 
@@ -1589,8 +1658,8 @@ function cancelCloudComputerRemoval() {
 }
 
 async function removeCloudComputer() {
-  if (!controller || !activeHost.value) return;
-  const host = activeHost.value;
+  if (!controller || !detailHost.value) return;
+  const host = detailHost.value;
   const environmentId = host.id.startsWith("or3-connect:")
     ? host.id.slice("or3-connect:".length).trim()
     : "";
@@ -1669,12 +1738,19 @@ async function unlockAndReconnect() {
   try {
     await controller.unlockCredentials(unlockPin.value);
     credentialStateVersion.value += 1;
-    const didConnect = await controller.reconnect();
+    const targetHostId =
+      selectedHostId.value ?? snapshot.value?.activeHostId ?? null;
+    const activeId = snapshot.value?.activeHostId ?? null;
+    const didConnect =
+      targetHostId && targetHostId !== activeId
+        ? await controller.switchHost(targetHostId)
+        : await controller.reconnect();
     if (!didConnect) {
       formError.value =
         controller.snapshot.connectionError ?? "Reconnect failed";
     } else {
       unlockPin.value = "";
+      if (targetHostId) selectedHostId.value = targetHostId;
     }
   } catch (cause) {
     formError.value =
@@ -1704,7 +1780,8 @@ async function clearSavedCredential() {
   }
 }
 
-async function switchHost(value: string) {
+async function selectHost(value: string) {
+  selectedHostId.value = value;
   formError.value = null;
   clearReauthForm();
   try {
@@ -1713,6 +1790,10 @@ async function switchHost(value: string) {
     formError.value =
       cause instanceof Error ? cause.message : "Host switch failed";
   }
+}
+
+async function switchHost(value: string) {
+  await selectHost(value);
 }
 
 async function quickSwitchHost(hostId: string) {

@@ -271,10 +271,69 @@
 
                             <section class="more-section">
                                 <p class="more-section-label">Account</p>
+                                <!-- Same card/row anatomy as System below — not rail auth tiles. -->
                                 <div class="more-list">
+                                    <button
+                                        v-if="showConnectRow"
+                                        type="button"
+                                        class="more-row"
+                                        :aria-label="connectAriaLabel"
+                                        :disabled="connectManaged"
+                                        @click="onConnectClick"
+                                    >
+                                        <span
+                                            class="more-row-icon more-row-icon--connect"
+                                            aria-hidden="true"
+                                        >
+                                            <svg
+                                                viewBox="0 0 512 512"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                fill="currentColor"
+                                                stroke="currentColor"
+                                            >
+                                                <g>
+                                                    <path
+                                                        d="M3 248.945C18 248.945 76 236 106 219C136 202 136 202 198 158C276.497 102.293 332 120.945 423 120.945"
+                                                        stroke-width="90"
+                                                    />
+                                                    <path
+                                                        d="M511 121.5L357.25 210.268L357.25 32.7324L511 121.5Z"
+                                                    />
+                                                    <path
+                                                        d="M0 249C15 249 73 261.945 103 278.945C133 295.945 133 295.945 195 339.945C273.497 395.652 329 377 420 377"
+                                                        stroke-width="90"
+                                                    />
+                                                    <path
+                                                        d="M508 376.445L354.25 287.678L354.25 465.213L508 376.445Z"
+                                                    />
+                                                </g>
+                                            </svg>
+                                        </span>
+                                        <span class="more-row-copy">
+                                            <span class="more-row-label">{{
+                                                connectLabel
+                                            }}</span>
+                                            <span class="more-row-desc"
+                                                >Integrate your tools</span
+                                            >
+                                        </span>
+                                        <UIcon
+                                            :name="iconChevron"
+                                            class="more-row-chevron"
+                                            aria-hidden="true"
+                                        />
+                                    </button>
+
+                                    <!--
+                                      display:contents so Account .more-row is a
+                                      direct flex child of .more-list (same as System).
+                                      layout prop is required — provide/inject can
+                                      miss across provider package Vue copies.
+                                    -->
                                     <div class="mobile-nav-more-auth">
                                         <component
-                                            :is="sidebarAuthButtonComponent"
+                                            :is="authUiOnlyComponent"
+                                            layout="more-sheet"
                                         />
                                     </div>
 
@@ -357,9 +416,10 @@
                     <footer v-if="!infoOpen" class="more-sheet-footer">
                         <div class="more-system">
                             <p class="more-section-label">System</p>
-                            <div class="more-system-card">
+                            <div class="more-system-card more-list">
                                 <div
-                                    class="more-system-mode"
+                                    class="more-row more-system-mode"
+                                    role="status"
                                     :aria-label="`${modeLabel} mode`"
                                 >
                                     <span
@@ -372,16 +432,10 @@
                                         <span class="more-row-label"
                                             >{{ modeLabel }} mode</span
                                         >
-                                        <span
-                                            class="more-row-desc"
-                                            :class="{
-                                                'more-row-desc--active':
-                                                    isSsrAuthEnabled,
-                                            }"
-                                        >
+                                        <span class="more-row-desc">
                                             {{
                                                 isSsrAuthEnabled
-                                                    ? 'Currently enabled'
+                                                    ? 'Cloud services enabled'
                                                     : 'Local-first workspace'
                                             }}
                                         </span>
@@ -396,7 +450,7 @@
                                 <button
                                     v-if="isSsrAuthEnabled"
                                     type="button"
-                                    class="more-system-admin"
+                                    class="more-row more-system-admin"
                                     aria-label="Open admin"
                                     @click="openAdmin"
                                 >
@@ -432,7 +486,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, provide, ref, watch } from 'vue';
-import { navigateTo, useNuxtApp, useRuntimeConfig, useToast } from '#imports';
+import { navigateTo, useRuntimeConfig, useToast } from '#imports';
 import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
@@ -442,7 +496,10 @@ import {
     projectProfileItems,
     resolvedWorkspaceProfile,
 } from '~/core/workspace-profiles/projection';
-import SidebarAuthButton from '~/components/sidebar/SidebarAuthButton.vue';
+import SidebarAuthButtonFallback from '~/components/sidebar/SidebarAuthButtonFallback.client.vue';
+import { resolveAuthUiAdapter } from '~/core/auth-ui/registry';
+import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
+import { state } from '~/state/global';
 
 /** Keep nested auth menus on-screen inside the mobile More sheet. */
 provide('or3:auth-ui-popover-content', {
@@ -451,6 +508,8 @@ provide('or3:auth-ui-popover-content', {
     sideOffset: 8,
     collisionPadding: 16,
 });
+/** Auth adapters render System-matched .more-row triggers. */
+provide('or3:auth-ui-layout', 'more-sheet');
 
 const DEFAULT_PAGE_ID = 'sidebar-home';
 
@@ -488,13 +547,61 @@ const isSsrAuthEnabled = computed(
     () => config.public?.ssrAuthEnabled === true
 );
 
-// Provider-adaptive auth button (theme-swappable via 'sidebar-auth-button')
-const themePlugin = useNuxtApp().$theme;
-const sidebarAuthButtonComponent = computed(
-    () =>
-        themePlugin?.activeComponents?.value?.['sidebar-auth-button'] ??
-        SidebarAuthButton
+// Account adapter only (Connect is a local System-matched more-row above).
+const authProviderId = computed(() =>
+    String(config.public?.authProvider ?? 'clerk')
 );
+const authUiOnlyComponent = computed(() => {
+    const adapter = resolveAuthUiAdapter(authProviderId.value);
+    return adapter?.component ?? SidebarAuthButtonFallback;
+});
+
+const openRouterConfig = computed(() => config.public?.openRouter ?? {});
+const requireUserKey = computed(
+    () => openRouterConfig.value.requireUserKey === true
+);
+const allowUserOverride = computed(
+    () =>
+        openRouterConfig.value.allowUserOverride !== false ||
+        requireUserKey.value
+);
+const hasInstanceKey = computed(
+    () =>
+        openRouterConfig.value.hasInstanceKey === true && !requireUserKey.value
+);
+const showConnectRow = computed(
+    () => !isSsrAuthEnabled.value || allowUserOverride.value
+);
+
+const openrouter = useOpenRouterAuth();
+const isConnected = computed(() => Boolean(state.value.openrouterKey));
+const usingInstanceKey = computed(
+    () =>
+        hasInstanceKey.value &&
+        (!allowUserOverride.value || !isConnected.value)
+);
+const connectManaged = computed(
+    () => usingInstanceKey.value && !allowUserOverride.value
+);
+const connectLabel = computed(() =>
+    isConnected.value ? 'Disconnect' : 'Connect'
+);
+const connectAriaLabel = computed(() => {
+    if (connectManaged.value) return 'OpenRouter managed by instance';
+    if (isConnected.value) return 'Disconnect from OpenRouter';
+    if (usingInstanceKey.value) return 'Using instance OpenRouter key';
+    return 'Connect to OpenRouter';
+});
+
+function onConnectClick() {
+    if (connectManaged.value) return;
+    if (isConnected.value) {
+        state.value.openrouterKey = null;
+        openrouter.logoutOpenRouter();
+    } else {
+        openrouter.startLogin();
+    }
+}
 
 // Mode badge (Local / Cloud) — same semantics as SideBottomNav
 const modeLabel = computed(() => (isSsrAuthEnabled.value ? 'Cloud' : 'Local'));
@@ -1171,18 +1278,53 @@ const createItemProps = computed(() => {
     border-radius: 1rem;
     background: var(--md-surface);
     overflow: hidden;
+    isolation: isolate;
 }
 
 .more-list--nested {
     border-radius: 0.9rem;
 }
 
+/* Clean 1px dividers only — never stacked shadows between rows. */
 .more-list > * + *,
-.mobile-nav-more-auth > * + * {
+.mobile-nav-more-auth > * + *,
+.more-system-card > * + * {
     border-top: 1px solid
-        color-mix(in srgb, var(--md-border-color) 65%, transparent);
+        color-mix(in srgb, var(--md-border-color) 70%, transparent);
+    box-shadow: none;
 }
 
+.more-system {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+/* Status row: same anatomy as actionable rows, no pointer affordance. */
+.more-system-mode {
+    cursor: default;
+}
+
+.more-system-mode:hover,
+.more-system-mode:active {
+    background: transparent;
+}
+
+/*
+ * Collapse the auth host wrapper so Account/Login .more-row participates in
+ * .more-list dividers exactly like System rows (Cloud mode / Admin).
+ */
+.mobile-nav-more-auth {
+    display: contents;
+}
+</style>
+
+<!--
+  Unscoped on purpose: Account auth adapters render .more-row inside child
+  components. Scoped parent styles never reach those nodes — that was the
+  mashed Connect text / giant Account rail tile. System rows use the same classes.
+-->
+<style>
 .more-row {
     display: flex;
     align-items: center;
@@ -1191,7 +1333,9 @@ const createItemProps = computed(() => {
     min-height: 3.65rem;
     padding: 0.75rem 0.85rem;
     border: 0;
+    border-radius: 0;
     background: transparent;
+    box-shadow: none;
     color: var(--md-on-surface);
     text-align: left;
     text-decoration: none;
@@ -1238,8 +1382,17 @@ const createItemProps = computed(() => {
     color: var(--md-secondary, var(--md-tertiary, var(--md-primary)));
 }
 
-.more-row-icon :deep(.iconify),
-.more-row-icon :deep(svg) {
+.more-row-icon--connect {
+    background: color-mix(
+        in srgb,
+        var(--md-success, var(--md-primary)) 12%,
+        transparent
+    );
+    color: var(--md-success, var(--md-primary));
+}
+
+.more-row-icon .iconify,
+.more-row-icon svg {
     width: 1rem;
     height: 1rem;
 }
@@ -1271,15 +1424,19 @@ const createItemProps = computed(() => {
     font-weight: 600;
 }
 
+.more-row-chevron,
+.more-status-badge {
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
 .more-row-chevron {
     width: 0.95rem;
     height: 0.95rem;
-    flex-shrink: 0;
     opacity: 0.35;
 }
 
 .more-status-badge {
-    flex-shrink: 0;
     padding: 0.2rem 0.55rem;
     border-radius: 9999px;
     background: color-mix(
@@ -1291,262 +1448,5 @@ const createItemProps = computed(() => {
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.02em;
-}
-
-.more-system {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-}
-
-.more-system-card {
-    display: flex;
-    flex-direction: column;
-    border: 1px solid
-        color-mix(in srgb, var(--md-border-color) 75%, transparent);
-    border-radius: 1rem;
-    background: var(--md-surface);
-    overflow: hidden;
-}
-
-.more-system-mode,
-.more-system-admin {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    width: 100%;
-    min-height: 3.65rem;
-    padding: 0.75rem 0.85rem;
-    color: var(--md-on-surface);
-    text-decoration: none;
-}
-
-.more-system-admin {
-    border-top: 1px solid
-        color-mix(in srgb, var(--md-border-color) 65%, transparent);
-    cursor: pointer;
-    transition: background 120ms ease;
-}
-
-.more-system-admin:hover {
-    background: var(--md-surface-hover);
-}
-
-.more-system-admin:active {
-    background: var(--md-surface-active);
-}
-
-/*
- * Auth adapters ship rail-oriented icon+caption tiles. Inside the More sheet,
- * reshape them into polished account rows matching System list spacing.
- */
-.mobile-nav-more-auth {
-    display: flex;
-    flex-direction: column;
-}
-
-.mobile-nav-more-auth :deep(button),
-.mobile-nav-more-auth :deep([aria-label='Account menu']),
-.mobile-nav-more-auth :deep([aria-label='Login']) {
-    display: flex !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    height: auto !important;
-    min-height: 3.65rem !important;
-    margin: 0 !important;
-    padding: 0.75rem 0.85rem !important;
-    border: 0 !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    justify-content: flex-start !important;
-    align-items: center !important;
-    gap: 0 !important;
-    color: var(--md-on-surface) !important;
-    line-height: 1.2 !important;
-}
-
-.mobile-nav-more-auth :deep(button:hover),
-.mobile-nav-more-auth :deep([aria-label='Account menu']:hover),
-.mobile-nav-more-auth :deep([aria-label='Login']:hover) {
-    background: var(--md-surface-hover) !important;
-}
-
-.mobile-nav-more-auth :deep(button:active),
-.mobile-nav-more-auth :deep([aria-label='Account menu']:active),
-.mobile-nav-more-auth :deep([aria-label='Login']:active) {
-    background: var(--md-surface-active) !important;
-}
-
-.mobile-nav-more-auth :deep(button > span),
-.mobile-nav-more-auth :deep([aria-label='Account menu'] > span),
-.mobile-nav-more-auth :deep([aria-label='Login'] > span) {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-    gap: 0.75rem !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    height: auto !important;
-}
-
-/*
- * Auth adapters put the glyph as the first child (svg / .iconify), not inside
- * a .more-row-icon well. Size the glyph to 1rem and paint the well with
- * padding — never set the glyph box itself to 2.15rem or it looks huge.
- */
-.mobile-nav-more-auth :deep(button > span > svg),
-.mobile-nav-more-auth :deep(button > span > .iconify),
-.mobile-nav-more-auth :deep([aria-label='Account menu'] > span > svg),
-.mobile-nav-more-auth :deep([aria-label='Account menu'] > span > .iconify),
-.mobile-nav-more-auth :deep([aria-label='Login'] > span > svg),
-.mobile-nav-more-auth :deep([aria-label='Login'] > span > .iconify) {
-    box-sizing: content-box !important;
-    display: block !important;
-    width: 1rem !important;
-    height: 1rem !important;
-    min-width: 1rem !important;
-    min-height: 1rem !important;
-    max-width: 1rem !important;
-    max-height: 1rem !important;
-    padding: 0.575rem !important;
-    margin: 0 !important;
-    flex-shrink: 0 !important;
-    border-radius: 0.7rem !important;
-    background: color-mix(in srgb, var(--md-on-surface) 6%, transparent) !important;
-    color: var(--md-on-surface-variant) !important;
-    font-size: 1rem !important;
-    overflow: visible !important;
-}
-
-.mobile-nav-more-auth
-    :deep(button[data-connection-state] > span > svg),
-.mobile-nav-more-auth
-    :deep(button[data-connection-state] > span > .iconify) {
-    background: color-mix(
-        in srgb,
-        var(--md-success, var(--md-primary)) 12%,
-        transparent
-    ) !important;
-    color: var(--md-success, var(--md-primary)) !important;
-}
-
-.mobile-nav-more-auth
-    :deep([aria-label='Account menu'] > span > svg),
-.mobile-nav-more-auth
-    :deep([aria-label='Account menu'] > span > .iconify),
-.mobile-nav-more-auth :deep([aria-label='Login'] > span > svg),
-.mobile-nav-more-auth :deep([aria-label='Login'] > span > .iconify) {
-    background: color-mix(
-        in srgb,
-        var(--md-secondary, var(--md-tertiary, var(--md-primary))) 14%,
-        transparent
-    ) !important;
-    color: var(--md-secondary, var(--md-tertiary, var(--md-primary))) !important;
-}
-
-/* Nested svg inside an iconify host must not get a second well */
-.mobile-nav-more-auth :deep(button .iconify svg),
-.mobile-nav-more-auth :deep([aria-label='Account menu'] .iconify svg),
-.mobile-nav-more-auth :deep([aria-label='Login'] .iconify svg) {
-    box-sizing: border-box !important;
-    width: 1rem !important;
-    height: 1rem !important;
-    min-width: 0 !important;
-    min-height: 0 !important;
-    max-width: 1rem !important;
-    max-height: 1rem !important;
-    padding: 0 !important;
-    background: transparent !important;
-    border-radius: 0 !important;
-}
-
-.mobile-nav-more-auth :deep(.sidebar-rail-caption),
-.mobile-nav-more-auth :deep([class~='text-[7px]']) {
-    display: flex !important;
-    flex: 1 1 auto !important;
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    justify-content: center !important;
-    gap: 0.15rem !important;
-    min-width: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    font-size: 0.92rem !important;
-    font-weight: 600 !important;
-    line-height: 1.2 !important;
-    letter-spacing: 0.01em !important;
-    text-transform: none !important;
-    text-align: left !important;
-    white-space: nowrap !important;
-    color: var(--md-on-surface) !important;
-}
-
-.mobile-nav-more-auth
-    :deep(button[data-connection-state] .sidebar-rail-caption)::after,
-.mobile-nav-more-auth
-    :deep(button[data-connection-state] [class~='text-[7px]'])::after {
-    content: 'Integrate your tools';
-    display: block;
-    font-size: 0.72rem;
-    font-weight: 500;
-    line-height: 1.3;
-    color: var(--md-on-surface-variant);
-    opacity: 0.8;
-    white-space: normal;
-}
-
-.mobile-nav-more-auth
-    :deep([aria-label='Account menu'] .sidebar-rail-caption)::after,
-.mobile-nav-more-auth
-    :deep([aria-label='Account menu'] [class~='text-[7px]'])::after,
-.mobile-nav-more-auth :deep([aria-label='Login'] .sidebar-rail-caption)::after,
-.mobile-nav-more-auth
-    :deep([aria-label='Login'] [class~='text-[7px]'])::after {
-    content: 'Manage your profile & settings';
-    display: block;
-    font-size: 0.72rem;
-    font-weight: 500;
-    line-height: 1.3;
-    color: var(--md-on-surface-variant);
-    opacity: 0.8;
-    white-space: normal;
-}
-
-.mobile-nav-more-auth :deep(button)::after,
-.mobile-nav-more-auth :deep([aria-label='Account menu'])::after,
-.mobile-nav-more-auth :deep([aria-label='Login'])::after {
-    content: '';
-    width: 0.55rem;
-    height: 0.55rem;
-    margin-left: auto;
-    flex-shrink: 0;
-    border-right: 1.5px solid currentColor;
-    border-bottom: 1.5px solid currentColor;
-    opacity: 0.35;
-    transform: rotate(-45deg);
-    color: var(--md-on-surface);
-}
-
-/* Connection status bar under Connect caption — hide in sheet rows */
-.mobile-nav-more-auth :deep(button span[aria-hidden='true']),
-.mobile-nav-more-auth :deep(button span.opacity-50),
-.mobile-nav-more-auth :deep(button span[class*='h-[3px]']),
-.mobile-nav-more-auth :deep(button span[class*='w-[54%]']) {
-    display: none !important;
-}
-
-.mobile-nav-more-auth :deep(div[class*='h-[54px]']) {
-    width: 100% !important;
-    height: auto !important;
-    min-height: 3.65rem !important;
-    justify-content: flex-start !important;
-    padding: 0.75rem 0.85rem !important;
-}
-
-.more-list > .mobile-nav-more-auth:first-child > :first-child {
-    border-top: 0;
 }
 </style>

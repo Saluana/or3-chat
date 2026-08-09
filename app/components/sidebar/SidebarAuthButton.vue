@@ -154,9 +154,6 @@ const isConnected = computed(() => Boolean(state.value.openrouterKey));
 const usingInstanceKey = computed(
     () => hasInstanceKey.value && (!allowUserOverride.value || !isConnected.value)
 );
-const effectiveConnected = computed(
-    () => isConnected.value || usingInstanceKey.value
-);
 
 const connectionState = computed(() =>
     hydrated.value ? (isConnected.value ? 'connected' : 'disconnected') : 'loading'

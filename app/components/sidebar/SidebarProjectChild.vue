@@ -52,6 +52,26 @@
                             class="project-child-menu-content p-1 w-48 space-y-1"
                         >
                             <UButton
+                                v-if="canOpenInNewTab"
+                                v-bind="openTabButtonProps"
+                                class="w-full justify-start"
+                                @click.stop.prevent="openInNewTab"
+                                >Open in new tab</UButton
+                            >
+                            <UButton
+                                v-if="!isMobile"
+                                v-bind="openPaneButtonProps"
+                                class="w-full justify-start"
+                                :disabled="!canOpenInNewPane"
+                                :title="
+                                    canOpenInNewPane
+                                        ? 'Open in new pane'
+                                        : 'Maximum pane limit reached'
+                                "
+                                @click.stop.prevent="openInNewPane"
+                                >Open in new pane</UButton
+                            >
+                            <UButton
                                 v-bind="renameButtonProps"
                                 class="w-full justify-start"
                                 @click.stop.prevent="emit('rename')"
@@ -72,10 +92,13 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import { useIcon } from '~/composables/useIcon';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
 import { useSidebarProjectActionButtonProps } from '~/composables/sidebar/useSidebarProjectActionButtonProps';
+import { useWorkspaceResourceActions } from '~/composables/core/useWorkspaceResourceActions';
+import { isMobile } from '~/state/global';
 
 const { handlePopoverTriggerKey } = usePopoverKeyboard();
 
@@ -85,7 +108,7 @@ const iconMore = useIcon('ui.more');
 const iconEdit = useIcon('ui.edit');
 const iconTrash = useIcon('ui.trash');
 
-defineProps<{
+const props = defineProps<{
     child: ProjectEntry;
     active?: boolean;
 }>();
@@ -105,4 +128,26 @@ const removeButtonProps = useSidebarProjectActionButtonProps({
     identifier: 'sidebar.project-entry-remove',
     icon: iconTrash.value,
 });
+
+const openTabButtonProps = useSidebarProjectActionButtonProps({
+    identifier: 'sidebar.project-entry-open-tab',
+    icon: useIcon('ui.open_tab').value,
+});
+
+const openPaneButtonProps = useSidebarProjectActionButtonProps({
+    identifier: 'sidebar.project-entry-open-pane',
+    icon: useIcon('ui.open_pane').value,
+});
+
+const workspaceResource = computed(() =>
+    props.child.kind === 'chat'
+        ? { kind: 'chat' as const, threadId: props.child.id }
+        : { kind: 'document' as const, documentId: props.child.id }
+);
+const {
+    canOpenInNewTab,
+    canOpenInNewPane,
+    openInNewTab,
+    openInNewPane,
+} = useWorkspaceResourceActions(workspaceResource);
 </script>

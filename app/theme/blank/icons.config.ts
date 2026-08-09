@@ -66,6 +66,8 @@ export default <IconMap>{
     'ui.check': 'tabler:check',
     'ui.close': 'tabler:x',
     'ui.copy': 'tabler:copy',
+    'ui.open_tab': 'tabler:external-link',
+    'ui.open_pane': 'tabler:columns-2',
     'ui.trash': 'tabler:trash',
     'ui.edit': 'tabler:pencil',
     'ui.warning': 'tabler:alert-square-rounded',

@@ -45,6 +45,8 @@ export interface PaneState {
     id: string;
     mode: PaneMode;
     threadId: string; // '' indicates unsaved/new chat
+    /** Target thread while an async workspace-tab activation is in flight. */
+    pendingThreadId?: string;
     documentId?: string;
     messages: MultiPaneMessage[];
     validating: boolean;

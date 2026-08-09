@@ -70,12 +70,18 @@ export function useWorkspaceTabHost(multiPane: UseMultiPaneApi): WorkspaceTabHos
         if (index < 0 || !activation.isCurrent()) return;
 
         if (resource.kind === 'chat') {
+            // Publish the target before thread-selection filters yield. This
+            // prevents the PageShell reconciliation watcher from mistaking a
+            // document → chat transition for a new blank chat.
             multiPane.updatePane(index, {
                 mode: 'chat',
                 documentId: undefined,
+                pendingThreadId: resource.threadId ?? '',
                 messages: [],
             });
             await multiPane.setPaneThread(index, resource.threadId ?? '');
+            if (!activation.isCurrent()) return;
+            multiPane.updatePane(index, { pendingThreadId: undefined });
             return;
         }
 
@@ -84,6 +90,7 @@ export function useWorkspaceTabHost(multiPane: UseMultiPaneApi): WorkspaceTabHos
                 mode: 'doc',
                 documentId: resource.documentId,
                 threadId: '',
+                pendingThreadId: undefined,
                 messages: [],
             });
             return;

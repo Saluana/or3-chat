@@ -668,6 +668,12 @@
                     "summary": "Runtime for workspace profiles. A profile defines which sidebar pages, dashboard tiles, pane apps, and commands a workspace uses, and how many panes are allowed."
                 },
                 {
+                    "name": "useWorkspaceResourceActions.md",
+                    "path": "/composables/useWorkspaceResourceActions",
+                    "category": "Core",
+                    "summary": "Reusable open-in-new-tab and open-in-new-pane actions for chat, document, and pane-app resources."
+                },
+                {
                     "name": "useWorkspaceTabDrafts.md",
                     "path": "/composables/useWorkspaceTabDrafts",
                     "category": "Core",
