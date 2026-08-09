@@ -93,6 +93,12 @@ test('release smoke re-resolves amd64 after architecture-specific scans', () => 
   expect(init).toBeGreaterThan(pull);
 });
 
+test('release digest verification uses buildx-compatible manifest output', () => {
+  const workflow = readFileSync(RELEASE_WORKFLOW, 'utf8');
+  expect(workflow).not.toContain('.Index.Digest');
+  expect(workflow.match(/awk '\$1 == "Digest:"/g)?.length).toBe(2);
+});
+
 test('compose.yaml hardens the or3 container', () => {
   const compose = asset('compose.yaml');
   expect(compose).toContain('no-new-privileges:true');

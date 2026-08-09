@@ -363,8 +363,9 @@ jobs:
             fi
             docker buildx imagetools create --tag "$RELEASE_IMAGE" "$CANDIDATE_IMAGE"
           fi
-          digest="$(docker buildx imagetools inspect "$RELEASE_IMAGE" --format '{{.Index.Digest}}')"
-          test -n "$digest"
+          release_inspect="$(docker buildx imagetools inspect "$RELEASE_IMAGE")"
+          digest="$(awk '$1 == "Digest:" { print $2; exit }' <<<"$release_inspect")"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           echo "$digest" > release-artifact/digest.txt
           echo "Promoted and verified $RELEASE_IMAGE @ $digest"
@@ -405,7 +406,9 @@ jobs:
           recorded="$(tr -d '[:space:]' < release-artifact/digest.txt)"
           test -n "$recorded"
           test "$recorded" = "$EXPECTED_DIGEST"
-          actual="$(docker buildx imagetools inspect "ghcr.io/saluana/or3-chat:$VERSION" --format '{{.Index.Digest}}')"
+          release_inspect="$(docker buildx imagetools inspect "ghcr.io/saluana/or3-chat:$VERSION")"
+          actual="$(awk '$1 == "Digest:" { print $2; exit }' <<<"$release_inspect")"
+          [[ "$actual" =~ ^sha256:[0-9a-f]{64}$ ]]
           test "$actual" = "$recorded"
           test -f "release-artifact/or3-cloud-$VERSION.tgz"
       - name: Reject reused npm version
