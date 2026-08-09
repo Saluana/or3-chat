@@ -21,6 +21,8 @@ export type BackgroundJobUpdate = {
     status: BackgroundJobStatus;
     content: string;
     delta: string;
+    /** True when recovery replaced a non-monotonic partial response. */
+    replace?: boolean;
 };
 
 /** Subscriber callbacks for background job events */
@@ -43,6 +45,7 @@ export type BackgroundJobTracker = {
     lastToolStateFingerprint?: string;
     lastWorkflowFingerprint?: string;
     lastContent: string;
+    lastAttempt?: number;
     lastPersistedLength: number;
     lastPersistAt: number;
     polling: boolean;
@@ -94,6 +97,7 @@ export type AttachBackgroundJobParams = {
     messageId: string;
     threadId: string;
     initialContent?: string;
+    initialAttempt?: number;
     isReattach?: boolean;
     useSse?: boolean;
 };
@@ -106,6 +110,7 @@ export type EnsureBackgroundJobTrackerParams = {
     messageId: string;
     preferServerNotifications?: boolean;
     initialContent?: string;
+    initialAttempt?: number;
     useSse?: boolean;
 };
 

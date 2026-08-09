@@ -29,8 +29,9 @@ export async function ensureThreadHistoryLoaded(
     historyLoadedFor: Ref<string | null>,
     messages: Ref<ChatMessage[]>
 ) {
-    if (!threadIdRef.value) return;
-    if (historyLoadedFor.value === threadIdRef.value) return;
+    const targetThreadId = threadIdRef.value;
+    if (!targetThreadId) return false;
+    if (historyLoadedFor.value === targetThreadId) return true;
 
     try {
         const DexieMod = (await import('dexie')).default;
@@ -38,20 +39,26 @@ export async function ensureThreadHistoryLoaded(
         const all = await db.messages
             .where('[thread_id+index]')
             .between(
-                [threadIdRef.value, DexieMod.minKey],
-                [threadIdRef.value, DexieMod.maxKey]
+                [targetThreadId, DexieMod.minKey],
+                [targetThreadId, DexieMod.maxKey]
             )
             .filter((m: Message) => !m.deleted)
             .toArray();
 
         all.sort(compareMessageOrder);
 
-        messages.value = projectTranscriptForOpenRouter(
+        const nextMessages = projectTranscriptForOpenRouter(
             storedMessagesToCanonicalTranscript(all)
         );
 
-        historyLoadedFor.value = threadIdRef.value;
+        // The database read can complete after navigation selects another
+        // thread. Never commit an older thread's transcript into the new view.
+        if (threadIdRef.value !== targetThreadId) return false;
+        messages.value = nextMessages;
+        historyLoadedFor.value = targetThreadId;
+        return true;
     } catch (e) {
         console.warn('[useChat.ensureThreadHistoryLoaded] failed', e);
+        return false;
     }
 }

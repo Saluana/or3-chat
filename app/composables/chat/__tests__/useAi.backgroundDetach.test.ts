@@ -567,6 +567,71 @@ describe('useChat background detach race', () => {
         expect(runForegroundStreamLoopMock).toHaveBeenCalledTimes(1);
     });
 
+    it('settles a foreground stream before switching threads', async () => {
+        runtimeConfigRef.value.public.backgroundStreaming = {
+            enabled: true,
+            startMode: 'foreground',
+        };
+        const foregroundAbort = {
+            reject: null as ((reason: unknown) => void) | null,
+        };
+        runForegroundStreamLoopMock.mockImplementationOnce(
+            ({ abortSignal, tailAssistant }: any) => {
+                tailAssistant.value = {
+                    id: 'assistant-msg-1',
+                    role: 'assistant',
+                    text: 'partial answer',
+                    pending: true,
+                };
+                return new Promise<void>((_resolve, reject) => {
+                    abortSignal.addEventListener(
+                        'abort',
+                        () => {
+                            foregroundAbort.reject = reject;
+                        },
+                        { once: true }
+                    );
+                });
+            }
+        );
+
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1');
+        const sendPromise = chat.sendMessage('foreground please', {
+            files: [], model: 'test-model', file_hashes: [], online: false,
+            context_hashes: [],
+        } as any);
+
+        await waitForCall(runForegroundStreamLoopMock);
+        const switchPromise = chat.switchThread('thread-2');
+        await nextTick();
+
+        // The old callbacks still own the shared reactive refs until abort
+        // cleanup has persisted their terminal state.
+        expect(chat.threadId.value).toBe('thread-1');
+        expect(foregroundAbort.reject).not.toBeNull();
+        if (!foregroundAbort.reject) {
+            throw new Error('Foreground abort handler was not installed');
+        }
+        foregroundAbort.reject(
+            new DOMException('The operation was aborted', 'AbortError')
+        );
+
+        await expect(sendPromise).resolves.toMatchObject({
+            status: 'aborted', reason: 'aborted',
+        });
+        await switchPromise;
+
+        expect(chat.threadId.value).toBe('thread-2');
+        expect(appendMessageMock.mock.calls).toHaveLength(2);
+        expect(
+            appendMessageMock.mock.calls.every(
+                ([message]) => message.thread_id === 'thread-1'
+            )
+        ).toBe(true);
+    });
+
     it('appends background deltas to the tail accumulator without full resets', async () => {
         vi.resetModules();
         const { useChat } = await import('~/composables/chat/useAi');
@@ -618,6 +683,41 @@ describe('useChat background detach race', () => {
             kind: 'text',
         });
         expect(streamAccResetMock.mock.calls.length).toBe(resetCallsBeforeUpdates);
+    });
+
+    it('clears stale live text for an empty recovery replacement', async () => {
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1');
+        const sendPromise = chat.sendMessage('hello', {
+            files: [], model: 'test-model', file_hashes: [], online: false,
+            context_hashes: [],
+        } as any);
+        await waitForCall(startBackgroundStreamMock);
+        if (!resolveBackgroundStart) {
+            throw new Error('Background start resolver was not initialized');
+        }
+        resolveBackgroundStart({ jobId: 'job-reset-1' });
+        await sendPromise;
+        const subscriber = latestTracker?.subscribers.values().next().value as
+            | { onUpdate?: (payload: any) => void }
+            | undefined;
+
+        subscriber?.onUpdate?.({
+            content: 'old partial', delta: 'old partial',
+            status: { status: 'streaming' },
+        });
+        subscriber?.onUpdate?.({
+            content: '', delta: '', replace: true,
+            status: { status: 'streaming', content_reset: true, attempt: 2 },
+        });
+        expect(chat.streamState.text).toBe('');
+
+        subscriber?.onUpdate?.({
+            content: 'new', delta: 'new',
+            status: { status: 'streaming', attempt: 2 },
+        });
+        expect(chat.streamState.text).toBe('new');
     });
 
     it('persists extraTextParts in the user message data.content', async () => {

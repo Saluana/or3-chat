@@ -668,6 +668,14 @@ SSR-only background processing for AI streams.
 - Env: `OR3_BACKGROUND_JOB_TIMEOUT`
 - Purpose: Job timeout.
 
+#### `backgroundStreaming.encryptionKey`
+
+- Type: `string` (at least 32 characters)
+- Default: none
+- Env: `OR3_BACKGROUND_ENCRYPTION_KEY`
+- Purpose: Runtime-only encryption key for resumable job credentials; required
+  when background streaming is enabled.
+
 ### `admin`
 
 SSR-only admin controls.

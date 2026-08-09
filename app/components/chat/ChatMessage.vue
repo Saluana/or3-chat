@@ -325,6 +325,7 @@
                     >
                         <UButton
                             v-bind="copyButtonProps"
+                            aria-label="Copy message"
                             @click="copyMessage"
                         ></UButton>
                     </UTooltip>
@@ -336,6 +337,7 @@
                     >
                         <UButton
                             v-bind="retryButtonProps"
+                            aria-label="Retry message"
                             @click="onRetry"
                         ></UButton>
                     </UTooltip>
@@ -348,6 +350,7 @@
                     >
                         <UButton
                             v-bind="continueButtonProps"
+                            aria-label="Continue generation"
                             @click="onContinue"
                         ></UButton>
                     </UTooltip>
@@ -358,6 +361,7 @@
                     >
                         <UButton
                             v-bind="branchButtonProps"
+                            aria-label="Branch conversation"
                             @click="onBranch"
                         ></UButton>
                     </UTooltip>
@@ -368,6 +372,7 @@
                     >
                         <UButton
                             v-bind="editButtonProps"
+                            aria-label="Edit message"
                             @click="wrappedBeginEdit"
                         ></UButton>
                     </UTooltip>
@@ -381,6 +386,7 @@
                             <UButton
                                 v-bind="pluginActionButtonProps"
                                 :icon="action.icon"
+                                :aria-label="action.tooltip || action.id"
                                 @click="() => runExtraAction(action)"
                             ></UButton>
                         </UTooltip>

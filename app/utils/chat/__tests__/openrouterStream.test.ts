@@ -400,9 +400,37 @@ describe('background streaming helpers', () => {
         });
         const assertion = expect(start).rejects.toBeInstanceOf(OpenRouterTimeoutError);
 
-        await vi.advanceTimersByTimeAsync(20);
+        await vi.advanceTimersByTimeAsync(600);
 
         await assertion;
+    });
+
+    it('retries ambiguous admission with the same idempotency key', async () => {
+        vi.useFakeTimers();
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(createJsonResponse({ error: 'temporary' }, 503))
+            .mockResolvedValueOnce(
+                createJsonResponse({ jobId: 'job-1', status: 'streaming' })
+            );
+        vi.stubGlobal('fetch', fetchMock);
+
+        const start = startBackgroundStream({
+            apiKey: 'key-1', model: 'model-1',
+            orMessages: [{ role: 'user', content: 'hi' }], modalities: ['text'],
+            threadId: 't1', messageId: 'm1',
+        });
+        await vi.advanceTimersByTimeAsync(150);
+        await expect(start).resolves.toMatchObject({ jobId: 'job-1' });
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        const bodies = fetchMock.mock.calls.map((call) =>
+            JSON.parse(String((call[1] as RequestInit).body))
+        );
+        expect(bodies[0]._backgroundAdmissionId).toBeTruthy();
+        expect(bodies[1]._backgroundAdmissionId).toBe(
+            bodies[0]._backgroundAdmissionId
+        );
     });
 
     it('lets caller abort cancel background admission before a job ID exists', async () => {

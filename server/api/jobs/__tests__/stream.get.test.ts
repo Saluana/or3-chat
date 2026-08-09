@@ -75,6 +75,19 @@ describe('serializeJobStatus', () => {
         expect(status.tool_calls).toEqual(baseJob.tool_calls);
         expect(status.workflow_state).toEqual(baseJob.workflow_state);
     });
+
+    it('marks a recovered full snapshot as a content reset', () => {
+        const status = streamModule.serializeJobStatus(
+            { ...baseJob, attempts: 2, content: 'checkpoint' },
+            { content_reset: true }
+        );
+
+        expect(status).toMatchObject({
+            attempt: 2,
+            content: 'checkpoint',
+            content_reset: true,
+        });
+    });
 });
 
 describe('SSE viewer queue performance gate', () => {

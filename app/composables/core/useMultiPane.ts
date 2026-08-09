@@ -801,9 +801,27 @@ export function useMultiPane(
                 return;
             }
             if (wasActive) {
-                setActive(
-                    Math.min(closingIndex, panes.value.length - 1)
+                const nextIndex = Math.min(
+                    closingIndex,
+                    panes.value.length - 1
                 );
+                const nextPane = panes.value[nextIndex];
+                activePaneIndex.value = nextIndex;
+                if (nextPane) {
+                    // `setActive` intentionally skips the current index. Once the
+                    // active pane is removed, that index can now point at a
+                    // different pane, which still needs an active/switch event.
+                    void hooks.doAction('ui.pane.switch:action', {
+                        pane: nextPane,
+                        index: nextIndex,
+                        previousIndex: closingIndex,
+                    });
+                    void hooks.doAction('ui.pane.active:action', {
+                        pane: nextPane,
+                        index: nextIndex,
+                        previousIndex: closingIndex,
+                    });
+                }
             } else if (closingIndex < activePaneIndex.value) {
                 activePaneIndex.value -= 1;
             }

@@ -79,12 +79,23 @@
       </p>
       <UButton
         v-if="!connected || !hasAvailableRunner"
-        class="agent-connection-fix"
+        class="agent-connection-fix shrink-0 whitespace-nowrap"
         size="xs"
         variant="ghost"
+        :aria-label="
+          activeHost
+            ? `${pinCredentialStatus.locked ? 'Unlock' : 'Reconnect'} ${activeHost.name}`
+            : 'Connect host'
+        "
         @click="showConnections = true"
       >
-        Fix
+        {{
+          activeHost
+            ? pinCredentialStatus.locked
+              ? "Unlock"
+              : "Reconnect"
+            : "Connect"
+        }}
       </UButton>
     </div>
 
@@ -255,6 +266,11 @@
               :key="host.value"
               type="button"
               class="flex w-full items-center gap-2 rounded-[var(--md-border-radius)] px-2 py-2 text-left hover:bg-[var(--md-surface-container)] disabled:opacity-60"
+              :class="
+                pendingQuickHostId === host.value
+                  ? 'bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]'
+                  : ''
+              "
               :disabled="quickHostPending"
               @click="quickSwitchHost(host.value)"
             >
@@ -288,8 +304,18 @@
               @submit.prevent="quickUnlockHosts"
             >
               <label class="text-xs font-medium" for="quick-host-pin">
-                Unlock saved hosts
+                {{
+                  pendingQuickHost
+                    ? `Unlock ${pendingQuickHost.label} to switch`
+                    : 'Unlock saved hosts'
+                }}
               </label>
+              <p
+                v-if="pendingQuickHost"
+                class="mt-0.5 text-[11px] text-[var(--md-on-surface-variant)]"
+              >
+                Enter your PIN, then OR3 will switch to {{ pendingQuickHost.label }}.
+              </p>
               <div class="mt-1 flex gap-1.5">
                 <input
                   id="quick-host-pin"
@@ -301,8 +327,13 @@
                   class="min-w-0 flex-1 rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-transparent px-2 py-1.5 text-sm"
                   placeholder="6-digit PIN"
                 />
-                <UButton type="submit" size="xs" :loading="quickHostPending">
-                  Unlock
+                <UButton
+                  type="submit"
+                  size="xs"
+                  :loading="quickHostPending"
+                  :disabled="!quickUnlockPin"
+                >
+                  {{ pendingQuickHost ? 'Unlock & switch' : 'Unlock' }}
                 </UButton>
               </div>
             </form>
@@ -684,7 +715,9 @@
                     <UIcon :name="iconLock" class="size-4" />
                   </span>
                   <div>
-                    <p class="text-sm font-semibold">Unlock saved token</p>
+                    <p class="text-sm font-semibold">
+                      Unlock {{ activeHost.name }}
+                    </p>
                     <p
                       class="mt-0.5 text-xs leading-relaxed text-[var(--md-on-surface-variant)]"
                     >
@@ -711,7 +744,7 @@
                     :loading="hostActionPending"
                     @click="unlockAndReconnect"
                   >
-                    Unlock and reconnect
+                    Unlock {{ activeHost.name }}
                   </UButton>
                   <UButton
                     class="justify-self-start sm:col-span-2"
@@ -1181,6 +1214,11 @@ const hostItems = computed(() =>
     label: host.name,
     description: `${host.driver === "runs" ? "Agent service" : "OR3 Intern"} · ${host.baseUrl}`,
   })),
+);
+const pendingQuickHost = computed(
+  () =>
+    hostItems.value.find((host) => host.value === pendingQuickHostId.value) ??
+    null,
 );
 const activeHost = computed(
   () =>

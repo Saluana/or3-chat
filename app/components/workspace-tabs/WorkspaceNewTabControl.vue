@@ -2,14 +2,18 @@
     <div class="workspace-tab-new-wrap">
         <UTooltip :delay-duration="0" :text="tooltip">
             <button
+                ref="trigger"
                 v-theme="'shell.tab-new'"
                 type="button"
                 class="workspace-tab-new"
-                aria-label="New tab"
+                aria-label="New chat"
                 :title="tooltip"
                 aria-haspopup="menu"
-                @click="emit('new-tab')"
+                :aria-expanded="Boolean(menu)"
+                :aria-controls="menu ? 'workspace-new-tab-menu' : undefined"
+                @click="onNewTab"
                 @contextmenu.prevent="openMenu"
+                @keydown="onTriggerKeydown"
             >
                 <UIcon :name="plusIcon" />
             </button>
@@ -22,11 +26,13 @@
         <Teleport to="body">
             <div
                 v-if="menu"
+                id="workspace-new-tab-menu"
                 ref="menuElement"
                 class="workspace-tab-context workspace-new-tab-menu"
                 :style="menuStyle"
                 role="menu"
                 aria-label="Create new tab"
+                @keydown="onMenuKeydown"
             >
                 <button
                     v-for="item in items"
@@ -74,11 +80,12 @@ const emit = defineEmits<{
 const plusIcon = useIcon('shell.tab.new');
 const menu = ref<{ x: number; y: number } | null>(null);
 const menuElement = ref<HTMLElement | null>(null);
+const trigger = ref<HTMLButtonElement | null>(null);
 
 const tooltip = computed(() =>
     props.canCreateDocument || props.canCreateWorkflow || props.canCreateAgent
-        ? 'New tab · right-click for more'
-        : 'New tab'
+        ? 'New chat · right-click or press ↓ for more'
+        : 'New chat'
 );
 
 const items = computed(() => {
@@ -122,7 +129,31 @@ const menuStyle = computed(() => {
 });
 
 function openMenu(event: MouseEvent): void {
-    menu.value = { x: event.clientX, y: event.clientY };
+    const rect = trigger.value?.getBoundingClientRect();
+    const isKeyboardInvocation = event.clientX === 0 && event.clientY === 0;
+    menu.value = {
+        x: isKeyboardInvocation ? (rect?.left ?? 0) : event.clientX,
+        y: isKeyboardInvocation ? (rect?.bottom ?? 0) : event.clientY,
+    };
+}
+
+function openMenuFromTrigger(): void {
+    const rect = trigger.value?.getBoundingClientRect();
+    menu.value = {
+        x: rect?.left ?? 0,
+        y: rect?.bottom ?? 0,
+    };
+}
+
+function onNewTab(): void {
+    menu.value = null;
+    emit('new-tab');
+}
+
+function onTriggerKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    openMenuFromTrigger();
 }
 
 function pick(kind: WorkspaceNewTabCreateKind): void {
@@ -142,7 +173,38 @@ function dismissOnOutsidePointer(event: PointerEvent): void {
 }
 
 function dismissOnEscape(event: KeyboardEvent): void {
-    if (event.key === 'Escape') menu.value = null;
+    if (event.key !== 'Escape' || !menu.value) return;
+    event.preventDefault();
+    menu.value = null;
+    trigger.value?.focus();
+}
+
+function menuItems(): HTMLButtonElement[] {
+    return Array.from(
+        menuElement.value?.querySelectorAll<HTMLButtonElement>(
+            '[role="menuitem"]'
+        ) ?? []
+    );
+}
+
+function onMenuKeydown(event: KeyboardEvent): void {
+    const items = menuItems();
+    if (!items.length) return;
+    const currentIndex = items.indexOf(
+        document.activeElement as HTMLButtonElement
+    );
+    let nextIndex: number | null = null;
+    if (event.key === 'ArrowDown') {
+        nextIndex = (currentIndex + 1 + items.length) % items.length;
+    }
+    if (event.key === 'ArrowUp') {
+        nextIndex = (currentIndex - 1 + items.length) % items.length;
+    }
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = items.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    items[nextIndex]?.focus();
 }
 
 if (typeof window !== 'undefined') {
@@ -171,7 +233,11 @@ watch(menu, async (value) => {
     if (y + rect.height > window.innerHeight - pad) {
         y = Math.max(pad, window.innerHeight - rect.height - pad);
     }
-    if (x !== value.x || y !== value.y) menu.value = { x, y };
+    if (x !== value.x || y !== value.y) {
+        menu.value = { x, y };
+        return;
+    }
+    menuItems()[0]?.focus();
 });
 </script>
 
@@ -229,6 +295,11 @@ watch(menu, async (value) => {
     font-size: 13px;
 }
 .workspace-tab-context button:hover {
+    background: var(--md-surface-hover);
+}
+.workspace-tab-context button:focus-visible {
+    outline: var(--md-border-width, 2px) solid var(--md-primary);
+    outline-offset: -2px;
     background: var(--md-surface-hover);
 }
 .workspace-new-tab-menu-icon {

@@ -607,7 +607,7 @@ describe("External Agents components", () => {
     await wrapper.find('[aria-label="Device PIN"]').setValue("482915");
     await wrapper
       .findAll("button")
-      .find((button) => button.text().includes("Unlock and reconnect"))
+      .find((button) => button.text().includes("Unlock Laptop"))
       ?.trigger("click");
     await flushPromises();
 

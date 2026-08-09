@@ -3,8 +3,10 @@ import { ref } from 'vue';
 
 // Store original require/import
 let originalDb: any;
+let hookActionCalls: Array<{ name: string; payload: unknown }> = [];
 
 beforeEach(async () => {
+    hookActionCalls = [];
     // Mock db module
     vi.doMock('~/db/client', () => ({
         getDb: () => ({
@@ -34,6 +36,7 @@ beforeEach(async () => {
                     }
                 ),
                 doAction: vi.fn(async (name: string, payload: unknown) => {
+                    hookActionCalls.push({ name, payload });
                     const listeners = actions.get(name) || [];
                     for (const listener of listeners) {
                         await listener(payload);
@@ -387,6 +390,29 @@ describe('useMultiPane - async ownership', () => {
         expect(multiPane.panes.value[0]?.messages).toEqual([
             expect.objectContaining({ id: 'b', content: 'B' }),
         ]);
+    });
+
+    it('activates the replacement after the active middle pane closes', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        const multiPane = useMultiPane({ maxPanes: 3 });
+        multiPane.addPane();
+        multiPane.addPane();
+        const replacement = multiPane.panes.value[2]!;
+        multiPane.setActive(1);
+
+        await multiPane.closePane(1);
+
+        expect(multiPane.activePaneIndex.value).toBe(1);
+        const activation = hookActionCalls
+            .filter((entry) => entry.name === 'ui.pane.active:action')
+            .at(-1);
+        expect(activation?.payload).toEqual(
+            expect.objectContaining({
+                pane: replacement,
+                index: 1,
+                previousIndex: 1,
+            })
+        );
     });
 });
 

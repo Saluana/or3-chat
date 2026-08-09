@@ -10,7 +10,8 @@ const sendStreamMock = vi.fn((_event, stream) => stream);
 const resolveSessionContextMock = vi.fn();
 const requireCanMock = vi.fn();
 const startBackgroundStreamMock = vi.fn();
-const mirrorForegroundStreamCompletionMock = vi.fn();
+const monitorForegroundStreamForClientMock = vi.fn((params) => params.stream);
+const backgroundStreamingAvailableMock = vi.fn();
 
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
@@ -59,11 +60,11 @@ vi.mock('../../../utils/background-jobs/stream-handler', () => ({
         messageId: 'message-1',
     })),
     startBackgroundStream: startBackgroundStreamMock,
-    isBackgroundStreamingAvailable: vi.fn(() => true),
+    isBackgroundStreamingAvailable: () => backgroundStreamingAvailableMock(),
 }));
 
 vi.mock('../../../utils/webhooks/foreground-stream-monitor', () => ({
-    mirrorForegroundStreamCompletion: mirrorForegroundStreamCompletionMock,
+    monitorForegroundStreamForClient: monitorForegroundStreamForClientMock,
 }));
 
 let handler: (event: H3Event) => Promise<unknown>;
@@ -145,7 +146,10 @@ describe('POST /api/openrouter/stream credential authorization', () => {
             jobId: 'job-1',
             status: 'streaming',
         });
-        mirrorForegroundStreamCompletionMock.mockReset();
+        monitorForegroundStreamForClientMock.mockReset().mockImplementation(
+            (params) => params.stream
+        );
+        backgroundStreamingAvailableMock.mockReset().mockReturnValue(true);
         vi.stubGlobal(
             'fetch',
             vi.fn(async () =>
@@ -340,5 +344,31 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         await handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }));
         expect(fetchMock).toHaveBeenCalledTimes(2);
         expect(sendStreamMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not forward OR3 background metadata when using the foreground fallback', async () => {
+        backgroundStreamingAvailableMock.mockReturnValue(false);
+        readBodyMock.mockResolvedValue({
+            model: 'test/model',
+            messages: [],
+            stream: true,
+            _background: true,
+            _threadId: 'thread-1',
+            _messageId: 'message-1',
+            _toolRuntime: { private_tool: 'server' },
+            _streamedFieldMode: 'delta',
+        });
+
+        await handler(makeEvent({ 'x-or3-openrouter-key': 'caller-key' }));
+
+        const request = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as
+            | { body?: string }
+            | undefined;
+        const body = JSON.parse(request?.body ?? '{}') as Record<string, unknown>;
+        expect(body).not.toHaveProperty('_background');
+        expect(body).not.toHaveProperty('_threadId');
+        expect(body).not.toHaveProperty('_messageId');
+        expect(body).not.toHaveProperty('_toolRuntime');
+        expect(body).not.toHaveProperty('_streamedFieldMode');
     });
 });

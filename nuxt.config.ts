@@ -586,6 +586,8 @@ export default defineNuxtConfig({
                 (or3CloudConfig.backgroundStreaming?.jobTimeoutSeconds ?? 300) *
                 1000,
             completedJobRetentionMs: 5 * 60 * 1000, // 5 minutes
+            encryptionKey:
+                or3CloudConfig.backgroundStreaming?.encryptionKey ?? '',
         },
         public: {
             appVersion: process.env.npm_package_version || '0.1.0',

@@ -193,6 +193,7 @@ Example `OR3_RATE_LIMIT_OVERRIDES_JSON`:
 | `backgroundStreaming.maxConcurrentJobs`        | `OR3_BACKGROUND_MAX_JOBS`           | `20`                                            | Global concurrent background jobs   |
 | `backgroundStreaming.maxConcurrentJobsPerUser` | `OR3_BACKGROUND_MAX_JOBS_PER_USER`  | `5`                                             | Per-user concurrent background jobs |
 | `backgroundStreaming.jobTimeoutSeconds`        | `OR3_BACKGROUND_JOB_TIMEOUT`        | `300`                                           | Background job timeout in seconds   |
+| `backgroundStreaming.encryptionKey`             | `OR3_BACKGROUND_ENCRYPTION_KEY`      | required when enabled                           | Runtime-only credential encryption key |
 
 > [!NOTE]
 > Legal links (`OR3_TERMS_URL`, `OR3_PRIVACY_URL`) are configured in [or3-config](./or3-config) (base config), not `or3-cloud-config`.

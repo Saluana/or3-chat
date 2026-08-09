@@ -11,8 +11,8 @@
 	}
 
 	encode zstd gzip
-	reverse_proxy or3:3000 {
-		# Preserve incremental SSE/chat output instead of buffering it at the proxy.
-		flush_interval -1
-	}
+	# Caddy recognizes text/event-stream and flushes it immediately. Keeping the
+	# default stream behavior also lets client disconnects cancel foreground
+	# provider requests instead of leaving a paid generation running.
+	reverse_proxy or3:3000
 }

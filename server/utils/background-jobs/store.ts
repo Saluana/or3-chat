@@ -113,6 +113,15 @@ export function getJobConfig(): BackgroundJobConfig {
     };
 }
 
+/** Resolve the server-only key used for encrypted recovery payloads. */
+export function getBackgroundJobEncryptionKey(): string {
+    const config = useRuntimeConfig();
+    const bgConfig = config.backgroundJobs as
+        | { encryptionKey?: string }
+        | undefined;
+    return bgConfig?.encryptionKey?.trim() ?? '';
+}
+
 /**
  * Purpose:
  * Clear the cached provider, typically for tests or config changes.

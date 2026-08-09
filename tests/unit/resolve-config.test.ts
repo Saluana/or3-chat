@@ -422,11 +422,36 @@ describe('buildOr3CloudConfigFromEnv', () => {
             OR3_BACKGROUND_MAX_JOBS: '50',
             OR3_BACKGROUND_MAX_JOBS_PER_USER: '7',
             OR3_BACKGROUND_JOB_TIMEOUT: '600',
+            OR3_BACKGROUND_ENCRYPTION_KEY:
+                'background-encryption-secret-at-least-32-characters',
         });
         expect(config.backgroundStreaming?.enabled).toBe(true);
         expect(config.backgroundStreaming?.maxConcurrentJobs).toBe(50);
         expect(config.backgroundStreaming?.maxConcurrentJobsPerUser).toBe(7);
         expect(config.backgroundStreaming?.jobTimeoutSeconds).toBe(600);
+        expect(config.backgroundStreaming?.encryptionKey).toBe(
+            'background-encryption-secret-at-least-32-characters'
+        );
+    });
+
+    it('does not reuse auth secrets for background credential encryption', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            OR3_ADMIN_JWT_SECRET: 'admin-secret-at-least-32-characters',
+            OR3_BASIC_AUTH_JWT_SECRET: 'auth-secret-at-least-32-characters',
+        });
+        expect(config.backgroundStreaming?.encryptionKey).toBeUndefined();
+    });
+
+    it('requires a dedicated background encryption key for Clerk deployments', () => {
+        expect(() =>
+            buildOr3CloudConfigFromEnv({
+                SSR_AUTH_ENABLED: 'true',
+                OR3_AUTH_PROVIDER: 'clerk',
+                OR3_BACKGROUND_STREAMING_ENABLED: 'true',
+                NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_example',
+                NUXT_CLERK_SECRET_KEY: 'sk_test_example',
+            })
+        ).toThrow(/OR3_BACKGROUND_ENCRYPTION_KEY/);
     });
 
     it('parses webhook config correctly', () => {

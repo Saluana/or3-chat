@@ -17,6 +17,8 @@ export function usePaneResizeController(options: {
     const paneContainerRef = ref<HTMLElement | null>(null);
     const isResizing = ref(false);
     let paneIndex: number | null = null;
+    let pointerId: number | null = null;
+    let pointerCaptureTarget: Element | null = null;
     let previousX = 0;
     let pendingFrame: number | null = null;
     let pendingDelta = 0;
@@ -59,16 +61,32 @@ export function usePaneResizeController(options: {
         event: PointerEvent,
         nextPaneIndex: number
     ): void {
-        if (options.isMobile.value) return;
-        (event.target as Element).setPointerCapture(event.pointerId);
+        if (
+            options.isMobile.value ||
+            event.button !== 0 ||
+            event.isPrimary === false
+        ) {
+            return;
+        }
+        const captureTarget = event.currentTarget;
+        if (
+            captureTarget instanceof Element &&
+            typeof captureTarget.setPointerCapture === 'function'
+        ) {
+            captureTarget.setPointerCapture(event.pointerId);
+            pointerCaptureTarget = captureTarget;
+        } else {
+            pointerCaptureTarget = null;
+        }
         paneIndex = nextPaneIndex;
+        pointerId = event.pointerId;
         previousX = event.clientX;
         pendingDelta = 0;
         isResizing.value = true;
     }
 
     function onPaneResizeMove(event: PointerEvent): void {
-        if (paneIndex === null) return;
+        if (paneIndex === null || pointerId !== event.pointerId) return;
         pendingDelta += event.clientX - previousX;
         previousX = event.clientX;
         if (pendingFrame !== null) return;
@@ -78,32 +96,36 @@ export function usePaneResizeController(options: {
         });
     }
 
-    function onPaneResizeEnd(): void {
+    function onPaneResizeEnd(event: PointerEvent): void {
+        if (pointerId !== event.pointerId) return;
         if (pendingFrame !== null) {
             cancelAnimationFrame(pendingFrame);
             pendingFrame = null;
         }
         flushPendingResize();
+        if (
+            typeof pointerCaptureTarget?.hasPointerCapture === 'function' &&
+            typeof pointerCaptureTarget.releasePointerCapture === 'function' &&
+            pointerCaptureTarget.hasPointerCapture(pointerId)
+        ) {
+            pointerCaptureTarget.releasePointerCapture(pointerId);
+        }
+        pointerCaptureTarget = null;
+        pointerId = null;
         paneIndex = null;
         isResizing.value = false;
         options.persist();
     }
 
-    useEventListener(
-        () => (isResizing.value ? window : null),
-        'pointermove',
-        onPaneResizeMove
-    );
-    useEventListener(
-        () => (isResizing.value ? window : null),
-        'pointerup',
-        onPaneResizeEnd
-    );
-    useEventListener(
-        () => (isResizing.value ? window : null),
-        'pointercancel',
-        onPaneResizeEnd
-    );
+    // Keep the listeners stable for the composable's lifetime. Registering
+    // only after `isResizing` changes can miss the terminating pointer event
+    // in fast drags; the handlers themselves are no-ops unless a matching
+    // pointer owns an active resize.
+    if (typeof window !== 'undefined') {
+        useEventListener(window, 'pointermove', onPaneResizeMove);
+        useEventListener(window, 'pointerup', onPaneResizeEnd);
+        useEventListener(window, 'pointercancel', onPaneResizeEnd);
+    }
 
     function onPaneResizeKeydown(
         event: KeyboardEvent,

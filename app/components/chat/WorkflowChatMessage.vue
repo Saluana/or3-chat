@@ -50,6 +50,7 @@
                 >
                     <UButton
                         v-bind="copyButtonProps"
+                        aria-label="Copy workflow result"
                         @click="copyResult"
                     ></UButton>
                 </UTooltip>
@@ -65,6 +66,7 @@
                 >
                     <UButton
                         v-bind="retryButtonProps"
+                        aria-label="Retry workflow"
                         :disabled="!workflowExecutionEnabled"
                         @click="retryFromHere"
                     />

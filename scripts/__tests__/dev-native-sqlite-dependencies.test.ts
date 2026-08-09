@@ -3,6 +3,7 @@ import {
     ensureNativeSqliteDependencies,
     isNativeAddonAbiMismatch,
     nativeSqliteDependencyTargets,
+    nuxtDevEnvironment,
     usesNativeSqlite,
     type NativeSqliteDependencyTarget,
 } from '../cli/dev';
@@ -14,6 +15,31 @@ NODE_MODULE_VERSION 147.`,
 );
 
 describe('native SQLite dev dependency repair', () => {
+    it('gives Nuxt devtools an ignored localStorage file on modern Node', () => {
+        const environment = nuxtDevEnvironment(
+            { NODE_OPTIONS: '--max-old-space-size=4096' },
+            '/workspace/or3-chat',
+        );
+        const nodeMajor = Number(process.versions.node.split('.')[0]);
+
+        if (nodeMajor >= 22) {
+            expect(environment.NODE_OPTIONS).toBe(
+                '--max-old-space-size=4096 --localstorage-file=/workspace/or3-chat/.nuxt/node-localstorage',
+            );
+        } else {
+            expect(environment.NODE_OPTIONS).toBe('--max-old-space-size=4096');
+        }
+    });
+
+    it('keeps a user-provided localStorage file unchanged', () => {
+        const environment = nuxtDevEnvironment(
+            { NODE_OPTIONS: '--localstorage-file=/tmp/custom-storage' },
+            '/workspace/or3-chat',
+        );
+
+        expect(environment.NODE_OPTIONS).toBe('--localstorage-file=/tmp/custom-storage');
+    });
+
     it('recognizes the native addon ABI mismatch reported by Node', () => {
         expect(isNativeAddonAbiMismatch(nativeAddonMismatch)).toBe(true);
         expect(isNativeAddonAbiMismatch(new Error('Cannot find module'))).toBe(false);

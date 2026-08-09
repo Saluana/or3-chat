@@ -343,7 +343,7 @@ import { Editor, EditorContent } from '@tiptap/vue-3';
 import { Extension, Node } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions/placeholder';
-import { isMobile, state } from '~/state/global';
+import { isMobile } from '~/state/global';
 import {
     useToast,
     useUserApiKey,
@@ -400,11 +400,15 @@ const iconUpload = useIcon('chat.upload');
 const iconClose = useIcon('ui.close');
 
 const runtimeConfig = useRuntimeConfig();
+// Resolve injected dependencies while setup is active. Event handlers can run
+// after the component's setup context has gone away, especially after a slow
+// network response or a plugin hook, and must not call inject-backed composables.
+const toast = useToast();
+const { apiKey } = useUserApiKey();
+const { startLogin } = useOpenRouterAuth();
+const hooks = useHooks();
 const openRouterAvailability = computed(() =>
     resolveOpenRouterKeyAvailability(runtimeConfig.public?.openRouter)
-);
-const requireUserKey = computed(
-    () => openRouterAvailability.value.requireUserKey
 );
 const allowUserOverride = computed(
     () => openRouterAvailability.value.allowUserOverride
@@ -459,7 +463,6 @@ onMounted(async () => {
         ];
 
         // Request mentions extension (lazy loads if plugin is installed)
-        const hooks = useHooks();
         await hooks.doAction('editor:request-extensions');
 
         // Allow plugins to add editor extensions via filter
@@ -810,7 +813,7 @@ const handleContainerClick = (event: MouseEvent) => {
 const handleSend = async (): Promise<SendResult> => {
     if (props.loading) return { status: 'rejected', reason: 'busy' };
     if (
-        !guardPendingAttachmentSend(attachments.value, useToast(), {
+        !guardPendingAttachmentSend(attachments.value, toast, {
             description: 'Please wait for attachments to finish before sending.',
             duration: 2600,
         })
@@ -818,10 +821,9 @@ const handleSend = async (): Promise<SendResult> => {
         return { status: 'rejected', reason: 'client_limit' };
     }
     // Require OpenRouter connection (api key) before sending
-    const { apiKey } = useUserApiKey();
     if (!apiKey.value && !hasInstanceKey.value) {
         if (!allowUserOverride.value) {
-            useToast().add({
+            toast.add({
                 title: 'Instance key required',
                 description:
                     'This deployment requires a managed OpenRouter key. Contact your administrator.',
@@ -830,9 +832,8 @@ const handleSend = async (): Promise<SendResult> => {
             });
             return { status: 'rejected', reason: 'missing_credentials' };
         }
-        const { startLogin } = useOpenRouterAuth();
         // Show toast with action to initiate login
-        useToast().add({
+        toast.add({
             id: 'need-openrouter-login',
             title: 'Connect to OpenRouter',
             description: 'You need an OpenRouter API key to send messages.',
@@ -864,7 +865,6 @@ const handleSend = async (): Promise<SendResult> => {
         // Provide the current editor JSON to hooks so downstream filters (mentions)
         // can extract structured mentions before the text is flattened.
         try {
-            const hooks = useHooks();
             const json = editor.value?.getJSON?.();
             // Fire as an action to avoid transforming data; listeners can stash it
             if (json) {

@@ -268,6 +268,34 @@ export function forwardDevArgs(argvAfterDoubleDash: string[]): string[] {
     return argvAfterDoubleDash.filter((arg) => arg !== '--');
 }
 
+/**
+ * Node 22+ exposes an experimental server-side localStorage global. Nuxt's
+ * devtools dependency sees Node's built-in navigator and probes that global,
+ * which otherwise emits an ExperimentalWarning after the first browser load.
+ * Keep its ephemeral state inside Nuxt's ignored build directory.
+ */
+export function nuxtDevEnvironment(
+    env: NodeJS.ProcessEnv = process.env,
+    projectRoot = process.cwd(),
+): NodeJS.ProcessEnv {
+    const nodeMajor = Number(process.versions.node.split('.')[0]);
+    const nodeOptions = env.NODE_OPTIONS?.trim() ?? '';
+    if (
+        nodeMajor < 22 ||
+        /(?:^|\s)--localstorage-file(?:=|\s|$)/.test(nodeOptions)
+    ) {
+        return env;
+    }
+
+    const localStorageFile = resolve(projectRoot, '.nuxt', 'node-localstorage');
+    return {
+        ...env,
+        NODE_OPTIONS: [nodeOptions, `--localstorage-file=${localStorageFile}`]
+            .filter(Boolean)
+            .join(' '),
+    };
+}
+
 function runNuxtDev(argv: string[]): Promise<number> {
     const command = execPackageCommand(detectPackageManager(), [
         'nuxt',
@@ -277,7 +305,7 @@ function runNuxtDev(argv: string[]): Promise<number> {
     return new Promise((resolvePromise, rejectPromise) => {
         const child = crossSpawn(command.command, command.args, {
             stdio: 'inherit',
-            env: process.env,
+            env: nuxtDevEnvironment(),
         });
         child.on('error', rejectPromise);
         child.on('exit', (code) => resolvePromise(code ?? 0));

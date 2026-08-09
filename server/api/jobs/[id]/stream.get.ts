@@ -11,6 +11,7 @@
  * - Handles client disconnects.
  */
 import type { BackgroundJob } from '../../../utils/background-jobs/types';
+import { shouldResetBackgroundContent } from '../../../utils/background-jobs/recovery';
 import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
@@ -40,12 +41,14 @@ type StreamEventPayload = {
         messageId: string;
         model: string;
         chunksReceived: number;
+        attempt?: number;
         startedAt: number;
         completedAt?: number;
         error?: string;
         content?: string;
         content_delta?: string;
         content_length?: number;
+        content_reset?: boolean;
         tool_calls?: BackgroundJob['tool_calls'];
         workflow_state?: BackgroundJob['workflow_state'];
     };
@@ -70,6 +73,7 @@ export function serializeJobStatus(
         includeContent?: boolean;
         tool_calls?: BackgroundJob['tool_calls'];
         workflow_state?: BackgroundJob['workflow_state'];
+        content_reset?: boolean;
     }
 ): StreamEventPayload['status'] {
     const includeContent = overrides?.includeContent !== false;
@@ -81,11 +85,13 @@ export function serializeJobStatus(
         messageId: job.messageId,
         model: job.model,
         chunksReceived: job.chunksReceived,
+        attempt: job.attempts ?? 0,
         startedAt: job.startedAt,
         completedAt: job.completedAt,
         error: job.error,
         tool_calls: overrides?.tool_calls ?? job.tool_calls,
         workflow_state: overrides?.workflow_state ?? job.workflow_state,
+        content_reset: overrides?.content_reset,
         content_delta: overrides?.content_delta,
         content_length:
             typeof overrides?.content_length === 'number'
@@ -160,7 +166,15 @@ export default defineEventHandler(async (event) => {
     const query = getQuery(event);
     const offsetParam = typeof query.offset === 'string' ? query.offset : null;
     const offset = offsetParam ? Number(offsetParam) : null;
+    const attemptParam =
+        typeof query.attempt === 'string' ? Number(query.attempt) : null;
+    const attemptChanged = shouldResetBackgroundContent(
+        attemptParam,
+        initialJob.attempts ?? 0,
+        offset
+    );
     const initialOffset =
+        !attemptChanged &&
         typeof offset === 'number' && Number.isFinite(offset) && offset >= 0
             ? Math.min(offset, initialJob.content.length)
             : 0;
@@ -185,6 +199,10 @@ export default defineEventHandler(async (event) => {
             let closed = false;
             let lastContentLength = initialOffset;
             let lastStatus: BackgroundJob['status'] = initialJob.status;
+            let lastAttempt =
+                typeof attemptParam === 'number' && Number.isFinite(attemptParam)
+                    ? attemptParam
+                    : initialJob.attempts ?? 0;
             const disposeViewer = registerJobViewer(jobId);
             logBgStream('jobs-stream-viewer-registered', {
                 jobId,
@@ -280,6 +298,7 @@ export default defineEventHandler(async (event) => {
                     status: serializeJobStatus(initialJob, {
                         content: initialJob.content,
                         content_length: initialJob.content.length,
+                        content_reset: attemptChanged || undefined,
                     }),
                 });
             } else {
@@ -332,6 +351,10 @@ export default defineEventHandler(async (event) => {
                                     ...initialJob,
                                     status: 'streaming',
                                     chunksReceived: liveEvent.chunksReceived,
+                                    attempts:
+                                        liveEvent.attempt ??
+                                        currentLiveState?.attempt ??
+                                        initialJob.attempts,
                                     tool_calls:
                                         liveEvent.tool_calls ??
                                         currentLiveState?.tool_calls ??
@@ -358,6 +381,9 @@ export default defineEventHandler(async (event) => {
                     }
                     lastStatus = liveEvent.status;
                     lastContentLength = liveEvent.content_length;
+                    if (typeof liveEvent.attempt === 'number') {
+                        lastAttempt = liveEvent.attempt;
+                    }
                     const currentLiveState = getJobLiveState(jobId);
                     write({
                         event: 'status',
@@ -369,6 +395,10 @@ export default defineEventHandler(async (event) => {
                                 completedAt: liveEvent.completedAt,
                                 error: liveEvent.error,
                                 content: liveEvent.content,
+                                attempts:
+                                    liveEvent.attempt ??
+                                    currentLiveState?.attempt ??
+                                    initialJob.attempts,
                                 tool_calls:
                                     liveEvent.tool_calls ??
                                     currentLiveState?.tool_calls ??
@@ -388,6 +418,7 @@ export default defineEventHandler(async (event) => {
                                 workflow_state:
                                     liveEvent.workflow_state ??
                                     currentLiveState?.workflow_state,
+                                content_reset: liveEvent.content_reset,
                             }
                         ),
                     });
@@ -407,6 +438,8 @@ export default defineEventHandler(async (event) => {
                                 ...initialJob,
                                 status: 'streaming',
                                 chunksReceived: liveState.chunksReceived,
+                                attempts:
+                                    liveState.attempt ?? initialJob.attempts,
                             },
                             {
                                 includeContent: false,
@@ -485,6 +518,7 @@ export default defineEventHandler(async (event) => {
                         return;
                     }
 
+                    const attemptChanged = (job.attempts ?? 0) !== lastAttempt;
                     const hasNewContent = job.content.length > lastContentLength;
                     const statusChanged = job.status !== lastStatus;
                     const deltaLength = hasNewContent
@@ -492,6 +526,7 @@ export default defineEventHandler(async (event) => {
                         : 0;
                     const shouldLogPollTick =
                         statusChanged ||
+                        attemptChanged ||
                         job.status !== 'streaming' ||
                         deltaLength >= 256;
                     if (shouldLogPollTick) {
@@ -501,12 +536,28 @@ export default defineEventHandler(async (event) => {
                             polledStatus: job.status,
                             polledContentLength: job.content.length,
                             hasNewContent,
+                            attemptChanged,
                             statusChanged,
                             deltaLength,
                         });
                     }
 
-                    if (hasNewContent) {
+                    if (attemptChanged) {
+                        // A recovered OpenRouter iteration starts from its
+                        // durable checkpoint. Replace the client projection in
+                        // full even if the regenerated text is already longer
+                        // than the pre-restart partial response.
+                        lastContentLength = job.content.length;
+                        write({
+                            event: 'status',
+                            status: serializeJobStatus(job, {
+                                content: job.content,
+                                includeContent: true,
+                                content_length: job.content.length,
+                                content_reset: true,
+                            }),
+                        });
+                    } else if (hasNewContent) {
                         const delta = job.content.slice(lastContentLength);
                         lastContentLength = job.content.length;
                         write({
@@ -548,6 +599,7 @@ export default defineEventHandler(async (event) => {
                     }
 
                     lastStatus = job.status;
+                    lastAttempt = job.attempts ?? 0;
                 }
             );
         },

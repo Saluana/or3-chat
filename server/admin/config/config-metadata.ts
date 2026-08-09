@@ -587,6 +587,13 @@ export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
         order: 5,
         valueType: 'number',
     },
+    'OR3_BACKGROUND_ENCRYPTION_KEY': {
+        label: 'Background Encryption Key',
+        description:
+            'Runtime-only secret (at least 32 characters) used to encrypt resumable job credentials',
+        group: 'Background Processing',
+        order: 6,
+    },
 
     // Admin
     'OR3_ADMIN_BASE_PATH': {

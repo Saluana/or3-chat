@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BackgroundJobProvider, BackgroundJob, JobUpdate } from '../types';
 import {
+    consumeBackgroundStream,
     consumeBackgroundStreamWithTools,
 } from '../stream-handler';
 import {
@@ -11,6 +12,10 @@ import type { ToolDefinition } from '~/utils/chat/types';
 import { toolCallFingerprint } from '~~/shared/chat/tool-ledger';
 import { canonicalToolResultData } from '~~/shared/chat/canonical-tool-transcript';
 import { toolResultTranscriptData } from '~/utils/chat/transcript';
+import {
+    registerJobStream,
+    resetJobViewersForTests,
+} from '../viewers';
 
 function makeSseStream(chunks: unknown[]): ReadableStream<Uint8Array> {
     const encoder = new TextEncoder();
@@ -81,6 +86,8 @@ function createProvider(
     const completeJob = vi.fn(async () => {
         statusRef.status = 'complete';
     });
+    const updateJobExecution = vi.fn(async () => true);
+    const failJob = vi.fn(async () => {});
 
     const provider: BackgroundJobProvider = {
         name: 'memory',
@@ -103,16 +110,19 @@ function createProvider(
         },
         updateJob,
         completeJob,
-        async failJob() {},
+        failJob,
         async abortJob() {
             return false;
         },
         async cleanupExpired() {
             return 0;
         },
+        updateJobExecution,
     };
 
-    return { provider, updateJob, completeJob };
+    return {
+        provider, updateJob, completeJob, updateJobExecution, failJob,
+    };
 }
 
 const toolDef: ToolDefinition = {
@@ -143,6 +153,7 @@ describe('consumeBackgroundStreamWithTools', () => {
     afterEach(() => {
         unregisterServerTool('server_echo');
         vi.unstubAllGlobals();
+        resetJobViewersForTests();
     });
 
     it('coalesces 500 provider text updates without losing terminal content', async () => {
@@ -226,6 +237,121 @@ describe('consumeBackgroundStreamWithTools', () => {
                 result: 'ok',
             })
         );
+    });
+
+    it('checkpoints a relaxed tool choice before the follow-up request', async () => {
+        const statusRef = { status: 'streaming' as const };
+        const { provider, updateJobExecution } = createProvider(statusRef);
+        vi.stubGlobal(
+            'fetch',
+            vi.fn()
+                .mockResolvedValueOnce(makeToolCallResponse())
+                .mockResolvedValueOnce(makeTextResponse('done'))
+        );
+        const forcedChoice = {
+            type: 'function' as const,
+            function: { name: 'server_echo' },
+        };
+        const execution = {
+            version: 1 as const,
+            body: {
+                model: 'test-model',
+                messages: [],
+                tools: [toolDef],
+                tool_choice: forcedChoice,
+            },
+            workspaceId: 'ws-1',
+            referer: 'http://localhost:3000',
+            apiKeyCiphertext: 'ciphertext',
+            contentBase: '',
+            checkpointedToolCallIds: [],
+        };
+
+        await consumeBackgroundStreamWithTools({
+            jobId: 'job-1', body: execution.body, apiKey: 'key',
+            referer: execution.referer, provider,
+            context: {
+                body: execution.body, apiKey: 'key', userId: 'user-1',
+                workspaceId: 'ws-1', threadId: 'thread-1', messageId: 'msg-1',
+                referer: execution.referer, execution, leaseOwner: 'worker-1',
+            },
+        });
+
+        expect(updateJobExecution).toHaveBeenCalledWith(
+            'job-1',
+            expect.objectContaining({
+                body: expect.objectContaining({ tool_choice: 'auto' }),
+            }),
+            'worker-1'
+        );
+    });
+
+    it('treats a fenced progress write as a handoff without an error event', async () => {
+        const statusRef = { status: 'streaming' as const };
+        const { provider, updateJob, completeJob, failJob } =
+            createProvider(statusRef);
+        const leaseError = new Error('Background job lease was superseded');
+        leaseError.name = 'BackgroundJobLeaseLostError';
+        updateJob.mockRejectedValueOnce(leaseError);
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(makeTextResponse('done')));
+        const events: unknown[] = [];
+        const dispose = registerJobStream('job-1', (event) => events.push(event));
+
+        await expect(
+            consumeBackgroundStreamWithTools({
+                jobId: 'job-1',
+                body: { model: 'test-model', messages: [], tools: [toolDef] },
+                apiKey: 'key', referer: 'http://localhost:3000', provider,
+                context: {
+                    body: {}, apiKey: 'key', userId: 'user-1',
+                    workspaceId: 'ws-1', threadId: 'thread-1',
+                    messageId: 'msg-1', referer: 'http://localhost:3000',
+                    leaseOwner: 'worker-old',
+                },
+            })
+        ).rejects.toMatchObject({ name: 'BackgroundJobLeaseLostError' });
+
+        expect(completeJob).not.toHaveBeenCalled();
+        expect(failJob).not.toHaveBeenCalled();
+        expect(events).not.toContainEqual(
+            expect.objectContaining({ type: 'status', status: 'error' })
+        );
+        dispose();
+    });
+
+    it('hands off a fenced plain-text stream without publishing failure', async () => {
+        const statusRef = { status: 'streaming' as const };
+        const { provider, updateJob, completeJob, failJob } =
+            createProvider(statusRef);
+        const leaseError = new Error('Background job lease was superseded');
+        leaseError.name = 'BackgroundJobLeaseLostError';
+        updateJob.mockRejectedValueOnce(leaseError);
+        const events: unknown[] = [];
+        const dispose = registerJobStream('job-1', (event) => events.push(event));
+
+        await expect(
+            consumeBackgroundStream({
+                jobId: 'job-1',
+                stream: makeSseStream([{
+                    choices: [{ delta: { content: 'partial' } }],
+                }]),
+                provider,
+                flushOnEveryChunk: true,
+                context: {
+                    body: {}, apiKey: 'key', userId: 'user-1',
+                    workspaceId: 'ws-1', threadId: 'thread-1',
+                    messageId: 'msg-1', referer: 'http://localhost:3000',
+                    leaseOwner: 'worker-old',
+                },
+            })
+        ).rejects.toMatchObject({ name: 'BackgroundJobLeaseLostError' });
+
+        expect(completeJob).not.toHaveBeenCalled();
+        expect(failJob).not.toHaveBeenCalled();
+        expect(events).not.toContainEqual(
+            expect.objectContaining({ type: 'status', status: 'error' })
+        );
+        dispose();
     });
 
     it('never invokes a registered server tool that was not advertised', async () => {

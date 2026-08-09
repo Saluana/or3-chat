@@ -26,13 +26,18 @@ function workflowVersionOf(value: unknown): number {
 export async function persistBackgroundJobUpdate(
     tracker: BackgroundJobTracker,
     status: BackgroundJobStatus,
-    content: string
+    content: string,
+    replaceContent = false
 ): Promise<boolean> {
     if (!isClientRuntime()) return true;
 
     const now = Date.now();
     const statusChanged = status.status !== tracker.status;
-    const contentChanged = content.length > tracker.lastPersistedLength;
+    const attemptChanged =
+        typeof status.attempt === 'number' &&
+        status.attempt !== tracker.lastAttempt;
+    const contentChanged =
+        replaceContent || content.length > tracker.lastPersistedLength;
     const toolStateFingerprint = JSON.stringify(status.tool_calls ?? []);
     const workflowFingerprint = JSON.stringify(status.workflow_state ?? null);
     const toolStateChanged =
@@ -41,11 +46,13 @@ export async function persistBackgroundJobUpdate(
         workflowFingerprint !== (tracker.lastWorkflowFingerprint ?? 'null');
     const shouldPersistContent =
         contentChanged &&
-        (now - tracker.lastPersistAt > BACKGROUND_JOB_PERSIST_INTERVAL_MS ||
+        (replaceContent ||
+            now - tracker.lastPersistAt > BACKGROUND_JOB_PERSIST_INTERVAL_MS ||
             status.status !== 'streaming');
 
     if (
         !statusChanged &&
+        !attemptChanged &&
         !shouldPersistContent &&
         !toolStateChanged &&
         !workflowChanged
@@ -96,15 +103,16 @@ export async function persistBackgroundJobUpdate(
                     ...baseData,
                     ...(includeWorkflowState ? workflowState : {}),
                     content:
-                        content.length > 0
+                        replaceContent || content.length > 0
                             ? content
                             : (baseData.content as string | undefined) ?? '',
                     background_job_id: tracker.jobId,
                     background_job_status: status.status,
-                    ...(status.error
-                        ? { background_job_error: status.error }
+                    ...(typeof status.attempt === 'number'
+                        ? { background_job_attempt: status.attempt }
                         : {}),
-                    ...(nextError ? { error: nextError } : {}),
+                    background_job_error: status.error ?? null,
+                    error: nextError ?? null,
                     ...(persistedToolCalls
                         ? { tool_calls: persistedToolCalls }
                         : {}),

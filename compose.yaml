@@ -27,6 +27,8 @@ services:
     volumes:
       - or3-data:/data
     restart: unless-stopped
+    # Give active chat streams time to close cleanly during a deploy or restart.
+    stop_grace_period: 25s
     healthcheck:
       test:
         - CMD

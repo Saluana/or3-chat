@@ -22,11 +22,17 @@
  */
 
 import { useRuntimeConfig } from '#imports';
-import type { BackgroundJobProvider } from '../background-jobs/types';
+import type {
+    BackgroundJobExecution,
+    BackgroundJobProvider,
+} from '../background-jobs/types';
 import {
+    getBackgroundJobEncryptionKey,
     getJobProvider,
     isBackgroundStreamingEnabled,
 } from '../background-jobs/store';
+import { encryptBackgroundCredential } from './crypto';
+import { claimAndRunBackgroundJob } from './lifecycle';
 import {
     parseOpenRouterSSE,
     type StreamedFieldMode,
@@ -91,6 +97,20 @@ function createAbortError(message = 'Job aborted by user'): Error {
     return err;
 }
 
+function isBackgroundJobLeaseLost(error: unknown): boolean {
+    return (
+        error instanceof Error &&
+        (error.name === 'BackgroundJobLeaseLostError' ||
+            error.message === 'Background job lease was superseded')
+    );
+}
+
+function createBackgroundJobLeaseLostError(): Error {
+    const error = new Error('Background job lease was superseded');
+    error.name = 'BackgroundJobLeaseLostError';
+    return error;
+}
+
 function resolveOpenRouterChatCompletionsUrl(): string {
     try {
         const config = useRuntimeConfig();
@@ -146,6 +166,10 @@ export interface BackgroundStreamParams {
     threadId: string;
     messageId: string;
     referer: string;
+    /** Persisted recovery input associated with the current worker claim. */
+    execution?: BackgroundJobExecution;
+    /** Durable lease owner used to fence provider writes. */
+    leaseOwner?: string;
 }
 
 function normalizeStreamedFieldMode(value: unknown): StreamedFieldMode {
@@ -216,6 +240,28 @@ export async function startBackgroundStream(
     params: BackgroundStreamParams
 ): Promise<BackgroundStreamResult> {
     const provider = await getJobProvider();
+    if (
+        !provider.claimJob ||
+        !provider.claimNextJob ||
+        !provider.renewJobLease
+    ) {
+        throw new Error(
+            `Background job provider "${provider.name}" does not support durable recovery`
+        );
+    }
+    const encryptionKey = getBackgroundJobEncryptionKey();
+    const execution: BackgroundJobExecution = {
+        version: 1,
+        body: params.body,
+        workspaceId: params.workspaceId,
+        referer: params.referer,
+        apiKeyCiphertext: encryptBackgroundCredential(
+            params.apiKey,
+            encryptionKey
+        ),
+        contentBase: '',
+        checkpointedToolCallIds: [],
+    };
     const model = (params.body.model as string) || 'unknown';
     logBgStream('server-background-start-attempt', {
         userId: params.userId,
@@ -233,6 +279,13 @@ export async function startBackgroundStream(
         messageId: params.messageId,
         model,
         kind: 'chat',
+        idempotencyKey:
+            typeof params.body._backgroundAdmissionId === 'string' &&
+            params.body._backgroundAdmissionId.trim() &&
+            params.body._backgroundAdmissionId.length <= 128
+                ? params.body._backgroundAdmissionId.trim()
+                : params.messageId,
+        execution,
     });
     logBackgroundEvent('info', 'background.chat.started', {
         jobId,
@@ -244,25 +297,12 @@ export async function startBackgroundStream(
         hasTools: Array.isArray(params.body.tools) && params.body.tools.length > 0,
     });
 
-    // Fire-and-forget the streaming
-    streamInBackground(jobId, params, provider).catch((err) => {
-        warnBgStream('server-background-loop-failed', {
-            jobId,
-            userId: params.userId,
-            workspaceId: params.workspaceId,
-            threadId: params.threadId,
-            messageId: params.messageId,
-            error: err instanceof Error ? err.message : String(err),
-        });
-        logBackgroundEvent('error', 'background.chat.failed', {
-            jobId,
-            userId: params.userId,
-            workspaceId: params.workspaceId,
-            threadId: params.threadId,
-            messageId: params.messageId,
-            error: err instanceof Error ? err.message : String(err),
-        });
-        void provider.failJob(jobId, err instanceof Error ? err.message : String(err));
+    // Claiming is atomic. A duplicate admission returns the existing job ID,
+    // while only one process can own and execute its lease.
+    await claimAndRunBackgroundJob(jobId, {
+        provider,
+        encryptionKey,
+        execute: executeBackgroundJob,
     });
     logBgStream('server-background-started', {
         jobId,
@@ -301,7 +341,8 @@ export async function consumeBackgroundStream(params: {
     flushChunkInterval?: number;
     streamedFieldMode?: StreamedFieldMode;
 }): Promise<void> {
-    let fullContent = '';
+    const contentBase = params.context.execution?.contentBase ?? '';
+    let fullContent = contentBase;
     let chunks = 0;
     let normalizedState = beginNormalizedIteration(
         createNormalizedStreamState()
@@ -364,6 +405,7 @@ export async function consumeBackgroundStream(params: {
             await params.provider.updateJob(params.jobId, {
                 contentChunk: chunk,
                 chunksReceived: chunks,
+                leaseOwner: params.context.leaseOwner,
             });
             lastUpdateAt = Date.now();
 
@@ -392,7 +434,7 @@ export async function consumeBackgroundStream(params: {
         })) {
             normalizedState = reduceNormalizedStreamEvent(normalizedState, evt);
             if (evt.type === 'text') {
-                fullContent = normalizedState.cumulativeText;
+                fullContent = contentBase + normalizedState.cumulativeText;
                 chunks = normalizedState.chunks;
                 pendingChunk += evt.text;
                 emitJobDelta(params.jobId, evt.text, {
@@ -455,7 +497,15 @@ export async function consumeBackgroundStream(params: {
         }
 
         // Complete the job
-        await params.provider.completeJob(params.jobId, fullContent);
+        if (params.context.leaseOwner) {
+            await params.provider.completeJob(
+                params.jobId,
+                fullContent,
+                params.context.leaseOwner
+            );
+        } else {
+            await params.provider.completeJob(params.jobId, fullContent);
+        }
         logBgStream('server-consume-background-complete', {
             jobId: params.jobId,
             chunks,
@@ -527,6 +577,7 @@ export async function consumeBackgroundStream(params: {
         }
 
     } catch (err) {
+        if (isBackgroundJobLeaseLost(err)) throw err;
         normalizedState = failNormalizedStream(normalizedState, err);
         clearFlushTimer();
         try {
@@ -536,7 +587,12 @@ export async function consumeBackgroundStream(params: {
             /* terminal handling below remains authoritative */
         }
         if (err instanceof Error && err.name === 'AbortError') {
-            // Job was aborted (already marked in provider)
+            const latest = await params.provider
+                .getJob(params.jobId, params.context.userId)
+                .catch(() => null);
+            // A user abort is terminal. A lease-loss abort must bubble so a
+            // new worker can resume without publishing a false aborted state.
+            if (latest?.status !== 'aborted') throw err;
             logBgStream('server-consume-background-aborted', {
                 jobId: params.jobId,
                 chunks,
@@ -644,7 +700,8 @@ export async function consumeBackgroundStreamWithTools(params: {
     abortSignal?: AbortSignal;
     streamedFieldMode?: StreamedFieldMode;
 }): Promise<void> {
-    let fullContent = '';
+    const contentBase = params.context.execution?.contentBase ?? '';
+    let fullContent = contentBase;
     let chunks = 0;
     let normalizedState = createNormalizedStreamState();
     const notificationEmitter = getNotificationEmitter(params.provider.name);
@@ -706,6 +763,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             contentChunk: contentChunk || undefined,
             chunksReceived: chunks,
             tool_calls: Array.from(toolStates.values()),
+            leaseOwner: params.context.leaseOwner,
         });
         lastProviderFlushAt = Date.now();
     };
@@ -833,7 +891,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                 });
                 normalizedState = reduceNormalizedStreamEvent(normalizedState, evt);
                 if (evt.type === 'text') {
-                    fullContent = normalizedState.cumulativeText;
+                    fullContent = contentBase + normalizedState.cumulativeText;
                     loopContent = normalizedState.iterationText;
                     chunks = normalizedState.chunks;
                     pendingProviderContent += evt.text;
@@ -1049,10 +1107,45 @@ export async function consumeBackgroundStreamWithTools(params: {
 
             await flushProviderProgress(true);
 
-            // If the caller forced a specific function, only enforce that on the first
-            // turn; subsequent turns should allow the model to produce the final answer.
-            if (isForcedFunctionToolChoice(activeToolChoice)) {
-                activeToolChoice = 'auto';
+            // The next model iteration can be safely recreated from this
+            // point without re-running any completed server tool. Persist the
+            // checkpoint before issuing that next upstream request.
+            if (
+                params.context.execution &&
+                params.context.leaseOwner &&
+                params.provider.updateJobExecution
+            ) {
+                const nextToolChoice = isForcedFunctionToolChoice(activeToolChoice)
+                    ? 'auto'
+                    : activeToolChoice;
+                const checkpoint: BackgroundJobExecution = {
+                    ...params.context.execution,
+                    body: {
+                        ...params.context.body,
+                        messages: orMessages,
+                        tool_choice: nextToolChoice,
+                    },
+                    contentBase: fullContent,
+                    checkpointedToolCallIds: Array.from(toolStates.values())
+                        .filter(
+                            (call) =>
+                                call.id &&
+                                call.status !== 'pending' &&
+                                call.status !== 'loading'
+                        )
+                        .map((call) => call.id!),
+                };
+                const saved = await params.provider.updateJobExecution(
+                    params.jobId,
+                    checkpoint,
+                    params.context.leaseOwner
+                );
+                if (!saved) {
+                    throw createBackgroundJobLeaseLostError();
+                }
+                params.context.execution = checkpoint;
+                params.context.body = checkpoint.body;
+                activeToolChoice = nextToolChoice;
             }
 
             normalizedState = finishNormalizedIteration(
@@ -1079,7 +1172,15 @@ export async function consumeBackgroundStreamWithTools(params: {
         }
 
         await flushProviderProgress(true);
-        await params.provider.completeJob(params.jobId, fullContent);
+        if (params.context.leaseOwner) {
+            await params.provider.completeJob(
+                params.jobId,
+                fullContent,
+                params.context.leaseOwner
+            );
+        } else {
+            await params.provider.completeJob(params.jobId, fullContent);
+        }
         logBackgroundEvent('info', 'background.tools.completed', {
             jobId: params.jobId,
             chunksReceived: chunks,
@@ -1153,6 +1254,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             }
         }
     } catch (err) {
+        if (isBackgroundJobLeaseLost(err)) throw err;
         normalizedState = failNormalizedStream(normalizedState, err);
         // Preserve the last coalesced text/tool snapshot before publishing a
         // terminal error. A failed flush must not hide the original failure.
@@ -1162,6 +1264,10 @@ export async function consumeBackgroundStreamWithTools(params: {
             /* terminal handling below remains authoritative */
         }
         if (err instanceof Error && err.name === 'AbortError') {
+            const latest = await params.provider
+                .getJob(params.jobId, params.context.userId)
+                .catch(() => null);
+            if (latest?.status !== 'aborted') throw err;
             logBgStream('server-consume-tools-aborted', {
                 jobId: params.jobId,
                 chunks,
@@ -1270,19 +1376,23 @@ export async function consumeBackgroundStreamWithTools(params: {
 /**
  * Stream in the background without keeping a client connection open.
  */
-async function streamInBackground(
+export async function executeBackgroundJob(
     jobId: string,
     params: BackgroundStreamParams,
-    provider: BackgroundJobProvider
+    provider: BackgroundJobProvider,
+    abortSignal?: AbortSignal
 ): Promise<void> {
-    // Get abort controller if provider supports it (memory provider)
-    const ac = provider.getAbortController?.(jobId) ?? new AbortController();
+    const signal =
+        abortSignal ??
+        provider.getAbortController?.(jobId)?.signal ??
+        new AbortController().signal;
 
     // Strip internal fields from body before sending to OpenRouter
     const {
         _background,
         _threadId,
         _messageId,
+        _backgroundAdmissionId,
         _backgroundMode,
         _toolRuntime,
         _streamedFieldMode,
@@ -1318,7 +1428,7 @@ async function streamInBackground(
             context: params,
             toolRuntime,
             shouldNotify: () => !hasJobViewers(jobId),
-            abortSignal: ac.signal,
+            abortSignal: signal,
             streamedFieldMode,
         });
         return;
@@ -1335,7 +1445,7 @@ async function streamInBackground(
             'X-Title': 'or3.chat',
         },
         body: JSON.stringify(cleanBody),
-    }, { signal: ac.signal });
+    }, { signal });
     logBgStream('server-stream-in-background-upstream-response', {
         jobId,
         status: upstream.status,
@@ -1345,7 +1455,7 @@ async function streamInBackground(
 
     if (!upstream.ok || !upstream.body) {
         const errorText = await readResponseTextWithIdleDeadline(upstream, {
-            signal: ac.signal,
+            signal,
         }).catch(() => '<no body>');
         warnBgStream('server-stream-in-background-upstream-failed', {
             jobId,
@@ -1357,7 +1467,7 @@ async function streamInBackground(
 
     await consumeBackgroundStream({
         jobId,
-        stream: withIdleWatchdog(upstream.body, { signal: ac.signal }),
+        stream: withIdleWatchdog(upstream.body, { signal }),
         context: params,
         provider,
         shouldNotify: () => !hasJobViewers(jobId),

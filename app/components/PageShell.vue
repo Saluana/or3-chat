@@ -313,7 +313,7 @@
                     ]"
                     tabindex="0"
                     :id="workspaceTabsChromeVisible ? `workspace-pane-${tabIdForPane(pane.id)}` : undefined"
-                    :role="workspaceTabsChromeVisible && i === activePaneIndex ? 'tabpanel' : 'region'"
+                    :role="workspaceTabsChromeVisible ? 'tabpanel' : 'region'"
                     :aria-labelledby="workspaceTabsChromeVisible ? `workspace-tab-${tabIdForPane(pane.id)}` : undefined"
                     @focus="onPaneFocused(i)"
                     @click="onPaneFocused(i)"

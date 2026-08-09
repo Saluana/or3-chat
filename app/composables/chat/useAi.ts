@@ -202,6 +202,10 @@ export function useChat(
     // from an async send handler triggers Vue's "inject() can only be used
     // inside setup()" warning.
     const toast = useToast();
+    const appConfig = useAppConfig() as {
+        errors?: { showAbortInfo?: boolean };
+    };
+    const openRouterAuth = useOpenRouterAuth();
     const syncConfig = runtimeConfig.public.sync;
     const serverNotificationsEnabled = computed(
         () =>
@@ -285,6 +289,12 @@ export function useChat(
         requestId: string;
         originDb: Or3DB;
         accumulator: typeof streamAcc;
+        /** Thread selected when the request was admitted (or created for it). */
+        threadId?: string;
+        /** Set when navigation supersedes an admission before it can stream. */
+        cancelled: boolean;
+        settled: Promise<void>;
+        resolveSettled: () => void;
         streamId?: string;
         abortController: AbortController | null;
         toolLedger: Map<string, ToolLedgerEntry>;
@@ -579,13 +589,27 @@ export function useChat(
     );
 
     let historySyncInFlight = false;
+    let historySyncQueued = false;
     let historyModulePromise: Promise<ChatHistoryModule> | null = null;
     const getHistoryModule = async (): Promise<ChatHistoryModule> => {
         if (!historyModulePromise) {
-            historyModulePromise = import('~/utils/chat/history');
+            historyModulePromise = import('~/utils/chat/history').catch(
+                (error) => {
+                    // A Vite dev-server restart can invalidate a lazy module
+                    // URL. Do not cache that rejection forever: the next chat
+                    // action can load the fresh module after a reload.
+                    historyModulePromise = null;
+                    throw error;
+                }
+            );
         }
         return historyModulePromise;
     };
+
+    function isStaleDevModuleError(error: unknown): boolean {
+        const message = error instanceof Error ? error.message : String(error);
+        return /failed to fetch dynamically imported module/i.test(message);
+    }
     /**
      * Purpose:
      * Loads thread history into memory and reattaches background jobs if needed.
@@ -601,14 +625,16 @@ export function useChat(
      */
     async function ensureHistorySynced() {
         if (historySyncInFlight) {
+            historySyncQueued = true;
             logBgStream('history-sync-skip-in-flight', {
                 threadId: threadIdRef.value || null,
             });
             return;
         }
         if (threadIdRef.value && historyLoadedFor.value !== threadIdRef.value) {
+            const targetThreadId = threadIdRef.value;
             logBgStream('history-sync-start', {
-                threadId: threadIdRef.value,
+                threadId: targetThreadId,
                 historyLoadedFor: historyLoadedFor.value,
                 detached: detached.value,
             });
@@ -621,6 +647,9 @@ export function useChat(
                     historyLoadedFor,
                     rawMessages
                 );
+                // A newer navigation owns the reactive state now. The queued
+                // sync below will load that target after this stale query ends.
+                if (threadIdRef.value !== targetThreadId) return;
                 messages.value = rawMessages.value
                     .filter((m: ChatMessage) => m.role !== 'tool')
                     .map((m) => ensureUiMessage(m));
@@ -634,6 +663,10 @@ export function useChat(
                 });
             } finally {
                 historySyncInFlight = false;
+                if (historySyncQueued) {
+                    historySyncQueued = false;
+                    void ensureHistorySynced();
+                }
             }
         }
     }
@@ -679,7 +712,10 @@ export function useChat(
         delta: string
     ): boolean {
         if (tailAssistant.value?.id !== messageId) return false;
-        if (!nextContent) return true;
+        if (!nextContent) {
+            streamAcc.reset();
+            return true;
+        }
 
         const currentContent = streamState.text || '';
         const canAppendDelta =
@@ -790,6 +826,7 @@ export function useChat(
         messageId: string;
         threadId: string;
         initialContent?: string;
+        initialAttempt?: number;
         isReattach?: boolean;
         useSse?: boolean;
     }): BackgroundJobTracker {
@@ -806,6 +843,9 @@ export function useChat(
                     : 0,
             detached: detached.value,
         });
+        const priorTrackerAttempt = backgroundJobTrackers.get(
+            params.jobId
+        )?.lastAttempt;
         const tracker = ensureBackgroundJobTracker({
             jobId: params.jobId,
             userId: params.userId,
@@ -814,20 +854,36 @@ export function useChat(
             preferServerNotifications: serverNotificationsEnabled.value,
             // Seed with DB content - server must have MORE to update
             initialContent: params.initialContent,
+            initialAttempt: params.initialAttempt,
             useSse: params.useSse,
         });
         if (params.isReattach && typeof params.initialContent === 'string') {
-            // Set tracker baseline to DB content
-            // Server must have MORE content to trigger an update
-            if (params.initialContent.length > tracker.lastContent.length) {
-                tracker.lastContent = params.initialContent;
-                tracker.lastPersistedLength = params.initialContent.length;
-            }
             tracker.lastPersistAt = 0;
-            // Sync UI with DB content (don't clear it)
             const target = resolveUiMessage(params.messageId);
-            if (target && params.initialContent.length > target.text.length) {
-                target.text = params.initialContent;
+            if (target) {
+                const incomingAttempt = params.initialAttempt;
+                const isNewerAttempt =
+                    typeof incomingAttempt === 'number' &&
+                    typeof priorTrackerAttempt === 'number' &&
+                    incomingAttempt > priorTrackerAttempt;
+                const isStaleAttempt =
+                    typeof incomingAttempt === 'number' &&
+                    typeof priorTrackerAttempt === 'number' &&
+                    incomingAttempt < priorTrackerAttempt;
+                if (
+                    !isStaleAttempt &&
+                    (isNewerAttempt ||
+                        params.initialContent.length > target.text.length)
+                ) {
+                    target.text = params.initialContent;
+                    if (isNewerAttempt) {
+                        syncTailAccumulator(
+                            params.messageId,
+                            params.initialContent,
+                            ''
+                        );
+                    }
+                }
             }
             logBgStream('attach-bg-job-reattach-seed', {
                 jobId: params.jobId,
@@ -856,7 +912,7 @@ export function useChat(
                 attachedAlready: attachedBackgroundJobs.has(params.jobId),
             });
             const subscriber: BackgroundJobSubscriber = {
-                onUpdate: ({ content, delta, status }) => {
+                onUpdate: ({ content, delta, replace, status }) => {
                     if (detached.value) {
                         return;
                     }
@@ -874,7 +930,8 @@ export function useChat(
 
                     const currentLen = target.text.length;
                     const contentChanged =
-                        content.length >= currentLen && content !== target.text;
+                        content !== target.text &&
+                        (replace === true || content.length >= currentLen);
 
                     if (contentChanged) {
                         target.text = content;
@@ -1156,6 +1213,10 @@ export function useChat(
                     messageId: msg.id,
                     threadId: threadIdRef.value,
                     initialContent,
+                    initialAttempt:
+                        typeof data.background_job_attempt === 'number'
+                            ? data.background_job_attempt
+                            : undefined,
                     isReattach: true,
                     useSse: backgroundStreamingAllowed.value,
                 });
@@ -1205,10 +1266,17 @@ export function useChat(
     ): Promise<SendResult> {
         if (activeRequestId) return { status: 'rejected', reason: 'busy' };
         const requestId = newId();
+        let resolveSettled!: () => void;
         const requestScope: ChatRequestScope = {
             requestId,
             originDb: getDb(),
             accumulator: streamAcc,
+            threadId: threadIdRef.value,
+            cancelled: false,
+            settled: new Promise<void>((resolve) => {
+                resolveSettled = resolve;
+            }),
+            resolveSettled,
             abortController: null,
             toolLedger: new Map(),
         };
@@ -1217,7 +1285,12 @@ export function useChat(
         requestScope.accumulator.reset();
         loading.value = true;
         requestState.value = { status: 'admitted', requestId };
-        let result: SendResult;
+        let result: SendResult = {
+            status: 'failed',
+            requestId,
+            reason: 'stream_error',
+            error: 'Chat request ended before returning a terminal result.',
+        };
         try {
             result = await executeSendMessage(
                 requestScope,
@@ -1249,10 +1322,11 @@ export function useChat(
             if (activeRequestScope === requestScope) {
                 activeRequestScope = null;
                 abortController.value = null;
+                loading.value = false;
+                requestState.value = { status: 'terminal', requestId, result };
             }
-            loading.value = false;
+            requestScope.resolveSettled();
         }
-        requestState.value = { status: 'terminal', requestId, result };
         return result;
     }
 
@@ -1284,8 +1358,7 @@ export function useChat(
         if (!hasKey) {
             if (allowUserOverride.value && guestAccessEnabled.value) {
                 // Guest access enabled - trigger OpenRouter login
-                const openrouter = useOpenRouterAuth();
-                openrouter.startLogin();
+                void openRouterAuth.startLogin();
             } else if (!allowUserOverride.value) {
                 toast.add({
                     title: 'Instance key required',
@@ -1346,10 +1419,21 @@ export function useChat(
             return { status: 'rejected', requestId, reason: 'filtered' };
         }
 
-        const canSend = await enforceClientLimits(!threadIdRef.value);
+        // Navigation can happen while an async outgoing filter is running. Do
+        // not let that older admission create messages in the newly selected
+        // thread after it resumes.
+        if (
+            requestScope.cancelled ||
+            (requestScope.threadId &&
+                threadIdRef.value !== requestScope.threadId)
+        ) {
+            return { status: 'aborted', requestId, reason: 'aborted' };
+        }
+
+        const canSend = await enforceClientLimits(!requestScope.threadId);
         if (!canSend) return { status: 'rejected', requestId, reason: 'client_limit' };
 
-        if (!threadIdRef.value) {
+        if (!requestScope.threadId) {
             let effectivePromptId: string | null =
                 pendingPromptIdRef.value || null;
             if (!effectivePromptId) {
@@ -1426,6 +1510,10 @@ export function useChat(
                     limits: runtimeConfig.public.limits,
                 }
             );
+            if (requestScope.cancelled) {
+                return { status: 'aborted', requestId, reason: 'aborted' };
+            }
+            requestScope.threadId = newThread.id;
             threadIdRef.value = newThread.id;
             // Bind thread to active pane immediately (before first user message hook) if multi-pane present.
             try {
@@ -1452,6 +1540,16 @@ export function useChat(
                 /* intentionally empty */
             }
         } // END create-new-thread block
+
+        const requestThreadId = requestScope.threadId;
+        if (!requestThreadId) {
+            return {
+                status: 'failed',
+                requestId,
+                reason: 'stream_error',
+                error: 'No chat thread is available for this request.',
+            };
+        }
 
         if (
             tailAssistant.value &&
@@ -1537,6 +1635,12 @@ export function useChat(
         const hydratedFiles = await Promise.all(
             Array.isArray(files) ? files.map(normalizeFileUrl) : []
         );
+        if (
+            requestScope.cancelled ||
+            threadIdRef.value !== requestThreadId
+        ) {
+            return { status: 'aborted', requestId, reason: 'aborted' };
+        }
 
         const parts: ContentPart[] = buildParts(
             outgoing,
@@ -1554,7 +1658,7 @@ export function useChat(
         const nextUserMessageId = newId();
         const userDbMsg = await appendMessageToDb(requestScope.originDb, {
             id: nextUserMessageId,
-            thread_id: threadIdRef.value,
+            thread_id: requestThreadId,
             role: 'user',
             data: {
                 ...userTranscriptData(nextUserMessageId),
@@ -1585,7 +1689,7 @@ export function useChat(
                     paneIndex: ctx.paneIndex,
                     message: {
                         id: userDbMsg.id,
-                        threadId: threadIdRef.value,
+                        threadId: requestThreadId,
                         length: outgoing.length,
                         fileHashes: userDbMsg.file_hashes || null,
                     },
@@ -1624,7 +1728,7 @@ export function useChat(
                 masterPrompt = '';
             }
             const systemMessagePromise = buildSystemPromptMessage({
-                threadId: threadIdRef.value,
+                threadId: requestThreadId,
                 activePromptContent: activePromptContent.value,
                 masterPrompt,
             });
@@ -1634,6 +1738,15 @@ export function useChat(
             ]);
             currentModelId = modelId;
             const systemMessage = await systemMessagePromise;
+            if (
+                requestScope.cancelled ||
+                threadIdRef.value !== requestThreadId
+            ) {
+                return {
+                    status: 'aborted', requestId, reason: 'aborted',
+                    userMessageId: userDbMsg.id,
+                };
+            }
 
             const messagesWithSystemRaw = sendMessagesParams.historyOverride
                 ? [...sendMessagesParams.historyOverride, rawUser]
@@ -1677,6 +1790,15 @@ export function useChat(
                 imageInclusionPolicy: 'all',
                 maxInputTokens,
             });
+            if (
+                requestScope.cancelled ||
+                threadIdRef.value !== requestThreadId
+            ) {
+                return {
+                    status: 'aborted', requestId, reason: 'aborted',
+                    userMessageId: userDbMsg.id,
+                };
+            }
             if (orMessages.length === 0) {
                 return {
                     status: 'failed', requestId, reason: 'empty_context',
@@ -1694,7 +1816,7 @@ export function useChat(
             const nextAssistantId = newId();
             const assistantDbMsg = (await appendMessageToDb(requestScope.originDb, {
                 id: nextAssistantId,
-                thread_id: threadIdRef.value,
+                thread_id: requestThreadId,
                 role: 'assistant',
                 stream_id: newStreamId,
                 pending: true, // Mark as streaming - HookBridge will skip sync until finalized
@@ -1727,7 +1849,7 @@ export function useChat(
             requestScope.persistAssistant = persistAssistant;
 
             await hooks.doAction('ai.chat.send:action:before', {
-                threadId: threadIdRef.value,
+                threadId: requestThreadId,
                 modelId,
                 user: { id: userDbMsg.id, length: outgoing.length },
                 assistant: { id: assistantDbMsg.id, streamId: newStreamId },
@@ -1813,7 +1935,7 @@ export function useChat(
                 modalities.length === 1 &&
                 modalities[0] === 'text';
             logBgStream('send-message-stream-mode-decision', {
-                threadId: threadIdRef.value || null,
+                threadId: requestThreadId,
                 allowBackgroundStreaming,
                 backgroundStreamingAllowed: backgroundStreamingAllowed.value,
                 backgroundStreamStartMode: backgroundStreamStartMode.value,
@@ -1824,7 +1946,7 @@ export function useChat(
             if (allowBackgroundStreaming) {
                 backgroundJobMode.value = 'background';
                 logBgStream('send-message-background-start', {
-                    threadId: threadIdRef.value || null,
+                    threadId: requestThreadId,
                     messageId: assistantDbMsg.id,
                     streamId: newStreamId,
                 });
@@ -1868,7 +1990,7 @@ export function useChat(
                             typeof startBackgroundStream
                         >[0]['orMessages'],
                         modalities,
-                        threadId: threadIdRef.value!,
+                        threadId: requestThreadId,
                         messageId: assistantDbMsg.id,
                         reasoning,
                         tools:
@@ -1879,14 +2001,8 @@ export function useChat(
                         signal: requestScope.abortController.signal,
                     });
 
-                    backgroundJobId.value = result.jobId;
-                    backgroundJobInfo.value = {
-                        jobId: result.jobId,
-                        threadId: threadIdRef.value!,
-                        messageId: assistantDbMsg.id,
-                    };
                     logBgStream('send-message-background-job-created', {
-                        threadId: threadIdRef.value!,
+                        threadId: requestThreadId,
                         messageId: assistantDbMsg.id,
                         streamId: newStreamId,
                         jobId: result.jobId,
@@ -1913,24 +2029,46 @@ export function useChat(
                         },
                     });
 
-                    const tracker = attachBackgroundJobToUi({
-                        jobId: result.jobId,
-                        userId: notificationUserId.value,
-                        messageId: assistantDbMsg.id,
-                        threadId: threadIdRef.value!,
-                        initialContent: '',
-                        useSse: backgroundStreamingAllowed.value,
-                    });
+                    const ownsCurrentThread =
+                        activeRequestScope === requestScope &&
+                        threadIdRef.value === requestThreadId;
+                    if (ownsCurrentThread) {
+                        backgroundJobId.value = result.jobId;
+                        backgroundJobInfo.value = {
+                            jobId: result.jobId,
+                            threadId: requestThreadId,
+                            messageId: assistantDbMsg.id,
+                        };
+                    }
+                    const tracker = ownsCurrentThread
+                        ? attachBackgroundJobToUi({
+                              jobId: result.jobId,
+                              userId: notificationUserId.value,
+                              messageId: assistantDbMsg.id,
+                              threadId: requestThreadId,
+                              initialContent: '',
+                              useSse: backgroundStreamingAllowed.value,
+                          })
+                        : ensureBackgroundJobTracker({
+                              jobId: result.jobId,
+                              userId: notificationUserId.value,
+                              messageId: assistantDbMsg.id,
+                              threadId: requestThreadId,
+                              preferServerNotifications:
+                                  serverNotificationsEnabled.value,
+                              initialContent: '',
+                              useSse: false,
+                          });
 
                     logBgStream('send-message-background-await-completion', {
                         jobId: tracker.jobId,
-                        threadId: threadIdRef.value!,
+                        threadId: requestThreadId,
                         messageId: assistantDbMsg.id,
                     });
                     const completion = await tracker.completion;
                     logBgStream('send-message-background-completed', {
                         jobId: tracker.jobId,
-                        threadId: threadIdRef.value!,
+                        threadId: requestThreadId,
                         messageId: assistantDbMsg.id,
                     });
                     if (completion.status === 'aborted') {
@@ -1965,7 +2103,7 @@ export function useChat(
                             ? error.message
                             : 'Background stream failed';
                     warnBgStream('send-message-background-failed', {
-                        threadId: threadIdRef.value || null,
+                        threadId: requestThreadId,
                         messageId: assistantDbMsg.id,
                         error: errMessage,
                     });
@@ -1993,7 +2131,7 @@ export function useChat(
                         });
                     } catch (persistError) {
                         warnBgStream('background-start-finalize-failed', {
-                            threadId: threadIdRef.value || null,
+                            threadId: requestThreadId,
                             messageId: assistantDbMsg.id,
                             error: persistError instanceof Error
                                 ? persistError.message
@@ -2037,7 +2175,7 @@ export function useChat(
                 assistantId: assistantDbMsg.id,
                 parentTurnId: userDbMsg.id,
                 streamId: newStreamId,
-                threadId: threadIdRef.value!,
+                threadId: requestThreadId,
                 streamAcc: requestScope.accumulator,
                 hooks,
                 toolRegistry,
@@ -2077,7 +2215,7 @@ export function useChat(
                     : assistantDbMsg.file_hashes,
             };
             await hooks.doAction('ai.chat.stream:action:complete', {
-                threadId: threadIdRef.value,
+                threadId: requestThreadId,
                 assistantId: assistantDbMsg.id,
                 streamId: newStreamId,
                 totalLength: incoming.length,
@@ -2092,7 +2230,7 @@ export function useChat(
                         paneIndex: ctx.paneIndex,
                         message: {
                             id: finalized.id,
-                            threadId: threadIdRef.value,
+                            threadId: requestThreadId,
                             length: incoming.length,
                             fileHashes: finalized.file_hashes || null,
                             reasoningLength: (current.reasoning_text || '')
@@ -2105,7 +2243,7 @@ export function useChat(
             }
             const endedAt = Date.now();
             await hooks.doAction('ai.chat.send:action:after', {
-                threadId: threadIdRef.value,
+                threadId: requestThreadId,
                 request: { modelId, userId: userDbMsg.id },
                 response: {
                     assistantId: assistantDbMsg.id,
@@ -2135,7 +2273,10 @@ export function useChat(
                     };
                 }
             }
-            if (aborted.value) {
+            if (
+                aborted.value ||
+                requestScope.abortController?.signal.aborted === true
+            ) {
                 terminalResult = {
                     status: 'aborted', requestId, reason: 'aborted',
                     userMessageId: userDbMsg.id,
@@ -2145,7 +2286,7 @@ export function useChat(
                     tailAssistant.value.pending = false;
                 try {
                     await hooks.doAction('ai.chat.send:action:after', {
-                        threadId: threadIdRef.value,
+                        threadId: requestThreadId,
                         aborted: true,
                     });
                 } catch (e) {
@@ -2247,7 +2388,15 @@ export function useChat(
                     tailAssistant.value = null;
                 }
             } else {
-                const terminalError = err instanceof Error ? err.message : String(err);
+                const visibleError = isStaleDevModuleError(err)
+                    ? new Error(
+                          'The development server reloaded while this message was starting. Reload OR3, then resend the message.'
+                      )
+                    : err;
+                const terminalError =
+                    visibleError instanceof Error
+                        ? visibleError.message
+                        : String(visibleError);
                 terminalResult = {
                     status: 'failed', requestId,
                     reason: err instanceof ToolIterationLimitError
@@ -2265,11 +2414,11 @@ export function useChat(
                       }
                     : undefined;
                 // Inline tag object (Req 18.1) for clarity & tree-shaking
-                reportError(err, {
+                reportError(visibleError, {
                     code: 'ERR_STREAM_FAILURE',
                     tags: {
                         domain: 'chat',
-                        threadId: threadIdRef.value || '',
+                        threadId: requestThreadId,
                         streamId: requestScope.streamId || '',
                         modelId: currentModelId || '',
                         stage: 'stream',
@@ -2278,10 +2427,13 @@ export function useChat(
                     toast: true,
                     retryable: !!retryFn,
                 });
-                const e = err instanceof Error ? err : new Error(String(err));
+                const e =
+                    visibleError instanceof Error
+                        ? visibleError
+                        : new Error(String(visibleError));
                 requestScope.accumulator.finalize({ error: e });
                 await hooks.doAction('ai.chat.stream:action:error', {
-                    threadId: threadIdRef.value,
+                    threadId: requestThreadId,
                     streamId: requestScope.streamId,
                     error: e,
                     aborted: false,
@@ -2357,10 +2509,12 @@ export function useChat(
                 }
             }
         } finally {
-            loading.value = false;
             // CRITICAL: Ensure abort controller is cleaned up to prevent memory leak
-            if (activeRequestScope === requestScope && abortController.value) {
-                abortController.value = null;
+            if (activeRequestScope === requestScope) {
+                loading.value = false;
+                if (abortController.value) {
+                    abortController.value = null;
+                }
             }
             setTimeout(() => {
                 if (
@@ -2551,10 +2705,21 @@ export function useChat(
             backgroundJobMode.value === 'none' &&
             Boolean(abortController.value);
 
-        if (isBackgroundActive || isForegroundStreamActive) {
-            // Keep durable background/foreground work alive; detach UI bindings.
+        if (isBackgroundActive) {
+            // Background jobs are durable, so detach only their UI bindings.
             detached.value = true;
             clearBackgroundJobSubscriptions({ keepTracking: true });
+        } else if (isForegroundStreamActive) {
+            // Abort and fully settle a foreground stream before changing the
+            // reactive thread. Its streaming callbacks share these refs, so
+            // swapping first could append an old response to the new chat.
+            const foregroundScope = activeRequestScope;
+            try {
+                abortController.value?.abort();
+            } catch {
+                /* intentionally empty */
+            }
+            if (foregroundScope) await foregroundScope.settled;
         } else if (abortController.value) {
             aborted.value = true;
             try {
@@ -2566,6 +2731,10 @@ export function useChat(
             abortController.value = null;
             clearBackgroundJobSubscriptions({ keepTracking: false });
         } else {
+            // An admission can still be awaiting a filter, file hydration, or
+            // new-thread creation before it has an AbortController. Fence it
+            // so it cannot resume into the newly selected thread.
+            if (activeRequestScope) activeRequestScope.cancelled = true;
             clearBackgroundJobSubscriptions({ keepTracking: false });
         }
 
@@ -2581,12 +2750,14 @@ export function useChat(
         backgroundJobMode.value = 'none';
         loading.value = false;
         requestState.value = { status: 'idle' };
-        activeRequestId = null;
-        activeRequestScope = null;
+        if (!isForegroundStreamActive) {
+            activeRequestId = null;
+            activeRequestScope = null;
+        }
         aborted.value = false;
         streamId.value = undefined;
         tailAssistant.value = null;
-        streamAcc.reset();
+        if (!isForegroundStreamActive) streamAcc.reset();
         detached.value = false;
 
         if (switchOptions.seedMessages) {
@@ -2789,9 +2960,6 @@ export function useChat(
         if (tailAssistant.value?.pending)
             tailAssistant.value.pending = false;
         try {
-            const appConfig = useAppConfig() as {
-                errors?: { showAbortInfo?: boolean };
-            };
             const showAbort =
                 typeof appConfig.errors === 'object' &&
                 appConfig.errors.showAbortInfo === true;

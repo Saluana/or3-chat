@@ -37,4 +37,58 @@ describe('usePaneResizeController', () => {
 
         expect(recalculateWidths).toHaveBeenCalledWith(1600);
     });
+
+    it('only completes the primary pointer interaction that started the resize', () => {
+        const scope = effectScope();
+        scopes.push(scope);
+        const persist = vi.fn();
+        const controller = scope.run(() =>
+            usePaneResizeController({
+                paneCount: () => 2,
+                paneWidths: ref([400, 400]),
+                isMobile: ref(false),
+                minPaneWidth: 280,
+                recalculateWidths: vi.fn(),
+                resize: vi.fn(),
+                persist,
+            })
+        )!;
+        const target = document.createElement('div');
+
+        controller.onPaneResizeStart(
+            {
+                button: 2,
+                isPrimary: true,
+                pointerId: 1,
+                clientX: 100,
+                currentTarget: target,
+            } as unknown as PointerEvent,
+            0
+        );
+        expect(controller.isResizing.value).toBe(false);
+
+        controller.onPaneResizeStart(
+            {
+                button: 0,
+                isPrimary: true,
+                pointerId: 1,
+                clientX: 100,
+                currentTarget: target,
+            } as unknown as PointerEvent,
+            0
+        );
+        expect(controller.isResizing.value).toBe(true);
+
+        const otherPointerUp = new Event('pointerup') as PointerEvent;
+        Object.defineProperty(otherPointerUp, 'pointerId', { value: 2 });
+        window.dispatchEvent(otherPointerUp);
+        expect(controller.isResizing.value).toBe(true);
+        expect(persist).not.toHaveBeenCalled();
+
+        const matchingPointerUp = new Event('pointerup') as PointerEvent;
+        Object.defineProperty(matchingPointerUp, 'pointerId', { value: 1 });
+        window.dispatchEvent(matchingPointerUp);
+        expect(controller.isResizing.value).toBe(false);
+        expect(persist).toHaveBeenCalledTimes(1);
+    });
 });

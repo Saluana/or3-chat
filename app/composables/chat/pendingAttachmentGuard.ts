@@ -25,6 +25,13 @@ export function getPendingAttachmentCount(
     return attachments.filter((att) => att.status === 'pending').length;
 }
 
+export function getFailedAttachmentCount(
+    attachments: AttachmentLike[] | null | undefined
+): number {
+    if (!attachments?.length) return 0;
+    return attachments.filter((att) => att.status === 'error').length;
+}
+
 export function guardPendingAttachmentSend(
     attachments: AttachmentLike[] | null | undefined,
     toast: ToastLike | null | undefined,
@@ -35,7 +42,19 @@ export function guardPendingAttachmentSend(
     }
 ): boolean {
     const pendingCount = getPendingAttachmentCount(attachments);
-    if (pendingCount === 0) return true;
+    const failedCount = getFailedAttachmentCount(attachments);
+    if (pendingCount === 0 && failedCount === 0) return true;
+
+    if (failedCount > 0) {
+        toast?.add?.({
+            title: 'Attachment needs attention',
+            description:
+                'Remove or retry failed attachments before sending so no files are omitted.',
+            color: 'warning',
+            duration: options?.duration ?? 2600,
+        });
+        return false;
+    }
 
     toast?.add?.({
         title: options?.title ?? 'Files are still uploading',

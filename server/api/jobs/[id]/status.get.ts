@@ -8,6 +8,7 @@ import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { getJobLiveState } from '../../../utils/background-jobs/viewers';
+import { shouldResetBackgroundContent } from '../../../utils/background-jobs/recovery';
 
 function logBgStream(
     _stage: string,
@@ -36,6 +37,10 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 400);
         return { error: 'Missing job ID' };
     }
+
+    // Job content is user-specific and changes frequently; intermediaries must
+    // not reuse a stale response after a reconnect or workspace switch.
+    setHeader(event, 'Cache-Control', 'no-store, private');
 
     // Resolve user ID for authorization
     let userId: string | null = null;
@@ -69,6 +74,14 @@ export default defineEventHandler(async (event) => {
     const query = getQuery(event);
     const offsetParam = typeof query.offset === 'string' ? query.offset : null;
     const offset = offsetParam ? Number(offsetParam) : null;
+    const attemptParam =
+        typeof query.attempt === 'string' ? Number(query.attempt) : null;
+    const currentAttempt = job.attempts ?? 0;
+    const attemptChanged = shouldResetBackgroundContent(
+        attemptParam,
+        currentAttempt,
+        offset
+    );
     const liveState = getJobLiveState(jobId);
     const effectiveContent =
         liveState && liveState.content.length > job.content.length
@@ -120,11 +133,13 @@ export default defineEventHandler(async (event) => {
         typeof effectiveContent === 'string'
     ) {
         const contentLength = effectiveContent.length;
-        const safeOffset = Math.min(offset, contentLength);
-        const contentDelta = effectiveContent.slice(safeOffset);
+        const safeOffset = attemptChanged ? 0 : Math.min(offset, contentLength);
+        const contentDelta = attemptChanged
+            ? undefined
+            : effectiveContent.slice(safeOffset);
         const shouldLogDeltaResponse =
             effectiveStatus !== 'streaming' ||
-            contentDelta.length >= 256 ||
+            (contentDelta?.length ?? 0) >= 256 ||
             safeOffset < offset;
         if (shouldLogDeltaResponse) {
             logBgStream('jobs-status-response-delta', {
@@ -134,8 +149,8 @@ export default defineEventHandler(async (event) => {
                 requestedOffset: offset,
                 safeOffset,
                 contentLength,
-                deltaLength: contentDelta.length,
-                includesFullContent: safeOffset < offset,
+                deltaLength: contentDelta?.length ?? 0,
+                includesFullContent: attemptChanged || safeOffset < offset,
             });
         }
         return {
@@ -145,6 +160,7 @@ export default defineEventHandler(async (event) => {
             messageId: job.messageId,
             model: job.model,
             chunksReceived: effectiveChunks,
+            attempt: currentAttempt,
             startedAt: job.startedAt,
             completedAt: effectiveCompletedAt,
             error: effectiveError,
@@ -152,7 +168,11 @@ export default defineEventHandler(async (event) => {
             workflow_state: effectiveWorkflowState,
             content_delta: contentDelta,
             content_length: contentLength,
-            content: safeOffset < offset ? effectiveContent : undefined,
+            content_reset: attemptChanged || undefined,
+            content:
+                attemptChanged || safeOffset < offset
+                    ? effectiveContent
+                    : undefined,
         };
     }
 
@@ -169,6 +189,7 @@ export default defineEventHandler(async (event) => {
         messageId: job.messageId,
         model: job.model,
         chunksReceived: effectiveChunks,
+        attempt: currentAttempt,
         startedAt: job.startedAt,
         completedAt: effectiveCompletedAt,
         error: effectiveError,

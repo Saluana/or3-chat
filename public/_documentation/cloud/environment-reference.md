@@ -248,6 +248,7 @@ is selected.
 | `OR3_BACKGROUND_MAX_JOBS` | `20` | Global concurrent jobs. |
 | `OR3_BACKGROUND_MAX_JOBS_PER_USER` | `5` | Per-user concurrent jobs. |
 | `OR3_BACKGROUND_JOB_TIMEOUT` | `300` | Job timeout in seconds. |
+| `OR3_BACKGROUND_ENCRYPTION_KEY` | none | Required runtime-only secret (at least 32 characters) for resumable job credentials. |
 
 OpenRouter's browser PKCE flow has three optional public settings:
 

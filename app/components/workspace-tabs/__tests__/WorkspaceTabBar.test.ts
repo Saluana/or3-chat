@@ -56,6 +56,10 @@ describe('WorkspaceTabBar', () => {
         const tabButtons = wrapper.findAll('[role="tab"]');
         expect(tabButtons[0]?.attributes('tabindex')).toBe('0');
         expect(tabButtons[1]?.attributes('tabindex')).toBe('-1');
+        expect(tabButtons[0]?.attributes('aria-controls')).toBe(
+            'workspace-pane-tab-chat'
+        );
+        expect(tabButtons[1]?.attributes('aria-controls')).toBeUndefined();
 
         await wrapper.get('[role="tablist"]').trigger('keydown', {
             key: 'ArrowRight',
@@ -66,10 +70,31 @@ describe('WorkspaceTabBar', () => {
         wrapper.unmount();
     });
 
+    it('focuses a context-menu action and restores tab focus on Escape', async () => {
+        const wrapper = mountBar();
+        const tab = wrapper.findAll('[role="tab"]')[1]!;
+        await tab.trigger('contextmenu', { clientX: 20, clientY: 30 });
+        await wrapper.vm.$nextTick();
+
+        const firstItem = contextMenu()?.querySelector<HTMLButtonElement>(
+            '[role="menuitem"]'
+        );
+        expect(document.activeElement).toBe(firstItem);
+
+        window.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+        );
+        await wrapper.vm.$nextTick();
+
+        expect(contextMenu()).toBeNull();
+        expect(document.activeElement).toBe(tab.element);
+        wrapper.unmount();
+    });
+
     it('keeps the new-tab action outside the horizontally scrolling tablist', () => {
         const wrapper = mountBar();
         expect(wrapper.find('[role="tablist"] .workspace-tab-new').exists()).toBe(false);
-        expect(wrapper.get('.workspace-tab-new').attributes('aria-label')).toBe('New tab');
+        expect(wrapper.get('.workspace-tab-new').attributes('aria-label')).toBe('New chat');
         wrapper.unmount();
     });
 

@@ -19,6 +19,7 @@
 import type {
     BackgroundJobProvider,
     BackgroundJob,
+    BackgroundJobExecution,
     CreateJobParams,
     JobUpdate,
 } from '../types';
@@ -29,6 +30,7 @@ import { getJobConfig } from '../store';
  */
 interface MemoryJob extends BackgroundJob {
     abortController: AbortController;
+    idempotencyKey?: string;
 }
 
 /** In-memory job storage */
@@ -97,6 +99,52 @@ function generateJobId(): string {
     return crypto.randomUUID();
 }
 
+function ownsLease(job: MemoryJob, leaseOwner?: string): boolean {
+    if (job.leaseOwner === undefined) return leaseOwner === undefined;
+    return (
+        job.leaseOwner === leaseOwner &&
+        (job.leaseExpiresAt ?? 0) > Date.now()
+    );
+}
+
+function throwLeaseLost(): never {
+    const error = new Error('Background job lease was superseded');
+    error.name = 'BackgroundJobLeaseLostError';
+    throw error;
+}
+
+function toPublicJob(job: MemoryJob): BackgroundJob {
+    const {
+        abortController: _,
+        idempotencyKey: _idempotencyKey,
+        ...result
+    } = job;
+    return result;
+}
+
+function claimJobRecord(
+    job: MemoryJob,
+    leaseOwner: string,
+    now: number,
+    leaseExpiresAt: number
+): BackgroundJob | null {
+    if (job.status !== 'streaming' || !job.execution) return null;
+    if (job.leaseOwner && (job.leaseExpiresAt ?? 0) > now) {
+        return null;
+    }
+
+    const recovering = (job.attempts ?? 0) > 0;
+    job.leaseOwner = leaseOwner;
+    job.leaseExpiresAt = leaseExpiresAt;
+    job.attempts = (job.attempts ?? 0) + 1;
+    job.abortController = new AbortController();
+    if (recovering) {
+        job.content = job.execution.contentBase ?? '';
+        job.chunksReceived = 0;
+    }
+    return toPublicJob(job);
+}
+
 /**
  * Purpose:
  * Memory-backed provider implementation for background jobs.
@@ -112,6 +160,15 @@ export const memoryJobProvider: BackgroundJobProvider = {
         ensureCleanupInterval();
 
         const config = getJobConfig();
+
+        if (params.idempotencyKey) {
+            const existing = Array.from(jobs.values()).find(
+                (job) =>
+                    job.userId === params.userId &&
+                    job.idempotencyKey === params.idempotencyKey
+            );
+            if (existing) return existing.id;
+        }
 
         // Enforce max concurrent jobs
         const activeCount = Array.from(jobs.values()).filter(
@@ -147,6 +204,9 @@ export const memoryJobProvider: BackgroundJobProvider = {
             kind: params.kind ?? 'chat',
             tool_calls: params.tool_calls ?? undefined,
             workflow_state: params.workflow_state ?? undefined,
+            execution: params.execution,
+            attempts: 0,
+            idempotencyKey: params.idempotencyKey,
         };
 
         jobs.set(id, job);
@@ -162,14 +222,19 @@ export const memoryJobProvider: BackgroundJobProvider = {
             return null;
         }
 
-        // Return public interface (without AbortController)
-        const { abortController: _, ...publicJob } = job;
-        return publicJob;
+        return toPublicJob(job);
     },
 
     async updateJob(jobId: string, update: JobUpdate): Promise<void> {
         const job = jobs.get(jobId);
-        if (!job || job.status !== 'streaming') return;
+        if (
+            !job ||
+            job.status !== 'streaming' ||
+            !ownsLease(job, update.leaseOwner)
+        ) {
+            if (update.leaseOwner) throwLeaseLost();
+            return;
+        }
 
         if (update.contentChunk !== undefined) {
             job.content += update.contentChunk;
@@ -185,18 +250,40 @@ export const memoryJobProvider: BackgroundJobProvider = {
         }
     },
 
-    async completeJob(jobId: string, finalContent: string): Promise<void> {
+    async completeJob(
+        jobId: string,
+        finalContent: string,
+        leaseOwner?: string
+    ): Promise<void> {
         const job = jobs.get(jobId);
-        if (!job || job.status !== 'streaming') return;
+        if (
+            !job ||
+            job.status !== 'streaming' ||
+            !ownsLease(job, leaseOwner)
+        ) {
+            if (leaseOwner) throwLeaseLost();
+            return;
+        }
 
         job.status = 'complete';
         job.content = finalContent;
         job.completedAt = Date.now();
     },
 
-    async failJob(jobId: string, error: string): Promise<void> {
+    async failJob(
+        jobId: string,
+        error: string,
+        leaseOwner?: string
+    ): Promise<void> {
         const job = jobs.get(jobId);
-        if (!job) return;
+        if (
+            !job ||
+            job.status !== 'streaming' ||
+            !ownsLease(job, leaseOwner)
+        ) {
+            if (leaseOwner) throwLeaseLost();
+            return;
+        }
 
         job.status = 'error';
         job.error = error;
@@ -226,6 +313,61 @@ export const memoryJobProvider: BackgroundJobProvider = {
 
     getAbortController(jobId: string): AbortController | undefined {
         return jobs.get(jobId)?.abortController;
+    },
+
+    async checkJobAborted(jobId: string): Promise<boolean> {
+        return jobs.get(jobId)?.status === 'aborted';
+    },
+
+    async claimJob(jobId, leaseOwner, now, leaseExpiresAt) {
+        const job = jobs.get(jobId);
+        return job
+            ? claimJobRecord(job, leaseOwner, now, leaseExpiresAt)
+            : null;
+    },
+
+    async claimNextJob(leaseOwner, now, leaseExpiresAt) {
+        for (const job of jobs.values()) {
+            const claimed = claimJobRecord(
+                job,
+                leaseOwner,
+                now,
+                leaseExpiresAt
+            );
+            if (claimed) return claimed;
+        }
+        return null;
+    },
+
+    async renewJobLease(jobId, leaseOwner, now, leaseExpiresAt) {
+        const job = jobs.get(jobId);
+        if (
+            !job ||
+            job.status !== 'streaming' ||
+            job.leaseOwner !== leaseOwner ||
+            (job.leaseExpiresAt ?? 0) <= now
+        ) {
+            return false;
+        }
+        job.leaseExpiresAt = leaseExpiresAt;
+        return true;
+    },
+
+    async updateJobExecution(
+        jobId: string,
+        execution: BackgroundJobExecution,
+        leaseOwner: string
+    ): Promise<boolean> {
+        const job = jobs.get(jobId);
+        if (
+            !job ||
+            job.status !== 'streaming' ||
+            !ownsLease(job, leaseOwner)
+        ) {
+            return false;
+        }
+        job.execution = execution;
+        return true;
     },
 
     async cleanupExpired(): Promise<number> {

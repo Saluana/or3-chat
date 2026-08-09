@@ -249,6 +249,14 @@ export function buildOr3CloudConfigFromEnv(
         nodeEnv: env.NODE_ENV ?? process.env.NODE_ENV,
         strictEnv: env.OR3_STRICT_CONFIG ?? process.env.OR3_STRICT_CONFIG,
     });
+    if (
+        env.OR3_BACKGROUND_STREAMING_ENABLED === 'true' &&
+        (env.OR3_BACKGROUND_ENCRYPTION_KEY?.trim().length ?? 0) < 32
+    ) {
+        throw new Error(
+            'OR3_BACKGROUND_ENCRYPTION_KEY must contain at least 32 characters when background streaming is enabled',
+        );
+    }
 
     const config: Or3CloudConfig = {
         auth: {
@@ -443,6 +451,9 @@ export function buildOr3CloudConfigFromEnv(
                     env.OR3_BACKGROUND_JOB_TIMEOUT,
                     DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
                 ) ?? DEFAULT_BACKGROUND_JOB_TIMEOUT_SECONDS,
+            // Dedicated runtime-only key for durable job credentials. Never
+            // derive this from an auth/build secret embedded in an image.
+            encryptionKey: env.OR3_BACKGROUND_ENCRYPTION_KEY || undefined,
         },
         webhooks: {
             enabled: authEnabled && env.OR3_WEBHOOKS_ENABLED !== 'false',

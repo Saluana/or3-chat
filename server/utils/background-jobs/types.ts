@@ -65,6 +65,32 @@ export interface BackgroundJob {
     }>;
     /** Workflow execution state snapshot */
     workflow_state?: WorkflowMessageData;
+    /** Encrypted, server-only input required to resume a chat job. */
+    execution?: BackgroundJobExecution;
+    /** Current durable worker lease owner. Never exposed by job API routes. */
+    leaseOwner?: string;
+    /** Unix timestamp when the current worker lease expires. */
+    leaseExpiresAt?: number;
+    /** Number of times this job has been claimed for execution. */
+    attempts?: number;
+}
+
+/**
+ * Persisted input for restart-safe chat execution.
+ *
+ * The OpenRouter credential is authenticated-encrypted before this object is
+ * handed to a durable provider. It must never contain the plaintext key.
+ */
+export interface BackgroundJobExecution {
+    version: 1;
+    body: Record<string, unknown>;
+    workspaceId: string;
+    referer: string;
+    apiKeyCiphertext: string;
+    /** Text that is already represented by a durable tool-loop checkpoint. */
+    contentBase?: string;
+    /** Tool calls whose results are included in the checkpointed request body. */
+    checkpointedToolCallIds?: string[];
 }
 
 /**
@@ -79,6 +105,10 @@ export interface CreateJobParams {
     kind?: BackgroundJob['kind'];
     tool_calls?: BackgroundJob['tool_calls'];
     workflow_state?: BackgroundJob['workflow_state'];
+    /** Stable key used to make admission idempotent. */
+    idempotencyKey?: string;
+    /** Server-only execution input used by the durable worker. */
+    execution?: BackgroundJobExecution;
 }
 
 /**
@@ -97,6 +127,8 @@ export interface JobUpdate {
     tool_calls?: BackgroundJob['tool_calls'];
     /** Workflow state snapshot updates */
     workflow_state?: BackgroundJob['workflow_state'];
+    /** Fences writes from a worker whose durable lease was superseded. */
+    leaseOwner?: string;
 }
 
 /**
@@ -108,8 +140,9 @@ export interface JobUpdate {
  * - The streaming loop depends on `createJob`, `updateJob`, and `completeJob`.
  *
  * Constraints:
- * - `checkAndRecord` style atomicity is not required here, but updates must
- *   be safe for concurrent streaming and viewer polling.
+ * - `createJob` atomically enforces configured global/per-user limits and
+ *   returns the existing job for a duplicate idempotency key.
+ * - Leased writes must be rejected after their lease owner is superseded.
  * - Providers that do not run in-process must not return AbortControllers.
  *
  * Non-Goals:
@@ -143,12 +176,16 @@ export interface BackgroundJobProvider {
     /**
      * Mark a job as successfully completed.
      */
-    completeJob(jobId: string, finalContent: string): Promise<void>;
+    completeJob(
+        jobId: string,
+        finalContent: string,
+        leaseOwner?: string
+    ): Promise<void>;
 
     /**
      * Mark a job as failed with an error.
      */
-    failJob(jobId: string, error: string): Promise<void>;
+    failJob(jobId: string, error: string, leaseOwner?: string): Promise<void>;
 
     /**
      * Abort a running job.
@@ -168,6 +205,36 @@ export interface BackgroundJobProvider {
      * Optional poll-based abort detection for external providers.
      */
     checkJobAborted?(jobId: string): Promise<boolean>;
+
+    /** Atomically claim one specific durable chat job. */
+    claimJob?(
+        jobId: string,
+        leaseOwner: string,
+        now: number,
+        leaseExpiresAt: number
+    ): Promise<BackgroundJob | null>;
+
+    /** Atomically claim the next unowned or expired durable chat job. */
+    claimNextJob?(
+        leaseOwner: string,
+        now: number,
+        leaseExpiresAt: number
+    ): Promise<BackgroundJob | null>;
+
+    /** Extend a claim only when it is still owned by the caller. */
+    renewJobLease?(
+        jobId: string,
+        leaseOwner: string,
+        now: number,
+        leaseExpiresAt: number
+    ): Promise<boolean>;
+
+    /** Persist a tool-loop recovery checkpoint under the current lease. */
+    updateJobExecution?(
+        jobId: string,
+        execution: BackgroundJobExecution,
+        leaseOwner: string
+    ): Promise<boolean>;
 
     /**
      * Clean up expired or stale jobs.

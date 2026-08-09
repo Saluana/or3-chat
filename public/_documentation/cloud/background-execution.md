@@ -21,6 +21,14 @@ Background execution is available only when SSR auth/server routes are active.
   - `OR3_BACKGROUND_MAX_JOBS=<n>` (default 20)
   - `OR3_BACKGROUND_MAX_JOBS_PER_USER=<n>` (default 5)
   - `OR3_BACKGROUND_JOB_TIMEOUT=<seconds>`
+  - `OR3_BACKGROUND_ENCRYPTION_KEY=<random secret of at least 32 characters>`
+
+`OR3_BACKGROUND_ENCRYPTION_KEY` is required when background streaming is
+enabled. It is read at runtime by prebuilt containers and is intentionally not
+derived from authentication secrets, so disposable build-time values can never
+decrypt persisted user credentials.
+Keep this key stable across restarts and replicas; rotating it makes jobs
+admitted under the previous key unrecoverable.
 
 If the server route is unavailable (static build, stale route cache, or wrong dev process), background start fails and client helpers cache unavailability.
 
@@ -50,6 +58,39 @@ them in the background tool loop described below.
    - optional `tool_calls` metadata
 6. Viewers receive live updates through SSE (`/api/jobs/:id/stream`) and/or polling (`/api/jobs/:id/status?offset=N`).
 7. On terminal state (`complete|error|aborted`), status is persisted and notifications are emitted when no viewers are attached.
+
+Admission is one provider transaction: an existing job with the same
+user/admission id is returned, otherwise both the global and per-user concurrency
+limits are checked before the row is inserted. Concurrent requests therefore
+cannot oversubscribe the configured caps or launch the same paid generation twice.
+Transport retries reuse the admission id even after a terminal result; an
+explicit user retry creates a fresh id.
+
+## Process Restart Recovery
+
+Chat jobs stored by a durable provider include the request body and an
+authenticated-encrypted OpenRouter credential. A process-local worker claims each
+job with a 30-second renewable lease. On startup and every five seconds, each
+server claims unowned or expired jobs and resumes them. Provider writes carry the
+lease owner, so a stalled process cannot append or complete after another process
+has taken over.
+
+OpenRouter streams cannot resume from a byte offset. A recovered model iteration
+therefore restarts from its last durable checkpoint. Partial text after that
+checkpoint is reset before the retry, and clients reconcile from the shorter
+durable offset. Tool results are checkpointed into the next request before another
+model call begins. If a process dies while a tool may be executing, the job fails
+with an explicit retry message instead of risking a repeated side effect.
+
+The credential envelope uses the dedicated runtime-only
+`OR3_BACKGROUND_ENCRYPTION_KEY`; plaintext API keys are never passed to the job
+provider. Durable restart recovery requires a durable provider such as Convex.
+The `memory` provider remains intended for development and loses its rows on a
+process restart.
+
+When using Convex, deploy the provider version and its bundled Convex
+schema/functions together; background admission fails closed if the selected
+adapter does not provide the durable claim contract.
 
 ## Background Tool Execution
 
@@ -163,6 +204,8 @@ the next model request, so reload cannot repeat an already completed side effect
   Guest foreground traffic must use caller-supplied credentials.
 - Workflow endpoints enforce `can('workspace.write')`.
 - Background provider enforces concurrency/timeouts/retention.
+- Durable providers enforce atomic idempotent admission, per-user/global caps,
+  renewable worker leases, and fenced progress/terminal writes.
 - With the Convex provider, every job persistence function is an internal
   Convex function reached by an admin-authenticated SSR adapter. Direct Convex
   callers cannot create, inspect, mutate, abort, count, or clean jobs, and the

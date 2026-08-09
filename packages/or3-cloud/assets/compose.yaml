@@ -18,6 +18,9 @@ services:
     volumes:
       - or3-data:/data
     restart: unless-stopped
+    # Leave enough time for Nuxt to close SSE responses and upstream provider
+    # connections before Docker sends SIGKILL.
+    stop_grace_period: 25s
     # Container hardening: the runtime image already runs as a non-root user and
     # listens on port 3000 (no privileged ports), so all capabilities are
     # dropped and the root filesystem is read-only. Persistent state lives on

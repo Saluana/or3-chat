@@ -25,9 +25,12 @@ test('Caddyfile sets the full security header set inside the site block', () => 
 
 test('Caddyfile keeps SSE streaming and compression intact', () => {
   const caddyfile = asset('Caddyfile');
-  expect(caddyfile).toContain('flush_interval -1');
   expect(caddyfile).toContain('encode zstd gzip');
   expect(caddyfile).toContain('reverse_proxy or3:3000');
+  // Caddy detects text/event-stream responses and flushes them immediately.
+  // Avoid a negative explicit interval: it prevents the upstream request from
+  // being cancelled when a client disconnects mid-generation.
+  expect(caddyfile).not.toContain('flush_interval -1');
 });
 
 test('local compose.yaml has no Caddy service', () => {
@@ -57,6 +60,7 @@ test('compose.yaml deep health treats degraded as unhealthy', () => {
   expect(healthcheck).toContain('timeout: 5s');
   expect(healthcheck).toContain('retries: 12');
   expect(healthcheck).toContain('start_period: 30s');
+  expect(compose).toContain('stop_grace_period: 25s');
 });
 
 test('container-side CLI probes use the runtime Node executable explicitly', () => {
@@ -139,7 +143,14 @@ test('runtime entrypoint preserves explicit Nuxt settings while translating OR3 
     'NUXT_AUTH_INVITE_TOKEN_SECRET',
     'NUXT_SYNC_ENABLED',
     'NUXT_STORAGE_ENABLED',
-    'NUXT_ADMIN_AUTH_JWT_SECRET'
+    'NUXT_ADMIN_AUTH_JWT_SECRET',
+    'NUXT_BACKGROUND_JOBS_ENABLED',
+    'NUXT_PUBLIC_BACKGROUND_STREAMING_ENABLED',
+    'NUXT_BACKGROUND_JOBS_STORAGE_PROVIDER',
+    'NUXT_BACKGROUND_JOBS_MAX_CONCURRENT_JOBS',
+    'NUXT_BACKGROUND_JOBS_MAX_CONCURRENT_JOBS_PER_USER',
+    'NUXT_BACKGROUND_JOBS_JOB_TIMEOUT_MS',
+    'NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY'
   ];
   const result = spawnSync(process.execPath, [
     RUNTIME_ENTRYPOINT,
@@ -157,7 +168,14 @@ test('runtime entrypoint preserves explicit Nuxt settings while translating OR3 
       OR3_AUTH_INVITE_TOKEN_SECRET: 'invite-secret',
       OR3_CLOUD_SYNC_ENABLED: 'true',
       OR3_CLOUD_STORAGE_ENABLED: 'true',
+      OR3_BACKGROUND_STREAMING_ENABLED: 'true',
+      OR3_BACKGROUND_STREAMING_PROVIDER: 'convex',
+      OR3_BACKGROUND_MAX_JOBS: '8',
+      OR3_BACKGROUND_MAX_JOBS_PER_USER: '3',
+      OR3_BACKGROUND_JOB_TIMEOUT: '45',
       OR3_BASIC_AUTH_JWT_SECRET: 'basic-auth-secret',
+      OR3_BACKGROUND_ENCRYPTION_KEY: 'runtime-background-secret-at-least-32-characters',
+      NUXT_ADMIN_AUTH_JWT_SECRET: 'explicit-admin-secret',
       NUXT_AUTH_PROVIDER: 'custom'
     }
   });
@@ -172,7 +190,14 @@ test('runtime entrypoint preserves explicit Nuxt settings while translating OR3 
     NUXT_AUTH_INVITE_TOKEN_SECRET: 'invite-secret',
     NUXT_SYNC_ENABLED: 'true',
     NUXT_STORAGE_ENABLED: 'true',
-    NUXT_ADMIN_AUTH_JWT_SECRET: 'c048744982bcfb2314b6718c134f2beb50a47ddec451172d8c87e6fca0d73e64'
+    NUXT_ADMIN_AUTH_JWT_SECRET: 'explicit-admin-secret',
+    NUXT_BACKGROUND_JOBS_ENABLED: 'true',
+    NUXT_PUBLIC_BACKGROUND_STREAMING_ENABLED: 'true',
+    NUXT_BACKGROUND_JOBS_STORAGE_PROVIDER: 'convex',
+    NUXT_BACKGROUND_JOBS_MAX_CONCURRENT_JOBS: '8',
+    NUXT_BACKGROUND_JOBS_MAX_CONCURRENT_JOBS_PER_USER: '3',
+    NUXT_BACKGROUND_JOBS_JOB_TIMEOUT_MS: '45000',
+    NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY: 'runtime-background-secret-at-least-32-characters'
   });
 });
 

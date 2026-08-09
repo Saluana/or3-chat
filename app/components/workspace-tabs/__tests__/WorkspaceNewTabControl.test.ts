@@ -90,4 +90,36 @@ describe('WorkspaceNewTabControl', () => {
         ]);
         wrapper.unmount();
     });
+
+    it('opens the create menu from the keyboard and restores trigger focus on Escape', async () => {
+        const wrapper = mountControl({ canCreateDocument: true });
+        const trigger = wrapper.get('.workspace-tab-new');
+        await trigger.trigger('keydown', { key: 'ArrowDown' });
+        await wrapper.vm.$nextTick();
+
+        expect(document.activeElement).toBe(menuItems()[0]);
+        expect(trigger.attributes('aria-expanded')).toBe('true');
+
+        window.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+        );
+        await wrapper.vm.$nextTick();
+
+        expect(menuItems()).toHaveLength(0);
+        expect(document.activeElement).toBe(trigger.element);
+        wrapper.unmount();
+    });
+
+    it('closes the create menu before opening a new chat from the trigger', async () => {
+        const wrapper = mountControl({ canCreateDocument: true });
+        const trigger = wrapper.get('.workspace-tab-new');
+        await trigger.trigger('contextmenu', { clientX: 40, clientY: 20 });
+        expect(menuItems()).toHaveLength(2);
+
+        await trigger.trigger('click');
+
+        expect(wrapper.emitted('new-tab')).toHaveLength(1);
+        expect(menuItems()).toHaveLength(0);
+        wrapper.unmount();
+    });
 });

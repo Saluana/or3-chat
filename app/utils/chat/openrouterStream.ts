@@ -510,12 +510,16 @@ export interface BackgroundJobStatus {
     messageId: string;
     model: string;
     chunksReceived: number;
+    /** Durable execution attempt; increments after a worker takeover. */
+    attempt?: number;
     startedAt: number;
     completedAt?: number;
     error?: string;
     content?: string;
     content_delta?: string;
     content_length?: number;
+    /** Full content replaces a pre-recovery partial response. */
+    content_reset?: boolean;
     tool_calls?: Array<{
         id?: string;
         name: string;
@@ -628,6 +632,7 @@ export async function startBackgroundStream(params: {
         _background: true;
         _threadId: string;
         _messageId: string;
+        _backgroundAdmissionId: string;
     } = {
         model: params.model,
         messages: params.orMessages,
@@ -636,6 +641,9 @@ export async function startBackgroundStream(params: {
         _background: true,
         _threadId: params.threadId,
         _messageId: params.messageId,
+        // One admission ID per user-initiated send. Transport retries reuse
+        // this body, while an explicit retry creates a fresh admission.
+        _backgroundAdmissionId: crypto.randomUUID(),
     };
 
     if (params.reasoning) {
@@ -664,32 +672,66 @@ export async function startBackgroundStream(params: {
         headers['x-or3-openrouter-key'] = params.apiKey;
     }
 
-    const resp = await fetchWithResponseDeadline('/api/openrouter/stream', {
-        method: 'POST',
-        headers,
-        credentials: 'include',
-        body: JSON.stringify(body),
-    }, {
-        signal: params.signal,
-        timeoutMs: params.responseTimeoutMs ?? DEFAULT_BACKGROUND_START_TIMEOUT_MS,
-    });
+    const serializedBody = JSON.stringify(body);
+    let result: BackgroundStreamResult | null = null;
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+            const resp = await fetchWithResponseDeadline('/api/openrouter/stream', {
+                method: 'POST',
+                headers,
+                credentials: 'include',
+                body: serializedBody,
+            }, {
+                signal: params.signal,
+                timeoutMs:
+                    params.responseTimeoutMs ??
+                    DEFAULT_BACKGROUND_START_TIMEOUT_MS,
+            });
 
-    if (!resp.ok) {
-        if (resp.status === 404 || resp.status === 405) {
-            setServerRouteAvailable(false);
-            setBackgroundStreamingAvailable(false);
+            if (!resp.ok) {
+                if (resp.status === 404 || resp.status === 405) {
+                    setServerRouteAvailable(false);
+                    setBackgroundStreamingAvailable(false);
+                }
+                const message = await readErrorMessage(
+                    resp,
+                    `Background stream failed: ${resp.status}`
+                );
+                const error = new Error(message);
+                Object.assign(error, {
+                    backgroundAdmissionRetryable: resp.status >= 500,
+                });
+                if (resp.status < 500 || attempt === 2) throw error;
+                lastError = error;
+            } else {
+                result = await readResponseJsonWithIdleDeadline<BackgroundStreamResult>(
+                    resp,
+                    { signal: params.signal, timeoutMs: params.idleTimeoutMs }
+                );
+                break;
+            }
+        } catch (error) {
+            if (
+                params.signal?.aborted ||
+                (error instanceof Error && error.name === 'AbortError') ||
+                (error instanceof Error &&
+                    (error as Error & {
+                        backgroundAdmissionRetryable?: boolean;
+                    }).backgroundAdmissionRetryable === false) ||
+                attempt === 2
+            ) {
+                throw error;
+            }
+            lastError = error;
         }
-        const message = await readErrorMessage(
-            resp,
-            `Background stream failed: ${resp.status}`
-        );
-        throw new Error(message);
+        await abortableDelay(150 * 2 ** attempt, params.signal);
     }
-
-    const result = await readResponseJsonWithIdleDeadline<BackgroundStreamResult>(resp, {
-        signal: params.signal,
-        timeoutMs: params.idleTimeoutMs,
-    });
+    if (!result) {
+        throw lastError instanceof Error
+            ? lastError
+            : new Error('Background stream admission failed');
+    }
     
     // Mark background streaming as available since it worked
     setBackgroundStreamingAvailable(true);
@@ -706,12 +748,22 @@ export async function startBackgroundStream(params: {
 export async function pollJobStatus(
     jobId: string,
     offset?: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    attempt?: number
 ): Promise<BackgroundJobStatus> {
-    const url =
-        typeof offset === 'number' && Number.isFinite(offset) && offset >= 0
-            ? `/api/jobs/${jobId}/status?offset=${Math.floor(offset)}`
-            : `/api/jobs/${jobId}/status`;
+    const query = new URLSearchParams();
+    if (typeof offset === 'number' && Number.isFinite(offset) && offset >= 0) {
+        query.set('offset', String(Math.floor(offset)));
+    }
+    if (
+        typeof attempt === 'number' &&
+        Number.isFinite(attempt) &&
+        attempt >= 0
+    ) {
+        query.set('attempt', String(Math.floor(attempt)));
+    }
+    const suffix = query.size > 0 ? `?${query.toString()}` : '';
+    const url = `/api/jobs/${jobId}/status${suffix}`;
     let resp: Response;
     try {
         resp = await fetchWithResponseDeadline(url, {}, { signal });
@@ -817,6 +869,7 @@ export async function waitForJobCompletion(
 export function subscribeBackgroundJobStream(params: {
     jobId: string;
     offset?: number;
+    attempt?: number;
     onStatus: (status: BackgroundJobStatus) => void;
     onError?: (error: Error) => void;
 }): () => void {
@@ -827,10 +880,17 @@ export function subscribeBackgroundJobStream(params: {
         typeof params.offset === 'number' && Number.isFinite(params.offset)
             ? Math.max(0, Math.floor(params.offset))
             : null;
-    const url =
-        offset !== null
-            ? `/api/jobs/${params.jobId}/stream?offset=${offset}`
-            : `/api/jobs/${params.jobId}/stream`;
+    const query = new URLSearchParams();
+    if (offset !== null) query.set('offset', String(offset));
+    if (
+        typeof params.attempt === 'number' &&
+        Number.isFinite(params.attempt) &&
+        params.attempt >= 0
+    ) {
+        query.set('attempt', String(Math.floor(params.attempt)));
+    }
+    const suffix = query.size > 0 ? `?${query.toString()}` : '';
+    const url = `/api/jobs/${params.jobId}/stream${suffix}`;
 
     const es = new EventSource(url);
 

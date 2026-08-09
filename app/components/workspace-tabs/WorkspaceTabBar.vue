@@ -38,7 +38,11 @@
                     type="button"
                     role="tab"
                     :aria-selected="tab.id === activeTabId"
-                    :aria-controls="`workspace-pane-${tab.id}`"
+                    :aria-controls="
+                        visibleTabIds.has(tab.id)
+                            ? `workspace-pane-${tab.id}`
+                            : undefined
+                    "
                     :aria-describedby="visibleDescriptionId(tab)"
                     :tabindex="tab.id === activeTabId ? 0 : -1"
                     class="workspace-tab"
@@ -96,6 +100,8 @@
                 class="workspace-tab-context"
                 :style="contextMenuStyle"
                 role="menu"
+                :aria-label="`Actions for ${contextMenuTitle}`"
+                @keydown="onContextMenuKeydown"
             >
                 <button role="menuitem" type="button" @click="runContext('close')">Close tab</button>
                 <button role="menuitem" type="button" @click="runContext('close-other')">Close other tabs</button>
@@ -209,6 +215,11 @@ const suppressActivation = ref<string | null>(null);
 const contextMenu = ref<{ tabId: string; x: number; y: number } | null>(null);
 const contextMenuElement = ref<HTMLElement | null>(null);
 const pendingCloseFocus = ref<{ tabId: string; index: number } | null>(null);
+const contextMenuTitle = computed(() => {
+    const tabId = contextMenu.value?.tabId;
+    const tab = tabId ? props.tabs.find((entry) => entry.id === tabId) : undefined;
+    return tab ? workspaceTabTitle(tab) : 'workspace tab';
+});
 const contextMenuStyle = computed(() =>
     contextMenu.value
         ? { left: `${contextMenu.value.x}px`, top: `${contextMenu.value.y}px` }
@@ -563,21 +574,81 @@ function dismissContextMenuOnOutsidePointer(event: PointerEvent): void {
     contextMenu.value = null;
 }
 
+function dismissContextMenuOnEscape(event: KeyboardEvent): void {
+    if (event.key !== 'Escape' || !contextMenu.value) return;
+    const tabId = contextMenu.value.tabId;
+    event.preventDefault();
+    contextMenu.value = null;
+    focusTab(tabId);
+}
+
 if (typeof window !== 'undefined') window.addEventListener('blur', onWindowBlur);
 if (typeof window !== 'undefined') {
     window.addEventListener('pointerdown', dismissContextMenuOnOutsidePointer, true);
+    window.addEventListener('keydown', dismissContextMenuOnEscape, true);
 }
 onBeforeUnmount(() => {
     finishDrag();
     if (typeof window !== 'undefined') {
         window.removeEventListener('blur', onWindowBlur);
         window.removeEventListener('pointerdown', dismissContextMenuOnOutsidePointer, true);
+        window.removeEventListener('keydown', dismissContextMenuOnEscape, true);
     }
 });
 
 function openContextMenu(event: MouseEvent, tabId: string): void {
     contextMenu.value = { tabId, x: event.clientX, y: event.clientY };
 }
+
+function contextMenuItems(): HTMLButtonElement[] {
+    return Array.from(
+        contextMenuElement.value?.querySelectorAll<HTMLButtonElement>(
+            '[role="menuitem"]:not(:disabled)'
+        ) ?? []
+    );
+}
+
+function onContextMenuKeydown(event: KeyboardEvent): void {
+    const items = contextMenuItems();
+    if (!items.length) return;
+    const currentIndex = items.indexOf(
+        document.activeElement as HTMLButtonElement
+    );
+    let nextIndex: number | null = null;
+    if (event.key === 'ArrowDown') {
+        nextIndex = (currentIndex + 1 + items.length) % items.length;
+    }
+    if (event.key === 'ArrowUp') {
+        nextIndex = (currentIndex - 1 + items.length) % items.length;
+    }
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = items.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    items[nextIndex]?.focus();
+}
+
+watch(contextMenu, async (value) => {
+    if (!value || typeof window === 'undefined') return;
+    await nextTick();
+    const menu = contextMenuElement.value;
+    if (!menu) return;
+    const rect = menu.getBoundingClientRect();
+    const padding = 8;
+    const x = Math.max(
+        padding,
+        Math.min(value.x, window.innerWidth - rect.width - padding)
+    );
+    const y = Math.max(
+        padding,
+        Math.min(value.y, window.innerHeight - rect.height - padding)
+    );
+    if (x !== value.x || y !== value.y) {
+        contextMenu.value = { ...value, x, y };
+        return;
+    }
+    contextMenuItems()[0]?.focus();
+});
 
 function runContext(
     action:
@@ -921,6 +992,11 @@ watch(
     font-size: 13px;
 }
 .workspace-tab-context button:hover {
+    background: var(--md-surface-hover);
+}
+.workspace-tab-context button:focus-visible {
+    outline: var(--md-border-width, 2px) solid var(--md-primary);
+    outline-offset: -2px;
     background: var(--md-surface-hover);
 }
 .workspace-tab-context button:disabled {

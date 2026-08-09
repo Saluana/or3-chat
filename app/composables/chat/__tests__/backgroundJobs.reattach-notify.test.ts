@@ -6,6 +6,18 @@ const subscribeBackgroundJobStreamMock = vi.fn();
 const abortBackgroundJobMock = vi.fn();
 const upsertMessageMock = vi.fn();
 const notificationCreateMock = vi.fn();
+const BackgroundJobPollErrorMock = vi.hoisted(
+    () =>
+        class BackgroundJobPollErrorMock extends Error {
+            constructor(
+                message: string,
+                readonly kind: string,
+                readonly retryable: boolean
+            ) {
+                super(message);
+            }
+        }
+);
 
 let sessionValue: any = null;
 
@@ -54,6 +66,7 @@ vi.mock('~/utils/chat/openrouterStream', () => ({
     subscribeBackgroundJobStream: (...args: unknown[]) =>
         subscribeBackgroundJobStreamMock(...args),
     abortBackgroundJob: (...args: unknown[]) => abortBackgroundJobMock(...args),
+    BackgroundJobPollError: BackgroundJobPollErrorMock,
 }));
 
 vi.mock('~/db', () => ({
@@ -150,6 +163,197 @@ describe('backgroundJobs reattach + notifications', () => {
 
         expect(subscribeBackgroundJobStreamMock).toHaveBeenCalledTimes(2);
 
+        stopBackgroundJobTracking(tracker);
+        backgroundJobTrackers.clear();
+    });
+
+    it('replaces a pre-restart partial response when the durable attempt changes', async () => {
+        let streamParams: {
+            onStatus: (status: ReturnType<typeof makeStatus>) => void;
+        } | null = null;
+        subscribeBackgroundJobStreamMock.mockImplementation((params) => {
+            streamParams = params;
+            return () => {};
+        });
+        const {
+            ensureBackgroundJobTracker,
+            subscribeBackgroundJob,
+            stopBackgroundJobTracking,
+            backgroundJobTrackers,
+        } = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = ensureBackgroundJobTracker({
+            jobId: 'job-1',
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'msg-1',
+            initialContent: 'old partial response',
+            initialAttempt: 1,
+            useSse: true,
+        });
+        const onUpdate = vi.fn();
+        subscribeBackgroundJob(tracker, { onUpdate });
+
+        streamParams!.onStatus(
+            makeStatus('streaming', {
+                content: 'new',
+                content_length: 3,
+                content_reset: true,
+                attempt: 2,
+            })
+        );
+
+        await vi.waitFor(() => {
+            expect(tracker.lastContent).toBe('new');
+            expect(onUpdate).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    content: 'new',
+                    delta: '',
+                    replace: true,
+                })
+            );
+        });
+        expect(dbMock.messages.put).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({
+                    content: 'new',
+                    background_job_attempt: 2,
+                }),
+            })
+        );
+
+        stopBackgroundJobTracking(tracker);
+        backgroundJobTrackers.clear();
+    });
+
+    it('replaces a longer reused tracker when storage has a newer shorter attempt', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        const {
+            ensureBackgroundJobTracker,
+            stopBackgroundJobTracking,
+            backgroundJobTrackers,
+        } = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = ensureBackgroundJobTracker({
+            jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', initialContent: 'old long response',
+            initialAttempt: 1, useSse: true,
+        });
+
+        const reused = ensureBackgroundJobTracker({
+            jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', initialContent: 'new', initialAttempt: 2,
+            useSse: true,
+        });
+
+        expect(reused).toBe(tracker);
+        expect(reused.lastAttempt).toBe(2);
+        expect(reused.lastContent).toBe('new');
+        stopBackgroundJobTracking(reused);
+        backgroundJobTrackers.clear();
+    });
+
+    it('drops a stale transport status from an older attempt', async () => {
+        let streamParams: {
+            onStatus: (status: ReturnType<typeof makeStatus>) => void;
+        } | null = null;
+        subscribeBackgroundJobStreamMock.mockImplementation((params) => {
+            streamParams = params;
+            return () => {};
+        });
+        const {
+            ensureBackgroundJobTracker,
+            subscribeBackgroundJob,
+            stopBackgroundJobTracking,
+            backgroundJobTrackers,
+        } = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = ensureBackgroundJobTracker({
+            jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', initialContent: 'new', initialAttempt: 2,
+            useSse: true,
+        });
+        const onUpdate = vi.fn();
+        subscribeBackgroundJob(tracker, { onUpdate });
+
+        streamParams!.onStatus(makeStatus('streaming', {
+            content: 'stale old response', content_length: 18,
+            content_reset: true, attempt: 1,
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(tracker.lastAttempt).toBe(2);
+        expect(tracker.lastContent).toBe('new');
+        expect(onUpdate).not.toHaveBeenCalled();
+        stopBackgroundJobTracking(tracker);
+        backgroundJobTrackers.clear();
+    });
+
+    it('honors a same-attempt content reset while priming', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        pollJobStatusMock.mockResolvedValue(makeStatus('streaming', {
+            content: 'new', content_length: 3, content_reset: true, attempt: 2,
+        }));
+        const {
+            ensureBackgroundJobTracker,
+            primeBackgroundJobUpdate,
+            stopBackgroundJobTracking,
+            backgroundJobTrackers,
+        } = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = ensureBackgroundJobTracker({
+            jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', initialContent: 'stale longer response',
+            initialAttempt: 2, useSse: true,
+        });
+
+        await primeBackgroundJobUpdate(tracker);
+
+        expect(tracker.lastContent).toBe('new');
+        stopBackgroundJobTracking(tracker);
+        backgroundJobTrackers.clear();
+    });
+
+    it('clears stale persisted error fields when a job resumes streaming', async () => {
+        let streamParams: {
+            onStatus: (status: ReturnType<typeof makeStatus>) => void;
+        } | null = null;
+        subscribeBackgroundJobStreamMock.mockImplementation((params) => {
+            streamParams = params;
+            return () => {};
+        });
+        dbMock.messages.get.mockResolvedValue({
+            id: 'msg-1', role: 'assistant', thread_id: 'thread-1',
+            data: {
+                content: 'old', error: 'old error',
+                background_job_error: 'old error',
+            },
+            error: 'old error', pending: false, created_at: 1,
+            updated_at: 1, clock: 1,
+        });
+        const {
+            ensureBackgroundJobTracker,
+            subscribeBackgroundJob,
+            stopBackgroundJobTracking,
+            backgroundJobTrackers,
+        } = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = ensureBackgroundJobTracker({
+            jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', initialContent: 'old', initialAttempt: 1,
+            useSse: true,
+        });
+        subscribeBackgroundJob(tracker, {});
+
+        streamParams!.onStatus(makeStatus('streaming', {
+            content: '', content_length: 0, content_reset: true, attempt: 2,
+        }));
+        await vi.waitFor(() => expect(dbMock.messages.put).toHaveBeenCalled());
+
+        expect(dbMock.messages.put).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                error: null,
+                data: expect.objectContaining({
+                    error: null,
+                    background_job_error: null,
+                }),
+            })
+        );
         stopBackgroundJobTracking(tracker);
         backgroundJobTrackers.clear();
     });
@@ -359,6 +563,51 @@ describe('backgroundJobs reattach + notifications', () => {
         });
         expect(dbMock.messages.put).toHaveBeenCalledTimes(1);
         expect(backgroundJobTrackers.has('job-1')).toBe(false);
+    });
+
+    it('keeps reconciling an active job after a transient transport outage', async () => {
+        vi.useFakeTimers();
+        const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+        try {
+            pollJobStatusMock
+                .mockRejectedValueOnce(
+                    new BackgroundJobPollErrorMock(
+                        'network temporarily unavailable',
+                        'transport',
+                        true
+                    )
+                )
+                .mockResolvedValueOnce(
+                    makeStatus('complete', {
+                        content: 'done',
+                        content_length: 4,
+                    })
+                );
+
+            const {
+                ensureBackgroundJobTracker,
+                backgroundJobTrackers,
+            } = await import('~/utils/chat/useAi-internal/backgroundJobs');
+            const tracker = ensureBackgroundJobTracker({
+                jobId: 'job-1',
+                userId: 'user-1',
+                threadId: 'thread-1',
+                messageId: 'msg-1',
+                useSse: false,
+            });
+
+            await vi.advanceTimersByTimeAsync(1_000);
+
+            await expect(tracker.completion).resolves.toMatchObject({
+                status: 'complete',
+                content: 'done',
+            });
+            expect(pollJobStatusMock).toHaveBeenCalledTimes(2);
+            expect(backgroundJobTrackers.has('job-1')).toBe(false);
+        } finally {
+            random.mockRestore();
+            vi.useRealTimers();
+        }
     });
 
     it('re-reads the message row for each persisted SSE status update', async () => {

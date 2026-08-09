@@ -29,6 +29,20 @@ const syncProvider = firstDefined(env.OR3_SYNC_PROVIDER, 'convex');
 const storageEnabled = firstDefined(env.OR3_CLOUD_STORAGE_ENABLED, env.OR3_STORAGE_ENABLED, 'false');
 const storageProvider = firstDefined(env.OR3_STORAGE_PROVIDER, env.NUXT_PUBLIC_STORAGE_PROVIDER, 'convex');
 
+const backgroundEnabled = firstDefined(env.OR3_BACKGROUND_STREAMING_ENABLED, 'false');
+const backgroundProvider = firstDefined(
+    env.OR3_BACKGROUND_STREAMING_PROVIDER,
+    syncEnabled === 'true' ? syncProvider : 'memory'
+);
+const backgroundMaxJobs = firstDefined(env.OR3_BACKGROUND_MAX_JOBS, '20');
+const backgroundMaxJobsPerUser = firstDefined(
+    env.OR3_BACKGROUND_MAX_JOBS_PER_USER,
+    '5'
+);
+const backgroundTimeoutSeconds = Number(
+    firstDefined(env.OR3_BACKGROUND_JOB_TIMEOUT, '300')
+);
+
 const adminUsername = firstDefined(env.OR3_ADMIN_USERNAME);
 const adminPassword = firstDefined(env.OR3_ADMIN_PASSWORD);
 const adminJwtSecret = firstDefined(
@@ -58,10 +72,31 @@ setDefault('NUXT_STORAGE_PROVIDER', storageProvider);
 setDefault('NUXT_PUBLIC_STORAGE_ENABLED', storageEnabled);
 setDefault('NUXT_PUBLIC_STORAGE_PROVIDER', storageProvider);
 
+setDefault('NUXT_BACKGROUND_JOBS_ENABLED', backgroundEnabled);
+setDefault('NUXT_PUBLIC_BACKGROUND_STREAMING_ENABLED', backgroundEnabled);
+setDefault('NUXT_BACKGROUND_JOBS_STORAGE_PROVIDER', backgroundProvider);
+setDefault('NUXT_BACKGROUND_JOBS_MAX_CONCURRENT_JOBS', backgroundMaxJobs);
+setDefault(
+    'NUXT_BACKGROUND_JOBS_MAX_CONCURRENT_JOBS_PER_USER',
+    backgroundMaxJobsPerUser
+);
+setDefault(
+    'NUXT_BACKGROUND_JOBS_JOB_TIMEOUT_MS',
+    String(
+        Number.isFinite(backgroundTimeoutSeconds)
+            ? backgroundTimeoutSeconds * 1000
+            : 300_000
+    )
+);
+
 setDefault('NUXT_ADMIN_AUTH_USERNAME', adminUsername);
 setDefault('NUXT_ADMIN_AUTH_PASSWORD', adminPassword);
 setDefault('NUXT_ADMIN_AUTH_JWT_SECRET', adminJwtSecret);
 setDefault('NUXT_ADMIN_AUTH_JWT_EXPIRY', adminJwtExpiry);
+setDefault(
+    'NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY',
+    firstDefined(env.OR3_BACKGROUND_ENCRYPTION_KEY)
+);
 
 const [command, ...args] = process.argv.slice(2);
 if (!command) throw new Error('A server command is required.');

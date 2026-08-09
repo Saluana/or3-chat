@@ -37,6 +37,7 @@ type LiveJobState = {
     error?: string;
     tool_calls?: BackgroundJob['tool_calls'];
     workflow_state?: BackgroundJob['workflow_state'];
+    attempt?: number;
     cleanupTimer?: ReturnType<typeof setTimeout> | null;
     listeners: Set<(event: LiveJobEvent) => void>;
 };
@@ -49,6 +50,7 @@ type LiveJobEvent =
           chunksReceived: number;
           tool_calls?: BackgroundJob['tool_calls'];
           workflow_state?: BackgroundJob['workflow_state'];
+          attempt?: number;
       }
     | {
           type: 'status';
@@ -60,6 +62,8 @@ type LiveJobEvent =
           error?: string;
           tool_calls?: BackgroundJob['tool_calls'];
           workflow_state?: BackgroundJob['workflow_state'];
+          attempt?: number;
+          content_reset?: boolean;
       };
 
 const jobStreams = new Map<string, LiveJobState>();
@@ -271,6 +275,7 @@ export function emitJobDelta(
         chunksReceived: number;
         tool_calls?: BackgroundJob['tool_calls'];
         workflow_state?: BackgroundJob['workflow_state'];
+        attempt?: number;
     }
 ): void {
     if (!delta) return;
@@ -284,6 +289,7 @@ export function emitJobDelta(
     if (meta.workflow_state !== undefined) {
         state.workflow_state = meta.workflow_state;
     }
+    if (meta.attempt !== undefined) state.attempt = meta.attempt;
     const event: LiveJobEvent = {
         type: 'delta',
         content_delta: delta,
@@ -291,6 +297,7 @@ export function emitJobDelta(
         chunksReceived: meta.chunksReceived,
         tool_calls: meta.tool_calls,
         workflow_state: meta.workflow_state,
+        attempt: meta.attempt ?? state.attempt,
     };
     for (const listener of state.listeners) {
         listener(event);
@@ -312,6 +319,8 @@ export function emitJobStatus(
         error?: string;
         tool_calls?: BackgroundJob['tool_calls'];
         workflow_state?: BackgroundJob['workflow_state'];
+        attempt?: number;
+        content_reset?: boolean;
     }
 ): void {
     const state = ensureJobLiveState(jobId);
@@ -322,6 +331,7 @@ export function emitJobStatus(
     state.error = meta.error;
     state.tool_calls = meta.tool_calls;
     state.workflow_state = meta.workflow_state;
+    if (meta.attempt !== undefined) state.attempt = meta.attempt;
     const event: LiveJobEvent = {
         type: 'status',
         status,
@@ -332,6 +342,8 @@ export function emitJobStatus(
         error: meta.error,
         tool_calls: meta.tool_calls,
         workflow_state: meta.workflow_state,
+        attempt: meta.attempt ?? state.attempt,
+        content_reset: meta.content_reset,
     };
     logBgStream('viewers-emit-status', {
         jobId,

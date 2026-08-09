@@ -283,6 +283,12 @@ export interface Or3CloudConfig {
          * @default 300
          */
         jobTimeoutSeconds?: number;
+        /**
+         * Server-only key used to encrypt resumable job credentials.
+         * Required when background streaming is enabled (minimum 32 chars).
+         * @env OR3_BACKGROUND_ENCRYPTION_KEY
+         */
+        encryptionKey?: string;
     };
 
     /**

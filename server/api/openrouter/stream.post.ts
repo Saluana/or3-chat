@@ -46,7 +46,7 @@ import {
     isBackgroundStreamingAvailable,
 } from '../../utils/background-jobs/stream-handler';
 import {
-    mirrorForegroundStreamCompletion,
+    monitorForegroundStreamForClient,
 } from '../../utils/webhooks/foreground-stream-monitor';
 import { validateServerToolRequest } from '../../utils/chat/tool-registry';
 import { sensitiveValueMetadata } from '~~/shared/logging/sensitive-metadata';
@@ -372,6 +372,20 @@ export default defineEventHandler(async (event) => {
     // FOREGROUND STREAMING (existing behavior)
     // =============================
 
+    // These fields are routing metadata for OR3, not OpenRouter request
+    // fields. A background request can reach this fallback when the durable
+    // worker is unavailable; never leak its internal identifiers upstream.
+    const {
+        _background: _backgroundRequest,
+        _threadId: _backgroundThreadId,
+        _messageId: _backgroundMessageId,
+        _backgroundAdmissionId: _backgroundAdmissionId,
+        _backgroundMode: _backgroundMode,
+        _toolRuntime: _toolRuntime,
+        _streamedFieldMode: _streamedFieldMode,
+        ...providerBody
+    } = body;
+
     // Req 2: Setup abort controller for client disconnect
     const ac = new AbortController();
 
@@ -399,7 +413,7 @@ export default defineEventHandler(async (event) => {
                 'HTTP-Referer': `${proto}://${host}`,
                 'X-Title': 'or3.chat',
             },
-            body: JSON.stringify(body),
+            body: JSON.stringify(providerBody),
         }, { signal: ac.signal });
         logBgStream('api-stream-foreground-upstream-response', {
             ok: upstream.ok,
@@ -493,10 +507,8 @@ export default defineEventHandler(async (event) => {
     const guardedUpstream = withIdleWatchdog(upstream.body, {
         signal: ac.signal,
     });
-    const [clientStream, inspectionStream] = guardedUpstream.tee();
-
-    void mirrorForegroundStreamCompletion({
-        stream: inspectionStream,
+    const clientStream = monitorForegroundStreamForClient({
+        stream: guardedUpstream,
         workspaceId,
         threadId,
         messageId,

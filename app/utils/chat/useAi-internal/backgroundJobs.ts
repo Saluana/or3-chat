@@ -66,22 +66,20 @@ export { BACKGROUND_JOB_MUTED_KEY } from './backgroundJobNotifications';
 export { BACKGROUND_JOB_PERSIST_INTERVAL_MS } from './backgroundJobPersistence';
 
 /**
- * Polling interval when no active subscribers (user navigated away).
- * Balances server load with reasonable update latency.
+ * Polling interval when no active subscribers (user navigated away). Detached
+ * jobs do not need sub-second UI updates; a lower request rate is more
+ * resilient on slow or lossy connections.
  */
-export const BACKGROUND_JOB_POLL_INTERVAL_MS = 300;
+export const BACKGROUND_JOB_POLL_INTERVAL_MS = 1_000;
 
 /**
- * Polling interval when subscribers are present (user viewing thread).
- * Provides more responsive updates during active streaming.
+ * Fallback polling interval when subscribers are present (user viewing a
+ * thread). SSE is preferred when available; this stays responsive without
+ * competing with token delivery on constrained connections.
  */
-export const BACKGROUND_JOB_POLL_INTERVAL_ACTIVE_MS = 80;
+export const BACKGROUND_JOB_POLL_INTERVAL_ACTIVE_MS = 250;
 
-/**
- * Minimum time between IndexedDB persistence writes.
- * Prevents excessive database writes during high-frequency streaming.
- */
-export const BACKGROUND_JOB_MAX_RETRYABLE_POLLS = 5;
+/** Bounded retries for terminal client-side authorization or lookup failures. */
 export const BACKGROUND_JOB_MAX_NOT_FOUND_POLLS = 3;
 export const BACKGROUND_JOB_MAX_AUTH_POLLS = 2;
 export const BACKGROUND_JOB_MAX_RETRY_DELAY_MS = 10_000;
@@ -194,9 +192,17 @@ function retryDelayMs(error: BackgroundJobPollError, attempt: number): number {
 function deriveBackgroundContent(
     tracker: BackgroundJobTracker,
     status: BackgroundJobStatus
-): { safeContent: string; delta: string } {
+): { safeContent: string; delta: string; replace: boolean } {
+    const replace =
+        typeof status.content === 'string' &&
+        (status.content_reset === true ||
+            (typeof tracker.lastAttempt === 'number' &&
+                typeof status.attempt === 'number' &&
+                status.attempt > tracker.lastAttempt));
     let nextContent = tracker.lastContent;
-    if (typeof status.content_delta === 'string') {
+    if (replace) {
+        nextContent = status.content!;
+    } else if (typeof status.content_delta === 'string') {
         nextContent = tracker.lastContent + status.content_delta;
     } else if (typeof status.content === 'string') {
         nextContent = status.content;
@@ -215,15 +221,16 @@ function deriveBackgroundContent(
             nextContent = status.content;
         }
     }
-    const safeContent =
-        nextContent.length >= tracker.lastContent.length
+    const safeContent = replace
+        ? nextContent
+        : nextContent.length >= tracker.lastContent.length
             ? nextContent
             : tracker.lastContent;
     const delta =
-        safeContent.length > tracker.lastContent.length
+        !replace && safeContent.length > tracker.lastContent.length
             ? safeContent.slice(tracker.lastContent.length)
             : '';
-    return { safeContent, delta };
+    return { safeContent, delta, replace };
 }
 
 /**
@@ -285,11 +292,26 @@ async function handleBackgroundStatus(
         });
         return false;
     }
+    if (
+        typeof status.attempt === 'number' &&
+        typeof tracker.lastAttempt === 'number' &&
+        status.attempt < tracker.lastAttempt
+    ) {
+        bgStreamLog('status-ignored-stale-attempt', {
+            jobId: tracker.jobId,
+            incomingAttempt: status.attempt,
+            currentAttempt: tracker.lastAttempt,
+        });
+        return true;
+    }
     let nextStatus = status;
     if (nextStatus.status !== 'streaming') {
         nextStatus = await ensureFullBackgroundStatus(tracker, nextStatus);
     }
-    const { safeContent, delta } = deriveBackgroundContent(tracker, nextStatus);
+    const { safeContent, delta, replace } = deriveBackgroundContent(
+        tracker,
+        nextStatus
+    );
     const shouldLogStatusProgress =
         nextStatus.status !== 'streaming' ||
         delta.length >= 256 ||
@@ -316,7 +338,8 @@ async function handleBackgroundStatus(
     const persisted = await persistBackgroundJobUpdate(
         tracker,
         nextStatus,
-        safeContent
+        safeContent,
+        replace
     );
     if (!persisted) {
         bgStreamWarn('status-persist-failed-stop-tracking', {
@@ -334,11 +357,15 @@ async function handleBackgroundStatus(
         void abortBackgroundJob(tracker.jobId);
         return false;
     }
+    if (typeof nextStatus.attempt === 'number') {
+        tracker.lastAttempt = nextStatus.attempt;
+    }
 
     const update: BackgroundJobUpdate = {
         status: nextStatus,
         content: safeContent,
         delta,
+        replace,
     };
     const workflowVersion = workflowVersionOf(nextStatus.workflow_state);
     notifyBackgroundSubscribers(tracker, 'onUpdate', update);
@@ -426,7 +453,12 @@ export async function primeBackgroundJobUpdate(
     // Fetch full content from server (no offset) - server is source of truth
     let initialStatus: BackgroundJobStatus | null = null;
     try {
-        initialStatus = await pollJobStatus(tracker.jobId);
+        initialStatus = await pollJobStatus(
+            tracker.jobId,
+            undefined,
+            undefined,
+            tracker.lastAttempt
+        );
     } catch {
         bgStreamWarn('prime-status-fetch-failed', {
             jobId: tracker.jobId,
@@ -451,36 +483,8 @@ export async function primeBackgroundJobUpdate(
         return;
     }
 
-    // Streaming - deliver full content immediately
-    // Only update if server has more content than we currently have
-    const serverContent = initialStatus.content || '';
-    if (serverContent.length >= tracker.lastContent.length) {
-        tracker.lastContent = serverContent;
-        bgStreamLog('prime-streaming-sync', {
-            jobId: tracker.jobId,
-            previousLength: tracker.lastPersistedLength,
-            serverContentLength: serverContent.length,
-        });
-        const persisted = await persistBackgroundJobUpdate(
-            tracker,
-            initialStatus,
-            serverContent
-        );
-        if (!persisted) {
-            bgStreamWarn('prime-persist-failed', {
-                jobId: tracker.jobId,
-            });
-            return;
-        }
-        const update: BackgroundJobUpdate = {
-            status: initialStatus,
-            content: serverContent,
-            delta: serverContent, // Full content as delta since baseline was empty
-        };
-        notifyBackgroundSubscribers(tracker, 'onUpdate', update);
-    }
-    // If server has less, keep our content and let normal polling continue
-    // Normal polling will continue from here - no burst loop needed
+    tracker.active = true;
+    await handleBackgroundStatus(tracker, initialStatus);
 }
 
 /**
@@ -511,7 +515,8 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
             status = await pollJobStatus(
                 tracker.jobId,
                 tracker.lastContent.length,
-                pollAbortController.signal
+                pollAbortController.signal,
+                tracker.lastAttempt
             );
             tracker.consecutivePollFailures = 0;
             tracker.notFoundPollFailures = 0;
@@ -540,9 +545,6 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
                         }
                     }
                 }
-                const withinGeneralBound =
-                    tracker.consecutivePollFailures <=
-                    BACKGROUND_JOB_MAX_RETRYABLE_POLLS;
                 const withinKindBound =
                     (err.kind !== 'not_found' ||
                         (tracker.notFoundPollFailures ?? 0) <=
@@ -550,7 +552,13 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
                     (err.kind !== 'auth' ||
                         (tracker.authPollFailures ?? 0) <=
                             BACKGROUND_JOB_MAX_AUTH_POLLS);
-                if (withinGeneralBound && withinKindBound) {
+                // A client-side transport failure does not mean the server-side
+                // generation failed. Keep reconciling retryable network, 429,
+                // and 5xx responses with a capped backoff so an intermittent or
+                // slow connection cannot permanently mark an active job as an
+                // error. Authentication and not-found responses remain bounded:
+                // retrying them indefinitely cannot recover the job.
+                if (withinKindBound) {
                     await abortableDelay(
                         retryDelayMs(err, tracker.consecutivePollFailures),
                         pollAbortController.signal
@@ -717,6 +725,7 @@ function startBackgroundJobTracking(
             unsubscribe = subscribeBackgroundJobStream({
                 jobId: tracker.jobId,
                 offset: tracker.lastContent.length,
+                attempt: tracker.lastAttempt,
                 onStatus: (status) => {
                     const shouldLogSseStatus =
                         status.status !== 'streaming' ||
@@ -771,7 +780,11 @@ function startBackgroundJobTracking(
                             error: error.message,
                         });
                         closeStream();
-                        void pollBackgroundJob(tracker);
+                        // Drain already-queued SSE statuses before polling so
+                        // an older event cannot land after a recovered attempt.
+                        void chain.finally(() => {
+                            if (tracker.active) void pollBackgroundJob(tracker);
+                        });
                     }
                 },
             });
@@ -859,6 +872,16 @@ export function ensureBackgroundJobTracker(
         if (typeof existing.lastWorkflowVersion !== 'number') {
             existing.lastWorkflowVersion = -1;
         }
+        const incomingAttempt = params.initialAttempt;
+        const currentAttempt = existing.lastAttempt;
+        const isNewerAttempt =
+            typeof incomingAttempt === 'number' &&
+            (typeof currentAttempt !== 'number' || incomingAttempt > currentAttempt);
+        const isStaleAttempt =
+            typeof incomingAttempt === 'number' &&
+            typeof currentAttempt === 'number' &&
+            incomingAttempt < currentAttempt;
+        if (isNewerAttempt) existing.lastAttempt = incomingAttempt;
         if (typeof existing.preferSse !== 'boolean') {
             existing.preferSse = false;
         }
@@ -868,8 +891,10 @@ export function ensureBackgroundJobTracker(
         if (!existing.threadId) existing.threadId = params.threadId;
         if (!existing.messageId) existing.messageId = params.messageId;
         if (
+            !isStaleAttempt &&
             typeof params.initialContent === 'string' &&
-            params.initialContent.length > existing.lastContent.length
+            (isNewerAttempt ||
+                params.initialContent.length > existing.lastContent.length)
         ) {
             existing.lastContent = params.initialContent;
             existing.lastPersistedLength = params.initialContent.length;
@@ -904,6 +929,7 @@ export function ensureBackgroundJobTracker(
         lastToolStateFingerprint: '[]',
         lastWorkflowFingerprint: 'null',
         lastContent: seedContent,
+        lastAttempt: params.initialAttempt,
         lastPersistedLength: seedContent.length,
         lastPersistAt: 0,
         polling: false,

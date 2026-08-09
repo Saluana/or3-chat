@@ -50,10 +50,10 @@
                 >
                     <UButton
                         id="dashboard-back-button"
-                        aria-label="Back to dashboard"
+                        aria-label="Return to dashboard overview"
                         v-bind="backButtonProps"
                         class="text-[20px] gap-0.5"
-                        @click="goBack()"
+                        @click="reset()"
                     >
                         <UIcon
                             class="h-6 w-6"
@@ -262,7 +262,7 @@ const {
     activePageTitle,
     openPlugin,
     openPage,
-    goBack,
+    reset,
 } = useDashboardNavigation({ baseItems: coreItems });
 
 const dashboardItems = computed(() =>

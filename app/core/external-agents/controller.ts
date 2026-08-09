@@ -365,8 +365,7 @@ export class ExternalAgentController {
     if (!this.#isWorkspaceLeaseCurrent(lease)) return;
     if (!credential) {
       this.#connectionState = "disconnected";
-      this.#connectionError =
-        "Reconnect to restore this host credential for this session.";
+      this.#connectionError = `Unlock ${host.name} to reconnect.`;
       this.#emit();
       return;
     }

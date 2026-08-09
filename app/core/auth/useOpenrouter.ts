@@ -63,23 +63,33 @@ async function sha256(plain: string) {
  */
 export function useOpenRouterAuth() {
     const isLoggingIn = ref(false);
+    // Resolve Nuxt/Vue injections while the composable is created. `startLogin`
+    // is normally called from a click handler, where invoking inject-backed
+    // composables can produce warnings and lose the component context.
+    const runtimeConfig = useRuntimeConfig();
+    const toast = useToast();
+    const sessionContext =
+        runtimeConfig.public?.ssrAuthEnabled === true
+            ? useSessionContext()
+            : null;
 
     const startLogin = async () => {
         if (isLoggingIn.value) return;
-        const rc = useRuntimeConfig();
+        const rc = runtimeConfig;
         if (rc.public?.ssrAuthEnabled === true) {
-            const { data, refresh } = useSessionContext();
-            let authenticated = data.value?.session?.authenticated === true;
+            let authenticated =
+                sessionContext?.data.value?.session?.authenticated === true;
             if (!authenticated) {
                 try {
                     authenticated =
-                        (await refresh())?.session?.authenticated === true;
+                        (await sessionContext?.refresh())?.session
+                            ?.authenticated === true;
                 } catch {
                     authenticated = false;
                 }
             }
             if (!authenticated) {
-                useToast().add({
+                toast.add({
                     title: 'Sign in required',
                     description:
                         'Sign in to this workspace before connecting OpenRouter.',
