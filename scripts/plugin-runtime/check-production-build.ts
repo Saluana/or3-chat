@@ -41,23 +41,11 @@ function findMarker(files: string[], marker: string): string[] {
     return files.filter((file) => readFileSync(file, 'utf8').includes(marker));
 }
 
-function hasPackagedBetterSqliteBinding(): boolean {
+function hasPackagedBetterSqliteBindings(): boolean {
     const packageRoot = resolve(serverRoot, 'node_modules/better-sqlite3');
-    const legacyBinding = resolve(
-        packageRoot,
-        'build/Release/better_sqlite3.node'
+    return ['linux-x64.node', 'linux-arm64.node'].every((binding) =>
+        existsSync(resolve(packageRoot, 'prebuilds', binding))
     );
-    const platform =
-        process.platform === 'linux' &&
-        !process.report.getReport().header.glibcVersionRuntime
-            ? 'linuxmusl'
-            : process.platform;
-    const prebuiltBinding = resolve(
-        packageRoot,
-        'prebuilds',
-        `${platform}-${process.arch}.node`
-    );
-    return existsSync(legacyBinding) || existsSync(prebuiltBinding);
 }
 
 if (modeArg !== 'ssr' && modeArg !== 'static') fail('pass --mode ssr or --mode static');
@@ -65,8 +53,8 @@ if (!existsSync(publicRoot)) fail('missing .output/public');
 if (modeArg === 'ssr' && !existsSync(resolve(serverRoot, 'index.mjs'))) {
     fail('SSR build is missing .output/server/index.mjs');
 }
-if (modeArg === 'ssr' && !hasPackagedBetterSqliteBinding()) {
-    fail('SSR build is missing the packaged better-sqlite3 native binding');
+if (modeArg === 'ssr' && !hasPackagedBetterSqliteBindings()) {
+    fail('SSR build is missing packaged better-sqlite3 bindings for linux/amd64 and linux/arm64');
 }
 if (modeArg === 'static' && !existsSync(resolve(publicRoot, 'index.html'))) {
     fail('static generation is missing .output/public/index.html');

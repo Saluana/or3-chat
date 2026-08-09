@@ -1,7 +1,10 @@
 # syntax=docker/dockerfile:1.7
 # Pinned multi-architecture OCI index (linux/amd64 + linux/arm64); update only
 # through the release qualification flow after scanning the resulting image.
-FROM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS build
+# The Nuxt output is architecture-neutral and better-sqlite3 ships both Linux
+# runtime bindings in its package. Build it once on the native CI platform;
+# only the distroless runtime stage varies across the output architectures.
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS build
 
 ARG SSR_AUTH_ENABLED=false
 ARG AUTH_PROVIDER=clerk
@@ -31,9 +34,6 @@ ENV NODE_ENV=development \
     NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
     NPM_CONFIG_FETCH_TIMEOUT=600000
 
-RUN apt-get update && \
-    apt-get install --no-install-recommends -y g++ make python3 && \
-    rm -rf /var/lib/apt/lists/*
 RUN npm install --global npm@11.6.2
 COPY package*.json bun.lock* ./
 COPY packages/plugin-sdk ./packages/plugin-sdk
@@ -47,12 +47,14 @@ RUN node scripts/docker/prepare-manifest.mjs package.json
 # stacks removed) and intentionally differs from the contributor manifest,
 # which still lists every provider. The build never re-resolves the tree; the
 # drift check fails qualification if the committed lock no longer matches the
-# pruned manifest, then npm ci installs from that exact lock. The cache mount
+# pruned manifest, then npm ci installs from that exact lock. Lifecycle scripts
+# are unnecessary here: Nuxt is prepared by the explicit build and the pinned
+# better-sqlite3 package already contains both Linux bindings. The cache mount
 # survives failed builds and retries.
 RUN --mount=type=cache,target=/root/.npm \
     node scripts/docker/preflight-registry.mjs && \
     node scripts/release/check-lock-drift.mjs && \
-    npm ci --no-audit --no-fund && \
+    npm ci --ignore-scripts --no-audit --no-fund && \
     cp package.json /tmp/or3-registry-package.json && \
     cp package-lock.json /tmp/or3-registry-package-lock.json
 

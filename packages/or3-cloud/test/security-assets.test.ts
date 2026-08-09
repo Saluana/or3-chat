@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 
 const ASSET_ROOT = resolve(import.meta.dir, '../assets');
 const RUNTIME_ENTRYPOINT = resolve(import.meta.dir, '../../../scripts/docker/runtime-entrypoint.mjs');
+const DOCKERFILE = resolve(import.meta.dir, '../../../Dockerfile');
 
 function asset(name: string): string {
   return readFileSync(resolve(ASSET_ROOT, name), 'utf8');
@@ -30,6 +31,12 @@ test('Caddyfile keeps SSE streaming and compression intact', () => {
 test('local compose.yaml has no Caddy service', () => {
   const compose = asset('compose.yaml');
   expect(compose).not.toMatch(/^\s*caddy:/m);
+});
+
+test('Dockerfile builds shared Nuxt output only once on the native runner', () => {
+  const dockerfile = readFileSync(DOCKERFILE, 'utf8');
+  expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:.* AS build$/m);
+  expect(dockerfile).toMatch(/^FROM gcr\.io\/distroless\/nodejs24-debian13:.* AS runtime$/m);
 });
 
 test('compose.yaml deep health treats degraded as unhealthy', () => {

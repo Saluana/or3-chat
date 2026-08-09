@@ -68,12 +68,14 @@ The `Release OR3 Cloud` workflow then:
 
 1. checks the version contract and provider registry entries;
 2. rejects a version that already exists in npm or GHCR;
-3. builds the root-context image with Basic Auth + SQLite + filesystem build
-   flags;
-4. publishes `ghcr.io/saluana/or3-chat:<version>`;
-5. smoke-tests login-capable deep health and persistence;
-6. packs and publishes `@or3/cloud@<version>`; and
-7. retries exact npm and `npx` verification until registry propagation ends.
+3. builds the Nuxt output once on the native runner, then packages amd64 and
+   arm64 runtime images with Basic Auth + SQLite + filesystem build flags;
+4. scans both runtime architectures and verifies their manifest entries;
+5. runs the full login, persistence, restart, and clean-browser journey on
+   amd64 plus a focused native SQLite query on arm64;
+6. publishes `ghcr.io/saluana/or3-chat:<version>`;
+7. packs and publishes `@or3/cloud@<version>`; and
+8. retries exact npm and `npx` verification until registry propagation ends.
 
 The workflow's image digest is the deployment identity. Copy it into the
 release notes with the supported profile and any migration/rollback warnings.

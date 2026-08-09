@@ -29,9 +29,9 @@ jobs:
   # ---------------------------------------------------------------------------
   qualify:
     runs-on: ubuntu-latest
-    # The linux/arm64 Nuxt build runs under emulation on the hosted amd64
-    # runner and can exceed the default hour before its candidate is ready.
-    timeout-minutes: 180
+    # The app build runs once on the native runner. Only a short native-binding
+    # probe uses arm64 emulation, so a longer release indicates a real problem.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -145,7 +145,8 @@ jobs:
           push: true
           tags: ${{ steps.image-plan.outputs.candidate_image }}
           provenance: true
-          sbom: true
+          # scan-image.mjs produces the retained per-architecture SBOMs below.
+          sbom: false
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -216,8 +217,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # Both platforms must independently produce an SBOM, provenance, digest,
-      # and a vulnerability report. scan-image.mjs is deliberately fail-closed.
+      # Both platforms independently produce a retained SBOM and vulnerability
+      # report. BuildKit supplies image provenance and the immutable digest.
       - name: Install Syft for release evidence
         if: startsWith(github.ref, 'refs/tags/v')
         id: syft
@@ -288,7 +289,7 @@ jobs:
           npx playwright install --with-deps chromium
           smoke="$RUNNER_TEMP/or3-audit-cloud-smoke"
           (cd "$smoke" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-browser.mjs")
-      - name: Clean native smoke before arm64 qualification
+      - name: Clean amd64 smoke deployment
         run: |
           smoke="$RUNNER_TEMP/or3-audit-cloud-smoke"
           if [ -d "$smoke" ]; then
@@ -300,32 +301,25 @@ jobs:
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
-      # Docker Desktop/BuildKit executes this real arm64 image under QEMU. It
-      # deliberately goes through the same packed operator CLI and validates
-      # the full auth/sync/storage persistence path across a restart.
-      - name: Smoke-test the qualifying image on arm64
+      # The full operator/browser journey above covers shared application code.
+      # Keep the architecture-specific arm64 gate small: start the published
+      # image's Node runtime and execute a real query through its native addon.
+      - name: Verify arm64 SQLite native binding
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           OR3_IMAGE: ${{ steps.image-plan.outputs.qualifying_image }}
         run: |
           set -euo pipefail
           docker image rm "$OR3_IMAGE" 2>/dev/null || true
-          smoke="$RUNNER_TEMP/or3-audit-cloud-arm64-smoke"
-          DOCKER_DEFAULT_PLATFORM=linux/arm64 OR3_CLOUD_TEST_IMAGE="$OR3_IMAGE" \
-            npm exec --yes --package="${{ steps.pack.outputs.tarball }}" -- \
-            or3 init "$smoke" --local --port 3018 --admin-email arm64-smoke@example.com
-          for attempt in $(seq 1 180); do
-            curl --fail --silent "http://127.0.0.1:3018/api/health?deep=true" && break
-            sleep 1
-          done
-          curl --fail "http://127.0.0.1:3018/api/health?deep=true"
-          (cd "$smoke" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
-          (cd "$smoke" && DOCKER_DEFAULT_PLATFORM=linux/arm64 docker compose --env-file .env -f compose.yaml restart or3)
-          for attempt in $(seq 1 120); do
-            curl --fail --silent "http://127.0.0.1:3018/api/health?deep=true" && break
-            sleep 1
-          done
-          (cd "$smoke" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          docker run --rm --platform linux/arm64 \
+            --entrypoint /nodejs/bin/node "$OR3_IMAGE" -e '
+              const Database = require("/app/.output/server/node_modules/better-sqlite3");
+              const db = new Database(":memory:");
+              const result = db.prepare("select 42 as value").get();
+              db.close();
+              if (result.value !== 42) process.exit(1);
+              console.log("arm64 better-sqlite3 query passed");
+            '
       - name: Promote the fully qualified candidate to the immutable release tag
         id: release-digest
         if: startsWith(github.ref, 'refs/tags/v')
@@ -360,11 +354,6 @@ jobs:
             docker compose --project-directory "$smoke" --env-file "$smoke/.env" -f "$smoke/compose.yaml" down --volumes 2>/dev/null || true
             rm -rf -- "$smoke"
           fi
-          arm_smoke="$RUNNER_TEMP/or3-audit-cloud-arm64-smoke"
-          if [ -d "$arm_smoke" ]; then
-            docker compose --project-directory "$arm_smoke" --env-file "$arm_smoke/.env" -f "$arm_smoke/compose.yaml" down --volumes 2>/dev/null || true
-            rm -rf -- "$arm_smoke"
-          fi
       - if: always()
         name: Verify named smoke resources are gone
         run: |
@@ -372,12 +361,10 @@ jobs:
           leftovers="$(
             {
               docker ps -aq --filter name='or3-audit-cloud-smoke' || true
-              docker ps -aq --filter name='or3-audit-cloud-arm64-smoke' || true
             } | sed '/^$/d' | sort -u
           )"
           test -z "$leftovers" || { echo "Named smoke containers remain: $leftovers"; exit 1; }
           test ! -e "$RUNNER_TEMP/or3-audit-cloud-smoke"
-          test ! -e "$RUNNER_TEMP/or3-audit-cloud-arm64-smoke"
 
   # ---------------------------------------------------------------------------
   # Job B "publish-npm" (tag-only): publishes ONLY the missing npm half.
