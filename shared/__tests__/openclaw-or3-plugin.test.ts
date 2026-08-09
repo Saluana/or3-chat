@@ -358,7 +358,7 @@ describe("OpenClaw OR3 Runs plugin", () => {
     await client.abortTurn(session.id, second.turn_id);
     expect(gatewayRequests).toContainEqual({
       method: "chat.abort",
-      params: expect.objectContaining({ runId: "openclaw-run-3" }),
+      params: expect.objectContaining({ runId: "openclaw-run-2" }),
     });
   });
 });

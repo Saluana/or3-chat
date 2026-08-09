@@ -556,7 +556,17 @@ export class Or3RunsBridge {
     this.runs.set(run.id, run);
     this.prune();
     session.updatedAt = createdAt;
-    if (await this.handleLocalCommand(run, prompt)) return run;
+    const model = text(requestInput.model);
+    const thinkingLevel = text(
+      object(requestInput.model_options).reasoning_effort,
+    );
+    if (
+      !model &&
+      !thinkingLevel &&
+      (await this.handleLocalCommand(run, prompt))
+    ) {
+      return run;
+    }
     try {
       run.historyMessageIds = new Set(
         (await this.messages(resolvedSessionId)).map((message) => message.id),
@@ -565,10 +575,6 @@ export class Or3RunsBridge {
       // Gateway history is a fallback for runtimes that do not emit final
       // chat events. A missing snapshot must not prevent a new turn.
     }
-    const model = text(requestInput.model);
-    const thinkingLevel = text(
-      object(requestInput.model_options).reasoning_effort,
-    );
     const request = {
       sessionKey: session.sessionKey,
       message: prompt,
