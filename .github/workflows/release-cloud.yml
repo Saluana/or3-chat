@@ -426,7 +426,7 @@ jobs:
             exit "${npm_status}"
           fi
       - name: Publish @or3/cloud
-        run: npm publish "release-artifact/or3-cloud-${{ needs.qualify.outputs.version }}.tgz" --access public
+        run: npm publish "./release-artifact/or3-cloud-${{ needs.qualify.outputs.version }}.tgz" --access public
       - name: Verify exact npm and npx propagation
         env:
           VERSION: ${{ needs.qualify.outputs.version }}

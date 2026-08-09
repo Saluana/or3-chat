@@ -99,6 +99,13 @@ test('release digest verification uses buildx-compatible manifest output', () =>
   expect(workflow.match(/awk '\$1 == "Digest:"/g)?.length).toBe(2);
 });
 
+test('npm publication identifies the qualified tarball as a local file', () => {
+  const workflow = readFileSync(RELEASE_WORKFLOW, 'utf8');
+  expect(workflow).toContain(
+    'npm publish "./release-artifact/or3-cloud-${{ needs.qualify.outputs.version }}.tgz" --access public',
+  );
+});
+
 test('compose.yaml hardens the or3 container', () => {
   const compose = asset('compose.yaml');
   expect(compose).toContain('no-new-privileges:true');
