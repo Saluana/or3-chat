@@ -29,7 +29,9 @@ jobs:
   # ---------------------------------------------------------------------------
   qualify:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # The linux/arm64 Nuxt build runs under emulation on the hosted amd64
+    # runner and can exceed the default hour before its candidate is ready.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -261,7 +263,9 @@ jobs:
           OR3_IMAGE: ${{ steps.image-plan.outputs.qualifying_image }}
         run: |
           smoke="$RUNNER_TEMP/or3-audit-cloud-smoke"
-          OR3_CLOUD_TEST_IMAGE="$OR3_IMAGE" OR3_CLOUD_SKIP_PULL=true \
+          # The candidate was anonymously pulled above; retain the registry
+          # manifest check so the CLI validates both release architectures.
+          OR3_CLOUD_TEST_IMAGE="$OR3_IMAGE" \
             npm exec --yes --package="${{ steps.pack.outputs.tarball }}" -- \
             or3 init "$smoke" --local --port 3017 --admin-email smoke@example.com
           for attempt in $(seq 1 120); do

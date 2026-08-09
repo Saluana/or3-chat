@@ -1,9 +1,10 @@
 import { expect, test } from 'bun:test';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const ASSET_ROOT = resolve(import.meta.dir, '../assets');
-const RUNTIME_ENTRYPOINT = resolve(import.meta.dir, '../../../scripts/docker/runtime-entrypoint.sh');
+const RUNTIME_ENTRYPOINT = resolve(import.meta.dir, '../../../scripts/docker/runtime-entrypoint.mjs');
 
 function asset(name: string): string {
   return readFileSync(resolve(ASSET_ROOT, name), 'utf8');
@@ -56,14 +57,61 @@ test('compose.yaml hardens the or3 container', () => {
 
 test('runtime entrypoint maps managed registration policy into Nuxt runtime config', () => {
   const entrypoint = readFileSync(RUNTIME_ENTRYPOINT, 'utf8');
-  expect(entrypoint).toContain('registration_mode=${OR3_AUTH_REGISTRATION_MODE:-open}');
+  expect(entrypoint).toContain("const registrationMode = firstDefined(env.OR3_AUTH_REGISTRATION_MODE, 'open');");
   expect(entrypoint).toContain('NUXT_AUTH_REGISTRATION_MODE');
-  expect(entrypoint).toContain('auto_provision=${OR3_AUTH_AUTO_PROVISION:-true}');
+  expect(entrypoint).toContain("const autoProvision = firstDefined(env.OR3_AUTH_AUTO_PROVISION, 'true');");
   expect(entrypoint).toContain('NUXT_AUTH_AUTO_PROVISION');
-  expect(entrypoint).toContain('bootstrap_email=${OR3_BASIC_AUTH_BOOTSTRAP_EMAIL:-}');
+  expect(entrypoint).toContain('const bootstrapEmail = firstDefined(env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL);');
   expect(entrypoint).toContain('NUXT_AUTH_BOOTSTRAP_EMAIL');
-  expect(entrypoint).toContain('invite_token_secret=${OR3_AUTH_INVITE_TOKEN_SECRET:-}');
+  expect(entrypoint).toContain('const inviteTokenSecret = firstDefined(env.OR3_AUTH_INVITE_TOKEN_SECRET);');
   expect(entrypoint).toContain('NUXT_AUTH_INVITE_TOKEN_SECRET');
+});
+
+test('runtime entrypoint preserves explicit Nuxt settings while translating OR3 defaults', () => {
+  const probe = [
+    'NUXT_AUTH_ENABLED',
+    'NUXT_AUTH_PROVIDER',
+    'NUXT_AUTH_REGISTRATION_MODE',
+    'NUXT_AUTH_AUTO_PROVISION',
+    'NUXT_AUTH_BOOTSTRAP_EMAIL',
+    'NUXT_AUTH_INVITE_TOKEN_SECRET',
+    'NUXT_SYNC_ENABLED',
+    'NUXT_STORAGE_ENABLED',
+    'NUXT_ADMIN_AUTH_JWT_SECRET'
+  ];
+  const result = spawnSync(process.execPath, [
+    RUNTIME_ENTRYPOINT,
+    process.execPath,
+    '-e',
+    `process.stdout.write(JSON.stringify(Object.fromEntries(${JSON.stringify(probe)}.map((name) => [name, process.env[name]]))))`
+  ], {
+    encoding: 'utf8',
+    env: {
+      SSR_AUTH_ENABLED: 'true',
+      AUTH_PROVIDER: 'basic-auth',
+      OR3_AUTH_REGISTRATION_MODE: 'invite_only',
+      OR3_AUTH_AUTO_PROVISION: 'false',
+      OR3_BASIC_AUTH_BOOTSTRAP_EMAIL: 'admin@example.com',
+      OR3_AUTH_INVITE_TOKEN_SECRET: 'invite-secret',
+      OR3_CLOUD_SYNC_ENABLED: 'true',
+      OR3_CLOUD_STORAGE_ENABLED: 'true',
+      OR3_BASIC_AUTH_JWT_SECRET: 'basic-auth-secret',
+      NUXT_AUTH_PROVIDER: 'custom'
+    }
+  });
+
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toEqual({
+    NUXT_AUTH_ENABLED: 'true',
+    NUXT_AUTH_PROVIDER: 'custom',
+    NUXT_AUTH_REGISTRATION_MODE: 'invite_only',
+    NUXT_AUTH_AUTO_PROVISION: 'false',
+    NUXT_AUTH_BOOTSTRAP_EMAIL: 'admin@example.com',
+    NUXT_AUTH_INVITE_TOKEN_SECRET: 'invite-secret',
+    NUXT_SYNC_ENABLED: 'true',
+    NUXT_STORAGE_ENABLED: 'true',
+    NUXT_ADMIN_AUTH_JWT_SECRET: 'c048744982bcfb2314b6718c134f2beb50a47ddec451172d8c87e6fca0d73e64'
+  });
 });
 
 test('compose.public.yaml pins Caddy to an exact digest', () => {

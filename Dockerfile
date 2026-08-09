@@ -61,7 +61,8 @@ RUN cp /tmp/or3-registry-package.json package.json && \
 # Cloud providers are initialized while Nitro prerenders routes. Supply only
 # disposable build-time values here: real credentials and paths remain runtime
 # environment values from Compose and are never copied into the image.
-RUN mkdir -p /tmp/or3-build/storage && \
+RUN mkdir -p /tmp/or3-build/storage /tmp/or3-runtime-data/admin /tmp/or3-runtime-data/extensions && \
+    chown -R 65532:65532 /tmp/or3-runtime-data && \
     OR3_BASIC_AUTH_DB_PATH=/tmp/or3-build/auth.sqlite \
     OR3_BASIC_AUTH_JWT_SECRET=or3-build-only-jwt-secret-not-for-runtime \
     OR3_BASIC_AUTH_REFRESH_SECRET=or3-build-only-refresh-secret-not-for-runtime \
@@ -70,7 +71,9 @@ RUN mkdir -p /tmp/or3-build/storage && \
     OR3_STORAGE_FS_TOKEN_SECRET=or3-build-only-storage-token-not-for-runtime \
     npm run build
 
-FROM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS runtime
+# The distroless runtime keeps only Node and the libraries it requires. It is
+# pinned to a multi-architecture OCI index and qualified by the release scan.
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:fbbdda866ea71aef98c4abece17e3d61fbf820cc2ef3961522caa2478716171a AS runtime
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
@@ -79,14 +82,13 @@ ENV NODE_ENV=production \
     OR3_ADMIN_DATA_DIR=/data/admin
 WORKDIR /app
 
-RUN mkdir -p /data/admin /data/extensions && \
-    chown -R node:node /data
-COPY --from=build --chown=node:node /app/.output ./.output
-COPY --from=build --chmod=755 /app/scripts/docker/runtime-entrypoint.sh /usr/local/bin/or3-runtime-entrypoint
+COPY --from=build --chown=65532:65532 /app/.output ./.output
+COPY --from=build --chown=65532:65532 /app/scripts/docker/runtime-entrypoint.mjs ./scripts/docker/runtime-entrypoint.mjs
+COPY --from=build --chown=65532:65532 /tmp/or3-runtime-data /data
 
-USER node
+USER 65532:65532
 EXPOSE 3000
 VOLUME ["/data"]
 
-ENTRYPOINT ["/usr/local/bin/or3-runtime-entrypoint"]
-CMD ["node", ".output/server/index.mjs"]
+ENTRYPOINT ["/nodejs/bin/node", "/app/scripts/docker/runtime-entrypoint.mjs"]
+CMD ["/nodejs/bin/node", ".output/server/index.mjs"]
