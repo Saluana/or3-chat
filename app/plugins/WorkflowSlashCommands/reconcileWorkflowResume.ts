@@ -104,35 +104,38 @@ export function reconcileWorkflowResume(
         !completed.has(storedStartNodeId)
     );
 
+    const incoming = new Map<string, string[]>();
+    for (const edge of workflow.edges) {
+        if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) continue;
+        const sources = incoming.get(edge.target) || [];
+        sources.push(edge.source);
+        incoming.set(edge.target, sources);
+    }
+    const readyUnfinished = workflow.nodes
+        .filter((node) => {
+            if (startIds.has(node.id) || completed.has(node.id)) return false;
+            const parents = incoming.get(node.id) || [];
+            return (
+                parents.length > 0 &&
+                parents.every((parentId) => completed.has(parentId))
+            );
+        })
+        .map((node) => node.id);
+
     let pendingNodes: string[] = [];
     let usedGraphFallback = false;
 
     if (storedPending.length > 0) {
-        pendingNodes = storedPending;
+        // Older/incomplete checkpoints could persist only the node that was
+        // active when a parallel wave stopped. Restore every unfinished
+        // sibling that is ready at the same graph frontier so downstream join
+        // nodes are not left waiting forever for work that was never queued.
+        pendingNodes = unique([...storedPending, ...readyUnfinished]);
     } else if (storedStartIsRunnable && storedStartNodeId) {
-        pendingNodes = [storedStartNodeId];
+        pendingNodes = unique([storedStartNodeId, ...readyUnfinished]);
     } else {
         usedGraphFallback = true;
-        const incoming = new Map<string, string[]>();
-        for (const edge of workflow.edges) {
-            if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target))
-                continue;
-            const sources = incoming.get(edge.target) || [];
-            sources.push(edge.source);
-            incoming.set(edge.target, sources);
-        }
-
-        pendingNodes = workflow.nodes
-            .filter((node) => {
-                if (startIds.has(node.id) || completed.has(node.id))
-                    return false;
-                const parents = incoming.get(node.id) || [];
-                return (
-                    parents.length > 0 &&
-                    parents.every((parentId) => completed.has(parentId))
-                );
-            })
-            .map((node) => node.id);
+        pendingNodes = readyUnfinished;
 
         if (pendingNodes.length === 0) {
             const firstUnfinished = workflow.nodes.find(

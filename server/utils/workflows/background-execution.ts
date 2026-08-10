@@ -402,6 +402,49 @@ async function runWorkflowInBackground(
         params.workflow,
         params.resumeFrom
     );
+    const providerAbortController = provider.getAbortController?.(jobId);
+    const durableAbortController = providerAbortController
+        ? null
+        : new AbortController();
+    const workflowAbortSignal =
+        providerAbortController?.signal ?? durableAbortController!.signal;
+    let checkingDurableStatus = false;
+    const durableAbortPoll = durableAbortController
+        ? setInterval(() => {
+              if (checkingDurableStatus || durableAbortController.signal.aborted) {
+                  return;
+              }
+              checkingDurableStatus = true;
+              void provider
+                  .getJob(jobId, params.userId)
+                  .then((job) => {
+                      if (!job) {
+                          durableAbortController.abort(
+                              new Error('Background workflow job disappeared')
+                          );
+                      } else if (job.status === 'aborted') {
+                          const abortError = new Error(
+                              'Workflow job aborted by user'
+                          );
+                          abortError.name = 'AbortError';
+                          durableAbortController.abort(abortError);
+                      } else if (job.status === 'error') {
+                          durableAbortController.abort(
+                              new Error(
+                                  job.error || 'Background workflow failed'
+                              )
+                          );
+                      }
+                  })
+                  .catch(() => {
+                      // Transient provider reads are retried on the next tick.
+                  })
+                  .finally(() => {
+                      checkingDurableStatus = false;
+                  });
+          }, 250)
+        : null;
+    durableAbortPoll?.unref?.();
 
     // Durable run journal for wave/tool restart safety (R7.AC1, R7.AC7).
     // Hydrate from any prior journal on the job so SSR process restarts resume
@@ -528,7 +571,7 @@ async function runWorkflowInBackground(
         sessionId: `workflow:${params.workflowId}:${params.messageId}`,
         persistWaveSnapshots: true,
         resumeFrom: params.resumeFrom,
-        _parentSignal: provider.getAbortController?.(jobId)?.signal,
+        _parentSignal: workflowAbortSignal,
         onToolCall: (name, args) =>
             executeWorkflowToolCall(name, args, {
                 jobId,
@@ -829,10 +872,8 @@ async function runWorkflowInBackground(
             }
         }
     } catch (error) {
-        if (
-            provider.getAbortController?.(jobId)?.signal.aborted ||
-            (error instanceof Error && error.name === 'AbortError')
-        ) {
+        const terminalJob = await provider.getJob(jobId, params.userId).catch(() => null);
+        if (terminalJob?.status === 'aborted') {
             logBackgroundEvent('warn', 'background.workflow.aborted', {
                 jobId,
                 workflowId: params.workflowId,
@@ -937,6 +978,7 @@ async function runWorkflowInBackground(
         }
         throw error;
     } finally {
+        if (durableAbortPoll) clearInterval(durableAbortPoll);
         clearHitlRequestsForJob(jobId);
     }
 }

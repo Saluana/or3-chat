@@ -42,6 +42,7 @@ export type BackgroundJobTracker = {
     preferServerNotifications?: boolean;
     status: BackgroundJobStatus['status'];
     lastWorkflowVersion: number;
+    lastWorkflowState?: BackgroundJobStatus['workflow_state'];
     lastToolStateFingerprint?: string;
     lastWorkflowFingerprint?: string;
     lastContent: string;

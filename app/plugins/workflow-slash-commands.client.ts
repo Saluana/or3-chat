@@ -340,6 +340,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     }
 
     const hooks = useHooks();
+    const pluginHookCleanups: Array<() => void> = [];
     // Resolve context-backed composables while the Nuxt plugin is initializing.
     // Workflow execution and retry handlers run asynchronously, after Vue's
     // active setup context has been cleared.
@@ -361,12 +362,14 @@ export default defineNuxtPlugin((nuxtApp) => {
         );
     };
 
-    hooks.on(
-        'ui.chat.editor:action:before_send',
-        (payload: unknown) => {
-            pendingEditorJson = payload;
-        },
-        { kind: 'action' }
+    pluginHookCleanups.push(
+        hooks.on(
+            'ui.chat.editor:action:before_send',
+            (payload: unknown) => {
+                pendingEditorJson = payload;
+            },
+            { kind: 'action' }
+        )
     );
 
     // Mark any previously running workflow messages as interrupted on load and push state to UI
@@ -380,49 +383,56 @@ export default defineNuxtPlugin((nuxtApp) => {
                 .where('[data.type+data.executionState]')
                 .equals(['workflow-execution', 'running'])
                 .toArray();
-
-            if (!stale.length) return;
-
-            await withMessageSyncTransaction(db, async () => {
-                await db.messages
-                    .where('[data.type+data.executionState]')
-                    .equals(['workflow-execution', 'running'])
-                    .modify((m: any) => {
-                        const data = m.data || {};
-                        const nodeOutputs = data.nodeOutputs || {};
-                        const startNodeId = deriveStartNodeId({
-                            resumeState: data.resumeState,
-                            failedNodeId: data.failedNodeId,
-                            currentNodeId: data.currentNodeId,
-                            nodeStates: data.nodeStates,
-                            lastActiveNodeId: data.lastActiveNodeId,
-                        });
-
-                        m.data.executionState = 'interrupted';
-                        if (startNodeId) {
-                            m.data.resumeState = {
-                                startNodeId,
-                                nodeOutputs,
-                                executionOrder:
-                                    data.executionOrder || Object.keys(nodeOutputs),
-                                lastActiveNodeId: data.lastActiveNodeId,
-                                sessionMessages: data.sessionMessages,
-                                resumeInput: data.lastActiveNodeId
-                                    ? nodeOutputs[data.lastActiveNodeId]
-                                    : undefined,
-                            };
-                        }
-                        m.data.result = {
-                            success: false,
-                            duration: 0,
-                            error: 'Execution interrupted',
-                        };
-                        m.updated_at = now;
-                        m.pending = false;
-                    });
+            const interrupted = stale.filter((message) => {
+                const data = message.data as Record<string, unknown> | null | undefined;
+                return !(
+                    typeof data?.background_job_id === 'string' &&
+                    data.background_job_id.length > 0 &&
+                    data.background_job_status === 'streaming'
+                );
             });
 
-            stale.forEach((m) => {
+            if (!interrupted.length) return;
+
+            await withMessageSyncTransaction(db, async () => {
+                for (const m of interrupted) {
+                    if (!isWorkflowMessageData(m.data)) continue;
+                    const data = m.data;
+                    const nodeOutputs = data.nodeOutputs || {};
+                    const startNodeId = deriveStartNodeId({
+                        resumeState: data.resumeState,
+                        failedNodeId: data.failedNodeId,
+                        currentNodeId: data.currentNodeId,
+                        nodeStates: data.nodeStates,
+                        lastActiveNodeId: data.lastActiveNodeId
+                    });
+                    const nextData: WorkflowMessageData = {
+                        ...data,
+                        executionState: 'interrupted',
+                        result: {
+                            success: false,
+                            duration: 0,
+                            error: 'Execution interrupted'
+                        }
+                    };
+                    if (startNodeId) {
+                        nextData.resumeState = {
+                            startNodeId,
+                            nodeOutputs,
+                            executionOrder: data.executionOrder || Object.keys(nodeOutputs),
+                            lastActiveNodeId: data.lastActiveNodeId,
+                            sessionMessages: data.sessionMessages,
+                            resumeInput: data.lastActiveNodeId ? nodeOutputs[data.lastActiveNodeId] : undefined
+                        };
+                    }
+                    m.data = nextData;
+                    m.updated_at = now;
+                    m.pending = false;
+                    await db.messages.put(m);
+                }
+            });
+
+            interrupted.forEach((m) => {
                 if (!isWorkflowMessageData(m.data)) return;
                 const data = m.data;
                 const nodeOutputs = data.nodeOutputs || {};
@@ -898,7 +908,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         };
 
         // Persistence helper - only called on lifecycle events, not tokens
-        const persist = (_immediate = false) => {
+        const persist = async (_immediate = false): Promise<boolean> => {
             // Ensure we only persist plain, cloneable data to Dexie
             const data = safeCloneWorkflowData(
                 accumulator.toMessageData(
@@ -908,7 +918,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 )
             );
 
-            withMessageSyncTransaction(db, async () => {
+            return withMessageSyncTransaction(db, async () => {
                 const msg = await db.messages.get(assistantContext.id);
                 const timestamp = nowSec();
                 if (msg) {
@@ -939,12 +949,16 @@ export default defineNuxtPlugin((nuxtApp) => {
                     stream_id: assistantContext.streamId,
                     file_hashes: null,
                 });
-            }).catch((e) =>
-                reportError(e, {
-                    code: 'ERR_DB_WRITE_FAILED',
-                    message: 'Persist failed',
-                    silent: true,
-                })
+            }).then(
+                () => true,
+                (e) => {
+                    reportError(e, {
+                        code: 'ERR_DB_WRITE_FAILED',
+                        message: 'Persist failed',
+                        silent: true
+                    });
+                    return false;
+                }
             );
         };
 
@@ -1006,7 +1020,9 @@ export default defineNuxtPlugin((nuxtApp) => {
         };
 
         // Initial persist to set message type
-        persist(true);
+        if (!(await persist(true))) {
+            throw new Error('Unable to save the workflow run before starting execution');
+        }
         emitStateUpdate();
 
         // Execution callbacks (manual wiring; helper not available in current core build)
@@ -1467,76 +1483,68 @@ export default defineNuxtPlugin((nuxtApp) => {
      * This runs BEFORE the filter hook, so we can use this ID
      * to update the message with workflow output.
      */
-    hooks.on(
-        'ai.chat.send:action:before',
-        (payload: {
-            threadId?: string;
-            assistant: { id: string; streamId: string };
-        }) => {
-            pendingAssistantContext = {
-                id: payload.assistant.id,
-                streamId: payload.assistant.streamId,
-                threadId: payload.threadId,
-            };
+    pluginHookCleanups.push(
+        hooks.on(
+            'ai.chat.send:action:before',
+            (payload: { threadId?: string; assistant: { id: string; streamId: string } }) => {
+                pendingAssistantContext = {
+                    id: payload.assistant.id,
+                    streamId: payload.assistant.streamId,
+                    threadId: payload.threadId
+                };
 
-            if (import.meta.dev) {
-                console.log(
-                    '[workflow-slash] Captured assistant context:',
-                    pendingAssistantContext
-                );
-            }
-        },
-        { kind: 'action', priority: 100 }
+                if (import.meta.dev) {
+                    console.log('[workflow-slash] Captured assistant context:', pendingAssistantContext);
+                }
+            },
+            { kind: 'action', priority: 100 }
+        )
     );
 
     /**
      * Register TipTap extension when editor requests extensions
      */
     let editorExtensionsCleanup: (() => void) | null = null;
-    hooks.on(
-        'editor:request-extensions',
-        async () => {
-            if (!workflowSlashEnabled) return;
-            const module = await loadSlashModule();
-            if (!module) return;
+    pluginHookCleanups.push(
+        hooks.on(
+            'editor:request-extensions',
+            async () => {
+                if (!workflowSlashEnabled) return;
+                const module = await loadSlashModule();
+                if (!module) return;
 
-            // Only register once
-            if (extensionRegistered) return;
-            extensionRegistered = true;
+                // Only register once
+                if (extensionRegistered) return;
+                extensionRegistered = true;
 
-            // Create the suggestion configuration
-            const suggestionConfig = module.createSlashCommandSuggestion(
-                module.searchWorkflows,
-                slashConfig.debounceMs || 100
-            );
+                // Create the suggestion configuration
+                const suggestionConfig = module.createSlashCommandSuggestion(
+                    module.searchWorkflows,
+                    slashConfig.debounceMs || 100
+                );
 
-            // Configure the extension with the suggestion config
-            const SlashCommandExtension = module.SlashCommand.configure({
-                suggestion: suggestionConfig,
-            });
+                // Configure the extension with the suggestion config
+                const SlashCommandExtension = module.SlashCommand.configure({
+                    suggestion: suggestionConfig
+                });
 
-            // Provide both WorkflowNode and SlashCommand extension via filter
-            editorExtensionsCleanup = hooks.on(
-                'ui.chat.editor:filter:extensions',
-                (existing) => {
+                // Provide both WorkflowNode and SlashCommand extension via filter
+                editorExtensionsCleanup = hooks.on('ui.chat.editor:filter:extensions', (existing) => {
                     const list = Array.isArray(existing) ? existing : [];
-                    return [
-                        ...list,
-                        module.WorkflowNode,
-                        SlashCommandExtension,
-                    ];
-                }
-            );
+                    return [...list, module.WorkflowNode, SlashCommandExtension];
+                });
 
-            console.log('[workflow-slash] Extension registered');
-        },
-        { kind: 'action' }
+                console.log('[workflow-slash] Extension registered');
+            },
+            { kind: 'action' }
+        )
     );
 
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
             stopAbort.abort();
             editorExtensionsCleanup?.();
+            for (const cleanup of pluginHookCleanups) cleanup();
             activitySourceHandle.dispose();
         });
     }
@@ -1544,9 +1552,8 @@ export default defineNuxtPlugin((nuxtApp) => {
     /**
      * Intercept message send to detect and execute workflow commands
      */
-    hooks.on(
-        'ai.chat.messages:filter:before_send',
-        async (payload: MessagesPayload) => {
+    pluginHookCleanups.push(
+        hooks.on('ai.chat.messages:filter:before_send', async (payload: MessagesPayload) => {
             if (!workflowSlashEnabled) {
                 return { messages: normalizeMessagesPayload(payload) };
             }
@@ -1557,9 +1564,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             }
 
             // Find the last user message
-            const lastUser = [...messages]
-                .reverse()
-                .find((m) => m.role === 'user');
+            const lastUser = [...messages].reverse().find((m) => m.role === 'user');
 
             if (!lastUser) {
                 return { messages };
@@ -1570,22 +1575,16 @@ export default defineNuxtPlugin((nuxtApp) => {
                 typeof lastUser.content === 'string'
                     ? lastUser.content
                     : Array.isArray(lastUser.content)
-                    ? lastUser.content
-                          .filter(
-                              (p): p is { type: 'text'; text: string } =>
-                                  typeof p === 'object' &&
-                                  p !== null &&
-                                  'type' in p &&
-                                  p.type === 'text'
-                          )
-                          .map((p) => p.text)
-                          .join('')
-                    : '';
+                      ? lastUser.content
+                            .filter(
+                                (p): p is { type: 'text'; text: string } =>
+                                    typeof p === 'object' && p !== null && 'type' in p && p.type === 'text'
+                            )
+                            .map((p) => p.text)
+                            .join('')
+                      : '';
 
-            let attachments = extractImageAttachments(
-                lastUser.content,
-                nowSec()
-            );
+            let attachments = extractImageAttachments(lastUser.content, nowSec());
 
             // Check for Vercel AI SDK specific attachment fields or internal data
             const lastUserData = lastUser as {
@@ -1594,47 +1593,30 @@ export default defineNuxtPlugin((nuxtApp) => {
                 data?: { attachments?: unknown };
             };
             const sdkAttachments =
-                lastUserData.experimental_attachments ||
-                lastUserData.attachments ||
-                lastUserData.data?.attachments;
+                lastUserData.experimental_attachments || lastUserData.attachments || lastUserData.data?.attachments;
 
             if (Array.isArray(sdkAttachments) && sdkAttachments.length > 0) {
                 const timestamp = nowSec();
                 const mapped = await Promise.all(
-                    (sdkAttachments as SDKAttachmentPayload[]).map(
-                        async (a, i): Promise<Attachment | null> => {
-                            const mimeType =
-                                a.contentType ||
-                                a.mediaType ||
-                                a.mimeType ||
-                                'application/octet-stream';
-                            const type: Attachment['type'] =
-                                mimeType.startsWith('image/')
-                                    ? 'image'
-                                    : 'file';
-                            // Support various Vercel/Internal URL properties
-                            const raw = a.url || a.content || a.data;
-                            const url = await normalizeAttachmentUrl(
-                                raw,
-                                mimeType
-                            );
+                    (sdkAttachments as SDKAttachmentPayload[]).map(async (a, i): Promise<Attachment | null> => {
+                        const mimeType = a.contentType || a.mediaType || a.mimeType || 'application/octet-stream';
+                        const type: Attachment['type'] = mimeType.startsWith('image/') ? 'image' : 'file';
+                        // Support various Vercel/Internal URL properties
+                        const raw = a.url || a.content || a.data;
+                        const url = await normalizeAttachmentUrl(raw, mimeType);
 
-                            if (!url) return null;
-                            return {
-                                id: `att-sdk-${timestamp}-${i}`,
-                                type,
-                                url,
-                                name: a.name || `file-${i}`,
-                                mimeType,
-                            } satisfies Attachment;
-                        }
-                    )
+                        if (!url) return null;
+                        return {
+                            id: `att-sdk-${timestamp}-${i}`,
+                            type,
+                            url,
+                            name: a.name || `file-${i}`,
+                            mimeType
+                        } satisfies Attachment;
+                    })
                 );
 
-                attachments = [
-                    ...attachments,
-                    ...mapped.filter((a): a is Attachment => Boolean(a)),
-                ];
+                attachments = [...attachments, ...mapped.filter((a): a is Attachment => Boolean(a))];
             }
 
             if (attachments.length === 0) {
@@ -1650,22 +1632,17 @@ export default defineNuxtPlugin((nuxtApp) => {
             }
 
             // Load modules
-            const [slashMod, execMod] = await Promise.all([
-                loadSlashModule(),
-                loadExecutionModule(),
-            ]);
+            const [slashMod, execMod] = await Promise.all([loadSlashModule(), loadExecutionModule()]);
 
             if (!slashMod || !execMod) {
                 reportError('Failed to load workflow modules', {
                     code: 'ERR_INTERNAL',
-                    toast: true,
+                    toast: true
                 });
                 return { messages };
             }
 
-            const editorMatch = editorDoc
-                ? extractWorkflowCommandFromEditorJson(editorDoc)
-                : null;
+            const editorMatch = editorDoc ? extractWorkflowCommandFromEditorJson(editorDoc) : null;
 
             let workflowPost: WorkflowPostWithMeta | null = null;
             let workflowNameForLog = '';
@@ -1676,18 +1653,14 @@ export default defineNuxtPlugin((nuxtApp) => {
                 workflowNameForLog = editorMatch.workflowName || '';
 
                 if (editorMatch.workflowId) {
-                    const post = await slashMod.getWorkflowById(
-                        editorMatch.workflowId
-                    );
+                    const post = await slashMod.getWorkflowById(editorMatch.workflowId);
                     if (hasWorkflowMeta(post)) {
                         workflowPost = post;
                     }
                 }
 
                 if (!workflowPost && editorMatch.workflowName) {
-                    const post = await slashMod.getWorkflowByName(
-                        editorMatch.workflowName
-                    );
+                    const post = await slashMod.getWorkflowByName(editorMatch.workflowName);
                     if (hasWorkflowMeta(post)) {
                         workflowPost = post;
                     }
@@ -1701,21 +1674,15 @@ export default defineNuxtPlugin((nuxtApp) => {
                         {
                             code: 'ERR_VALIDATION',
                             severity: 'warn',
-                            toast: true,
+                            toast: true
                         }
                     );
                     return { messages };
                 }
             } else {
-                const workflowOptions = await slashMod.searchWorkflows(
-                    '',
-                    Number.POSITIVE_INFINITY
-                );
+                const workflowOptions = await slashMod.searchWorkflows('', Number.POSITIVE_INFINITY);
                 const workflowNames = workflowOptions.map((item) => item.label);
-                const parsed = execMod.parseSlashCommand(
-                    normalizedContent,
-                    workflowNames
-                );
+                const parsed = execMod.parseSlashCommand(normalizedContent, workflowNames);
 
                 if (!parsed) {
                     return { messages };
@@ -1723,9 +1690,7 @@ export default defineNuxtPlugin((nuxtApp) => {
 
                 workflowNameForLog = parsed.workflowName;
                 prompt = parsed.prompt || '';
-                const post = await slashMod.getWorkflowByName(
-                    parsed.workflowName
-                );
+                const post = await slashMod.getWorkflowByName(parsed.workflowName);
                 if (hasWorkflowMeta(post)) {
                     workflowPost = post;
                 }
@@ -1734,7 +1699,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                     reportError(`No workflow named "${parsed.workflowName}"`, {
                         code: 'ERR_VALIDATION',
                         severity: 'warn',
-                        toast: true,
+                        toast: true
                     });
                     return { messages };
                 }
@@ -1743,9 +1708,8 @@ export default defineNuxtPlugin((nuxtApp) => {
             if (!workflowExecutionEnabled) {
                 toast.add({
                     title: 'Workflow execution disabled',
-                    description:
-                        'This deployment has workflow execution turned off.',
-                    color: 'warning',
+                    description: 'This deployment has workflow execution turned off.',
+                    color: 'warning'
                 });
                 return { messages };
             }
@@ -1768,28 +1732,19 @@ export default defineNuxtPlugin((nuxtApp) => {
                 title: workflowPost.title,
                 hasNodes: Array.isArray(workflowPost.meta.nodes),
                 hasEdges: Array.isArray(workflowPost.meta.edges),
-                nodesCount: Array.isArray(workflowPost.meta.nodes)
-                    ? workflowPost.meta.nodes.length
-                    : 'N/A',
-                edgesCount: Array.isArray(workflowPost.meta.edges)
-                    ? workflowPost.meta.edges.length
-                    : 'N/A',
+                nodesCount: Array.isArray(workflowPost.meta.nodes) ? workflowPost.meta.nodes.length : 'N/A',
+                edgesCount: Array.isArray(workflowPost.meta.edges) ? workflowPost.meta.edges.length : 'N/A'
             });
 
             // Execute the workflow
             if (import.meta.dev) {
-                console.log(
-                    '[workflow-slash] Executing workflow:',
-                    workflowNameForLog || workflowPost.title
-                );
+                console.log('[workflow-slash] Executing workflow:', workflowNameForLog || workflowPost.title);
             }
 
             // Capture context before starting async work
             const assistantContext = pendingAssistantContext;
             if (!assistantContext) {
-                console.error(
-                    '[workflow-slash] No assistant context available'
-                );
+                console.error('[workflow-slash] No assistant context available');
                 return { messages };
             }
 
@@ -1799,7 +1754,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 assistantContext,
                 execMod,
                 apiKey: apiKey.value,
-                attachments,
+                attachments
             });
 
             // Clear pending context
@@ -1809,7 +1764,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             markChatSendHandled();
 
             return { messages: [] };
-        }
+        })
     );
 
     return {

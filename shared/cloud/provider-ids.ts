@@ -28,6 +28,7 @@ export const LIMITS_PROVIDER_IDS = {
 export const BACKGROUND_PROVIDER_IDS = {
     memory: 'memory',
     convex: 'convex',
+    sqlite: 'sqlite',
     redis: 'redis',
 } as const;
 
@@ -61,6 +62,7 @@ export const LIMITS_PROVIDER_ID_LIST = [
 export const BACKGROUND_PROVIDER_ID_LIST = [
     BACKGROUND_PROVIDER_IDS.memory,
     BACKGROUND_PROVIDER_IDS.convex,
+    BACKGROUND_PROVIDER_IDS.sqlite,
     BACKGROUND_PROVIDER_IDS.redis,
 ] as const;
 

@@ -242,13 +242,19 @@ for (const moduleId of or3ProviderModules) {
     generatedProviderModules.push(moduleId);
 }
 
+function resolveLocalProviderModule(moduleId: string): string {
+    if (moduleId !== 'or3-provider-sqlite/nuxt') return moduleId;
+    const localModule = resolve(__dirname, '../or3-provider-sqlite/src/module.ts');
+    return existsSync(localModule) ? localModule : moduleId;
+}
+
 const activeProviderModules = Array.from(
     new Set([
         ...generatedProviderModules,
         ...providerModulesFromConfig,
         ...pluginModulesFromConfig,
-    ]),
-);
+    ])
+).map(resolveLocalProviderModule);
 
 const authProviderAvailable =
     isStaticCloudDisabledBuild ||

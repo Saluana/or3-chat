@@ -213,4 +213,60 @@ describe('reconcileWorkflowResume', () => {
         expect(result.startNodeId).toBe('writer-a');
         expect(result.pendingNodes).toEqual(['writer-a', 'writer-b']);
     });
+
+    it('repairs an incomplete saved parallel wave before resuming', () => {
+        const graph = workflow(
+            [
+                ['start', 'start'],
+                ['architect', 'agent'],
+                ['writer-deepseek', 'agent'],
+                ['writer-glm', 'agent'],
+                ['writer-luna', 'agent'],
+                ['judge', 'agent'],
+            ],
+            [
+                ['start', 'architect'],
+                ['architect', 'writer-deepseek'],
+                ['architect', 'writer-glm'],
+                ['architect', 'writer-luna'],
+                ['writer-deepseek', 'judge'],
+                ['writer-glm', 'judge'],
+                ['writer-luna', 'judge'],
+            ]
+        );
+        const result = reconcileWorkflowResume(
+            graph,
+            snapshot({
+                nodeStates: {
+                    architect: {
+                        status: 'completed',
+                        label: 'Architect',
+                        type: 'agent',
+                        output: 'Outline',
+                    },
+                    'writer-deepseek': {
+                        status: 'error',
+                        label: 'DeepSeek',
+                        type: 'agent',
+                        output: '',
+                    },
+                },
+                nodeOutputs: { architect: 'Outline' },
+                executionOrder: ['architect'],
+                resumeState: {
+                    startNodeId: 'writer-deepseek',
+                    pendingNodes: ['writer-deepseek'],
+                    nodeOutputs: { architect: 'Outline' },
+                    executionOrder: ['architect'],
+                },
+            })
+        );
+
+        expect(result.startNodeId).toBe('writer-deepseek');
+        expect(result.pendingNodes).toEqual([
+            'writer-deepseek',
+            'writer-glm',
+            'writer-luna',
+        ]);
+    });
 });

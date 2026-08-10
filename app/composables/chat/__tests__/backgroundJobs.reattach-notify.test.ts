@@ -430,6 +430,104 @@ describe('backgroundJobs reattach + notifications', () => {
         expect(backgroundJobTrackers.has('job-1')).toBe(false);
     });
 
+    it('projects an abort without a server workflow snapshot into the stored card state', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        pollJobStatusMock.mockResolvedValue(
+            makeStatus('aborted', {
+                content: 'partial',
+                content_length: 7,
+                workflow_state: undefined
+            })
+        );
+        dbMock.messages.get.mockResolvedValue({
+            id: 'msg-1',
+            role: 'assistant',
+            thread_id: 'thread-1',
+            pending: true,
+            created_at: 1,
+            updated_at: 1,
+            clock: 1,
+            data: {
+                type: 'workflow-execution',
+                workflowId: 'wf-1',
+                workflowName: 'Workflow',
+                prompt: 'run it',
+                executionState: 'running',
+                nodeStates: {},
+                executionOrder: [],
+                currentNodeId: 'writer',
+                finalOutput: '',
+                version: 4
+            }
+        });
+
+        const {
+            ensureBackgroundJobTracker,
+            primeBackgroundJobUpdate,
+            stopBackgroundJobTracking,
+            backgroundJobTrackers
+        } = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = ensureBackgroundJobTracker({
+            jobId: 'job-1',
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'msg-1',
+            useSse: true
+        });
+        stopBackgroundJobTracking(tracker);
+
+        await primeBackgroundJobUpdate(tracker);
+
+        expect(dbMock.messages.put).toHaveBeenCalledWith(
+            expect.objectContaining({
+                pending: false,
+                data: expect.objectContaining({
+                    executionState: 'stopped',
+                    currentNodeId: null,
+                    background_job_status: 'aborted'
+                })
+            })
+        );
+        expect(backgroundJobTrackers.has('job-1')).toBe(false);
+    });
+
+    it('does not cancel or drop a live server job when local persistence fails', async () => {
+        let streamParams: {
+            onStatus: (status: ReturnType<typeof makeStatus>) => void;
+        } | null = null;
+        subscribeBackgroundJobStreamMock.mockImplementation((params) => {
+            streamParams = params;
+            return () => {};
+        });
+        dbMock.messages.put.mockRejectedValueOnce(new Error('sync write failed'));
+
+        const { ensureBackgroundJobTracker, subscribeBackgroundJob, stopBackgroundJobTracking, backgroundJobTrackers } =
+            await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = ensureBackgroundJobTracker({
+            jobId: 'job-1',
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'msg-1',
+            useSse: true
+        });
+        const onUpdate = vi.fn();
+        subscribeBackgroundJob(tracker, { onUpdate });
+
+        streamParams!.onStatus(
+            makeStatus('streaming', {
+                content: 'live content',
+                content_length: 12
+            })
+        );
+
+        await vi.waitFor(() => expect(onUpdate).toHaveBeenCalled());
+        expect(backgroundJobTrackers.has('job-1')).toBe(true);
+        expect(abortBackgroundJobMock).not.toHaveBeenCalled();
+
+        stopBackgroundJobTracking(tracker);
+        backgroundJobTrackers.clear();
+    });
+
     it('uses one live reconciliation transport for multiple viewers of one job', async () => {
         subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
         const {

@@ -37,23 +37,33 @@ export function normalizeTerminalWorkflowState(
         return state;
     }
 
-    const failedNodeId =
-        state.failedNodeId ?? state.currentNodeId ?? state.lastActiveNodeId ?? null;
+    const completed = status === 'complete';
+    const failedNodeId = completed
+        ? null
+        : state.failedNodeId ??
+          state.currentNodeId ??
+          state.lastActiveNodeId ??
+          null;
     return {
         ...state,
-        executionState: status === 'aborted' ? 'stopped' : 'error',
+        executionState: completed
+            ? 'completed'
+            : status === 'aborted'
+              ? 'stopped'
+              : 'error',
         currentNodeId: null,
         failedNodeId,
         result: {
             ...state.result,
-            success: false,
+            success: completed,
             duration: state.result?.duration ?? 0,
-            error:
-                error ??
-                state.result?.error ??
-                (status === 'aborted'
-                    ? 'Workflow stopped by user'
-                    : 'Background workflow failed'),
+            error: completed
+                ? undefined
+                : error ??
+                  state.result?.error ??
+                  (status === 'aborted'
+                      ? 'Workflow stopped by user'
+                      : 'Background workflow failed'),
         },
         version: (state.version ?? 0) + 1,
     };
@@ -64,8 +74,13 @@ export async function persistBackgroundJobUpdate(
     status: BackgroundJobStatus,
     content: string,
     replaceContent = false
-): Promise<boolean> {
-    if (!isClientRuntime()) return true;
+): Promise<{
+    persisted: boolean;
+    workflowState?: BackgroundJobStatus['workflow_state'];
+}> {
+    if (!isClientRuntime()) {
+        return { persisted: true, workflowState: status.workflow_state };
+    }
 
     const now = Date.now();
     const statusChanged = status.status !== tracker.status;
@@ -92,7 +107,9 @@ export async function persistBackgroundJobUpdate(
         !shouldPersistContent &&
         !toolStateChanged &&
         !workflowChanged
-    ) return true;
+    ) {
+        return { persisted: true, workflowState: status.workflow_state };
+    }
 
     const nextError =
         status.status === 'error'
@@ -100,13 +117,6 @@ export async function persistBackgroundJobUpdate(
             : status.status === 'aborted'
               ? 'Background response aborted'
               : null;
-    const workflowState = normalizeTerminalWorkflowState(
-        status.workflow_state && typeof status.workflow_state === 'object'
-            ? status.workflow_state
-            : undefined,
-        status.status,
-        status.error
-    );
     const persistedToolCalls = Array.isArray(status.tool_calls)
         ? status.tool_calls.map((toolCall) => ({
               ...toolCall,
@@ -116,15 +126,15 @@ export async function persistBackgroundJobUpdate(
                       : toolCall.status,
           }))
         : undefined;
-    const workflowVersion = workflowVersionOf(workflowState);
-    const includeWorkflowState =
-        workflowState !== null && workflowVersion >= tracker.lastWorkflowVersion;
-
     const currentDb = tracker.originDb ?? getDb();
-    const nextRecord = await currentDb.transaction(
+    const persistedResult = await currentDb.transaction(
         'rw',
         getWriteTxTableNames(currentDb, 'messages'),
-        async (): Promise<StoredMessage | null> => {
+        async (): Promise<{
+            record: StoredMessage;
+            workflowState?: BackgroundJobStatus['workflow_state'];
+            workflowVersion: number;
+        } | null> => {
             const existing = (await currentDb.messages.get(
                 tracker.messageId
             )) as StoredMessage | undefined;
@@ -134,6 +144,24 @@ export async function persistBackgroundJobUpdate(
                 existing.data && typeof existing.data === 'object'
                     ? (existing.data as Record<string, unknown>)
                     : {};
+            const incomingWorkflowState =
+                status.workflow_state &&
+                typeof status.workflow_state === 'object'
+                    ? status.workflow_state
+                    : undefined;
+            const storedWorkflowState =
+                baseData.type === 'workflow-execution'
+                    ? (baseData as unknown as BackgroundJobStatus['workflow_state'])
+                    : undefined;
+            const workflowState = normalizeTerminalWorkflowState(
+                incomingWorkflowState ?? storedWorkflowState,
+                status.status,
+                status.error
+            );
+            const workflowVersion = workflowVersionOf(workflowState);
+            const includeWorkflowState =
+                workflowState !== null &&
+                workflowVersion >= tracker.lastWorkflowVersion;
             const updated: StoredMessage = {
                 ...existing,
                 pending: status.status === 'streaming',
@@ -160,18 +188,31 @@ export async function persistBackgroundJobUpdate(
             };
 
             await currentDb.messages.put(updated);
-            return updated;
+            return {
+                record: updated,
+                workflowState: includeWorkflowState
+                    ? workflowState
+                    : incomingWorkflowState,
+                workflowVersion: includeWorkflowState
+                    ? workflowVersion
+                    : tracker.lastWorkflowVersion,
+            };
         }
     );
-    if (!nextRecord) return false;
+    if (!persistedResult) return { persisted: false };
 
     tracker.status = status.status;
     tracker.lastPersistAt = now;
     tracker.lastPersistedLength = content.length;
     tracker.lastToolStateFingerprint = toolStateFingerprint;
-    tracker.lastWorkflowFingerprint = workflowFingerprint;
-    if (includeWorkflowState) {
-        tracker.lastWorkflowVersion = workflowVersion;
+    tracker.lastWorkflowFingerprint = JSON.stringify(
+        persistedResult.workflowState ?? null
+    );
+    if (persistedResult.workflowVersion >= tracker.lastWorkflowVersion) {
+        tracker.lastWorkflowVersion = persistedResult.workflowVersion;
     }
-    return true;
+    return {
+        persisted: true,
+        workflowState: persistedResult.workflowState,
+    };
 }

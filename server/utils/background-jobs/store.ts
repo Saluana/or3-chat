@@ -45,38 +45,20 @@ export async function getJobProvider(): Promise<BackgroundJobProvider> {
     const bgConfig = config.backgroundJobs as { storageProvider?: string } | undefined;
     const storageProvider = bgConfig?.storageProvider ?? BACKGROUND_PROVIDER_IDS.memory;
 
-    switch (storageProvider) {
-        case BACKGROUND_PROVIDER_IDS.convex: {
-            const syncConfig = config.sync as { convexUrl?: string } | undefined;
-            const publicSyncConfig = (config.public as { sync?: { convexUrl?: string } } | undefined)?.sync;
-            const convexUrl = syncConfig?.convexUrl ?? publicSyncConfig?.convexUrl;
-            if (!convexUrl) {
-                console.warn('[background-jobs] Convex URL not configured, using memory');
-                cachedProvider = memoryJobProvider;
-                break;
-            }
-
-            const registered = getBackgroundJobProviderById(storageProvider);
-            if (registered) {
-                cachedProvider = registered;
-            } else {
-                console.warn('[background-jobs] Provider not registered, using memory:', storageProvider);
-                cachedProvider = memoryJobProvider;
-            }
-            break;
-        }
-
-        case BACKGROUND_PROVIDER_IDS.redis:
-            // Future: Redis provider
-            console.warn('[background-jobs] Redis provider not yet implemented, using memory');
-            cachedProvider = memoryJobProvider;
-            break;
-
-        case BACKGROUND_PROVIDER_IDS.memory:
-        default:
-            cachedProvider = memoryJobProvider;
-            break;
+    if (storageProvider === BACKGROUND_PROVIDER_IDS.memory) {
+        cachedProvider = memoryJobProvider;
+        return cachedProvider;
     }
+
+    const registered = getBackgroundJobProviderById(storageProvider);
+    if (!registered) {
+        throw new Error(
+            `[background-jobs] Provider "${storageProvider}" is not registered. ` +
+                `Install/configure the provider package or explicitly set ` +
+                `OR3_BACKGROUND_STREAMING_PROVIDER=memory for ephemeral jobs.`
+        );
+    }
+    cachedProvider = registered;
 
     return cachedProvider;
 }

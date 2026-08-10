@@ -1000,13 +1000,6 @@ watch(panePendingPrompt, (promptId) => {
 
 function onStopStream() {
     try {
-        chat.value?.abort?.();
-    } catch (e) {
-        if (import.meta.dev) {
-            console.warn('[ChatContainer] abort failed', e);
-        }
-    }
-    try {
         if (typeof window !== 'undefined') {
             const workflowMessage = [...messages.value]
                 .reverse()
@@ -1019,15 +1012,25 @@ function onStopStream() {
                         executionState === 'idle'
                     );
                 });
-            window.dispatchEvent(
-                new CustomEvent('workflow:stop', {
-                    detail: { messageId: workflowMessage?.id },
-                })
-            );
+            if (workflowMessage?.id) {
+                window.dispatchEvent(
+                    new CustomEvent('workflow:stop', {
+                        detail: { messageId: workflowMessage.id },
+                    })
+                );
+                return;
+            }
         }
     } catch (e) {
         if (import.meta.dev) {
             console.warn('[ChatContainer] workflow stop dispatch failed', e);
+        }
+    }
+    try {
+        chat.value?.abort?.();
+    } catch (e) {
+        if (import.meta.dev) {
+            console.warn('[ChatContainer] abort failed', e);
         }
     }
 }

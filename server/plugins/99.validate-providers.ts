@@ -10,6 +10,7 @@ import { listSyncGatewayAdapterIds } from '../sync/gateway/registry';
 import { listStorageGatewayAdapterIds } from '../storage/gateway/registry';
 import { listConnectStoreIds } from '../connect/store/registry';
 import { listConnectRelayIds } from '../connect/relay/registry';
+import { listBackgroundJobProviderIds } from '../utils/background-jobs/registry';
 import { parseConnectMaxComputers } from '../connect/config';
 import { useRuntimeConfig } from '#imports';
 import { resolveStrictMode } from '../../shared/cloud/env-contract';
@@ -63,6 +64,16 @@ export default defineNitroPlugin(() => {
             errors.push(
                 `storage.provider "${storageProviderId}" is not registered. ` +
                     `Install the provider package that registers it (e.g. or3-provider-${storageProviderId}).`
+            );
+        }
+    }
+
+    if (config.backgroundJobs?.enabled) {
+        const backgroundProviderId = config.backgroundJobs.storageProvider;
+        if (backgroundProviderId !== 'memory' && !listBackgroundJobProviderIds().includes(backgroundProviderId)) {
+            errors.push(
+                `backgroundJobs.storageProvider "${backgroundProviderId}" is not registered. ` +
+                    `Install the provider package that registers it (e.g. or3-provider-${backgroundProviderId}).`
             );
         }
     }

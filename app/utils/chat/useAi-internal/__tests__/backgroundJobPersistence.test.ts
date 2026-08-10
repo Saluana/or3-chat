@@ -38,4 +38,33 @@ describe('normalizeTerminalWorkflowState', () => {
             version: 5,
         });
     });
+
+    it.each([
+        ['aborted', 'stopped', false],
+        ['complete', 'completed', true]
+    ] as const)('projects %s into %s immediately', (jobStatus, executionState, success) => {
+        const state = normalizeTerminalWorkflowState(
+            {
+                type: 'workflow-execution',
+                workflowId: 'wf-1',
+                workflowName: 'Workflow',
+                prompt: 'run it',
+                executionState: 'running',
+                nodeStates: {},
+                executionOrder: [],
+                currentNodeId: 'writer',
+                finalOutput: '',
+                version: 2
+            },
+            jobStatus,
+            undefined
+        );
+
+        expect(state).toMatchObject({
+            executionState,
+            currentNodeId: null,
+            result: { success },
+            version: 3
+        });
+    });
 });

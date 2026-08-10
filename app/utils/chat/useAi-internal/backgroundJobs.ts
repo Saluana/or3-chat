@@ -55,6 +55,7 @@ import {
     emitBackgroundComplete,
 } from './backgroundJobNotifications';
 import {
+    normalizeTerminalWorkflowState,
     persistBackgroundJobUpdate,
 } from './backgroundJobPersistence';
 import {
@@ -308,6 +309,21 @@ async function handleBackgroundStatus(
     if (nextStatus.status !== 'streaming') {
         nextStatus = await ensureFullBackgroundStatus(tracker, nextStatus);
     }
+    if (
+        nextStatus.workflow_state &&
+        typeof nextStatus.workflow_state === 'object'
+    ) {
+        tracker.lastWorkflowState = nextStatus.workflow_state;
+    } else if (nextStatus.status !== 'streaming' && tracker.lastWorkflowState) {
+        nextStatus = {
+            ...nextStatus,
+            workflow_state: normalizeTerminalWorkflowState(
+                tracker.lastWorkflowState,
+                nextStatus.status,
+                nextStatus.error
+            ),
+        };
+    }
     const { safeContent, delta, replace } = deriveBackgroundContent(
         tracker,
         nextStatus
@@ -335,27 +351,34 @@ async function handleBackgroundStatus(
     }
     tracker.lastContent = safeContent;
 
-    const persisted = await persistBackgroundJobUpdate(
+    const persistence = await persistBackgroundJobUpdate(
         tracker,
         nextStatus,
         safeContent,
         replace
-    );
-    if (!persisted) {
-        bgStreamWarn('status-persist-failed-stop-tracking', {
+    ).catch((error) => {
+        bgStreamWarn('status-persist-failed', {
+            jobId: tracker.jobId,
+            status: nextStatus.status,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return { persisted: false as const };
+    });
+    if (!persistence.persisted) {
+        // Local projection failures must never cancel a valid server job. The
+        // next status will retry persistence while subscribers keep receiving
+        // live progress.
+        bgStreamWarn('status-persist-failed-continue-tracking', {
             jobId: tracker.jobId,
             status: nextStatus.status,
         });
-        tracker.active = false;
-        tracker.polling = false;
-        tracker.streaming = false;
-        backgroundJobTrackers.delete(tracker.jobId);
-        notifyBackgroundJobTrackerLifecycle({
-            type: 'removed',
-            tracker,
-        });
-        void abortBackgroundJob(tracker.jobId);
-        return false;
+    }
+    if (persistence.persisted && persistence.workflowState) {
+        tracker.lastWorkflowState = persistence.workflowState;
+        nextStatus = {
+            ...nextStatus,
+            workflow_state: persistence.workflowState,
+        };
     }
     if (typeof nextStatus.attempt === 'number') {
         tracker.lastAttempt = nextStatus.attempt;
@@ -388,7 +411,11 @@ async function handleBackgroundStatus(
             update
         );
         await emitBackgroundComplete(tracker, nextStatus);
-        if (nextStatus.workflow_state && typeof nextStatus.workflow_state === 'object') {
+        if (
+            nextStatus.status === 'complete' &&
+            nextStatus.workflow_state &&
+            typeof nextStatus.workflow_state === 'object'
+        ) {
             const state = nextStatus.workflow_state;
             const workflowId = state.workflowId;
             const finalOutput = state.finalOutput || undefined;
@@ -411,6 +438,10 @@ async function handleBackgroundStatus(
         tracker.polling = false;
         tracker.streaming = false;
         backgroundJobTrackers.delete(tracker.jobId);
+        notifyBackgroundJobTrackerLifecycle({
+            type: 'removed',
+            tracker
+        });
         return false;
     }
 

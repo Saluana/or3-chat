@@ -17,7 +17,7 @@ Background execution is available only when SSR auth/server routes are active.
 - Server gate: `runtimeConfig.backgroundJobs.enabled === true`
 - Main envs:
   - `OR3_BACKGROUND_STREAMING_ENABLED=true`
-  - `OR3_BACKGROUND_STREAMING_PROVIDER=memory|convex|...`
+  - `OR3_BACKGROUND_STREAMING_PROVIDER=memory|sqlite|convex|...`
   - `OR3_BACKGROUND_MAX_JOBS=<n>` (default 20)
   - `OR3_BACKGROUND_MAX_JOBS_PER_USER=<n>` (default 5)
   - `OR3_BACKGROUND_JOB_TIMEOUT=<seconds>`
@@ -84,9 +84,16 @@ with an explicit retry message instead of risking a repeated side effect.
 
 The credential envelope uses the dedicated runtime-only
 `OR3_BACKGROUND_ENCRYPTION_KEY`; plaintext API keys are never passed to the job
-provider. Durable restart recovery requires a durable provider such as Convex.
+provider. Durable restart recovery requires a durable provider such as SQLite
+or Convex.
 The `memory` provider remains intended for development and loses its rows on a
 process restart.
+
+SQLite stores job rows, workflow snapshots, inactivity timestamps,
+cancellation, and worker leases in the same database used by OR3 sync. A Nitro
+HMR/module reload therefore cannot make a live job disappear from the status or
+abort routes. Selecting an unregistered non-memory provider fails startup rather
+than silently degrading to process memory.
 
 When using Convex, deploy the provider version and its bundled Convex
 schema/functions together; background admission fails closed if the selected
@@ -126,6 +133,12 @@ Server-side behavior:
 
 `workflow_state` is persisted on the background job and includes execution state, per-node states, HITL requests, output, and version counter.
 
+Cancellation is authoritative at the provider. External providers are polled
+through a run-local abort signal so Stop interrupts the active model request and
+prevents later nodes from starting. The abort response also emits a terminal
+workflow snapshot immediately; the card, node spinners, and composer Stop button
+do not wait for a refresh or a later poll.
+
 ## HITL Pause/Resume
 
 Workflow HITL requests are persisted in `workflow_state.hitlRequests`.
@@ -151,7 +164,10 @@ Each job has one process-local tracker and one adaptive reconciliation transport
 regardless of viewer count. Healthy SSE delivery suppresses hot polling. Polling
 uses typed retryable transport/rate-limit/server errors with bounded jitter,
 limited not-found reconciliation, and one bounded auth refresh. A transient poll
-or Dexie failure does not fabricate model completion or advance the durable offset.
+or Dexie failure does not fabricate model completion, cancel a valid server job,
+or advance the durable offset. Terminal provider state is projected into both
+Dexie and the live card from the same normalized snapshot, including lost-job
+reconciliation where the server has no final workflow payload.
 
 Foreground and background provider consumption use the same pure normalized
 stream reducer. It owns iteration boundaries, cumulative text/reasoning limits,
@@ -210,7 +226,8 @@ the next model request, so reload cannot repeat an already completed side effect
   Convex function reached by an admin-authenticated SSR adapter. Direct Convex
   callers cannot create, inspect, mutate, abort, count, or clean jobs, and the
   stored-owner checks do not accept a wildcard user ID.
-- Workflow state size is bounded (`MAX_WORKFLOW_STATE_BYTES = 64KB`).
+- Synchronized message payloads are bounded at 256KB and compact oversized
+  workflow projections before sync.
 - Responses use `Cache-Control: no-store` where applicable.
 
 ## Structured Logging
