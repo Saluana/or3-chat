@@ -66,7 +66,7 @@
                                 :key="user.userId"
                                 type="button"
                                 @click="selectOwner(user)"
-                                class="flex w-full items-center gap-3 p-3 text-left rounded-lg bg-[var(--md-surface-container-low)] cursor-pointer hover:bg-[var(--md-surface-container)] focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]"
+                                class="flex w-full items-center gap-3 p-3 text-left rounded-[var(--md-border-radius-small)] bg-[var(--md-surface-container-low)] cursor-pointer hover:bg-[var(--md-surface-container)] focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]"
                                 :class="{ 'ring-2 ring-[var(--md-primary)]': form.ownerUserId === user.userId }"
                                 :aria-pressed="form.ownerUserId === user.userId"
                             >
@@ -82,7 +82,7 @@
                             </button>
                         </div>
 
-                        <div v-if="selectedOwner" class="mt-2 p-3 rounded-lg bg-[var(--md-primary-container)]">
+                        <div v-if="selectedOwner" class="mt-2 p-3 rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)]">
                             <div class="flex items-center gap-2 text-sm">
                                 <UIcon name="i-heroicons-check" class="text-[var(--md-on-primary-container)]" />
                                 <span class="text-[var(--md-on-primary-container)]">

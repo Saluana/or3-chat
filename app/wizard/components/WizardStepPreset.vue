@@ -22,7 +22,7 @@
             <label
                 v-for="option in wizardModeField.options ?? []"
                 :key="String(option.value)"
-                class="group relative cursor-pointer rounded-[var(--md-border-radius)] border px-4 py-4 text-left transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--md-primary)]"
+                class="group relative cursor-pointer rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] px-4 py-4 text-left transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--md-primary)]"
                 :class="cardClass(option.value)"
             >
                 <input
@@ -39,7 +39,7 @@
                 >
                     Recommended
                 </span>
-                <div class="mb-3 flex h-8 w-8 items-center justify-center rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/5">
+                <div class="mb-3 flex h-8 w-8 items-center justify-center rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/5">
                     <UIcon
                         :name="presetIcon(option.value)"
                         class="h-4 w-4 text-[var(--md-primary)]"
@@ -115,7 +115,7 @@ const nonModeFields = computed(() =>
 function cardClass(value: WizardFieldOption['value']): string {
     const selected = props.answers.wizardMode === value;
     if (selected) {
-        return 'border-[var(--md-primary)] bg-[var(--md-primary)]/8 shadow-sm';
+        return 'border-[length:var(--md-border-width-strong)] border-[var(--md-primary)] bg-[var(--md-primary)]/8 shadow-sm';
     }
     return 'border-[color:var(--md-border-color)] bg-[var(--md-surface)] hover:bg-[var(--md-inverse-surface)]/6';
 }

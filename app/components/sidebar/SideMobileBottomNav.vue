@@ -1,7 +1,7 @@
 <template>
     <nav
         id="mobile-bottom-nav"
-        class="mobile-bottom-nav-root shrink-0 w-full flex items-stretch gap-1 px-2 pt-1.5 border-t-[length:var(--md-border-width)] border-t-[color:var(--md-border-color)] bg-[var(--md-surface)]"
+        class="mobile-bottom-nav-root shrink-0 w-full flex items-stretch gap-1 px-2 pt-1.5 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-t-[color:var(--md-border-color)] bg-[var(--md-surface)]"
         aria-label="Sidebar navigation"
     >
         <!-- Home -->
@@ -861,10 +861,10 @@ async function openAdmin() {
    through unchanged. */
 
 const NAV_ITEM_BASE_CLASS =
-    'mobile-nav-item group flex flex-1 min-w-0 flex-col items-center justify-center gap-[3px] rounded-[var(--md-border-radius)] px-1 py-1.5 min-h-[54px] text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] hover:text-[var(--md-on-surface)] active:bg-[var(--md-surface-active)] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]';
+    'mobile-nav-item group flex flex-1 min-w-0 flex-col items-center justify-center gap-[3px] rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-1 py-1.5 min-h-[54px] text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] hover:text-[var(--md-on-surface)] active:bg-[var(--md-surface-active)] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]';
 
 const NAV_ITEM_ACTIVE_CLASS =
-    'mobile-nav-item group flex flex-1 min-w-0 flex-col items-center justify-center gap-[3px] rounded-[var(--md-border-radius)] px-1 py-1.5 min-h-[54px] text-[var(--md-primary)] bg-[var(--md-primary)]/10 hover:bg-[var(--md-primary)]/15 hover:text-[var(--md-primary)] active:bg-[var(--md-primary)]/20 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]';
+    'mobile-nav-item group flex flex-1 min-w-0 flex-col items-center justify-center gap-[3px] rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-1 py-1.5 min-h-[54px] text-[var(--md-primary)] bg-[var(--md-primary)]/10 hover:bg-[var(--md-primary)]/15 hover:text-[var(--md-primary)] active:bg-[var(--md-primary)]/20 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]';
 
 function createNavItemProps(state?: 'active') {
     const overrides = useThemeOverrides({
@@ -909,14 +909,14 @@ const createButtonProps = computed(() => {
     return {
         ...restOverrides,
         class: [
-            'mobile-nav-item mobile-nav-create group flex flex-1 min-w-0 flex-col items-center justify-center gap-[3px] rounded-[var(--md-border-radius)] px-1 py-1.5 min-h-[54px] text-[var(--md-on-surface-variant)] hover:text-[var(--md-on-surface)] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]',
+            'mobile-nav-item mobile-nav-create group flex flex-1 min-w-0 flex-col items-center justify-center gap-[3px] rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-1 py-1.5 min-h-[54px] text-[var(--md-on-surface-variant)] hover:text-[var(--md-on-surface)] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]',
             overrideClass,
         ],
     };
 });
 
 const MENU_ITEM_CLASS =
-    'mobile-nav-menu-item flex items-center gap-2.5 w-full min-h-[44px] px-3 py-2 rounded-[var(--md-border-radius)] text-[14px] text-left text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]';
+    'mobile-nav-menu-item flex items-center gap-2.5 w-full min-h-[44px] px-3 py-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[14px] text-left text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]';
 
 // Create menu rows
 const createItemOverrides = useThemeOverrides({
@@ -972,7 +972,7 @@ const createItemProps = computed(() => {
     margin-bottom: 2px;
     flex-shrink: 0;
     border-radius: 9999px;
-    border: var(--md-border-width, 2px) solid
+    border: var(--md-border-width-strong, var(--md-border-width, 2px)) solid
         var(--md-border-color, transparent);
     background: var(--md-primary);
     color: var(--md-on-primary);
@@ -1031,7 +1031,7 @@ const createItemProps = computed(() => {
     width: 100%;
     max-height: min(88dvh, 720px);
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-    border-radius: 1.5rem 1.5rem 0 0;
+    border-radius: var(--md-border-radius-large, 1.5rem) var(--md-border-radius-large, 1.5rem) 0 0;
     background: var(--md-surface);
     box-shadow: 0 -12px 40px rgb(15 23 42 / 0.18);
     will-change: transform;
@@ -1185,9 +1185,9 @@ const createItemProps = computed(() => {
     min-height: 7.25rem;
     min-width: 0;
     padding: 0.85rem 0.8rem;
-    border: 1px solid
+    border: var(--md-border-width, 1px) solid
         color-mix(in srgb, var(--md-border-color) 75%, transparent);
-    border-radius: 1rem;
+    border-radius: var(--md-border-radius, 1rem);
     background: var(--md-surface);
     color: var(--md-on-surface);
     text-align: left;
@@ -1209,6 +1209,7 @@ const createItemProps = computed(() => {
 }
 
 .more-tile--active {
+    border-width: var(--md-border-width-strong, var(--md-border-width, 1px));
     border-color: color-mix(in srgb, var(--md-primary) 45%, transparent);
     background: color-mix(in srgb, var(--md-primary) 8%, var(--md-surface));
     box-shadow: inset 0 0 0 1px
@@ -1221,7 +1222,7 @@ const createItemProps = computed(() => {
     justify-content: center;
     width: 2.35rem;
     height: 2.35rem;
-    border-radius: 0.75rem;
+    border-radius: var(--md-border-radius-small, 0.75rem);
     background: color-mix(in srgb, var(--more-tile-accent) 14%, transparent);
     color: var(--more-tile-accent);
 }
@@ -1273,23 +1274,23 @@ const createItemProps = computed(() => {
 .more-list {
     display: flex;
     flex-direction: column;
-    border: 1px solid
+    border: var(--md-border-width, 1px) solid
         color-mix(in srgb, var(--md-border-color) 75%, transparent);
-    border-radius: 1rem;
+    border-radius: var(--md-border-radius, 1rem);
     background: var(--md-surface);
     overflow: hidden;
     isolation: isolate;
 }
 
 .more-list--nested {
-    border-radius: 0.9rem;
+    border-radius: var(--md-border-radius, 0.9rem);
 }
 
 /* Clean 1px dividers only — never stacked shadows between rows. */
 .more-list > * + *,
 .mobile-nav-more-auth > * + *,
 .more-system-card > * + * {
-    border-top: 1px solid
+    border-top: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid
         color-mix(in srgb, var(--md-border-color) 70%, transparent);
     box-shadow: none;
 }
@@ -1358,7 +1359,7 @@ const createItemProps = computed(() => {
     width: 2.15rem;
     height: 2.15rem;
     flex-shrink: 0;
-    border-radius: 0.7rem;
+    border-radius: var(--md-border-radius-small, 0.7rem);
     background: color-mix(in srgb, var(--md-on-surface) 6%, transparent);
     color: var(--md-on-surface-variant);
 }

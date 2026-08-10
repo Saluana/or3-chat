@@ -4,7 +4,7 @@
             collapsed
                 ? 'px-0 justify-center w-[64px]'
                 : 'px-3 justify-between w-full',
-            'flex items-center min-h-12 max-h-12 header-pattern py-2 border-b-(--md-border-width) border-(--md-border-color)',
+            'flex items-center min-h-12 max-h-12 header-pattern py-2 border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-(--md-border-color)',
             { 'sidebar-header--retro': activeTheme === 'retro' },
             sidebarHeaderProps.class || '',
         ]"

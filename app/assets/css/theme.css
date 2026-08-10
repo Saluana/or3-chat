@@ -5,3 +5,11 @@
 @import "./dark.css";
 @import "./dark-hc.css";
 @import "./dark-mc.css";
+
+/* Tiered shape tokens inherit the established middle tokens by default. */
+:root {
+  --md-border-width-subtle: var(--md-border-width);
+  --md-border-width-strong: var(--md-border-width);
+  --md-border-radius-small: var(--md-border-radius);
+  --md-border-radius-large: var(--md-border-radius);
+}

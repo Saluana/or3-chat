@@ -82,7 +82,7 @@
             <ClientOnly>
                 <div
                     id="nav-pages-section"
-                    class="pt-2 flex flex-col space-y-2 border-t-[length:var(--md-border-width)] border-t-[color:var(--md-border-color)]"
+                    class="pt-2 flex flex-col space-y-2 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-t-[color:var(--md-border-color)]"
                 >
                     <UTooltip
                         v-if="showHomePage"

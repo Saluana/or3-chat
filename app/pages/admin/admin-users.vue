@@ -36,7 +36,7 @@
                     <div
                         v-for="user in searchResults"
                         :key="user.userId"
-                        class="flex flex-col gap-3 p-3 rounded-lg bg-[var(--md-surface-container-low)] sm:flex-row sm:items-center sm:justify-between"
+                        class="flex flex-col gap-3 p-3 rounded-[var(--md-border-radius)] bg-[var(--md-surface-container-low)] sm:flex-row sm:items-center sm:justify-between"
                     >
                         <div class="min-w-0 flex items-center gap-3">
                             <div class="w-8 h-8 rounded-full bg-[var(--md-primary-container)] flex items-center justify-center">
@@ -97,7 +97,7 @@
                     <div
                         v-for="admin in admins"
                         :key="admin.userId"
-                        class="flex flex-col gap-3 p-3 rounded-lg bg-[var(--md-surface-container-low)] sm:flex-row sm:items-center sm:justify-between"
+                        class="flex flex-col gap-3 p-3 rounded-[var(--md-border-radius)] bg-[var(--md-surface-container-low)] sm:flex-row sm:items-center sm:justify-between"
                     >
                         <div class="min-w-0 flex items-center gap-3">
                             <div class="w-8 h-8 rounded-full bg-[var(--md-primary-container)] flex items-center justify-center">

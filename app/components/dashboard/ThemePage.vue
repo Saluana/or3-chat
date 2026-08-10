@@ -46,11 +46,9 @@
             tabindex="0"
         >
             <template v-if="activeSection === 'theme'">
-                <div
-                    class="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]"
-                >
-                    <DashboardThemeSelector />
+                <div class="flex min-w-0 flex-col gap-4">
                     <DashboardThemeModeToggle />
+                    <DashboardThemeSelector />
                 </div>
             </template>
 
@@ -67,7 +65,6 @@
             />
 
             <template v-else-if="activeSection === 'backgrounds'">
-                <DashboardThemeCustomBackgroundToggle />
                 <DashboardThemeBackgroundLayersSection />
             </template>
 
@@ -209,11 +206,21 @@ async function handleTabKeydown(
 }
 .theme-studio-tab:hover {
     color: var(--md-on-surface);
-    background: var(--md-surface-hover);
+    background: var(
+        --md-surface-hover,
+        var(--md-surface-container-high, var(--md-surface))
+    );
 }
 .theme-studio-tab.active {
-    color: var(--md-on-primary-container, var(--md-on-surface));
-    background: var(--md-primary-container);
+    color: var(--md-on-primary);
+    background: var(--md-primary);
+    border-color: var(--md-primary);
+    box-shadow: inset 0 calc(-1 * var(--md-border-width-strong)) 0
+        color-mix(in srgb, var(--md-on-primary) 40%, transparent);
+}
+.theme-studio-tab.active:hover {
+    color: var(--md-on-primary);
+    background: var(--md-primary-hover, var(--md-primary));
     border-color: var(--md-primary);
 }
 .theme-studio-tab:focus-visible,
@@ -227,6 +234,15 @@ async function handleTabKeydown(
     gap: 1rem;
     min-width: 0;
     max-width: 100%;
+}
+#dashboard-theme-page-container .dashboard-page-description,
+#dashboard-theme-page-container .supporting-text {
+    color: color-mix(
+        in srgb,
+        var(--md-on-surface) 88%,
+        var(--md-surface)
+    );
+    opacity: 1;
 }
 @media (max-width: 759px) {
     .theme-studio-tabs {

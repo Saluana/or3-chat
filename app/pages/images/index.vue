@@ -926,7 +926,7 @@ const searchInputProps = computed(() => {
 
                 <div
                     v-if="selectionMode"
-                    class="fixed inset-x-0 bottom-0 z-[1000] border-t-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-high)]/80 backdrop-blur-md"
+                    class="fixed inset-x-0 bottom-0 z-[1000] border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-high)]/80 backdrop-blur-md"
                 >
                     <div
                         class="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2 px-4 py-2"
@@ -1180,7 +1180,7 @@ const searchInputProps = computed(() => {
         gap: 0.25rem;
         margin-top: 0.4rem;
         padding: 0.8rem 0.7rem 0.2rem;
-        border-top: var(--md-border-width) solid var(--md-outline-variant);
+        border-top: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--md-outline-variant);
     }
 }
 </style>

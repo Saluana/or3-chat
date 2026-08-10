@@ -179,8 +179,12 @@ export function validateThemeDefinition(
     }
 
     for (const [field, value] of [
+        ['borderWidthSubtle', config.borderWidthSubtle],
         ['borderWidth', config.borderWidth],
+        ['borderWidthStrong', config.borderWidthStrong],
+        ['borderRadiusSmall', config.borderRadiusSmall],
         ['borderRadius', config.borderRadius],
+        ['borderRadiusLarge', config.borderRadiusLarge],
     ] as const) {
         if (value !== undefined && !/^(?:0|\d*\.?\d+(?:px|rem|em|%))$/.test(value.trim())) {
             errors.push({

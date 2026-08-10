@@ -3,7 +3,7 @@
         <div class="mx-auto w-full max-w-7xl flex-1 space-y-6">
             <!-- Header -->
             <header
-                class="rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-surface)] px-5 py-4 shadow-sm"
+                class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] px-5 py-4 shadow-sm"
             >
                 <div class="flex flex-wrap items-center justify-between gap-4">
                     <div class="space-y-1">
@@ -33,14 +33,14 @@
 
             <div
                 v-if="isLoading"
-                class="rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-surface)] px-5 py-8 text-sm"
+                class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] px-5 py-8 text-sm"
             >
                 Loading wizard session...
             </div>
 
             <div
                 v-else-if="!currentStep"
-                class="rounded-[var(--md-border-radius)] border border-[var(--md-error)]/60 bg-[var(--md-error)]/6 px-5 py-8 text-sm text-[var(--md-on-surface)]"
+                class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-error)]/60 bg-[var(--md-error)]/6 px-5 py-8 text-sm text-[var(--md-on-surface)]"
             >
                 Could not load wizard steps. Refresh and try again.
             </div>
@@ -51,7 +51,7 @@
             >
                 <!-- Sidebar -->
                 <aside
-                    class="self-start rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-surface)] p-2.5 shadow-sm lg:sticky lg:top-6"
+                    class="self-start rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] p-2.5 shadow-sm lg:sticky lg:top-6"
                 >
                     <ol class="space-y-1">
                         <li
@@ -60,7 +60,7 @@
                         >
                             <button
                                 type="button"
-                                class="step-pill flex w-full items-center gap-2.5 rounded-[var(--md-border-radius)] border px-2.5 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                                class="step-pill flex w-full items-center gap-2.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] px-2.5 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                                 :class="stepPillClass(step.id)"
                                 :disabled="!canNavigateToStep(step.id)"
                                 @click="onGoToStep(step.id)"
@@ -97,7 +97,7 @@
 
                 <!-- Content -->
                 <section
-                    class="wizard-content space-y-5 rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-surface)] p-6 shadow-sm"
+                    class="wizard-content space-y-5 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] p-6 shadow-sm"
                 >
                     <component
                         :is="activeComponent"

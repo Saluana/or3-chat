@@ -46,7 +46,7 @@
             >
                 <div
                     id="dashboard-page-header"
-                    class="flex h-14 shrink-0 items-center border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-3 sm:px-5"
+                    class="flex h-14 shrink-0 items-center border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[color:var(--md-border-color)] px-3 sm:px-5"
                 >
                     <UButton
                         id="dashboard-back-button"
@@ -65,7 +65,9 @@
                         class="ml-2 font-semibold text-sm truncate"
                     >
                         {{ headerPluginLabel }}
-                        <span v-if="activePageTitle" class="opacity-60"
+                        <span
+                            v-if="activePageTitle"
+                            class="text-[var(--md-on-surface)]"
                             >/ {{ activePageTitle }}</span
                         >
                     </div>
@@ -73,7 +75,7 @@
                 <div
                     v-if="state.error"
                     id="dashboard-page-error"
-                    class="mx-4 mt-3 rounded-md border-[var(--md-border-width)] border-(--md-error) bg-(--md-error-container) px-3 py-2 text-xs text-(--md-on-error-container)"
+                    class="mx-4 mt-3 rounded-[var(--md-border-radius)] border-[var(--md-border-width)] border-(--md-error) bg-(--md-error-container) px-3 py-2 text-xs text-(--md-on-error-container)"
                 >
                     {{ state.error.message }}
                 </div>
@@ -292,7 +294,7 @@ const dashboardModalProps = computed(() => {
         'w-[calc(100dvw-0.75rem)] h-[calc(100dvh-0.75rem)] sm:w-[96dvw] sm:max-w-[1180px] sm:h-[94dvh] sm:max-h-[900px] overflow-hidden max-w-[100dvw]';
     const baseUi = {
         content: 'z-[10] max-w-[100dvw]',
-        footer: 'justify-end border-t-[var(--md-border-width)]',
+        footer: 'justify-end border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))]',
         body: 'overflow-hidden h-full flex-1 min-w-0 !p-0',
     } as Record<string, unknown>;
 

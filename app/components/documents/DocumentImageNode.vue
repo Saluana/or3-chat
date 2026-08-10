@@ -94,7 +94,7 @@ function setWidth(value: number | number[] | undefined) {
     display: block;
     width: 100%;
     min-height: 8rem;
-    border-radius: var(--md-border-radius);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
     object-fit: contain;
     background: color-mix(in oklab, var(--md-surface-container), transparent 20%);
 }
@@ -108,7 +108,7 @@ function setWidth(value: number | number[] | undefined) {
     display: grid;
     place-items: center;
     color: var(--md-on-surface-variant);
-    border: var(--md-border-width) dashed var(--md-border-color);
+    border: var(--md-border-width-subtle, var(--md-border-width)) dashed var(--md-border-color);
 }
 
 .image-controls {
@@ -124,7 +124,7 @@ function setWidth(value: number | number[] | undefined) {
     gap: 0.5rem;
     padding: 0.375rem;
     border: var(--md-border-width) solid var(--md-border-color);
-    border-radius: var(--md-border-radius);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
     background: color-mix(in oklab, var(--md-surface), transparent 4%);
     box-shadow: 0 8px 24px rgb(0 0 0 / 14%);
 }

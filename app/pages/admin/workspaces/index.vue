@@ -48,7 +48,7 @@
 
             <!-- Loading State -->
             <div v-if="showSkeleton" class="space-y-4">
-                <div v-for="i in perPage" :key="i" class="h-20 bg-[var(--md-surface-container-highest)] rounded-lg animate-pulse" />
+                <div v-for="i in perPage" :key="i" class="h-20 bg-[var(--md-surface-container-highest)] rounded-[var(--md-border-radius)] animate-pulse" />
             </div>
 
             <!-- Error State -->
@@ -68,7 +68,7 @@
                 >
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div class="min-w-0 flex items-center gap-4">
-                            <div class="w-10 h-10 rounded-lg bg-[var(--md-surface-container-high)] flex items-center justify-center">
+                            <div class="w-10 h-10 rounded-[var(--md-border-radius-small)] bg-[var(--md-surface-container-high)] flex items-center justify-center">
                                 <UIcon :name="workspaceIcon" class="w-5 h-5 text-[var(--md-primary)]" />
                             </div>
                             <div class="min-w-0">

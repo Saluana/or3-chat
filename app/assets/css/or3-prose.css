@@ -55,7 +55,7 @@
 
 .or3-prose :deep(h1) {
     font-size: 1.875rem;
-    border-bottom: var(--md-border-width) solid var(--md-border-color);
+    border-bottom: var(--md-border-width-subtle) solid var(--md-border-color);
     padding-bottom: 0.5rem;
     margin-bottom: 1rem;
 }
@@ -81,7 +81,7 @@
     background: var(--or3-prose-code-inline-bg);
     padding: 0.1rem 0.25rem;
     color: var(--or3-prose-code-inline-fg);
-    border-radius: calc(var(--md-border-radius) * 0.65);
+    border-radius: var(--md-border-radius-small);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
         'Courier New', monospace;
     font-size: 0.9em;
@@ -108,7 +108,7 @@
 .or3-prose :deep([data-streamdown='code-block']) {
     margin: 1rem 0;
     border: var(--md-border-width) solid var(--or3-prose-code-border);
-    border-radius: calc(var(--md-border-radius) + 2px);
+    border-radius: var(--md-border-radius-large);
     background: var(--or3-prose-code-block-bg);
     overflow: hidden;
 }
@@ -132,7 +132,7 @@
     min-height: 2.5rem;
     padding: 0.45rem 0.75rem;
     background: var(--or3-prose-code-header-bg);
-    border-bottom: var(--md-border-width) solid var(--or3-prose-code-border);
+    border-bottom: var(--md-border-width-subtle) solid var(--or3-prose-code-border);
     font-family: inherit;
     font-size: 0.875rem;
     color: var(--or3-prose-code-header-fg);
@@ -171,8 +171,8 @@
     padding: 0.2rem 0.45rem;
     background: var(--or3-prose-code-button-bg);
     color: var(--or3-prose-code-button-fg);
-    border: 1px solid transparent;
-    border-radius: calc(var(--md-border-radius) * 0.8);
+    border: var(--md-border-width) solid transparent;
+    border-radius: var(--md-border-radius-small);
     cursor: pointer;
     font-size: 0.7rem;
     line-height: 1;
@@ -190,7 +190,7 @@
 }
 
 .or3-prose :deep(blockquote) {
-    border-left: 4px solid var(--md-primary);
+    border-left: var(--md-border-width-strong) solid var(--md-primary);
     padding-left: 1rem;
     margin: 1rem 0;
     font-style: italic;
@@ -210,7 +210,7 @@
 
 
 .or3-prose :deep(th) {
-    border-bottom: var(--md-border-width) solid var(--md-border-color);
+    border-bottom: var(--md-border-width-subtle) solid var(--md-border-color);
     padding: 0.5rem 0.75rem;
     text-align: left;
     color: var(--or3-prose-table-header-fg);
@@ -221,7 +221,7 @@
 }
 
 .or3-prose :deep(td) {
-    border-bottom: var(--md-border-width) solid var(--md-border-color);
+    border-bottom: var(--md-border-width-subtle) solid var(--md-border-color);
     padding: 0.5rem 0.75rem;
     text-align: left;
     font-size: 0.875rem;
@@ -254,7 +254,7 @@
 .or3-prose :deep([data-streamdown='th']) {
     padding-top: 8px;
     padding-bottom: 8px;
-    border-bottom: var(--md-border-width) solid var(--md-border-color);
+    border-bottom: var(--md-border-width-subtle) solid var(--md-border-color);
     font-weight: 600;
     border-top: none;
     white-space: nowrap;

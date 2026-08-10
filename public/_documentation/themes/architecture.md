@@ -75,6 +75,11 @@ color mode in localStorage (`or3:user-theme-overrides:light` / `:dark`) and
 merged into the DOM at runtime. Each group has an `enabled` toggle, and values
 are clamped (font size 14-24px, opacity 0-1). See the capability table below.
 
+Typography overrides independently select body and heading fonts from the
+bundled font catalog or retain the active theme's authored font for either
+role. Existing saved `useSystemFont` values remain supported as a fallback for
+profiles created before the independent selectors were introduced.
+
 The color editor presents the highest-impact roles first: accent, app and panel
 surfaces, text, borders, hover/selected states, and status colors. Less common
 Material roles and individual surface levels remain available in a collapsed
@@ -85,19 +90,47 @@ outline role remains independently editable for stronger component outlines.
 Success and warning overrides also feed Nuxt UI's extended semantic color
 variables.
 
+The editor uses a responsive list-and-detail layout: users select a color role
+from the categorized list, then edit that color with one full-size picker, hex
+and RGB fields, quick colors, and a contextual preview. The picker is never
+visually scaled, so its rendered geometry remains aligned with pointer and
+touch coordinates on desktop and mobile.
+
+The Backgrounds section uses the same focused editing model. Workspace base,
+workspace overlay, and sidebar appear as lightweight area selectors, while one
+inspector edits the selected area's image, layout, opacity, pattern size, and
+base color. The master switch preserves saved values when disabled and restores
+the active theme's authored backgrounds.
+
+Theme Studio controls use the active theme's paired semantic roles for every
+state: primary/on-primary for selected controls, surface/on-surface for neutral
+controls, and the corresponding hover or container pair for interaction and
+selection. The editor does not impose a fixed accent color, and it always
+changes foreground and background together to preserve contrast in both modes.
+
 These mappings are user-override behavior only. With color overrides disabled,
 the active theme's authored variables—including custom state tokens—continue to
 cascade unchanged. Existing saved detailed values remain supported and editable
 under Advanced colors, and disabling then re-enabling colors preserves those
 saved values.
 
-The Shape section exposes `--md-border-width` and `--md-border-radius`. These
-are the two broadly consumed non-color design tokens: they control shared
-borders, dividers, inputs, cards, panels, and interactive-surface rounding.
-Shape overrides have their own enabled toggle and restore the active theme's
-authored values when disabled. Shadows are intentionally not exposed because
-most current shadows are component- or theme-specific rather than consumers of
-one reliable shared elevation token.
+The Shape section exposes three border-width tiers and three radius tiers.
+`--md-border-width-subtle` is for dividers, `--md-border-width` remains the
+standard component token, and `--md-border-width-strong` is for emphasis.
+`--md-border-radius-small` is for controls, `--md-border-radius` remains the
+standard surface token, and `--md-border-radius-large` is for large surfaces.
+The established middle tokens remain the compatibility defaults: the four new
+tiers inherit from them until a theme or user override opts in. Shape overrides
+are stored separately per color mode, have their own enabled toggle, and
+restore the active theme's authored values when disabled. Shadows are
+intentionally not exposed because most current shadows are component- or
+theme-specific rather than consumers of one reliable shared elevation token.
+Theme authors can set the same tiers with `borderWidthSubtle`, `borderWidth`,
+`borderWidthStrong`, `borderRadiusSmall`, `borderRadius`, and
+`borderRadiusLarge` on `ThemeDefinition`; omitted outer tiers continue to
+inherit their middle token. The shipped Blank theme uses a 1px component border
+by default so inputs and other neutral controls remain visibly bounded, while
+its divider and emphasis tiers remain at 0px to preserve the minimal layout.
 
 The signed-in preference repository is canonical once account storage is
 ready. The SSR cookie supplies first paint, and localStorage is a migration and

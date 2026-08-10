@@ -1,6 +1,6 @@
 <template>
     <button
-        class="w-full flex items-center gap-3 px-2.5 min-h-[52px] group relative transition-colors duration-200 rounded-[var(--md-border-radius)] mb-1 bg-[color:var(--md-surface)] border border-[color:var(--md-border-color)]/60 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:bg-[color:var(--md-surface-hover)] hover:border-[color:var(--md-border-color)] active:bg-[color:var(--md-surface-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--md-primary)]/20 cursor-pointer page-link-btn"
+        class="w-full flex items-center gap-3 px-2.5 min-h-[52px] group relative transition-colors duration-200 rounded-[var(--md-border-radius-small,var(--md-border-radius))] mb-1 bg-[color:var(--md-surface)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]/60 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:bg-[color:var(--md-surface-hover)] hover:border-[color:var(--md-border-color)] active:bg-[color:var(--md-surface-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--md-primary)]/20 cursor-pointer page-link-btn"
         :class="accentClass"
         :aria-label="label"
         @click="emit('select')"

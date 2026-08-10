@@ -25,13 +25,13 @@
                 />
             </div>
 
-            <div class="wizard-preview-panel self-start rounded-[var(--md-border-radius)] border border-dashed border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/3 p-4">
+            <div class="wizard-preview-panel self-start rounded-[var(--md-border-radius-large)] border-[length:var(--md-border-width)] border-dashed border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/3 p-4">
                 <div class="space-y-4">
                     <div class="text-[10px] font-bold uppercase tracking-widest text-[var(--md-on-surface)]/50">
                         Live Brand Preview
                     </div>
                     <div
-                        class="rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-surface)] p-4 shadow-sm"
+                        class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] p-4 shadow-sm"
                     >
                         <div class="font-heading text-base text-[var(--md-on-surface)]">
                             {{ answers.or3SiteName || 'OR3' }}

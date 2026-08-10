@@ -599,12 +599,12 @@ const modelCatalogButtonProps = computed(() => {
 
 <style scoped>
 .chat-settings-popover {
-    --chat-settings-divider-width: max(1px, var(--md-border-width));
+    --chat-settings-divider-width: var(--md-border-width-subtle, var(--md-border-width));
 
     overflow: hidden;
     color: var(--md-on-surface);
     background: var(--md-surface);
-    border-radius: var(--md-border-radius);
+    border-radius: var(--md-border-radius-large, var(--md-border-radius));
 }
 
 .chat-settings-header {
@@ -650,7 +650,7 @@ const modelCatalogButtonProps = computed(() => {
     overflow: hidden;
     border: var(--chat-settings-divider-width) solid
         color-mix(in srgb, var(--md-border-color) 45%, transparent);
-    border-radius: var(--md-border-radius);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
     background: var(--md-surface);
 }
 
@@ -679,7 +679,7 @@ const modelCatalogButtonProps = computed(() => {
     background: var(--md-surface);
     border: var(--chat-settings-divider-width) solid
         color-mix(in srgb, var(--md-border-color) 55%, transparent);
-    border-radius: var(--md-border-radius);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
 }
 
 .chat-settings-model-select :deep(button:hover) {
@@ -726,7 +726,7 @@ const modelCatalogButtonProps = computed(() => {
     );
     border: var(--chat-settings-divider-width) solid
         color-mix(in srgb, var(--md-primary) 18%, transparent);
-    border-radius: var(--md-border-radius);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
 }
 
 .chat-settings-row-copy {

@@ -363,8 +363,8 @@ defineExpose({
     max-width: 480px;
     max-height: 60dvh;
     background: var(--md-surface);
-    border: 1px solid var(--md-outline-variant);
-    border-radius: var(--md-border-radius);
+    border: var(--md-border-width) solid var(--md-outline-variant);
+    border-radius: var(--md-border-radius-large);
     box-shadow:
         0 4px 6px -1px rgb(0 0 0 / 0.1),
         0 2px 4px -2px rgb(0 0 0 / 0.1),
@@ -394,7 +394,7 @@ defineExpose({
     flex-direction: column;
     gap: 10px;
     background: var(--md-surface);
-    border-bottom: 1px solid var(--md-outline-variant);
+    border-bottom: var(--md-border-width-subtle) solid var(--md-outline-variant);
     flex-shrink: 0;
 }
 
@@ -447,8 +447,8 @@ defineExpose({
 .search-input {
     width: 100%;
     padding: 7px 10px 7px 32px;
-    border-radius: var(--md-border-radius);
-    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-border-radius-small);
+    border: var(--md-border-width) solid var(--md-outline-variant);
     background: var(--md-surface-container-low);
     color: var(--md-on-surface);
     font-size: 13px;

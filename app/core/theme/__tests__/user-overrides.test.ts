@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useUserThemeOverrides } from '../useUserThemeOverrides';
-import type { UserThemeOverrides } from '../user-overrides-types';
+import type {
+    UserFontChoice,
+    UserThemeOverrides,
+} from '../user-overrides-types';
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -154,6 +157,34 @@ describe('useUserThemeOverrides', () => {
         expect(overrides.value.colors?.primary).toBe('#light');
     });
 
+    it('keeps tiered shape overrides separate per color mode', () => {
+        const { set, switchMode, overrides } = useUserThemeOverrides();
+
+        set({
+            shape: {
+                enabled: true,
+                borderWidthSubtlePx: 0.5,
+                borderRadiusLargePx: 20,
+            },
+        });
+
+        switchMode('dark');
+        set({
+            shape: {
+                enabled: true,
+                borderWidthStrongPx: 4,
+                borderRadiusSmallPx: 2,
+            },
+        });
+        expect(overrides.value.shape?.borderWidthStrongPx).toBe(4);
+        expect(overrides.value.shape?.borderWidthSubtlePx).toBeUndefined();
+
+        switchMode('light');
+        expect(overrides.value.shape?.borderWidthSubtlePx).toBe(0.5);
+        expect(overrides.value.shape?.borderRadiusLargePx).toBe(20);
+        expect(overrides.value.shape?.borderWidthStrongPx).toBeUndefined();
+    });
+
     it('reset() clears only active mode', () => {
         const { set, reset, switchMode, overrides } = useUserThemeOverrides();
 
@@ -220,22 +251,63 @@ describe('useUserThemeOverrides', () => {
         expect(overrides.value.typography?.baseFontPx).toBe(18); // valid value
     });
 
+    it('accepts supported font choices and rejects unknown values', () => {
+        const { set, overrides } = useUserThemeOverrides();
+
+        set({
+            typography: {
+                bodyFont: 'ibm-plex-sans',
+                headingFont: 'press-start-2p',
+            },
+        });
+        expect(overrides.value.typography?.bodyFont).toBe('ibm-plex-sans');
+        expect(overrides.value.typography?.headingFont).toBe('press-start-2p');
+
+        set({
+            typography: {
+                bodyFont: 'unknown-font' as UserFontChoice,
+            },
+        });
+        expect(overrides.value.typography?.bodyFont).toBe('ibm-plex-sans');
+    });
+
     it('validates shared shape ranges', () => {
         const { set, overrides } = useUserThemeOverrides();
 
         set({
             shape: {
                 enabled: true,
+                borderWidthSubtlePx: 20,
                 borderWidthPx: 20,
+                borderWidthStrongPx: 20,
+                borderRadiusSmallPx: 80,
                 borderRadiusPx: 80,
+                borderRadiusLargePx: 80,
             },
         });
+        expect(overrides.value.shape?.borderWidthSubtlePx).toBe(6);
         expect(overrides.value.shape?.borderWidthPx).toBe(6);
+        expect(overrides.value.shape?.borderWidthStrongPx).toBe(6);
+        expect(overrides.value.shape?.borderRadiusSmallPx).toBe(32);
         expect(overrides.value.shape?.borderRadiusPx).toBe(32);
+        expect(overrides.value.shape?.borderRadiusLargePx).toBe(32);
 
-        set({ shape: { borderWidthPx: -1, borderRadiusPx: -4 } });
+        set({
+            shape: {
+                borderWidthSubtlePx: -1,
+                borderWidthPx: -1,
+                borderWidthStrongPx: -1,
+                borderRadiusSmallPx: -4,
+                borderRadiusPx: -4,
+                borderRadiusLargePx: -4,
+            },
+        });
+        expect(overrides.value.shape?.borderWidthSubtlePx).toBe(0);
         expect(overrides.value.shape?.borderWidthPx).toBe(0);
+        expect(overrides.value.shape?.borderWidthStrongPx).toBe(0);
+        expect(overrides.value.shape?.borderRadiusSmallPx).toBe(0);
         expect(overrides.value.shape?.borderRadiusPx).toBe(0);
+        expect(overrides.value.shape?.borderRadiusLargePx).toBe(0);
     });
 
     it('validates opacity range (0-1)', () => {

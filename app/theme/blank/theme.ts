@@ -18,7 +18,9 @@ export default defineTheme({
     description: 'ChatGPT-inspired clean minimal theme',
     isDefault: false,
 
-    borderWidth: '0px',
+    borderWidthSubtle: '0px',
+    borderWidth: '1px',
+    borderWidthStrong: '0px',
     borderRadius: '10px',
     stylesheets: ['~/theme/blank/styles.css'],
     customComponents: {

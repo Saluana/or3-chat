@@ -112,6 +112,13 @@ export interface NodeState {
     /** Streaming text (cleared on completion, output gets final value) */
     streamingText?: string;
 
+    /**
+     * A concise, user-facing activity while the model works before it has
+     * started producing visible output. Raw reasoning is intentionally not
+     * retained or rendered in chat.
+     */
+    activity?: 'thinking';
+
     /** Error message if status is 'error' */
     error?: string;
 
@@ -241,6 +248,11 @@ export interface WorkflowMessageData {
 
     /** Version counter for reactivity tracking */
     version?: number;
+
+    /** Durable background-job metadata used to reattach or stop a run. */
+    background_job_id?: string;
+    background_job_status?: 'streaming' | 'complete' | 'error' | 'aborted';
+    background_job_error?: string | null;
 
     /**
      * Durable run journal for wave/tool restart safety (R7).
@@ -468,4 +480,6 @@ export interface WorkflowResumeState {
     sessionMessages?: ChatHistoryMessage[];
     /** Suggested input when resuming (last output) */
     resumeInput?: string;
+    /** Full queued wave retained for an exact parallel/DAG resume. */
+    pendingNodes?: string[];
 }

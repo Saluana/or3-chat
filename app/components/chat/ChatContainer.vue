@@ -1008,7 +1008,22 @@ function onStopStream() {
     }
     try {
         if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('workflow:stop'));
+            const workflowMessage = [...messages.value]
+                .reverse()
+                .find((message) => {
+                    if (!message.id) return false;
+                    const executionState = workflowStates.get(message.id)
+                        ?.executionState;
+                    return (
+                        executionState === 'running' ||
+                        executionState === 'idle'
+                    );
+                });
+            window.dispatchEvent(
+                new CustomEvent('workflow:stop', {
+                    detail: { messageId: workflowMessage?.id },
+                })
+            );
         }
     } catch (e) {
         if (import.meta.dev) {
@@ -1066,7 +1081,9 @@ const cleanupWorkflowHook = hooks.on(
         if (!activeIds.has(payload.messageId)) return;
         // Only set if not already the same reference (avoid unnecessary reactivity triggers)
         const existing = workflowStates.get(payload.messageId);
-        if (existing !== payload.state) {
+        const incomingVersion = payload.state.version ?? 0;
+        const existingVersion = existing?.version ?? -1;
+        if (existing !== payload.state && incomingVersion >= existingVersion) {
             workflowStates.set(payload.messageId, payload.state);
         }
         // If same reference, Vue reactivity will pick up internal state changes via version

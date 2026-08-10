@@ -514,12 +514,6 @@ async function runWorkflowTest(): Promise<void> {
                 'Generate a concise verse about confidence and respect. Keep it under six lines.',
             threadId: ids.threadId,
             messageId: ids.messageId,
-            conversationHistory: [
-                {
-                    role: 'user',
-                    content: 'Please run the selected workflow in background mode.',
-                },
-            ],
         });
 
         appendLog(`[workflow] started job ${response.jobId}`);

@@ -1,6 +1,6 @@
 export const documentsOverrides = {
     'button.document': {
-        class: 'bg-[var(--md-surface-hover)] hover:bg-[var(--md-surface-active)] border-0 rounded-[var(--md-border-radius)]',
+        class: 'bg-[var(--md-surface-hover)] hover:bg-[var(--md-surface-active)] border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
     },
 };
 export const documentsStyles = {
@@ -11,40 +11,40 @@ export const documentsStyles = {
     },
     '.document-editor-root .editor-topbar': {
         style: {
-            borderBottom: '1px solid var(--md-border-color)',
+            borderBottom: 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color)',
         },
     },
     '.document-editor-root .document-editor-toolbar': {
         style: {
             borderBottom:
-                'max(1px, var(--md-border-width)) solid var(--md-border-color)',
+                'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color)',
             boxShadow: '0 1px 2px color-mix(in srgb, var(--md-on-surface) 4%, transparent)',
         },
     },
     '.document-editor-root .document-inspector': {
         style: {
-            borderLeft: '1px solid var(--md-border-color)',
+            borderLeft: 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color)',
             boxShadow: 'none',
         },
     },
     '.document-editor-root .document-ai-composer': {
         style: {
-            border: '1px solid var(--md-border-color)',
+            border: 'var(--md-border-width) solid var(--md-border-color)',
             borderRadius: 'var(--chat-composer-border-radius, 28px)',
             boxShadow: '0 12px 36px color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
         },
     },
     '.document-editor-root .toolbar-overflow': {
         style: {
-            border: '1px solid var(--md-border-color)',
-            borderRadius: '12px',
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius-large, var(--md-border-radius))',
             boxShadow: '0 12px 36px color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
         },
     },
     '.document-editor-root .selection-menu': {
         style: {
-            border: '1px solid var(--md-border-color)',
-            borderRadius: '12px',
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius-large, var(--md-border-radius))',
             boxShadow: '0 12px 30px color-mix(in srgb, var(--md-on-surface) 10%, transparent)',
         },
     },

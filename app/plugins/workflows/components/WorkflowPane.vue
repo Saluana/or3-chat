@@ -1041,7 +1041,7 @@ watch(
     --workflow-toolbar-canvas: 780px;
     --workflow-toolbar-control-size: 2.5rem;
     --workflow-toolbar-gap: 0.15rem;
-    --workflow-toolbar-border-width: var(--md-border-width);
+    --workflow-toolbar-border-width: var(--md-border-width-subtle);
     --workflow-toolbar-surface: color-mix(
         in oklab,
         var(--md-surface),
@@ -1112,7 +1112,7 @@ watch(
 }
 
 .workflow-toolbar-separator {
-    width: 1px;
+    width: var(--md-border-width-subtle);
     height: 1.35rem;
     flex: 0 0 auto;
     margin-inline: 0.35rem;
@@ -1129,7 +1129,7 @@ watch(
     gap: 0.4rem;
     grid-auto-flow: column !important;
     grid-template-rows: 1fr !important;
-    border-radius: var(--md-border-radius) !important;
+    border-radius: var(--md-border-radius-small) !important;
     font-family: inherit;
     line-height: 1;
     white-space: nowrap;
@@ -1150,7 +1150,7 @@ watch(
     gap: 2px;
     padding: 2px;
     border: var(--workflow-toolbar-border-width) solid var(--md-border-color);
-    border-radius: var(--md-border-radius);
+    border-radius: var(--md-border-radius-small);
     background: var(--md-surface);
 }
 
@@ -1166,7 +1166,7 @@ watch(
             var(--workflow-toolbar-border-width)
     ) !important;
     border: 0 !important;
-    border-radius: calc(var(--md-border-radius) - 2px) !important;
+    border-radius: var(--md-border-radius-small) !important;
     box-shadow: none !important;
 }
 

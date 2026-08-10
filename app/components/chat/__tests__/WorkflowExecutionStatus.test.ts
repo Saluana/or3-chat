@@ -242,4 +242,28 @@ describe('WorkflowExecutionStatus', () => {
             false
         );
     });
+
+    it('explains when an active model is still thinking', async () => {
+        const state: UiWorkflowState = {
+            ...mockState,
+            nodeStates: {
+                'node-1': {
+                    status: 'active',
+                    label: 'Planner',
+                    type: 'agent',
+                    output: '',
+                    streamingText: '',
+                    activity: 'thinking',
+                },
+            },
+            executionOrder: ['node-1'],
+        };
+        const wrapper = mount(WorkflowExecutionStatus, {
+            props: { workflowState: state },
+            global: { components: { StreamMarkdown, UIcon } },
+        });
+
+        await wrapper.find('.cursor-pointer').trigger('click');
+        expect(wrapper.text()).toContain('Thinking…');
+    });
 });

@@ -19,7 +19,7 @@
                     :key="link.to"
                     :to="link.to"
                     :aria-current="isActive(link.to) ? 'page' : undefined"
-                    class="flex items-center gap-3 px-3 text-sm font-medium rounded-[var(--md-sys-shape-corner-small,4px)] transition-all duration-200 hover:bg-[var(--md-primary)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)] group relative"
+                    class="flex items-center gap-3 px-3 text-sm font-medium rounded-[var(--md-border-radius-small,var(--md-sys-shape-corner-small,4px))] transition-all duration-200 hover:bg-[var(--md-primary)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)] group relative"
                     :class="[
                         isActive(link.to)
                             ? 'bg-[var(--md-primary)]/15 text-[var(--md-primary)] shadow-sm'
@@ -47,7 +47,7 @@
 
                     <div
                         v-if="isDesktop && collapsed"
-                        class="absolute left-full ml-2 px-2 py-1 bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface)] text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity duration-150"
+                        class="absolute left-full ml-2 px-2 py-1 bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface)] text-xs rounded-[var(--md-border-radius-small,0.25rem)] shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity duration-150"
                     >
                         {{ link.label }}
                     </div>

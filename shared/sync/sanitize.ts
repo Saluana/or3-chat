@@ -13,8 +13,10 @@ const TABLES_WITH_DELETED = ['threads', 'messages', 'projects', 'posts', 'kv', '
 const MAX_INLINE_DATA_URL_SIZE = 10000; // 10KB - small icons/thumbnails OK, large images stripped
 /** Max recursive depth when sanitizing nested payloads */
 const MAX_SANITIZE_DEPTH = 20;
-/** Keep message payloads below server hard limit (64KB) with margin */
-const MAX_SYNC_MESSAGE_PAYLOAD_BYTES = 60 * 1024;
+/** Shared per-operation payload ceiling enforced by every sync provider. */
+export const MAX_SYNC_PAYLOAD_BYTES = 256 * 1024;
+/** Message payloads are compacted before they exceed the provider ceiling. */
+const MAX_SYNC_MESSAGE_PAYLOAD_BYTES = MAX_SYNC_PAYLOAD_BYTES;
 /** Truncation marker used when compacting oversized sync payloads */
 const SYNC_TRUNCATED_MARKER = '[truncated-for-sync]';
 
@@ -148,6 +150,30 @@ function compactMessagePayloadForSync(
     if (sizeBytes <= MAX_SYNC_MESSAGE_PAYLOAD_BYTES) {
         return payload;
     }
+
+    const data = toRecord(payload.data);
+    if (data.type === 'workflow-execution') {
+        const compacted = {
+            ...payload,
+            data: compactWorkflowDataForSync(data),
+        };
+        if (getPayloadSizeBytes(compacted) <= MAX_SYNC_MESSAGE_PAYLOAD_BYTES) {
+            return compacted;
+        }
+
+        // A workflow can legitimately contain several long competing drafts.
+        // Keep an even smaller cross-device status snapshot rather than
+        // rejecting the local write. The full node outputs remain in Dexie and
+        // the durable background job; only the sync operation is compacted.
+        const minimal = {
+            ...payload,
+            data: compactWorkflowDataForSync(data, { minimal: true }),
+        };
+        if (getPayloadSizeBytes(minimal) <= MAX_SYNC_MESSAGE_PAYLOAD_BYTES) {
+            return minimal;
+        }
+    }
+
     throw new SyncPayloadTooLargeError('messages', sizeBytes, MAX_SYNC_MESSAGE_PAYLOAD_BYTES);
 }
 
@@ -164,13 +190,11 @@ export class SyncPayloadTooLargeError extends Error {
     }
 }
 
-// Retained temporarily for compatibility with downstream imports while
-// oversized canonical messages use typed rejection instead of lossy compaction.
-void compactWorkflowDataForSync;
-
 function compactWorkflowDataForSync(
-    data: Record<string, unknown>
+    data: Record<string, unknown>,
+    options: { minimal?: boolean } = {}
 ): Record<string, unknown> {
+    const minimal = options.minimal === true;
     const compacted: Record<string, unknown> = {
         type: 'workflow-execution',
         workflowId:
@@ -187,7 +211,7 @@ function compactWorkflowDataForSync(
             typeof data.executionState === 'string'
                 ? data.executionState
                 : undefined,
-        executionOrder: limitStringArray(data.executionOrder, 64),
+        executionOrder: limitStringArray(data.executionOrder, minimal ? 32 : 64),
         currentNodeId:
             typeof data.currentNodeId === 'string' || data.currentNodeId === null
                 ? data.currentNodeId
@@ -207,35 +231,51 @@ function compactWorkflowDataForSync(
                 : undefined,
         finalOutput:
             typeof data.finalOutput === 'string'
-                ? truncateString(data.finalOutput, 12000)
+                ? truncateString(data.finalOutput, minimal ? 4000 : 6000)
                 : undefined,
         imageCaption:
             typeof data.imageCaption === 'string'
                 ? truncateString(data.imageCaption, 1000)
                 : undefined,
+        background_job_id:
+            typeof data.background_job_id === 'string'
+                ? truncateString(data.background_job_id, 200)
+                : undefined,
+        background_job_status:
+            typeof data.background_job_status === 'string'
+                ? data.background_job_status
+                : undefined,
+        background_job_error:
+            typeof data.background_job_error === 'string'
+                ? truncateString(data.background_job_error, 1000)
+                : undefined,
     };
 
-    const attachments = compactAttachments(data.attachments);
+    const attachments = compactAttachments(data.attachments, minimal);
     if (attachments) {
         compacted.attachments = attachments;
     }
 
-    const nodeStates = compactNodeStates(data.nodeStates);
+    const nodeStates = compactNodeStates(data.nodeStates, minimal);
     if (nodeStates) {
         compacted.nodeStates = nodeStates;
     }
 
-    const branches = compactBranches(data.branches);
+    const branches = compactBranches(data.branches, minimal);
     if (branches) {
         compacted.branches = branches;
     }
 
-    const nodeOutputs = compactStringMap(data.nodeOutputs, 24, 1200);
+    const nodeOutputs = compactStringMap(
+        data.nodeOutputs,
+        minimal ? 8 : 16,
+        minimal ? 400 : 600
+    );
     if (nodeOutputs) {
         compacted.nodeOutputs = nodeOutputs;
     }
 
-    const resumeState = compactResumeState(data.resumeState);
+    const resumeState = compactResumeState(data.resumeState, minimal);
     if (resumeState) {
         compacted.resumeState = resumeState;
     }
@@ -248,9 +288,12 @@ function compactWorkflowDataForSync(
     return compacted;
 }
 
-function compactAttachments(value: unknown): Array<Record<string, unknown>> | undefined {
+function compactAttachments(
+    value: unknown,
+    minimal: boolean
+): Array<Record<string, unknown>> | undefined {
     if (!Array.isArray(value)) return undefined;
-    return value.slice(0, 8).map((entry) => {
+    return value.slice(0, minimal ? 4 : 8).map((entry) => {
         const source = toRecord(entry);
         return {
             id: typeof source.id === 'string' ? source.id : undefined,
@@ -271,9 +314,15 @@ function compactAttachments(value: unknown): Array<Record<string, unknown>> | un
     });
 }
 
-function compactNodeStates(value: unknown): Record<string, Record<string, unknown>> | undefined {
+function compactNodeStates(
+    value: unknown,
+    minimal: boolean
+): Record<string, Record<string, unknown>> | undefined {
     if (!value || typeof value !== 'object') return undefined;
-    const entries = Object.entries(value as Record<string, unknown>).slice(0, 40);
+    const entries = Object.entries(value as Record<string, unknown>).slice(
+        0,
+        minimal ? 16 : 24
+    );
     if (!entries.length) return undefined;
     const result: Record<string, Record<string, unknown>> = {};
     for (const [nodeId, nodeValue] of entries) {
@@ -295,7 +344,7 @@ function compactNodeStates(value: unknown): Record<string, Record<string, unknow
                     : undefined,
             output:
                 typeof node.output === 'string'
-                    ? truncateString(node.output, 1500)
+                    ? truncateString(node.output, minimal ? 300 : 700)
                     : undefined,
             error:
                 typeof node.error === 'string'
@@ -312,9 +361,15 @@ function compactNodeStates(value: unknown): Record<string, Record<string, unknow
     return result;
 }
 
-function compactBranches(value: unknown): Record<string, Record<string, unknown>> | undefined {
+function compactBranches(
+    value: unknown,
+    minimal: boolean
+): Record<string, Record<string, unknown>> | undefined {
     if (!value || typeof value !== 'object') return undefined;
-    const entries = Object.entries(value as Record<string, unknown>).slice(0, 24);
+    const entries = Object.entries(value as Record<string, unknown>).slice(
+        0,
+        minimal ? 8 : 12
+    );
     if (!entries.length) return undefined;
     const result: Record<string, Record<string, unknown>> = {};
     for (const [branchId, branchValue] of entries) {
@@ -332,7 +387,7 @@ function compactBranches(value: unknown): Record<string, Record<string, unknown>
                 typeof branch.status === 'string' ? branch.status : undefined,
             output:
                 typeof branch.output === 'string'
-                    ? truncateString(branch.output, 1200)
+                    ? truncateString(branch.output, minimal ? 300 : 600)
                     : undefined,
             error:
                 typeof branch.error === 'string'
@@ -343,7 +398,10 @@ function compactBranches(value: unknown): Record<string, Record<string, unknown>
     return result;
 }
 
-function compactResumeState(value: unknown): Record<string, unknown> | undefined {
+function compactResumeState(
+    value: unknown,
+    minimal: boolean
+): Record<string, unknown> | undefined {
     const resume = toRecord(value);
     if (!Object.keys(resume).length) return undefined;
 
@@ -352,7 +410,7 @@ function compactResumeState(value: unknown): Record<string, unknown> | undefined
             typeof resume.startNodeId === 'string'
                 ? truncateString(resume.startNodeId, 120)
                 : undefined,
-        executionOrder: limitStringArray(resume.executionOrder, 64),
+        executionOrder: limitStringArray(resume.executionOrder, minimal ? 32 : 64),
         lastActiveNodeId:
             typeof resume.lastActiveNodeId === 'string' ||
             resume.lastActiveNodeId === null
@@ -360,11 +418,15 @@ function compactResumeState(value: unknown): Record<string, unknown> | undefined
                 : undefined,
         resumeInput:
             typeof resume.resumeInput === 'string'
-                ? truncateString(resume.resumeInput, 2000)
+                ? truncateString(resume.resumeInput, minimal ? 1000 : 2000)
                 : undefined,
     };
 
-    const nodeOutputs = compactStringMap(resume.nodeOutputs, 24, 1200);
+    const nodeOutputs = compactStringMap(
+        resume.nodeOutputs,
+        minimal ? 8 : 16,
+        minimal ? 400 : 600
+    );
     if (nodeOutputs) {
         compacted.nodeOutputs = nodeOutputs;
     }

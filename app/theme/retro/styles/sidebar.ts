@@ -25,7 +25,7 @@ export const sidebarOverrides = {
     'input#sidebar.search': {
         class: 'mb-4',
         ui: {
-            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus-visible:ring-0! focus-visible:outline-none! text-[14px]! h-[40px]!',
+            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus-visible:ring-0! focus-visible:outline-none! text-[14px]! h-[40px]!',
         },
     },
     'selectmenu#sidebar.project-select': {
@@ -37,7 +37,7 @@ export const sidebarOverrides = {
             item: 'text-[14px]!',
             itemLabel: 'text-[14px]!',
             content:
-                'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[14px]!',
+                'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius-large,var(--md-border-radius))] bg-[var(--md-surface)] text-[14px]!',
         },
     },
 
@@ -46,16 +46,16 @@ export const sidebarOverrides = {
     // Sidebar item buttons
     'button#ui.glass-button': {
         activeClass: 'bg-blue-500',
-        class: 'font-[IBM_Plex_Sans] text-[12px] font-light border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)]/30 text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] backdrop-blur',
+        class: 'font-[IBM_Plex_Sans] text-[12px] font-light border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)]/30 text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] backdrop-blur',
     },
     'div#sidebar.project-group-container': {
-        class: 'font-[IBM_Plex_Sans] text-[12px] font-light border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)]/30 text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] backdrop-blur theme-shadow',
+        class: 'font-[IBM_Plex_Sans] text-[12px] font-light border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)]/30 text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] backdrop-blur theme-shadow',
     },
     'button#sidebar.new-chat': {
         variant: 'solid',
         color: 'primary',
         ui: {
-            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)]',
+            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
         },
     },
 
@@ -77,18 +77,18 @@ export const sidebarOverrides = {
     },
     /* --- Sidebar bottom nav buttons --- */
     'button#sidebar.bottom-nav.info': {
-        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] hover:bg-[var(--md-info-hover)]! active:bg-[var(--md-info-active)]!',
+        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)] hover:bg-[var(--md-info-hover)]! active:bg-[var(--md-info-active)]!',
         variant: 'soft',
     },
     'button#sidebar.bottom-nav.connect': {
         variant: 'outline',
-        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] text-[color:var(--md-on-surface)]! transition-colors duration-150',
+        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[color:var(--md-on-surface)]! transition-colors duration-150',
     },
     // SSR Auth button (Clerk sign-in/account) - PRIMARY CTA
     // Base styles only - hover/active defined per-state to avoid conflicts
     // NOTE: No variant/color specified - using raw classes only to avoid Nuxt UI blue tint
     'button#sidebar.bottom-nav.auth': {
-        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] transition-colors duration-150',
+        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)] transition-colors duration-150',
     },
     // OpenRouter auth button states (static build mode)
     'button#sidebar.bottom-nav.auth:connected': {
@@ -111,7 +111,7 @@ export const sidebarOverrides = {
 
     // Dashboard button - SECONDARY action (neutral styling)
     'button#sidebar.bottom-nav.dashboard': {
-        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)]/70 hover:bg-[var(--md-surface-hover)]! hover:text-[var(--md-on-surface)]! active:bg-[var(--md-surface-active)]!',
+        class: 'h-[48px] w-[48px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)]/70 hover:bg-[var(--md-surface-hover)]! hover:text-[var(--md-on-surface)]! active:bg-[var(--md-surface-active)]!',
         variant: 'soft',
     },
 
@@ -162,12 +162,12 @@ export const sidebarCssSelectors = {
     // Sidebar container border
     '#sidebar-container-outer': {
         style: {
-            borderRight: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRight: 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color)',
         },
     },
     '.sidenav-header-separator': {
         style: {
-            borderBottom: 'var(--md-border-width) solid var(--md-border-color)',
+            borderBottom: 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color)',
         },
     },
     '.hud-button': {
@@ -175,7 +175,7 @@ export const sidebarCssSelectors = {
             background:
                 'color-mix(in srgb, var(--md-surface) 30%, transparent)',
             border: 'var(--md-border-width) solid var(--md-border-color)',
-            borderRadius: 'var(--md-border-radius)',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
             boxShadow:
                 '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
         },
@@ -217,7 +217,7 @@ export const sidebarCssSelectors = {
         style: {
             minWidth: '64px !important',
             maxWidth: '64px !important',
-            borderRight: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRight: 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color)',
         },
     },
     '#nav-top-section, #nav-footer-section, #nav-pages-section, #nav-middle-section':
@@ -234,7 +234,7 @@ export const sidebarCssSelectors = {
     },
     '#mobile-bottom-nav .mobile-nav-create-fab': {
         style: {
-            borderRadius: 'var(--md-border-radius)',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
             boxShadow: '2px 2px 0 var(--md-border-color)',
         },
     },

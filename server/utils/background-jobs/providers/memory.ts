@@ -48,16 +48,17 @@ async function cleanupExpiredJobs(): Promise<number> {
     let cleaned = 0;
 
     for (const [id, job] of jobs) {
-        const age = now - job.startedAt;
         const isStreaming = job.status === 'streaming';
-        const isTimedOut = isStreaming && age > config.jobTimeoutMs;
+        const idleFor = now - (job.lastActivityAt ?? job.startedAt);
+        const isTimedOut = isStreaming && idleFor > config.jobTimeoutMs;
 
         const isTerminal = ['complete', 'error', 'aborted'].includes(job.status);
         const completedAge = now - (job.completedAt ?? job.startedAt);
         const isStale = isTerminal && completedAge > config.completedJobRetentionMs;
 
         if (isTimedOut) {
-            // Timeout streaming job
+            // This is an inactivity watchdog, never a total runtime limit. A
+            // workflow that is actively receiving model output must remain live.
             job.abortController.abort();
             job.status = 'error';
             job.error = 'Job timed out';
@@ -200,6 +201,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
             content: '',
             chunksReceived: 0,
             startedAt: Date.now(),
+            lastActivityAt: Date.now(),
             abortController: new AbortController(),
             kind: params.kind ?? 'chat',
             tool_calls: params.tool_calls ?? undefined,
@@ -248,6 +250,7 @@ export const memoryJobProvider: BackgroundJobProvider = {
         if (update.workflow_state !== undefined) {
             job.workflow_state = update.workflow_state;
         }
+        job.lastActivityAt = Date.now();
     },
 
     async completeJob(

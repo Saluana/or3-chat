@@ -4,25 +4,25 @@ const paletteActionButton = {
     variant: 'ghost' as const,
     size: 'sm' as const,
     ui: {
-        base: 'rounded-xl border-0 text-[color:var(--md-on-surface)] hover:bg-[color:var(--md-surface-hover)] active:bg-[color:var(--md-surface-active)]',
+        base: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-0 text-[color:var(--md-on-surface)] hover:bg-[color:var(--md-surface-hover)] active:bg-[color:var(--md-surface-active)]',
     },
 };
 
 export const paletteOverrides = {
     'modal#modal.command-palette': {
-        class: 'sm:rounded-2xl shadow-2xl ring-0',
+        class: 'sm:rounded-[var(--md-border-radius-large,var(--md-border-radius))] shadow-2xl ring-0',
         ui: {
             overlay: 'bg-black/40 backdrop-blur-[2px]',
         },
     },
     'command-palette#command-palette.shell': {
-        class: 'sm:rounded-2xl',
+        class: 'sm:rounded-[var(--md-border-radius-large,var(--md-border-radius))]',
     },
     'button#command-palette.primary-action': {
         color: 'primary' as const,
         variant: 'solid' as const,
         size: 'sm' as const,
-        ui: { base: 'rounded-xl border-0' },
+        ui: { base: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-0' },
     },
     'button#command-palette.secondary-action': paletteActionButton,
 };
@@ -30,7 +30,7 @@ export const paletteOverrides = {
 export const paletteCssSelectors = {
     '.or3-palette-option': {
         style: {
-            borderRadius: '12px',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
         },
     },
 };

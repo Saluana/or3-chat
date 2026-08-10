@@ -26,7 +26,7 @@
 
         <div
             v-if="canTestConnection"
-            class="rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-surface)] p-4"
+            class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] p-4"
             :aria-busy="isTestingConnection"
         >
             <div class="flex flex-wrap items-center gap-3">

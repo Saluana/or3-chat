@@ -1,41 +1,99 @@
 <template>
-    <div class="space-y-12">
-        <DashboardBackgroundLayerEditor
-            v-for="layer in layerEditors"
-            :key="layer.key"
-            :title="layer.title"
-            :description="layer.description"
-            :section-id="layer.sectionId"
-            :url="layer.url"
-            :opacity="layer.opacity"
-            :size-px="layer.sizePx"
-            :repeat="layer.repeat"
-            :fit="layer.fit"
-            :color="layer.color"
-            :preview-style="layer.previewStyle"
-            :presets="layer.presets"
-            :bg-enabled="bgEnabled"
-            :empty-label="layer.emptyLabel"
-            :preset-button-props="presetButtonProps"
-            :remove-layer-button-props="removeLayerButtonProps"
-            :repeat-button-props="repeatButtonProps"
-            :color-picker-props="backgroundColorPickerProps"
-            :hex-input-props="hexInputProps"
-            :copy-button-props="copyButtonProps"
-            @update:opacity="(v: number) => onLayerOpacity(layer.key, v)"
-            @update:size-px="(v: number) => onLayerSize(layer.key, v)"
-            @update:repeat="(v: 'repeat' | 'no-repeat') => layer.onRepeat(v)"
-            @update:fit="(v: boolean) => layer.onFit(v)"
-            @update:color="(c: string) => layer.onColor(c)"
-            @upload="(file: File) => handleLayerUpload(file, layer.key)"
-            @remove="removeLayer(layer.key)"
-            @apply-preset="(src: string, opacity: number) => applyPreset(layer.key, src, opacity)"
-        />
-    </div>
+    <section
+        id="dashboard-theme-backgrounds-section"
+        class="section-card background-studio"
+        role="group"
+        aria-labelledby="theme-section-backgrounds"
+    >
+        <header class="background-studio-header">
+            <div>
+                <h2
+                    id="theme-section-backgrounds"
+                    class="dashboard-section-title"
+                >
+                    App backgrounds
+                </h2>
+                <p class="supporting-text mt-1">
+                    Add subtle patterns or images behind the workspace and
+                    sidebar. Changes apply to this color mode only.
+                </p>
+            </div>
+            <label class="background-toggle">
+                <span>Custom backgrounds</span>
+                <input
+                    type="checkbox"
+                    :checked="bgEnabled"
+                    @change="toggleBackgrounds"
+                />
+                <span class="background-toggle-track" aria-hidden="true">
+                    <span class="background-toggle-thumb" />
+                </span>
+            </label>
+        </header>
+
+        <div class="background-workspace">
+            <nav class="background-layer-list" aria-label="Background areas">
+                <p class="background-list-label">Background areas</p>
+                <button
+                    v-for="layer in layerEditors"
+                    :key="layer.key"
+                    type="button"
+                    class="background-layer-item"
+                    :class="{ active: activeLayerKey === layer.key }"
+                    :aria-pressed="activeLayerKey === layer.key"
+                    @click="activeLayerKey = layer.key"
+                >
+                    <span class="background-layer-thumb">
+                        <span
+                            :style="{
+                                ...layer.previewStyle,
+                                opacity: String(layer.opacity),
+                            }"
+                        />
+                    </span>
+                    <span class="background-layer-copy">
+                        <strong>{{ layer.title }}</strong>
+                        <small>{{ layer.sourceLabel }}</small>
+                    </span>
+                    <UIcon
+                        :name="chevronIcon"
+                        class="h-4 w-4 shrink-0"
+                        aria-hidden="true"
+                    />
+                </button>
+            </nav>
+
+            <DashboardBackgroundLayerEditor
+                :key="activeLayer.key"
+                :title="activeLayer.title"
+                :description="activeLayer.description"
+                :section-id="activeLayer.sectionId"
+                :url="activeLayer.url"
+                :opacity="activeLayer.opacity"
+                :size-px="activeLayer.sizePx"
+                :repeat="activeLayer.repeat"
+                :fit="activeLayer.fit"
+                :color="activeLayer.color"
+                :preview-style="activeLayer.previewStyle"
+                :presets="activeLayer.presets"
+                :bg-enabled="bgEnabled"
+                :empty-label="activeLayer.emptyLabel"
+                :copy-button-props="copyButtonProps"
+                @update:opacity="(v: number) => onLayerOpacity(activeLayer.key, v)"
+                @update:size-px="(v: number) => onLayerSize(activeLayer.key, v)"
+                @update:repeat="(v: 'repeat' | 'no-repeat') => activeLayer.onRepeat(v)"
+                @update:fit="(v: boolean) => activeLayer.onFit(v)"
+                @update:color="(c: string) => activeLayer.onColor(c)"
+                @upload="(file: File) => handleLayerUpload(file, activeLayer.key)"
+                @remove="removeLayer(activeLayer.key)"
+                @apply-preset="(src: string, opacity: number) => applyPreset(activeLayer.key, src, opacity)"
+            />
+        </div>
+    </section>
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch } from 'vue';
+import { reactive, computed, ref, watch } from 'vue';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useDebounceFn } from '@vueuse/core';
@@ -51,6 +109,8 @@ const set = themeApi.set;
 
 // Computed helpers for cleaner bindings
 const bgEnabled = computed(() => overrides.value.backgrounds?.enabled ?? false);
+const activeLayerKey = ref<LayerKey>('contentBg1');
+const chevronIcon = useIcon('ui.chevron.right').value;
 const contentBg1Url = computed(() => overrides.value.backgrounds?.content?.base?.url || null);
 const contentBg1Repeat = computed(() => overrides.value.backgrounds?.content?.base?.repeat || 'repeat');
 const contentBg1Fit = computed(() => overrides.value.backgrounds?.content?.base?.fit ?? false);
@@ -77,59 +137,6 @@ const local = reactive({
 type LayerKey = 'contentBg1' | 'contentBg2' | 'sidebarBg';
 type OpacityLocalKey = 'contentBg1Opacity' | 'contentBg2Opacity' | 'sidebarBgOpacity';
 type SizeLocalKey = 'contentBg1SizePx' | 'contentBg2SizePx' | 'sidebarBgSizePx';
-
-// Theme overrides for buttons/inputs
-const presetButtonOverride = useThemeOverrides({
-    component: 'button', context: 'dashboard', identifier: 'dashboard.theme.preset', isNuxtUI: true,
-});
-const presetButtonProps = computed(() => {
-    return {
-        size: 'sm' as const,
-        variant: 'outline' as const,
-        color: 'on-surface' as const,
-        ...(presetButtonOverride.value as any),
-    };
-});
-
-const removeLayerButtonOverride = useThemeOverrides({
-    component: 'button', context: 'dashboard', identifier: 'dashboard.theme.remove-layer', isNuxtUI: true,
-});
-const removeLayerButtonProps = computed(() => {
-    return {
-        size: 'sm' as const,
-        variant: 'outline' as const,
-        color: 'on-surface' as const,
-        ...(removeLayerButtonOverride.value as any),
-    };
-});
-
-const repeatButtonOverride = useThemeOverrides({
-    component: 'button', context: 'dashboard', identifier: 'dashboard.theme.repeat', isNuxtUI: true,
-});
-const repeatButtonProps = computed(() => {
-    return {
-        size: 'sm' as const,
-        variant: 'outline' as const,
-        color: 'on-surface' as const,
-        ...(repeatButtonOverride.value as any),
-    };
-});
-
-const backgroundColorPickerOverride = useThemeOverrides({
-    component: 'color-picker', context: 'dashboard', identifier: 'dashboard.theme.background-picker', isNuxtUI: true,
-});
-const backgroundColorPickerProps = computed(() => backgroundColorPickerOverride.value || {});
-
-const hexInputOverride = useThemeOverrides({
-    component: 'input', context: 'dashboard', identifier: 'dashboard.theme.hex-input', isNuxtUI: true,
-});
-const hexInputProps = computed(() => {
-    return {
-        size: 'sm' as const,
-        variant: 'outline' as const,
-        ...(hexInputOverride.value as any),
-    };
-});
 
 const copyButtonOverride = useThemeOverrides({
     component: 'button', context: 'dashboard', identifier: 'dashboard.theme.copy-color', isNuxtUI: true,
@@ -230,8 +237,7 @@ const layerEditors = computed(() => [
     {
         key: 'contentBg1' as const,
         title: 'Content Layer 1',
-        description:
-            'Primary pattern beneath UI chrome. Size slider disabled when Fit is enabled.',
+        description: 'The main workspace background.',
         sectionId: 'content-layer1',
         url: contentBg1Url.value,
         opacity: local.contentBg1Opacity,
@@ -241,7 +247,8 @@ const layerEditors = computed(() => [
         color: contentBg1Color.value,
         previewStyle: contentBg1PreviewStyle.value,
         presets: presetsContent1,
-        emptyLabel: 'None',
+        emptyLabel: 'Theme pattern',
+        sourceLabel: contentBg1Url.value ? 'Custom image' : 'Theme pattern',
         onRepeat: (value: 'repeat' | 'no-repeat') =>
             set({ backgrounds: { content: { base: { repeat: value } } } }),
         onFit: (value: boolean) =>
@@ -252,8 +259,7 @@ const layerEditors = computed(() => [
     {
         key: 'contentBg2' as const,
         title: 'Content Layer 2',
-        description:
-            'Optional overlay pattern. Lower opacity recommended for subtle texture.',
+        description: 'A second layer for subtle texture or depth.',
         sectionId: 'content-layer2',
         url: contentBg2Url.value,
         opacity: local.contentBg2Opacity,
@@ -263,7 +269,8 @@ const layerEditors = computed(() => [
         color: contentBg2Color.value,
         previewStyle: contentBg2PreviewStyle.value,
         presets: presetsContent2,
-        emptyLabel: 'Disabled',
+        emptyLabel: 'Optional overlay',
+        sourceLabel: contentBg2Url.value ? 'Custom image' : 'Optional overlay',
         onRepeat: (value: 'repeat' | 'no-repeat') =>
             set({ backgrounds: { content: { overlay: { repeat: value } } } }),
         onFit: (value: boolean) =>
@@ -274,7 +281,7 @@ const layerEditors = computed(() => [
     {
         key: 'sidebarBg' as const,
         title: 'Sidebar Background',
-        description: 'Applies to navigation rail / project tree area.',
+        description: 'The navigation and project sidebar background.',
         sectionId: 'sidebar',
         url: sidebarBgUrl.value,
         opacity: local.sidebarBgOpacity,
@@ -284,7 +291,8 @@ const layerEditors = computed(() => [
         color: sidebarBgColor.value,
         previewStyle: sidebarBgPreviewStyle.value,
         presets: presetsSidebar,
-        emptyLabel: 'None',
+        emptyLabel: 'Theme pattern',
+        sourceLabel: sidebarBgUrl.value ? 'Custom image' : 'Theme pattern',
         onRepeat: (value: 'repeat' | 'no-repeat') =>
             set({ backgrounds: { sidebar: { repeat: value } } }),
         onFit: (value: boolean) =>
@@ -293,6 +301,17 @@ const layerEditors = computed(() => [
             set({ backgrounds: { sidebar: { color: value } } }),
     },
 ]);
+
+const activeLayer = computed(
+    () =>
+        layerEditors.value.find((layer) => layer.key === activeLayerKey.value) ??
+        layerEditors.value[0]!
+);
+
+function toggleBackgrounds() {
+    set({ backgrounds: { enabled: !bgEnabled.value } });
+    themeApi.reapply();
+}
 
 function getCssVarUrl(cssVar: string): string | null {
     if (!isBrowser()) return null;
@@ -414,3 +433,192 @@ watch(
     }
 );
 </script>
+
+<style scoped>
+.background-studio {
+    width: 100%;
+    max-width: 74rem;
+    margin-inline: auto;
+    --background-editor-accent: var(--md-primary);
+    --background-editor-on-accent: var(--md-on-primary);
+    --background-editor-accent-container: var(--md-primary-container);
+    --background-editor-on-accent-container: var(--md-on-primary-container);
+    --background-editor-subtle: var(
+        --md-surface-container-low,
+        var(--md-surface)
+    );
+    --background-editor-border: var(
+        --md-outline-variant,
+        var(--md-border-color)
+    );
+}
+.background-studio-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem 1.5rem;
+}
+.background-studio-header .dashboard-section-title {
+    font-size: 1.25rem;
+    font-weight: 650;
+}
+.background-studio-header .supporting-text {
+    max-width: 68ch;
+    font-size: 0.8125rem;
+}
+.background-toggle {
+    position: relative;
+    display: flex;
+    min-height: 2.25rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+    color: var(--md-on-surface);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    user-select: none;
+}
+.background-toggle input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+.background-toggle-track {
+    position: relative;
+    display: block;
+    width: 2.4rem;
+    height: 1.35rem;
+    background: var(--background-editor-border);
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: 999px;
+    transition: background-color 120ms ease;
+}
+.background-toggle-thumb {
+    position: absolute;
+    top: 50%;
+    left: 0.16rem;
+    width: 0.9rem;
+    height: 0.9rem;
+    background: var(--md-on-primary);
+    border-radius: 50%;
+    transform: translateY(-50%);
+    transition: left 120ms ease;
+}
+.background-toggle input:checked + .background-toggle-track {
+    background: var(--background-editor-accent);
+}
+.background-toggle input:checked + .background-toggle-track .background-toggle-thumb {
+    left: 1.18rem;
+}
+.background-toggle input:focus-visible + .background-toggle-track {
+    outline: 3px solid var(--background-editor-accent);
+    outline-offset: 2px;
+}
+.background-workspace {
+    display: grid;
+    min-width: 0;
+    gap: 1.25rem;
+    margin-top: 1rem;
+    padding-top: 0.8rem;
+    border-top: var(--md-border-width) solid var(--background-editor-border);
+}
+.background-layer-list {
+    min-width: 0;
+}
+.background-list-label {
+    margin-bottom: 0.35rem;
+    padding: 0.35rem 0.65rem;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+.background-layer-item {
+    display: grid;
+    width: 100%;
+    min-height: 4.25rem;
+    grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.55rem 0.65rem;
+    color: var(--md-on-surface);
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-radius: var(--md-border-radius-small);
+    cursor: pointer;
+}
+.background-layer-item:hover {
+    background: var(--background-editor-subtle);
+}
+.background-layer-item.active {
+    color: var(--background-editor-on-accent-container);
+    background: var(--background-editor-accent-container);
+    box-shadow: inset var(--md-border-width-strong) 0 0
+        var(--background-editor-accent);
+}
+.background-layer-item:focus-visible {
+    outline: 3px solid var(--background-editor-accent);
+    outline-offset: -3px;
+}
+.background-layer-thumb {
+    position: relative;
+    display: block;
+    width: 4.5rem;
+    height: 3rem;
+    overflow: hidden;
+    background: var(--background-editor-subtle);
+    border: var(--md-border-width) solid var(--background-editor-border);
+    border-radius: var(--md-border-radius-small);
+}
+.background-layer-thumb > span {
+    position: absolute;
+    inset: 0;
+}
+.background-layer-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+.background-layer-copy strong {
+    overflow: hidden;
+    font-size: 0.85rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.background-layer-copy small {
+    overflow: hidden;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    font-size: 0.68rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.background-layer-item.active .background-layer-copy small {
+    color: inherit;
+    opacity: 0.78;
+}
+@media (max-width: 520px) {
+    .background-layer-item {
+        grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+    }
+    .background-layer-thumb {
+        width: 3.5rem;
+        height: 2.5rem;
+    }
+}
+@media (min-width: 920px) {
+    .background-workspace {
+        grid-template-columns: minmax(16rem, 0.72fr) minmax(24rem, 1.28fr);
+        align-items: start;
+    }
+    .background-inspector {
+        padding-left: 1.25rem;
+        border-left: var(--md-border-width) solid var(--background-editor-border);
+    }
+}
+</style>

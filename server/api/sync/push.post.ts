@@ -29,6 +29,11 @@ import {
 } from '../../utils/sync/rate-limiter';
 import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 import { setNoCacheHeaders } from '../../utils/headers';
+import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
+
+function serializedPayloadBytes(payload: unknown): number {
+    return new TextEncoder().encode(JSON.stringify(payload)).byteLength;
+}
 
 /**
  * POST /api/sync/push
@@ -67,6 +72,15 @@ export default defineEventHandler(async (event) => {
     // Delete ops intentionally send minimal tombstone-ish payloads (or none at all),
     // and must not be rejected for missing non-delete fields.
     for (const op of normalizedOps) {
+        if (
+            op.payload !== undefined &&
+            serializedPayloadBytes(op.payload) > MAX_SYNC_PAYLOAD_BYTES
+        ) {
+            throw createError({
+                statusCode: 413,
+                statusMessage: `Payload too large for ${op.tableName}: exceeds ${MAX_SYNC_PAYLOAD_BYTES} bytes`,
+            });
+        }
         if (op.operation !== 'put') continue;
         const schema = TABLE_PAYLOAD_SCHEMAS[op.tableName];
         if (!schema) continue;

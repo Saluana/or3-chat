@@ -59,8 +59,8 @@ const containerProps = useThemeOverrides({
     pointer-events: none;
 }
 .theme-loader::before {
-    border: 1px solid var(--rl-border);
-    border-radius: 4px;
+    border: var(--md-border-width, 1px) solid var(--rl-border);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
     mix-blend-mode: overlay;
 }
 .theme-loader::after {

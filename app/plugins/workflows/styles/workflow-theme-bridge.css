@@ -321,8 +321,8 @@
   display: flex !important;
   flex-direction: column !important;
   background-color: var(--or3-color-surface) !important;
-  border: 1px solid var(--or3-color-border) !important;
-  border-radius: 8px !important;
+  border: var(--md-border-width) solid var(--or3-color-border) !important;
+  border-radius: var(--md-border-radius) !important;
   box-shadow: var(--or3-shadow-md) !important;
   overflow: hidden !important;
 }
@@ -330,7 +330,7 @@
 .workflow-app .vue-flow__controls-button {
   background-color: transparent !important;
   border: none !important;
-  border-bottom: 1px solid var(--or3-color-border-subtle) !important;
+  border-bottom: var(--md-border-width-subtle) solid var(--or3-color-border-subtle) !important;
   color: var(--or3-color-text-secondary) !important;
   width: 32px !important;
   height: 32px !important;
@@ -663,7 +663,7 @@
 /* Node wrapper in dark mode */
 .dark .workflow-app .node-wrapper {
   background: var(--or3-color-bg-elevated, #1f1f26) !important;
-  border: 1px solid var(--or3-color-border, rgba(255, 255, 255, 0.12)) !important;
+  border: var(--md-border-width) solid var(--or3-color-border, rgba(255, 255, 255, 0.12)) !important;
 }
 
 .dark .workflow-app .node-wrapper:hover {
@@ -672,7 +672,7 @@
 
 .dark .workflow-app .node-wrapper.selected {
   border-color: var(--or3-color-accent, #4E8FBC) !important;
-  border-width: 2px !important;
+  border-width: var(--md-border-width-strong) !important;
 }
 
 /* ═══════════════════════════════════════════════════════

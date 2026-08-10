@@ -134,6 +134,8 @@ Nuxt gateway and invokes the deployment directly:
   ID as an authoritative mutation argument.
 - Sync reads accept owner, editor, and viewer memberships. Sync writes accept
   owners and editors, keeping viewers read-only.
+- Direct and gateway sync writes enforce the shared 256 KB serialized payload
+  ceiling for each operation.
 - Sync GC entry points are internal-only, bounded, and require the verified
   `snapshot-v1` retention contract.
 - Gateway object deletion verifies workspace membership, matches any supplied

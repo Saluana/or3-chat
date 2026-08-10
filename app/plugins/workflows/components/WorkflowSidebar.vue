@@ -134,8 +134,8 @@ function handlePaletteQuickAdd() {
                     :items="items"
                     class="w-full"
                     :ui="{
-                        list: 'bg-[var(--md-surface)]/50 backdrop-blur-sm border border-[color:var(--md-border-color)]/30 rounded-lg p-1 gap-1',
-                        trigger: 'rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 data-[state=inactive]:text-[color:var(--md-on-surface)]/60 data-[state=inactive]:hover:text-[color:var(--md-on-surface)] data-[state=inactive]:hover:bg-[color:var(--md-surface-hover)]/50',
+                        list: 'bg-[var(--md-surface)]/50 backdrop-blur-sm border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]/30 rounded-[var(--md-border-radius)] p-1 gap-1',
+                        trigger: 'rounded-[var(--md-border-radius-small)] px-3 py-1.5 text-xs font-medium transition-all duration-200 data-[state=inactive]:text-[color:var(--md-on-surface)]/60 data-[state=inactive]:hover:text-[color:var(--md-on-surface)] data-[state=inactive]:hover:bg-[color:var(--md-surface-hover)]/50',
                     }"
                     @update:model-value="onPanelChange"
                 />

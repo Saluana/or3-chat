@@ -3,7 +3,7 @@
         <header>
             <div class="flex items-center gap-3">
                 <div
-                    class="flex h-10 w-10 items-center justify-center rounded-[var(--md-sys-shape-corner-medium,12px)] bg-[var(--md-primary)]/10 text-[var(--md-primary)]"
+                    class="flex h-10 w-10 items-center justify-center rounded-[var(--md-border-radius-small,var(--md-sys-shape-corner-medium,12px))] bg-[var(--md-primary)]/10 text-[var(--md-primary)]"
                 >
                     <UIcon :name="icon" class="h-5 w-5" />
                 </div>
@@ -16,7 +16,7 @@
 
         <div
             v-if="variant === 'advanced'"
-            class="flex gap-3 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)]/50 bg-[var(--md-sys-color-warning-container,#fef3c7)] p-4 text-[var(--md-sys-color-on-warning-container,#92400e)]"
+            class="flex gap-3 rounded-[var(--md-border-radius,var(--md-sys-shape-corner-medium,12px))] border-[length:var(--md-border-width)] border-[var(--md-sys-color-warning,#f59e0b)]/50 bg-[var(--md-sys-color-warning-container,#fef3c7)] p-4 text-[var(--md-sys-color-on-warning-container,#92400e)]"
         >
             <UIcon name="i-heroicons-exclamation-triangle" class="mt-0.5 h-5 w-5 shrink-0" />
             <div>
@@ -30,14 +30,14 @@
 
         <ClientOnly>
             <div v-if="pending" class="space-y-4 animate-pulse">
-                <div class="h-24 rounded-[var(--md-sys-shape-corner-medium,12px)] bg-[var(--md-surface-container-highest)]" />
-                <div class="h-64 rounded-[var(--md-sys-shape-corner-medium,12px)] bg-[var(--md-surface-container-highest)]" />
+                <div class="h-24 rounded-[var(--md-border-radius,var(--md-sys-shape-corner-medium,12px))] bg-[var(--md-surface-container-highest)]" />
+                <div class="h-64 rounded-[var(--md-border-radius,var(--md-sys-shape-corner-medium,12px))] bg-[var(--md-surface-container-highest)]" />
             </div>
 
             <template v-else>
                 <div
                     v-if="restartRequired"
-                    class="flex flex-col gap-3 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] p-4 text-[var(--md-sys-color-on-warning-container,#92400e)] sm:flex-row sm:items-center sm:justify-between"
+                    class="flex flex-col gap-3 rounded-[var(--md-border-radius,var(--md-sys-shape-corner-medium,12px))] border-[length:var(--md-border-width)] border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] p-4 text-[var(--md-sys-color-on-warning-container,#92400e)] sm:flex-row sm:items-center sm:justify-between"
                 >
                     <div class="flex items-start gap-3">
                         <UIcon name="i-heroicons-arrow-path" class="mt-0.5 h-5 w-5 shrink-0" />
@@ -72,7 +72,7 @@
                         v-for="group in visibleGroups"
                         :key="group"
                         :open="variant === 'advanced' && searchQuery.length > 0 ? true : undefined"
-                        class="group overflow-hidden rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)]"
+                        class="group overflow-hidden rounded-[var(--md-border-radius,var(--md-sys-shape-corner-medium,12px))] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)]"
                     >
                         <component
                             :is="variant === 'advanced' ? 'summary' : 'div'"
@@ -100,7 +100,7 @@
                             </div>
                         </component>
 
-                        <div class="divide-y divide-[var(--md-outline-variant)] border-t border-[var(--md-outline-variant)]">
+                        <div class="divide-y-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] divide-[var(--md-outline-variant)] border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)]">
                             <div
                                 v-for="entry in getEntriesForGroup(group)"
                                 :key="entry.key"
@@ -159,14 +159,14 @@
 
                 <div
                     v-else
-                    class="rounded-[var(--md-sys-shape-corner-medium,12px)] border border-dashed border-[var(--md-outline-variant)] p-8 text-center"
+                    class="rounded-[var(--md-border-radius,var(--md-sys-shape-corner-medium,12px))] border-[length:var(--md-border-width)] border-dashed border-[var(--md-outline-variant)] p-8 text-center"
                 >
                     <UIcon name="i-heroicons-magnifying-glass" class="mx-auto h-6 w-6 opacity-40" />
                     <p class="mt-2 text-sm font-medium">No settings found</p>
                     <p class="mt-1 text-xs opacity-60">Try a different search term.</p>
                 </div>
 
-                <div class="sticky bottom-0 z-10 -mx-4 border-t border-[var(--md-outline-variant)] bg-[var(--md-surface)]/95 px-4 py-4 backdrop-blur sm:static sm:mx-0 sm:flex sm:items-center sm:justify-between sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
+                <div class="sticky bottom-0 z-10 -mx-4 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] bg-[var(--md-surface)]/95 px-4 py-4 backdrop-blur sm:static sm:mx-0 sm:flex sm:items-center sm:justify-between sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
                     <p class="mb-3 text-xs opacity-60 sm:mb-0">
                         <template v-if="changedCount">
                             {{ changedCount }} unsaved {{ changedCount === 1 ? 'change' : 'changes' }}
@@ -188,7 +188,7 @@
             </template>
 
             <template #fallback>
-                <div class="h-64 animate-pulse rounded-[var(--md-sys-shape-corner-medium,12px)] bg-[var(--md-surface-container-highest)]" />
+                <div class="h-64 animate-pulse rounded-[var(--md-border-radius,var(--md-sys-shape-corner-medium,12px))] bg-[var(--md-surface-container-highest)]" />
             </template>
         </ClientOnly>
     </div>

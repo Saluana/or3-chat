@@ -469,7 +469,7 @@ function onNewTab(): void {
 :deep(.workspace-tab-switcher-header-slot) {
     background: var(--md-surface) !important;
     color: var(--md-on-surface) !important;
-    border-bottom: var(--md-border-width, 1px) solid var(--md-border-color) !important;
+    border-bottom: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--md-border-color) !important;
 }
 :deep(.workspace-tab-switcher-body),
 :deep(.workspace-tab-switcher-footer) {
@@ -498,7 +498,7 @@ function onNewTab(): void {
     color: var(--md-on-surface);
 }
 .workspace-tab-switcher-count {
-    border-radius: var(--md-border-radius, 999px);
+    border-radius: 999px;
 }
 .workspace-tab-switcher-search {
     width: 100%;
@@ -510,7 +510,7 @@ function onNewTab(): void {
     width: 100%;
 }
 .workspace-tab-switcher-search :deep(.workspace-tab-switcher-search-input) {
-    border-radius: var(--md-border-radius, 0.75rem);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius, 0.75rem));
     border: var(--md-border-width, 1px) solid var(--md-border-color);
     background: var(--md-surface-variant);
     color: var(--md-on-surface);
@@ -527,7 +527,7 @@ function onNewTab(): void {
     width: 100%;
     justify-content: flex-start;
     border: var(--md-border-width, 1px) solid var(--md-border-color);
-    border-radius: var(--md-border-radius, 0.75rem);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius, 0.75rem));
     background: var(--md-surface-variant);
     color: var(--md-on-surface);
     box-shadow: none;
@@ -567,6 +567,7 @@ function onNewTab(): void {
     color: var(--md-on-surface);
 }
 .workspace-tab-switcher-card.is-active {
+    border-width: var(--md-border-width-strong, var(--md-border-width, 1px));
     border-color: var(--md-primary);
     background: color-mix(in srgb, var(--md-primary) 10%, var(--md-surface));
 }
@@ -650,7 +651,7 @@ function onNewTab(): void {
 .workspace-tab-switcher-action {
     width: 100%;
     justify-content: center;
-    border-radius: var(--md-border-radius, 0.75rem);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius, 0.75rem));
 }
 .workspace-tab-switcher-action--new {
     color: var(--md-on-surface);

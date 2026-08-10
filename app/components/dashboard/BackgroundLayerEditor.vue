@@ -1,73 +1,55 @@
 <template>
     <section
         :id="`dashboard-theme-${sectionId}-section`"
-        class="section-card space-y-4"
+        class="background-inspector"
         role="group"
         :aria-labelledby="`theme-section-${sectionId}`"
     >
-        <h2
-            :id="`theme-section-${sectionId}`"
-            class="font-heading text-base uppercase tracking-wide group-heading"
-        >
-            {{ title }}
-        </h2>
-        <p v-if="description" class="supporting-text">
-            {{ description }}
-        </p>
+        <header class="background-inspector-header">
+            <div>
+                <h3
+                    :id="`theme-section-${sectionId}`"
+                    class="background-inspector-title"
+                >
+                    {{ title }}
+                </h3>
+                <p v-if="description" class="background-inspector-description">
+                    {{ description }}
+                </p>
+            </div>
+            <span class="background-source-status">
+                {{ url ? displayName : emptyLabel }}
+            </span>
+        </header>
 
-        <!-- Preview row -->
-        <div class="flex items-center gap-3">
+        <div class="background-inspector-body">
             <div
-                class="pattern-thumb drop-zone relative flex h-24 w-[140px] flex-col items-center justify-center overflow-hidden rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)]/90 text-[var(--md-on-surface)] shadow-[2px_2px_0_var(--md-border-color)] transition-all duration-150"
-                :class="[
-                    !url || opacity === 0 ? 'opacity-60' : '',
-                    isDragOver
-                        ? 'ring-2 ring-[color:var(--md-primary)] ring-offset-2 ring-offset-[var(--md-surface)] scale-[1.01]'
-                        : '',
-                ]"
-                :style="previewStyle"
+                class="background-preview"
+                :class="{
+                    'is-muted': !url || opacity === 0,
+                    'is-dragging': isDragOver,
+                }"
+                :style="{ backgroundColor: color || undefined }"
                 :aria-label="`${title} (click or drop to upload)`"
                 role="button"
                 tabindex="0"
                 @click="openFileInput"
                 @keydown.enter.prevent="openFileInput"
-                @dragenter.prevent="onDragEnter"
-                @dragover.prevent="onDragOver"
-                @dragleave.prevent="onDragLeave"
+                @dragenter.prevent="isDragOver = true"
+                @dragover.prevent
+                @dragleave.prevent="isDragOver = false"
                 @drop.prevent="onDrop"
             >
-                <div
-                    v-if="url"
-                    class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"
-                ></div>
                 <span
-                    class="relative z-10 rounded bg-[var(--md-surface)]/85 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em]"
+                    class="background-preview-image"
+                    :style="{ ...previewStyle, opacity: String(opacity) }"
                     aria-hidden="true"
-                >
-                    {{ url ? 'Replace' : 'Drop / Tap' }}
+                />
+                <span class="background-preview-action" aria-hidden="true">
+                    {{ url ? 'Replace image' : 'Upload image' }}
                 </span>
             </div>
-            <span class="text-xs truncate max-w-40" :title="displayName">
-                {{ displayName || emptyLabel }}
-            </span>
-        </div>
 
-        <!-- Preset buttons and controls row -->
-        <div class="flex flex-wrap gap-2 items-center">
-            <span class="text-xs opacity-70">Presets:</span>
-            <UButton
-                v-bind="presetButtonProps"
-                v-for="p in presets"
-                :key="p.src"
-                @click="$emit('apply-preset', p.src, p.opacity)"
-                :class="url === p.src ? 'active' : ''"
-            >
-                {{ p.label }}
-            </UButton>
-            <UButton v-bind="removeLayerButtonProps" @click="$emit('remove')">
-                Remove
-            </UButton>
-            <!-- hidden input for programmatic trigger -->
             <input
                 ref="fileInputRef"
                 type="file"
@@ -75,99 +57,147 @@
                 accept="image/*"
                 @change="onUpload"
             />
-            <UButton
-                v-bind="repeatButtonProps"
-                @click="$emit('update:repeat', repeat === 'repeat' ? 'no-repeat' : 'repeat')"
-                :aria-pressed="repeat === 'repeat'"
-            >
-                Repeat: {{ repeat === 'repeat' ? 'On' : 'Off' }}
-            </UButton>
-            <label
-                class="flex items-center gap-1 text-[10px] cursor-pointer select-none"
-            >
-                <input
-                    type="checkbox"
-                    :checked="fit"
-                    @change="$emit('update:fit', !fit)"
-                />
-                Fit
-            </label>
-        </div>
 
-        <!-- Opacity slider -->
-        <div class="flex flex-wrap items-center gap-3 sm:gap-4">
-            <label class="w-full shrink-0 sm:w-32">Opacity</label>
-            <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                :value="opacity"
-                @input="onOpacityInput"
-                class="min-w-0 flex-1"
-            />
-            <span class="w-12 shrink-0 text-right tabular-nums">{{
-                opacity.toFixed(2)
-            }}</span>
-        </div>
+            <section class="background-control-section">
+                <h4>Image</h4>
+                <div class="background-action-row">
+                    <button
+                        v-for="preset in presets"
+                        :key="preset.src"
+                        type="button"
+                        class="background-action-button"
+                        :class="{ active: url === preset.src }"
+                        :disabled="!bgEnabled"
+                        @click="$emit('apply-preset', preset.src, preset.opacity)"
+                    >
+                        {{
+                            preset.label === 'Default'
+                                ? 'Use theme pattern'
+                                : preset.label
+                        }}
+                    </button>
+                    <button
+                        type="button"
+                        class="background-action-button"
+                        :disabled="!bgEnabled"
+                        @click="openFileInput"
+                    >
+                        Upload image
+                    </button>
+                    <button
+                        type="button"
+                        class="background-action-button"
+                        :disabled="!bgEnabled || !url"
+                        @click="$emit('remove')"
+                    >
+                        Remove
+                    </button>
+                </div>
+            </section>
 
-        <!-- Size slider -->
-        <div class="flex flex-wrap items-center gap-3 sm:gap-4">
-            <label class="w-full shrink-0 sm:w-32">Size</label>
-            <input
-                type="range"
-                min="8"
-                max="1200"
-                :disabled="fit"
-                :value="sizePx"
-                @input="onSizeInput"
-                class="min-w-0 flex-1"
-            />
-            <span class="w-16 shrink-0 text-right tabular-nums text-xs">{{
-                fit ? 'cover' : sizePx + 'px'
-            }}</span>
-        </div>
+            <section class="background-control-section">
+                <h4>Layout</h4>
+                <div
+                    class="background-layout-options"
+                    role="group"
+                    aria-label="Image layout"
+                >
+                    <button
+                        type="button"
+                        :disabled="!bgEnabled"
+                        :class="{ active: repeat === 'no-repeat' && !fit }"
+                        :aria-pressed="repeat === 'no-repeat' && !fit"
+                        @click="selectLayout('single')"
+                    >
+                        Single
+                    </button>
+                    <button
+                        type="button"
+                        :disabled="!bgEnabled"
+                        :class="{ active: repeat === 'repeat' && !fit }"
+                        :aria-pressed="repeat === 'repeat' && !fit"
+                        @click="selectLayout('repeat')"
+                    >
+                        Repeat
+                    </button>
+                    <button
+                        type="button"
+                        :disabled="!bgEnabled"
+                        :class="{ active: fit }"
+                        :aria-pressed="fit"
+                        @click="selectLayout('fit')"
+                    >
+                        Fill area
+                    </button>
+                </div>
+            </section>
 
-        <!-- Fallback Color -->
-        <div class="flex flex-wrap items-start gap-3 sm:gap-4 fallback-row">
-            <label class="w-full shrink-0 text-xs pt-2 sm:w-32">Fallback Color</label>
-            <div class="flex flex-col gap-2 w-full sm:w-auto">
-                <UColorPicker
-                    v-bind="colorPickerProps"
-                    :disabled="!bgEnabled"
-                    :model-value="
-                        bgEnabled && color.startsWith('#') ? color : undefined
-                    "
-                    @update:model-value="(c: string | undefined) => c && $emit('update:color', c)"
-                    class="scale-60 origin-left"
-                />
-                <div class="flex items-center gap-2">
-                    <UInput
-                        v-bind="hexInputProps"
-                        class="flex-1 sm:w-24 h-8"
+            <section class="background-control-section background-sliders">
+                <h4>Appearance</h4>
+                <label class="background-slider-row">
+                    <span>Opacity</span>
+                    <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        :value="opacity"
+                        :disabled="!bgEnabled"
+                        @input="onOpacityInput"
+                    />
+                    <output>{{ Math.round(opacity * 100) }}%</output>
+                </label>
+                <label class="background-slider-row">
+                    <span>Pattern size</span>
+                    <input
+                        type="range"
+                        min="8"
+                        max="1200"
+                        :disabled="fit || !bgEnabled"
+                        :value="sizePx"
+                        @input="onSizeInput"
+                    />
+                    <output>{{ fit ? 'Cover' : sizePx + 'px' }}</output>
+                </label>
+            </section>
+
+            <section class="background-control-section">
+                <h4>Base color</h4>
+                <div class="background-color-row">
+                    <input
+                        class="background-color-swatch"
+                        type="color"
+                        :value="validColor"
+                        :disabled="!bgEnabled"
+                        :aria-label="`${title} base color picker`"
+                        @input="onNativeColor"
+                    />
+                    <input
+                        class="background-hex-input"
                         type="text"
                         placeholder="#RRGGBB"
-                        :model-value="localHexColor"
-                        @update:model-value="onHexInput"
+                        :value="localHexColor"
                         :disabled="!bgEnabled"
-                        :aria-label="`${title} fallback hex color`"
+                        :aria-label="`${title} base color`"
+                        @input="onHexInput"
                     />
                     <UButton
                         v-bind="copyButtonProps"
                         class="shrink-0"
-                        @click="copyColor"
                         :disabled="!bgEnabled || !color.startsWith('#')"
                         :aria-label="`Copy ${title} color`"
                         :title="`Copy ${title} color`"
+                        @click="copyColor"
                     />
                 </div>
-            </div>
+                <p>The base color shows beneath transparent images.</p>
+            </section>
         </div>
     </section>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useClipboard } from '@vueuse/core';
 
 export interface BackgroundPreset {
@@ -177,143 +207,348 @@ export interface BackgroundPreset {
 }
 
 const props = defineProps<{
-    /** Section heading */
     title: string;
-    /** Supporting description text */
     description?: string;
-    /** ID suffix for accessibility (e.g., 'content1', 'sidebar') */
     sectionId: string;
-    /** Current background URL */
     url: string | null;
-    /** Current opacity (0-1) */
     opacity: number;
-    /** Current size in pixels */
     sizePx: number;
-    /** Repeat mode */
     repeat: 'repeat' | 'no-repeat';
-    /** Fit to cover */
     fit: boolean;
-    /** Fallback hex color */
     color: string;
-    /** Computed preview style object */
     previewStyle: Record<string, string>;
-    /** Array of preset options */
     presets: BackgroundPreset[];
-    /** Whether backgrounds are globally enabled */
     bgEnabled: boolean;
-    /** Label shown when no URL is set */
     emptyLabel?: string;
-    /** Props for preset buttons */
-    presetButtonProps?: Record<string, any>;
-    /** Props for remove button */
-    removeLayerButtonProps?: Record<string, any>;
-    /** Props for repeat toggle button */
-    repeatButtonProps?: Record<string, any>;
-    /** Props for color picker */
-    colorPickerProps?: Record<string, any>;
-    /** Props for hex input */
-    hexInputProps?: Record<string, any>;
-    /** Props for copy button */
     copyButtonProps?: Record<string, any>;
 }>();
 
 const emit = defineEmits<{
-    'update:url': [value: string | null];
     'update:opacity': [value: number];
     'update:sizePx': [value: number];
     'update:repeat': [value: 'repeat' | 'no-repeat'];
     'update:fit': [value: boolean];
     'update:color': [value: string];
-    'upload': [file: File];
-    'remove': [];
+    upload: [file: File];
+    remove: [];
     'apply-preset': [src: string, opacity: number];
 }>();
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const isDragOver = ref(false);
 const localHexColor = ref(props.color.startsWith('#') ? props.color : '');
-
-// Sync local hex color when prop changes
-watch(() => props.color, (newColor) => {
-    if (newColor.startsWith('#')) {
-        localHexColor.value = newColor;
-    }
-});
-
-// Display name for URL
+const validColor = computed(() =>
+    /^#[0-9a-fA-F]{6}$/.test(props.color) ? props.color : '#ffffff'
+);
 const displayName = computed(() => {
     if (!props.url) return '';
-    if (props.url.startsWith('internal-file://')) return 'Saved Image';
+    if (props.url.startsWith('internal-file://')) return 'Saved image';
+    if (props.url.startsWith('blob:')) return 'Uploaded image';
     try {
-        if (props.url.startsWith('blob:')) return 'Uploaded';
-        const url = new URL(props.url, window.location.origin);
-        return url.pathname.split('/').pop() || props.url;
+        const url = new URL(props.url, 'http://localhost');
+        return url.pathname.split('/').pop() || 'Background image';
     } catch {
-        return props.url.split('/').pop() || props.url;
+        return props.url.split('/').pop() || 'Background image';
     }
 });
 
-// Clipboard utility
-const { copy } = useClipboard();
+watch(
+    () => props.color,
+    (newColor) => {
+        if (newColor.startsWith('#')) localHexColor.value = newColor;
+    }
+);
 
 function openFileInput() {
-    fileInputRef.value?.click();
+    if (props.bgEnabled) fileInputRef.value?.click();
 }
 
-function onDragEnter() {
-    isDragOver.value = true;
-}
-
-function onDragOver() {
-    // Keep drag state active
-}
-
-function onDragLeave() {
+function onDrop(event: DragEvent) {
     isDragOver.value = false;
+    if (!props.bgEnabled) return;
+    const file = event.dataTransfer?.files?.[0];
+    if (file) emit('upload', file);
 }
 
-function onDrop(e: DragEvent) {
-    isDragOver.value = false;
-    const file = e.dataTransfer?.files?.[0];
-    if (file) {
-        emit('upload', file);
-    }
-}
-
-function onUpload(e: Event) {
-    const input = e.target as HTMLInputElement;
+function onUpload(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
-    if (file) {
-        emit('upload', file);
-    }
-    // Reset input so same file can be reselected
-    if (input) input.value = '';
+    if (file) emit('upload', file);
+    input.value = '';
 }
 
-function onOpacityInput(e: Event) {
-    const v = Number((e.target as HTMLInputElement).value);
-    emit('update:opacity', v);
+function onOpacityInput(event: Event) {
+    emit('update:opacity', Number((event.currentTarget as HTMLInputElement).value));
 }
 
-function onSizeInput(e: Event) {
-    const v = Number((e.target as HTMLInputElement).value);
-    emit('update:sizePx', v);
+function onSizeInput(event: Event) {
+    emit('update:sizePx', Number((event.currentTarget as HTMLInputElement).value));
 }
 
-function onHexInput(value: any) {
-    const raw = String(value ?? '');
+function selectLayout(layout: 'single' | 'repeat' | 'fit') {
+    if (!props.bgEnabled) return;
+    emit('update:fit', layout === 'fit');
+    emit('update:repeat', layout === 'repeat' ? 'repeat' : 'no-repeat');
+}
+
+function onNativeColor(event: Event) {
+    const color = (event.currentTarget as HTMLInputElement).value.toLowerCase();
+    localHexColor.value = color;
+    emit('update:color', color);
+}
+
+function onHexInput(event: Event) {
+    const raw = (event.currentTarget as HTMLInputElement).value;
     localHexColor.value = raw;
-    
-    // Validate and emit if valid
     const candidate = raw.startsWith('#') ? raw : `#${raw}`;
-    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(candidate)) {
+    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(candidate)) {
         emit('update:color', candidate.toLowerCase());
     }
 }
 
+const { copy } = useClipboard();
 function copyColor() {
-    if (props.color.startsWith('#')) {
-        copy(props.color);
-    }
+    if (props.color.startsWith('#')) copy(props.color);
 }
 </script>
+
+<style scoped>
+.background-inspector {
+    min-width: 0;
+    padding: 0.55rem 0;
+    color: var(--md-on-surface);
+}
+.background-inspector-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.55rem 0.75rem 0.8rem;
+}
+.background-inspector-title {
+    font-size: 1.0625rem;
+    font-weight: 650;
+}
+.background-inspector-description {
+    max-width: 58ch;
+    margin-top: 0.2rem;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    font-size: 0.76rem;
+    line-height: 1.4;
+}
+.background-source-status {
+    flex: 0 0 auto;
+    max-width: 12rem;
+    overflow: hidden;
+    padding: 0.25rem 0.45rem;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    font-size: 0.66rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: var(--background-editor-subtle);
+    border-radius: var(--md-border-radius-small);
+}
+.background-inspector-body {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 0 0.75rem 0.75rem;
+}
+.background-preview {
+    position: relative;
+    display: grid;
+    width: 100%;
+    min-height: 11rem;
+    overflow: hidden;
+    place-items: center;
+    background: var(--background-editor-subtle);
+    border: var(--md-border-width) solid var(--background-editor-border);
+    border-radius: var(--md-border-radius);
+    cursor: pointer;
+    isolation: isolate;
+}
+.background-preview-image {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+}
+.background-preview.is-muted .background-preview-image {
+    opacity: 0.35 !important;
+}
+.background-preview.is-dragging,
+.background-preview:focus-visible {
+    outline: 3px solid var(--background-editor-accent);
+    outline-offset: 2px;
+}
+.background-preview-action {
+    padding: 0.45rem 0.7rem;
+    color: var(--md-on-surface);
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: color-mix(in srgb, var(--md-surface) 90%, transparent);
+    border: var(--md-border-width) solid var(--background-editor-border);
+    border-radius: var(--md-border-radius-small);
+}
+.background-control-section {
+    padding-top: 0.8rem;
+    border-top: var(--md-border-width-subtle) solid var(--background-editor-border);
+}
+.background-control-section h4 {
+    margin-bottom: 0.55rem;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+.background-control-section > p {
+    margin-top: 0.35rem;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    font-size: 0.68rem;
+}
+.background-action-row,
+.background-layout-options,
+.background-color-row {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+.background-action-button {
+    min-height: 2.35rem;
+    padding: 0.4rem 0.65rem;
+    color: var(--md-on-surface) !important;
+    background: var(--md-surface) !important;
+    border: var(--md-border-width) solid var(--background-editor-border) !important;
+    border-radius: var(--md-border-radius-small) !important;
+}
+.background-action-button:hover:not(:disabled):not(.active) {
+    color: var(--md-on-surface) !important;
+    background: var(
+        --md-surface-hover,
+        var(--md-surface-container-high, var(--md-surface))
+    ) !important;
+    border-color: var(--md-primary) !important;
+}
+.background-action-button.active {
+    color: var(--md-on-primary) !important;
+    background: var(--background-editor-accent) !important;
+    border-color: var(--background-editor-accent) !important;
+}
+.background-action-button.active:hover:not(:disabled) {
+    color: var(--md-on-primary) !important;
+    background: var(
+        --md-primary-hover,
+        var(--background-editor-accent)
+    ) !important;
+}
+.background-action-button:disabled {
+    color: var(--md-on-surface-variant) !important;
+    background: var(--md-surface-variant) !important;
+    border-color: var(--md-outline-variant) !important;
+    opacity: 0.62 !important;
+}
+.background-layout-options button {
+    min-width: 6.5rem;
+    min-height: 2.35rem;
+    padding: 0.4rem 0.65rem;
+    color: var(--md-on-surface);
+    background: var(--md-surface);
+    border: var(--md-border-width) solid var(--background-editor-border);
+    border-radius: var(--md-border-radius-small);
+}
+.background-layout-options button:hover:not(:disabled):not(.active) {
+    color: var(--md-on-surface);
+    background: var(
+        --md-surface-hover,
+        var(--background-editor-subtle)
+    );
+    border-color: var(--background-editor-accent);
+}
+.background-layout-options button.active {
+    color: var(--background-editor-on-accent);
+    background: var(--background-editor-accent);
+    border-color: var(--background-editor-accent);
+}
+.background-layout-options button.active:hover:not(:disabled) {
+    color: var(--md-on-primary);
+    background: var(--md-primary-hover, var(--md-primary));
+}
+.background-layout-options button:focus-visible {
+    outline: 3px solid var(--background-editor-accent);
+    outline-offset: 2px;
+}
+.background-layout-options button:disabled {
+    color: var(--md-on-surface-variant);
+    background: var(--md-surface-variant);
+    border-color: var(--md-outline-variant);
+    cursor: not-allowed;
+    opacity: 0.62;
+}
+.background-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.background-slider-row {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: 6.5rem minmax(7rem, 1fr) 4rem;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.76rem;
+}
+.background-slider-row input {
+    min-width: 0;
+    accent-color: var(--background-editor-accent);
+}
+.background-slider-row output {
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    font-family: ui-monospace, monospace;
+    font-size: 0.7rem;
+    text-align: right;
+}
+.background-color-swatch {
+    width: 2.5rem;
+    height: 2.35rem;
+    padding: 0.18rem;
+    background: var(--md-surface);
+    border: var(--md-border-width) solid var(--background-editor-border);
+    border-radius: var(--md-border-radius-small);
+    cursor: pointer;
+}
+.background-hex-input {
+    width: min(11rem, 100%);
+    min-height: 2.35rem;
+    padding: 0.4rem 0.55rem;
+    color: var(--md-on-surface) !important;
+    background: var(--background-editor-subtle) !important;
+    border: var(--md-border-width) solid var(--background-editor-border) !important;
+    border-radius: var(--md-border-radius-small);
+    font-family: ui-monospace, monospace;
+    font-size: 0.78rem;
+}
+.background-hex-input:focus-visible,
+.background-color-swatch:focus-visible {
+    outline: 2px solid var(--background-editor-accent);
+    outline-offset: 2px;
+}
+@media (max-width: 520px) {
+    .background-inspector-header {
+        flex-direction: column;
+    }
+    .background-preview {
+        min-height: 9rem;
+    }
+    .background-slider-row {
+        grid-template-columns: 1fr auto;
+    }
+    .background-slider-row input {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        width: 100%;
+    }
+}
+</style>

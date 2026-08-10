@@ -1,7 +1,7 @@
 <template>
     <div class="flex flex-col w-72">
         <!-- Header -->
-        <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--md-border-color)]">
+        <div class="flex items-center justify-between px-3 py-2 border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)]">
             <span class="text-sm font-semibold text-[var(--md-on-surface)]">Notifications</span>
             <UButton
                 v-if="unreadCount > 0"
@@ -41,7 +41,7 @@
         </div>
 
         <!-- Footer -->
-        <div v-if="notifications.length > 0 && !showClearConfirm" class="px-3 py-2 border-t border-[var(--md-border-color)]">
+        <div v-if="notifications.length > 0 && !showClearConfirm" class="px-3 py-2 border-t-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)]">
             <UButton
                 v-bind="clearAllButtonProps"
                 @click="showClearConfirm = true"
@@ -51,7 +51,7 @@
         </div>
 
         <!-- Inline clear confirmation -->
-        <div v-if="showClearConfirm" class="px-3 py-2 border-t border-[var(--md-border-color)] bg-[var(--md-error-container)]">
+        <div v-if="showClearConfirm" class="px-3 py-2 border-t-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)] bg-[var(--md-error-container)]">
             <p class="text-xs text-[var(--md-on-error-container)] mb-2">Clear all notifications?</p>
             <div class="flex gap-2">
                 <UButton v-bind="clearCancelButtonProps" @click="showClearConfirm = false">

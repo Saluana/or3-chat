@@ -10,9 +10,9 @@
 
             <section
                 v-if="!connectEnabled"
-                class="rounded-[28px] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-6! shadow-[var(--md-elevation-2)] sm:p-9!"
+                class="rounded-[var(--md-border-radius-large,28px)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-6! shadow-[var(--md-elevation-2)] sm:p-9!"
             >
-                <div class="mb-7! flex size-14 items-center justify-center rounded-2xl bg-[var(--md-primary-container)]">
+                <div class="mb-7! flex size-14 items-center justify-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)]">
                     <UIcon :name="computerIcon" class="size-7 text-[var(--md-on-primary-container)]" />
                 </div>
                 <h1 class="text-2xl font-semibold">Remote Connect unavailable</h1>
@@ -29,13 +29,13 @@
 
             <section
                 v-else
-                class="rounded-[28px] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-6! shadow-[var(--md-elevation-2)] sm:p-9!"
+                class="rounded-[var(--md-border-radius-large,28px)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-6! shadow-[var(--md-elevation-2)] sm:p-9!"
                 :aria-busy="busy || monitoring"
             >
                 <p class="sr-only" aria-live="polite" aria-atomic="true">
                     {{ screenReaderStatus }}
                 </p>
-                <div class="mb-7! flex size-14 items-center justify-center rounded-2xl bg-[var(--md-primary-container)]">
+                <div class="mb-7! flex size-14 items-center justify-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)]">
                     <UIcon :name="computerIcon" class="size-7 text-[var(--md-on-primary-container)]" />
                 </div>
 
@@ -74,7 +74,7 @@
                             OR3 service and secure tunnel.
                         </template>
                     </p>
-                    <div class="mt-7! space-y-3! rounded-2xl bg-[var(--md-surface-container)] p-5!">
+                    <div class="mt-7! space-y-3! rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)] p-5!">
                         <div class="flex items-center gap-3">
                             <UIcon name="i-lucide-circle-check" class="size-5 text-[var(--md-primary)]" />
                             <span class="text-sm font-medium">Connection approved</span>
@@ -114,7 +114,7 @@
                         Approval succeeded, but OR3 could not confirm the protected
                         service and an available agent before the setup window ended.
                     </p>
-                    <div class="mt-6! rounded-2xl bg-[var(--md-surface-container)] p-5!">
+                    <div class="mt-6! rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)] p-5!">
                         <p class="text-sm font-medium">Check the terminal first.</p>
                         <p class="mt-2! text-sm leading-5 text-[var(--md-on-surface-variant)]">
                             Finish any administrator prompt. If setup stopped, run
@@ -143,7 +143,7 @@
                         Nothing was connected. Generate a fresh code on the computer,
                         then enter it here.
                     </p>
-                    <div class="mt-6! rounded-2xl bg-[var(--md-surface-container)] p-5!">
+                    <div class="mt-6! rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)] p-5!">
                         <p class="text-sm font-medium">Run this command again:</p>
                         <code class="mt-2! block select-all font-mono text-sm">
                             {{ CONNECT_COMMAND }}
@@ -203,10 +203,10 @@
 
                     <div
                         v-if="state === 'confirm' && request"
-                        class="mt-7! rounded-2xl border border-[var(--md-outline-variant)] bg-[var(--md-surface-container)] p-5!"
+                        class="mt-7! rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)] p-5!"
                     >
                         <div class="flex items-start gap-4">
-                            <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[var(--md-surface-container-high)]">
+                            <div class="flex size-11 shrink-0 items-center justify-center rounded-[var(--md-border-radius-small)] bg-[var(--md-surface-container-high)]">
                                 <UIcon :name="computerIcon" class="size-5" />
                             </div>
                             <div class="min-w-0">
@@ -216,7 +216,7 @@
                                 </p>
                             </div>
                         </div>
-                        <div class="mt-5! rounded-xl bg-[var(--md-surface-container-high)] px-4! py-3! text-center font-mono text-lg font-semibold tracking-wider">
+                        <div class="mt-5! rounded-[var(--md-border-radius-small)] bg-[var(--md-surface-container-high)] px-4! py-3! text-center font-mono text-lg font-semibold tracking-wider">
                             {{ request.code }}
                         </div>
                         <p

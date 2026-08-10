@@ -1,11 +1,11 @@
 <template>
     <div
         :class="[label + '-header']"
-        class="w-full h-10 flex items-center justify-between gap-2 rounded-[var(--md-border-radius)] px-0.5 cursor-default sb-group-header"
+        class="w-full h-10 flex items-center justify-between gap-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-0.5 cursor-default sb-group-header"
     >
         <button
             type="button"
-            class="min-w-0 flex-1 h-full flex items-center gap-2 px-1.5 rounded-[var(--md-border-radius)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] transition-colors group text-left"
+            class="min-w-0 flex-1 h-full flex items-center gap-2 px-1.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] transition-colors group text-left"
             @click="emit('toggle')"
         >
             <span
@@ -22,7 +22,7 @@
         <button
             v-if="actionLabel"
             type="button"
-            class="shrink-0 text-[11px] font-semibold text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/8 px-2 py-1 rounded-lg sb-group-header-action"
+            class="shrink-0 text-[11px] font-semibold text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/8 px-2 py-1 rounded-[var(--md-border-radius-small,0.5rem)] sb-group-header-action"
             @click="emit('action')"
         >
             {{ actionLabel }}

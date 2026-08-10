@@ -40,8 +40,8 @@ defineExpose({ rootElement });
 <style scoped>
 .chat-composer-shell {
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--md-outline) 18%, transparent);
-  border-radius: var(--chat-composer-border-radius, var(--md-border-radius));
+  border: var(--md-border-width, 1px) solid color-mix(in srgb, var(--md-outline) 18%, transparent);
+  border-radius: var(--chat-composer-border-radius, var(--md-border-radius-large, var(--md-border-radius)));
   background: color-mix(in srgb, var(--md-surface) 92%, white 8%);
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--md-outline) 6%, transparent),

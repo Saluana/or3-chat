@@ -7,6 +7,7 @@
 
 import type { BackgroundStreamResult } from './openrouterStream';
 import type { Attachment } from 'or3-workflow-core';
+import type { ResumeFromOptions } from 'or3-workflow-core';
 
 async function readWorkflowErrorMessage(
     response: Response,
@@ -42,9 +43,10 @@ export async function startBackgroundWorkflow(params: {
     prompt: string;
     threadId: string;
     messageId: string;
-    conversationHistory: Array<{ role: string; content: string }>;
     apiKey?: string | null;
     attachments?: Attachment[];
+    resumeFrom?: ResumeFromOptions;
+    resumeStateVersion?: number;
 }): Promise<BackgroundStreamResult> {
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -65,8 +67,9 @@ export async function startBackgroundWorkflow(params: {
             prompt: params.prompt,
             threadId: params.threadId,
             messageId: params.messageId,
-            conversationHistory: params.conversationHistory,
             attachments: params.attachments,
+            resumeFrom: params.resumeFrom,
+            resumeStateVersion: params.resumeStateVersion,
         }),
     });
 

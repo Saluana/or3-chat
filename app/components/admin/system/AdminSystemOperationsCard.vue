@@ -1,5 +1,5 @@
 <template>
-    <div class="p-5 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
+    <div class="p-5 rounded-[var(--md-border-radius,var(--md-sys-shape-corner-medium,12px))] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface)]">
         <h3 class="text-lg font-medium mb-4">Operations</h3>
         <div class="space-y-4">
             <p class="text-sm opacity-70">
@@ -8,14 +8,14 @@
 
             <div
                 v-if="!allowRestart && !allowRebuild"
-                class="p-3 rounded bg-[var(--md-sys-color-info-container,#dbeafe)] border border-[var(--md-sys-color-info,#3b82f6)]/20"
+                class="p-3 rounded-[var(--md-border-radius-small)] bg-[var(--md-sys-color-info-container,#dbeafe)] border-[length:var(--md-border-width)] border-[var(--md-sys-color-info,#3b82f6)]/20"
             >
                 <div class="text-xs font-bold text-[var(--md-sys-color-on-info-container,#1e3a8a)] uppercase mb-1">Info</div>
                 <div class="text-sm text-[var(--md-sys-color-on-info-container,#1e40af)]">
                     Server operations are disabled. To enable, set
-                    <code class="text-xs bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded">OR3_ADMIN_ALLOW_RESTART=true</code>
+                    <code class="text-xs bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded-[var(--md-border-radius-small,0.25rem)]">OR3_ADMIN_ALLOW_RESTART=true</code>
                     or
-                    <code class="text-xs bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded">OR3_ADMIN_ALLOW_REBUILD=true</code>
+                    <code class="text-xs bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded-[var(--md-border-radius-small,0.25rem)]">OR3_ADMIN_ALLOW_REBUILD=true</code>
                     in your environment.
                 </div>
             </div>

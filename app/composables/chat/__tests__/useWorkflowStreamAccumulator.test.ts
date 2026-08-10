@@ -68,6 +68,26 @@ describe('useWorkflowStreamAccumulator', () => {
         );
     });
 
+    it('shows model-thinking activity without retaining raw reasoning', () => {
+        const accumulator = createWorkflowStreamAccumulator();
+        accumulator.nodeStart('node-1', 'Test Node', 'agent');
+
+        accumulator.nodeReasoning('node-1', 'private reasoning');
+
+        expect(accumulator.state.nodeStates['node-1']!.activity).toBe(
+            'thinking'
+        );
+        expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe('');
+
+        accumulator.nodeToken('node-1', 'Visible response');
+        vi.runAllTimers();
+
+        expect(accumulator.state.nodeStates['node-1']!.activity).toBeUndefined();
+        expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe(
+            'Visible response'
+        );
+    });
+
     it('tracks parallel branches', () => {
         const accumulator = createWorkflowStreamAccumulator();
         accumulator.nodeStart('parallel-1', 'Parallel Node', 'parallel');

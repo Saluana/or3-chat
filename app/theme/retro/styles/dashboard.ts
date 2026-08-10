@@ -17,13 +17,13 @@ export const dashboardOverrides = {
         class: 'w-full',
         ui: {
             content:
-                'z-[30] ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[14px]!',
+                'z-[30] ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius-large,var(--md-border-radius))] bg-[var(--md-surface)] text-[14px]!',
         },
     },
     'button#dashboard.back': {
         variant: 'basic' as const,
         ui: {
-            base: 'ml-0! border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]!',
+            base: 'ml-0! border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]!',
         },
     },
     'button#dashboard.theme.copy-color': {
@@ -53,7 +53,7 @@ export const dashboardStyles = {
     '.dashboard-plugin-icon-button': {
         style: {
             border: 'var(--md-border-width) solid var(--md-border-color)',
-            borderRadius: 'var(--md-border-radius) !important',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius)) !important',
             backgroundColor: 'var(--md-surface)',
             color: 'var(--md-on-surface)',
         },

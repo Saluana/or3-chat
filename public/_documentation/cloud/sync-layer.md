@@ -216,6 +216,11 @@ when their complete operation fingerprints match. Conflicting reuse of an ID,
 including a conflict with an already-processed operation, returns `CONFLICT`
 without consuming another version.
 
+Each operation may carry at most 256 KB of serialized payload data. Oversized
+workflow messages are compacted into a bounded cross-device snapshot before
+they enter the outbox; the complete workflow state remains in local storage and
+the durable background execution checkpoint.
+
 Server push requests are rate limited (`sync:push`: 200 requests per minute).
 Client outbox flushing treats HTTP 429 (and 502/503/504) as a deferral, not a
 failure: the batch moves back to `retry_wait` with `nextAttemptAt` taken from

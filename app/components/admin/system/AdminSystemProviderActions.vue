@@ -5,7 +5,7 @@
             <div
                 v-for="action in actions"
                 :key="action.kind + ':' + action.id"
-                class="p-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)]"
+                class="p-4 rounded-[var(--md-border-radius,var(--md-sys-shape-corner-medium,12px))] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)]"
             >
                 <div class="flex justify-between items-start mb-2">
                     <div class="text-xs font-bold uppercase opacity-50 tracking-wider">{{ action.kind }}</div>

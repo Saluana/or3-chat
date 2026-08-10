@@ -7,7 +7,7 @@ export default defineAppConfig({
         tree: {
             slots: {
                 root: '',
-                item: 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] mb-2 theme-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
+                item: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] mb-2 theme-shadow bg-[var(--md-inverse-surface)]/5 backdrop-blur-sm text-[var(--md-on-surface)]',
                 link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
             },
         },
@@ -25,7 +25,10 @@ export default defineAppConfig({
         button: {
             slots: {
                 // Make base styles clearly different so it's obvious when applied
-                base: ['transition-colors', 'cursor-pointer text-start'],
+                base: [
+                    'transition-colors',
+                    'cursor-pointer text-start rounded-[var(--md-border-radius-small)]',
+                ],
                 // Label tweaks are rarely overridden by variants, good to verify
                 label: 'truncate tracking-wider',
                 leadingIcon: 'shrink-0',
@@ -37,7 +40,7 @@ export default defineAppConfig({
                 variant: {
                     light: 'theme-btn flex items-center justify-center bg-[var(--md-surface)] dark:bg-[var(--md-on-background)] dark:text-black dark:hover:bg-[var(--md-on-background)]/90 backdrop-blur-sm',
                     subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
-                    basic: 'border-[var(--md-border-width)] shadow-none! drop-shadow-none!  hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[color:var(--md-border-color)] text-[var(--md-on-surface)]',
+                    basic: 'border-[length:var(--md-border-width)] shadow-none! drop-shadow-none! hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[color:var(--md-border-color)] text-[var(--md-on-surface)]',
                     popover:
                         'flex items-center! hover:bg-[var(--md-primary)]/5 active:bg-[var(--md-primary)]/10 justify-start!',
                 },
@@ -59,15 +62,15 @@ export default defineAppConfig({
                 },
                 fieldGroup: {
                     horizontal:
-                        'first:rounded-l-[var(--md-border-radius)]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[var(--md-border-radius)]!',
+                        'first:rounded-l-[var(--md-border-radius-small)]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[var(--md-border-radius-small)]!',
                     vertical:
-                        'first:rounded-t-[var(--md-border-radius)]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[var(--md-border-radius)]!',
+                        'first:rounded-t-[var(--md-border-radius-small)]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[var(--md-border-radius-small)]!',
                 },
             },
         },
         input: {
             slots: {
-                base: 'mt-0 rounded-[var(--md-border-radius)] border-[var(--md-border-width)] border-[color:var(--md-border-color)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+                base: 'mt-0 rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
             },
             variants: {
                 // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
@@ -82,9 +85,9 @@ export default defineAppConfig({
         },
         select: {
             slots: {
-                base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)]',
+                base: 'rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! focus:ring-1 focus:ring-[color:var(--md-primary)]',
                 content: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! theme-shadow',
-                item: 'rounded-[var(--md-border-radius)] data-highlighted:before:bg-[var(--md-surface-hover)]',
+                item: 'rounded-[var(--md-border-radius-small)] data-highlighted:before:bg-[var(--md-surface-hover)]',
             },
         },
         tabs: {
@@ -127,7 +130,7 @@ export default defineAppConfig({
         // Make the toast close button md-sized by default
         toast: {
             slots: {
-                root: 'border border-[var(--md-border-width)] theme-shadow rounded-[var(--md-border-radius)]',
+                root: 'border-[length:var(--md-border-width)] theme-shadow rounded-[var(--md-border-radius)]',
                 // Match our md button height (40px) and enforce perfect centering
                 close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
             },
@@ -147,19 +150,19 @@ export default defineAppConfig({
             // Retro styled switch theme (square, hard borders, pixel shadow)
             slots: {
                 root: 'relative inline-flex items-center select-none ',
-                base: 'border-[var(--md-border-width)] border-black rounded-[var(--md-border-radius)] h-[20px] w-[39px]! cursor-pointer',
-                thumb: 'border-[var(--md-border-width)] border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[var(--md-border-radius)] ',
+                base: 'border-[length:var(--md-border-width)] border-black rounded-[var(--md-border-radius-small)] h-[20px] w-[39px]! cursor-pointer',
+                thumb: 'border-[length:var(--md-border-width)] border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[var(--md-border-radius-small)]',
                 label: 'block font-medium text-default cursor-pointer',
             },
         },
         textarea: {
             slots: {
-                base: 'mt-0 rounded-md border-[2px] border-[color:var(--md-border-color)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+                base: 'mt-0 rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
             },
         },
         selectMenu: {
             slots: {
-                base: 'rounded-[var(--md-border-radius)] border-[var(--md-border-width)] border-[color:var(--md-border-color)]',
+                base: 'rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
                 content:
                     'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)]',
                 input: 'border-0 rounded-none!',

@@ -255,11 +255,23 @@ export interface ThemeDefinition {
     /** Color palette (Material Design 3 tokens) */
     colors: ColorPalette;
 
-    /** Default border width (e.g., '2px', '1px') - generates --md-border-width */
+    /** Divider/hairline width - generates --md-border-width-subtle */
+    borderWidthSubtle?: string;
+
+    /** Default component border width - generates --md-border-width */
     borderWidth?: string;
 
-    /** Default border radius (e.g., '3px', '8px') - generates --md-border-radius */
+    /** Emphasized border width - generates --md-border-width-strong */
+    borderWidthStrong?: string;
+
+    /** Compact-control radius - generates --md-border-radius-small */
+    borderRadiusSmall?: string;
+
+    /** Default surface radius - generates --md-border-radius */
     borderRadius?: string;
+
+    /** Large panel/dialog radius - generates --md-border-radius-large */
+    borderRadiusLarge?: string;
 
     /**
      * Component overrides using CSS selector syntax

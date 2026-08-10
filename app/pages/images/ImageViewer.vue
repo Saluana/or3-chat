@@ -45,7 +45,7 @@ const imageViewerModalOverrides = useThemeOverrides({
 const imageViewerModalProps = computed(() => {
     return buildThemeOverrideProps(imageViewerModalOverrides.value, {
         baseUi: {
-            footer: 'justify-end border-t-[var(--md-border-width)]',
+            footer: 'justify-end border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))]',
             body: 'overflow-hidden flex-1 p-0! h-[100dvh] w-[100dvw]',
         },
         baseContent: {

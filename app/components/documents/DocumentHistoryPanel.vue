@@ -217,6 +217,7 @@ onMounted(load);
     background: var(--md-surface-container) !important;
 }
 .revision-item.selected {
+    border-width: var(--md-border-width-strong, var(--md-border-width));
     border-color: var(--md-primary);
     background: color-mix(in oklab, var(--md-primary-container), transparent 60%) !important;
 }
@@ -225,7 +226,7 @@ onMounted(load);
     height: 2rem;
     display: grid;
     place-items: center;
-    border-radius: var(--md-border-radius);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
     color: var(--md-primary);
     background: color-mix(in oklab, var(--md-primary-container), transparent 38%);
 }

@@ -15,8 +15,12 @@ export interface ThemeDefinition {
   isDefault?: boolean;
 
   colors: ColorPalette;
+  borderWidthSubtle?: string;
   borderWidth?: string;
+  borderWidthStrong?: string;
+  borderRadiusSmall?: string;
   borderRadius?: string;
+  borderRadiusLarge?: string;
   fonts?: ThemeFonts;
 
   overrides?: Record<string, OverrideProps>;
@@ -33,6 +37,9 @@ export interface ThemeDefinition {
   recommendedWorkspaceProfileId?: string;
 }
 ```
+
+The middle width and radius fields remain the compatibility defaults. Omitted
+outer tiers inherit from `borderWidth` or `borderRadius`, respectively.
 
 - `componentContractVersion` must match the current contract version (`1`);
   incompatible versions fail validation. See `/themes/component-overrides`.

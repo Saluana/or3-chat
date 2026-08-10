@@ -82,16 +82,16 @@ defineExpose({ onKeyDown });
     box-shadow: 0 16px 42px rgb(0 0 0 / 16%);
 }
 .action-section { display: grid; gap: 0.2rem; padding: 0.5rem; }
-.action-section + .action-section { border-top: var(--md-border-width) solid var(--md-border-color); }
+.action-section + .action-section { border-top: var(--md-border-width-subtle) solid var(--md-border-color); }
 .section-label { padding: 0.2rem 0.35rem; color: var(--md-on-surface-variant); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-button { width: 100%; display: flex; align-items: center; gap: 0.65rem; padding: 0.6rem 0.7rem; border: 0; border-radius: var(--md-border-radius); color: var(--md-on-surface); background: transparent; text-align: left; cursor: pointer; }
+button { width: 100%; display: flex; align-items: center; gap: 0.65rem; padding: 0.6rem 0.7rem; border: 0; border-radius: var(--md-border-radius-small); color: var(--md-on-surface); background: transparent; text-align: left; cursor: pointer; }
 button:hover, button.selected { background: var(--md-surface-container-high); }
 .action-copy { min-width: 0; flex: 1; display: grid; gap: 0.1rem; }
 .action-copy strong, .action-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .action-copy strong { font-size: 0.76rem; }
 .action-copy small { color: var(--md-on-surface-variant); font-size: 0.66rem; }
-footer { display: flex; gap: 0.35rem; align-items: center; padding: 0.5rem 0.75rem; border-top: var(--md-border-width) solid var(--md-border-color); color: var(--md-on-surface-variant); font-size: 0.6rem; }
-kbd { padding: 0.1rem 0.25rem; border-radius: 0.25rem; background: var(--md-surface-container-high); font: inherit; }
+footer { display: flex; gap: 0.35rem; align-items: center; padding: 0.5rem 0.75rem; border-top: var(--md-border-width-subtle) solid var(--md-border-color); color: var(--md-on-surface-variant); font-size: 0.6rem; }
+kbd { padding: 0.1rem 0.25rem; border-radius: var(--md-border-radius-small); background: var(--md-surface-container-high); font: inherit; }
 .empty-state { display: grid; gap: 0.15rem; padding: 1rem; }
 .empty-state span { color: var(--md-on-surface-variant); font-size: 0.68rem; }
 </style>

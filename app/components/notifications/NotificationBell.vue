@@ -20,7 +20,7 @@
                         />
                         <span
                             v-if="unreadCount > 0"
-                            class="absolute -top-1 -right-1 bg-[var(--md-error)] text-[var(--md-on-error)] rounded-[var(--md-border-radius)] min-w-[16px] h-[16px] flex items-center justify-center text-[10px] font-bold px-1 notification-badge"
+                            class="absolute -top-1 -right-1 bg-[var(--md-error)] text-[var(--md-on-error)] rounded-full min-w-[16px] h-[16px] flex items-center justify-center text-[10px] font-bold px-1 notification-badge"
                             :aria-label="`${unreadCount} unread notifications`"
                         >
                             {{ unreadCount > 99 ? '99+' : unreadCount }}

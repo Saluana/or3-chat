@@ -90,6 +90,11 @@ const localPackageCandidates = [
 const localPackageAliases = localPackageCandidates.filter(({ replacement }) =>
     existsSync(replacement)
 );
+const localWorkflowCoreSource = resolve(
+    __dirname,
+    '../or3-workflows/packages/workflow-core/src/index.ts',
+);
+const hasLocalWorkflowCoreSource = existsSync(localWorkflowCoreSource);
 
 function isPackageInstalled(pkgName: string): boolean {
     return existsSync(resolve(__dirname, 'node_modules', pkgName));
@@ -816,6 +821,11 @@ export default defineNuxtConfig({
         provider: 'local',
     },
     nitro: {
+        // Keep server-side workflow execution on the same sibling source tree
+        // that Vite uses for the editor during local multi-repo development.
+        alias: hasLocalWorkflowCoreSource
+            ? { 'or3-workflow-core': localWorkflowCoreSource }
+            : {},
         // Emit precompressed variants for the self-hosted Node server while
         // keeping the original assets for hosts that do their own compression.
         compressPublicAssets: true,

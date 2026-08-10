@@ -67,7 +67,7 @@
                     aria-labelledby="delete-prompt-title"
                 >
                     <div
-                        class="w-full max-w-md rounded-[var(--md-border-radius)] border border-[var(--md-border-color)] bg-[var(--md-surface)] p-5 shadow-xl"
+                        class="w-full max-w-md rounded-[var(--md-border-radius-large,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[var(--md-border-color)] bg-[var(--md-surface)] p-5 shadow-xl"
                     >
                         <h3
                             id="delete-prompt-title"
@@ -102,7 +102,7 @@
 
                 <div
                     v-if="errorMessage"
-                    class="shrink-0 border-b border-[var(--md-border-color)] bg-error/10 px-4 py-2 text-sm text-error"
+                    class="shrink-0 border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)] bg-error/10 px-4 py-2 text-sm text-error"
                     role="alert"
                 >
                     {{ errorMessage }}
@@ -125,7 +125,7 @@
                     class="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_340px] xl:grid-cols-[240px_minmax(0,1fr)_370px]"
                 >
                     <aside
-                        class="hidden min-h-0 flex-col overflow-y-auto border-r border-[var(--md-border-color)] p-4 lg:flex"
+                        class="hidden min-h-0 flex-col overflow-y-auto border-r-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)] p-4 lg:flex"
                         aria-label="Prompt library filters"
                     >
                         <div
@@ -157,7 +157,7 @@
                         </button>
 
                         <div
-                            class="my-4 border-t border-[var(--md-border-color)]"
+                            class="my-4 border-t-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)]"
                         />
                         <div
                             class="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--md-on-surface-variant)]"
@@ -190,7 +190,7 @@
                         data-test="system-prompts-library"
                     >
                         <div
-                            class="shrink-0 border-b border-[var(--md-border-color)] px-3 py-3 sm:px-4"
+                            class="shrink-0 border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)] px-3 py-3 sm:px-4"
                         >
                             <div class="flex items-center gap-2">
                                 <UInput
@@ -244,7 +244,7 @@
                                             </button>
                                             <div
                                                 v-if="tagCounts.length"
-                                                class="my-1 border-t border-[var(--md-border-color)]"
+                                                class="my-1 border-t-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)]"
                                             />
                                             <button
                                                 v-for="entry in tagCounts"
@@ -337,7 +337,7 @@
                                 <article
                                     v-for="prompt in visiblePrompts"
                                     :key="prompt.id"
-                                    class="group cursor-pointer rounded-[var(--md-border-radius)] border bg-[var(--md-surface)] p-3 transition-colors hover:bg-[var(--md-surface-hover)] sm:p-3.5"
+                                    class="group cursor-pointer rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] bg-[var(--md-surface)] p-3 transition-colors hover:bg-[var(--md-surface-hover)] sm:p-3.5"
                                     :class="
                                         prompt.id === selectedPromptId
                                             ? 'border-[var(--md-primary)] ring-1 ring-[var(--md-primary)]/20'
@@ -514,7 +514,7 @@
                     </section>
 
                     <aside
-                        class="min-h-0 flex-col border-l border-[var(--md-border-color)]"
+                        class="min-h-0 flex-col border-l-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)]"
                         :class="view === 'detail' ? 'flex' : 'hidden lg:flex'"
                         data-test="system-prompts-detail"
                     >
@@ -576,7 +576,7 @@
                                     Prompt preview
                                 </div>
                                 <div
-                                    class="mt-2 max-h-56 overflow-y-auto whitespace-pre-wrap rounded-[var(--md-border-radius)] border border-[var(--md-border-color)] p-3 text-sm leading-relaxed"
+                                    class="mt-2 max-h-56 overflow-y-auto whitespace-pre-wrap rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-border-color)] p-3 text-sm leading-relaxed"
                                 >
                                     {{
                                         promptText(selectedPrompt) ||
@@ -705,7 +705,7 @@
                             </div>
 
                             <div
-                                class="shrink-0 border-t border-[var(--md-border-color)] p-4"
+                            class="shrink-0 border-t-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)] p-4"
                             >
                                 <UButton
                                     block
@@ -940,7 +940,7 @@ const systemPromptsModalProps = computed(() => {
             .join(' '),
         ui: {
             body: 'p-0! min-h-0 flex-1 overflow-hidden',
-            header: 'border-b border-[var(--md-border-color)]',
+            header: 'border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)]',
             content: 'flex flex-col min-h-0',
             ...overrideUi,
         },
@@ -974,7 +974,7 @@ const searchInputProps = computed(() => ({
 
 function filterButtonClass(active: boolean) {
     return [
-        'flex w-full items-center gap-2 rounded-[var(--md-border-radius)] px-2.5 py-2 text-left text-sm transition-colors',
+        'flex w-full items-center gap-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-2.5 py-2 text-left text-sm transition-colors',
         active
             ? 'bg-primary/10 font-medium text-primary'
             : 'hover:bg-[var(--md-surface-hover)]',

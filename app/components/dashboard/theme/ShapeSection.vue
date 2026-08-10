@@ -11,8 +11,8 @@
                     Shape & borders
                 </h2>
                 <p class="supporting-text mt-1">
-                    Adjust the two shape tokens shared most broadly across the
-                    application.
+                    Adjust border and corner tiers for dividers, components,
+                    emphasis, controls, and surfaces.
                 </p>
             </div>
             <label class="shape-toggle">
@@ -33,7 +33,27 @@
         <div class="shape-controls">
             <div class="shape-control">
                 <div class="shape-control-heading">
-                    <label for="theme-border-width">Border thickness</label>
+                    <label for="theme-border-width-subtle">Divider thickness</label>
+                    <span>{{ formatPixels(localBorderWidthSubtlePx) }}</span>
+                </div>
+                <input
+                    id="theme-border-width-subtle"
+                    v-model.number="localBorderWidthSubtlePx"
+                    type="range"
+                    min="0"
+                    max="6"
+                    step="0.5"
+                    :disabled="!shapeOverridesEnabled"
+                    @input="commitBorderWidthSubtle(localBorderWidthSubtlePx)"
+                />
+                <p class="supporting-text">
+                    Used for subtle separators and dividers.
+                </p>
+            </div>
+
+            <div class="shape-control">
+                <div class="shape-control-heading">
+                    <label for="theme-border-width">Component thickness</label>
                     <span>{{ formatPixels(localBorderWidthPx) }}</span>
                 </div>
                 <input
@@ -47,13 +67,53 @@
                     @input="commitBorderWidth(localBorderWidthPx)"
                 />
                 <p class="supporting-text">
-                    Used by borders, dividers, inputs, cards, and panels.
+                    The standard border used by existing components.
                 </p>
             </div>
 
             <div class="shape-control">
                 <div class="shape-control-heading">
-                    <label for="theme-border-radius">Corner radius</label>
+                    <label for="theme-border-width-strong">Emphasis thickness</label>
+                    <span>{{ formatPixels(localBorderWidthStrongPx) }}</span>
+                </div>
+                <input
+                    id="theme-border-width-strong"
+                    v-model.number="localBorderWidthStrongPx"
+                    type="range"
+                    min="0"
+                    max="6"
+                    step="0.5"
+                    :disabled="!shapeOverridesEnabled"
+                    @input="commitBorderWidthStrong(localBorderWidthStrongPx)"
+                />
+                <p class="supporting-text">
+                    Used for emphasized frames and high-attention boundaries.
+                </p>
+            </div>
+
+            <div class="shape-control">
+                <div class="shape-control-heading">
+                    <label for="theme-border-radius-small">Control radius</label>
+                    <span>{{ formatPixels(localBorderRadiusSmallPx) }}</span>
+                </div>
+                <input
+                    id="theme-border-radius-small"
+                    v-model.number="localBorderRadiusSmallPx"
+                    type="range"
+                    min="0"
+                    max="32"
+                    step="1"
+                    :disabled="!shapeOverridesEnabled"
+                    @input="commitBorderRadiusSmall(localBorderRadiusSmallPx)"
+                />
+                <p class="supporting-text">
+                    Used for compact controls and inputs.
+                </p>
+            </div>
+
+            <div class="shape-control">
+                <div class="shape-control-heading">
+                    <label for="theme-border-radius">Surface radius</label>
                     <span>{{ formatPixels(localBorderRadiusPx) }}</span>
                 </div>
                 <input
@@ -67,8 +127,27 @@
                     @input="commitBorderRadius(localBorderRadiusPx)"
                 />
                 <p class="supporting-text">
-                    Controls the shared rounding used by most interactive
-                    surfaces.
+                    The standard rounding used by existing surfaces.
+                </p>
+            </div>
+
+            <div class="shape-control">
+                <div class="shape-control-heading">
+                    <label for="theme-border-radius-large">Large-surface radius</label>
+                    <span>{{ formatPixels(localBorderRadiusLargePx) }}</span>
+                </div>
+                <input
+                    id="theme-border-radius-large"
+                    v-model.number="localBorderRadiusLargePx"
+                    type="range"
+                    min="0"
+                    max="32"
+                    step="1"
+                    :disabled="!shapeOverridesEnabled"
+                    @input="commitBorderRadiusLarge(localBorderRadiusLargePx)"
+                />
+                <p class="supporting-text">
+                    Used for large panels, dialogs, and other broad surfaces.
                 </p>
             </div>
         </div>
@@ -86,8 +165,20 @@ const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides;
 const set = themeApi.set;
 
+const localBorderWidthSubtlePx = ref(
+    overrides.value.shape?.borderWidthSubtlePx ?? 1
+);
 const localBorderWidthPx = ref(overrides.value.shape?.borderWidthPx ?? 1);
+const localBorderWidthStrongPx = ref(
+    overrides.value.shape?.borderWidthStrongPx ?? 1
+);
+const localBorderRadiusSmallPx = ref(
+    overrides.value.shape?.borderRadiusSmallPx ?? 8
+);
 const localBorderRadiusPx = ref(overrides.value.shape?.borderRadiusPx ?? 8);
+const localBorderRadiusLargePx = ref(
+    overrides.value.shape?.borderRadiusLargePx ?? 8
+);
 const shapeOverridesEnabled = computed(
     () => overrides.value.shape?.enabled ?? false
 );
@@ -96,8 +187,24 @@ const commitBorderWidth = useDebounceFn(
     (value: number) => set({ shape: { borderWidthPx: value } }),
     50
 );
+const commitBorderWidthSubtle = useDebounceFn(
+    (value: number) => set({ shape: { borderWidthSubtlePx: value } }),
+    50
+);
+const commitBorderWidthStrong = useDebounceFn(
+    (value: number) => set({ shape: { borderWidthStrongPx: value } }),
+    50
+);
 const commitBorderRadius = useDebounceFn(
     (value: number) => set({ shape: { borderRadiusPx: value } }),
+    50
+);
+const commitBorderRadiusSmall = useDebounceFn(
+    (value: number) => set({ shape: { borderRadiusSmallPx: value } }),
+    50
+);
+const commitBorderRadiusLarge = useDebounceFn(
+    (value: number) => set({ shape: { borderRadiusLargePx: value } }),
     50
 );
 
@@ -112,11 +219,37 @@ function currentPixels(variable: string, fallback: number): number {
 }
 
 function syncCurrentThemeValues() {
+    const currentBorderWidthPx = currentPixels('--md-border-width', 1);
+    const currentBorderRadiusPx = currentPixels('--md-border-radius', 8);
+    if (overrides.value.shape?.borderWidthSubtlePx === undefined) {
+        localBorderWidthSubtlePx.value = currentPixels(
+            '--md-border-width-subtle',
+            currentBorderWidthPx
+        );
+    }
     if (overrides.value.shape?.borderWidthPx === undefined) {
-        localBorderWidthPx.value = currentPixels('--md-border-width', 1);
+        localBorderWidthPx.value = currentBorderWidthPx;
+    }
+    if (overrides.value.shape?.borderWidthStrongPx === undefined) {
+        localBorderWidthStrongPx.value = currentPixels(
+            '--md-border-width-strong',
+            currentBorderWidthPx
+        );
+    }
+    if (overrides.value.shape?.borderRadiusSmallPx === undefined) {
+        localBorderRadiusSmallPx.value = currentPixels(
+            '--md-border-radius-small',
+            currentBorderRadiusPx
+        );
     }
     if (overrides.value.shape?.borderRadiusPx === undefined) {
-        localBorderRadiusPx.value = currentPixels('--md-border-radius', 8);
+        localBorderRadiusPx.value = currentBorderRadiusPx;
+    }
+    if (overrides.value.shape?.borderRadiusLargePx === undefined) {
+        localBorderRadiusLargePx.value = currentPixels(
+            '--md-border-radius-large',
+            currentBorderRadiusPx
+        );
     }
 }
 
@@ -127,19 +260,41 @@ function toggleShapeOverrides() {
         return;
     }
 
+    const currentBorderWidthPx = currentPixels('--md-border-width', 1);
+    const currentBorderRadiusPx = currentPixels('--md-border-radius', 8);
+    const borderWidthSubtlePx =
+        overrides.value.shape?.borderWidthSubtlePx ??
+        currentPixels('--md-border-width-subtle', currentBorderWidthPx);
     const borderWidthPx =
         overrides.value.shape?.borderWidthPx ??
-        currentPixels('--md-border-width', 1);
+        currentBorderWidthPx;
+    const borderWidthStrongPx =
+        overrides.value.shape?.borderWidthStrongPx ??
+        currentPixels('--md-border-width-strong', currentBorderWidthPx);
+    const borderRadiusSmallPx =
+        overrides.value.shape?.borderRadiusSmallPx ??
+        currentPixels('--md-border-radius-small', currentBorderRadiusPx);
     const borderRadiusPx =
         overrides.value.shape?.borderRadiusPx ??
-        currentPixels('--md-border-radius', 8);
+        currentBorderRadiusPx;
+    const borderRadiusLargePx =
+        overrides.value.shape?.borderRadiusLargePx ??
+        currentPixels('--md-border-radius-large', currentBorderRadiusPx);
+    localBorderWidthSubtlePx.value = borderWidthSubtlePx;
     localBorderWidthPx.value = borderWidthPx;
+    localBorderWidthStrongPx.value = borderWidthStrongPx;
+    localBorderRadiusSmallPx.value = borderRadiusSmallPx;
     localBorderRadiusPx.value = borderRadiusPx;
+    localBorderRadiusLargePx.value = borderRadiusLargePx;
     set({
         shape: {
             enabled: true,
+            borderWidthSubtlePx,
             borderWidthPx,
+            borderWidthStrongPx,
+            borderRadiusSmallPx,
             borderRadiusPx,
+            borderRadiusLargePx,
         },
     });
 }
@@ -151,11 +306,26 @@ function formatPixels(value: number): string {
 watch(
     () => overrides.value.shape,
     (shape) => {
+        // Mode switches can load legacy/partial shape data. Refresh omitted
+        // tiers from the newly active theme instead of retaining the old mode.
+        syncCurrentThemeValues();
+        if (shape?.borderWidthSubtlePx !== undefined) {
+            localBorderWidthSubtlePx.value = shape.borderWidthSubtlePx;
+        }
         if (shape?.borderWidthPx !== undefined) {
             localBorderWidthPx.value = shape.borderWidthPx;
         }
+        if (shape?.borderWidthStrongPx !== undefined) {
+            localBorderWidthStrongPx.value = shape.borderWidthStrongPx;
+        }
+        if (shape?.borderRadiusSmallPx !== undefined) {
+            localBorderRadiusSmallPx.value = shape.borderRadiusSmallPx;
+        }
         if (shape?.borderRadiusPx !== undefined) {
             localBorderRadiusPx.value = shape.borderRadiusPx;
+        }
+        if (shape?.borderRadiusLargePx !== undefined) {
+            localBorderRadiusLargePx.value = shape.borderRadiusLargePx;
         }
     },
     { deep: true }
@@ -218,7 +388,7 @@ onMounted(syncCurrentThemeValues);
 }
 @media (min-width: 760px) {
     .shape-controls {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }
 </style>

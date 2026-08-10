@@ -44,7 +44,7 @@
 
             <div
                 v-if="isExpandable"
-                class="tool-call-expanded-content ml-2 mt-1 min-w-0 space-y-3 border-l border-[var(--md-outline-variant)] py-1 pl-5"
+                class="tool-call-expanded-content ml-2 mt-1 min-w-0 space-y-3 border-l-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-outline-variant)] py-1 pl-5"
             >
                 <div
                     v-for="(call, index) in detailedCalls"
@@ -64,7 +64,7 @@
                     </div>
                     <pre
                         v-if="call.args"
-                        class="tool-call-detail-value ml-5 mt-1 max-h-56 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-md bg-[var(--md-surface-container-low)] px-2.5 py-2 font-mono text-[11px] leading-5 text-[var(--md-on-surface)]"
+                        class="tool-call-detail-value ml-5 mt-1 max-h-56 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface-container-low)] px-2.5 py-2 font-mono text-[11px] leading-5 text-[var(--md-on-surface)]"
                         >{{ formatArgs(call.args) }}</pre
                     >
                     <pre

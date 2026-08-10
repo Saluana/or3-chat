@@ -28,25 +28,16 @@ export function generateThemeCssVariables(def: ThemeDefinition): string {
     const light = buildPalette(def.colors);
     applyFontVars(light, def.fonts);
 
-    // Add border styling if defined
-    if (def.borderWidth) {
-        light['--md-border-width'] = def.borderWidth;
-    }
-    if (def.borderRadius) {
-        light['--md-border-radius'] = def.borderRadius;
-    }
+    applyShapeVars(light, def);
 
     const darkOverrides = def.colors.dark
         ? buildPalette(def.colors.dark as ColorPalette)
         : {};
     applyFontVars(darkOverrides, def.fonts?.dark);
 
-    // Add border styling to dark mode as well (same values)
-    if (def.borderWidth && Object.keys(darkOverrides).length > 0) {
-        darkOverrides['--md-border-width'] = def.borderWidth;
-    }
-    if (def.borderRadius && Object.keys(darkOverrides).length > 0) {
-        darkOverrides['--md-border-radius'] = def.borderRadius;
+    // Shape is shared across color modes, matching the original middle tokens.
+    if (Object.keys(darkOverrides).length > 0) {
+        applyShapeVars(darkOverrides, def);
     }
 
     const lightBlock = toCssBlock(def.name, light, false);
@@ -55,6 +46,24 @@ export function generateThemeCssVariables(def: ThemeDefinition): string {
             ? toCssBlock(def.name, darkOverrides, true)
             : '';
     return lightBlock + (darkBlock ? '\n' + darkBlock : '');
+}
+
+function applyShapeVars(
+    target: Record<string, string>,
+    def: ThemeDefinition
+): void {
+    const shapeVars = [
+        ['--md-border-width-subtle', def.borderWidthSubtle],
+        ['--md-border-width', def.borderWidth],
+        ['--md-border-width-strong', def.borderWidthStrong],
+        ['--md-border-radius-small', def.borderRadiusSmall],
+        ['--md-border-radius', def.borderRadius],
+        ['--md-border-radius-large', def.borderRadiusLarge],
+    ] as const;
+
+    for (const [variable, value] of shapeVars) {
+        if (value) target[variable] = value;
+    }
 }
 
 // Safe to keep unbounded: keys come from theme token names, which are finite

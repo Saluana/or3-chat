@@ -1,13 +1,13 @@
 <template>
     <div
-        class="notification-item flex flex-col p-3 hover:bg-[var(--md-surface-hover)] cursor-pointer transition-colors border-b border-[var(--md-border-color)] last:border-b-0"
+        class="notification-item flex flex-col p-3 hover:bg-[var(--md-surface-hover)] cursor-pointer transition-colors border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)] last:border-b-0"
         :class="{ 'bg-[var(--md-surface-container)]': !notification.read_at }"
         @click="handleClick"
     >
         <div class="flex items-start gap-3">
             <!-- Type icon -->
             <div
-                class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-[var(--md-border-radius)] bg-[var(--md-surface-container-high)] notification-type-icon"
+                class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface-container-high)] notification-type-icon"
             >
                 <UIcon :name="typeIcon" class="w-5 h-5" />
             </div>

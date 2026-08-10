@@ -2,7 +2,7 @@
   <div class="space-y-3" aria-label="New external agent session">
     <div
       v-if="!availableOptions.length"
-      class="rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-5 text-left shadow-sm"
+      class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-5 text-left shadow-sm"
       :aria-busy="recoveryPending"
       data-testid="external-agent-recovery"
     >

@@ -107,8 +107,8 @@
                         <label
                             v-for="item in eventOptions"
                             :key="item.value"
-                            class="group flex cursor-pointer items-start gap-3 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-outline-variant)]/40 bg-[var(--md-surface)] px-3 py-2.5 transition-colors hover:border-[color:var(--md-primary)]/40 hover:bg-[var(--md-primary)]/5"
-                            :class="selectedEvents.includes(item.value) ? 'border-[color:var(--md-primary)]/60 bg-[var(--md-primary)]/8' : ''"
+                            class="group flex cursor-pointer items-start gap-3 rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[color:var(--md-outline-variant)]/40 bg-[var(--md-surface)] px-3 py-2.5 transition-colors hover:border-[color:var(--md-primary)]/40 hover:bg-[var(--md-primary)]/5"
+                            :class="selectedEvents.includes(item.value) ? 'border-[length:var(--md-border-width-strong,var(--md-border-width,1px))] border-[color:var(--md-primary)]/60 bg-[var(--md-primary)]/8' : ''"
                         >
                             <UCheckbox
                                 :model-value="selectedEvents.includes(item.value)"
@@ -136,7 +136,7 @@
                         <summary class="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-[var(--md-on-surface)]">
                             Custom server-side hooks
                         </summary>
-                        <div class="border-t-[length:var(--md-border-width)] border-t-[color:var(--md-outline-variant)] px-4 py-3">
+                        <div class="border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-t-[color:var(--md-outline-variant)] px-4 py-3">
                             <p class="mb-3 text-xs text-[var(--md-on-surface)] opacity-60 leading-snug">
                                 Subscribe to arbitrary Nitro server hook names. Payload schemas are not guaranteed stable.
                             </p>

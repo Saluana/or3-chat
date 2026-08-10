@@ -16,11 +16,11 @@
         <!-- Final Output - only shown when workflow completes -->
         <div
             v-if="showResultBox"
-            class="workflow-output relative bg-[var(--md-surface)] rounded-[var(--md-border-radius)] p-4 border border-[var(--md-outline-variant)]"
+            class="workflow-output relative bg-[var(--md-surface)] rounded-[var(--md-border-radius)] p-4 border-[length:var(--md-border-width)] border-[var(--md-outline-variant)]"
         >
             <!-- Label -->
             <div
-                class="absolute top-0 left-0 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-[var(--md-on-surface-variant)] bg-[var(--md-surface-container)] rounded-br rounded-tl-[var(--md-border-radius)] border-b border-r border-[var(--md-outline-variant)]"
+            class="absolute top-0 left-0 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-[var(--md-on-surface-variant)] bg-[var(--md-surface-container)] rounded-br-[var(--md-border-radius-small,var(--md-border-radius))] rounded-tl-[var(--md-border-radius-small,var(--md-border-radius))] border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-r-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-outline-variant)]"
             >
                 Result
             </div>
@@ -31,17 +31,17 @@
                     :content="outputContent"
                     :shiki-theme="currentShikiTheme"
                     code-block-show-line-numbers
-                    class="cm-markdown-assistant prose max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 w-full min-w-full or3-prose prose-pre:max-w-full prose-pre:overflow-x-auto leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] dark:text-white/95 dark:prose-headings:text-white/95! prose-pre:bg-(--md-surface-container)/80 prose-pre:border-(--md-border-width) prose-pre:border-(--md-border-color) prose-pre:text-(--md-on-surface) prose-pre:font-[inherit] prose-code:text-(--md-on-surface) prose-code:font-[inherit]"
+                    class="cm-markdown-assistant prose max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 w-full min-w-full or3-prose prose-pre:max-w-full prose-pre:overflow-x-auto leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] dark:text-white/95 dark:prose-headings:text-white/95! prose-pre:bg-(--md-surface-container)/80 prose-pre:border-[length:var(--md-border-width-subtle,var(--md-border-width))] prose-pre:border-(--md-border-color) prose-pre:text-(--md-on-surface) prose-pre:font-[inherit] prose-code:text-(--md-on-surface) prose-code:font-[inherit]"
                 />
             </div>
         </div>
 
-        <!-- Action buttons (Copy, Retry, etc) - Reusing similar layout to ChatMessage but simplified -->
+        <!-- Action buttons (Copy, Resume, etc) - Reusing similar layout to ChatMessage but simplified -->
         <div
             class="flex justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity"
         >
             <UFieldGroup
-                class="bg-(--md-surface) rounded-(--md-border-radius) shadow-sm border border-(--md-outline-variant) overflow-hidden"
+                class="bg-(--md-surface) rounded-[var(--md-border-radius-small,var(--md-border-radius))] shadow-sm border-[length:var(--md-border-width)] border-(--md-outline-variant) overflow-hidden"
             >
                 <UTooltip
                     :delay-duration="500"
@@ -59,14 +59,14 @@
                     :delay-duration="500"
                     :text="
                         workflowExecutionEnabled
-                            ? 'Retry from failed node'
+                            ? 'Resume from last checkpoint'
                             : 'Workflow execution disabled'
                     "
                     :teleport="true"
                 >
                     <UButton
                         v-bind="retryButtonProps"
-                        aria-label="Retry workflow"
+                        aria-label="Resume workflow"
                         :disabled="!workflowExecutionEnabled"
                         @click="retryFromHere"
                     />
@@ -81,7 +81,6 @@
 import { computed, onMounted } from 'vue';
 import { useClipboard } from '@vueuse/core';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
-import { deriveStartNodeId } from '~/utils/chat/workflow-types';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
@@ -139,20 +138,11 @@ const showResultBox = computed(() => outputContent.value.length > 0);
 const canRetry = computed(() => {
     const wf = props.message.workflowState;
     if (!wf) return false;
-    // Check if workflow is in a retryable state
-    const isRetryableState = ['error', 'interrupted', 'stopped'].includes(
+    // The retry handler reconciles stale or missing checkpoint node IDs with
+    // the current workflow graph before resuming.
+    return ['error', 'interrupted', 'stopped'].includes(
         wf.executionState as string
     );
-    if (!isRetryableState) return false;
-    // Derive start node from utility
-    const startNodeId = deriveStartNodeId({
-        resumeState: wf.resumeState,
-        failedNodeId: wf.failedNodeId,
-        currentNodeId: wf.currentNodeId,
-        nodeStates: wf.nodeStates,
-        lastActiveNodeId: wf.lastActiveNodeId,
-    });
-    return Boolean(startNodeId);
 });
 
 // Styles
@@ -235,7 +225,7 @@ async function retryFromHere() {
     const ok = await svc.retry(props.message.id);
     if (ok) {
         toast.add({
-            title: 'Retry started',
+            title: 'Workflow resumed',
             color: 'info',
             icon: useIcon('ui.check').value,
         });

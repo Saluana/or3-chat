@@ -79,7 +79,51 @@ describe('applyMergedTheme', () => {
         );
     });
 
-    it('applies and removes shared shape overrides', async () => {
+    it('applies body and heading font choices independently', async () => {
+        const overrides: UserThemeOverrides = {
+            typography: {
+                bodyFont: 'ibm-plex-sans',
+                headingFont: 'press-start-2p',
+            },
+            colors: { enabled: false },
+            backgrounds: { enabled: false },
+            ui: {},
+        };
+
+        await applyMergedTheme('light', overrides, mockThemePlugin as any);
+
+        const style = document.documentElement.style;
+        expect(style.getPropertyValue('--app-font-sans-current')).toContain(
+            'IBM Plex Sans'
+        );
+        expect(style.getPropertyValue('--app-font-heading-current')).toContain(
+            'Press Start 2P'
+        );
+    });
+
+    it('falls back to theme fonts for an unknown persisted font choice', async () => {
+        const overrides = {
+            typography: {
+                bodyFont: 'font-that-is-not-installed',
+                headingFont: 'also-not-installed',
+            },
+            colors: { enabled: false },
+            backgrounds: { enabled: false },
+            ui: {},
+        } as unknown as UserThemeOverrides;
+
+        await applyMergedTheme('light', overrides, mockThemePlugin as any);
+
+        const style = document.documentElement.style;
+        expect(style.getPropertyValue('--app-font-sans-current')).toBe(
+            'var(--font-sans)'
+        );
+        expect(style.getPropertyValue('--app-font-heading-current')).toBe(
+            'var(--font-heading)'
+        );
+    });
+
+    it('applies and removes tiered shape overrides', async () => {
         const style = document.documentElement.style;
 
         await applyMergedTheme(
@@ -87,8 +131,12 @@ describe('applyMergedTheme', () => {
             {
                 shape: {
                     enabled: true,
+                    borderWidthSubtlePx: 0.5,
                     borderWidthPx: 2.5,
+                    borderWidthStrongPx: 4,
+                    borderRadiusSmallPx: 4,
                     borderRadiusPx: 18,
+                    borderRadiusLargePx: 28,
                 },
                 colors: { enabled: false },
                 backgrounds: { enabled: false },
@@ -98,8 +146,12 @@ describe('applyMergedTheme', () => {
             mockThemePlugin as any
         );
 
+        expect(style.getPropertyValue('--md-border-width-subtle')).toBe('0.5px');
         expect(style.getPropertyValue('--md-border-width')).toBe('2.5px');
+        expect(style.getPropertyValue('--md-border-width-strong')).toBe('4px');
+        expect(style.getPropertyValue('--md-border-radius-small')).toBe('4px');
         expect(style.getPropertyValue('--md-border-radius')).toBe('18px');
+        expect(style.getPropertyValue('--md-border-radius-large')).toBe('28px');
 
         await applyMergedTheme(
             'light',
@@ -115,6 +167,36 @@ describe('applyMergedTheme', () => {
 
         expect(style.getPropertyValue('--md-border-width')).toBe('');
         expect(style.getPropertyValue('--md-border-radius')).toBe('');
+        expect(style.getPropertyValue('--md-border-width-subtle')).toBe('');
+        expect(style.getPropertyValue('--md-border-width-strong')).toBe('');
+        expect(style.getPropertyValue('--md-border-radius-small')).toBe('');
+        expect(style.getPropertyValue('--md-border-radius-large')).toBe('');
+    });
+
+    it('keeps legacy middle shape overrides compatible', async () => {
+        await applyMergedTheme(
+            'light',
+            {
+                shape: {
+                    enabled: true,
+                    borderWidthPx: 3,
+                    borderRadiusPx: 12,
+                },
+                colors: { enabled: false },
+                backgrounds: { enabled: false },
+                typography: {},
+                ui: {},
+            },
+            mockThemePlugin as any
+        );
+
+        const style = document.documentElement.style;
+        expect(style.getPropertyValue('--md-border-width')).toBe('3px');
+        expect(style.getPropertyValue('--md-border-radius')).toBe('12px');
+        expect(style.getPropertyValue('--md-border-width-subtle')).toBe('');
+        expect(style.getPropertyValue('--md-border-width-strong')).toBe('');
+        expect(style.getPropertyValue('--md-border-radius-small')).toBe('');
+        expect(style.getPropertyValue('--md-border-radius-large')).toBe('');
     });
 
     it('should apply color palette overrides when enabled', async () => {

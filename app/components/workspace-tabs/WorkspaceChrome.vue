@@ -188,7 +188,7 @@ defineExpose({ openTabSwitcher });
     width: 100%;
     padding-block: var(--or3-chrome-pad-block);
     overflow: visible;
-    border-bottom: var(--md-border-width, 1px) solid var(--md-border-color);
+    border-bottom: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--md-border-color);
     background: var(--or3-workspace-chrome-bg, var(--md-surface));
     color: var(--md-on-surface);
 }
@@ -212,7 +212,7 @@ defineExpose({ openTabSwitcher });
 .workspace-chrome:not(.workspace-chrome--mobile)
     :deep(.workspace-chrome-action) {
     border: var(--md-border-width, 1px) solid var(--md-border-color);
-    border-radius: var(--md-border-radius, 0.5rem);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius, 0.5rem));
     background: transparent;
     color: var(--md-on-surface);
     box-shadow: none;
@@ -264,7 +264,7 @@ defineExpose({ openTabSwitcher });
     padding: 0 0.55rem;
     border: var(--md-border-width, 1px) solid
         color-mix(in srgb, var(--md-border-color) 70%, transparent);
-    border-radius: var(--md-border-radius, 0.5rem);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius, 0.5rem));
     background: var(--md-surface-variant);
     color: var(--md-on-surface);
     text-align: left;
@@ -292,7 +292,7 @@ defineExpose({ openTabSwitcher });
 /* Tokenized chrome actions: match PageShell theme-btn look across themes. */
 .workspace-chrome--mobile :deep(.workspace-chrome-action) {
     border: var(--md-border-width, 1px) solid var(--md-border-color);
-    border-radius: var(--md-border-radius, 0.5rem);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius, 0.5rem));
     background: transparent;
     color: var(--md-on-surface);
     box-shadow: none;
@@ -306,7 +306,7 @@ defineExpose({ openTabSwitcher });
     min-width: 32px;
     height: 32px;
     border: var(--md-border-width, 1px) solid var(--md-border-color);
-    border-radius: var(--md-border-radius, 0.5rem);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius, 0.5rem));
     background: transparent;
     color: var(--md-on-surface);
     box-shadow: none;

@@ -49,4 +49,23 @@ describe('generateThemeCssVariables', () => {
         expect(css).toContain('--app-font-size-root: 17px;');
         expect(css).toContain('--app-font-weight-root: 600;');
     });
+
+    it('emits optional semantic shape tiers for theme authors', () => {
+        const css = generateThemeCssVariables({
+            ...baseTheme,
+            borderWidthSubtle: '1px',
+            borderWidth: '2px',
+            borderWidthStrong: '4px',
+            borderRadiusSmall: '3px',
+            borderRadius: '8px',
+            borderRadiusLarge: '16px',
+        });
+
+        expect(css).toContain('--md-border-width-subtle: 1px;');
+        expect(css).toContain('--md-border-width: 2px;');
+        expect(css).toContain('--md-border-width-strong: 4px;');
+        expect(css).toContain('--md-border-radius-small: 3px;');
+        expect(css).toContain('--md-border-radius: 8px;');
+        expect(css).toContain('--md-border-radius-large: 16px;');
+    });
 });

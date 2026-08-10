@@ -167,6 +167,33 @@ describe('POST /api/sync/push', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
     });
 
+    it('accepts sync payloads larger than the former 64KB limit', async () => {
+        const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
+        const body = makeBaseBody();
+        (body.ops[0]!.payload as Record<string, unknown>).data = {
+            content: 'x'.repeat(120 * 1024),
+        };
+        readBodyMock.mockResolvedValue(body);
+
+        await expect(handler(makeEvent())).resolves.toEqual(
+            successfulPushResult(STAMP_1.opId)
+        );
+    });
+
+    it('rejects sync payloads larger than 256KB before reaching a provider', async () => {
+        const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
+        const body = makeBaseBody();
+        (body.ops[0]!.payload as Record<string, unknown>).data = {
+            content: 'x'.repeat(257 * 1024),
+        };
+        readBodyMock.mockResolvedValue(body);
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 413,
+        });
+        expect(pushMock).not.toHaveBeenCalled();
+    });
+
     it('accepts delete op without full payload fields', async () => {
         const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
         const body = {

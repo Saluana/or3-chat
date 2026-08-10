@@ -258,9 +258,9 @@ defineExpose({ focus, removeReference });
     content: attr(data-placeholder);
     pointer-events: none;
 }
-.prompt-editor :deep(.document-ai-mention) { display: inline-flex; align-items: center; padding: 0.05rem 0.25rem; border-radius: 0.3rem; color: var(--md-primary); background: var(--md-primary-container); font-weight: 650; }
+.prompt-editor :deep(.document-ai-mention) { display: inline-flex; align-items: center; padding: 0.05rem 0.25rem; border-radius: var(--md-border-radius-small, 0.3rem); color: var(--md-primary); background: var(--md-primary-container); font-weight: 650; }
 .context-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; padding-inline: 0.25rem; }
-.context-chip { min-width: 0; max-width: 16rem; display: flex; align-items: center; gap: 0.3rem; padding: 0.18rem 0.22rem 0.18rem 0.4rem; border: var(--md-border-width) solid var(--md-border-color); border-radius: var(--md-border-radius); color: var(--md-on-surface); background: var(--md-surface-container-low); font-size: 0.66rem; }
+.context-chip { min-width: 0; max-width: 16rem; display: flex; align-items: center; gap: 0.3rem; padding: 0.18rem 0.22rem 0.18rem 0.4rem; border: var(--md-border-width) solid var(--md-border-color); border-radius: var(--md-border-radius-small, var(--md-border-radius)); color: var(--md-on-surface); background: var(--md-surface-container-low); font-size: 0.66rem; }
 .context-chip > svg { width: 0.8rem; height: 0.8rem; flex: 0 0 auto; color: var(--md-on-surface-variant); }
 .context-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 600px) {

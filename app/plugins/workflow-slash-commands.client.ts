@@ -25,16 +25,26 @@ import type { Attachment } from 'or3-workflow-core';
 import { createWorkflowStreamAccumulator } from '~/composables/chat/useWorkflowStreamAccumulator';
 import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
 import { reportError } from '~/utils/errors';
-import { isBackgroundStreamingEnabled } from '~/utils/chat/openrouterStream';
+import {
+    abortBackgroundJob,
+    isBackgroundStreamingEnabled,
+    pollJobStatus,
+    BackgroundJobPollError,
+} from '~/utils/chat/openrouterStream';
 import { startBackgroundWorkflow, respondHitlRequest } from '~/utils/chat/backgroundWorkflow';
-import { ensureBackgroundJobTracker } from '~/utils/chat/useAi-internal/backgroundJobs';
+import {
+    backgroundJobTrackers,
+    ensureBackgroundJobTracker,
+} from '~/utils/chat/useAi-internal/backgroundJobs';
 import {
     isWorkflowMessageData,
     deriveStartNodeId,
     type ChatHistoryMessage,
     type HitlRequestState,
     type HitlAction,
+    type WorkflowMessageData,
 } from '~/utils/chat/workflow-types';
+import { reconcileWorkflowResume } from './WorkflowSlashCommands/reconcileWorkflowResume';
 import {
     extractImageAttachments,
     inheritAttachmentsFromMessages,
@@ -111,6 +121,7 @@ type SDKAttachmentPayload = {
 
 let activeController: WorkflowExecutionController | null = null;
 let activeWorkflowMessageId: string | null = null;
+const activeBackgroundWorkflowJobs = new Map<string, string>();
 const pendingHitlRequests = new Map<
     string,
     {
@@ -164,6 +175,85 @@ export function stopWorkflowExecution(messageId?: string): boolean {
         return true;
     }
     return false;
+}
+
+async function stopBackgroundWorkflowExecution(
+    messageId?: string
+): Promise<boolean> {
+    const jobs = new Map<string, string>();
+    if (messageId) {
+        const knownJobId = activeBackgroundWorkflowJobs.get(messageId);
+        if (knownJobId) jobs.set(messageId, knownJobId);
+        for (const tracker of backgroundJobTrackers.values()) {
+            if (
+                tracker.messageId === messageId &&
+                tracker.status === 'streaming'
+            ) {
+                jobs.set(tracker.messageId, tracker.jobId);
+            }
+        }
+        // The active-job map is intentionally process-local, so it is empty
+        // after a browser refresh. The workflow message is the durable source
+        // of truth for the job that should be cancelled.
+        try {
+            const message = await getDb().messages.get(messageId);
+            const persistedJobId =
+                message?.data && typeof message.data === 'object'
+                    ? (message.data as Record<string, unknown>)
+                          .background_job_id
+                    : undefined;
+            if (typeof persistedJobId === 'string' && persistedJobId) {
+                jobs.set(messageId, persistedJobId);
+            }
+        } catch {
+            // The in-memory tracker remains a valid fallback when IndexedDB is
+            // temporarily unavailable.
+        }
+    } else if (activeBackgroundWorkflowJobs.size === 1) {
+        const onlyJob = activeBackgroundWorkflowJobs.entries().next().value;
+        if (onlyJob) jobs.set(onlyJob[0], onlyJob[1]);
+    } else {
+        const activeTrackers = [...backgroundJobTrackers.values()].filter(
+            (tracker) => tracker.status === 'streaming'
+        );
+        if (activeTrackers.length === 1) {
+            const tracker = activeTrackers[0]!;
+            jobs.set(tracker.messageId, tracker.jobId);
+        }
+    }
+    if (jobs.size === 0) return false;
+
+    const results = await Promise.all(
+        [...jobs.entries()].map(async ([activeMessageId, jobId]) => {
+            const aborted = await abortBackgroundJob(jobId).catch(() => false);
+            if (aborted) {
+                activeBackgroundWorkflowJobs.delete(activeMessageId);
+                return true;
+            }
+
+            // `ChatContainer` also aborts the active background job. When it
+            // wins the race, this second request returns false because the job
+            // is already terminal. Treat an aborted (or no-longer-present) job
+            // as stopped so the workflow card cannot stay on "Running".
+            try {
+                const status = await pollJobStatus(jobId);
+                if (status.status === 'aborted') {
+                    activeBackgroundWorkflowJobs.delete(activeMessageId);
+                    return true;
+                }
+            } catch (error) {
+                if (
+                    error instanceof BackgroundJobPollError &&
+                    error.kind === 'not_found'
+                ) {
+                    activeBackgroundWorkflowJobs.delete(activeMessageId);
+                    return true;
+                }
+            }
+            return false;
+        })
+    );
+    return results.some(Boolean);
 }
 
 /**
@@ -383,6 +473,75 @@ export default defineNuxtPlugin((nuxtApp) => {
         }
     })();
     const toast = useToast();
+
+    const markBackgroundWorkflowStopped = async (
+        messageId?: string
+    ): Promise<void> => {
+        if (!messageId) return;
+
+        let nextState: WorkflowMessageData | null;
+        try {
+            const db = getDb();
+            nextState = await withMessageSyncTransaction(db, async () => {
+                const message = await db.messages.get(messageId);
+                if (!message || !isWorkflowMessageData(message.data)) {
+                    return null;
+                }
+                if (
+                    message.data.executionState !== 'running' &&
+                    message.data.executionState !== 'idle'
+                ) {
+                    return null;
+                }
+
+                const data = message.data;
+                const state = safeCloneWorkflowData({
+                    ...data,
+                    executionState: 'stopped' as const,
+                    currentNodeId: null,
+                    result: {
+                        ...data.result,
+                        success: false,
+                        duration: data.result?.duration ?? 0,
+                        error: 'Workflow stopped by user',
+                    },
+                    version: (data.version ?? 0) + 1,
+                    background_job_status: 'aborted' as const,
+                    background_job_error: 'Workflow stopped by user',
+                });
+                await db.messages.put({
+                    ...message,
+                    data: state,
+                    pending: false,
+                    error: null,
+                    updated_at: nowSec(),
+                    clock: nextClock(message.clock),
+                });
+                return state;
+            });
+        } catch (error) {
+            reportError(error, {
+                code: 'ERR_DB_WRITE_FAILED',
+                message: 'Failed to update stopped workflow',
+                silent: true,
+            });
+            return;
+        }
+
+        if (!nextState) return;
+        for (const tracker of backgroundJobTrackers.values()) {
+            if (tracker.messageId === messageId) {
+                tracker.lastWorkflowVersion = Math.max(
+                    tracker.lastWorkflowVersion,
+                    nextState.version ?? 0
+                );
+            }
+        }
+        void hooks.doAction('workflow.execution:action:state_update', {
+            messageId,
+            state: nextState,
+        });
+    };
     let slashModule: SlashCommandsModule | null = null;
     let executionModule: ExecutionModule | null = null;
     let extensionRegistered = false;
@@ -440,8 +599,13 @@ export default defineNuxtPlugin((nuxtApp) => {
                 },
             },
             actions: {
-                cancel(messageId) {
-                    return stopWorkflowExecution(messageId);
+                async cancel(messageId) {
+                    if (stopWorkflowExecution(messageId)) return true;
+                    const stopped = await stopBackgroundWorkflowExecution(
+                        messageId
+                    );
+                    if (stopped) await markBackgroundWorkflowStopped(messageId);
+                    return stopped;
                 },
                 retry: retryWorkflowMessage,
                 respond(_messageId, requestId, action, jobId) {
@@ -461,18 +625,28 @@ export default defineNuxtPlugin((nuxtApp) => {
     if (typeof window !== 'undefined') {
         window.addEventListener(
             'workflow:stop',
-            () => {
-                if (stopWorkflowExecution()) {
-                    if (import.meta.dev)
-                        console.log(
-                            '[workflow-slash] Execution stopped by user'
-                        );
-                    toast.add({
-                        title: 'Workflow Stopped',
-                        description: 'Execution was cancelled',
-                        color: 'info',
-                    });
-                }
+            (event) => {
+                const messageId = (event as CustomEvent<{ messageId?: string }>)
+                    .detail?.messageId;
+                void (async () => {
+                    const stoppedForeground = stopWorkflowExecution(messageId);
+                    const stoppedBackground =
+                        await stopBackgroundWorkflowExecution(messageId);
+                    if (stoppedForeground || stoppedBackground) {
+                        if (stoppedBackground) {
+                            await markBackgroundWorkflowStopped(messageId);
+                        }
+                        if (import.meta.dev)
+                            console.log(
+                                '[workflow-slash] Execution stopped by user'
+                            );
+                        toast.add({
+                            title: 'Workflow Stopped',
+                            description: 'Execution was cancelled',
+                            color: 'info',
+                        });
+                    }
+                })();
             },
             { signal: stopAbort.signal }
         );
@@ -620,10 +794,8 @@ export default defineNuxtPlugin((nuxtApp) => {
         execMod: ExecutionModule;
         apiKey: string;
         attachments?: Attachment[];
-        conversationHistory?: Awaited<
-            ReturnType<ExecutionModule['getConversationHistory']>
-        >;
         resumeFrom?: import('or3-workflow-core').ResumeFromOptions;
+        resumeStateVersion?: number;
     }) {
         const {
             workflowPost,
@@ -632,8 +804,8 @@ export default defineNuxtPlugin((nuxtApp) => {
             execMod,
             apiKey,
             attachments,
-            conversationHistory,
             resumeFrom,
+            resumeStateVersion,
         } = opts;
 
         // Import db for streaming updates
@@ -887,11 +1059,14 @@ export default defineNuxtPlugin((nuxtApp) => {
             },
             onToken: (nodeId: string, token: string) => {
                 accumulator.nodeToken(nodeId, token);
-                // Token updates are RAF-batched in accumulator; no hook emission needed
+                // The accumulator applies the token on its own RAF. Queue the
+                // chat bridge immediately after it so the card receives that
+                // freshly-flushed state rather than only lifecycle snapshots.
+                emitStateUpdate();
             },
             onReasoning: (nodeId: string, token: string) => {
                 accumulator.nodeReasoning(nodeId, token);
-                // Token updates are RAF-batched in accumulator; no hook emission needed
+                emitStateUpdate();
             },
             onBranchStart: (
                 nodeId: string,
@@ -908,7 +1083,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 token: string
             ) => {
                 accumulator.branchToken(nodeId, branchId, label, token);
-                // Token updates are RAF-batched in accumulator; no hook emission needed
+                emitStateUpdate();
             },
             onBranchReasoning: (
                 nodeId: string,
@@ -917,7 +1092,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 token: string
             ) => {
                 accumulator.branchReasoning(nodeId, branchId, label, token);
-                // Token updates are RAF-batched in accumulator; no hook emission needed
+                emitStateUpdate();
             },
             onBranchComplete: (
                 nodeId: string,
@@ -1035,13 +1210,10 @@ export default defineNuxtPlugin((nuxtApp) => {
                     prompt: executionPrompt,
                     threadId: assistantContext.threadId || '',
                     messageId: assistantContext.id,
-                    conversationHistory:
-                        conversationHistory ||
-                        (await execMod.getConversationHistory(
-                            assistantContext.threadId || ''
-                        )),
                     apiKey,
                     attachments,
+                    resumeFrom,
+                    resumeStateVersion,
                 });
             } catch (error) {
                 console.warn(
@@ -1051,6 +1223,10 @@ export default defineNuxtPlugin((nuxtApp) => {
             }
 
             if (backgroundJob) {
+                activeBackgroundWorkflowJobs.set(
+                    assistantContext.id,
+                    backgroundJob.jobId
+                );
                 try {
                     await withMessageSyncTransaction(db, async () => {
                         const msg = await db.messages.get(assistantContext.id);
@@ -1095,11 +1271,6 @@ export default defineNuxtPlugin((nuxtApp) => {
         const controller = execMod.executeWorkflow({
             workflow: workflowPost.meta,
             prompt: executionPrompt,
-            conversationHistory:
-                conversationHistory ||
-                (await execMod.getConversationHistory(
-                    assistantContext.threadId || ''
-                )),
             apiKey,
             attachments, // Pass extracted attachments
             onToken: () => {}, // Handled by callbacks.onToken
@@ -1115,6 +1286,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 });
             },
             resumeFrom,
+            sessionId: `workflow:${workflowPost.id}:${assistantContext.id}`,
         });
 
         activeController = controller;
@@ -1209,25 +1381,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 return false;
             }
 
-            // Derive resume state from multiple sources if not explicitly set
             const data = message.data;
-            const nodeOutputs = data.nodeOutputs || {};
-            const derivedStartNodeId = deriveStartNodeId({
-                resumeState: data.resumeState,
-                failedNodeId: data.failedNodeId,
-                currentNodeId: data.currentNodeId,
-                nodeStates: data.nodeStates,
-                lastActiveNodeId: data.lastActiveNodeId,
-            });
-
-            if (!derivedStartNodeId) {
-                reportError('No retry state available for this message', {
-                    code: 'ERR_VALIDATION',
-                    toast: true,
-                });
-                return false;
-            }
-
             const workflowPost =
                 (message.data.workflowId
                     ? await slashMod.getWorkflowById(message.data.workflowId)
@@ -1236,6 +1390,15 @@ export default defineNuxtPlugin((nuxtApp) => {
 
             if (!hasWorkflowMeta(workflowPost)) {
                 reportError('Workflow not found for retry', {
+                    code: 'ERR_VALIDATION',
+                    toast: true,
+                });
+                return false;
+            }
+
+            const resume = reconcileWorkflowResume(workflowPost.meta, data);
+            if (!resume.startNodeId) {
+                reportError('No executable node is available to resume', {
                     code: 'ERR_VALIDATION',
                     toast: true,
                 });
@@ -1252,11 +1415,6 @@ export default defineNuxtPlugin((nuxtApp) => {
                 return false;
             }
 
-            const resumeNodeOutputs =
-                data.resumeState?.nodeOutputs ||
-                data.nodeOutputs ||
-                nodeOutputs;
-
             // Reuse the original message ID so UI updates in place
             const assistantContext = {
                 id: messageId,
@@ -1265,29 +1423,23 @@ export default defineNuxtPlugin((nuxtApp) => {
             };
 
             const resumeFrom = {
-                startNodeId: derivedStartNodeId,
-                nodeOutputs: resumeNodeOutputs,
-                executionOrder:
-                    data.resumeState?.executionOrder ||
-                    data.executionOrder ||
-                    Object.keys(resumeNodeOutputs),
-                lastActiveNodeId:
-                    data.resumeState?.lastActiveNodeId ??
-                    data.lastActiveNodeId ??
-                    undefined,
-                sessionMessages:
-                    data.sessionMessages || data.resumeState?.sessionMessages,
-                resumeInput:
-                    data.resumeState?.resumeInput ||
-                    (data.lastActiveNodeId
-                        ? resumeNodeOutputs[data.lastActiveNodeId]
-                        : undefined),
-                finalNodeId: data.finalNodeId || undefined,
+                startNodeId: resume.startNodeId,
+                nodeOutputs: resume.nodeOutputs,
+                executionOrder: resume.executionOrder,
+                lastActiveNodeId: resume.lastActiveNodeId,
+                sessionMessages: resume.sessionMessages,
+                resumeInput: resume.resumeInput,
+                pendingNodes: resume.pendingNodes,
             } satisfies import('or3-workflow-core').ResumeFromOptions;
 
-            const conversationHistory = await execMod.getConversationHistory(
-                assistantContext.threadId || ''
-            );
+            if (resume.usedGraphFallback) {
+                toast.add({
+                    title: 'Resume point recovered',
+                    description:
+                        'Resuming from the first unfinished node in the current workflow.',
+                    color: 'info',
+                });
+            }
 
             await runWorkflowExecution({
                 workflowPost,
@@ -1295,8 +1447,8 @@ export default defineNuxtPlugin((nuxtApp) => {
                 assistantContext,
                 execMod,
                 apiKey: apiKey.value,
-                conversationHistory,
                 resumeFrom,
+                resumeStateVersion: data.version ?? 0,
             });
 
             return true;
@@ -1641,10 +1793,6 @@ export default defineNuxtPlugin((nuxtApp) => {
                 return { messages };
             }
 
-            const conversationHistory = await execMod.getConversationHistory(
-                assistantContext.threadId || ''
-            );
-
             await runWorkflowExecution({
                 workflowPost,
                 prompt,
@@ -1652,7 +1800,6 @@ export default defineNuxtPlugin((nuxtApp) => {
                 execMod,
                 apiKey: apiKey.value,
                 attachments,
-                conversationHistory,
             });
 
             // Clear pending context

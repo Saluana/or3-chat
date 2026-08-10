@@ -10,12 +10,12 @@
                 Base theme
             </h2>
             <p class="supporting-text mt-1">
-                Start with any installed theme. Your token overrides stay
+                Start with any installed theme. Your customizations stay
                 separate for light and dark mode.
             </p>
         </div>
 
-        <div class="grid min-w-0 gap-3 sm:grid-cols-2">
+        <div class="theme-option-grid">
             <UButton
                 v-for="theme in availableThemes"
                 :key="theme.name"
@@ -25,8 +25,8 @@
                     'theme-option-btn',
                     theme.name === activeTheme ? 'active' : '',
                 ]"
-                :active="theme.name === activeTheme"
                 :aria-pressed="theme.name === activeTheme"
+                :aria-current="theme.name === activeTheme ? 'true' : undefined"
                 @click="selectTheme(theme.name)"
             >
                 <span class="flex min-w-0 w-full flex-1 items-center gap-3 text-left">
@@ -44,7 +44,7 @@
                         <span class="block font-semibold break-words">{{
                             theme.displayName || theme.name
                         }}</span>
-                        <span class="mt-0.5 block truncate text-xs opacity-65">
+                        <span class="theme-option-description">
                             {{
                                 theme.description || 'Installed workspace theme'
                             }}
@@ -52,7 +52,7 @@
                     </span>
                     <span
                         v-if="theme.name === activeTheme"
-                        class="ml-auto shrink-0 text-xs text-[var(--md-primary)]"
+                        class="theme-current-badge"
                     >
                         Current
                     </span>
@@ -141,19 +141,31 @@ const themeButtonProps = computed(() => {
     font-size: 15px;
     line-height: 1.35;
     max-width: min(82ch, 100%);
-    color: var(--md-on-surface-variant, var(--md-on-surface));
-    opacity: 0.7;
+    color: var(--md-on-surface);
     overflow-wrap: break-word;
+}
+.theme-option-grid {
+    display: grid;
+    grid-auto-rows: 1fr;
+    gap: 0.75rem;
 }
 .theme-option-btn {
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    min-height: 4.75rem;
+    height: 100%;
+    min-height: 6rem;
     justify-content: stretch;
     padding: 0.8rem;
     text-transform: none;
     white-space: normal;
+    color: var(--md-on-surface) !important;
+    background: var(--md-surface) !important;
+    border-color: var(--md-border-color) !important;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        box-shadow 120ms ease;
 }
 .theme-option-btn :deep([data-slot='base']),
 .theme-option-btn :deep([data-slot='label']) {
@@ -162,11 +174,35 @@ const themeButtonProps = computed(() => {
     max-width: 100%;
     white-space: normal;
 }
+.theme-option-btn :deep([data-slot='label']) {
+    color: inherit !important;
+}
 .theme-option-btn.active {
-    color: var(--md-on-surface);
-    background: var(--md-primary-container);
-    border-color: var(--md-primary);
-    box-shadow: inset 0 0 0 1px var(--md-primary);
+    color: var(--md-on-surface) !important;
+    background: var(--md-surface) !important;
+    border-color: var(--md-primary) !important;
+    border-width: var(--md-border-width-strong);
+    box-shadow: inset 0 0 0 var(--md-border-width) var(--md-primary);
+}
+.theme-option-btn:hover {
+    color: var(--md-on-surface) !important;
+    background: var(
+        --md-surface-hover,
+        var(--md-surface-container-high, var(--md-surface))
+    ) !important;
+    border-color: var(--md-primary) !important;
+}
+.theme-option-btn.active:hover {
+    color: var(--md-on-surface) !important;
+    background: var(
+        --md-surface-hover,
+        var(--md-surface-container-high, var(--md-surface))
+    ) !important;
+    border-color: var(--md-primary) !important;
+}
+.theme-option-btn:focus-visible {
+    outline: 3px solid var(--md-primary);
+    outline-offset: 2px;
 }
 .theme-option-mark {
     display: grid;
@@ -177,5 +213,36 @@ const themeButtonProps = computed(() => {
     color: var(--md-primary);
     background: var(--md-surface-container-high);
     border-radius: var(--md-border-radius);
+}
+.theme-option-btn.active .theme-option-mark {
+    color: var(--md-on-primary);
+    background: var(--md-primary);
+}
+.theme-option-description {
+    display: -webkit-box;
+    margin-top: 0.2rem;
+    overflow: hidden;
+    color: color-mix(in srgb, var(--md-on-surface) 82%, var(--md-surface));
+    font-size: 0.75rem;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+.theme-current-badge {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 0.2rem 0.4rem;
+    color: var(--md-on-primary);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: var(--md-primary);
+    border-radius: var(--md-border-radius-small);
+}
+@media (min-width: 640px) {
+    .theme-option-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 </style>

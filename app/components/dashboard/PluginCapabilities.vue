@@ -44,8 +44,8 @@ function formatCapability(cap: string): string {
 .plugin-capabilities {
     margin-top: 1rem;
     padding: 0.75rem;
-    border: 1px solid var(--md-outline-variant);
-    border-radius: 3px;
+    border: var(--md-border-width, 1px) solid var(--md-outline-variant);
+    border-radius: var(--md-border-radius, 3px);
     background: var(--md-surface-container-low);
 }
 

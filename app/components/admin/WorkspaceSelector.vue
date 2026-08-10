@@ -15,7 +15,7 @@
                     <div
                         v-for="i in 3"
                         :key="i"
-                        class="h-20 bg-[var(--md-surface-container-highest)] rounded-lg animate-pulse"
+                        class="h-20 bg-[var(--md-surface-container-highest)] rounded-[var(--md-border-radius)] animate-pulse"
                     />
                 </div>
 
@@ -42,11 +42,11 @@
                         v-for="workspace in workspaces"
                         :key="workspace.id"
                         type="button"
-                        class="group flex w-full items-center gap-3 p-4 text-left rounded-lg border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] hover:bg-[var(--md-surface-container)] transition-all focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]"
+                        class="group flex w-full items-center gap-3 p-4 text-left rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] hover:bg-[var(--md-surface-container)] transition-all focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]"
                         @click="selectAndClose(workspace)"
                     >
                         <div
-                            class="w-12 h-12 rounded-lg bg-[var(--md-surface-container-high)] flex items-center justify-center flex-shrink-0"
+                            class="w-12 h-12 rounded-[var(--md-border-radius-small)] bg-[var(--md-surface-container-high)] flex items-center justify-center flex-shrink-0"
                         >
                             <UIcon
                                 :name="workspaceIcon"
@@ -65,7 +65,7 @@
                             </div>
                         </div>
 
-                        <span class="rounded bg-[var(--md-primary)] px-3 py-2 text-sm font-medium text-[var(--md-on-primary)]">
+                        <span class="rounded-[var(--md-border-radius-small,0.25rem)] bg-[var(--md-primary)] px-3 py-2 text-sm font-medium text-[var(--md-on-primary)]">
                             Select
                         </span>
                     </button>

@@ -9,7 +9,7 @@
           class="mx-auto flex min-h-full max-w-3xl flex-col items-center justify-center px-5 pb-40 pt-12 text-center"
         >
           <div
-            class="mb-5 grid size-14 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)]"
+            class="mb-5 grid size-14 place-items-center rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface-container)]"
           >
             <UIcon :name="iconBot" class="size-7" />
           </div>
@@ -34,7 +34,7 @@
       class="grid min-h-0 flex-1 place-items-center px-5 py-10"
     >
       <form
-        class="w-full max-w-sm rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-5 shadow-sm"
+        class="w-full max-w-sm rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-5 shadow-sm"
         aria-label="Unlock agent conversation"
         @submit.prevent="unlockConversation"
       >
@@ -98,7 +98,7 @@
       class="grid min-h-0 flex-1 place-items-center p-6"
     >
       <div
-        class="w-full max-w-md rounded-[var(--md-border-radius)] border border-[var(--md-error)]/40 bg-[var(--md-error-container)] p-5 text-[var(--md-on-error-container)]"
+        class="w-full max-w-md rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-error)]/40 bg-[var(--md-error-container)] p-5 text-[var(--md-on-error-container)]"
         role="alert"
         data-testid="conversation-load-recovery"
       >
@@ -225,7 +225,7 @@
               <div
                 v-for="approval in turn.approvals"
                 :key="approval.id"
-                class="mx-2 mb-4 rounded-[var(--md-border-radius)] border border-[var(--md-extended-color-warning-color)]/60 bg-[var(--md-surface-container-low)] p-3 sm:mx-5"
+                class="mx-2 mb-4 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-extended-color-warning-color)]/60 bg-[var(--md-surface-container-low)] p-3 sm:mx-5"
               >
                 <div class="flex items-start gap-3">
                   <UIcon
@@ -289,7 +289,7 @@
                 <article
                   v-for="artifact in turn.artifacts"
                   :key="artifact.id"
-                  class="min-w-0 rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-3"
+                  class="min-w-0 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-3"
                 >
                   <div class="flex items-center gap-2">
                     <UIcon

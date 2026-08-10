@@ -1228,7 +1228,14 @@ export function useChat(
                     initialContentLength: initialContent.length,
                 });
 
-                if (!backgroundJobId.value) backgroundJobId.value = jobId;
+                if (!backgroundJobId.value) {
+                    backgroundJobId.value = jobId;
+                    backgroundJobInfo.value = {
+                        jobId,
+                        threadId: threadIdRef.value,
+                        messageId: msg.id,
+                    };
+                }
                 if (backgroundJobMode.value === 'none') {
                     backgroundJobMode.value = 'background';
                 }

@@ -5,6 +5,7 @@ import type { ThemePlugin } from '~/theme/_shared/types';
 import type { UserThemeOverrides } from './user-overrides-types';
 import { EMPTY_USER_OVERRIDES } from './user-overrides-types';
 import { applyMergedTheme } from './apply-merged-theme';
+import { isUserFontChoice } from './font-options';
 import { invalidateBackgroundToken, revokeBackgroundBlobs } from './backgrounds';
 import { isBrowser } from '~/utils/env';
 
@@ -242,17 +243,31 @@ function validatePatch(patch: Partial<UserThemeOverrides>): Partial<UserThemeOve
             Math.min(24, result.typography.baseFontPx)
         );
     }
-    if (result.shape?.borderWidthPx !== undefined) {
-        result.shape.borderWidthPx = Math.max(
-            0,
-            Math.min(6, result.shape.borderWidthPx)
-        );
+    for (const key of ['bodyFont', 'headingFont'] as const) {
+        const value = result.typography?.[key];
+        if (value !== undefined && !isUserFontChoice(value)) {
+            delete result.typography![key];
+        }
     }
-    if (result.shape?.borderRadiusPx !== undefined) {
-        result.shape.borderRadiusPx = Math.max(
-            0,
-            Math.min(32, result.shape.borderRadiusPx)
-        );
+    for (const key of [
+        'borderWidthSubtlePx',
+        'borderWidthPx',
+        'borderWidthStrongPx',
+    ] as const) {
+        const value = result.shape?.[key];
+        if (value !== undefined) {
+            result.shape![key] = Math.max(0, Math.min(6, value));
+        }
+    }
+    for (const key of [
+        'borderRadiusSmallPx',
+        'borderRadiusPx',
+        'borderRadiusLargePx',
+    ] as const) {
+        const value = result.shape?.[key];
+        if (value !== undefined) {
+            result.shape![key] = Math.max(0, Math.min(32, value));
+        }
     }
     for (const layer of [
         result.backgrounds?.content?.base,

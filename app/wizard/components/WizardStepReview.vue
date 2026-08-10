@@ -14,14 +14,14 @@
 
         <div
             v-if="statusMessage"
-            class="rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-surface)] px-4 py-3 text-sm"
+            class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] px-4 py-3 text-sm"
         >
             {{ statusMessage }}
         </div>
 
         <div
             v-if="validationErrors.length > 0"
-            class="rounded-[var(--md-border-radius)] border border-[var(--md-error)]/60 bg-[var(--md-error)]/6 px-4 py-3"
+            class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-error)]/60 bg-[var(--md-error)]/6 px-4 py-3"
         >
             <p class="text-sm font-semibold text-[var(--md-error)]">
                 Validation Errors
@@ -38,7 +38,7 @@
 
         <div
             v-if="validationWarnings.length > 0"
-            class="rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/6 px-4 py-3"
+            class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/6 px-4 py-3"
         >
             <p class="text-sm font-semibold">Warnings</p>
             <ul class="mt-2 list-disc space-y-1 pl-5 text-xs text-[var(--md-on-surface)]">
@@ -51,7 +51,7 @@
             </ul>
         </div>
 
-        <div class="rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-surface)] p-4">
+        <div class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] p-4">
             <h3 class="font-heading text-sm">Configuration Snapshot</h3>
 
             <div
@@ -66,7 +66,7 @@
                     <div
                         v-for="row in group.rows"
                         :key="row.label"
-                        class="rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/5 px-3 py-2"
+                        class="rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/5 px-3 py-2"
                     >
                         <div class="text-[11px] uppercase tracking-wide text-[var(--md-on-surface)]/50">
                             {{ row.label }}
@@ -82,7 +82,7 @@
         <!-- Success banner (validate / apply / deploy) -->
         <div
             v-if="successBanner && !isDeploying"
-            class="rounded-[var(--md-border-radius)] border border-[var(--md-primary)]/40 bg-[var(--md-primary)]/6 px-5 py-5"
+            class="rounded-[var(--md-border-radius-large)] border-[length:var(--md-border-width-strong)] border-[var(--md-primary)]/40 bg-[var(--md-primary)]/6 px-5 py-5"
         >
             <div class="flex items-start gap-3">
                 <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--md-primary)] text-[var(--md-on-primary,#fff)]">
@@ -103,7 +103,7 @@
 
         <div
             v-if="showBootstrapCredentials"
-            class="rounded-[var(--md-border-radius)] border border-[var(--md-primary)]/40 bg-[var(--md-surface)] px-4 py-4"
+            class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width-strong)] border-[var(--md-primary)]/40 bg-[var(--md-surface)] px-4 py-4"
         >
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -137,7 +137,7 @@
 
         <div
             v-if="deployResponse?.deployResult?.nextSteps?.length"
-            class="rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-surface)] px-4 py-3"
+            class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] px-4 py-3"
         >
             <p class="text-sm font-semibold">Next Steps</p>
             <ol class="mt-2 list-decimal space-y-1 pl-5 text-xs">
@@ -150,7 +150,7 @@
             </ol>
         </div>
 
-        <div class="flex flex-wrap items-center gap-3 border-t border-[color:var(--md-border-color)] pt-5">
+        <div class="flex flex-wrap items-center gap-3 border-t-[length:var(--md-border-width-subtle)] border-[color:var(--md-border-color)] pt-5">
             <UButton
                 label="Validate"
                 variant="outline"

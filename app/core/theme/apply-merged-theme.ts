@@ -7,7 +7,7 @@
  * theme plugin registry) with user overrides (typography, colors, backgrounds).
  *
  * Responsibilities:
- * - Apply typography overrides (font size, system font toggle)
+ * - Apply typography overrides (font size and independent font choices)
  * - Apply color palette overrides (Material Design tokens)
  * - Build merged background layers and apply via `applyThemeBackgrounds`
  * - Apply background color overrides
@@ -29,6 +29,7 @@
  * @see docs/theme-backgrounds.md for background system documentation
  */
 import type { UserThemeOverrides } from './user-overrides-types';
+import { resolveUserFontStack } from './font-options';
 import type {
     ThemeBackgrounds,
     ThemeBackgroundSlots,
@@ -105,43 +106,82 @@ export async function applyMergedTheme(
         r.removeProperty('--app-font-size-root'); // use theme default
     }
 
-    if (overrides.typography?.useSystemFont !== undefined) {
-        const useSystem = overrides.typography.useSystemFont;
+    const legacyFontChoice = overrides.typography?.useSystemFont
+        ? 'system'
+        : 'theme';
+    const bodyFontChoice = overrides.typography?.bodyFont;
+    const headingFontChoice = overrides.typography?.headingFont;
+
+    if (
+        bodyFontChoice !== undefined ||
+        overrides.typography?.useSystemFont !== undefined
+    ) {
         r.setProperty(
             '--app-font-sans-current',
-            useSystem
-                ? 'ui-sans-serif, system-ui, sans-serif'
-                : 'var(--font-sans)'
-        );
-        r.setProperty(
-            '--app-font-heading-current',
-            useSystem
-                ? 'ui-sans-serif, system-ui, sans-serif'
-                : 'var(--font-heading)'
+            resolveUserFontStack(bodyFontChoice ?? legacyFontChoice, 'body')
         );
     } else {
         r.removeProperty('--app-font-sans-current');
+    }
+
+    if (
+        headingFontChoice !== undefined ||
+        overrides.typography?.useSystemFont !== undefined
+    ) {
+        r.setProperty(
+            '--app-font-heading-current',
+            resolveUserFontStack(
+                headingFontChoice ?? legacyFontChoice,
+                'heading'
+            )
+        );
+    } else {
         r.removeProperty('--app-font-heading-current');
     }
 
-    // 2. Apply shared shape overrides
+    // 2. Apply tiered shape overrides. The middle tokens remain the
+    // compatibility defaults for existing component styles.
     if (overrides.shape?.enabled) {
+        applyPixelOverride(
+            r,
+            '--md-border-width-subtle',
+            overrides.shape.borderWidthSubtlePx
+        );
         if (overrides.shape.borderWidthPx !== undefined) {
             r.setProperty(
                 '--md-border-width',
                 `${overrides.shape.borderWidthPx}px`
             );
         } else r.removeProperty('--md-border-width');
+        applyPixelOverride(
+            r,
+            '--md-border-width-strong',
+            overrides.shape.borderWidthStrongPx
+        );
 
+        applyPixelOverride(
+            r,
+            '--md-border-radius-small',
+            overrides.shape.borderRadiusSmallPx
+        );
         if (overrides.shape.borderRadiusPx !== undefined) {
             r.setProperty(
                 '--md-border-radius',
                 `${overrides.shape.borderRadiusPx}px`
             );
         } else r.removeProperty('--md-border-radius');
+        applyPixelOverride(
+            r,
+            '--md-border-radius-large',
+            overrides.shape.borderRadiusLargePx
+        );
     } else {
         r.removeProperty('--md-border-width');
         r.removeProperty('--md-border-radius');
+        r.removeProperty('--md-border-width-subtle');
+        r.removeProperty('--md-border-width-strong');
+        r.removeProperty('--md-border-radius-small');
+        r.removeProperty('--md-border-radius-large');
     }
 
     // 3. Apply color palette overrides
@@ -230,6 +270,15 @@ export async function applyMergedTheme(
             overrides.backgrounds.bottomNavGradient.enabled ? 'block' : 'none'
         );
     } else r.removeProperty('--app-bottomnav-gradient-display');
+}
+
+function applyPixelOverride(
+    style: CSSStyleDeclaration,
+    variable: string,
+    value: number | undefined
+): void {
+    if (value !== undefined) style.setProperty(variable, `${value}px`);
+    else style.removeProperty(variable);
 }
 
 function hasColor(value: string | null | undefined): boolean {

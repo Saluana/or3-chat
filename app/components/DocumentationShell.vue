@@ -95,7 +95,7 @@
                             v-if="sidebarOpen"
                             ref="mobileSidebarRef"
                             :id="sidebarId"
-                            class="docs-mobile-sidebar relative z-[61] h-full w-[min(84vw,320px)] max-w-full transform bg-[var(--md-surface)] border-r-[length:var(--md-border-width)] border-[color:var(--md-border-color)] shadow-2xl overflow-y-auto scrollbars"
+                            class="docs-mobile-sidebar relative z-[61] h-full w-[min(84vw,320px)] max-w-full transform bg-[var(--md-surface)] border-r-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[color:var(--md-border-color)] shadow-2xl overflow-y-auto scrollbars"
                             @keydown="onSidebarKeydown"
                         >
                             <h2 :id="sidebarLabelId" class="sr-only">
@@ -1022,7 +1022,7 @@ function onMobileTocSelect(id: string) {
 
 .docs-header {
     flex-shrink: 0;
-    border-bottom: 1px solid var(--docs-border);
+    border-bottom: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--docs-border);
     background: color-mix(in oklab, var(--md-surface) 88%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -1087,7 +1087,7 @@ function onMobileTocSelect(id: string) {
     align-items: center;
     gap: 0.625rem;
     min-width: 0;
-    border-radius: calc(var(--md-border-radius) * 0.75);
+    border-radius: var(--md-border-radius-small, calc(var(--md-border-radius) * 0.75));
 }
 
 .docs-brand-logo {
@@ -1161,8 +1161,8 @@ function onMobileTocSelect(id: string) {
     display: inline-flex;
     align-items: center;
     padding: 0.18rem 0.42rem;
-    border: 1px solid var(--docs-border);
-    border-radius: 6px;
+    border: var(--md-border-width, 1px) solid var(--docs-border);
+    border-radius: var(--md-border-radius-small, 6px);
     background: color-mix(in oklab, var(--md-on-surface) 4%, transparent);
     box-shadow: 0 1px 0 var(--docs-border);
     color: var(--md-on-surface-variant);
@@ -1176,7 +1176,7 @@ function onMobileTocSelect(id: string) {
 /* ---------- Sidebar ---------- */
 
 .docs-sidebar {
-    border-right: 1px solid var(--docs-border);
+    border-right: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--docs-border);
     background: var(--docs-sidebar-bg);
 }
 
@@ -1202,20 +1202,20 @@ function onMobileTocSelect(id: string) {
 /* ---------- TOC (right rail) ---------- */
 
 .docs-toc {
-    border-left: 1px solid var(--docs-border);
+    border-left: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--docs-border);
 }
 
 .docs-toc :deep(.docs-toc-list) {
     display: flex;
     flex-direction: column;
-    border-left: 1px solid var(--docs-border);
+    border-left: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--docs-border);
 }
 
 .docs-toc :deep(.docs-toc-link) {
     display: block;
     margin-left: -1px;
     padding: 0.28rem 0 0.28rem 0.875rem;
-    border-left: 2px solid transparent;
+    border-left: var(--md-border-width-strong, var(--md-border-width, 2px)) solid transparent;
     font-size: 13px;
     line-height: 1.4;
     color: var(--md-on-surface-variant);
@@ -1247,8 +1247,8 @@ function onMobileTocSelect(id: string) {
 
 .docs-mobile-toc {
     margin-bottom: 1.75rem;
-    border: 1px solid var(--docs-border);
-    border-radius: calc(var(--md-border-radius) * 0.9);
+    border: var(--md-border-width, 1px) solid var(--docs-border);
+    border-radius: var(--md-border-radius, calc(var(--md-border-radius) * 0.9));
     background: var(--md-surface-container-lowest);
     overflow: hidden;
 }
@@ -1279,7 +1279,7 @@ function onMobileTocSelect(id: string) {
 
 .docs-mobile-toc-body {
     padding: 0.5rem 0.875rem 0.75rem;
-    border-top: 1px solid var(--docs-border);
+    border-top: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--docs-border);
 }
 
 .docs-mobile-toc-body :deep(.docs-toc-list) {
@@ -1352,7 +1352,7 @@ function onMobileTocSelect(id: string) {
     gap: 0.75rem;
     margin-top: 4rem;
     padding-top: 2rem;
-    border-top: 1px solid var(--docs-border);
+    border-top: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--docs-border);
 }
 
 @media (min-width: 640px) {
@@ -1366,8 +1366,8 @@ function onMobileTocSelect(id: string) {
     flex-direction: column;
     gap: 0.3rem;
     padding: 0.875rem 1rem;
-    border: 1px solid var(--docs-border);
-    border-radius: calc(var(--md-border-radius) * 1.1);
+    border: var(--md-border-width, 1px) solid var(--docs-border);
+    border-radius: var(--md-border-radius, calc(var(--md-border-radius) * 1.1));
     transition:
         border-color 0.15s ease,
         background-color 0.15s ease;

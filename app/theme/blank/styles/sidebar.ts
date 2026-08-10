@@ -8,7 +8,7 @@ const SidebarPopoverButtonConfig = {
 };
 
 const SidebarCollapsedTopButtonConfig = {
-    class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] max-md:min-h-[44px]! max-md:min-w-[44px]!',
+    class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] max-md:min-h-[44px]! max-md:min-w-[44px]!',
 };
 
 export const sidebarOverrides = {
@@ -22,21 +22,21 @@ export const sidebarOverrides = {
 
     'input#sidebar.search': {
         ui: {
-            base: 'border border-[color:var(--md-border-color)] rounded-xl bg-[var(--md-surface)] hover:bg-[var(--md-surface)] ring-0! focus:ring-2 focus:ring-[color:var(--md-primary)]/10 text-[14px]! h-[40px]! shadow-[0_1px_2px_rgba(15,23,42,0.04)] max-md:min-h-[44px]! max-md:text-[16px]!',
+            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)] hover:bg-[var(--md-surface)] ring-0! focus:ring-2 focus:ring-[color:var(--md-primary)]/10 text-[14px]! h-[40px]! shadow-[0_1px_2px_rgba(15,23,42,0.04)] max-md:min-h-[44px]! max-md:text-[16px]!',
         },
     },
     'selectmenu#sidebar.project-select': {
-        class: 'h-[36px] rounded-xl border-0 ring-0 data-[state=open]:bg-[var(--md-surface-hover)]! w-full cursor-pointer max-md:min-h-[44px]!',
+        class: 'h-[36px] rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-0 ring-0 data-[state=open]:bg-[var(--md-surface-hover)]! w-full cursor-pointer max-md:min-h-[44px]!',
         ui: {
             base: 'text-[14px]! max-md:text-[16px]!',
             value: 'text-[14px]! max-md:text-[16px]!',
             placeholder: 'text-[14px]! max-md:text-[16px]!',
             content:
-                'ring-0! border-0! rounded-xl bg-[var(--md-surface)] shadow-lg text-[14px]! max-md:text-[16px]!',
+                'ring-0! border-0! rounded-[var(--md-border-radius-large,var(--md-border-radius))] bg-[var(--md-surface)] shadow-lg text-[14px]! max-md:text-[16px]!',
         },
         searchInput: {
             ui: {
-                base: 'text-[14px]! rounded-none rounded-t-xl! max-md:min-h-[44px]! max-md:text-[16px]!',
+                base: 'text-[14px]! rounded-none rounded-t-[var(--md-border-radius-large,var(--md-border-radius))]! max-md:min-h-[44px]! max-md:text-[16px]!',
             },
         },
     },
@@ -44,14 +44,14 @@ export const sidebarOverrides = {
     // Sidebar item buttons: ChatGPT style - clean, minimal, rounded
     'button#ui.glass-button': {
         activeClass: 'bg-[var(--md-surface-active)]',
-        class: 'text-[14px] font-normal border-0 rounded-[10px] bg-transparent text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
+        class: 'text-[14px] font-normal border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
     },
     'div#sidebar.project-group-container': {
-        class: 'text-[14px] font-normal border-0 rounded-[10px] bg-transparent text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
+        class: 'text-[14px] font-normal border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]',
     },
     'button#sidebar.new-chat': {
         variant: 'ghost',
-        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! border-0! rounded-xl max-md:min-h-[44px]! max-md:min-w-[44px]!',
+        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! border-0! rounded-[var(--md-border-radius-small,var(--md-border-radius))] max-md:min-h-[44px]! max-md:min-w-[44px]!',
     },
     'button#sidebar.collapsed-search': SidebarCollapsedTopButtonConfig,
     'button#sidebar.new-document': SidebarCollapsedTopButtonConfig,
@@ -71,11 +71,11 @@ export const sidebarOverrides = {
 
     /* --- Bottom nav buttons: clean, borderless --- */
     'button#sidebar.bottom-nav.info': {
-        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
+        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
     },
     'button#sidebar.bottom-nav.connect': {
         variant: 'ghost',
-        class: 'h-[48px]! w-[48px]! flex items-center justify-center p-0 border-0! rounded-xl text-[var(--md-on-surface-variant)]! hover:bg-[var(--md-surface-hover)]! hover:text-[var(--md-on-surface)]! active:bg-[var(--md-surface-active)]! transition-colors duration-150',
+        class: 'h-[48px]! w-[48px]! flex items-center justify-center p-0 border-0! rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface-variant)]! hover:bg-[var(--md-surface-hover)]! hover:text-[var(--md-on-surface)]! active:bg-[var(--md-surface-active)]! transition-colors duration-150',
     },
     'button#sidebar.bottom-nav.connect:connected': {
         class: 'bg-[var(--md-surface-hover)] text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-active)]! hover:text-[var(--md-on-surface)]!',
@@ -85,11 +85,11 @@ export const sidebarOverrides = {
     },
 
     'button#sidebar.bottom-nav.auth': {
-        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
+        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
     },
 
     'button#sidebar.bottom-nav.dashboard': {
-        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
+        class: 'h-[40px] w-[40px] flex items-center justify-center p-0 bg-transparent border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
     },
 
     'button#sidebar.bottom-nav.activity': SidebarPopoverButtonConfig,
@@ -121,25 +121,25 @@ export const sidebarOverrides = {
 
     /* --- Mobile bottom nav bar (replaces rail on small screens) --- */
     'button#sidebar.mobile-nav.item': {
-        class: 'rounded-xl text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] hover:text-[var(--md-on-surface)] active:bg-[var(--md-surface-active)]',
+        class: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] hover:text-[var(--md-on-surface)] active:bg-[var(--md-surface-active)]',
     },
     'button#sidebar.mobile-nav.item:active': {
-        class: 'rounded-xl bg-[var(--md-surface-hover)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-active)] hover:text-[var(--md-on-surface)]',
+        class: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface-hover)] text-[var(--md-on-surface)] hover:bg-[var(--md-surface-active)] hover:text-[var(--md-on-surface)]',
     },
     'button#sidebar.mobile-nav.create-item': {
-        class: 'rounded-xl border-0 max-md:min-h-[44px]! max-md:text-[16px]!',
+        class: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-0 max-md:min-h-[44px]! max-md:text-[16px]!',
     },
 
     /* --- Collapsed sidebar --- */
     'button#sidebar.collapsed-page': {
         ui: {
-            base: 'h-[40px] w-[40px] flex items-center justify-center bg-transparent hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 text-[var(--md-on-surface)] rounded-xl p-0! max-md:min-h-[44px]! max-md:min-w-[44px]!',
+            base: 'h-[40px] w-[40px] flex items-center justify-center bg-transparent hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 text-[var(--md-on-surface)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] p-0! max-md:min-h-[44px]! max-md:min-w-[44px]!',
             leadingIcon: 'w-5 h-5',
         },
     },
     'button#sidebar.collapsed-page:active': {
         ui: {
-            base: 'h-[40px] w-[40px] flex items-center justify-center bg-[var(--md-surface-hover)] hover:bg-[var(--md-surface-active)] border-0 text-[var(--md-on-surface)] rounded-xl p-0! max-md:min-h-[44px]! max-md:min-w-[44px]!',
+            base: 'h-[40px] w-[40px] flex items-center justify-center bg-[var(--md-surface-hover)] hover:bg-[var(--md-surface-active)] border-0 text-[var(--md-on-surface)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] p-0! max-md:min-h-[44px]! max-md:min-w-[44px]!',
             leadingIcon: 'w-5 h-5',
         },
     },
@@ -157,7 +157,7 @@ export const sidebarCssSelectors = {
     '#sidebar-container-outer:has(#top-header[data-sidebar-state="expanded"])': {
         style: {
             borderRight:
-                '1px solid color-mix(in srgb, var(--md-border-color) 70%, transparent)',
+                'var(--md-border-width-subtle, var(--md-border-width)) solid color-mix(in srgb, var(--md-border-color) 70%, transparent)',
             boxSizing: 'border-box',
         },
     },
@@ -170,7 +170,7 @@ export const sidebarCssSelectors = {
         style: {
             background: 'transparent',
             border: 'none',
-            borderRadius: '12px',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
             boxShadow: 'none',
         },
     },
@@ -211,16 +211,16 @@ export const sidebarCssSelectors = {
     },
     '.page-link-btn': {
         style: {
-            borderRadius: '14px',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
             minHeight: '54px',
             marginBottom: '0.4rem',
         },
     },
     '.unified-sb-item': {
         style: {
-            borderRadius: '12px',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
             marginInline: '0',
-            border: '1px solid transparent',
+            border: 'var(--md-border-width) solid transparent',
         },
     },
     '.unified-sb-item-active': {
@@ -245,7 +245,7 @@ export const sidebarCssSelectors = {
     },
     '.project-empty-state': {
         style: {
-            borderRadius: '14px',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
         },
     },
     /* Soft brand blue — pairs with docs green, echoes logo #2a8fd6 */

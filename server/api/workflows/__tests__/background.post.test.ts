@@ -167,6 +167,66 @@ describe('POST /api/workflows/background', () => {
         );
     });
 
+    it('forwards a validated resume checkpoint to the background runner', async () => {
+        const handler = (await import('../background.post')).default as (
+            event: H3Event
+        ) => Promise<unknown>;
+        readBodyMock.mockResolvedValue({
+            ...baseBody(),
+            resumeFrom: {
+                startNodeId: 'start',
+                nodeOutputs: { prior: 'saved output' },
+                executionOrder: ['prior'],
+                pendingNodes: ['start'],
+                sessionMessages: [
+                    { role: 'assistant', content: 'saved context' },
+                ],
+            },
+            resumeStateVersion: 18,
+        });
+        resolveCanonicalWorkflowMock.mockResolvedValue({
+            workflowId: 'wf-1',
+            workflowName: 'Canonical Workflow',
+            workflow: {
+                meta: { version: '2.0.0', name: 'Canonical Workflow' },
+                nodes: [{ id: 'start' }],
+                edges: [],
+            },
+        });
+
+        await handler(makeEvent());
+
+        expect(startBackgroundWorkflowMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                resumeFrom: {
+                    startNodeId: 'start',
+                    nodeOutputs: { prior: 'saved output' },
+                    executionOrder: ['prior'],
+                    pendingNodes: ['start'],
+                    sessionMessages: [
+                        { role: 'assistant', content: 'saved context' },
+                    ],
+                },
+                resumeStateVersion: 18,
+            })
+        );
+    });
+
+    it('rejects an invalid resume state version', async () => {
+        const handler = (await import('../background.post')).default as (
+            event: H3Event
+        ) => Promise<unknown>;
+        readBodyMock.mockResolvedValue({
+            ...baseBody(),
+            resumeStateVersion: -1,
+        });
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 400,
+        });
+        expect(startBackgroundWorkflowMock).not.toHaveBeenCalled();
+    });
+
     it('rejects mismatched inline workflow payloads', async () => {
         const handler = (await import('../background.post')).default as (
             event: H3Event

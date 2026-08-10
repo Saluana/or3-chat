@@ -98,6 +98,61 @@ describe('memory background job admission and lifecycle', () => {
         expect(await memoryJobProvider.getActiveJobCount?.()).toBe(1);
     });
 
+    it('uses timeout as an inactivity watchdog rather than a runtime cap', async () => {
+        vi.useFakeTimers();
+        try {
+            config.jobTimeoutMs = 1_000;
+            vi.setSystemTime(new Date('2026-08-09T00:00:00.000Z'));
+            const jobId = await memoryJobProvider.createJob({
+                userId: 'user-1',
+                threadId: 'thread-1',
+                messageId: 'message-1',
+                model: 'test-model',
+                execution: execution(),
+            });
+
+            await vi.advanceTimersByTimeAsync(999);
+            await memoryJobProvider.updateJob(jobId, {
+                contentChunk: 'still working',
+            });
+            await vi.advanceTimersByTimeAsync(999);
+            expect(await memoryJobProvider.cleanupExpired()).toBe(0);
+            expect((await memoryJobProvider.getJob(jobId, 'user-1'))?.status).toBe(
+                'streaming'
+            );
+
+            await vi.advanceTimersByTimeAsync(2);
+            expect(await memoryJobProvider.cleanupExpired()).toBe(1);
+            expect(await memoryJobProvider.getJob(jobId, 'user-1')).toMatchObject({
+                status: 'error',
+                error: 'Job timed out',
+            });
+        } finally {
+            clearAllJobs();
+            vi.useRealTimers();
+        }
+    });
+
+    it('aborts the upstream signal when a streaming job is stopped', async () => {
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'user-1',
+            threadId: 'thread-1',
+            messageId: 'message-1',
+            model: 'test-model',
+            execution: execution(),
+        });
+        const abortSignal = memoryJobProvider.getAbortController?.(jobId)?.signal;
+
+        expect(abortSignal?.aborted).toBe(false);
+        await expect(memoryJobProvider.abortJob(jobId, 'user-1')).resolves.toBe(
+            true
+        );
+        expect(abortSignal?.aborted).toBe(true);
+        expect(await memoryJobProvider.getJob(jobId, 'user-1')).toMatchObject({
+            status: 'aborted',
+        });
+    });
+
     it('returns the terminal job for a repeated admission and accepts a new retry key', async () => {
         const params = {
             userId: 'user-1',

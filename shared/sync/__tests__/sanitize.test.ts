@@ -253,7 +253,7 @@ describe('sanitizePayloadForSync', () => {
         expect(asJson.includes('[max-depth-stripped]')).toBe(true);
     });
 
-    it('rejects oversized workflow messages without replacing canonical content', () => {
+    it('compacts oversized workflow messages for sync without replacing canonical content', () => {
         const hugeOutput = 'x'.repeat(90000);
         const payload = {
             id: 'msg-workflow',
@@ -292,10 +292,42 @@ describe('sanitizePayloadForSync', () => {
             },
         };
 
-        expect(() => sanitizePayloadForSync('messages', payload, 'put')).toThrow(
-            /Payload too large for messages/
+        const synced = sanitizePayloadForSync('messages', payload, 'put');
+
+        expect(synced).toBeDefined();
+        expect(JSON.stringify(synced).length).toBeLessThan(256 * 1024);
+        expect((synced?.data as Record<string, unknown>).finalOutput).toContain(
+            '[truncated-for-sync]'
         );
         expect(payload.data.finalOutput).toBe(hugeOutput);
         expect(payload.data.sessionMessages[0]!.content).toBe(hugeOutput);
+    });
+
+    it('keeps workflow payloads below 256KB intact', () => {
+        const output = 'x'.repeat(120000);
+        const payload = {
+            id: 'msg-workflow-under-limit',
+            thread_id: 'thread-1',
+            role: 'assistant',
+            index: 13,
+            order_key: '0000000000013:0000:node',
+            deleted: false,
+            created_at: 100,
+            updated_at: 100,
+            clock: 11,
+            data: {
+                type: 'workflow-execution',
+                workflowId: 'wf-1',
+                workflowName: 'Long Workflow',
+                executionState: 'running',
+                finalOutput: output,
+            },
+        };
+
+        const synced = sanitizePayloadForSync('messages', payload, 'put');
+
+        expect((synced?.data as Record<string, unknown>).finalOutput).toBe(
+            output
+        );
     });
 });

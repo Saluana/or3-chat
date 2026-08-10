@@ -184,8 +184,8 @@ defineExpose({
     width: 320px;
     max-height: 340px;
     background: var(--md-surface);
-    border: 1px solid var(--md-outline-variant);
-    border-radius: var(--md-border-radius);
+    border: var(--md-border-width) solid var(--md-outline-variant);
+    border-radius: var(--md-border-radius-large);
     box-shadow:
         0 4px 6px -1px rgb(0 0 0 / 0.1),
         0 2px 4px -2px rgb(0 0 0 / 0.1),
@@ -289,7 +289,7 @@ defineExpose({
     flex-shrink: 0;
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: var(--md-border-radius-small);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -370,7 +370,7 @@ defineExpose({
 .empty-icon-circle {
     width: 44px;
     height: 44px;
-    border-radius: 12px;
+    border-radius: var(--md-border-radius);
     background: var(--md-surface-container-high);
     display: flex;
     align-items: center;
@@ -403,7 +403,7 @@ defineExpose({
 /* ── Footer ────────────────────────────────────────────────────── */
 .suggestion-footer {
     padding: 8px 12px;
-    border-top: 1px solid var(--md-outline-variant);
+    border-top: var(--md-border-width-subtle) solid var(--md-outline-variant);
     background: var(--md-surface-container-low);
     display: flex;
     align-items: center;
@@ -430,9 +430,9 @@ defineExpose({
     justify-content: center;
     min-width: 22px;
     padding: 1px 5px;
-    border-radius: 4px;
+    border-radius: var(--md-border-radius-small);
     background: var(--md-surface-container-high);
-    border: 1px solid var(--md-outline-variant);
+    border: var(--md-border-width) solid var(--md-outline-variant);
     font-size: 10px;
     font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
     color: var(--md-on-surface-variant);

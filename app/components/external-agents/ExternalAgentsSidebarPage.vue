@@ -151,7 +151,7 @@
             v-for="item in group.items"
             :key="item.key"
             type="button"
-            class="agent-session-row group w-full rounded-[var(--md-border-radius)] px-2.5 py-2 text-left transition-colors hover:bg-[var(--md-surface-hover)] focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
+            class="agent-session-row group w-full rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-2.5 py-2 text-left transition-colors hover:bg-[var(--md-surface-hover)] focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
             :class="
               activeRecordId === item.recordId
                 ? 'bg-[var(--md-surface-active)]'
@@ -224,12 +224,12 @@
     </div>
 
     <footer
-      class="agent-sidebar-footer shrink-0 border-t border-[var(--md-outline-variant)] px-2 py-1"
+      class="agent-sidebar-footer shrink-0 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] px-2 py-1"
     >
       <UPopover v-model:open="hostSwitcherOpen">
         <button
           type="button"
-          class="flex w-full items-center gap-2 rounded-[var(--md-border-radius)] px-2 py-1.5 text-left hover:bg-[var(--md-surface-container)] focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
+          class="flex w-full items-center gap-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-2 py-1.5 text-left hover:bg-[var(--md-surface-container)] focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
           aria-label="Switch agent host"
     >
       <span
@@ -265,7 +265,7 @@
               v-for="host in hostItems"
               :key="host.value"
               type="button"
-              class="flex w-full items-center gap-2 rounded-[var(--md-border-radius)] px-2 py-2 text-left hover:bg-[var(--md-surface-container)] disabled:opacity-60"
+              class="flex w-full items-center gap-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-2 py-2 text-left hover:bg-[var(--md-surface-container)] disabled:opacity-60"
               :class="
                 pendingQuickHostId === host.value
                   ? 'bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]'
@@ -300,7 +300,7 @@
 
             <form
               v-if="pinCredentialStatus.locked"
-              class="mt-2 border-t border-[var(--md-outline-variant)] px-2 pt-2"
+              class="mt-2 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] px-2 pt-2"
               @submit.prevent="quickUnlockHosts"
             >
               <label class="text-xs font-medium" for="quick-host-pin">
@@ -324,7 +324,7 @@
                   inputmode="numeric"
                   autocomplete="current-password"
                   maxlength="6"
-                  class="min-w-0 flex-1 rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-transparent px-2 py-1.5 text-sm"
+                  class="min-w-0 flex-1 rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-transparent px-2 py-1.5 text-sm"
                   placeholder="6-digit PIN"
                 />
                 <UButton
@@ -346,7 +346,7 @@
             </p>
             <button
               type="button"
-              class="mt-2 w-full border-t border-[var(--md-outline-variant)] px-2 pt-2 text-left text-xs font-medium text-[var(--md-primary)]"
+              class="mt-2 w-full border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] px-2 pt-2 text-left text-xs font-medium text-[var(--md-primary)]"
               @click="openConnections"
             >
               Manage connections
@@ -363,9 +363,9 @@
       :ui="{
         overlay: 'bg-black/35 backdrop-blur-[3px]',
         content:
-          'agent-connections-dialog w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] min-w-0 overflow-hidden border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] shadow-2xl sm:max-w-[900px]',
+          'agent-connections-dialog w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] min-w-0 overflow-hidden rounded-[var(--md-border-radius-large,var(--md-border-radius))] border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] shadow-2xl sm:max-w-[900px]',
         header:
-          'agent-connections-dialog-header border-b border-[var(--md-outline-variant)] px-5 py-4 sm:px-6',
+          'agent-connections-dialog-header border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] px-5 py-4 sm:px-6',
         body: 'p-0 sm:p-0',
         close: 'agent-conn-close top-4 end-4',
       }"
@@ -373,7 +373,7 @@
       <template #title>
         <span class="flex min-w-0 items-center gap-2">
           <span
-            class="agent-conn-icon-tile grid size-8 shrink-0 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
+            class="agent-conn-icon-tile grid size-8 shrink-0 place-items-center rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
           >
             <UIcon :name="iconNetwork" class="size-4" />
           </span>
@@ -396,7 +396,7 @@
           data-testid="agent-connections-modal"
         >
           <aside
-            class="agent-conn-sidebar min-w-0 overflow-hidden border-b border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-4 md:border-b-0 md:border-r md:p-5"
+            class="agent-conn-sidebar min-w-0 overflow-hidden border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-4 md:border-b-0 md:border-r-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] md:p-5"
             aria-label="Saved hosts"
           >
             <div class="agent-conn-sidebar-head mb-3 flex items-start justify-between gap-3">
@@ -428,10 +428,10 @@
                 v-for="host in hostItems"
                 :key="host.value"
                 type="button"
-                class="agent-conn-host group min-w-0 max-w-full rounded-[var(--md-border-radius)] border p-3 text-left transition-colors"
+                class="agent-conn-host group min-w-0 max-w-full rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] p-3 text-left transition-colors"
                 :class="
                   host.value === selectedHostId
-                    ? 'agent-conn-host--selected agent-conn-host--active border-[var(--md-outline)] bg-[var(--md-surface-container-lowest)]'
+                    ? 'agent-conn-host--selected agent-conn-host--active border-[length:var(--md-border-width-strong,var(--md-border-width,1px))] border-[var(--md-outline)] bg-[var(--md-surface-container-lowest)]'
                     : 'border-transparent hover:border-[var(--md-outline-variant)] hover:bg-[var(--md-surface-container-lowest)]'
                 "
                 :aria-pressed="host.value === selectedHostId"
@@ -468,10 +468,10 @@
 
             <div
               v-else
-              class="rounded-[var(--md-border-radius)] border border-dashed border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-4 text-center"
+              class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-dashed border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-4 text-center"
             >
               <span
-                class="agent-conn-icon-tile mx-auto grid size-9 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
+                class="agent-conn-icon-tile mx-auto grid size-9 place-items-center rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
               >
                 <UIcon :name="iconServer" class="size-4" />
               </span>
@@ -484,7 +484,7 @@
             </div>
 
             <div
-              class="agent-conn-notice mt-4 hidden rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-3 md:block"
+              class="agent-conn-notice mt-4 hidden rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-3 md:block"
             >
               <div class="flex items-start gap-2">
                 <UIcon
@@ -507,12 +507,12 @@
           >
             <section
               v-if="detailHost"
-              class="agent-conn-section border-b border-[var(--md-outline-variant)] p-4 sm:p-5"
+              class="agent-conn-section border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] p-4 sm:p-5"
               aria-labelledby="current-connection-title"
             >
               <div class="flex min-w-0 flex-wrap items-start gap-3">
                 <span
-                  class="agent-conn-icon-tile grid size-10 shrink-0 place-items-center rounded-[var(--md-border-radius)]"
+                  class="agent-conn-icon-tile grid size-10 shrink-0 place-items-center rounded-[var(--md-border-radius-small,var(--md-border-radius))]"
                   :class="
                     detailHostIsActive && connected
                       ? 'bg-[color-mix(in_srgb,var(--md-extended-color-success-color)_14%,transparent)] text-[var(--md-extended-color-success-color)]'
@@ -678,7 +678,7 @@
 
               <div
                 v-if="activeHostIsCloud && cloudRemovalHostId === detailHost.id"
-                class="mt-4 rounded-[var(--md-border-radius)] border border-[var(--md-error)] bg-[color-mix(in_srgb,var(--md-error)_6%,var(--md-surface-container-lowest))] p-4"
+                class="mt-4 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-error)] bg-[color-mix(in_srgb,var(--md-error)_6%,var(--md-surface-container-lowest))] p-4"
                 data-testid="cloud-computer-removal-confirmation"
                 role="alert"
               >
@@ -727,7 +727,7 @@
               >
                 <div class="flex items-start gap-3 p-4">
                   <span
-                    class="agent-conn-icon-tile grid size-9 shrink-0 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
+                    class="agent-conn-icon-tile grid size-9 shrink-0 place-items-center rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
                   >
                     <UIcon :name="iconLock" class="size-4" />
                   </span>
@@ -744,7 +744,7 @@
                   </div>
                 </div>
                 <div
-                  class="agent-conn-unlock-actions grid gap-2 border-t border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+                  class="agent-conn-unlock-actions grid gap-2 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
                 >
                   <UInput
                     v-model="unlockPin"
@@ -785,7 +785,7 @@
               >
                 <div class="flex items-start gap-3 p-4">
                   <span
-                    class="agent-conn-icon-tile grid size-9 shrink-0 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
+                    class="agent-conn-icon-tile grid size-9 shrink-0 place-items-center rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
                   >
                     <UIcon :name="iconKey" class="size-4" />
                   </span>
@@ -802,7 +802,7 @@
                   </div>
                 </div>
                 <div
-                  class="space-y-3 border-t border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-3"
+                  class="space-y-3 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-3"
                 >
                   <UInput
                     ref="reauthTokenInput"
@@ -876,12 +876,12 @@
             </section>
 
             <section
-              class="agent-conn-section agent-conn-remote border-b border-[var(--md-outline-variant)] p-4 sm:p-5"
+              class="agent-conn-section agent-conn-remote border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] p-4 sm:p-5"
               aria-labelledby="connect-computer-title"
             >
               <div class="flex items-start gap-3">
                 <span
-                  class="agent-conn-icon-tile grid size-9 shrink-0 place-items-center rounded-[var(--md-border-radius)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
+                  class="agent-conn-icon-tile grid size-9 shrink-0 place-items-center rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
                 >
                   <UIcon :name="iconInstall" class="size-4" />
                 </span>
@@ -938,7 +938,7 @@
               data-testid="advanced-host-enrollment"
             >
               <summary
-                class="agent-conn-advanced-summary cursor-pointer list-none rounded-[var(--md-border-radius)] font-medium focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
+                class="agent-conn-advanced-summary cursor-pointer list-none rounded-[var(--md-border-radius-small,var(--md-border-radius))] font-medium focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
               >
                 <span class="flex items-center gap-2 text-sm">
                   <UIcon
@@ -997,7 +997,7 @@
 
                 <div
                 v-if="pinCredentialStatus.supported"
-                class="mt-4 rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-3"
+                class="mt-4 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-3"
               >
                 <UCheckbox
                   v-model="rememberToken"
@@ -1015,7 +1015,7 @@
 
                 <div
                   v-if="rememberToken"
-                  class="mt-3 border-t border-[var(--md-outline-variant)] pt-3"
+                  class="mt-3 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] pt-3"
                 >
                   <div class="mb-3 flex items-start gap-2">
                     <UIcon
@@ -1065,7 +1065,7 @@
                 </p>
 
                 <div
-                class="mt-4 flex flex-col-reverse gap-3 border-t border-[var(--md-outline-variant)] pt-4 sm:flex-row sm:items-center"
+                class="mt-4 flex flex-col-reverse gap-3 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] pt-4 sm:flex-row sm:items-center"
               >
                 <p
                   v-if="formError"
@@ -1901,14 +1901,14 @@ onBeforeUnmount(() => {
 }
 
 .external-agents-sidebar--cyberpunk .agent-sidebar-header {
-  border-bottom: 1px solid
+  border-bottom: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid
     color-mix(in srgb, var(--md-primary) 24%, transparent);
 }
 
 .external-agents-sidebar--textured :deep(.agent-sidebar-header-button) {
   color: var(--md-on-surface) !important;
   background: color-mix(in srgb, var(--md-surface) 72%, transparent) !important;
-  border: 1px solid color-mix(in srgb, var(--md-outline) 30%, transparent) !important;
+  border: var(--md-border-width, 1px) solid color-mix(in srgb, var(--md-outline) 30%, transparent) !important;
 }
 
 .external-agents-sidebar--textured :deep(.agent-sidebar-header-button:hover) {
@@ -1954,7 +1954,7 @@ onBeforeUnmount(() => {
 .agent-connection-notice {
   color: var(--md-on-surface);
   background: var(--agent-sidebar-panel);
-  border: 1px solid color-mix(in srgb, var(--md-outline) 30%, transparent);
+  border: var(--md-border-width, 1px) solid color-mix(in srgb, var(--md-outline) 30%, transparent);
   box-shadow: 0 2px 10px rgb(0 0 0 / 7%);
   backdrop-filter: blur(10px) saturate(0.9);
 }

@@ -508,7 +508,7 @@ describe('OutboxManager', () => {
     });
 
     it('retains the original message when local sanitization rejects its size', async () => {
-        const content = 'x'.repeat(70 * 1024);
+        const content = 'x'.repeat(257 * 1024);
         const oversized = createPendingOp({
             id: 'local-oversized',
             payload: {

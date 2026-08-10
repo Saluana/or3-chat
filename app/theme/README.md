@@ -73,7 +73,11 @@ export default defineTheme({
 
 Key fields you can use:
 
-- `colors`, `fonts`, `borderWidth`, `borderRadius`: generate CSS variables.
+- `colors` and `fonts`: generate their shared CSS variables.
+- `borderWidthSubtle`, `borderWidth`, `borderWidthStrong`: define divider,
+  component, and emphasis widths.
+- `borderRadiusSmall`, `borderRadius`, `borderRadiusLarge`: define control,
+  surface, and large-surface rounding.
 - `overrides`: selector-driven component overrides resolved at runtime.
 - `cssSelectors`: direct DOM targeting for third-party or legacy elements.
 - `stylesheets`: optional CSS files to load per theme.

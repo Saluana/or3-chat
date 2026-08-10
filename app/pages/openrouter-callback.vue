@@ -4,7 +4,7 @@
         data-page="openrouter-callback"
     >
         <div
-            class="w-full max-w-md rounded-xl border border-neutral-200/60 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/70 backdrop-blur p-5 text-center"
+            class="w-full max-w-md rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-neutral-200/60 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/70 backdrop-blur p-5 text-center"
         >
             <p class="text-base font-medium mb-2">
                 {{ title }}
@@ -19,14 +19,14 @@
                 />
                 <button
                     v-if="ready"
-                    class="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-500"
+                    class="px-4 py-2 rounded-[var(--md-border-radius-small,0.375rem)] bg-primary-600 text-white hover:bg-primary-500"
                     @click="goHome"
                 >
                     Continue
                 </button>
                 <button
                     v-if="errorMessage"
-                    class="px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-500"
+                    class="px-4 py-2 rounded-[var(--md-border-radius-small,0.375rem)] bg-amber-600 text-white hover:bg-amber-500"
                     @click="goHome"
                 >
                     Go Home

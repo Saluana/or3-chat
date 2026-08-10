@@ -5,7 +5,7 @@
             (typeof attrs.id === 'string' ? attrs.id : null) ??
             'bottom-nav-root'
         "
-        class="bottomnav-root absolute bottom-0 w-[63.5px] border-t-[var(--md-border-width)] border-[color:var(--md-border-color)] bg-transparent px-1 flex flex-col items-center justify-between"
+        class="bottomnav-root absolute bottom-0 w-[63.5px] bg-transparent px-1 flex flex-col items-center justify-between"
     >
         <!-- DASHBOARD -->
         <UTooltip
@@ -36,7 +36,7 @@
 
         <!-- Visual separator between app tools and personal section -->
         <div
-            class="w-[40px] h-[var(--md-border-width)] bg-[var(--md-border-color)]/50 my-1 sb-bottom-border"
+            class="w-[40px] h-[var(--md-border-width-subtle,var(--md-border-width,1px))] bg-[var(--md-border-color)]/50 my-1 sb-bottom-border"
         />
 
         <!-- Auth Button (Clerk SSR or OpenRouter) - placed above user info -->
@@ -101,7 +101,7 @@
                 :is="modeLinkComponent"
                 v-bind="modeLinkProps"
                 :aria-label="modeLabel"
-                class="sidebar-mode-badge mt-auto mb-1 block rounded-[var(--md-border-radius)] border px-1.5 py-0.5 text-[9px] uppercase tracking-wider whitespace-nowrap"
+                class="sidebar-mode-badge mt-auto mb-1 block rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] px-1.5 py-0.5 text-[9px] uppercase tracking-wider whitespace-nowrap"
                 :class="
                     isSsrAuthEnabled
                         ? 'border-[var(--md-primary)]/40 text-[var(--md-primary)]'

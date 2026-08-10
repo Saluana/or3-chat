@@ -45,7 +45,7 @@
         <div v-if="!collapsed" :class="contentClasses">
             <div
                 v-if="hasAttachments"
-                class="rounded border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-2 space-y-2"
+                class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-2 space-y-2"
             >
                 <div
                     class="text-[11px] font-semibold uppercase tracking-wide opacity-70"
@@ -57,7 +57,7 @@
                     <div
                         v-for="attachment in imageAttachments"
                         :key="attachment.id"
-                        class="w-12 h-12 rounded-md overflow-hidden border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)]"
+                        class="w-12 h-12 rounded-[var(--md-border-radius-small,var(--md-border-radius))] overflow-hidden border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)]"
                     >
                         <img
                             :src="attachment.url"
@@ -70,7 +70,7 @@
                     <div
                         v-for="attachment in fileAttachments"
                         :key="attachment.id"
-                        class="w-12 h-12 rounded-md overflow-hidden border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] flex flex-col items-center justify-center gap-0.5 p-1"
+                        class="w-12 h-12 rounded-[var(--md-border-radius-small,var(--md-border-radius))] overflow-hidden border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] flex flex-col items-center justify-center gap-0.5 p-1"
                         :title="attachment.name"
                     >
                         <span
@@ -92,7 +92,7 @@
 
                 <div
                     v-if="imageCaption"
-                    class="rounded border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-2"
+                    class="rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] p-2"
                 >
                     <div
                         class="text-[10px] font-semibold uppercase tracking-wide opacity-70"
@@ -155,7 +155,7 @@
                     </summary>
 
                     <div
-                        class="pl-2 mt-1 text-sm border-l-2 border-[var(--md-outline-variant)] ml-2"
+                        class="pl-2 mt-1 text-sm border-l-[length:var(--md-border-width-strong,var(--md-border-width))] border-[var(--md-outline-variant)] ml-2"
                     >
                         <!-- Error Banner -->
                         <div
@@ -179,7 +179,7 @@
                             <div
                                 v-for="request in getNodeHitlRequests(nodeId)"
                                 :key="request.id"
-                                class="rounded border border-[var(--md-extended-color-warning-color)] bg-[var(--md-extended-color-warning-color-container)] p-2 text-[var(--md-extended-color-warning-on-color-container)]"
+                                class="rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[var(--md-extended-color-warning-color)] bg-[var(--md-extended-color-warning-color-container)] p-2 text-[var(--md-extended-color-warning-on-color-container)]"
                             >
                                 <div class="flex items-start gap-2">
                                     <UIcon
@@ -202,7 +202,7 @@
                                                 {{ getHitlInputLabel(request) }}
                                             </div>
                                             <div
-                                                class="mt-1 text-xs font-mono whitespace-pre-wrap bg-[var(--md-surface)] text-[var(--md-on-surface)] p-2 rounded border border-[var(--md-outline-variant)] max-h-32 overflow-y-auto"
+                                            class="mt-1 text-xs font-mono whitespace-pre-wrap bg-[var(--md-surface)] text-[var(--md-on-surface)] p-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] max-h-32 overflow-y-auto"
                                             >
                                                 {{
                                                     getHitlInputDisplay(request)
@@ -222,7 +222,7 @@
                                                 Output to review
                                             </div>
                                             <div
-                                                class="mt-1 text-xs font-mono whitespace-pre-wrap bg-[var(--md-surface)] text-[var(--md-on-surface)] p-2 rounded border border-[var(--md-outline-variant)] max-h-32 overflow-y-auto"
+                                            class="mt-1 text-xs font-mono whitespace-pre-wrap bg-[var(--md-surface)] text-[var(--md-on-surface)] p-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] max-h-32 overflow-y-auto"
                                             >
                                                 {{
                                                     getHitlOutputDisplay(
@@ -246,7 +246,7 @@
                                         :class="
                                             action.primary
                                                 ? 'bg-[var(--md-primary)] text-[var(--md-on-primary)] shadow-sm'
-                                                : 'border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] text-[var(--md-on-surface)]'
+                                                : 'border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] text-[var(--md-on-surface)]'
                                         "
                                         @click.stop="
                                             handleHitlAction(
@@ -283,7 +283,7 @@
                                         tool.name
                                     }}</span>
                                     <span class="ml-auto opacity-60">{{
-                                        getToolStatusText(tool.status)
+                                        getToolStatusTextForWorkflow(tool)
                                     }}</span>
                                 </div>
                                 <div
@@ -347,7 +347,7 @@
                                                 >{{ tool.name }}</span
                                             >
                                             <span class="ml-auto opacity-60">{{
-                                                getToolStatusText(tool.status)
+                                                getToolStatusTextForWorkflow(tool)
                                             }}</span>
                                         </div>
                                         <div
@@ -360,7 +360,7 @@
                                 </div>
                                 <div
                                     v-if="getBranchContent(branch)"
-                                    class="pl-5 text-xs opacity-70 font-mono whitespace-pre-wrap bg-(--md-surface) p-1 rounded border border-(--md-outline-variant) max-h-48 overflow-y-auto"
+                                    class="pl-5 text-xs opacity-70 font-mono whitespace-pre-wrap bg-(--md-surface) p-1 rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-(--md-outline-variant) max-h-48 overflow-y-auto"
                                 >
                                     {{ getBranchContent(branch) }}
                                 </div>
@@ -374,7 +374,7 @@
                             <template v-if="getNodeOutput(nodeId)">
                                 <pre
                                     v-if="isNodeStreaming(nodeId)"
-                                    class="streaming-plain font-mono text-xs whitespace-pre-wrap bg-(--md-surface) p-2 rounded border border-(--md-outline-variant) leading-normal"
+                                    class="streaming-plain font-mono text-xs whitespace-pre-wrap bg-(--md-surface) p-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-(--md-outline-variant) leading-normal"
                                 >
                                     {{ getNodeOutput(nodeId) }}
                                 </pre>
@@ -388,7 +388,7 @@
                             <div v-else class="text-xs opacity-50 italic py-1">
                                 {{
                                     getNodeStatus(nodeId) === 'active'
-                                        ? 'Executing...'
+                                        ? getNodeActivityText(nodeId)
                                         : getNodeStatus(nodeId) === 'waiting'
                                         ? getNodeWaitingText(nodeId)
                                         : 'No output'
@@ -469,7 +469,7 @@ const workflowTitle = computed(
 );
 const containerClasses = computed(() =>
     [
-        'workflow-execution-status border rounded-md overflow-hidden border-[var(--md-outline-variant)]',
+        'workflow-execution-status border-[length:var(--md-border-width)] rounded-[var(--md-border-radius)] overflow-hidden border-[var(--md-outline-variant)]',
         depth.value > 0
             ? 'bg-[var(--md-surface-container-low)] ml-2'
             : 'bg-[var(--md-surface-container-lowest)]',
@@ -765,6 +765,13 @@ function getNodeOutput(nodeId: string): string {
     return node?.streamingText || node?.output || '';
 }
 
+function getNodeActivityText(nodeId: string): string {
+    if (activeWorkWasStopped(getNodeStatus(nodeId))) return 'Stopped';
+    const node = getNode(nodeId);
+    if (node?.activity === 'thinking') return 'Thinking…';
+    return 'Starting model response…';
+}
+
 function isNodeStreaming(nodeId: string): boolean {
     const node = getNode(nodeId);
     // A node is streaming if it has streamingText and status is active
@@ -881,10 +888,14 @@ function getBranchContent(branch: BranchState): string {
 }
 
 function getBranchStatusIcon(branch: BranchState) {
+    if (activeWorkWasStopped(branch.status)) return presentationIcons.value.stopped;
     return branchStatusIcon(branch, presentationIcons.value);
 }
 
 function getBranchStatusColor(branch: BranchState) {
+    if (activeWorkWasStopped(branch.status)) {
+        return 'text-[var(--md-outline)]';
+    }
     return statusColor(branch.status);
 }
 
@@ -893,11 +904,30 @@ function getBranchToolCalls(branch: BranchState): ToolCallState[] {
 }
 
 function getToolStatusIcon(tool: ToolCallState) {
+    if (activeWorkWasStopped(tool.status)) return presentationIcons.value.stopped;
     return toolStatusIcon(tool, presentationIcons.value);
 }
 
 function getToolStatusColor(tool: ToolCallState) {
+    if (activeWorkWasStopped(tool.status)) {
+        return 'text-[var(--md-outline)]';
+    }
     return statusColor(tool.status);
+}
+
+function getToolStatusTextForWorkflow(tool: ToolCallState): string {
+    return activeWorkWasStopped(tool.status)
+        ? 'Stopped'
+        : getToolStatusText(tool.status);
+}
+
+function activeWorkWasStopped(status: string): boolean {
+    return (
+        status === 'active' &&
+        ['stopped', 'interrupted', 'error'].includes(
+            props.workflowState.executionState
+        )
+    );
 }
 
 function getHitlInputDisplay(request: HitlRequestState): string {

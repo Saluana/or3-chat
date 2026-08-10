@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 
 vi.mock('or3-workflow-core', () => ({
-    DEFAULT_WORKFLOW_MODEL: 'deepseek/deepseek-v4-flash-latest',
+    DEFAULT_WORKFLOW_MODEL: 'openai/gpt-5.6-luna',
     WorkflowEditor: class {
         private destroyed = false;
 

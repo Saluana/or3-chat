@@ -1,10 +1,10 @@
 <template>
     <div class="px-3 py-2">
-        <div class="flex h-8 rounded-[var(--md-border-radius)] bg-[color:var(--md-surface-variant)]/50 p-1 gap-1">
+        <div class="flex h-8 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[color:var(--md-surface-variant)]/50 p-1 gap-1">
             <button
                 v-for="option in options"
                 :key="option.id"
-                class="flex-1 px-2 text-[11px] font-bold rounded-[var(--md-border-radius)] transition-all duration-200 relative"
+                class="flex-1 px-2 text-[11px] font-bold rounded-[var(--md-border-radius-small,var(--md-border-radius))] transition-all duration-200 relative"
                 :class="[
                     modelValue === option.id 
                         ? 'bg-[color:var(--md-primary-container)] text-[color:var(--md-on-primary-container)] shadow-sm' 

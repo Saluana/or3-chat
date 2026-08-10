@@ -21,11 +21,10 @@ import {
 } from '../../utils/sync/rate-limiter';
 import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 import type { Attachment } from 'or3-workflow-core';
+import type { ResumeFromOptions } from 'or3-workflow-core';
 
 const MAX_BACKGROUND_WORKFLOW_BODY_BYTES = 256 * 1024;
 const MAX_WORKFLOW_PROMPT_CHARS = 12_000;
-const MAX_HISTORY_MESSAGES = 200;
-const MAX_HISTORY_CONTENT_CHARS = 8_000;
 const MAX_ATTACHMENTS = 20;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -33,48 +32,80 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     return value as Record<string, unknown>;
 }
 
-function parseConversationHistory(
-    value: unknown
-): Array<{ role: string; content: string }> {
-    if (!Array.isArray(value)) return [];
-    if (value.length > MAX_HISTORY_MESSAGES) {
+function parseResumeFrom(value: unknown): ResumeFromOptions | undefined {
+    if (value === undefined) return undefined;
+    const resume = asRecord(value);
+    if (!resume || typeof resume.startNodeId !== 'string' || !resume.startNodeId) {
         throw createError({
-            statusCode: 413,
-            statusMessage: `conversationHistory exceeds ${MAX_HISTORY_MESSAGES} entries`,
+            statusCode: 400,
+            statusMessage: 'resumeFrom requires a startNodeId',
+        });
+    }
+    const outputs = asRecord(resume.nodeOutputs);
+    if (!outputs || Object.values(outputs).some((output) => typeof output !== 'string')) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'resumeFrom.nodeOutputs must be a string record',
+        });
+    }
+    const asStringList = (field: 'executionOrder' | 'pendingNodes') => {
+        const value = resume[field];
+        if (value === undefined) return undefined;
+        if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+            throw createError({
+                statusCode: 400,
+                statusMessage: `resumeFrom.${field} must be a string array`,
+            });
+        }
+        return value;
+    };
+    let sessionMessages: ResumeFromOptions['sessionMessages'];
+    if (resume.sessionMessages !== undefined) {
+        if (!Array.isArray(resume.sessionMessages)) {
+            throw createError({
+                statusCode: 400,
+                statusMessage: 'resumeFrom.sessionMessages must be an array',
+            });
+        }
+        sessionMessages = resume.sessionMessages.map((message) => {
+            const row = asRecord(message);
+            if (
+                !row ||
+                !['system', 'user', 'assistant'].includes(String(row.role)) ||
+                typeof row.content !== 'string'
+            ) {
+                throw createError({
+                    statusCode: 400,
+                    statusMessage:
+                        'resumeFrom.sessionMessages entries must have a supported role and string content',
+                });
+            }
+            return {
+                role: row.role as 'system' | 'user' | 'assistant',
+                content: row.content,
+            };
         });
     }
 
-    return value.map((item) => {
-        const row = asRecord(item);
-        if (!row) {
-            throw createError({
-                statusCode: 400,
-                statusMessage: 'Invalid conversationHistory entry',
-            });
-        }
-        if (typeof row.role !== 'string' || row.role.length === 0) {
-            throw createError({
-                statusCode: 400,
-                statusMessage: 'conversationHistory role must be a non-empty string',
-            });
-        }
-        if (typeof row.content !== 'string') {
-            throw createError({
-                statusCode: 400,
-                statusMessage: 'conversationHistory content must be a string',
-            });
-        }
-        if (row.content.length > MAX_HISTORY_CONTENT_CHARS) {
-            throw createError({
-                statusCode: 413,
-                statusMessage: `conversationHistory content exceeds ${MAX_HISTORY_CONTENT_CHARS} chars`,
-            });
-        }
-        return {
-            role: row.role,
-            content: row.content,
-        };
-    });
+    return {
+        startNodeId: resume.startNodeId,
+        nodeOutputs: outputs as Record<string, string>,
+        executionOrder: asStringList('executionOrder'),
+        pendingNodes: asStringList('pendingNodes'),
+        sessionMessages,
+        lastActiveNodeId:
+            typeof resume.lastActiveNodeId === 'string'
+                ? resume.lastActiveNodeId
+                : undefined,
+        resumeInput:
+            typeof resume.resumeInput === 'string'
+                ? resume.resumeInput
+                : undefined,
+        finalNodeId:
+            typeof resume.finalNodeId === 'string'
+                ? resume.finalNodeId
+                : undefined,
+    };
 }
 
 export default defineEventHandler(async (event) => {
@@ -105,6 +136,13 @@ export default defineEventHandler(async (event) => {
     const prompt = body.prompt;
     const threadId = body.threadId;
     const messageId = body.messageId;
+    const resumeFrom = parseResumeFrom(body.resumeFrom);
+    const resumeStateVersion =
+        typeof body.resumeStateVersion === 'number' &&
+        Number.isFinite(body.resumeStateVersion) &&
+        body.resumeStateVersion >= 0
+            ? Math.floor(body.resumeStateVersion)
+            : undefined;
 
     if (typeof workflowId !== 'string' || !workflowId) {
         throw createError({ statusCode: 400, statusMessage: 'Missing workflowId' });
@@ -136,6 +174,15 @@ export default defineEventHandler(async (event) => {
     }
     if (typeof messageId !== 'string' || !messageId) {
         throw createError({ statusCode: 400, statusMessage: 'Missing messageId' });
+    }
+    if (
+        body.resumeStateVersion !== undefined &&
+        resumeStateVersion === undefined
+    ) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'resumeStateVersion must be a non-negative number',
+        });
     }
 
     const session = await resolveSessionContext(event);
@@ -175,7 +222,6 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Missing OpenRouter API key' });
     }
 
-    const conversationHistory = parseConversationHistory(body.conversationHistory);
     const attachments = Array.isArray(body.attachments)
         ? (body.attachments as Attachment[])
         : undefined;
@@ -214,19 +260,31 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'Workflow payload mismatch with canonical server definition',
         });
     }
+    if (
+        resumeFrom &&
+        !canonicalWorkflow.workflow.nodes.some(
+            (node) => node.id === resumeFrom.startNodeId
+        )
+    ) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'resumeFrom startNodeId is not in this workflow',
+        });
+    }
 
     const result = await startBackgroundWorkflow({
         workflow: canonicalWorkflow.workflow,
         workflowId: canonicalWorkflow.workflowId,
         workflowName: canonicalWorkflow.workflowName,
         prompt,
-        conversationHistory,
         apiKey,
         userId: session.user.id,
         workspaceId: session.workspace.id,
         threadId,
         messageId,
         attachments,
+        resumeFrom,
+        resumeStateVersion,
     });
 
     recordSyncRequest(session.user.id, 'workflow:background');

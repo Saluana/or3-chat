@@ -6,7 +6,7 @@
     /* Keep controls compact; give the shell real breathing room. */
     padding: 0.5rem 0.6rem;
     min-height: 0;
-    border-radius: var(--chat-composer-border-radius, var(--md-border-radius));
+    border-radius: var(--chat-composer-border-radius, var(--md-border-radius-large, var(--md-border-radius)));
     backdrop-filter: blur(18px);
 }
 /* Beat ChatComposerShell --sm editor floor if any nested host matches. */
@@ -103,7 +103,7 @@
     gap: 0.4rem;
     padding: 0.25rem 0.3rem 0.25rem 0.25rem;
     border: var(--md-border-width) solid var(--md-border-color);
-    border-radius: var(--md-border-radius);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
     background: var(--md-surface-container-low);
     font-size: 0.68rem;
 }
@@ -112,7 +112,7 @@
     width: 1.8rem;
     height: 1.8rem;
     flex: 0 0 auto;
-    border-radius: var(--md-border-radius);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
     object-fit: cover;
 }
 .attachment-type {
@@ -135,8 +135,8 @@
 }
 .document-ai-composer.reviewing {
     padding: 0.85rem 1rem;
-    border: 1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent);
-    border-radius: var(--chat-composer-border-radius, var(--md-border-radius));
+    border: var(--md-border-width) solid color-mix(in srgb, var(--md-on-surface) 10%, transparent);
+    border-radius: var(--chat-composer-border-radius, var(--md-border-radius-large, var(--md-border-radius)));
     background: color-mix(in srgb, var(--md-surface) 92%, transparent);
     box-shadow:
         0 12px 32px color-mix(in srgb, var(--md-on-surface) 10%, transparent),
@@ -333,7 +333,7 @@
     top: -1rem;
     margin: -1rem -1rem 0;
     padding: 1rem;
-    border-bottom: var(--md-border-width) solid var(--md-border-color);
+    border-bottom: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color);
     background: color-mix(in oklab, var(--md-surface), transparent 2%);
     backdrop-filter: blur(14px);
 }
@@ -346,8 +346,8 @@
     gap: 0.65rem;
 }
 .tool-group {
-    border: 1px solid color-mix(in srgb, var(--md-on-surface) 10%, transparent);
-    border-radius: 12px;
+    border: var(--md-border-width) solid color-mix(in srgb, var(--md-on-surface) 10%, transparent);
+    border-radius: var(--md-border-radius, 12px);
     overflow: hidden;
     background: color-mix(in srgb, var(--md-surface) 88%, transparent);
 }
@@ -390,7 +390,7 @@
     display: grid;
     gap: 0.15rem;
     padding: 0.45rem 0.35rem;
-    border-top: 1px solid color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+    border-top: var(--md-border-width-subtle, var(--md-border-width)) solid color-mix(in srgb, var(--md-on-surface) 8%, transparent);
 }
 .tool-row-main {
     display: flex;
@@ -773,7 +773,7 @@
     .action-buttons {
         grid-column: 1 / -1;
         padding-top: 0.45rem;
-        border-top: var(--md-border-width) solid color-mix(in oklab, var(--md-border-color), transparent 38%);
+        border-top: var(--md-border-width-subtle, var(--md-border-width)) solid color-mix(in oklab, var(--md-border-color), transparent 38%);
         justify-content: flex-end;
     }
     .quick-action-edit-header .action-buttons {

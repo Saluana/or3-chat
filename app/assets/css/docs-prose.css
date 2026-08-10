@@ -49,7 +49,7 @@
     margin-top: 0;
     margin-bottom: 1.25rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--docs-prose-border);
+    border-bottom: var(--md-border-width-subtle) solid var(--docs-prose-border);
 }
 
 .docs-prose :deep(h2) {
@@ -155,9 +155,9 @@
 
 .docs-prose :deep(code) {
     background: var(--md-surface-container);
-    border: 1px solid var(--docs-prose-border);
+    border: var(--md-border-width) solid var(--docs-prose-border);
     padding: 0.12em 0.38em;
-    border-radius: 5px;
+    border-radius: var(--md-border-radius-small);
     color: var(--md-on-surface);
     font-size: 0.855em;
     font-weight: 450;
@@ -174,9 +174,9 @@
 .docs-prose :deep(kbd) {
     display: inline-block;
     padding: 0.1em 0.45em;
-    border: 1px solid var(--docs-prose-border-strong);
-    border-bottom-width: 2px;
-    border-radius: 5px;
+    border: var(--md-border-width) solid var(--docs-prose-border-strong);
+    border-bottom-width: var(--md-border-width-strong);
+    border-radius: var(--md-border-radius-small);
     background: var(--md-surface-container-low);
     color: var(--md-on-surface);
     font-family: inherit;
@@ -188,15 +188,15 @@
 /* ---------- Code blocks ---------- */
 
 .docs-prose :deep(pre) {
-    border-radius: 10px;
-    border: 1px solid var(--docs-prose-border);
+    border-radius: var(--md-border-radius);
+    border: var(--md-border-width) solid var(--docs-prose-border);
     box-shadow: var(--docs-prose-shadow);
 }
 
 .docs-prose :deep([data-streamdown='code-block']) {
     margin: 1.5rem 0;
-    border: 1px solid var(--docs-prose-border);
-    border-radius: 10px;
+    border: var(--md-border-width) solid var(--docs-prose-border);
+    border-radius: var(--md-border-radius);
     box-shadow: var(--docs-prose-shadow);
 }
 
@@ -208,8 +208,8 @@
 /* ---------- Blockquote ---------- */
 
 .docs-prose :deep(blockquote) {
-    border-left: 3px solid color-mix(in oklab, var(--md-primary) 45%, transparent);
-    border-radius: 0 8px 8px 0;
+    border-left: var(--md-border-width-strong) solid color-mix(in oklab, var(--md-primary) 45%, transparent);
+    border-radius: 0 var(--md-border-radius-small) var(--md-border-radius-small) 0;
     background: color-mix(in oklab, var(--md-primary) 5%, transparent);
     padding: 0.75rem 1rem;
     margin: 1.5rem 0;
@@ -224,8 +224,8 @@
 /* ---------- Tables ---------- */
 
 .docs-prose :deep([data-streamdown='table-wrapper']) {
-    border: 1px solid var(--docs-prose-border);
-    border-radius: 10px;
+    border: var(--md-border-width) solid var(--docs-prose-border);
+    border-radius: var(--md-border-radius);
     box-shadow: var(--docs-prose-shadow);
     margin-top: 1.75rem !important;
     margin-bottom: 1.75rem;
@@ -257,13 +257,13 @@
 }
 
 .docs-prose :deep(img) {
-    border-radius: 10px;
-    border: 1px solid var(--docs-prose-border);
+    border-radius: var(--md-border-radius);
+    border: var(--md-border-width) solid var(--docs-prose-border);
 }
 
 .docs-prose :deep(details) {
-    border: 1px solid var(--docs-prose-border);
-    border-radius: 10px;
+    border: var(--md-border-width) solid var(--docs-prose-border);
+    border-radius: var(--md-border-radius);
     padding: 0.75rem 1rem;
     margin: 1.25rem 0;
 }

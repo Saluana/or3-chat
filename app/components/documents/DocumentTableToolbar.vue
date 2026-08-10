@@ -67,7 +67,7 @@ function deleteTable(): void {
 .table-toolbar :deep(button) {
     flex: 0 0 auto;
     min-height: 2.05rem;
-    border-radius: var(--md-border-radius);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
 }
 .toolbar-separator {
     width: 1px;

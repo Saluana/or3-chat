@@ -17,13 +17,13 @@ export const dashboardOverrides = {
         class: 'w-full',
         ui: {
             content:
-                'z-[30] ring-0! border-0! rounded-xl bg-[var(--md-surface)] shadow-lg text-[14px]!',
+                'z-[30] ring-0! border-0! rounded-[var(--md-border-radius-large,var(--md-border-radius))] bg-[var(--md-surface)] shadow-lg text-[14px]!',
         },
     },
     'button#dashboard.back': {
         variant: 'ghost' as const,
         ui: {
-            base: 'ml-0! border-0 rounded-xl text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]!',
+            base: 'ml-0! border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]!',
         },
     },
     'button#images.gallery.download': {
@@ -38,7 +38,7 @@ export const dashboardOverrides = {
 export const dashboardStyles = {
     '#dashboard-page-header': {
         style: {
-            borderBottom: '1px solid var(--md-border-color) !important',
+            borderBottom: 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color) !important',
         },
     },
     '.dashboard-page-scroll': {
@@ -54,7 +54,7 @@ export const dashboardStyles = {
     '.dashboard-plugin-icon-button': {
         style: {
             border: 'none',
-            borderRadius: '12px !important',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius)) !important',
             backgroundColor: 'var(--md-surface-hover)',
             color: 'var(--md-on-surface)',
         },
@@ -72,7 +72,7 @@ export const dashboardStyles = {
     '.dashboard-landing-item': {
         style: {
             border: 'none',
-            borderRadius: '12px !important',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius)) !important',
             backgroundColor: 'var(--md-surface-hover)',
             color: 'var(--md-on-surface)',
             cursor: 'pointer',
@@ -86,8 +86,8 @@ export const dashboardStyles = {
     '.section-card': {
         style: {
             backgroundColor: 'var(--md-surface)',
-            border: '1px solid var(--md-border-color) !important',
-            borderRadius: '12px !important',
+            border: 'var(--md-border-width) solid var(--md-border-color) !important',
+            borderRadius: 'var(--md-border-radius-large, var(--md-border-radius)) !important',
             padding: '20px 16px',
             boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
             minWidth: '0',

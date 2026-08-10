@@ -712,8 +712,8 @@ watch(
 
 <style scoped>
 .workspace-tab-bar-shell {
-    --or3-tab-radius: var(--md-border-radius, 0.5rem);
-    --or3-tab-close-radius: var(--md-border-radius, 0.375rem);
+    --or3-tab-radius: var(--md-border-radius-small, var(--md-border-radius, 0.5rem));
+    --or3-tab-close-radius: var(--md-border-radius-small, var(--md-border-radius, 0.375rem));
     --or3-chrome-item-gap: var(--or3-chrome-gap, 6px);
     --or3-tab-overflow-pad: var(--or3-chrome-overflow-pad, 2px);
     position: relative;
@@ -793,6 +793,7 @@ watch(
     );
 }
 .workspace-tab-wrap.is-active .workspace-tab {
+    border-width: var(--md-border-width-strong, var(--md-border-width, 1px));
     border-color: var(--or3-tab-border-active, var(--md-primary));
     background: var(
         --or3-tab-bg-active,
@@ -986,7 +987,7 @@ watch(
 .workspace-tab-context button {
     min-height: 28px;
     padding: 0 8px;
-    border-radius: var(--md-border-radius, 0.375rem);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius, 0.375rem));
     color: inherit;
     text-align: left;
     font-size: 13px;

@@ -121,7 +121,7 @@ const chevronIcon = computed(() => useIcon('ui.chevron.right').value);
     width: 100%;
     min-height: 32px;
     padding: 0.25rem 0.625rem;
-    border-radius: calc(var(--md-border-radius) * 0.75);
+    border-radius: var(--md-border-radius-small, calc(var(--md-border-radius) * 0.75));
     font-size: 13.5px;
     line-height: 1.35;
     text-align: left;
@@ -176,7 +176,7 @@ const chevronIcon = computed(() => useIcon('ui.chevron.right').value);
 .docs-nav-children {
     margin-left: 1.05rem;
     padding-left: 0.5rem;
-    border-left: 1px solid color-mix(
+    border-left: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid color-mix(
         in oklab,
         var(--md-border-color),
         transparent 25%

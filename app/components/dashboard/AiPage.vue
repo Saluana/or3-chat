@@ -150,7 +150,7 @@
                 />
                 <div
                     id="dashboard-ai-model-results"
-                    class="max-h-64 overflow-auto border-[var(--md-border-width)] border-[var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)] p-1 space-y-1"
+                    class="max-h-64 overflow-auto border-[var(--md-border-width)] border-[var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)] p-1 space-y-1"
                     role="listbox"
                     aria-label="Model results"
                 >
@@ -466,8 +466,8 @@ const resetButtonProps = computed(() => {
     place-items: center;
     color: var(--md-primary);
     background: var(--md-primary-container);
-    border: var(--md-border-width) solid var(--md-outline-variant);
-    border-radius: var(--md-border-radius);
+    border: var(--md-border-width, 1px) solid var(--md-outline-variant);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius, 0.5rem));
 }
 .dashboard-setting-icon--error {
     color: var(--md-error);
@@ -486,12 +486,12 @@ const resetButtonProps = computed(() => {
     gap: 0.3rem;
     padding: 0.3rem;
     background: var(--md-surface-container-low);
-    border: var(--md-border-width) solid var(--md-border-color);
-    border-radius: var(--md-border-radius);
+    border: var(--md-border-width, 1px) solid var(--md-border-color);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius, 0.5rem));
 }
 .ai-model-picker {
     padding-top: 1rem;
-    border-top: var(--md-border-width) solid var(--md-outline-variant);
+    border-top: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--md-outline-variant);
 }
 .ai-settings-note {
     display: flex;

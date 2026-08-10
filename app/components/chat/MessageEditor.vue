@@ -148,7 +148,7 @@ watch(
 .tiptap-editor :deep(pre) {
     background: var(--md-surface-container-lowest);
     padding: 0.5rem;
-    border: 1px solid var(--md-outline);
+    border: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-outline);
 }
 .tiptap-editor :deep(.ProseMirror) {
     outline: none;

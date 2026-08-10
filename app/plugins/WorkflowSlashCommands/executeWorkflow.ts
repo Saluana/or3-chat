@@ -8,6 +8,7 @@ import {
     DefaultSubflowRegistry,
     createDefaultInputMappings,
     createSubflowDefinition,
+    DEFAULT_WORKFLOW_MODEL,
     isSubflowNodeData,
     modelRegistry,
 } from 'or3-workflow-core';
@@ -80,8 +81,12 @@ export interface WorkflowExecutionOptions {
     workflow: WorkflowData;
     /** User's prompt/input text */
     prompt: string;
-    /** Conversation history for context */
-    conversationHistory: ChatMessage[];
+    /**
+     * Retained for call-site compatibility. Workflow nodes only receive their
+     * explicit graph input; prior chat transcripts are never added to model
+     * requests.
+     */
+    conversationHistory?: ChatMessage[];
     /** OpenRouter API key */
     apiKey: string;
     /** Callback for each streamed token */
@@ -102,6 +107,8 @@ export interface WorkflowExecutionOptions {
     onHITLRequest?: (request: HITLRequest) => Promise<HITLResponse>;
     /** Resume from a failed node without re-running completed steps */
     resumeFrom?: ResumeFromOptions;
+    /** Stable provider-routing key for this workflow run and any retry. */
+    sessionId?: string;
     /** Attachments (files, images) to include */
     attachments?: Attachment[];
 }
@@ -678,7 +685,6 @@ export function executeWorkflow(
     const {
         workflow,
         prompt,
-        conversationHistory,
         apiKey,
         onToken,
         onNodeStart,
@@ -747,51 +753,15 @@ export function executeWorkflow(
             );
         }
 
-        // Determine start node (needed when seeding session messages via resumeFrom)
-        const startNodeId =
-            workflowForExecution.nodes.find((n: any) => n?.type === 'start')
-                ?.id ||
-            workflowForExecution.nodes[0]?.id ||
-            'start';
-
-        // Seed session history with prior thread messages (and current prompt) so LLM nodes see context
-        // Limit to last 20 messages to avoid inflating context/memory during streaming
-        const MAX_HISTORY_MESSAGES = 20;
-        const rawHistory = Array.isArray(conversationHistory)
-            ? conversationHistory
-            : [];
-        const historyMessages =
-            rawHistory.length > MAX_HISTORY_MESSAGES
-                ? rawHistory.slice(-MAX_HISTORY_MESSAGES)
-                : [...rawHistory];
-        if (historyMessages.length) {
-            historyMessages.push({
-                role: 'user',
-                content: prompt || 'Execute workflow',
-            });
-        }
-
-        const resumeFromWithHistory =
-            historyMessages.length && !resumeFrom?.sessionMessages
-                ? ({
-                      startNodeId: resumeFrom?.startNodeId ?? startNodeId,
-                      nodeOutputs: resumeFrom?.nodeOutputs ?? {},
-                      executionOrder: resumeFrom?.executionOrder,
-                      lastActiveNodeId: resumeFrom?.lastActiveNodeId,
-                      sessionMessages: historyMessages,
-                      resumeInput: resumeFrom?.resumeInput,
-                      finalNodeId: resumeFrom?.finalNodeId,
-                  } satisfies ResumeFromOptions)
-                : resumeFrom;
-
         const workflowTools = getWorkflowTools();
         const typedWorkflowTools = getTypedWorkflowTools();
 
         // Create execution adapter from the provider-neutral gateway.
         adapter = new OpenRouterExecutionAdapter(gateway, {
-            defaultModel: DEFAULT_TOOL_MODEL,
+            defaultModel: DEFAULT_WORKFLOW_MODEL,
             preflight: true,
-            resumeFrom: resumeFromWithHistory,
+            resumeFrom,
+            sessionId: options.sessionId,
             tools: workflowTools,
             workflowTools: typedWorkflowTools,
             toolExecutionPolicy: {
@@ -841,20 +811,14 @@ export function executeWorkflow(
         };
 
         try {
-            // Build workflow with conversation history
-            const workflowWithHistory = {
-                ...workflowForExecution,
-                conversationHistory,
-            } as WorkflowData & { conversationHistory: ChatMessage[] };
             const inputPayload = {
                 text: prompt,
-                conversationHistory,
                 attachments: options.attachments,
             };
 
             // Execute the workflow
             const result = await adapter.execute(
-                workflowWithHistory as any,
+                workflowForExecution,
                 inputPayload as any,
                 callbacks
             );

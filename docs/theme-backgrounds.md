@@ -158,6 +158,7 @@ Theme backgrounds serve as **defaults**. The dashboard theme settings UI can ove
 -   When a user selects a texture, it replaces the theme default for that slot.
 -   When a user clears a texture, the theme default is restored.
 -   User overrides persist across theme switches (stored separately).
+-   The responsive Backgrounds editor selects one area at a time and exposes its image, layout, opacity, pattern size, and base color in a single inspector.
 
 The dashboard merges these user selections through `useUserThemeOverrides()`, which combines stored overrides with the active theme definition during startup.
 

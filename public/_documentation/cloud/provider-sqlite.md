@@ -12,6 +12,8 @@ Setup and operating guide for the default-stack sync backend.
 - Global `server_version` cursor progression per workspace.
 - Durable outbox push/pull support with idempotency (`op_id`) and LWW conflict semantics.
 - Consistent materialized snapshot pages pinned to one server high-watermark.
+- A 256 KB serialized payload ceiling per sync operation, shared with the core
+  gateway and other providers.
 
 ## Install
 

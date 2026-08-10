@@ -42,7 +42,7 @@
         <pre
             :id="`reasoning-${id}`"
             :class="[
-                'reasoning-box text-black dark:text-white font-[inherit] text-wrap overflow-x-hidden flex flex-col items-start gap-1 bg-(--md-surface-container-low) text-start border-(--md-inverse-surface) rounded-sm',
+                'reasoning-box text-black dark:text-white font-[inherit] text-wrap overflow-x-hidden flex flex-col items-start gap-1 bg-(--md-surface-container-low) text-start border-[length:var(--md-border-width)] border-(--md-inverse-surface) rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
                 'grid transition-[grid-template-rows] duration-200 ease-in-out',
                 expanded
                     ? 'grid-rows-[1fr] mt-2 px-3 py-1 opacity-100'

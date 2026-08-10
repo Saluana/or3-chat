@@ -85,7 +85,7 @@
                 <div
                     v-for="workspace in displayWorkspaces"
                     :key="workspace.id"
-                    class="rounded-md border border-[var(--md-outline-variant)] p-4 space-y-3"
+                    class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] p-4 space-y-3"
                 >
                     <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                         <div class="min-w-0 flex-1 space-y-1 pr-2">

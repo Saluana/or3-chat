@@ -203,7 +203,7 @@
                 <img
                     :src="image.url"
                     :alt="'Uploaded Image ' + (image.displayIndex + 1)"
-                    class="chat-input-attachment-image w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+                    class="chat-input-attachment-image w-full h-full object-cover rounded-[var(--md-border-radius-small,var(--md-border-radius))] shadow-sm border-[length:var(--md-border-width)] border-gray-200 dark:border-gray-700"
                 />
                 <UButton
                     v-bind="attachmentRemoveBtnProps"
@@ -212,7 +212,7 @@
                     aria-label="Remove image"
                 />
                 <div
-                    class="chat-input-attachment-image-name absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
+                    class="chat-input-attachment-image-name absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-[var(--md-border-radius-small,var(--md-border-radius))]"
                 >
                     {{ image.name }}
                 </div>

@@ -55,13 +55,32 @@ type StreamEventPayload = {
 };
 
 const KEEPALIVE_INTERVAL_MS = 15_000;
-export const MAX_SSE_VIEWER_QUEUE_BYTES = 256 * 1024;
+// Workflow execution state includes completed node outputs so a viewer can
+// follow multi-agent runs. Keep enough headroom for several concurrent drafts
+// before treating a client as too slow to keep up.
+export const MAX_SSE_VIEWER_QUEUE_BYTES = 1024 * 1024;
 
 export function hasSseQueueCapacity(
     availableBytes: number | null,
     eventBytes: number
 ): boolean {
     return availableBytes === null || availableBytes >= eventBytes;
+}
+
+export function workflowStateVersionOf(
+    state: BackgroundJob['workflow_state']
+): number {
+    const version = state?.version;
+    return typeof version === 'number' && Number.isFinite(version)
+        ? version
+        : -1;
+}
+
+export function hasWorkflowStateAdvanced(
+    lastVersion: number,
+    state: BackgroundJob['workflow_state']
+): boolean {
+    return workflowStateVersionOf(state) > lastVersion;
 }
 
 export function serializeJobStatus(
@@ -199,6 +218,9 @@ export default defineEventHandler(async (event) => {
             let closed = false;
             let lastContentLength = initialOffset;
             let lastStatus: BackgroundJob['status'] = initialJob.status;
+            let lastWorkflowVersion = workflowStateVersionOf(
+                initialJob.workflow_state
+            );
             let lastAttempt =
                 typeof attemptParam === 'number' && Number.isFinite(attemptParam)
                     ? attemptParam
@@ -344,6 +366,13 @@ export default defineEventHandler(async (event) => {
                         const currentLiveState = getJobLiveState(jobId);
                         lastContentLength = liveEvent.content_length;
                         lastStatus = 'streaming';
+                        lastWorkflowVersion = Math.max(
+                            lastWorkflowVersion,
+                            workflowStateVersionOf(
+                                liveEvent.workflow_state ??
+                                    currentLiveState?.workflow_state
+                            )
+                        );
                         write({
                             event: 'delta',
                             status: serializeJobStatus(
@@ -379,12 +408,19 @@ export default defineEventHandler(async (event) => {
                         });
                         return;
                     }
+                    const currentLiveState = getJobLiveState(jobId);
                     lastStatus = liveEvent.status;
                     lastContentLength = liveEvent.content_length;
+                    lastWorkflowVersion = Math.max(
+                        lastWorkflowVersion,
+                        workflowStateVersionOf(
+                            liveEvent.workflow_state ??
+                                currentLiveState?.workflow_state
+                        )
+                    );
                     if (typeof liveEvent.attempt === 'number') {
                         lastAttempt = liveEvent.attempt;
                     }
-                    const currentLiveState = getJobLiveState(jobId);
                     write({
                         event: 'status',
                         status: serializeJobStatus(
@@ -445,6 +481,42 @@ export default defineEventHandler(async (event) => {
                                 includeContent: false,
                                 content_delta: delta,
                                 content_length: liveState.content.length,
+                                tool_calls: liveState.tool_calls,
+                                workflow_state: liveState.workflow_state,
+                            }
+                        ),
+                    });
+                    lastWorkflowVersion = Math.max(
+                        lastWorkflowVersion,
+                        workflowStateVersionOf(liveState.workflow_state)
+                    );
+                } else if (
+                    liveState &&
+                    hasWorkflowStateAdvanced(
+                        lastWorkflowVersion,
+                        liveState.workflow_state
+                    )
+                ) {
+                    lastWorkflowVersion = workflowStateVersionOf(
+                        liveState.workflow_state
+                    );
+                    write({
+                        event: 'status',
+                        status: serializeJobStatus(
+                            {
+                                ...initialJob,
+                                status: liveState.status,
+                                chunksReceived: liveState.chunksReceived,
+                                workflow_state: liveState.workflow_state,
+                                tool_calls: liveState.tool_calls,
+                                attempts:
+                                    liveState.attempt ?? initialJob.attempts,
+                            },
+                            {
+                                includeContent: false,
+                                content_length: liveState.content.length,
+                                workflow_state: liveState.workflow_state,
+                                tool_calls: liveState.tool_calls,
                             }
                         ),
                     });
@@ -521,6 +593,10 @@ export default defineEventHandler(async (event) => {
                     const attemptChanged = (job.attempts ?? 0) !== lastAttempt;
                     const hasNewContent = job.content.length > lastContentLength;
                     const statusChanged = job.status !== lastStatus;
+                    const workflowStateAdvanced = hasWorkflowStateAdvanced(
+                        lastWorkflowVersion,
+                        job.workflow_state
+                    );
                     const deltaLength = hasNewContent
                         ? job.content.length - lastContentLength
                         : 0;
@@ -581,7 +657,23 @@ export default defineEventHandler(async (event) => {
                                 content_length: job.content.length,
                             }),
                         });
+                    } else if (workflowStateAdvanced) {
+                        // Node lifecycle and reasoning updates may advance while
+                        // final workflow content is still empty. Project those
+                        // state-only changes instead of waiting for text.
+                        write({
+                            event: 'status',
+                            status: serializeJobStatus(job, {
+                                includeContent: false,
+                                content_length: job.content.length,
+                            }),
+                        });
                     }
+
+                    lastWorkflowVersion = Math.max(
+                        lastWorkflowVersion,
+                        workflowStateVersionOf(job.workflow_state)
+                    );
 
                     if (job.status !== 'streaming') {
                         if (!hasNewContent && !statusChanged) {

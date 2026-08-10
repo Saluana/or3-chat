@@ -1,6 +1,6 @@
 <template>
     <div class="space-y-6">
-        <div class="rounded-2xl border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-5">
+        <div class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-5">
             <h1 class="text-2xl font-semibold">Admin Webhooks</h1>
             <p class="mt-1 text-sm opacity-70">
                 Manage deployment-wide operational webhooks, including curated admin events and advanced custom Nitro hooks.

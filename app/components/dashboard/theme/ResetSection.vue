@@ -14,14 +14,14 @@
         <div class="flex flex-wrap gap-2">
             <UButton
                 v-bind="resetButtonProps"
-                class="px-3 py-2 text-xs"
+                class="theme-reset-button px-3 py-2 text-xs"
                 @click="openResetModal('light')"
             >
                 Reset Light Mode
             </UButton>
             <UButton
                 v-bind="resetButtonProps"
-                class="px-3 py-2 text-xs"
+                class="theme-reset-button px-3 py-2 text-xs"
                 @click="openResetModal('dark')"
             >
                 Reset Dark Mode
@@ -29,7 +29,7 @@
             <UButton
                 v-bind="resetButtonProps"
                 variant="subtle"
-                class="px-3 py-2 text-xs opacity-70 hover:opacity-100"
+                class="theme-reset-button px-3 py-2 text-xs"
                 @click="openResetModal('all')"
             >
                 Reset All
@@ -133,3 +133,22 @@ const confirmReset = () => {
     showResetModal.value = false;
 };
 </script>
+
+<style scoped>
+.theme-reset-button {
+    color: var(--md-on-surface) !important;
+    background: var(--md-surface) !important;
+    border: var(--md-border-width) solid var(--md-outline-variant) !important;
+}
+.theme-reset-button:hover {
+    color: var(--md-on-surface) !important;
+    background: var(
+        --md-surface-hover,
+        var(--md-surface-container-high, var(--md-surface))
+    ) !important;
+    border-color: var(--md-primary) !important;
+}
+.theme-reset-button :deep([data-slot='label']) {
+    color: inherit !important;
+}
+</style>

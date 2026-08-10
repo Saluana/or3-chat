@@ -23,6 +23,42 @@ function workflowVersionOf(value: unknown): number {
         : -1;
 }
 
+export function normalizeTerminalWorkflowState(
+    state: BackgroundJobStatus['workflow_state'],
+    status: BackgroundJobStatus['status'],
+    error: string | undefined
+): BackgroundJobStatus['workflow_state'] {
+    if (
+        !state ||
+        typeof state !== 'object' ||
+        status === 'streaming' ||
+        (state.executionState !== 'running' && state.executionState !== 'idle')
+    ) {
+        return state;
+    }
+
+    const failedNodeId =
+        state.failedNodeId ?? state.currentNodeId ?? state.lastActiveNodeId ?? null;
+    return {
+        ...state,
+        executionState: status === 'aborted' ? 'stopped' : 'error',
+        currentNodeId: null,
+        failedNodeId,
+        result: {
+            ...state.result,
+            success: false,
+            duration: state.result?.duration ?? 0,
+            error:
+                error ??
+                state.result?.error ??
+                (status === 'aborted'
+                    ? 'Workflow stopped by user'
+                    : 'Background workflow failed'),
+        },
+        version: (state.version ?? 0) + 1,
+    };
+}
+
 export async function persistBackgroundJobUpdate(
     tracker: BackgroundJobTracker,
     status: BackgroundJobStatus,
@@ -64,10 +100,13 @@ export async function persistBackgroundJobUpdate(
             : status.status === 'aborted'
               ? 'Background response aborted'
               : null;
-    const workflowState =
+    const workflowState = normalizeTerminalWorkflowState(
         status.workflow_state && typeof status.workflow_state === 'object'
             ? status.workflow_state
-            : null;
+            : undefined,
+        status.status,
+        status.error
+    );
     const persistedToolCalls = Array.isArray(status.tool_calls)
         ? status.tool_calls.map((toolCall) => ({
               ...toolCall,

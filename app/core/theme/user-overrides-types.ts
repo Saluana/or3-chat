@@ -13,6 +13,7 @@
  *
  * Constraints:
  * - Color values are CSS color strings (hex, rgb, etc.)
+ * - Font choices are restricted to bundled or system font identifiers
  * - Font size is clamped to 14-24 px by the composable
  * - Background opacity is clamped to 0-1
  * - This file is types-only plus the `EMPTY_USER_OVERRIDES` constant
@@ -20,6 +21,13 @@
  * @see core/theme/useUserThemeOverrides for the composable that reads/writes these
  * @see core/theme/apply-merged-theme for how overrides are applied to the DOM
  */
+
+export type UserFontChoice =
+    | 'theme'
+    | 'system'
+    | 'ibm-plex-sans'
+    | 'vt323'
+    | 'press-start-2p';
 
 /**
  * Purpose:
@@ -103,18 +111,30 @@ export interface UserThemeOverrides {
     typography?: {
         /** Base font size in pixels (14-24) */
         baseFontPx?: number;
-        /** Use system fonts instead of theme fonts */
+        /** Body font selection; defaults to the active theme */
+        bodyFont?: UserFontChoice;
+        /** Heading font selection; defaults to the active theme */
+        headingFont?: UserFontChoice;
+        /** @deprecated Legacy combined font toggle retained for saved overrides */
         useSystemFont?: boolean;
     };
 
-    /** High-impact shape tokens shared by app components */
+    /** Tiered shape tokens shared by app components */
     shape?: {
         /** Master toggle for border width and radius overrides */
         enabled?: boolean;
-        /** Global border thickness in pixels (0-6) */
+        /** Subtle divider thickness in pixels (0-6) */
+        borderWidthSubtlePx?: number;
+        /** Standard component thickness in pixels (0-6), kept for compatibility */
         borderWidthPx?: number;
-        /** Global corner radius in pixels (0-32) */
+        /** Strong emphasis thickness in pixels (0-6) */
+        borderWidthStrongPx?: number;
+        /** Small control radius in pixels (0-32) */
+        borderRadiusSmallPx?: number;
+        /** Standard surface radius in pixels (0-32), kept for compatibility */
         borderRadiusPx?: number;
+        /** Large-surface radius in pixels (0-32) */
+        borderRadiusLargePx?: number;
     };
 
     /** UI-specific settings (not in theme DSL) */

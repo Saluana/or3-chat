@@ -1,7 +1,7 @@
 <template>
     <div v-if="showSkeleton" class="space-y-4">
-            <div class="h-32 bg-[var(--md-surface-container-highest)] rounded-lg animate-pulse" />
-            <div class="h-64 bg-[var(--md-surface-container-highest)] rounded-lg animate-pulse" />
+            <div class="h-32 bg-[var(--md-surface-container-highest)] rounded-[var(--md-border-radius)] animate-pulse" />
+            <div class="h-64 bg-[var(--md-surface-container-highest)] rounded-[var(--md-border-radius)] animate-pulse" />
         </div>
 
         <UAlert
@@ -125,7 +125,7 @@
                     <div
                         v-for="member in workspace.members"
                         :key="member.userId"
-                        class="flex flex-col gap-3 p-3 rounded-lg bg-[var(--md-surface-container-low)] sm:flex-row sm:items-center sm:justify-between"
+                        class="flex flex-col gap-3 p-3 rounded-[var(--md-border-radius)] bg-[var(--md-surface-container-low)] sm:flex-row sm:items-center sm:justify-between"
                     >
                         <div class="min-w-0 flex items-center gap-3">
                             <div class="w-8 h-8 rounded-full bg-[var(--md-primary-container)] flex items-center justify-center">
@@ -189,7 +189,7 @@
                     <div
                         v-for="invite in invites"
                         :key="invite.id"
-                        class="p-3 rounded-lg bg-[var(--md-surface-container-low)] flex items-center justify-between gap-3"
+                        class="p-3 rounded-[var(--md-border-radius)] bg-[var(--md-surface-container-low)] flex items-center justify-between gap-3"
                     >
                         <div class="min-w-0">
                             <div class="font-medium truncate">{{ invite.email }}</div>

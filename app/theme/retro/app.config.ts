@@ -3,13 +3,13 @@ export default {
         tooltip: {
             slots: {
                 content:
-                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]! ring-0 rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[var(--md-on-surface)] shadow-lg h-[40px] px-3 text-md',
+                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]! ring-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)] text-[var(--md-on-surface)] shadow-lg h-[40px] px-3 text-md',
             },
         },
         tree: {
             slots: {
                 root: '',
-                item: 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] mb-2 theme-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
+                item: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] mb-2 theme-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
                 link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
             },
         },
@@ -19,8 +19,8 @@ export default {
                 overlay:
                     'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
                 content:
-                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none ',
-                body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)]  p-4',
+                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-large,var(--md-border-radius))] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none ',
+                body: 'border-y-[length:var(--md-border-width-subtle,var(--md-border-width))] border-y-[color:var(--md-border-color)]  p-4',
                 header: 'relative border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center gap-2 text-[var(--md-on-primary)]!',
                 // Press Start wraps poorly at modal widths; keep the readable retro face and clip overflow.
                 title: 'text-[var(--md-on-primary)] font-vt323 font-semibold text-base! leading-tight min-w-0 flex-1 truncate',
@@ -33,7 +33,7 @@ export default {
                 // Make base styles clearly different so it's obvious when applied
                 base: [
                     'transition-colors',
-                    'cursor-pointer text-start border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] theme-shadow retro-press',
+                    'cursor-pointer text-start border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] theme-shadow retro-press',
                 ],
                 // Label tweaks are rarely overridden by variants, good to verify
                 label: 'truncate tracking-wider',
@@ -46,7 +46,7 @@ export default {
                 variant: {
                     light: 'theme-btn flex items-center justify-center bg-[var(--md-surface)] dark:bg-[var(--md-on-background)] dark:text-black dark:hover:bg-[var(--md-on-background)]/90 backdrop-blur-sm',
                     subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
-                    basic: 'border-[var(--md-border-width)] shadow-none! drop-shadow-none!  hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-[color:var(--md-border-color)] text-[var(--md-on-surface)]',
+                    basic: 'border-[length:var(--md-border-width)] shadow-none! drop-shadow-none!  hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-[color:var(--md-border-color)] text-[var(--md-on-surface)]',
                     popover:
                         'flex items-center! hover:bg-[var(--md-primary)]/5 active:bg-[var(--md-primary)]/10 justify-start!',
                     ghost: 'font-base border-none shadow-none! [--tw-shadow:none] items-center justify-center',
@@ -118,7 +118,7 @@ export default {
         // Global input overrides
         input: {
             slots: {
-                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus-visible:ring-0! focus-visible:outline-none! max-lg:text-[16px]!',
+                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus-visible:ring-0! focus-visible:outline-none! max-lg:text-[16px]!',
             },
             variants: {
                 variant: {
@@ -137,9 +137,9 @@ export default {
         },
         select: {
             slots: {
-                base: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! retro-shadow max-lg:text-[16px]!',
+                base: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! retro-shadow max-lg:text-[16px]!',
                 content: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! theme-shadow',
-                item: 'rounded-[var(--md-border-radius)] data-highlighted:before:bg-[var(--md-surface-hover)]',
+                item: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] data-highlighted:before:bg-[var(--md-surface-hover)]',
             },
         },
         tabs: {
@@ -150,8 +150,8 @@ export default {
                 variant: {
                     pill: {
                         list: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface-container-low)]',
-                        indicator: 'rounded-[var(--md-border-radius)] theme-shadow',
-                        trigger: 'rounded-[var(--md-border-radius)]',
+                        indicator: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] theme-shadow',
+                        trigger: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
                     },
                     link: {
                         list: 'rounded-none bg-transparent',
@@ -169,7 +169,7 @@ export default {
         checkbox: {
             slots: {
                 root: 'relative flex items-center',
-                base: 'rounded-[var(--md-border-radius)] ring-0! border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
+                base: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] ring-0! border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
             },
             variants: {
                 size: {
@@ -274,7 +274,7 @@ export default {
         },
         textarea: {
             slots: {
-                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus-visible:ring-0! focus-visible:outline-none! max-lg:text-[16px]!',
+                base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus-visible:ring-0! focus-visible:outline-none! max-lg:text-[16px]!',
             },
         },
         selectMenu: {

@@ -32,7 +32,7 @@
                         >
                             <UTextarea
                                 :model-value="description"
-                                class="w-full border-[var(--md-border-width)] rounded-[6px]"
+                                class="w-full border-[var(--md-border-width)] rounded-[var(--md-border-radius-small,var(--md-border-radius,6px))]"
                                 :rows="3"
                                 placeholder="Optional description"
                                 @update:model-value="

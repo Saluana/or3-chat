@@ -259,7 +259,7 @@ watch(menu, async (value) => {
     padding: 0;
     border: var(--md-border-width, 1px) solid
         var(--or3-tab-border, var(--md-border-color));
-    border-radius: var(--or3-tab-radius, var(--md-border-radius, 0.5rem));
+    border-radius: var(--or3-tab-radius, var(--md-border-radius-small, var(--md-border-radius, 0.5rem)));
     background: var(--or3-tab-bg, transparent);
     color: var(--md-on-surface);
     box-shadow: var(--or3-tab-shadow, none);
@@ -289,7 +289,7 @@ watch(menu, async (value) => {
     gap: 0.5rem;
     min-height: 28px;
     padding: 0 8px;
-    border-radius: var(--md-border-radius, 0.375rem);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius, 0.375rem));
     color: inherit;
     text-align: left;
     font-size: 13px;

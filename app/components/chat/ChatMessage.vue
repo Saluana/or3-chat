@@ -8,7 +8,7 @@
             messageContainerProps?.class || '',
         ]"
         :data-theme-matches="messageContainerProps?.['data-theme-matches']"
-        class="p-2 min-w-[140px] max-w-full rounded-(--md-border-radius) first:mt-3 first:mb-6 not-first:my-6 relative"
+        class="p-2 min-w-[140px] max-w-full rounded-[var(--md-border-radius)] first:mt-3 first:mb-6 not-first:my-6 relative"
     >
         <!-- Workflow Message Handling -->
         <WorkflowChatMessage
@@ -32,14 +32,14 @@
                         v-for="(hash, idx) in displayedHashes"
                         :key="hash"
                         type="button"
-                        class="attachment-item flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer shadow-sm backdrop-blur-sm"
+                        class="attachment-item flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer shadow-sm backdrop-blur-sm"
                         @click="toggleExpanded"
                         :aria-label="'View attachment ' + (idx + 1)"
                     >
                         <!-- PDF thumbnail -->
                         <template v-if="pdfMeta[hash]">
                             <div
-                                class="attachment-icon w-10 h-10 flex items-center justify-center bg-red-500/30 rounded-lg border border-red-400/30"
+                                class="attachment-icon w-10 h-10 flex items-center justify-center bg-red-500/30 rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-red-400/30"
                             >
                                 <span
                                     class="text-[11px] font-bold text-red-200 tracking-wide"
@@ -78,7 +78,7 @@
                                         : undefined
                                 "
                                 :alt="'Attachment ' + (idx + 1)"
-                                class="attachment-thumb w-10 h-10 object-cover rounded-lg"
+                                class="attachment-thumb w-10 h-10 object-cover rounded-[var(--md-border-radius-small,var(--md-border-radius))]"
                                 draggable="false"
                             />
                             <div
@@ -100,7 +100,7 @@
                             v-else-if="thumbnails[hash]?.status === 'loading'"
                         >
                             <div
-                                class="attachment-icon w-10 h-10 flex items-center justify-center bg-white/10 rounded-lg animate-pulse"
+                                class="attachment-icon w-10 h-10 flex items-center justify-center bg-white/10 rounded-[var(--md-border-radius-small,var(--md-border-radius))] animate-pulse"
                             >
                                 <span class="text-xs opacity-40">···</span>
                             </div>
@@ -116,7 +116,7 @@
                         <!-- Error state -->
                         <template v-else>
                             <div
-                                class="attachment-icon w-10 h-10 flex items-center justify-center bg-white/10 rounded-lg"
+                                class="attachment-icon w-10 h-10 flex items-center justify-center bg-white/10 rounded-[var(--md-border-radius-small,var(--md-border-radius))]"
                             >
                                 <span class="text-xs opacity-40">?</span>
                             </div>
@@ -134,7 +134,7 @@
                     <button
                         v-if="hashList.length > maxDisplayedThumbs"
                         type="button"
-                        class="attachment-more flex items-center justify-center px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer text-[13px] font-medium shadow-sm backdrop-blur-sm"
+                        class="attachment-more flex items-center justify-center px-4 py-1.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer text-[13px] font-medium shadow-sm backdrop-blur-sm"
                         @click="toggleExpanded"
                     >
                         +{{ hashList.length - maxDisplayedThumbs }} more
@@ -316,7 +316,7 @@
                 ]"
             >
                 <UFieldGroup
-                    class="bg-(--md-surface) rounded-(--md-border-radius) cm-action-group"
+                    class="bg-(--md-surface) rounded-[var(--md-border-radius-small,var(--md-border-radius))] cm-action-group"
                 >
                     <UTooltip
                         :delay-duration="500"
@@ -616,7 +616,7 @@ const outerClass = computed(() => ({
 
 const innerClass = computed(() => ({
     // Added Tailwind Typography per-element utilities for tables (no custom CSS)
-    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-pre:bg-[var(--md-surface-container)]/80 prose-pre:border-[var(--md-border-width)] prose-pre:border-[color:var(--md-border-color)] prose-pre:text-[var(--md-on-surface)] prose-code:text-[var(--md-on-surface)] prose-code:font-[inherit] prose-pre:font-[inherit] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5 prose-':
+    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-pre:bg-[var(--md-surface-container)]/80 prose-pre:border-[length:var(--md-border-width-subtle,var(--md-border-width))] prose-pre:border-[color:var(--md-border-color)] prose-pre:text-[var(--md-on-surface)] prose-code:text-[var(--md-on-surface)] prose-code:font-[inherit] prose-pre:font-[inherit] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5 prose-':
         props.message.role === 'assistant',
 }));
 

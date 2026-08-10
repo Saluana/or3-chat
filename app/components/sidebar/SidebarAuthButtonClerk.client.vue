@@ -27,7 +27,7 @@
         </div>
         <div
             v-else
-            class="h-[54px] w-[54px] flex items-center justify-center cursor-pointer rounded-[var(--md-border-radius)] hover:bg-[var(--md-surface-hover)]! transition-colors"
+            class="h-[54px] w-[54px] flex items-center justify-center cursor-pointer rounded-[var(--md-border-radius-small,var(--md-border-radius))] hover:bg-[var(--md-surface-hover)]! transition-colors"
         >
             <UserButton
                 :appearance="{

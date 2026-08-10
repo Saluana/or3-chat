@@ -31,7 +31,7 @@
                 </div>
                 <button
                     type="button"
-                    class="group relative block w-full cursor-zoom-in overflow-hidden rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-primary)]"
+                    class="group relative block w-full cursor-zoom-in overflow-hidden rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-primary)]"
                     :aria-label="`Expand ${selectedThemeLabel} preview`"
                     @click="openLightbox"
                 >
@@ -94,7 +94,7 @@
                         <img
                             :src="previewImage"
                             :alt="selectedThemeLabel"
-                            class="max-h-[85vh] w-full rounded-lg object-contain shadow-2xl"
+                            class="max-h-[85vh] w-full rounded-[var(--md-border-radius-large)] object-contain shadow-2xl"
                         />
                         <p
                             :id="lightboxHintId"

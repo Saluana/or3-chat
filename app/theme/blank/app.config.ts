@@ -3,13 +3,13 @@ export default {
         tooltip: {
             slots: {
                 content:
-                    'border-0 ring-0 rounded-xl bg-[var(--md-on-surface)] text-[var(--md-surface)] shadow-lg h-[36px] px-3 text-sm',
+                    'border-0 ring-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-on-surface)] text-[var(--md-surface)] shadow-lg h-[36px] px-3 text-sm',
             },
         },
         tree: {
             slots: {
                 root: '',
-                item: 'border-0 rounded-xl mb-2 bg-[var(--md-surface-hover)] text-[var(--md-on-surface)]',
+                item: 'border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] mb-2 bg-[var(--md-surface-hover)] text-[var(--md-on-surface)]',
                 link: 'h-[36px] text-[14px]! hover:bg-[var(--md-surface-active)] max-md:min-h-[44px]! max-md:text-[16px]!',
             },
         },
@@ -18,19 +18,19 @@ export default {
                 overlay:
                     'fixed inset-0 bg-black/30 backdrop-blur-[1px]',
                 content:
-                    'border border-[rgba(0,0,0,0.08)] dark:border-[rgba(255,255,255,0.08)] rounded-2xl ring-0 fixed divide-y-0 flex flex-col focus:outline-none shadow-[0_12px_28px_rgba(0,0,0,0.12)] overflow-hidden bg-[var(--md-surface)]',
+                    'border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.08)] dark:border-[rgba(255,255,255,0.08)] rounded-[var(--md-border-radius-large,var(--md-border-radius))] ring-0 fixed divide-y-0 flex flex-col focus:outline-none shadow-[0_12px_28px_rgba(0,0,0,0.12)] overflow-hidden bg-[var(--md-surface)]',
                 body: 'p-5',
-                header: 'border-b border-[rgba(0,0,0,0.08)] dark:border-[rgba(255,255,255,0.1)] bg-transparent px-5! py-0 min-h-[52px] w-full justify-between flex items-center',
+                header: 'border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[rgba(0,0,0,0.08)] dark:border-[rgba(255,255,255,0.1)] bg-transparent px-5! py-0 min-h-[52px] w-full justify-between flex items-center',
                 title: 'text-[var(--md-on-surface)] font-normal text-lg!',
                 description: 'hidden',
-                close: 'relative! top-auto! end-auto! flex items-center justify-center leading-none h-[36px] w-[36px] p-0 rounded-lg bg-transparent! hover:bg-[var(--md-surface-hover)]! text-[var(--md-on-surface-variant)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
+                close: 'relative! top-auto! end-auto! flex items-center justify-center leading-none h-[36px] w-[36px] p-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent! hover:bg-[var(--md-surface-hover)]! text-[var(--md-on-surface-variant)]! max-md:min-h-[44px]! max-md:min-w-[44px]!',
             },
         },
         button: {
             slots: {
                 base: [
                     'transition-colors duration-150',
-                    'cursor-pointer text-start rounded-full',
+                    'cursor-pointer text-start rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
                 ],
                 label: 'truncate',
                 leadingIcon: 'shrink-0',
@@ -47,7 +47,7 @@ export default {
                         'flex items-center! hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] justify-start! border-0',
                     ghost: 'font-base border-0',
                     outline:
-                        'border-[1px] border-[color:rgba(0,0,0,0.15)] dark:border-[color:rgba(255,255,255,0.15)] ring-0! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
+                        'border-[length:var(--md-border-width)] border-[color:rgba(0,0,0,0.15)] dark:border-[color:rgba(255,255,255,0.15)] ring-0! hover:bg-[var(--md-surface-hover)]! active:bg-[var(--md-surface-active)]!',
                 },
                 color: {
                     primary: 'text-[color:var(--md-on-primary)]',
@@ -83,15 +83,15 @@ export default {
                 },
                 fieldGroup: {
                     horizontal:
-                        'first:rounded-l-full! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-full!',
+                        'first:rounded-l-[var(--md-border-radius-small,var(--md-border-radius))]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[var(--md-border-radius-small,var(--md-border-radius))]!',
                     vertical:
-                        'first:rounded-t-xl! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-xl!',
+                        'first:rounded-t-[var(--md-border-radius-small,var(--md-border-radius))]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[var(--md-border-radius-small,var(--md-border-radius))]!',
                 },
             },
         },
         input: {
             slots: {
-                base: 'border border-[rgba(0,0,0,0.15)] rounded-xl bg-transparent hover:border-[rgba(0,0,0,0.25)] ring-0! focus:ring-0 focus:border-[rgba(0,0,0,0.3)] dark:border-[rgba(255,255,255,0.15)] dark:hover:border-[rgba(255,255,255,0.25)] dark:focus:border-[rgba(255,255,255,0.3)] dark:bg-transparent max-lg:text-[16px]!',
+                base: 'border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.15)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent hover:border-[rgba(0,0,0,0.25)] ring-0! focus:ring-0 focus:border-[rgba(0,0,0,0.3)] dark:border-[rgba(255,255,255,0.15)] dark:hover:border-[rgba(255,255,255,0.25)] dark:focus:border-[rgba(255,255,255,0.3)] dark:bg-transparent max-lg:text-[16px]!',
             },
             variants: {
                 leading: { true: 'ps-10!' },
@@ -104,9 +104,9 @@ export default {
         },
         select: {
             slots: {
-                base: 'rounded-xl border border-[rgba(0,0,0,0.15)] bg-transparent text-[var(--md-on-surface)] ring-0! hover:border-[rgba(0,0,0,0.25)] focus:ring-1 focus:ring-[var(--md-primary)] dark:border-[rgba(255,255,255,0.15)] dark:hover:border-[rgba(255,255,255,0.25)] max-lg:text-[16px]! max-md:min-h-[44px]!',
-                content: 'rounded-xl border border-[rgba(0,0,0,0.08)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! shadow-lg dark:border-[rgba(255,255,255,0.08)]',
-                item: 'rounded-lg data-highlighted:before:bg-[var(--md-surface-hover)] max-md:min-h-[44px]! max-md:text-[16px]!',
+                base: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.15)] bg-transparent text-[var(--md-on-surface)] ring-0! hover:border-[rgba(0,0,0,0.25)] focus:ring-1 focus:ring-[var(--md-primary)] dark:border-[rgba(255,255,255,0.15)] dark:hover:border-[rgba(255,255,255,0.25)] max-lg:text-[16px]! max-md:min-h-[44px]!',
+                content: 'rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.08)] bg-[var(--md-surface)] text-[var(--md-on-surface)] ring-0! shadow-lg dark:border-[rgba(255,255,255,0.08)]',
+                item: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] data-highlighted:before:bg-[var(--md-surface-hover)] max-md:min-h-[44px]! max-md:text-[16px]!',
             },
         },
         tabs: {
@@ -116,9 +116,9 @@ export default {
             variants: {
                 variant: {
                     pill: {
-                        list: 'rounded-xl bg-[var(--md-surface-container-low)]',
-                        indicator: 'rounded-lg shadow-sm',
-                        trigger: 'rounded-lg',
+                        list: 'rounded-[var(--md-border-radius)] bg-[var(--md-surface-container-low)]',
+                        indicator: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] shadow-sm',
+                        trigger: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
                     },
                     link: {
                         list: 'rounded-none bg-transparent',
@@ -130,7 +130,7 @@ export default {
         },
         card: {
             slots: {
-                root: 'rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[var(--md-surface-container-low)] ring-0! shadow-sm dark:border-[rgba(255,255,255,0.08)]',
+                root: 'rounded-[var(--md-border-radius-large,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.08)] bg-[var(--md-surface-container-low)] ring-0! shadow-sm dark:border-[rgba(255,255,255,0.08)]',
             },
         },
         formField: {
@@ -151,14 +151,14 @@ export default {
         },
         toast: {
             slots: {
-                root: 'border-0 rounded-xl shadow-lg',
+                root: 'border-0 rounded-[var(--md-border-radius-large,var(--md-border-radius))] shadow-lg',
                 close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0 rounded-full max-md:min-h-[44px]! max-md:min-w-[44px]!',
             },
         },
         popover: {
             slots: {
                 content:
-                    'bg-[var(--md-surface)] ring-0 rounded-2xl border border-[rgba(0,0,0,0.06)] dark:border-[rgba(255,255,255,0.08)] shadow-[0_2px_8px_rgba(0,0,0,0.08),0_0_1px_rgba(0,0,0,0.06)] p-1.5',
+                    'bg-[var(--md-surface)] ring-0 rounded-[var(--md-border-radius-large,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.06)] dark:border-[rgba(255,255,255,0.08)] shadow-[0_2px_8px_rgba(0,0,0,0.08),0_0_1px_rgba(0,0,0,0.06)] p-1.5',
             },
         },
         switch: {
@@ -203,14 +203,14 @@ export default {
         },
         textarea: {
             slots: {
-                base: 'border border-[rgba(0,0,0,0.15)] rounded-xl bg-transparent ring-0! focus:ring-0 focus:border-[rgba(0,0,0,0.3)] dark:border-[rgba(255,255,255,0.15)] dark:focus:border-[rgba(255,255,255,0.3)] dark:bg-transparent max-lg:text-[16px]!',
+                base: 'border-[length:var(--md-border-width)] border-[rgba(0,0,0,0.15)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-transparent ring-0! focus:ring-0 focus:border-[rgba(0,0,0,0.3)] dark:border-[rgba(255,255,255,0.15)] dark:focus:border-[rgba(255,255,255,0.3)] dark:bg-transparent max-lg:text-[16px]!',
             },
         },
         selectMenu: {
             slots: {
-                base: 'rounded-xl border-0 max-lg:text-[16px]! max-md:min-h-[44px]!',
+                base: 'rounded-[var(--md-border-radius-small,var(--md-border-radius))] border-0 max-lg:text-[16px]! max-md:min-h-[44px]!',
                 content:
-                    'ring-0! border-0! rounded-xl bg-[var(--md-surface)] shadow-lg',
+                    'ring-0! border-0! rounded-[var(--md-border-radius-large,var(--md-border-radius))] bg-[var(--md-surface)] shadow-lg',
                 input: 'border-0 rounded-none! max-lg:text-[16px]!',
                 arrow: 'h-[18px] w-[18px]',
                 item: 'max-md:min-h-[44px]! max-md:text-[16px]!',

@@ -16,10 +16,10 @@ export const chatOverrides = {
     },
     // Message action buttons: subtle gray icons
     'button.message': {
-        class: 'flex items-center justify-center bg-transparent text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 rounded-lg',
+        class: 'flex items-center justify-center bg-transparent text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
     },
     'button#message.reasoning-toggle': {
-        class: 'flex items-center justify-center bg-transparent text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 rounded-lg',
+        class: 'flex items-center justify-center bg-transparent text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
     },
     /* --- Chat Input --- */
     'button#chat.send': {
@@ -36,7 +36,7 @@ export const chatOverrides = {
         class: 'text-[16px]',
     },
     'div#chat.input-main-container': {
-        class: 'rounded-[28px] shadow-[0_4px_8px_rgba(0,0,0,0.04)] border-0 hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-within:shadow-[0_4px_16px_rgba(0,0,0,0.1)]',
+        class: 'rounded-[var(--md-border-radius-large,var(--md-border-radius))] shadow-[0_4px_8px_rgba(0,0,0,0.04)] border-0 hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-within:shadow-[0_4px_16px_rgba(0,0,0,0.1)]',
     },
     'button#chat.attach': chatInputButtonConfig,
     'button#chat.settings': chatInputButtonConfig,
@@ -49,11 +49,11 @@ export const chatOverrides = {
             item: 'text-[14px]! max-md:min-h-[44px]! max-md:text-[16px]!',
             itemLabel: 'text-[14px]! max-md:text-[16px]!',
             content:
-                'ring-0! border-0! rounded-xl bg-[var(--md-surface)] shadow-lg text-[14px]! max-md:text-[16px]!',
+                'ring-0! border-0! rounded-[var(--md-border-radius-large,var(--md-border-radius))] bg-[var(--md-surface)] shadow-lg text-[14px]! max-md:text-[16px]!',
         },
         searchInput: {
             ui: {
-                base: 'text-[14px]! rounded-none shadow-none! rounded-t-xl! max-md:min-h-[44px]! max-md:text-[16px]!',
+                base: 'text-[14px]! rounded-none shadow-none! rounded-t-[var(--md-border-radius-large,var(--md-border-radius))]! max-md:min-h-[44px]! max-md:text-[16px]!',
             },
         },
     },
@@ -69,7 +69,7 @@ export const chatOverrides = {
         },
     },
     'div#message.user-container': {
-        class: 'px-4! py-3! bg-[var(--md-surface-hover)] rounded-[18px]',
+        class: 'px-4! py-3! bg-[var(--md-surface-hover)] rounded-[var(--md-border-radius)]',
     },
 };
 
@@ -78,7 +78,7 @@ export const chatCssSelectors = {
         style: {
             backgroundColor: 'var(--md-surface-hover)',
             border: 'none',
-            borderRadius: '10px',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
         },
     },
     '#btn-reasoning-toggle:hover': {
@@ -90,7 +90,7 @@ export const chatCssSelectors = {
         style: {
             background: 'var(--md-surface-hover)',
             border: 'none',
-            borderRadius: '12px',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
         },
     },
     '.cm-text-user': {
@@ -104,7 +104,7 @@ export const chatCssSelectors = {
             backgroundColor: 'var(--md-surface)',
             border: 'none',
             boxShadow: '0 1px 3px rgba(0, 0, 0, 0.06)',
-            borderRadius: '8px',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',
             opacity: '0',
             transition: 'opacity 0.15s ease',
         },
@@ -121,12 +121,12 @@ export const chatCssSelectors = {
     },
     '.chat-container-root:not(:last-child)': {
         style: {
-            borderRight: '1px solid var(--md-border-color)',
+            borderRight: 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color)',
         },
     },
     '.chat-container-root:not(:first-child)': {
         style: {
-            borderTop: '1px solid var(--md-border-color) !important',
+            borderTop: 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color) !important',
         },
     },
     '.cm-assistant': {
@@ -187,7 +187,7 @@ export const chatCssSelectors = {
         style: {
             backgroundColor: 'var(--md-surface-hover) !important',
             border: 'none !important',
-            borderRadius: '8px !important',
+            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius)) !important',
             fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace !important',
             fontSize: '12px !important',
             padding: '12px !important',

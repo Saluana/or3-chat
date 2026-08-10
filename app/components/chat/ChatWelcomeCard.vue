@@ -6,7 +6,7 @@
         :aria-labelledby="titleId"
         :aria-describedby="descriptionId"
         tabindex="-1"
-        class="pointer-events-auto relative w-full max-w-md rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-surface)] p-6 shadow-lg outline-none"
+        class="pointer-events-auto relative w-full max-w-md rounded-[var(--md-border-radius-large,var(--md-border-radius))] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] p-6 shadow-lg outline-none"
         data-welcome-card
         @keydown="onCardKeydown"
     >

@@ -17,7 +17,7 @@
 
         <!-- Mobile Header -->
         <header
-            class="fixed top-0 left-0 right-0 h-16 bg-[var(--md-surface-container)] border-b-[length:var(--md-border-width)] border-[var(--md-border-color)] flex items-center justify-between px-4 z-40 lg:hidden"
+            class="fixed top-0 left-0 right-0 h-16 bg-[var(--md-surface-container)] border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-border-color)] flex items-center justify-between px-4 z-40 lg:hidden"
         >
             <div class="flex items-center gap-4">
                 <UButton
@@ -71,10 +71,10 @@
                 v-if="isMobileMenuOpen"
                 role="navigation"
                 aria-label="Admin navigation"
-                class="fixed top-0 left-0 bottom-0 w-72 bg-[var(--md-surface-container)] border-r border-[var(--md-outline-variant)] shadow-[var(--md-elevation-3)] z-50 lg:hidden flex flex-col"
+                class="fixed top-0 left-0 bottom-0 w-72 bg-[var(--md-surface-container)] border-r-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] shadow-[var(--md-elevation-3)] z-50 lg:hidden flex flex-col"
             >
                 <!-- Mobile Drawer Header -->
-                <div class="p-4 border-b border-[var(--md-outline-variant)] flex items-center justify-between">
+                <div class="p-4 border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] flex items-center justify-between">
                     <div>
                         <h1 class="text-lg font-bold">Admin</h1>
                         <p class="text-xs opacity-70 mt-1">System Control</p>
@@ -100,9 +100,9 @@
                 />
 
                 <!-- Mobile Logout -->
-                <div class="p-2 border-t border-[var(--md-outline-variant)]">
+                <div class="p-2 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)]">
                     <button
-                        class="w-full flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-[var(--md-sys-shape-corner-small,4px)] transition-all duration-200 text-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-sys-color-error)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)]"
+                        class="w-full flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-[var(--md-border-radius-small,var(--md-sys-shape-corner-small,4px))] transition-all duration-200 text-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-sys-color-error)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)]"
                         @click="handleLogout"
                     >
                         <UIcon
@@ -114,7 +114,7 @@
                 </div>
 
                 <!-- Mobile Drawer Footer -->
-                <div class="p-4 border-t border-[var(--md-outline-variant)] text-xs text-[var(--md-on-surface-variant)]" role="contentinfo">
+                <div class="p-4 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] text-xs text-[var(--md-on-surface-variant)]" role="contentinfo">
                     <span>OR3 v{{ appVersion }}</span>
                 </div>
             </aside>
@@ -124,11 +124,11 @@
         <aside
             role="navigation"
             aria-label="Admin navigation"
-            class="hidden lg:flex flex-shrink-0 flex-col border-r border-[var(--md-outline-variant)] bg-[var(--md-surface-container)] shadow-[var(--md-elevation-1)] transition-all duration-300 ease-in-out"
+            class="hidden lg:flex flex-shrink-0 flex-col border-r-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)] shadow-[var(--md-elevation-1)] transition-all duration-300 ease-in-out"
             :class="isDesktopCollapsed ? 'w-20' : 'w-64'"
         >
             <!-- Desktop Sidebar Header -->
-            <div class="p-4 border-b border-[var(--md-outline-variant)] flex items-center justify-between" :class="{ 'justify-center': isDesktopCollapsed }">
+            <div class="p-4 border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] flex items-center justify-between" :class="{ 'justify-center': isDesktopCollapsed }">
                 <div v-if="!isDesktopCollapsed">
                     <h1 class="text-lg font-bold">Admin</h1>
                     <p class="text-xs opacity-70 mt-1">System Control</p>
@@ -154,9 +154,9 @@
             />
 
             <!-- Desktop Logout -->
-            <div class="p-2 border-t border-[var(--md-outline-variant)]">
+            <div class="p-2 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)]">
                 <button
-                    class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-[var(--md-sys-shape-corner-small,4px)] transition-all duration-200 text-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-sys-color-error)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)] group relative"
+                    class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-[var(--md-border-radius-small,var(--md-sys-shape-corner-small,4px))] transition-all duration-200 text-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-sys-color-error)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)] group relative"
                     :class="{ 'justify-center': isDesktopCollapsed }"
                     @click="handleLogout"
                 >
@@ -168,7 +168,7 @@
                     <!-- Tooltip for collapsed state -->
                     <div
                         v-if="isDesktopCollapsed"
-                        class="absolute left-full ml-2 px-2 py-1 bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface)] text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity duration-150"
+                        class="absolute left-full ml-2 px-2 py-1 bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface)] text-xs rounded-[var(--md-border-radius-small)] shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity duration-150"
                     >
                         Logout
                     </div>
@@ -176,7 +176,7 @@
             </div>
 
             <!-- Desktop Sidebar Footer -->
-            <div class="p-4 border-t border-[var(--md-outline-variant)] text-xs text-[var(--md-on-surface-variant)]" role="contentinfo" :class="{ 'text-center': isDesktopCollapsed }">
+            <div class="p-4 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] text-xs text-[var(--md-on-surface-variant)]" role="contentinfo" :class="{ 'text-center': isDesktopCollapsed }">
                 <span v-if="!isDesktopCollapsed">OR3 v{{ appVersion }}</span>
                 <span v-else>v{{ appVersion }}</span>
             </div>
@@ -192,7 +192,7 @@
             <!-- Workspace Indicator Banner -->
             <div
                 v-if="showWorkspaceContext && selectedWorkspace"
-                class="sticky top-0 z-10 px-4 sm:px-6 lg:px-8 py-3 bg-[var(--md-surface-container-low)] border-b border-[var(--md-outline-variant)]"
+                class="sticky top-0 z-10 px-4 sm:px-6 lg:px-8 py-3 bg-[var(--md-surface-container-low)] border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)]"
             >
                 <div class="max-w-5xl mx-auto flex items-center justify-between">
                     <div class="flex items-center gap-3">

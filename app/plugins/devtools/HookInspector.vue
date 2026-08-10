@@ -47,7 +47,7 @@
 
         <!-- Documentation Link -->
         <div
-            class="p-3 rounded-md border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)]"
+            class="p-3 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)]"
         >
             <div class="flex items-start gap-2">
                 <UIcon
@@ -74,7 +74,7 @@
         <!-- Summary Cards -->
         <div class="grid sm:grid-cols-3 gap-4">
             <div
-                class="p-4 rounded-md border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+                class="p-4 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
             >
                 <div class="text-xs opacity-60 mb-1">Total Actions</div>
                 <div class="text-2xl font-bold tracking-tight">
@@ -82,7 +82,7 @@
                 </div>
             </div>
             <div
-                class="p-4 rounded-md border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+                class="p-4 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
             >
                 <div class="text-xs opacity-60 mb-1">Total Filters</div>
                 <div class="text-2xl font-bold tracking-tight">
@@ -90,7 +90,7 @@
                 </div>
             </div>
             <div
-                class="p-4 rounded-md border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+                class="p-4 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
             >
                 <div class="text-xs opacity-60 mb-1">Total Errors</div>
                 <div
@@ -104,17 +104,17 @@
 
         <!-- Hook Details Table -->
         <div
-            class="rounded-md border border-[var(--md-outline-variant)] overflow-hidden"
+            class="rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] overflow-hidden"
         >
             <div
-                class="bg-[var(--md-surface-container-high)] px-4 py-2 border-b border-[var(--md-outline-variant)]"
+                class="bg-[var(--md-surface-container-high)] px-4 py-2 border-b-[length:var(--md-border-width-subtle)] border-[var(--md-outline-variant)]"
             >
                 <h3 class="text-sm font-semibold">Hook Details</h3>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead
-                        class="bg-[var(--md-surface-container)] border-b border-[var(--md-outline-variant)]"
+                        class="bg-[var(--md-surface-container)] border-b-[length:var(--md-border-width-subtle)] border-[var(--md-outline-variant)]"
                     >
                         <tr>
                             <th
@@ -153,7 +153,7 @@
                         <tr
                             v-for="hook in hookDetails"
                             :key="hook.name"
-                            class="border-b border-[var(--md-outline-variant)] hover:bg-[var(--md-surface-container-low)]"
+                            class="border-b-[length:var(--md-border-width-subtle)] border-[var(--md-outline-variant)] hover:bg-[var(--md-surface-container-low)]"
                         >
                             <td class="px-4 py-2 font-mono text-xs">
                                 {{ hook.name }}

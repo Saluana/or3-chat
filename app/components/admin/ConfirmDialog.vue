@@ -7,7 +7,7 @@
 
             <div
                 v-if="importantNote"
-                class="mt-3 rounded-md border px-3 py-2 text-xs"
+                class="mt-3 rounded-[var(--md-border-radius-small,0.375rem)] border-[length:var(--md-border-width)] px-3 py-2 text-xs"
                 :class="
                     noteTone === 'warning'
                         ? 'border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)]'

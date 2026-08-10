@@ -215,15 +215,15 @@ const storageProviders = computed(() => listImplementedProviders('storage'));
 
 function providerCardClass(selectedId: string, currentId: string): string {
     if (selectedId === currentId) {
-        return 'border-[var(--md-primary)] bg-[var(--md-primary)]/8';
+        return 'border-[length:var(--md-border-width-strong)] border-[var(--md-primary)] bg-[var(--md-primary)]/8';
     }
-    return 'border-[color:var(--md-border-color)] bg-[var(--md-surface)] hover:bg-[var(--md-inverse-surface)]/6';
+    return 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] hover:bg-[var(--md-inverse-surface)]/6';
 }
 </script>
 
 <style scoped>
 .provider-card {
-    border-width: 1px;
+    border-width: var(--md-border-width);
     border-radius: var(--md-border-radius);
     padding: 12px;
     transition: background-color 0.15s ease, border-color 0.15s ease;

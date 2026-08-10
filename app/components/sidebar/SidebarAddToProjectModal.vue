@@ -9,14 +9,14 @@
             <div class="space-y-4">
                 <div class="flex gap-2 text-xs font-mono">
                     <button
-                        class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
+                        class="theme-btn px-2 py-1 rounded-[var(--md-border-radius-small,4px)] border-[var(--md-border-width)]"
                         :class="mode === 'select' ? 'bg-primary/30' : 'opacity-70'"
                         @click="emit('update:mode', 'select')"
                     >
                         Select Existing
                     </button>
                     <button
-                        class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
+                        class="theme-btn px-2 py-1 rounded-[var(--md-border-radius-small,4px)] border-[var(--md-border-width)]"
                         :class="mode === 'create' ? 'bg-primary/30' : 'opacity-70'"
                         @click="emit('update:mode', 'create')"
                     >
@@ -70,7 +70,7 @@
                             :model-value="newProjectDescription"
                             :rows="3"
                             placeholder="Optional description"
-                            class="w-full border-[var(--md-border-width)] rounded-[6px]"
+                            class="w-full border-[var(--md-border-width)] rounded-[var(--md-border-radius-small,6px)]"
                             @update:model-value="
                                 emit('update:newProjectDescription', String($event ?? ''))
                             "

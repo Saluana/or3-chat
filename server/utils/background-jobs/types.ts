@@ -46,6 +46,8 @@ export interface BackgroundJob {
     chunksReceived: number;
     /** Unix timestamp when job started */
     startedAt: number;
+    /** Unix timestamp of the most recent streaming progress update. */
+    lastActivityAt?: number;
     /** Unix timestamp when job completed, failed, or aborted */
     completedAt?: number;
     /** Error message when status is `error` */

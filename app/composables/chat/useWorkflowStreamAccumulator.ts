@@ -42,7 +42,7 @@
  * **Event → State Mapping Invariants**
  * - `nodeStart` → creates NodeState, adds to executionOrder, sets currentNodeId
  * - `nodeToken` → appends to node.streamingText (batched via RAF)
- * - `nodeReasoning` → appends to node.reasoning (batched via RAF)
+ * - `nodeReasoning` → marks the node as thinking without exposing raw model reasoning
  * - `nodeFinish` → sets node.output, moves streamingText to output, marks complete
  * - `nodeError` → sets node.error, failedNodeId, executionState = 'failed'
  * - `branchStart` → creates BranchState under `nodeId:branchId` key
@@ -517,6 +517,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             if (!node) continue;
 
             node.streamingText = (node.streamingText || '') + tokens.join('');
+            node.activity = undefined;
             // Update token count estimate (rough approximation)
             node.tokenCount = (node.tokenCount || 0) + tokens.length;
             touchedStates.add(targetState);
@@ -627,9 +628,15 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
     }
 
     function nodeReasoning(nodeId: string, token: string) {
-        // Reasoning tokens treated same as regular tokens for now
-        // Could be extended to track separately per-node if needed
-        nodeToken(nodeId, token);
+        if (finalized || !token) return;
+
+        // Surface the lifecycle without displaying private model reasoning.
+        const { targetState, nodeId: localNodeId } =
+            resolveScopedTarget(nodeId);
+        const node = targetState.nodeStates[localNodeId];
+        if (!node || node.streamingText) return;
+        node.activity = 'thinking';
+        touchState(targetState);
     }
 
     function nodeFinish(nodeId: string, output: string) {
@@ -653,6 +660,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         node.status = 'completed';
         node.output = output;
         node.streamingText = undefined; // Clear streaming buffer
+        node.activity = undefined;
         node.finishedAt = Date.now();
 
         if (targetState.currentNodeId === localNodeId) {

@@ -5,7 +5,7 @@
         <div
             role="button"
             tabindex="0"
-            class="project-child-toggle relative group w-full flex items-center h-full px-3 gap-2 rounded-[var(--md-border-radius)] transition-colors duration-200 cursor-pointer"
+            class="project-child-toggle relative group w-full flex items-center h-full px-3 gap-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] transition-colors duration-200 cursor-pointer"
             :class="{ 
                 'bg-[color:var(--md-primary)]/12 text-[color:var(--md-primary)]': active,
                 'hover:bg-[var(--md-surface-hover)] text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-on-surface)]': !active
@@ -37,7 +37,7 @@
                     }"
                 >
                     <button
-                        class="project-child-actions-menu inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius)] cursor-pointer text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
+                        class="project-child-actions-menu inline-flex items-center justify-center w-6 h-6 rounded-[var(--md-border-radius-small,var(--md-border-radius))] cursor-pointer text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-primary)] hover:bg-[color:var(--md-primary)]/10 active:bg-[color:var(--md-primary)]/20"
                         @click.stop
                         @keydown="handlePopoverTriggerKey"
                         aria-label="Entry actions"

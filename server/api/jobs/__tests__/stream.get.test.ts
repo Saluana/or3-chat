@@ -90,9 +90,26 @@ describe('serializeJobStatus', () => {
     });
 });
 
+describe('workflow-only progress', () => {
+    it('detects a newer workflow state without requiring content growth', () => {
+        expect(
+            streamModule.hasWorkflowStateAdvanced(4, {
+                ...baseJob.workflow_state!,
+                version: 5,
+            })
+        ).toBe(true);
+        expect(
+            streamModule.hasWorkflowStateAdvanced(5, {
+                ...baseJob.workflow_state!,
+                version: 5,
+            })
+        ).toBe(false);
+    });
+});
+
 describe('SSE viewer queue performance gate', () => {
-    it('caps every viewer at 256 KiB and rejects the first overflowing event', () => {
-        expect(streamModule.MAX_SSE_VIEWER_QUEUE_BYTES).toBe(256 * 1024);
+    it('caps every viewer at 1 MiB and rejects the first overflowing event', () => {
+        expect(streamModule.MAX_SSE_VIEWER_QUEUE_BYTES).toBe(1024 * 1024);
         expect(streamModule.hasSseQueueCapacity(1024, 1024)).toBe(true);
         expect(streamModule.hasSseQueueCapacity(1023, 1024)).toBe(false);
         expect(streamModule.hasSseQueueCapacity(null, 1024)).toBe(true);

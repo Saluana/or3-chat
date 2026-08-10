@@ -27,7 +27,7 @@
 
         <template v-if="field.type === 'boolean'">
             <div
-                class="rounded-[var(--md-border-radius)] border border-[color:var(--md-border-color)] bg-[var(--md-surface)] px-3 py-2.5"
+                class="rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] px-3 py-2.5"
                 :class="errorClass"
             >
                 <UCheckbox

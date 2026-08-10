@@ -9,7 +9,7 @@
                 </p>
                 <div
                     v-if="codeTrustWarning"
-                    class="p-3 rounded border border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)]"
+                    class="p-3 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-sys-color-warning,#f59e0b)] bg-[var(--md-sys-color-warning-container,#fef3c7)] text-[var(--md-sys-color-on-warning-container,#92400e)]"
                 >
                     <div class="text-xs font-semibold">Trusted code warning</div>
                     <div class="text-xs opacity-80 mt-1">

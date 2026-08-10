@@ -23,7 +23,7 @@
                         <button
                             v-else-if="!isMobile"
                             type="button"
-                            class="inline-flex items-center justify-center h-5 px-1.5 rounded-md border border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)] text-[10px] leading-none font-medium text-[color:var(--md-on-surface-variant)] select-none font-[system-ui,ui-sans-serif,sans-serif] transition-colors hover:border-[color:var(--md-primary)] hover:text-[color:var(--md-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--md-primary)]/40"
+                            class="inline-flex items-center justify-center h-5 px-1.5 rounded-[var(--md-border-radius-small,0.375rem)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)] text-[10px] leading-none font-medium text-[color:var(--md-on-surface-variant)] select-none font-[system-ui,ui-sans-serif,sans-serif] transition-colors hover:border-[color:var(--md-primary)] hover:text-[color:var(--md-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--md-primary)]/40"
                             :title="`Search everything (${searchShortcutLabel})`"
                             aria-label="Open command palette"
                             @click="openCommandPalette"
@@ -206,7 +206,7 @@ const searchInputProps = computed(() => {
     // Merge theme UI with component-specific UI
     const themeUi = (searchInputOverrides.value as any)?.ui || {};
     const componentUi = {
-        base: 'rounded-xl border border-[color:var(--md-border-color)] bg-[color:var(--md-surface)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] placeholder:text-[color:var(--md-on-surface-variant)]/70 focus:border-[color:var(--md-primary)]/35 focus:ring-2 focus:ring-[color:var(--md-primary)]/10',
+        base: 'rounded-[var(--md-border-radius-small,var(--md-border-radius,0.75rem))] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[color:var(--md-surface)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] placeholder:text-[color:var(--md-on-surface-variant)]/70 focus:border-[color:var(--md-primary)]/35 focus:ring-2 focus:ring-[color:var(--md-primary)]/10',
         trailing: 'pr-1.5 gap-0',
     };
     const mergedUi = { ...componentUi, ...themeUi };

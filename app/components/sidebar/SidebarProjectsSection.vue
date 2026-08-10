@@ -80,11 +80,11 @@
                 </div>
                 <div
                     v-else
-                    class="mx-1 rounded-xl border border-dashed border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)]/35 px-3 py-3.5 project-empty-state"
+                    class="mx-1 rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-dashed border-[color:var(--md-border-color)] bg-[color:var(--md-surface-variant)]/35 px-3 py-3.5 project-empty-state"
                 >
                     <div class="flex items-start gap-3">
                         <div
-                            class="project-empty-icon shrink-0 w-9 h-9 rounded-lg border border-dashed border-[color:var(--md-border-color)] bg-[color:var(--md-surface)] flex items-center justify-center text-[color:var(--md-on-surface-variant)]"
+                            class="project-empty-icon shrink-0 w-9 h-9 rounded-[var(--md-border-radius-small,0.5rem)] border-[length:var(--md-border-width)] border-dashed border-[color:var(--md-border-color)] bg-[color:var(--md-surface)] flex items-center justify-center text-[color:var(--md-on-surface-variant)]"
                         >
                             <UIcon :name="iconPlus" class="w-4 h-4" />
                         </div>

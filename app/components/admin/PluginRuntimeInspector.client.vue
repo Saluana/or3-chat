@@ -1,6 +1,6 @@
 <template>
     <section
-        class="space-y-4 rounded-[var(--md-sys-shape-corner-medium,12px)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-4"
+        class="space-y-4 rounded-[var(--md-border-radius,var(--md-sys-shape-corner-medium,12px))] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-4"
     >
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -17,19 +17,19 @@
         </div>
 
         <div class="grid gap-2 text-xs sm:grid-cols-3">
-            <div class="rounded border border-[var(--md-outline-variant)] p-3">
+            <div class="rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] p-3">
                 <div class="font-semibold">This client</div>
                 <div class="mt-1 opacity-75">
                     {{ records.length }} observed active generation(s)
                 </div>
             </div>
-            <div class="rounded border border-[var(--md-outline-variant)] p-3">
+            <div class="rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] p-3">
                 <div class="font-semibold">This server process</div>
                 <div class="mt-1 opacity-75">
                     Not observed by this client-only shadow manager
                 </div>
             </div>
-            <div class="rounded border border-[var(--md-outline-variant)] p-3">
+            <div class="rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] p-3">
                 <div class="font-semibold">Persisted package state</div>
                 <div class="mt-1 opacity-75">
                     Disable/rollback require server package lifecycle/promotion
@@ -113,7 +113,7 @@
 
         <details
             v-if="managerV2Enabled"
-            class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
+            class="rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] p-3 text-xs"
         >
             <summary class="cursor-pointer font-medium">
                 Manager-canary records ({{ managerV2Records.length }})
@@ -122,7 +122,7 @@
                 <div
                     v-for="record in managerV2Records"
                     :key="`${record.descriptor.id}:${record.generation}:${record.updatedAt}`"
-                    class="rounded bg-[var(--md-surface-container-low)] p-2"
+                    class="rounded-[var(--md-border-radius-small)] bg-[var(--md-surface-container-low)] p-2"
                 >
                     <div class="font-medium">
                         {{ record.descriptor.id }} · {{ record.status }} ·
@@ -155,7 +155,7 @@
             <details
                 v-for="record in records"
                 :key="`${record.descriptor.id}:${record.generation}`"
-                class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
+                class="rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] p-3 text-xs"
             >
                 <summary class="cursor-pointer font-medium">
                     {{ record.descriptor.id }} · generation
@@ -214,13 +214,13 @@
         </div>
         <p
             v-else
-            class="rounded border border-dashed border-[var(--md-outline-variant)] p-3 text-xs opacity-70"
+            class="rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-dashed border-[var(--md-outline-variant)] p-3 text-xs opacity-70"
         >
             No active V1 generation has been observed in this client.
         </p>
 
         <details
-            class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
+            class="rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] p-3 text-xs"
             open
         >
             <summary class="cursor-pointer font-medium">
@@ -234,7 +234,7 @@
                 <div
                     v-for="control in controls"
                     :key="control.id"
-                    class="rounded bg-[var(--md-surface-container-low)] p-2"
+                    class="rounded-[var(--md-border-radius-small)] bg-[var(--md-surface-container-low)] p-2"
                 >
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div>
@@ -271,7 +271,7 @@
             </div>
             <p
                 v-if="controlMessage"
-                class="mt-3 rounded border border-[var(--md-outline-variant)] p-2"
+                class="mt-3 rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] p-2"
                 :class="
                     controlMessage.status === 'failed'
                         ? 'text-[var(--md-error)]'
@@ -292,7 +292,7 @@
         </details>
 
         <details
-            class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
+            class="rounded-[var(--md-border-radius-small)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] p-3 text-xs"
         >
             <summary class="cursor-pointer font-medium">
                 Shadow divergences ({{ divergences.length }})
@@ -301,7 +301,7 @@
                 <div
                     v-for="item in divergences"
                     :key="item.sequence"
-                    class="rounded bg-[var(--md-surface-container-low)] p-2 font-mono"
+                    class="rounded-[var(--md-border-radius-small)] bg-[var(--md-surface-container-low)] p-2 font-mono"
                 >
                     #{{ item.sequence }} {{ item.kind }} · desired={{
                         item.desiredPluginId ?? '—'

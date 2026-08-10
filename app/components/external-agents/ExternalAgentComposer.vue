@@ -39,12 +39,12 @@
       >
         <template #content>
           <div
-            class="flex max-h-[min(28rem,60dvh)] w-[min(30rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] shadow-xl"
+            class="flex max-h-[min(28rem,60dvh)] w-[min(30rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface)] shadow-xl"
             role="listbox"
             aria-label="Available agent commands"
           >
             <div
-              class="border-b border-[var(--md-outline-variant)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--md-on-surface-variant)]"
+              class="border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--md-on-surface-variant)]"
             >
               Agent commands
             </div>
@@ -65,7 +65,7 @@
                 @mousedown.prevent="selectCommand(command)"
               >
                 <span
-                  class="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--md-surface-container-high)] font-mono text-sm font-semibold text-[var(--md-primary)]"
+                  class="grid size-8 shrink-0 place-items-center rounded-[var(--md-border-radius-small)] bg-[var(--md-surface-container-high)] font-mono text-sm font-semibold text-[var(--md-primary)]"
                   >/</span
                 >
                 <span class="min-w-0 flex-1">
@@ -82,7 +82,7 @@
               </button>
             </div>
             <div
-              class="hidden items-center gap-4 border-t border-[var(--md-outline-variant)] px-3 py-2 text-[11px] text-[var(--md-on-surface-variant)] md:flex"
+              class="hidden items-center gap-4 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] px-3 py-2 text-[11px] text-[var(--md-on-surface-variant)] md:flex"
             >
               <span><kbd>↑↓</kbd> navigate</span>
               <span><kbd>↵</kbd> select</span>
@@ -100,17 +100,17 @@
         <article
           v-for="attachment in attachments"
           :key="attachment.id"
-          class="group relative flex min-w-0 max-w-56 shrink-0 items-center gap-2 rounded-[calc(var(--md-border-radius)*0.8)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] py-1.5 pl-1.5 pr-8"
+          class="group relative flex min-w-0 max-w-56 shrink-0 items-center gap-2 rounded-[var(--md-border-radius-small,calc(var(--md-border-radius)*0.8))] border-[length:var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] py-1.5 pl-1.5 pr-8"
         >
           <img
             v-if="attachment.previewUrl"
             :src="attachment.previewUrl"
             :alt="attachment.name"
-            class="size-9 shrink-0 rounded-[calc(var(--md-border-radius)*0.55)] object-cover"
+            class="size-9 shrink-0 rounded-[var(--md-border-radius-small,calc(var(--md-border-radius)*0.55))] object-cover"
           />
           <span
             v-else
-            class="grid size-9 shrink-0 place-items-center rounded-[calc(var(--md-border-radius)*0.55)] bg-[var(--md-surface-container-high)]"
+            class="grid size-9 shrink-0 place-items-center rounded-[var(--md-border-radius-small,calc(var(--md-border-radius)*0.55))] bg-[var(--md-surface-container-high)]"
           >
             <UIcon
               :name="attachmentIcon(attachment)"
