@@ -63,6 +63,7 @@
         </button>
       </div>
       <div
+        v-if="!collapsed && props.workflowState.executionState !== 'completed'"
         class="run-progress"
         role="progressbar"
         :aria-valuenow="progressPercent"

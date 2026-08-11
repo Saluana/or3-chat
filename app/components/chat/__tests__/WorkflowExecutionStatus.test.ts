@@ -145,6 +145,7 @@ describe("WorkflowExecutionStatus", () => {
     );
     expect(wrapper.find(".timeline-label").exists()).toBe(true);
     expect(wrapper.text()).toContain(longLabel);
+    expect(wrapper.find(".run-progress").exists()).toBe(false);
     expect(
       wrapper.find(".timeline-divider-toggle").attributes("aria-label"),
     ).toBe("Collapse run timeline");
@@ -174,12 +175,15 @@ describe("WorkflowExecutionStatus", () => {
     });
 
     expect(wrapper.find(".node-item").exists()).toBe(true);
+    expect(wrapper.find(".run-progress").exists()).toBe(true);
 
     await wrapper.find(".run-collapse-button").trigger("click");
     expect(wrapper.find(".node-item").exists()).toBe(false);
+    expect(wrapper.find(".run-progress").exists()).toBe(false);
 
     await wrapper.find(".run-collapse-button").trigger("click");
     expect(wrapper.find(".node-item").exists()).toBe(true);
+    expect(wrapper.find(".run-progress").exists()).toBe(true);
   });
 
   it("collapses the timeline without hiding the focused inspector", async () => {

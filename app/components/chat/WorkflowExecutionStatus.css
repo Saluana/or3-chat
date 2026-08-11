@@ -27,7 +27,7 @@
 }
 
 .run-header {
-  background: var(--md-surface-container-low);
+  background: var(--md-surface-container-lowest);
   border-bottom: var(--md-border-width-subtle, var(--md-border-width)) solid
     var(--workflow-run-separator);
 }
@@ -198,12 +198,12 @@
 .run-progress span {
   display: block;
   height: 100%;
-  background: var(--md-primary);
+  background: color-mix(in srgb, var(--md-primary) 58%, transparent);
   transition: width 240ms ease;
 }
 
 .workflow-run[data-state="running"] .run-progress span {
-  background: var(--md-primary);
+  background: color-mix(in srgb, var(--md-primary) 72%, transparent);
 }
 
 .run-body {
