@@ -162,7 +162,7 @@ function main() {
   for (const required of [
     'npx @or3/cloud init --local',
     'npx @or3/cloud init --public --domain cloud.example.com',
-    'npx @or3/connect intern',
+    'npx @or3/connect@0.1.3 intern',
     'Remote Connect is **withheld',
   ]) {
     if (!start.includes(required)) errors.push(`docs/start-here.md: missing canonical route ${required}`);

@@ -33,17 +33,15 @@ backup, restore, rollback, and safe removal guidance.
 
 ## I want a local Intern computer
 
-The intended one-command bootstrap is below. It is usable only after the
-matching `@or3/connect` package and verified Intern release assets are
-published; check the [Connect release status](https://github.com/Saluana/or3-intern/blob/main/docs/connect-release-status.md)
-first. The current registry package predates this command, so do not
-silently substitute the older package:
+The supported one-command bootstrap uses the coordinated package and verified
+Intern release assets. Pin the published version so a copied command cannot
+silently select a different release; see the [Connect release status](https://github.com/Saluana/or3-intern/blob/main/docs/connect-release-status.md):
 
 ```bash
-npx @or3/connect intern
+npx @or3/connect@0.1.3 intern
 ```
 
-When published, this opens the guided local `or3-intern` setup. It stays on the computer until
+This opens the guided local `or3-intern` setup. It stays on the computer until
 you explicitly add it to an OR3 Chat instance through the advanced local-host
 connection settings. See the [Intern getting-started guide](https://github.com/Saluana/or3-intern/blob/main/docs/getting-started.md)
 for the local runtime and runner steps.
@@ -56,7 +54,7 @@ Cloudflare/domain/attestation flow has not completed its staging proof. An
 administrator must finish that operator flow before remote Connect can be
 enabled. Do not paste a generic URL or token as a workaround.
 
-Local Intern remains the intended path once its matching release is available.
+Local Intern remains the supported path.
 For source-only Connect development, use the
 [advanced Connect reference](../public/_documentation/cloud/or3-connect.md)
 and treat its environment settings as operator documentation, not a beginner

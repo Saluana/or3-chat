@@ -63,11 +63,16 @@ themes is disabled in the immutable image because it cannot rebuild trusted
 source; bundled extensions remain available.
 
 Remote OR3 Connect is withheld from the managed Cloud release until its
-Cloudflare/domain staging flow is proved. The intended local Intern command is
-`npx @or3/connect intern`, but it is usable only after the matching package and
-verified release assets are published; see the [Connect release status](https://github.com/Saluana/or3-intern/blob/main/docs/connect-release-status.md).
-Do not substitute the older package or paste a generic remote URL/token as a
-workaround. The [Start Here guide](https://github.com/Saluana/or3-chat/blob/main/docs/start-here.md)
+Cloudflare/domain staging flow is proved. Local Intern is independently
+supported through the coordinated published release:
+
+```sh
+npx @or3/connect@0.1.3 intern
+```
+
+See the [Connect release status](https://github.com/Saluana/or3-intern/blob/main/docs/connect-release-status.md).
+Do not substitute a bare package command or paste a generic remote URL/token as
+a workaround. The [Start Here guide](https://github.com/Saluana/or3-chat/blob/main/docs/start-here.md)
 routes each supported setup path.
 
 ## More help

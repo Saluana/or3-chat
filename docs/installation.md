@@ -259,14 +259,15 @@ Remote OR3 Connect is withheld from this managed Cloud release. The
 Cloudflare/domain/attestation operator flow and a disposable staging lifecycle
 must pass before the production UI or beginner docs can offer it. Do not run a
 generic `npx @or3/connect` command against a managed Cloud instance and do not
-paste a URL/token workaround. To use an agent locally, run
-`npx @or3/connect intern` on that computer once the matching package and
-verified Intern release assets are published (see the [Connect release
-status](https://github.com/Saluana/or3-intern/blob/main/docs/connect-release-status.md)).
-Until then, do not substitute the older registry package; use the source
-development path for Intern work. Add the resulting local Intern host through
-Agents → Connection settings. The advanced source/operator reference is
-[OR3 Connect](../public/_documentation/cloud/or3-connect.md).
+paste a URL/token workaround. To use an agent locally, run the coordinated
+published release on that computer (see the [Connect release status](https://github.com/Saluana/or3-intern/blob/main/docs/connect-release-status.md)):
+
+```bash
+npx @or3/connect@0.1.3 intern
+```
+
+Add the resulting local Intern host through Agents → Connection settings. The
+advanced source/operator reference is [OR3 Connect](../public/_documentation/cloud/or3-connect.md).
 
 ## Troubleshooting
 

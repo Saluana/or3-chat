@@ -1199,7 +1199,7 @@
                     "name": "or3-connect.md",
                     "path": "/cloud/or3-connect",
                     "category": "Guide",
-                    "summary": "Managed Cloud status: withheld. Remote Connect is not part of the supported managed Cloud launch. Its Cloudflare/domain/attestation flow and a disposable staging lifecycle must pass before the production UI or beginner"
+                    "summary": "Managed Cloud status: withheld. Remote Connect is not part of the supported managed Cloud launch. Local Intern is independently available through the pinned @or3/connect@0.1.3 bootstrap."
                 },
                 {
                     "name": "plugin-access-gating.md",

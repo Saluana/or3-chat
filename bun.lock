@@ -8,7 +8,7 @@
         "@noble/hashes": "^2.2.0",
         "@nuxt/ui": "4.10.0",
         "@openrouter/sdk": "^1.1.6",
-        "@or3/intern-client": "0.1.1",
+        "@or3/intern-client": "0.1.3",
         "@or3/plugin-sdk": "file:./packages/plugin-sdk",
         "@orama/orama": "^3.1.16",
         "@tiptap/core": "^3.28.0",
@@ -33,12 +33,12 @@
         "katex": "^0.16.47",
         "lru-cache": "^11.5.2",
         "nuxt": "4.5.1",
-        "or3-provider-basic-auth": "0.0.8",
-        "or3-provider-clerk": "0.0.4",
+        "or3-provider-basic-auth": "0.0.9",
+        "or3-provider-clerk": "0.0.6",
         "or3-provider-convex": "0.0.6",
         "or3-provider-fs": "0.0.4",
         "or3-provider-s3": "0.0.4",
-        "or3-provider-sqlite": "0.0.8",
+        "or3-provider-sqlite": "0.0.9",
         "or3-scroll": "0.1.1",
         "or3-workflow-core": "0.1.4",
         "or3-workflow-vue": "0.1.6",
@@ -636,7 +636,7 @@
 
     "@openrouter/sdk": ["@openrouter/sdk@1.1.7", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-R8BzrhQow3WcwFHoeChG64E1hg5pHDyAaWL9cR84G4A4Xkn4wRtjjWdTIbyXabFXIRo3D2j5jqrL2bt5BZplXA=="],
 
-    "@or3/intern-client": ["@or3/intern-client@0.1.1", "", {}, "sha512-uJJLs2waX5VU3osxNEE29W0oqEtbPdXW0XS1GoSOrxARsqgaWQa9Z5ZCcDqjcruZ5uG898I5YaoEi4sn+sw29g=="],
+    "@or3/intern-client": ["@or3/intern-client@0.1.3", "", {}, "sha512-+QS3Pfzz+cJMMJfNMcpHVif0KLQUct2yLNShRmEslOPuxyKVBwRNDNnn+wXiSG5jt2RdYlS4r9oaKv+LykP98A=="],
 
     "@or3/plugin-sdk": ["@or3/plugin-sdk@file:packages/plugin-sdk", { "devDependencies": { "typescript": "^5.9.3" } }],
 
@@ -2420,9 +2420,9 @@
 
     "optionator": ["optionator@0.9.4", "", { "dependencies": { "deep-is": "^0.1.3", "fast-levenshtein": "^2.0.6", "levn": "^0.4.1", "prelude-ls": "^1.2.1", "type-check": "^0.4.0", "word-wrap": "^1.2.5" } }, "sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g=="],
 
-    "or3-provider-basic-auth": ["or3-provider-basic-auth@0.0.8", "", { "dependencies": { "bcryptjs": "^3.0.3", "better-sqlite3": "^13.0.3", "jsonwebtoken": "^9.0.2", "zod": "^4.1.12" }, "peerDependencies": { "@nuxt/kit": "^3.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-X3JDlxUwhYWOfEbd/eUpE07JudgnPF1GuF+w9dBH5YOwQt5ZubmzBtkOV2fab9bL+N8h/Xk24f8oozPp4XUkrQ=="],
+    "or3-provider-basic-auth": ["or3-provider-basic-auth@0.0.9", "", { "dependencies": { "bcryptjs": "^3.0.3", "better-sqlite3": "^13.0.3", "jsonwebtoken": "^9.0.2", "zod": "^4.1.12" }, "peerDependencies": { "@nuxt/kit": "^3.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-oXp4qFN0Hg/6Ir5Briwmcy5BaK4bo5JWxohsGwzy+sZ6CNy9ZWrEHDu7fVxziOzIgrWdjDv8hk9NibNz+yTZyQ=="],
 
-    "or3-provider-clerk": ["or3-provider-clerk@0.0.4", "", { "dependencies": { "@clerk/nuxt": "^1.13.12" }, "peerDependencies": { "@nuxt/kit": "^3.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-iYBuzwJi5e+KBKMNoyCN7BjJTnDTl0Du4bTCaxSqtrDKprjCQ2qN3iHc/FzqXmXFAZSW7YSQscwwYMrTnDCGYQ=="],
+    "or3-provider-clerk": ["or3-provider-clerk@0.0.6", "", { "dependencies": { "@clerk/nuxt": "^1.13.12" }, "peerDependencies": { "@nuxt/kit": "^3.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-0onSRVVlWoo4h9gatk2C2c+knamKQT/2N7TvyF+UtcvyVlCYR2yllsdbV1qyhLOUvFimIJhq2oHynaDC6kSTHA=="],
 
     "or3-provider-convex": ["or3-provider-convex@0.0.6", "", { "dependencies": { "convex": "^1.31.3", "convex-nuxt": "0.1.5", "convex-vue": "^0.1.4" }, "peerDependencies": { "@nuxt/kit": "^3.0.0", "nuxt": "^3.0.0 || ^4.0.0", "zod": "^3.0.0 || ^4.0.0" }, "bin": { "or3-provider-convex": "scripts/init.mjs" } }, "sha512-nDxoWiTGRAQeFyiguM5Am2aNA0k3yxkTj28EQ4f+xkwv4jwCpdNHek4lNxUW/NPUlce0SwcQfkCOE+eAS/hE5A=="],
 
@@ -2430,7 +2430,7 @@
 
     "or3-provider-s3": ["or3-provider-s3@0.0.4", "", { "dependencies": { "@aws-sdk/client-s3": "^3.888.0", "@aws-sdk/s3-request-presigner": "^3.888.0" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-J48LpVLKdLkGvINugC3mLVu6y5oMEpxGYRFRcgc+sRD5q6N3SpPmJXOqCp/1PXeodarCEfDAHkjSvaYggMJs/A=="],
 
-    "or3-provider-sqlite": ["or3-provider-sqlite@0.0.8", "", { "dependencies": { "kysely": "^0.28.11" }, "optionalDependencies": { "better-sqlite3": "^13.0.3", "libsql": "^0.5.29" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-jyC5+hCysEF6z4d5l+hg0gmpIUs9JSikmwcVtIA2en8AcQxCt9XD2vDo2snW1wSPDMJ879AlNGT+8GcziMEKVQ=="],
+    "or3-provider-sqlite": ["or3-provider-sqlite@0.0.9", "", { "dependencies": { "kysely": "^0.28.11" }, "optionalDependencies": { "better-sqlite3": "^13.0.3", "libsql": "^0.5.29" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-+kzb1KhNgiXyqBtRXy1YS88vojrayka8b+q8mBi+F+BGlMDgvZYd+1WilTdGrEBYsDRpzcNN+Cx5RhQoiKoTAw=="],
 
     "or3-scroll": ["or3-scroll@0.1.1", "", { "peerDependencies": { "vue": "^3.3.0" } }, "sha512-PDuzKi6qGhsKEe+3uctlxXjLTelmr6arOVCY86PMa18Ah1k4Cmu6Vo0yaC9ANyertM1K9s+ZHkjVGBNS80bwLg=="],
 

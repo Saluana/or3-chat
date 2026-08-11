@@ -7,14 +7,16 @@
 
 Do not run a generic `npx @or3/connect` command against a managed Cloud
 instance, and do not paste a URL or token as a workaround. For a local agent
-computer, use the independently supported local Intern bootstrap once its
-matching package and verified release assets are published. Check [Connect
-release status](https://github.com/Saluana/or3-intern/blob/main/docs/connect-release-status.md)
-first; the current registry package predates this command:
+computer, use the coordinated published package and verified release assets.
+Pin the exact version and check [Connect release status](https://github.com/Saluana/or3-intern/blob/main/docs/connect-release-status.md)
+before adopting a newer release:
 
 ```bash
-npx @or3/connect intern
+npx @or3/connect@0.1.3 intern
 ```
+
+The command installs the local Intern CLI and opens its guided setup without
+enabling managed remote Connect.
 
 The remainder of this page is an advanced source/operator reference for a
 future or explicitly configured Connect deployment. It is not a managed Cloud
