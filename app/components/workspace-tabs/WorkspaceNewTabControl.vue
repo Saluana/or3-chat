@@ -253,8 +253,8 @@ watch(menu, async (value) => {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: var(--or3-workspace-tab-height, 32px);
+    height: var(--or3-workspace-tab-height, 32px);
     margin: 0;
     padding: 0;
     border: var(--md-border-width, 1px) solid
@@ -298,8 +298,9 @@ watch(menu, async (value) => {
     background: var(--md-surface-hover);
 }
 .workspace-tab-context button:focus-visible {
-    outline: var(--md-border-width, 2px) solid var(--md-primary);
-    outline-offset: -2px;
+    outline: var(--app-focus-ring-width, var(--md-border-width, 2px)) solid
+        var(--md-focus-ring, var(--md-primary));
+    outline-offset: calc(-1 * var(--app-focus-ring-width, 2px));
     background: var(--md-surface-hover);
 }
 .workspace-new-tab-menu-icon {

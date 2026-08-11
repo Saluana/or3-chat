@@ -10,7 +10,7 @@ export default defineAppConfig({
                 // Make base styles clearly different so it's obvious when applied
                 base: [
                     'rounded-full font-bold inline-flex items-center disabled:cursor-not-allowed aria-disabled:cursor-not-allowed disabled:opacity-75 aria-disabled:opacity-75',
-                    'transition-colors',
+                    'transition-[color,background-color,border-color,box-shadow,transform] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)]',
                     'border border-black',
                 ],
                 // Label tweaks are rarely overridden by variants, good to verify
@@ -24,7 +24,7 @@ export default defineAppConfig({
             variants: {
                 size: {
                     md: {
-                        base: 'px-6 py-3 gap-3',
+                        base: 'min-h-[var(--app-control-height-medium,36px)] px-6 py-3 gap-[var(--app-space-control,0.75rem)]',
                     },
                 },
             },

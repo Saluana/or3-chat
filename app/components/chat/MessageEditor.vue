@@ -142,6 +142,11 @@ watch(
     outline: none;
     font: inherit;
 }
+.message-editor-container:focus-within {
+    outline: var(--app-focus-ring-width, 2px) solid
+        var(--md-focus-ring, var(--md-primary));
+    outline-offset: var(--app-focus-ring-offset, 2px);
+}
 .tiptap-editor :deep(p) {
     margin: 0 0 0.5rem;
 }
@@ -155,7 +160,8 @@ watch(
 }
 .fade-in {
     opacity: 0;
-    animation: fadeInEditor 0.14s ease-out forwards;
+    animation: fadeInEditor var(--app-motion-duration-fast, 0.14s)
+        var(--app-motion-easing-standard, ease-out) forwards;
 }
 @keyframes fadeInEditor {
     to {

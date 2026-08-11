@@ -22,6 +22,28 @@ export default defineTheme({
     borderWidth: '1px',
     borderWidthStrong: '0px',
     borderRadius: '10px',
+    density: {
+        controlHeightSmall: '32px',
+        controlHeightMedium: '36px',
+        controlHeightLarge: '44px',
+        spaceControl: '8px',
+        spaceSection: '16px',
+    },
+    focus: {
+        ringColor: 'var(--md-primary)',
+        ringOffset: '2px',
+    },
+    motion: {
+        durationFast: '120ms',
+        durationMedium: '200ms',
+        durationSlow: '300ms',
+        easingStandard: 'ease',
+    },
+    elevation: {
+        low: '0 1px 3px rgb(0 0 0 / 0.05)',
+        medium: '0 2px 8px rgb(0 0 0 / 0.08)',
+        high: '0 12px 28px rgb(0 0 0 / 0.12)',
+    },
     stylesheets: ['~/theme/blank/styles.css'],
     customComponents: {
         'chat-input': './components/ChatInput.vue',

@@ -25,7 +25,7 @@ export const sidebarOverrides = {
     'input#sidebar.search': {
         class: 'mb-4',
         ui: {
-            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus-visible:ring-0! focus-visible:outline-none! text-[14px]! h-[40px]!',
+            base: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] hover:border-[color:var(--md-primary)] focus:border-[color:var(--md-primary)] ring-0! focus-visible:ring-0! focus-visible:outline-none! text-[14px]! h-[var(--app-control-height-medium,40px)]!',
         },
     },
     'selectmenu#sidebar.project-select': {

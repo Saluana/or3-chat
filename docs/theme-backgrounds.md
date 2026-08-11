@@ -178,6 +178,12 @@ The dashboard merges these user selections through `useUserThemeOverrides()`, wh
 -   Verify the theme plugin is wired to call `applyThemeBackgrounds` on `setActiveTheme`.
 -   Check browser console for token resolution errors (e.g., missing files).
 
+**Custom upload from Finder does nothing:**
+
+-   Uploads must be PNG, JPEG, WebP, or GIF and at most 8MB. HEIC/HEIF (common from iPhone/macOS Photos) is rejected with a toast.
+-   macOS sometimes leaves `File.type` empty; validation uses magic bytes so empty MIME is allowed for valid image bytes.
+-   Failures show a toast (`Background image not applied`) instead of failing silently.
+
 **Textures look stretched or squashed:**
 
 -   Ensure `size` matches the source image dimensions.

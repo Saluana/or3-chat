@@ -43,7 +43,7 @@
             :id="`reasoning-${id}`"
             :class="[
                 'reasoning-box text-black dark:text-white font-[inherit] text-wrap overflow-x-hidden flex flex-col items-start gap-1 bg-(--md-surface-container-low) text-start border-[length:var(--md-border-width)] border-(--md-inverse-surface) rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
-                'grid transition-[grid-template-rows] duration-200 ease-in-out',
+                'grid transition-[grid-template-rows] duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease-in-out)]',
                 expanded
                     ? 'grid-rows-[1fr] mt-2 px-3 py-1 opacity-100'
                     : 'grid-rows-[0fr] mt-0 p-0 opacity-0 pointer-events-none',
@@ -103,9 +103,17 @@ const toggleButtonProps = computed(() => {
     gap: 0.5rem;
     font-size: 16px;
     padding: 4px 8px;
-    min-height: 32px;
+    min-height: var(--app-control-height-small, 32px);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+        color var(--app-motion-duration-medium, 0.2s)
+            var(--app-motion-easing-standard, ease),
+        background-color var(--app-motion-duration-medium, 0.2s)
+            var(--app-motion-easing-standard, ease),
+        border-color var(--app-motion-duration-medium, 0.2s)
+            var(--app-motion-easing-standard, ease),
+        opacity var(--app-motion-duration-medium, 0.2s)
+            var(--app-motion-easing-standard, ease);
 }
 
 .pulse {
@@ -113,7 +121,8 @@ const toggleButtonProps = computed(() => {
     height: 8px;
     border-radius: 50%;
     background: var(--md-primary);
-    animation: pulse 1.2s infinite ease-in-out;
+    animation: pulse var(--app-motion-duration-slow, 1.2s) infinite
+        var(--app-motion-easing-standard, ease-in-out);
 }
 
 @keyframes pulse {

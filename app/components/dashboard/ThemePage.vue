@@ -60,9 +60,10 @@
                 v-else-if="activeSection === 'typography'"
             />
 
-            <DashboardThemeShapeSection
-                v-else-if="activeSection === 'shape'"
-            />
+            <template v-else-if="activeSection === 'shape'">
+                <DashboardThemeShapeSection />
+                <DashboardThemeAppearanceSection />
+            </template>
 
             <template v-else-if="activeSection === 'backgrounds'">
                 <DashboardThemeBackgroundLayersSection />
@@ -200,9 +201,12 @@ async function handleTabKeydown(
     border-radius: var(--md-border-radius);
     cursor: pointer;
     transition:
-        color 150ms ease,
-        background-color 150ms ease,
-        border-color 150ms ease;
+        color var(--app-motion-duration-fast, 150ms)
+            var(--app-motion-easing-standard, ease),
+        background-color var(--app-motion-duration-fast, 150ms)
+            var(--app-motion-easing-standard, ease),
+        border-color var(--app-motion-duration-fast, 150ms)
+            var(--app-motion-easing-standard, ease);
 }
 .theme-studio-tab:hover {
     color: var(--md-on-surface);
@@ -225,13 +229,14 @@ async function handleTabKeydown(
 }
 .theme-studio-tab:focus-visible,
 .theme-studio-panel:focus-visible {
-    outline: 2px solid var(--md-primary);
-    outline-offset: 2px;
+    outline: var(--app-focus-ring-width, 2px) solid
+        var(--md-focus-ring, var(--md-primary));
+    outline-offset: var(--app-focus-ring-offset, 2px);
 }
 .theme-studio-panel {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: var(--app-space-section, 1rem);
     min-width: 0;
     max-width: 100%;
 }

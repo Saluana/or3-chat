@@ -68,7 +68,7 @@
                 <div
                     id="sidebar-container-expanded"
                     :class="[
-                        'flex-1 min-w-0',
+                        'flex-1 min-w-0 min-h-0',
                         collapsed
                             ? 'overflow-hidden'
                             : 'overflow-auto overscroll-contain',

@@ -233,7 +233,8 @@
     height: 100%;
     border-radius: inherit;
     background: var(--md-primary);
-    transition: width 180ms ease;
+    transition: width max(180ms, var(--app-motion-duration-medium, 180ms))
+        var(--app-motion-easing-standard, ease);
 }
 .review-bar-actions {
     display: flex;
@@ -477,9 +478,12 @@
     border-radius: var(--md-border-radius);
     background: color-mix(in oklab, var(--md-surface), transparent 2%);
     transition:
-        border-color 180ms ease,
-        background-color 180ms ease,
-        box-shadow 180ms ease;
+        border-color max(180ms, var(--app-motion-duration-medium, 180ms))
+            var(--app-motion-easing-standard, ease),
+        background-color max(180ms, var(--app-motion-duration-medium, 180ms))
+            var(--app-motion-easing-standard, ease),
+        box-shadow max(180ms, var(--app-motion-duration-medium, 180ms))
+            var(--app-motion-easing-standard, ease);
 }
 .quick-action-row:hover:not(.is-editing) {
     background: var(--md-surface-container-low);
@@ -643,11 +647,13 @@
 }
 .ai-settings-enter-active,
 .ai-settings-leave-active {
-    transition: opacity 180ms ease;
+    transition: opacity max(180ms, var(--app-motion-duration-medium, 180ms))
+        var(--app-motion-easing-standard, ease);
 }
 .ai-settings-enter-active .settings-panel-shell,
 .ai-settings-leave-active .settings-panel-shell {
-    transition: transform 240ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform max(240ms, var(--app-motion-duration-slow, 240ms))
+        var(--app-motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
 }
 .ai-settings-enter-from,
 .ai-settings-leave-to {
@@ -675,7 +681,8 @@
     flex: 0 0 auto;
     border-radius: 50%;
     background: currentColor;
-    animation: pulse 1s infinite;
+    animation: pulse max(1s, var(--app-motion-duration-slow, 1s)) infinite
+        var(--app-motion-easing-standard, ease);
 }
 @keyframes pulse {
     50% {
@@ -707,21 +714,21 @@
     }
     .attachment-button,
     .settings-button {
-        width: 1.75rem !important;
-        height: 1.75rem !important;
-        min-width: 1.75rem !important;
-        min-height: 1.75rem !important;
-        max-width: 1.75rem !important;
-        max-height: 1.75rem !important;
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+        max-width: 44px !important;
+        max-height: 44px !important;
     }
     .send-button {
-        width: 1.875rem !important;
-        height: 1.875rem !important;
-        min-width: 1.875rem !important;
-        min-height: 1.875rem !important;
-        max-width: 1.875rem !important;
-        max-height: 1.875rem !important;
-        flex-basis: 1.875rem;
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+        max-width: 44px !important;
+        max-height: 44px !important;
+        flex-basis: 44px;
         border-radius: 50%;
     }
     .attachment-button :deep(svg),

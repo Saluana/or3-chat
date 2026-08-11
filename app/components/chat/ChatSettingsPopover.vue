@@ -799,7 +799,8 @@ const modelCatalogButtonProps = computed(() => {
     padding: 0.625rem 0.75rem;
     color: var(--md-on-surface);
     text-align: left;
-    transition: background-color 150ms ease;
+    transition: background-color var(--app-motion-duration-fast, 150ms)
+        var(--app-motion-easing-standard, ease);
 }
 
 .chat-settings-tool-category:hover {
@@ -807,8 +808,9 @@ const modelCatalogButtonProps = computed(() => {
 }
 
 .chat-settings-tool-category:focus-visible {
-    outline: 2px solid var(--md-primary);
-    outline-offset: -2px;
+    outline: var(--app-focus-ring-width, 2px) solid
+        var(--md-focus-ring, var(--md-primary));
+    outline-offset: calc(-1 * var(--app-focus-ring-width, 2px));
 }
 
 .chat-settings-tool-list {

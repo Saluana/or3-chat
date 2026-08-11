@@ -168,8 +168,9 @@ watch(
 }
 .typography-field select:focus-visible,
 .typography-range-row input:focus-visible {
-    outline: 2px solid var(--md-primary);
-    outline-offset: 2px;
+    outline: var(--app-focus-ring-width, 2px) solid
+        var(--md-focus-ring, var(--md-primary));
+    outline-offset: var(--app-focus-ring-offset, 2px);
 }
 .typography-field small {
     color: var(--md-on-surface-variant, var(--md-on-surface));

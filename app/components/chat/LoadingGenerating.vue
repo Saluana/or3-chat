@@ -79,7 +79,8 @@ const containerProps = useThemeOverrides({
         rgba(0, 0, 0, 0.08) 0 2px,
         transparent 2px 4px
     );
-    animation: rl-scan 5s linear infinite;
+    animation: rl-scan max(5s, var(--app-motion-duration-slow, 5s)) linear
+        infinite;
     opacity: 0.55;
     mix-blend-mode: overlay;
 }
@@ -103,7 +104,8 @@ const containerProps = useThemeOverrides({
         transparent 70%
     );
     filter: blur(18px);
-    animation: rl-glow 3.2s ease-in-out infinite;
+    animation: rl-glow max(3.2s, var(--app-motion-duration-slow, 3.2s))
+        var(--app-motion-easing-standard, ease-in-out) infinite;
     opacity: 0.55;
 }
 .rl-bar {
@@ -119,7 +121,8 @@ const containerProps = useThemeOverrides({
         transparent
     );
     filter: blur(1px) saturate(1.4);
-    animation: rl-bar 1.35s cubic-bezier(0.65, 0.15, 0.35, 0.85) infinite;
+    animation: rl-bar max(1.35s, var(--app-motion-duration-slow, 1.35s))
+        var(--app-motion-easing-standard, cubic-bezier(0.65, 0.15, 0.35, 0.85)) infinite;
     mix-blend-mode: screen;
 }
 .rl-text {
@@ -142,7 +145,8 @@ const containerProps = useThemeOverrides({
     margin-left: 4px;
 }
 .rl-dots span {
-    animation: rl-dots 1.2s infinite ease-in-out;
+    animation: rl-dots max(1.2s, var(--app-motion-duration-slow, 1.2s)) infinite
+        var(--app-motion-easing-standard, ease-in-out);
     display: inline-block;
     width: 6px;
 }

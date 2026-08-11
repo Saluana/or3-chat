@@ -21,6 +21,10 @@ export interface ThemeDefinition {
   borderRadiusSmall?: string;
   borderRadius?: string;
   borderRadiusLarge?: string;
+  density?: ThemeDensityTokens;
+  focus?: ThemeFocusTokens;
+  motion?: ThemeMotionTokens;
+  elevation?: ThemeElevationTokens;
   fonts?: ThemeFonts;
 
   overrides?: Record<string, OverrideProps>;
@@ -129,6 +133,51 @@ export interface ThemeFonts {
   dark?: ThemeFontSet;
 }
 ```
+
+### Appearance token groups
+
+All appearance token groups are optional. Consumers must use local literal
+fallbacks so themes that omit the contract retain their existing appearance.
+
+```ts
+export interface ThemeDensityTokens {
+  controlHeightSmall?: string;
+  controlHeightMedium?: string;
+  controlHeightLarge?: string;
+  spaceControl?: string;
+  spaceSection?: string;
+}
+
+export interface ThemeFocusTokens {
+  ringColor?: string;
+  ringOffset?: string;
+}
+
+export interface ThemeMotionTokens {
+  durationFast?: string;
+  durationMedium?: string;
+  durationSlow?: string;
+  easingStandard?: string;
+}
+
+export interface ThemeElevationTokens {
+  low?: string;
+  medium?: string;
+  high?: string;
+}
+```
+
+The generated variables are:
+
+| Group | Variables |
+|---|---|
+| Density | `--app-control-height-small`, `--app-control-height-medium`, `--app-control-height-large`, `--app-space-control`, `--app-space-section` |
+| Focus | `--md-focus-ring`, `--app-focus-ring-offset` |
+| Motion | `--app-motion-duration-fast`, `--app-motion-duration-medium`, `--app-motion-duration-slow`, `--app-motion-easing-standard` |
+| Elevation | `--app-elevation-low`, `--app-elevation-medium`, `--app-elevation-high` |
+
+The globally user-controlled `--app-focus-ring-width` is separate from the
+theme DSL and is constrained to 1–4px.
 
 ### ThemeBackgrounds
 

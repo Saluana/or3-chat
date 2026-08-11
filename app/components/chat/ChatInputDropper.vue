@@ -212,7 +212,7 @@
                     aria-label="Remove image"
                 />
                 <div
-                    class="chat-input-attachment-image-name absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-[var(--md-border-radius-small,var(--md-border-radius))]"
+                    class="chat-input-attachment-image-name absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease)] rounded-b-[var(--md-border-radius-small,var(--md-border-radius))]"
                 >
                     {{ image.name }}
                 </div>

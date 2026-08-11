@@ -122,15 +122,31 @@ standard surface token, and `--md-border-radius-large` is for large surfaces.
 The established middle tokens remain the compatibility defaults: the four new
 tiers inherit from them until a theme or user override opts in. Shape overrides
 are stored separately per color mode, have their own enabled toggle, and
-restore the active theme's authored values when disabled. Shadows are
-intentionally not exposed because most current shadows are component- or
-theme-specific rather than consumers of one reliable shared elevation token.
-Theme authors can set the same tiers with `borderWidthSubtle`, `borderWidth`,
-`borderWidthStrong`, `borderRadiusSmall`, `borderRadius`, and
-`borderRadiusLarge` on `ThemeDefinition`; omitted outer tiers continue to
-inherit their middle token. The shipped Blank theme uses a 1px component border
-by default so inputs and other neutral controls remain visibly bounded, while
-its divider and emphasis tiers remain at 0px to preserve the minimal layout.
+restore the active theme's authored values when disabled. Theme authors can set
+the same tiers with `borderWidthSubtle`, `borderWidth`, `borderWidthStrong`,
+`borderRadiusSmall`, `borderRadius`, and `borderRadiusLarge` on
+`ThemeDefinition`; omitted outer tiers continue to inherit their middle token.
+The shipped Blank theme uses a 1px component border by default so inputs and
+other neutral controls remain visibly bounded, while its divider and emphasis
+tiers remain at 0px to preserve the minimal layout.
+
+Density and elevation use the same per-mode override model. Their constrained
+presets set only the five `--app-control-height-*` / `--app-space-*` variables
+or the three `--app-elevation-*` variables that the runtime owns. Selecting
+Theme default or disabling a group removes those inline declarations and the
+`data-density` / `data-elevation` markers, allowing authored theme values and
+component-local fallbacks to cascade unchanged. Flat elevation removes generic
+depth only; elevated overlays retain their opaque surface and border.
+
+Focus width and motion are global accessibility preferences, rather than
+per-mode style overrides. They are persisted in browser localStorage under
+`or3:user-theme-accessibility`, apply to both light and dark modes, and are
+validated on load. Focus width is 1–4px. Motion is `System` or `Reduced`; the
+operating-system reduced-motion preference takes precedence, writing a short
+100ms transition tier and stopping decorative loops while status content
+remains visible. Themes retain ownership of normal-motion durations, focus
+color, focus offset, and their authored elevation stacks through optional
+`density`, `focus`, `motion`, and `elevation` fields on `ThemeDefinition`.
 
 The signed-in preference repository is canonical once account storage is
 ready. The SSR cookie supplies first paint, and localStorage is a migration and

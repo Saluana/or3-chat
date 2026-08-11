@@ -9,7 +9,7 @@
             :aria-label="label"
             v-bind="iconButtonProps"
             :class="[
-                'dashboard-plugin-icon-button group relative flex items-center justify-center overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]',
+                'dashboard-plugin-icon-button group relative flex items-center justify-center overflow-hidden cursor-pointer focus:outline-none focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]',
                 (iconButtonProps as any)?.class || '',
             ]"
             :style="iconBoxStyle"
@@ -25,7 +25,7 @@
                 v-else-if="icon"
                 :name="icon"
                 :class="[
-                    'dashboard-button-icon transition-transform duration-150',
+                    'dashboard-button-icon transition-transform duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)]',
                 ]"
                 :style="iconStyle"
             />

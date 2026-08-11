@@ -176,6 +176,7 @@ defineExpose({ openTabSwitcher });
 <style scoped>
 .workspace-chrome {
     --or3-workspace-chrome-height: var(--or3-workspace-chrome-size, 48px);
+    --or3-workspace-tab-height: var(--or3-workspace-tab-size, 32px);
     --or3-chrome-item-gap: var(--or3-chrome-gap, 6px);
     --or3-chrome-pad-block: var(--or3-chrome-padding-block, 6px);
     --or3-tab-overflow-pad: var(--or3-chrome-overflow-pad, 2px);
@@ -197,7 +198,10 @@ defineExpose({ openTabSwitcher });
     align-items: center;
     min-width: 0;
     width: 100%;
-    min-height: calc(32px + (2 * var(--or3-tab-overflow-pad)));
+    min-height: calc(
+        var(--or3-workspace-tab-height) + var(--or3-tab-overflow-pad) +
+            var(--or3-tab-overflow-pad)
+    );
     overflow: visible;
 }
 .workspace-chrome-actions {
@@ -205,7 +209,10 @@ defineExpose({ openTabSwitcher });
     align-items: center;
     flex: none;
     gap: var(--or3-chrome-item-gap);
-    min-height: calc(32px + var(--or3-tab-overflow-pad));
+    min-height: calc(
+        var(--or3-workspace-tab-height) + var(--or3-tab-overflow-pad) +
+            var(--or3-tab-overflow-pad)
+    );
     padding: 0 6px;
     overflow: visible;
 }

@@ -8,7 +8,7 @@
             v-for="chip in chips"
             :key="chip.id ?? 'all'"
             type="button"
-            class="or3-palette-chip shrink-0 inline-flex items-center gap-1 sm:gap-1.5 h-6 sm:h-7 px-2 sm:px-2.5 rounded-full border text-[11px] sm:text-[12px] leading-none whitespace-nowrap transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--md-primary)]/40"
+            class="or3-palette-chip shrink-0 inline-flex items-center gap-1 sm:gap-1.5 h-6 sm:h-7 px-2 sm:px-2.5 rounded-full border text-[11px] sm:text-[12px] leading-none whitespace-nowrap transition-colors duration-[var(--app-motion-duration-fast,100ms)] ease-[var(--app-motion-easing-standard,ease)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]"
             :class="
                 chip.id === activeCategoryId ||
                 (!activeCategoryId && chip.id === null)

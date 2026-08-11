@@ -167,7 +167,7 @@
 .find-bar button { min-width: 2.25rem; min-height: 2.25rem; padding: 0.35rem; border-radius: var(--md-border-radius-small, var(--md-border-radius)); font-size: 0.72rem; }
 .find-bar button:hover { background: var(--md-surface-container); }
 .table-toolbar { z-index: 9; min-height: 2.85rem; display: flex; align-items: center; gap: 0.2rem; overflow-x: auto; padding: 0.35rem max(0.65rem, calc((100% - var(--editor-canvas)) / 2)); border-bottom: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color); background: color-mix(in oklab, var(--md-primary-container), var(--md-surface) 86%); scrollbar-width: thin; }
-.table-toolbar-enter-active, .table-toolbar-leave-active { overflow: hidden; transition: max-height 220ms cubic-bezier(0.4, 0, 0.2, 1), opacity 160ms ease, transform 220ms cubic-bezier(0.4, 0, 0.2, 1), padding-block 220ms ease; }
+.table-toolbar-enter-active, .table-toolbar-leave-active { overflow: hidden; transition: max-height max(220ms, var(--app-motion-duration-slow, 220ms)) var(--app-motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1)), opacity max(160ms, var(--app-motion-duration-medium, 160ms)) var(--app-motion-easing-standard, ease), transform max(220ms, var(--app-motion-duration-slow, 220ms)) var(--app-motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1)), padding-block max(220ms, var(--app-motion-duration-slow, 220ms)) var(--app-motion-easing-standard, ease); }
 .table-toolbar-enter-from, .table-toolbar-leave-to { max-height: 0; padding-block: 0; opacity: 0; transform: translateY(-0.35rem); }
 .table-toolbar-enter-to, .table-toolbar-leave-from { max-height: 3.2rem; opacity: 1; transform: translateY(0); }
 
@@ -176,6 +176,7 @@
 .document-canvas { position: relative; width: min(var(--editor-canvas), calc(100% - 3rem)); min-height: 100%; margin: 0 auto; padding: clamp(2.5rem, 7cqw, 5.5rem) 0 12rem; }
 .document-title-field { width: 100%; }
 .document-title-field :deep(textarea) { display: block; width: 100%; min-height: 1.2em; resize: none; overflow: hidden; border: 0; padding: 0; background: transparent; color: var(--md-on-surface); font-family: var(--font-heading, var(--font-sans, ui-sans-serif, system-ui, sans-serif)); font-size: clamp(2rem, 5cqw, 3rem); font-weight: 720; letter-spacing: -0.035em; line-height: 1.08; outline: none; box-shadow: none; }
+.document-title-field :deep(textarea:focus-visible), .document-content :deep(.ProseMirror:focus-visible) { outline: var(--app-focus-ring-width, 2px) solid var(--md-focus-ring, var(--md-primary)); outline-offset: var(--app-focus-ring-offset, 2px); }
 .document-title-field :deep(textarea::placeholder) { color: color-mix(in oklab, var(--md-on-surface-variant), transparent 55%); }
 .document-byline { display: flex; gap: 0.8rem; margin: 0.85rem 0 3rem; color: var(--md-on-surface-variant); font-size: 0.72rem; }
 
@@ -261,7 +262,7 @@
 
 .inspector-backdrop { display: none; }
 .document-inspector { flex: 0 0 320px; }
-.document-inspector-enter-active, .document-inspector-leave-active { overflow: hidden; transition: flex-basis 240ms cubic-bezier(0.4, 0, 0.2, 1), min-width 240ms cubic-bezier(0.4, 0, 0.2, 1), width 240ms cubic-bezier(0.4, 0, 0.2, 1), opacity 180ms ease, transform 240ms cubic-bezier(0.4, 0, 0.2, 1); }
+.document-inspector-enter-active, .document-inspector-leave-active { overflow: hidden; transition: flex-basis max(240ms, var(--app-motion-duration-slow, 240ms)) var(--app-motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1)), min-width max(240ms, var(--app-motion-duration-slow, 240ms)) var(--app-motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1)), width max(240ms, var(--app-motion-duration-slow, 240ms)) var(--app-motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1)), opacity max(180ms, var(--app-motion-duration-medium, 180ms)) var(--app-motion-easing-standard, ease), transform max(240ms, var(--app-motion-duration-slow, 240ms)) var(--app-motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1)); }
 .document-inspector-enter-from, .document-inspector-leave-to { width: 0 !important; min-width: 0 !important; flex-basis: 0 !important; opacity: 0; transform: translateX(1rem); }
 .document-inspector-enter-to, .document-inspector-leave-from { opacity: 1; transform: translateX(0); }
 .inspector-backdrop-enter-active, .inspector-backdrop-leave-active { transition: opacity 180ms ease; }
@@ -307,7 +308,7 @@
 }
 .document-inspector-enter-active,
 .document-inspector-leave-active {
-    transition: transform 260ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform max(260ms, var(--app-motion-duration-slow, 260ms)) var(--app-motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
 }
 .document-inspector-enter-from,
 .document-inspector-leave-to {

@@ -199,7 +199,8 @@
   display: block;
   height: 100%;
   background: color-mix(in srgb, var(--md-primary) 58%, transparent);
-  transition: width 240ms ease;
+  transition: width var(--app-motion-duration-medium, 240ms)
+    var(--app-motion-easing-standard, ease);
 }
 
 .workflow-run[data-state="running"] .run-progress span {
@@ -215,7 +216,8 @@
   display: grid;
   min-width: 0;
   grid-template-columns: minmax(12.5rem, 32%) minmax(0, 1fr);
-  transition: grid-template-columns 180ms ease;
+  transition: grid-template-columns var(--app-motion-duration-medium, 180ms)
+    var(--app-motion-easing-standard, ease);
 }
 
 .run-layout.is-timeline-collapsed {
@@ -228,7 +230,8 @@
   padding: 0.55rem 0.45rem 0.65rem;
   border-right: var(--md-border-width-subtle, 1px) solid
     var(--workflow-run-separator);
-  transition: padding 180ms ease;
+  transition: padding var(--app-motion-duration-medium, 180ms)
+    var(--app-motion-easing-standard, ease);
 }
 
 .run-layout.is-timeline-collapsed .run-timeline {
@@ -293,9 +296,12 @@
   border-radius: var(--md-border-radius-small, var(--md-border-radius));
   opacity: 0.62;
   transition:
-    color 140ms ease,
-    background-color 140ms ease,
-    opacity 140ms ease;
+    color var(--app-motion-duration-fast, 140ms)
+      var(--app-motion-easing-standard, ease),
+    background-color var(--app-motion-duration-fast, 140ms)
+      var(--app-motion-easing-standard, ease),
+    opacity var(--app-motion-duration-fast, 140ms)
+      var(--app-motion-easing-standard, ease);
 }
 
 .run-timeline:hover .timeline-divider-toggle,
@@ -312,8 +318,9 @@
 }
 
 .timeline-divider-toggle:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 1px;
+  outline: var(--app-focus-ring-width, 2px) solid
+    var(--md-focus-ring, var(--md-primary));
+  outline-offset: var(--app-focus-ring-offset, 1px);
 }
 
 .timeline-list {
@@ -351,9 +358,12 @@
   border: 0;
   border-radius: var(--md-border-radius-small, var(--md-border-radius));
   transition:
-    background-color 160ms ease,
-    border-color 160ms ease,
-    opacity 160ms ease;
+    background-color var(--app-motion-duration-fast, 160ms)
+      var(--app-motion-easing-standard, ease),
+    border-color var(--app-motion-duration-fast, 160ms)
+      var(--app-motion-easing-standard, ease),
+    opacity var(--app-motion-duration-fast, 160ms)
+      var(--app-motion-easing-standard, ease);
 }
 
 .timeline-row:hover {
@@ -540,7 +550,8 @@
   height: 0.42rem;
   background: var(--md-primary);
   border-radius: 999px;
-  animation: workflow-live-pulse 1.35s ease-in-out infinite;
+  animation: workflow-live-pulse max(1.35s, var(--app-motion-duration-slow, 1.35s))
+    var(--app-motion-easing-standard, ease-in-out) infinite;
 }
 
 .reasoning-live-label {
@@ -912,7 +923,8 @@
 
   .run-layout.is-mobile-inspector .run-inspector {
     display: block;
-    animation: workflow-mobile-enter 170ms ease-out;
+    animation: workflow-mobile-enter var(--app-motion-duration-medium, 170ms)
+      var(--app-motion-easing-standard, ease-out);
   }
 
   .workflow-run.is-mobile-inspector-open .run-header {
@@ -941,8 +953,9 @@
   }
 
   .mobile-timeline-back:focus-visible {
-    outline: 2px solid var(--md-primary);
-    outline-offset: 1px;
+    outline: var(--app-focus-ring-width, 2px) solid
+      var(--md-focus-ring, var(--md-primary));
+    outline-offset: var(--app-focus-ring-offset, 1px);
   }
 
   .inspector-heading-row {
@@ -958,7 +971,8 @@
     min-height: min(30rem, 58dvh);
     max-height: min(46rem, 72dvh);
     padding-left: 0.8rem;
-    animation: workflow-mobile-enter 170ms ease-out;
+    animation: workflow-mobile-enter var(--app-motion-duration-medium, 170ms)
+      var(--app-motion-easing-standard, ease-out);
   }
 
   .run-meta-status,

@@ -1064,7 +1064,8 @@ const streamMdClasses = [
 }
 
 .attachment-thumb {
-    transition: transform 0.15s ease;
+    transition: transform var(--app-motion-duration-fast, 0.15s)
+        var(--app-motion-easing-standard, ease);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 

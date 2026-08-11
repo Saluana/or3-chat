@@ -3,14 +3,14 @@ export default {
         tooltip: {
             slots: {
                 content:
-                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]! ring-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)] text-[var(--md-on-surface)] shadow-lg h-[40px] px-3 text-md',
+                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]! ring-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)] text-[var(--md-on-surface)] shadow-lg h-[var(--app-control-height-medium,40px)] px-3 text-md',
             },
         },
         tree: {
             slots: {
                 root: '',
                 item: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] mb-2 theme-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
-                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
+                link: 'h-[var(--app-control-height-medium,40px)] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
             },
         },
         // Global modal overrides
@@ -32,7 +32,7 @@ export default {
             slots: {
                 // Make base styles clearly different so it's obvious when applied
                 base: [
-                    'transition-colors',
+                    'transition-[color,background-color,border-color,box-shadow,transform] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)]',
                     'cursor-pointer text-start border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] theme-shadow retro-press',
                 ],
                 // Label tweaks are rarely overridden by variants, good to verify
@@ -67,19 +67,19 @@ export default {
                 size: {
                     xs: { base: 'h-[24px] px-[8px]! text-[12px]' },
                     sm: {
-                        base: 'h-[32px] px-[12px]! text-[15px]',
+                        base: 'h-[var(--app-control-height-small,32px)] px-[12px]! text-[15px]',
                         leadingIcon: 'shrink-0 h-5 w-5',
                         trailingIcon: 'shrink-0 h-5 w-5',
                     },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                    md: { base: 'h-[var(--app-control-height-medium,40px)] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[var(--app-control-height-large,56px)] px-[24px]! text-[24px]' },
                     'sb-square': {
-                        base: 'h-[40px] w-[40px] text-[20px]',
+                        base: 'h-[var(--app-control-height-medium,40px)] w-[var(--app-control-height-medium,40px)] text-[20px]',
                         trailingIcon: 'shrink-0 h-6 w-6',
                         leadingIcon: 'shrink-0 h-6 w-6',
                     },
                     'sb-base': {
-                        base: 'bg-transparent hover:bg-[var(--md-surface-hover)] hover:ring-1 hover:ring-[var(--md-surface-active)] active:bg-[var(--md-surface-active)] border-0! shadow-none! text-[var(--md-on-surface)] h-[40px]',
+                        base: 'bg-transparent hover:bg-[var(--md-surface-hover)] hover:ring-1 hover:ring-[var(--md-surface-active)] active:bg-[var(--md-surface-active)] border-0! shadow-none! text-[var(--md-on-surface)] h-[var(--app-control-height-medium,40px)]',
                         trailingIcon: 'shrink-0 h-6 w-6',
                         leadingIcon: 'shrink-0 h-6 w-6',
                     },
@@ -129,9 +129,9 @@ export default {
                 leading: { true: 'ps-10!' },
                 trailing: { true: 'pe-10!' },
                 size: {
-                    sm: { base: 'h-[32px] text-[12px]!' },
-                    md: { base: 'h-[40px] text-[14px]!' },
-                    lg: { base: 'h-[48px] text-[16px]!' },
+                    sm: { base: 'h-[var(--app-control-height-small,32px)] text-[12px]!' },
+                    md: { base: 'h-[var(--app-control-height-medium,40px)] text-[14px]!' },
+                    lg: { base: 'h-[var(--app-control-height-large,48px)] text-[16px]!' },
                 },
             },
         },
@@ -217,7 +217,7 @@ export default {
             slots: {
                 root: 'border-[length:var(--md-border-width)] rounded-[var(--md-border-radius)]',
                 // Match our md button height (40px) and enforce perfect centering
-                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
+                close: 'inline-flex items-center justify-center leading-none h-[var(--app-control-height-small,32px)] w-[var(--app-control-height-small,32px)] p-0',
             },
         },
         popover: {
@@ -236,14 +236,14 @@ export default {
             slots: {
                 root: 'relative flex items-start',
                 base: [
-                    'inline-flex items-center shrink-0 rounded-full border-2 border-transparent focus-visible:outline-2 focus-visible:outline-offset-2 data-[state=unchecked]:bg-accented',
-                    'transition-[background] duration-200',
+                    'inline-flex items-center shrink-0 rounded-full border-2 border-transparent focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)] data-[state=unchecked]:bg-accented',
+                    'transition-[background] duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease)]',
                 ],
                 container: 'flex items-center',
-                thumb: 'group pointer-events-none rounded-full bg-default shadow-lg ring-0 transition-transform duration-200 data-[state=unchecked]:translate-x-0 data-[state=unchecked]:rtl:-translate-x-0 flex items-center justify-center',
+                thumb: 'group pointer-events-none rounded-full bg-default shadow-lg ring-0 transition-transform duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease)] data-[state=unchecked]:translate-x-0 data-[state=unchecked]:rtl:-translate-x-0 flex items-center justify-center',
                 icon: [
                     'absolute shrink-0 group-data-[state=unchecked]:text-dimmed opacity-0 size-10/12',
-                    'transition-[color,opacity] duration-200',
+                    'transition-[color,opacity] duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease)]',
                 ],
                 wrapper: 'ms-2',
                 label: 'block font-medium text-default',

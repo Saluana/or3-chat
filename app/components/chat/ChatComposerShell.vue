@@ -4,7 +4,7 @@
     ref="rootElement"
     v-bind="attrs"
     :class="[
-      'chat-composer-shell chat-input-main relative z-10 mx-2 flex cursor-text flex-col items-stretch bg-[var(--md-surface)] transition-all duration-300 md:mx-0',
+      'chat-composer-shell chat-input-main relative z-10 mx-2 flex cursor-text flex-col items-stretch bg-[var(--md-surface)] transition-[border-color,box-shadow,transform] duration-[var(--app-motion-duration-slow,300ms)] ease-[var(--app-motion-easing-standard,ease)] md:mx-0',
       `chat-composer-shell--${size}`,
     ]"
     :data-composer-size="size"
@@ -48,9 +48,12 @@ defineExpose({ rootElement });
     0 1px 3px rgb(0 0 0 / 4%),
     0 4px 12px -4px rgb(0 0 0 / 6%);
   transition:
-    border-color 250ms ease,
-    box-shadow 350ms cubic-bezier(0.4, 0, 0.2, 1),
-    transform 200ms ease;
+    border-color max(250ms, var(--app-motion-duration-medium, 250ms))
+      var(--app-motion-easing-standard, ease),
+    box-shadow max(350ms, var(--app-motion-duration-slow, 350ms))
+      var(--app-motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+    transform max(200ms, var(--app-motion-duration-medium, 200ms))
+      var(--app-motion-easing-standard, ease);
 }
 
 .chat-composer-shell:hover:not(:focus-within) {

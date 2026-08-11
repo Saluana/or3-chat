@@ -196,6 +196,8 @@ export function validateThemeDefinition(
         }
     }
 
+    validateAppearanceTokens(config, errors);
+
     // Validate background definitions if present
     if (config.backgrounds) {
         const repeatOptions = new Set([
@@ -417,6 +419,98 @@ export function validateThemeDefinition(
         errors,
         warnings,
     };
+}
+
+function validateAppearanceTokens(
+    config: ThemeDefinition,
+    errors: ValidationError[]
+): void {
+    for (const [field, value] of [
+        ['density.controlHeightSmall', config.density?.controlHeightSmall],
+        ['density.controlHeightMedium', config.density?.controlHeightMedium],
+        ['density.controlHeightLarge', config.density?.controlHeightLarge],
+        ['density.spaceControl', config.density?.spaceControl],
+        ['density.spaceSection', config.density?.spaceSection],
+        ['focus.ringOffset', config.focus?.ringOffset],
+    ] as const) {
+        if (value !== undefined && !isSafeLength(value)) {
+            errors.push({
+                severity: 'error',
+                code: 'THEME_025',
+                message: `${field} must be a safe CSS length`,
+                file: 'theme.ts',
+            });
+        }
+    }
+
+    const focusColor = config.focus?.ringColor;
+    if (
+        focusColor !== undefined &&
+        !isValidColor(focusColor) &&
+        !isSafeCssReference(focusColor)
+    ) {
+        errors.push({
+            severity: 'error',
+            code: 'THEME_026',
+            message: 'focus.ringColor must be a safe CSS color or token reference',
+            file: 'theme.ts',
+        });
+    }
+
+    for (const [field, value] of [
+        ['motion.durationFast', config.motion?.durationFast],
+        ['motion.durationMedium', config.motion?.durationMedium],
+        ['motion.durationSlow', config.motion?.durationSlow],
+    ] as const) {
+        if (value !== undefined && !/^(?:0|\d*\.?\d+(?:ms|s))$/.test(value.trim())) {
+            errors.push({
+                severity: 'error',
+                code: 'THEME_027',
+                message: `${field} must be a safe CSS duration`,
+                file: 'theme.ts',
+            });
+        }
+    }
+
+    const easing = config.motion?.easingStandard;
+    if (easing !== undefined && !isSafeCssValue(easing)) {
+        errors.push({
+            severity: 'error',
+            code: 'THEME_028',
+            message: 'motion.easingStandard must be a safe CSS timing function',
+            file: 'theme.ts',
+        });
+    }
+
+    for (const [field, value] of [
+        ['elevation.low', config.elevation?.low],
+        ['elevation.medium', config.elevation?.medium],
+        ['elevation.high', config.elevation?.high],
+    ] as const) {
+        if (value !== undefined && !isSafeCssValue(value)) {
+            errors.push({
+                severity: 'error',
+                code: 'THEME_029',
+                message: `${field} must be a safe CSS shadow stack`,
+                file: 'theme.ts',
+            });
+        }
+    }
+}
+
+function isSafeLength(value: string): boolean {
+    return /^(?:0|\d*\.?\d+(?:px|rem|em|%))$/.test(value.trim());
+}
+
+function isSafeCssReference(value: string): boolean {
+    return /^var\(--[a-z0-9-]+(?:\s*,\s*[^;{}]+)?\)$/i.test(value.trim());
+}
+
+function isSafeCssValue(value: string): boolean {
+    return (
+        value.trim().length > 0 &&
+        !/[;{}]|@import|expression\s*\(|javascript:|url\s*\(/i.test(value)
+    );
 }
 
 function validateStyleMap(

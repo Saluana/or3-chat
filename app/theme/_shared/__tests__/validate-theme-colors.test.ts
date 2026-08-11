@@ -66,4 +66,16 @@ describe('validateThemeDefinition safe declarative values', () => {
             expect.arrayContaining([expect.objectContaining({ code: 'THEME_022' })])
         );
     });
+
+    it('rejects unsafe appearance token values', () => {
+        const theme = createTheme('#3366ff');
+        theme.density = { controlHeightMedium: 'calc(20px); color: red' };
+        theme.motion = { durationFast: 'forever' };
+        theme.elevation = { low: '0 1px 2px black; color: red' };
+
+        const result = validateThemeDefinition(theme);
+        expect(result.errors.map((error) => error.code)).toEqual(
+            expect.arrayContaining(['THEME_025', 'THEME_027', 'THEME_029'])
+        );
+    });
 });

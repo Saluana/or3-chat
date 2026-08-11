@@ -61,6 +61,11 @@
 	--app-sidebar-bg-1: none;
 	--app-sidebar-bg-1-opacity: 1;
 	--app-sidebar-bg-1-repeat: repeat;
+	/* Accessibility defaults. Theme authors own normal motion values, while the
+	   accessibility preference store only writes the reduced-motion tier. */
+	--app-focus-ring-width: 2px;
+	--app-focus-ring-offset: 2px;
+	--md-focus-ring: var(--md-primary);
 }
 
 .font-ps2 {
@@ -130,7 +135,7 @@ body,
 	padding: 1.25rem;
 	display: flex;
 	flex-direction: column;
-	gap: 1rem;
+	gap: var(--app-space-section, 1rem);
 	box-sizing: border-box;
 	overflow-x: clip;
 }
@@ -269,7 +274,8 @@ html {
 	scrollbar-width: thin;
 	scrollbar-color: transparent transparent;
 	scrollbar-gutter: stable;
-	transition: scrollbar-color 0.2s ease;
+	transition: scrollbar-color var(--app-motion-duration-medium, 0.2s)
+		var(--app-motion-easing-standard, ease);
 }
 
 .sidebar-scroll.or3-scroll:hover {
@@ -278,7 +284,8 @@ html {
 
 .sidebar-scroll.or3-scroll::-webkit-scrollbar-thumb {
 	background: transparent;
-	transition: background 0.2s ease;
+	transition: background var(--app-motion-duration-medium, 0.2s)
+		var(--app-motion-easing-standard, ease);
 }
 
 .sidebar-scroll.or3-scroll:hover::-webkit-scrollbar-thumb {
@@ -339,7 +346,8 @@ html {
 }
 
 .animate-sidebar-item-enter {
-	animation: sidebar-item-enter 200ms ease-out both;
+	animation: sidebar-item-enter var(--app-motion-duration-medium, 200ms)
+		var(--app-motion-easing-standard, ease-out) both;
 }
 
 /* Sidebar item exit animation (for collapse) */
@@ -360,7 +368,8 @@ html {
 }
 
 .is-exiting {
-	animation: sidebar-item-exit 200ms ease-out forwards;
+	animation: sidebar-item-exit var(--app-motion-duration-medium, 200ms)
+		var(--app-motion-easing-standard, ease-out) forwards;
 	overflow: hidden;
 }
 
@@ -435,4 +444,269 @@ html {
 	border-color: var(--md-primary);
 	color: var(--md-primary);
 	background: var(--md-primary-container);
+}
+
+/* Density-only adaptations preserve every existing theme's baseline. The
+   runtime adds data-density only for an active non-default user preset, so
+   original component geometry remains the fallback for unmodified themes. */
+html[data-density] :where(
+	button,
+	input:not([type='hidden']):not([type='checkbox']):not([type='radio']):not([type='range']),
+	select,
+	textarea,
+	[role='button'],
+	[role='menuitem'],
+	[role='tab']
+) {
+	min-height: var(--app-control-height-medium, 36px);
+}
+
+html[data-density] .page-link-btn {
+	min-height: var(--app-control-height-large, 52px);
+	gap: var(--app-space-control, 0.75rem);
+}
+
+/* These cards carry a title and description, so the compact control tier is
+   too small. Keep their content breathing room without changing one-line
+   controls elsewhere. */
+html[data-density='compact'] .page-link-btn {
+	min-height: 64px !important;
+	padding-block: max(0.75rem, var(--app-space-control, 0.75rem)) !important;
+	gap: max(0.75rem, var(--app-space-control, 0.75rem));
+}
+
+html[data-density] .unified-sb-item {
+	min-height: var(--app-control-height-medium, 40px);
+	gap: var(--app-space-control, 0.625rem);
+}
+
+html[data-density] .project-root-container,
+html[data-density] .project-root-toggle,
+html[data-density] .sb-group-header {
+	height: var(--app-control-height-medium, 40px);
+}
+
+html[data-density] .workspace-chrome:not(.workspace-chrome--mobile) {
+	--or3-workspace-chrome-size: var(--app-control-height-large, 48px);
+	--or3-workspace-tab-size: var(--app-control-height-small, 32px);
+	--or3-chrome-gap: var(--app-space-control, 6px);
+}
+
+html[data-density='compact'] .workspace-chrome:not(.workspace-chrome--mobile),
+html[data-density='comfortable']
+	.workspace-chrome:not(.workspace-chrome--mobile) {
+	/* Keep the scrollable tab rail (tab + 2px top/bottom safety pad) inside
+	   the compact chrome rather than letting overflow-y crop it. */
+	--or3-chrome-padding-block: 4px;
+}
+
+html[data-density] .workspace-chrome:not(.workspace-chrome--mobile)
+	.workspace-tab,
+html[data-density] .workspace-chrome:not(.workspace-chrome--mobile)
+	.workspace-tab-new {
+	/* The generic control minimum is intentionally larger than compact/spacious
+	   tab rows. Keep these purpose-built tabs at their selected small tier. */
+	min-height: var(--or3-workspace-tab-size, 32px);
+}
+
+html[data-density] .workspace-tab-context button {
+	min-height: var(--app-control-height-small, 28px);
+}
+
+html[data-density] .document-toolbar-button {
+	height: var(--app-control-height-small, 32px);
+	min-height: var(--app-control-height-small, 32px);
+}
+
+html[data-density] .document-toolbar-button[aria-pressed='true'],
+html[data-density] .reasoning-toggle,
+html[data-density] .workflow-list-item {
+	min-height: var(--app-control-height-small, 32px);
+	gap: var(--app-space-control, 0.5rem);
+}
+
+html[data-density] .workflow-toolbar {
+	--workflow-toolbar-control-size: var(--app-control-height-medium, 40px);
+	--workflow-toolbar-gap: var(--app-space-control, 0.15rem);
+}
+
+/* Theme Studio controls are ordinary interactive controls, while previews and
+   swatches keep their visual geometry. Applying this only for a selected
+   density preset lets the unmodified studio retain its established layout. */
+html[data-density] .theme-studio-tab,
+html[data-density] .theme-mode-option,
+html[data-density] .shape-toggle,
+html[data-density] #dashboard-theme-appearance-section .appearance-toggle,
+html[data-density] #dashboard-theme-appearance-section .appearance-control select,
+html[data-density] #dashboard-theme-typography-section .typography-field select,
+html[data-density] #dashboard-theme-palette-section .palette-toggle,
+html[data-density] #dashboard-theme-palette-section .color-list-item,
+html[data-density] #dashboard-theme-palette-section .color-hex-input,
+html[data-density] #dashboard-theme-palette-section .rgb-fields input,
+html[data-density] #dashboard-theme-palette-section .advanced-colors-toggle,
+html[data-density] #dashboard-theme-backgrounds-section .background-action-button,
+html[data-density] #dashboard-theme-backgrounds-section .background-layout-options button,
+html[data-density] #dashboard-theme-backgrounds-section .background-color-swatch,
+html[data-density] #dashboard-theme-backgrounds-section .background-hex-input {
+	min-height: var(--app-control-height-medium, 36px);
+}
+
+html[data-density] .shape-controls,
+html[data-density] #dashboard-theme-typography-section .typography-grid,
+html[data-density] #dashboard-theme-appearance-section .appearance-control-heading,
+html[data-density] #dashboard-theme-backgrounds-section .background-action-row,
+html[data-density] #dashboard-theme-backgrounds-section .background-layout-options,
+html[data-density] #dashboard-theme-backgrounds-section .background-color-row {
+	gap: var(--app-space-control, 0.75rem);
+}
+
+/* Generic raised surfaces opt into elevation only while a user preset is
+   active. Theme-owned Retro press effects and Blank's intentional flat
+   treatments therefore retain their authored baseline. */
+html[data-elevation] .page-link-btn {
+	box-shadow: var(--app-elevation-low, none);
+}
+
+html[data-elevation] .workspace-tab-context {
+	box-shadow: var(--app-elevation-high, none);
+}
+
+html[data-elevation] .chat-composer-shell,
+html[data-elevation] .document-ai-composer.reviewing,
+html[data-elevation] .quick-action-row.is-editing,
+html[data-elevation] .workflow-chat-message,
+html[data-elevation] .document-inspector {
+	box-shadow: var(--app-elevation-medium, none) !important;
+}
+
+html[data-elevation] .toolbar-overflow,
+html[data-elevation] .selection-menu,
+html[data-elevation] .slash-menu,
+html[data-elevation] .ai-composer-loading,
+html[data-elevation] .settings-panel-shell,
+html[data-elevation] .image-controls,
+html[data-elevation] .system-prompts-modal {
+	box-shadow: var(--app-elevation-high, none) !important;
+}
+
+html[data-elevation] [data-slot='popover-content'],
+html[data-elevation] [data-slot='modal-content'] {
+	box-shadow: var(--app-elevation-high, none);
+}
+
+/* Tailwind's stable shadow utilities are generic raised surfaces. Map them
+   only while an elevation preset is active and retain Tailwind's own stack as
+   the fallback. Theme-authored Retro pressed offsets use dedicated CSS and
+   therefore remain outside this generic mapping. */
+html[data-elevation] :where([class~='shadow'], [class~='shadow-sm']) {
+	box-shadow: var(--app-elevation-low, var(--tw-shadow));
+}
+
+html[data-elevation] :where([class~='shadow-md'], [class~='shadow-lg']) {
+	box-shadow: var(--app-elevation-medium, var(--tw-shadow));
+}
+
+html[data-elevation] :where([class~='shadow-xl'], [class~='shadow-2xl']) {
+	box-shadow: var(--app-elevation-high, var(--tw-shadow));
+}
+
+/* Normal-motion Tailwind utilities inherit a theme's authored duration tier.
+   Each utility keeps its previous duration if a third-party theme omits the
+   optional motion contract. Responsive/variant utilities are intentionally
+   excluded because their media condition remains their own responsibility. */
+html [class~='duration-75'] {
+	transition-duration: var(--app-motion-duration-fast, 75ms);
+}
+
+html [class~='duration-100'] {
+	transition-duration: var(--app-motion-duration-fast, 100ms);
+}
+
+html [class~='duration-150'] {
+	transition-duration: var(--app-motion-duration-fast, 150ms);
+}
+
+html [class~='duration-200'] {
+	transition-duration: var(--app-motion-duration-medium, 200ms);
+}
+
+html [class~='duration-300'] {
+	transition-duration: var(--app-motion-duration-medium, 300ms);
+}
+
+html [class~='duration-500'] {
+	transition-duration: var(--app-motion-duration-slow, 500ms);
+}
+
+html [class~='duration-700'] {
+	transition-duration: var(--app-motion-duration-slow, 700ms);
+}
+
+html [class~='duration-1000'] {
+	transition-duration: var(--app-motion-duration-slow, 1000ms);
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+	html[data-density] :where(
+		button,
+		input:not([type='hidden']):not([type='checkbox']):not([type='radio']):not([type='range']),
+		select,
+		textarea,
+		[role='button'],
+		[role='menuitem'],
+		[role='tab']
+	) {
+		min-height: max(44px, var(--app-control-height-medium, 36px));
+	}
+
+	html[data-density] :where(
+		button,
+		[role='button'],
+		[role='menuitem'],
+		[role='tab']
+	) {
+		min-width: max(44px, var(--app-control-height-medium, 36px));
+	}
+
+	html[data-density] .theme-mode-option,
+	html[data-density] .shape-toggle,
+	html[data-density] #dashboard-theme-appearance-section .appearance-toggle,
+	html[data-density] #dashboard-theme-appearance-section .appearance-control select,
+	html[data-density] #dashboard-theme-typography-section .typography-field select,
+	html[data-density] #dashboard-theme-palette-section .palette-toggle,
+	html[data-density] #dashboard-theme-palette-section .color-list-item,
+	html[data-density] #dashboard-theme-palette-section .color-hex-input,
+	html[data-density] #dashboard-theme-palette-section .rgb-fields input,
+	html[data-density] #dashboard-theme-palette-section .advanced-colors-toggle,
+	html[data-density] #dashboard-theme-backgrounds-section .background-action-button,
+	html[data-density] #dashboard-theme-backgrounds-section .background-layout-options button,
+	html[data-density] #dashboard-theme-backgrounds-section .background-color-swatch,
+	html[data-density] #dashboard-theme-backgrounds-section .background-hex-input {
+		min-height: max(44px, var(--app-control-height-medium, 36px));
+	}
+}
+
+/* Reduced motion uses a short state transition and freezes decorative loops.
+   Busy/progress controls remain visibly present, so their status is still
+   communicated without a looping animation. */
+html[data-motion-resolved='reduced'] *,
+html[data-motion-resolved='reduced'] *::before,
+html[data-motion-resolved='reduced'] *::after {
+	animation-duration: 1ms !important;
+	animation-iteration-count: 1 !important;
+	transition-duration: var(--app-motion-duration-fast, 100ms) !important;
+	transition-delay: 0ms !important;
+	scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html:not([data-motion]) *,
+	html:not([data-motion]) *::before,
+	html:not([data-motion]) *::after {
+		animation-duration: 1ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 100ms !important;
+		transition-delay: 0ms !important;
+		scroll-behavior: auto !important;
+	}
 }

@@ -94,18 +94,24 @@
 
 <script setup lang="ts">
 import { reactive, computed, ref, watch } from 'vue';
+import { useToast } from '#imports';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useDebounceFn } from '@vueuse/core';
 import { isBrowser } from '~/utils/env';
 import { createOrRefFile } from '~/db/files';
 import { useResolvedThemeAsset } from '~/core/theme/useResolvedThemeAsset';
-import { isAllowedImageType, validateImageMagicNumber } from './types';
+import {
+    backgroundImageValidationMessage,
+    MAX_BACKGROUND_IMAGE_BYTES,
+    validateBackgroundImageFile,
+} from './types';
 import type { BackgroundPreset } from './types';
 
 const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides;
 const set = themeApi.set;
+const toast = useToast();
 
 // Computed helpers for cleaner bindings
 const bgEnabled = computed(() => overrides.value.backgrounds?.enabled ?? false);
@@ -248,7 +254,11 @@ const layerEditors = computed(() => [
         previewStyle: contentBg1PreviewStyle.value,
         presets: presetsContent1,
         emptyLabel: 'Theme pattern',
-        sourceLabel: contentBg1Url.value ? 'Custom image' : 'Theme pattern',
+        sourceLabel: layerSourceLabel(
+            contentBg1Url.value,
+            presetsContent1,
+            'Theme pattern'
+        ),
         onRepeat: (value: 'repeat' | 'no-repeat') =>
             set({ backgrounds: { content: { base: { repeat: value } } } }),
         onFit: (value: boolean) =>
@@ -270,7 +280,11 @@ const layerEditors = computed(() => [
         previewStyle: contentBg2PreviewStyle.value,
         presets: presetsContent2,
         emptyLabel: 'Optional overlay',
-        sourceLabel: contentBg2Url.value ? 'Custom image' : 'Optional overlay',
+        sourceLabel: layerSourceLabel(
+            contentBg2Url.value,
+            presetsContent2,
+            'Optional overlay'
+        ),
         onRepeat: (value: 'repeat' | 'no-repeat') =>
             set({ backgrounds: { content: { overlay: { repeat: value } } } }),
         onFit: (value: boolean) =>
@@ -292,7 +306,11 @@ const layerEditors = computed(() => [
         previewStyle: sidebarBgPreviewStyle.value,
         presets: presetsSidebar,
         emptyLabel: 'Theme pattern',
-        sourceLabel: sidebarBgUrl.value ? 'Custom image' : 'Theme pattern',
+        sourceLabel: layerSourceLabel(
+            sidebarBgUrl.value,
+            presetsSidebar,
+            'Theme pattern'
+        ),
         onRepeat: (value: 'repeat' | 'no-repeat') =>
             set({ backgrounds: { sidebar: { repeat: value } } }),
         onFit: (value: boolean) =>
@@ -370,44 +388,106 @@ const sidebarBgPreviewStyle = computed(() => {
     } as const;
 });
 
+function layerSourceLabel(
+    url: string | null,
+    presets: BackgroundPreset[],
+    emptyLabel: string
+): string {
+    if (!url) return emptyLabel;
+    if (presets.some((preset) => preset.src === url)) return 'Theme pattern';
+    return 'Custom image';
+}
+
+function showUploadError(description: string) {
+    toast.add({
+        title: 'Background image not applied',
+        description,
+        color: 'error',
+    });
+}
+
+function applyUploadedLayer(
+    which: LayerKey,
+    token: string,
+    currentOpacity: number
+) {
+    // Photos are usually meant as a single cover image, not a tiny tiled pattern.
+    const layer = {
+        url: token,
+        fit: true,
+        repeat: 'no-repeat' as const,
+        // Keep a visible floor so a 0% leftover from "remove" does not hide the upload.
+        opacity: currentOpacity > 0 ? currentOpacity : 0.35,
+    };
+    if (which === 'contentBg1') {
+        set({ backgrounds: { content: { base: layer } } });
+        local.contentBg1Opacity = layer.opacity;
+        return;
+    }
+    if (which === 'contentBg2') {
+        set({ backgrounds: { content: { overlay: layer } } });
+        local.contentBg2Opacity = layer.opacity;
+        return;
+    }
+    set({ backgrounds: { sidebar: layer } });
+    local.sidebarBgOpacity = layer.opacity;
+}
+
 // File upload handler with security validation
-async function handleLayerUpload(file: File, which: 'contentBg1' | 'contentBg2' | 'sidebarBg') {
+async function handleLayerUpload(file: File, which: LayerKey) {
     try {
-        // Strict MIME type check using shared utility
-        if (!isAllowedImageType(file.type)) {
-            console.error('[BackgroundLayersSection] Invalid image type:', file.type);
-            return;
-        }
-        
-        // Size check
-        if (file.size > 2 * 1024 * 1024) {
-            console.error('[BackgroundLayersSection] Image too large:', file.size);
-            return;
-        }
-        
-        // Magic number validation
         const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-        if (!validateImageMagicNumber(header)) {
-            console.error('[BackgroundLayersSection] File format mismatch');
+        const validation = validateBackgroundImageFile({
+            type: file.type,
+            size: file.size,
+            header,
+        });
+        if (!validation.ok) {
+            showUploadError(backgroundImageValidationMessage(validation.reason));
+            if (import.meta.dev) {
+                console.error('[BackgroundLayersSection] Upload rejected:', {
+                    reason: validation.reason,
+                    type: file.type || '(empty)',
+                    size: file.size,
+                    maxBytes: MAX_BACKGROUND_IMAGE_BYTES,
+                });
+            }
             return;
         }
-        
-        // Persist via file store
-        const meta = await createOrRefFile(file, file.name || 'upload');
+
+        // Normalize MIME when Finder/macOS leaves File.type empty or wrong.
+        const uploadFile =
+            file.type === validation.mime
+                ? file
+                : new File([file], file.name || 'upload', {
+                      type: validation.mime,
+                      lastModified: file.lastModified,
+                  });
+
+        const meta = await createOrRefFile(
+            uploadFile,
+            uploadFile.name || 'upload'
+        );
         const token = `internal-file://${meta.hash}`;
-        
-        if (which === 'contentBg1')
-            set({ backgrounds: { content: { base: { url: token } } } });
-        else if (which === 'contentBg2')
-            set({ backgrounds: { content: { overlay: { url: token } } } });
-        else if (which === 'sidebarBg')
-            set({ backgrounds: { sidebar: { url: token } } });
-            
+        const currentOpacity = local[layerLocalKeys[which].opacity];
+        applyUploadedLayer(which, token, currentOpacity);
+
+        toast.add({
+            title: 'Background image applied',
+            description: 'Saved for this color mode.',
+            color: 'success',
+        });
+
         if (import.meta.dev) {
-            console.log('[BackgroundLayersSection] Image saved:', meta.hash.slice(0, 8));
+            console.log(
+                '[BackgroundLayersSection] Image saved:',
+                meta.hash.slice(0, 8)
+            );
         }
-    } catch (e: any) {
-        console.error('[BackgroundLayersSection] Upload failed:', e?.message);
+    } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Please try again.';
+        showUploadError(message);
+        console.error('[BackgroundLayersSection] Upload failed:', message);
     }
 }
 
@@ -496,7 +576,8 @@ watch(
     background: var(--background-editor-border);
     border: var(--md-border-width) solid var(--md-border-color);
     border-radius: 999px;
-    transition: background-color 120ms ease;
+    transition: background-color var(--app-motion-duration-fast, 120ms)
+        var(--app-motion-easing-standard, ease);
 }
 .background-toggle-thumb {
     position: absolute;
@@ -507,7 +588,8 @@ watch(
     background: var(--md-on-primary);
     border-radius: 50%;
     transform: translateY(-50%);
-    transition: left 120ms ease;
+    transition: left var(--app-motion-duration-fast, 120ms)
+        var(--app-motion-easing-standard, ease);
 }
 .background-toggle input:checked + .background-toggle-track {
     background: var(--background-editor-accent);
@@ -516,8 +598,9 @@ watch(
     left: 1.18rem;
 }
 .background-toggle input:focus-visible + .background-toggle-track {
-    outline: 3px solid var(--background-editor-accent);
-    outline-offset: 2px;
+    outline: var(--app-focus-ring-width, 3px) solid
+        var(--md-focus-ring, var(--background-editor-accent));
+    outline-offset: var(--app-focus-ring-offset, 2px);
 }
 .background-workspace {
     display: grid;
@@ -564,8 +647,9 @@ watch(
         var(--background-editor-accent);
 }
 .background-layer-item:focus-visible {
-    outline: 3px solid var(--background-editor-accent);
-    outline-offset: -3px;
+    outline: var(--app-focus-ring-width, 3px) solid
+        var(--md-focus-ring, var(--background-editor-accent));
+    outline-offset: calc(-1 * var(--app-focus-ring-width, 3px));
 }
 .background-layer-thumb {
     position: relative;

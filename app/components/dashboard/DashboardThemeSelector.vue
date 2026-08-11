@@ -163,9 +163,12 @@ const themeButtonProps = computed(() => {
     background: var(--md-surface) !important;
     border-color: var(--md-border-color) !important;
     transition:
-        background-color 120ms ease,
-        border-color 120ms ease,
-        box-shadow 120ms ease;
+        background-color var(--app-motion-duration-fast, 120ms)
+            var(--app-motion-easing-standard, ease),
+        border-color var(--app-motion-duration-fast, 120ms)
+            var(--app-motion-easing-standard, ease),
+        box-shadow var(--app-motion-duration-fast, 120ms)
+            var(--app-motion-easing-standard, ease);
 }
 .theme-option-btn :deep([data-slot='base']),
 .theme-option-btn :deep([data-slot='label']) {
@@ -201,8 +204,9 @@ const themeButtonProps = computed(() => {
     border-color: var(--md-primary) !important;
 }
 .theme-option-btn:focus-visible {
-    outline: 3px solid var(--md-primary);
-    outline-offset: 2px;
+    outline: var(--app-focus-ring-width, 3px) solid
+        var(--md-focus-ring, var(--md-primary));
+    outline-offset: var(--app-focus-ring-offset, 2px);
 }
 .theme-option-mark {
     display: grid;

@@ -27,6 +27,28 @@ export default defineTheme({
     borderWidth: '2px',
     borderWidthStrong: '2px',
     borderRadius: '3px',
+    density: {
+        controlHeightSmall: '32px',
+        controlHeightMedium: '40px',
+        controlHeightLarge: '56px',
+        spaceControl: '8px',
+        spaceSection: '16px',
+    },
+    focus: {
+        ringColor: 'var(--md-primary)',
+        ringOffset: '2px',
+    },
+    motion: {
+        durationFast: '150ms',
+        durationMedium: '200ms',
+        durationSlow: '300ms',
+        easingStandard: 'ease',
+    },
+    elevation: {
+        low: '2px 2px 0 0 var(--md-surface-variant)',
+        medium: '3px 3px 0 0 var(--md-border-color)',
+        high: '4px 4px 0 0 var(--md-border-color)',
+    },
     // Material Design 3 color palette for retro theme
     // These will generate CSS variables for both light and dark modes
     colors: {

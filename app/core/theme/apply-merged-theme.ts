@@ -44,6 +44,12 @@ import {
     createThemeBackgroundTokenResolver,
 } from './backgrounds';
 import { isBrowser } from '~/utils/env';
+import {
+    DENSITY_TOKEN_VARIABLES,
+    ELEVATION_TOKEN_VARIABLES,
+    getDensityPresetTokens,
+    getElevationPresetTokens,
+} from './theme-token-presets';
 const backgroundTokenResolver = createThemeBackgroundTokenResolver();
 
 /**
@@ -184,7 +190,13 @@ export async function applyMergedTheme(
         r.removeProperty('--md-border-radius-large');
     }
 
-    // 3. Apply color palette overrides
+    // 3. Apply per-mode appearance presets. Theme/default selections remove
+    // only the inline properties owned by this runtime, exposing authored
+    // theme tokens (or a component's literal fallback) again.
+    applyDensityOverrides(r, overrides);
+    applyElevationOverrides(r, overrides);
+
+    // 4. Apply color palette overrides
     if (overrides.colors?.enabled) {
         for (const [key, cssVar] of Object.entries(COLOR_TOKEN_REGISTRY)) {
             const val = (overrides.colors as Record<string, unknown>)[key];
@@ -212,7 +224,7 @@ export async function applyMergedTheme(
         }
     }
 
-    // 4. Build merged backgrounds
+    // 5. Build merged backgrounds
     const mergedBackgrounds = buildMergedBackgrounds(
         baseBackgrounds,
         overrides
@@ -222,7 +234,7 @@ export async function applyMergedTheme(
         shouldCommit,
     });
 
-    // 5. Apply background color overrides (if enabled)
+    // 6. Apply background color overrides (if enabled)
     const themeBaseColor = mergedBackgrounds.content?.base?.color;
     const themeOverlayColor = mergedBackgrounds.content?.overlay?.color;
     const themeSidebarColor = mergedBackgrounds.sidebar?.color;
@@ -257,7 +269,7 @@ export async function applyMergedTheme(
         }
     }
 
-    // 6. Handle gradient visibility (UI-specific)
+    // 7. Handle gradient visibility (UI-specific)
     if (overrides.backgrounds?.headerGradient?.enabled !== undefined) {
         r.setProperty(
             '--app-header-gradient-display',
@@ -270,6 +282,48 @@ export async function applyMergedTheme(
             overrides.backgrounds.bottomNavGradient.enabled ? 'block' : 'none'
         );
     } else r.removeProperty('--app-bottomnav-gradient-display');
+}
+
+function applyDensityOverrides(
+    style: CSSStyleDeclaration,
+    overrides: UserThemeOverrides
+): void {
+    const tokens = overrides.density?.enabled
+        ? getDensityPresetTokens(overrides.density.preset)
+        : null;
+    applyTokenMap(style, DENSITY_TOKEN_VARIABLES, tokens);
+    if (tokens && isBrowser()) {
+        document.documentElement.dataset.density = overrides.density?.preset!;
+    } else if (isBrowser()) {
+        delete document.documentElement.dataset.density;
+    }
+}
+
+function applyElevationOverrides(
+    style: CSSStyleDeclaration,
+    overrides: UserThemeOverrides
+): void {
+    const tokens = overrides.elevation?.enabled
+        ? getElevationPresetTokens(overrides.elevation.preset)
+        : null;
+    applyTokenMap(style, ELEVATION_TOKEN_VARIABLES, tokens);
+    if (tokens && isBrowser()) {
+        document.documentElement.dataset.elevation = overrides.elevation?.preset!;
+    } else if (isBrowser()) {
+        delete document.documentElement.dataset.elevation;
+    }
+}
+
+function applyTokenMap(
+    style: CSSStyleDeclaration,
+    variables: readonly string[],
+    tokens: Readonly<Record<string, string>> | null
+): void {
+    for (const variable of variables) {
+        const value = tokens?.[variable];
+        if (value) style.setProperty(variable, value);
+        else style.removeProperty(variable);
+    }
 }
 
 function applyPixelOverride(

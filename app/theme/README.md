@@ -86,6 +86,66 @@ Key fields you can use:
 - `backgrounds`: theme background layers (applied via `app/core/theme/backgrounds.ts`).
 - `icons`: inlined icon overrides (or use `icons.config.ts`).
 
+### Appearance tokens
+
+Themes can optionally author the shared appearance contract. Every field is
+optional: components must retain a literal fallback so existing and third-party
+themes keep their baseline geometry and effects when a token is absent.
+
+```ts
+density: {
+  controlHeightSmall: '32px',
+  controlHeightMedium: '36px',
+  controlHeightLarge: '44px',
+  spaceControl: '8px',
+  spaceSection: '16px',
+},
+focus: {
+  ringColor: 'var(--md-primary)',
+  ringOffset: '2px',
+},
+motion: {
+  durationFast: '150ms',
+  durationMedium: '200ms',
+  durationSlow: '300ms',
+  easingStandard: 'ease',
+},
+elevation: {
+  low: '0 1px 2px rgb(0 0 0 / 0.05)',
+  medium: '0 4px 10px rgb(0 0 0 / 0.1)',
+  high: '0 12px 28px rgb(0 0 0 / 0.14)',
+},
+```
+
+These generate `--app-control-height-*`, `--app-space-*`,
+`--md-focus-ring`, `--app-focus-ring-offset`, `--app-motion-*`, and
+`--app-elevation-*`. Use them with local fallbacks, for example:
+
+```css
+.toolbar-button {
+  min-height: var(--app-control-height-small, 32px);
+  transition-duration: var(--app-motion-duration-fast, 150ms);
+  box-shadow: var(--app-elevation-low, 0 1px 2px rgb(0 0 0 / 0.05));
+}
+```
+
+`--app-focus-ring-width` is intentionally not theme-authored. It is the
+global accessibility preference (1–4px) and defaults to 2px.
+
+### User appearance preferences
+
+Theme Studio offers per-color-mode density (`Theme default`, `Compact`,
+`Comfortable`, `Spacious`) and elevation (`Theme default`, `Flat`, `Subtle`,
+`Expressive`) presets. A disabled group retains its selected value but removes
+only the inline variables owned by the preference, revealing the active
+theme's authored values again.
+
+Focus-ring thickness and motion preference are global browser-local
+accessibility settings stored in `or3:user-theme-accessibility`. Motion offers
+`System` and `Reduced`; an operating-system reduced-motion preference always
+wins. Reduced motion limits transitions to 100ms and stops decorative loops
+without hiding the corresponding status content.
+
 ## Override selector syntax
 
 Selectors are CSS-like and are normalized into `data-*` attributes:
@@ -309,6 +369,7 @@ const icon = useIcon('chat.send');
 - `bun run theme:build-css` builds `/public/themes/<name>.css` from
   `cssSelectors` that use `style`.
 - `bun run theme:switch` updates `OR3_DEFAULT_THEME` in `.env`.
+- `bun run test:e2e:theme-tokens` runs the shipped-theme appearance matrix.
 
 ## Debugging tips
 

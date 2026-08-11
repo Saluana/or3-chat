@@ -30,7 +30,7 @@
             </span>
             <button
                 type="button"
-                class="shrink-0 rounded-full border border-[color:var(--md-border-color)] px-2 py-0.5 text-[11px] hover:bg-[color:var(--md-surface-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--md-primary)]/40"
+                class="shrink-0 rounded-full border border-[color:var(--md-border-color)] px-2 py-0.5 text-[11px] hover:bg-[color:var(--md-surface-hover)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]"
                 @click="emit('retry', status.sourceId)"
             >
                 Retry
@@ -58,7 +58,7 @@
                     role="option"
                     :aria-selected="result.key === activeKey"
                     :aria-disabled="result.primaryAction.disabled || undefined"
-                    class="or3-palette-option mx-1.5 sm:mx-2 flex cursor-pointer items-center gap-2.5 rounded-[var(--md-border-radius)] border-l-2 px-2 py-1.5 transition-colors duration-75"
+                    class="or3-palette-option mx-1.5 sm:mx-2 flex cursor-pointer items-center gap-2.5 rounded-[var(--md-border-radius)] border-l-2 px-2 py-1.5 transition-colors duration-[var(--app-motion-duration-fast,75ms)] ease-[var(--app-motion-easing-standard,ease)]"
                     :class="
                         result.key === activeKey
                             ? 'border-l-[color:var(--md-primary)] bg-[color-mix(in_srgb,var(--md-primary)_11%,transparent)]'

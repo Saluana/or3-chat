@@ -68,4 +68,36 @@ describe('generateThemeCssVariables', () => {
         expect(css).toContain('--md-border-radius: 8px;');
         expect(css).toContain('--md-border-radius-large: 16px;');
     });
+
+    it('emits explicitly authored density, focus, motion, and elevation tokens', () => {
+        const css = generateThemeCssVariables({
+            ...baseTheme,
+            density: {
+                controlHeightSmall: '28px',
+                controlHeightMedium: '36px',
+                controlHeightLarge: '44px',
+                spaceControl: '8px',
+                spaceSection: '16px',
+            },
+            focus: { ringColor: '#123456', ringOffset: '3px' },
+            motion: {
+                durationFast: '100ms',
+                durationMedium: '200ms',
+                durationSlow: '300ms',
+                easingStandard: 'ease-out',
+            },
+            elevation: {
+                low: '0 1px 2px rgb(0 0 0 / 0.05)',
+                medium: '0 2px 4px rgb(0 0 0 / 0.1)',
+                high: '0 8px 16px rgb(0 0 0 / 0.15)',
+            },
+        });
+
+        expect(css).toContain('--app-control-height-medium: 36px;');
+        expect(css).toContain('--app-space-section: 16px;');
+        expect(css).toContain('--md-focus-ring: #123456;');
+        expect(css).toContain('--app-focus-ring-offset: 3px;');
+        expect(css).toContain('--app-motion-duration-medium: 200ms;');
+        expect(css).toContain('--app-elevation-high: 0 8px 16px rgb(0 0 0 / 0.15);');
+    });
 });

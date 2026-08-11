@@ -54,7 +54,7 @@
                 ref="fileInputRef"
                 type="file"
                 class="sr-only"
-                accept="image/*"
+                accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif"
                 @change="onUpload"
             />
 
@@ -376,10 +376,14 @@ function copyColor() {
 .background-preview.is-muted .background-preview-image {
     opacity: 0.35 !important;
 }
-.background-preview.is-dragging,
-.background-preview:focus-visible {
+.background-preview.is-dragging {
     outline: 3px solid var(--background-editor-accent);
     outline-offset: 2px;
+}
+.background-preview:focus-visible {
+    outline: var(--app-focus-ring-width, 3px) solid
+        var(--md-focus-ring, var(--background-editor-accent));
+    outline-offset: var(--app-focus-ring-offset, 2px);
 }
 .background-preview-action {
     padding: 0.45rem 0.7rem;
@@ -477,8 +481,9 @@ function copyColor() {
     background: var(--md-primary-hover, var(--md-primary));
 }
 .background-layout-options button:focus-visible {
-    outline: 3px solid var(--background-editor-accent);
-    outline-offset: 2px;
+    outline: var(--app-focus-ring-width, 3px) solid
+        var(--md-focus-ring, var(--background-editor-accent));
+    outline-offset: var(--app-focus-ring-offset, 2px);
 }
 .background-layout-options button:disabled {
     color: var(--md-on-surface-variant);
@@ -532,8 +537,9 @@ function copyColor() {
 }
 .background-hex-input:focus-visible,
 .background-color-swatch:focus-visible {
-    outline: 2px solid var(--background-editor-accent);
-    outline-offset: 2px;
+    outline: var(--app-focus-ring-width, 2px) solid
+        var(--md-focus-ring, var(--background-editor-accent));
+    outline-offset: var(--app-focus-ring-offset, 2px);
 }
 @media (max-width: 520px) {
     .background-inspector-header {

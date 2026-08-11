@@ -96,7 +96,7 @@
                                 v-for="chip in mainChips"
                                 :key="chip.key"
                                 type="button"
-                                class="shrink-0 inline-flex items-center gap-1.5 px-3 h-7 rounded-full text-[13px] border transition-colors duration-100"
+                                class="shrink-0 inline-flex items-center gap-1.5 px-3 h-7 rounded-full text-[13px] border transition-colors duration-[var(--app-motion-duration-fast,100ms)] ease-[var(--app-motion-easing-standard,ease)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]"
                                 :class="
                                     capability === chip.key
                                         ? 'border-[var(--md-primary)] bg-[color-mix(in_srgb,var(--md-primary)_10%,transparent)] text-[var(--md-primary)] font-medium'
@@ -115,7 +115,7 @@
                             <UPopover v-model:open="moreOpen">
                                 <button
                                     type="button"
-                                    class="shrink-0 inline-flex items-center gap-1.5 px-3 h-7 rounded-full text-[13px] border transition-colors duration-100"
+                                    class="shrink-0 inline-flex items-center gap-1.5 px-3 h-7 rounded-full text-[13px] border transition-colors duration-[var(--app-motion-duration-fast,100ms)] ease-[var(--app-motion-easing-standard,ease)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]"
                                     :class="
                                         isMoreChipActive
                                             ? 'border-[var(--md-primary)] bg-[color-mix(in_srgb,var(--md-primary)_10%,transparent)] text-[var(--md-primary)] font-medium'
@@ -899,7 +899,8 @@ onMounted(() => {
 <style scoped>
 .mc-overlay-left-enter-active,
 .mc-overlay-left-leave-active {
-    transition: opacity 0.18s ease;
+    transition: opacity var(--app-motion-duration-medium, 0.18s)
+        var(--app-motion-easing-standard, ease);
 }
 .mc-overlay-left-enter-from,
 .mc-overlay-left-leave-to {
@@ -907,7 +908,8 @@ onMounted(() => {
 }
 .mc-overlay-left-enter-active .mc-panel,
 .mc-overlay-left-leave-active .mc-panel {
-    transition: transform 0.18s ease;
+    transition: transform var(--app-motion-duration-medium, 0.18s)
+        var(--app-motion-easing-standard, ease);
 }
 .mc-overlay-left-enter-from .mc-panel,
 .mc-overlay-left-leave-to .mc-panel {
@@ -916,8 +918,10 @@ onMounted(() => {
 .mc-overlay-right-enter-active,
 .mc-overlay-right-leave-active {
     transition:
-        opacity 0.18s ease,
-        transform 0.18s ease;
+        opacity var(--app-motion-duration-medium, 0.18s)
+            var(--app-motion-easing-standard, ease),
+        transform var(--app-motion-duration-medium, 0.18s)
+            var(--app-motion-easing-standard, ease);
 }
 .mc-overlay-right-enter-from,
 .mc-overlay-right-leave-to {

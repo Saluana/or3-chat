@@ -6,6 +6,10 @@ import type { UserThemeOverrides } from './user-overrides-types';
 import { EMPTY_USER_OVERRIDES } from './user-overrides-types';
 import { applyMergedTheme } from './apply-merged-theme';
 import { isUserFontChoice } from './font-options';
+import {
+    isDensityPreset,
+    isElevationPreset,
+} from './theme-token-presets';
 import { invalidateBackgroundToken, revokeBackgroundBlobs } from './backgrounds';
 import { isBrowser } from '~/utils/env';
 
@@ -70,7 +74,12 @@ function loadFromStorage(mode: 'light' | 'dark'): UserThemeOverrides | null {
     try {
         const key = mode === 'light' ? STORAGE_KEY_LIGHT : STORAGE_KEY_DARK;
         const raw = localStorage.getItem(key);
-        return raw ? (JSON.parse(raw) as UserThemeOverrides) : null;
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return null;
+        }
+        return validatePatch(parsed as Partial<UserThemeOverrides>) as UserThemeOverrides;
     } catch (error) {
         console.warn('[user-theme-overrides] Failed to parse stored data', error);
         return null;
@@ -276,6 +285,21 @@ function validatePatch(patch: Partial<UserThemeOverrides>): Partial<UserThemeOve
     ]) {
         if (layer?.opacity !== undefined) {
             layer.opacity = Math.max(0, Math.min(1, layer.opacity));
+        }
+    }
+    for (const group of ['density', 'elevation'] as const) {
+        const value = result[group];
+        if (!value) continue;
+        if (value.enabled !== undefined && typeof value.enabled !== 'boolean') {
+            delete value.enabled;
+        }
+        if (
+            value.preset !== undefined &&
+            (group === 'density'
+                ? !isDensityPreset(value.preset)
+                : !isElevationPreset(value.preset))
+        ) {
+            delete value.preset;
         }
     }
     return result;

@@ -310,6 +310,46 @@ describe('useUserThemeOverrides', () => {
         expect(overrides.value.shape?.borderRadiusLargePx).toBe(0);
     });
 
+    it('accepts documented density and elevation presets and rejects unknown ones', () => {
+        const { set, overrides } = useUserThemeOverrides();
+
+        set({
+            density: { enabled: true, preset: 'comfortable' },
+            elevation: { enabled: true, preset: 'flat' },
+        });
+        expect(overrides.value.density).toEqual({
+            enabled: true,
+            preset: 'comfortable',
+        });
+        expect(overrides.value.elevation).toEqual({
+            enabled: true,
+            preset: 'flat',
+        });
+
+        set({
+            density: { preset: 'unknown' as any },
+            elevation: { preset: 'raised' as any },
+        });
+        expect(overrides.value.density?.preset).toBe('comfortable');
+        expect(overrides.value.elevation?.preset).toBe('flat');
+    });
+
+    it('drops invalid stored appearance preset values at the storage boundary', () => {
+        localStorageMock.setItem(
+            'or3:user-theme-overrides:light',
+            JSON.stringify({
+                density: { enabled: true, preset: 'unknown' },
+                elevation: { enabled: 'yes', preset: 'raised' },
+            })
+        );
+        delete (globalThis as any).__or3UserThemeOverrides;
+
+        const { overrides } = useUserThemeOverrides();
+        expect(overrides.value.density?.preset).toBeUndefined();
+        expect(overrides.value.elevation?.preset).toBeUndefined();
+        expect(overrides.value.elevation?.enabled).toBeUndefined();
+    });
+
     it('validates opacity range (0-1)', () => {
         const { set, overrides } = useUserThemeOverrides();
 

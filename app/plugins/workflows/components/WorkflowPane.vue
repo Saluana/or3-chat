@@ -1270,6 +1270,11 @@ watch(
 .workflow-toggle-active:focus-visible {
     box-shadow: none !important;
 }
+.workflow-toggle-active:focus-visible {
+    outline: var(--app-focus-ring-width, 2px) solid
+        var(--md-focus-ring, var(--md-primary));
+    outline-offset: var(--app-focus-ring-offset, 2px);
+}
 
 .workflow-canvas {
     position: relative;

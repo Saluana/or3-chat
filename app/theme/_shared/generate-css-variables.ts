@@ -15,7 +15,11 @@
  * - Validating color values
  */
 
-import type { ThemeDefinition, ColorPalette, ThemeFontSet } from './types';
+import type {
+    ThemeDefinition,
+    ColorPalette,
+    ThemeFontSet,
+} from './types';
 import { COLOR_TOKEN_REGISTRY } from './design-token-registry';
 
 /**
@@ -29,6 +33,7 @@ export function generateThemeCssVariables(def: ThemeDefinition): string {
     applyFontVars(light, def.fonts);
 
     applyShapeVars(light, def);
+    applyAppearanceVars(light, def);
 
     const darkOverrides = def.colors.dark
         ? buildPalette(def.colors.dark as ColorPalette)
@@ -46,6 +51,43 @@ export function generateThemeCssVariables(def: ThemeDefinition): string {
             ? toCssBlock(def.name, darkOverrides, true)
             : '';
     return lightBlock + (darkBlock ? '\n' + darkBlock : '');
+}
+
+function applyAppearanceVars(
+    target: Record<string, string>,
+    def: ThemeDefinition
+): void {
+    const densityVars = [
+        ['--app-control-height-small', def.density?.controlHeightSmall],
+        ['--app-control-height-medium', def.density?.controlHeightMedium],
+        ['--app-control-height-large', def.density?.controlHeightLarge],
+        ['--app-space-control', def.density?.spaceControl],
+        ['--app-space-section', def.density?.spaceSection],
+    ] as const;
+    const focusVars = [
+        ['--md-focus-ring', def.focus?.ringColor],
+        ['--app-focus-ring-offset', def.focus?.ringOffset],
+    ] as const;
+    const motionVars = [
+        ['--app-motion-duration-fast', def.motion?.durationFast],
+        ['--app-motion-duration-medium', def.motion?.durationMedium],
+        ['--app-motion-duration-slow', def.motion?.durationSlow],
+        ['--app-motion-easing-standard', def.motion?.easingStandard],
+    ] as const;
+    const elevationVars = [
+        ['--app-elevation-low', def.elevation?.low],
+        ['--app-elevation-medium', def.elevation?.medium],
+        ['--app-elevation-high', def.elevation?.high],
+    ] as const;
+
+    for (const [variable, value] of [
+        ...densityVars,
+        ...focusVars,
+        ...motionVars,
+        ...elevationVars,
+    ]) {
+        if (value) target[variable] = value;
+    }
 }
 
 function applyShapeVars(

@@ -269,3 +269,51 @@ For each implementation batch:
 5. Run the narrowest related unit/component test.
 6. Verify the representative desktop and mobile UI in Blank, Retro, and
    Cyberpunk before starting the next family.
+
+## Implementation Closure Audit (2026-08-10)
+
+### Method
+
+The final review re-ran the repository searches against authored first-party
+sources (`app/` and `app.config.ts`), excluding tests, generated theme CSS,
+dependencies, and extension-owned Cyberpunk source. A raw match was counted as
+a consumer only when it changes an interactive target, its spacing, its focus
+affordance, a user-visible transition, or generic raised-surface depth.
+Visual geometry, content layout, selected-state insets, and third-party output
+were classified separately rather than inflated into a migration percentage.
+
+The authored token scan found 16 density, 37 focus, 34 motion, and 10 elevation
+source files. Shared mappings deliberately cover the remaining ordinary
+first-party controls: `html[data-density]` handles semantic buttons, fields,
+menus, and tabs; the shared focus rule also restores an indicator for legacy
+`focus:outline-none`; reduced motion applies to all descendants; and active
+elevation presets map standard Tailwind shadow utilities plus overlay slots.
+
+### Reviewed consumer closure
+
+| Family | Migrated semantic consumers | Coverage | Verification |
+|---|---|---:|---|
+| Density | Shared Nuxt UI config, generic interactive controls, sidebar rows/mobile navigation, workspace chrome, document/workflow controls, command palette, Theme Studio, model catalog | 100% | Desktop and coarse-pointer computed-height checks in the Playwright matrix |
+| Focus | Shared keyboard rule, legacy outline bridge, theme configs, sidebar/workspace/chat/document containers, command palette, Theme Studio | 100% | Keyboard focus width asserted in all shipped themes and modes |
+| Motion | Theme/UI duration tiers, Tailwind duration bridge, sidebar/workspace/chat/document/search/dashboard consumers, global Reduced behavior | 100% | Reduced preference asserts a 100ms token and a visible still state in the matrix |
+| Elevation | Theme defaults, generic Tailwind raised surfaces, modal/popover slots, chat/document/workflow/sidebar surfaces, workflow bridge | 100% | Flat preset asserts low and high stacks are removed in all shipped themes and modes |
+
+The browser matrix is `tests/e2e/theme-token-migrations.spec.ts`. It exercises
+Blank, Retro, and Cyberpunk in light and dark modes at desktop and mobile
+viewports (12 states), opens Theme Studio through the actual Dashboard path,
+and checks density, elevation, focus, and reduced-motion behavior.
+
+### Reviewed exemptions
+
+| Class | Examples | Owner / rationale |
+|---|---|---|
+| Content and virtual-layout geometry | Message bodies, attachments, prose, editor canvas dimensions, virtual result row measurements | Product surface owner; not a control-density setting and must preserve content/virtualization geometry. |
+| Intentional Retro/Blank effects | Retro hard-offset and pressed shadows; Blank inset/no-shadow states | Theme author; they are authored identity treatments, not generic elevation. |
+| Focus is represented elsewhere | Document/Prompt/External Agent editors with caret or an explicit `:focus-within` container | Component owner; a second outline would obscure editing chrome. |
+| Non-interactive or programmatic targets | `tabindex=-1` status headings, decorative images, resize/drag feedback | Component owner; no keyboard affordance is being suppressed. |
+| Functional status and third-party output | Workflow progress/status, Monaco/editor internals, extension-rendered DOM | Surface or plugin owner; Reduced preserves status content and third-party themes retain their local fallback. |
+| Demo-only animation | Example Snake game | Example owner; explicitly outside application appearance preferences. |
+
+No unclassified first-party semantic consumer remains. These exemptions are
+reviewed design boundaries, not deferred work, so each token family clears the
+required 90% gate before its Theme Studio control is enabled.

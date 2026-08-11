@@ -861,10 +861,10 @@ async function openAdmin() {
    through unchanged. */
 
 const NAV_ITEM_BASE_CLASS =
-    'mobile-nav-item group flex flex-1 min-w-0 flex-col items-center justify-center gap-[3px] rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-1 py-1.5 min-h-[54px] text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] hover:text-[var(--md-on-surface)] active:bg-[var(--md-surface-active)] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]';
+    'mobile-nav-item group flex flex-1 min-w-0 flex-col items-center justify-center gap-[3px] rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-1 py-1.5 min-h-[54px] text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-hover)] hover:text-[var(--md-on-surface)] active:bg-[var(--md-surface-active)] transition-colors duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]';
 
 const NAV_ITEM_ACTIVE_CLASS =
-    'mobile-nav-item group flex flex-1 min-w-0 flex-col items-center justify-center gap-[3px] rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-1 py-1.5 min-h-[54px] text-[var(--md-primary)] bg-[var(--md-primary)]/10 hover:bg-[var(--md-primary)]/15 hover:text-[var(--md-primary)] active:bg-[var(--md-primary)]/20 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]';
+    'mobile-nav-item group flex flex-1 min-w-0 flex-col items-center justify-center gap-[3px] rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-1 py-1.5 min-h-[54px] text-[var(--md-primary)] bg-[var(--md-primary)]/10 hover:bg-[var(--md-primary)]/15 hover:text-[var(--md-primary)] active:bg-[var(--md-primary)]/20 transition-colors duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]';
 
 function createNavItemProps(state?: 'active') {
     const overrides = useThemeOverrides({
@@ -909,14 +909,14 @@ const createButtonProps = computed(() => {
     return {
         ...restOverrides,
         class: [
-            'mobile-nav-item mobile-nav-create group flex flex-1 min-w-0 flex-col items-center justify-center gap-[3px] rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-1 py-1.5 min-h-[54px] text-[var(--md-on-surface-variant)] hover:text-[var(--md-on-surface)] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]',
+            'mobile-nav-item mobile-nav-create group flex flex-1 min-w-0 flex-col items-center justify-center gap-[3px] rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-1 py-1.5 min-h-[54px] text-[var(--md-on-surface-variant)] hover:text-[var(--md-on-surface)] transition-colors duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]',
             overrideClass,
         ],
     };
 });
 
 const MENU_ITEM_CLASS =
-    'mobile-nav-menu-item flex items-center gap-2.5 w-full min-h-[44px] px-3 py-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[14px] text-left text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]';
+    'mobile-nav-menu-item flex items-center gap-2.5 w-full min-h-[44px] px-3 py-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[14px] text-left text-[var(--md-on-surface)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] transition-colors duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]';
 
 // Create menu rows
 const createItemOverrides = useThemeOverrides({

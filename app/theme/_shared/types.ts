@@ -153,6 +153,39 @@ export interface ThemeBackgrounds extends ThemeBackgroundSlots {
 }
 
 /**
+ * Optional shared density tokens authored by a theme. Components retain a
+ * local literal fallback, so third-party themes may omit these safely.
+ */
+export interface ThemeDensityTokens {
+    controlHeightSmall?: string;
+    controlHeightMedium?: string;
+    controlHeightLarge?: string;
+    spaceControl?: string;
+    spaceSection?: string;
+}
+
+/** Focus affordance tokens authored by a theme. */
+export interface ThemeFocusTokens {
+    ringColor?: string;
+    ringOffset?: string;
+}
+
+/** Shared transition tokens authored by a theme. */
+export interface ThemeMotionTokens {
+    durationFast?: string;
+    durationMedium?: string;
+    durationSlow?: string;
+    easingStandard?: string;
+}
+
+/** Shared elevation stacks authored by a theme. */
+export interface ThemeElevationTokens {
+    low?: string;
+    medium?: string;
+    high?: string;
+}
+
+/**
  * CSS attribute selector operators
  */
 export type AttributeOperator =
@@ -272,6 +305,18 @@ export interface ThemeDefinition {
 
     /** Large panel/dialog radius - generates --md-border-radius-large */
     borderRadiusLarge?: string;
+
+    /** Shared control heights and layout gaps for density-aware components. */
+    density?: ThemeDensityTokens;
+
+    /** Theme-authored color and offset for keyboard focus indicators. */
+    focus?: ThemeFocusTokens;
+
+    /** Shared duration and easing tokens for appearance transitions. */
+    motion?: ThemeMotionTokens;
+
+    /** Shared low/medium/high elevation stacks for generic raised surfaces. */
+    elevation?: ThemeElevationTokens;
 
     /**
      * Component overrides using CSS selector syntax

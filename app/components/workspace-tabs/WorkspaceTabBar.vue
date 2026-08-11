@@ -723,7 +723,10 @@ watch(
     gap: var(--or3-chrome-item-gap);
     min-width: 0;
     flex: 1;
-    min-height: calc(32px + (2 * var(--or3-tab-overflow-pad)));
+    min-height: calc(
+        var(--or3-workspace-tab-height, 32px) +
+            var(--or3-tab-overflow-pad) + var(--or3-tab-overflow-pad)
+    );
     overflow: visible;
 }
 .workspace-tab-bar-shell::before {
@@ -762,16 +765,18 @@ watch(
     flex: 0 1 clamp(96px, 15vw, 220px);
     min-width: 96px;
     max-width: 220px;
-    height: 32px;
+    height: var(--or3-workspace-tab-height, 32px);
     margin-inline-end: 0;
-    transition: transform 0.14s ease;
+    transition: transform var(--app-motion-duration-fast, 0.14s)
+        var(--app-motion-easing-standard, ease);
 }
 .workspace-tab {
     display: flex;
     align-items: center;
     gap: 7px;
     width: 100%;
-    height: 32px;
+    box-sizing: border-box;
+    height: var(--or3-workspace-tab-height, 32px);
     padding: 0 30px 0 10px;
     border: var(--md-border-width, 1px) solid
         var(--or3-tab-border, var(--md-border-color));
@@ -781,9 +786,12 @@ watch(
     box-shadow: var(--or3-tab-shadow, none);
     text-align: left;
     transition:
-        background-color 0.15s ease,
-        border-color 0.15s ease,
-        opacity 0.15s ease;
+        background-color var(--app-motion-duration-fast, 0.15s)
+            var(--app-motion-easing-standard, ease),
+        border-color var(--app-motion-duration-fast, 0.15s)
+            var(--app-motion-easing-standard, ease),
+        opacity var(--app-motion-duration-fast, 0.15s)
+            var(--app-motion-easing-standard, ease);
 }
 .workspace-tab:hover {
     background: var(--or3-tab-bg-hover, var(--md-surface-hover));
@@ -813,8 +821,9 @@ watch(
 .workspace-tab:focus-visible,
 .workspace-tab-close:focus-visible,
 :deep(.workspace-tab-new:focus-visible) {
-    outline: var(--md-border-width, 2px) solid var(--md-primary);
-    outline-offset: 2px;
+    outline: var(--app-focus-ring-width, 2px) solid
+        var(--md-focus-ring, var(--md-primary));
+    outline-offset: var(--app-focus-ring-offset, 2px);
 }
 .workspace-tab-icon {
     flex: none;
@@ -828,7 +837,7 @@ watch(
     white-space: nowrap;
     min-width: 0;
     font-size: 13px;
-    line-height: 1;
+    line-height: 1.25;
 }
 .workspace-tab-status {
     width: 7px;
@@ -840,7 +849,8 @@ watch(
 .workspace-tab-status.is-streaming,
 .workspace-tab-status.is-loading,
 .workspace-tab-status.is-saving {
-    animation: workspace-tab-pulse 1s ease-in-out infinite alternate;
+    animation: workspace-tab-pulse var(--app-motion-duration-slow, 1s)
+        var(--app-motion-easing-standard, ease-in-out) infinite alternate;
 }
 .workspace-tab-status.is-error {
     background: var(--md-error, #ba1a1a);
@@ -849,7 +859,8 @@ watch(
     position: absolute;
     z-index: 1;
     right: 3px;
-    top: 4px;
+    top: 50%;
+    transform: translateY(-50%);
     display: grid;
     place-items: center;
     width: 24px;
@@ -895,8 +906,8 @@ watch(
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: var(--or3-workspace-tab-height, 32px);
+    height: var(--or3-workspace-tab-height, 32px);
     margin: 0;
     padding: 0;
     border: var(--md-border-width, 1px) solid
@@ -981,7 +992,10 @@ watch(
     color: var(--md-on-surface);
     box-shadow: var(
         --or3-tab-menu-shadow,
-        0 8px 24px color-mix(in srgb, var(--md-on-surface) 18%, transparent)
+        var(
+            --app-elevation-high,
+            0 8px 24px color-mix(in srgb, var(--md-on-surface) 18%, transparent)
+        )
     );
 }
 .workspace-tab-context button {
@@ -996,8 +1010,9 @@ watch(
     background: var(--md-surface-hover);
 }
 .workspace-tab-context button:focus-visible {
-    outline: var(--md-border-width, 2px) solid var(--md-primary);
-    outline-offset: -2px;
+    outline: var(--app-focus-ring-width, 2px) solid
+        var(--md-focus-ring, var(--md-primary));
+    outline-offset: calc(-1 * var(--app-focus-ring-offset, 2px));
     background: var(--md-surface-hover);
 }
 .workspace-tab-context button:disabled {

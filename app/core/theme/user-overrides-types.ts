@@ -29,6 +29,18 @@ export type UserFontChoice =
     | 'vt323'
     | 'press-start-2p';
 
+export type DensityPreset =
+    | 'theme'
+    | 'compact'
+    | 'comfortable'
+    | 'spacious';
+
+export type ElevationPreset =
+    | 'theme'
+    | 'flat'
+    | 'subtle'
+    | 'expressive';
+
 /**
  * Purpose:
  * Top-level user theme overrides. Each sub-object has an `enabled` toggle
@@ -137,6 +149,18 @@ export interface UserThemeOverrides {
         borderRadiusLargePx?: number;
     };
 
+    /** Shared desktop density. Values are retained while temporarily disabled. */
+    density?: {
+        enabled?: boolean;
+        preset?: DensityPreset;
+    };
+
+    /** Shared generic elevation. Values are retained while temporarily disabled. */
+    elevation?: {
+        enabled?: boolean;
+        preset?: ElevationPreset;
+    };
+
     /** UI-specific settings (not in theme DSL) */
     ui?: {
         /** Reduce pattern opacity in high contrast modes */
@@ -175,6 +199,8 @@ export const EMPTY_USER_OVERRIDES: UserThemeOverrides = {
     colors: { enabled: false },
     backgrounds: { enabled: false },
     shape: { enabled: false },
+    density: { enabled: false, preset: 'theme' },
+    elevation: { enabled: false, preset: 'theme' },
     typography: {},
     ui: {},
 };

@@ -121,8 +121,9 @@ function selectMode(mode: 'light' | 'dark') {
     translate: 0 var(--md-border-width-subtle);
 }
 .theme-mode-option:focus-visible {
-    outline: 3px solid var(--md-primary);
-    outline-offset: 2px;
+    outline: var(--app-focus-ring-width, 3px) solid
+        var(--md-focus-ring, var(--md-primary));
+    outline-offset: var(--app-focus-ring-offset, 2px);
 }
 .theme-mode-section {
     display: flex;

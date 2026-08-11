@@ -741,7 +741,8 @@ watch(
     background: var(--theme-editor-border);
     border: var(--md-border-width) solid var(--md-border-color);
     border-radius: 999px;
-    transition: background-color 120ms ease;
+    transition: background-color var(--app-motion-duration-fast, 120ms)
+        var(--app-motion-easing-standard, ease);
 }
 .palette-toggle-thumb {
     position: absolute;
@@ -752,7 +753,8 @@ watch(
     background: var(--md-on-primary);
     border-radius: 50%;
     transform: translateY(-50%);
-    transition: left 120ms ease;
+    transition: left var(--app-motion-duration-fast, 120ms)
+        var(--app-motion-easing-standard, ease);
 }
 .palette-toggle input:checked + .palette-toggle-track {
     background: var(--theme-editor-accent);
@@ -761,8 +763,9 @@ watch(
     left: 1.18rem;
 }
 .palette-toggle input:focus-visible + .palette-toggle-track {
-    outline: 3px solid var(--theme-editor-accent);
-    outline-offset: 2px;
+    outline: var(--app-focus-ring-width, 3px) solid
+        var(--md-focus-ring, var(--theme-editor-accent));
+    outline-offset: var(--app-focus-ring-offset, 2px);
 }
 .color-workspace {
     display: grid;
@@ -821,8 +824,9 @@ watch(
 .color-list-item:focus-visible {
     position: relative;
     z-index: 1;
-    outline: 3px solid var(--theme-editor-accent);
-    outline-offset: -3px;
+    outline: var(--app-focus-ring-width, 3px) solid
+        var(--md-focus-ring, var(--theme-editor-accent));
+    outline-offset: calc(-1 * var(--app-focus-ring-width, 3px));
 }
 .color-list-swatch,
 .color-editor-swatch {
@@ -926,8 +930,9 @@ watch(
 }
 .color-hex-input:focus-visible,
 .rgb-fields input:focus-visible {
-    outline: 2px solid var(--theme-editor-accent);
-    outline-offset: 1px;
+    outline: var(--app-focus-ring-width, 2px) solid
+        var(--md-focus-ring, var(--theme-editor-accent));
+    outline-offset: var(--app-focus-ring-offset, 1px);
     border-color: var(--theme-editor-accent) !important;
 }
 .rgb-fields {

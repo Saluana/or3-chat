@@ -107,6 +107,28 @@ Use theme tokens in CSS:
 
 Avoid `rgb(var(--md-primary))` style usage; tokens already contain full values.
 
+### Appearance token fallbacks
+
+For controls, focus, motion, and generic raised surfaces, use the shared
+appearance tokens with the pre-migration literal as the fallback:
+
+```css
+.my-control {
+  min-height: var(--app-control-height-medium, 36px);
+  outline-offset: var(--app-focus-ring-offset, 2px);
+  transition-duration: var(--app-motion-duration-fast, 150ms);
+  box-shadow: var(--app-elevation-medium, 0 4px 10px rgb(0 0 0 / 0.1));
+}
+```
+
+Theme authors may define `density`, `focus`, `motion`, and `elevation` in
+`theme.ts`; all values are optional. The Theme Studio can then apply a
+per-light/dark density or elevation preset, or restore the authored value with
+Theme default. Focus-ring thickness (1–4px) and System/Reduced motion are
+global accessibility preferences. Never use a theme to override the selected
+focus width, and preserve a textual or still state when reduced motion stops a
+decorative animation.
+
 ## Step 6: Use cssSelectors for non-component DOM
 
 ```ts

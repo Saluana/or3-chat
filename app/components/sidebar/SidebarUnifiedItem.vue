@@ -3,7 +3,7 @@
         ref="el"
         role="button"
         tabindex="0"
-        class="min-w-0 group flex items-center gap-2.5 px-2.5 py-2.5 group relative transition-colors duration-200 rounded-[var(--md-border-radius-small,var(--md-border-radius))] cursor-pointer animate-sidebar-item-enter unified-sb-item theme-btn retro-press"
+        class="min-w-0 group flex items-center gap-2.5 px-2.5 py-2.5 group relative transition-colors duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] cursor-pointer focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)] animate-sidebar-item-enter unified-sb-item theme-btn retro-press"
         :class="{
             'bg-[color:var(--md-primary)]/12 dark:bg-[color:var(--md-primary)]/20 text-[color:var(--md-primary)] unified-sb-item-active':
                 active,

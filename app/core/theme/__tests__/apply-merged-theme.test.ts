@@ -199,6 +199,51 @@ describe('applyMergedTheme', () => {
         expect(style.getPropertyValue('--md-border-radius-large')).toBe('');
     });
 
+    it('applies and removes owned density and elevation preset variables', async () => {
+        const style = document.documentElement.style;
+
+        await applyMergedTheme(
+            'light',
+            {
+                density: { enabled: true, preset: 'spacious' },
+                elevation: { enabled: true, preset: 'flat' },
+                colors: { enabled: false },
+                backgrounds: { enabled: false },
+                typography: {},
+                ui: {},
+            },
+            mockThemePlugin as any
+        );
+
+        expect(style.getPropertyValue('--app-control-height-small')).toBe('36px');
+        expect(style.getPropertyValue('--app-control-height-medium')).toBe('44px');
+        expect(style.getPropertyValue('--app-control-height-large')).toBe('52px');
+        expect(style.getPropertyValue('--app-elevation-low')).toBe('none');
+        expect(style.getPropertyValue('--app-elevation-high')).toBe('none');
+        expect(document.documentElement.dataset.density).toBe('spacious');
+        expect(document.documentElement.dataset.elevation).toBe('flat');
+
+        await applyMergedTheme(
+            'light',
+            {
+                density: { enabled: false, preset: 'spacious' },
+                elevation: { enabled: true, preset: 'theme' },
+                colors: { enabled: false },
+                backgrounds: { enabled: false },
+                typography: {},
+                ui: {},
+            },
+            mockThemePlugin as any
+        );
+
+        expect(style.getPropertyValue('--app-control-height-small')).toBe('');
+        expect(style.getPropertyValue('--app-control-height-medium')).toBe('');
+        expect(style.getPropertyValue('--app-elevation-low')).toBe('');
+        expect(style.getPropertyValue('--app-elevation-high')).toBe('');
+        expect(document.documentElement.dataset.density).toBeUndefined();
+        expect(document.documentElement.dataset.elevation).toBeUndefined();
+    });
+
     it('should apply color palette overrides when enabled', async () => {
         const overrides: UserThemeOverrides = {
             colors: {

@@ -53,7 +53,7 @@ const selectMenuProps = computed(() => {
     } = overrideValue;
 
     const baseClass =
-        'h-[32px] text-[14px] px-2 w-full min-w-[100px] max-w-full truncate whitespace-nowrap';
+        'h-[var(--app-control-height-small,32px)] text-[14px] px-2 w-full min-w-[100px] max-w-full truncate whitespace-nowrap';
     const mergedClass = [
         baseClass,
         typeof themeClass === 'string' ? themeClass : '',
