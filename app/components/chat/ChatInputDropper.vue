@@ -416,6 +416,7 @@ const allowUserOverride = computed(
 const hasInstanceKey = computed(
     () => openRouterAvailability.value.hasInstanceKey
 );
+let componentDisposed = false;
 
 onMounted(async () => {
     if (!process.client) return;
@@ -464,6 +465,7 @@ onMounted(async () => {
 
         // Request mentions extension (lazy loads if plugin is installed)
         await hooks.doAction('editor:request-extensions');
+        if (componentDisposed) return;
 
         // Allow plugins to add editor extensions via filter
         try {
@@ -481,8 +483,9 @@ onMounted(async () => {
                 if (next.length) extensions = next;
             }
         } catch {}
+        if (componentDisposed) return;
 
-        editor.value = new Editor({
+        const nextEditor = new Editor({
             extensions,
             editorProps: {
                 attributes: {
@@ -500,6 +503,11 @@ onMounted(async () => {
             },
             content: '',
         });
+        if (componentDisposed) {
+            nextEditor.destroy();
+            return;
+        }
+        editor.value = nextEditor;
         await restoreDraft(props.tabId);
     } catch (err) {
         // Silently handle TipTap init failure
@@ -507,6 +515,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+    componentDisposed = true;
     clearDraftCaptureTimer();
     if (props.tabId) captureDraft(props.tabId);
     else releaseAll();

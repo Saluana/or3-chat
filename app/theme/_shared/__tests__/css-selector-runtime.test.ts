@@ -139,6 +139,22 @@ describe('CSS Selector Runtime', () => {
                 expect(el.classList.contains('multi-class')).toBe(true);
             });
         });
+
+        it('releases theme-owned classes when matching elements are removed', async () => {
+            const element = document.createElement('div');
+            element.className = 'temporary-theme-node';
+            container.appendChild(element);
+            applyThemeClasses('detached-node-theme', {
+                '.temporary-theme-node': { class: 'theme-owned' },
+            });
+            expect(element.classList.contains('theme-owned')).toBe(true);
+
+            element.remove();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            expect(element.classList.contains('theme-owned')).toBe(false);
+            removeThemeClasses('detached-node-theme');
+        });
     });
 
     describe('removeThemeClasses', () => {

@@ -17,10 +17,11 @@ export default defineNuxtPlugin(() => {
     );
 
     // Register some test hooks that fire on different events
+    const hookDisposers: Array<() => void> = [];
 
     // 1. Fire hooks every 2 seconds to show activity
     let counter = 0;
-    setInterval(() => {
+    const interval = setInterval(() => {
         counter++;
         hooks.doAction('test.inspector.tick', { count: counter });
 
@@ -36,34 +37,44 @@ export default defineNuxtPlugin(() => {
     }, 2000);
 
     // 2. Listen to some real app hooks to show actual activity
-    hooks.on('ui.pane.switch:action', (payload: any) => {
-        console.log('[HookInspectorTest] Pane switched to', payload?.index);
-    });
+    hookDisposers.push(
+        hooks.on('ui.pane.switch:action', (payload: any) => {
+            console.log('[HookInspectorTest] Pane switched to', payload?.index);
+        })
+    );
 
-    hooks.on('ui.sidebar.select:action:before', (info: any) => {
-        console.log('[HookInspectorTest] Sidebar selection:', info);
-    });
+    hookDisposers.push(
+        hooks.on('ui.sidebar.select:action:before', (info: any) => {
+            console.log('[HookInspectorTest] Sidebar selection:', info);
+        })
+    );
 
     // 3. Register the error-throwing hook
-    hooks.on('test.inspector.error', (_ctx: any) => {
-        throw new Error('Test error from Hook Inspector demo');
-    });
+    hookDisposers.push(
+        hooks.on('test.inspector.error', (_ctx: any) => {
+            throw new Error('Test error from Hook Inspector demo');
+        })
+    );
 
     // 4. Register hooks for the tick and filter
-    hooks.on('test.inspector.tick', (payload: any) => {
-        console.log('[HookInspectorTest] Tick:', payload.count);
-    });
+    hookDisposers.push(
+        hooks.on('test.inspector.tick', (payload: any) => {
+            console.log('[HookInspectorTest] Tick:', payload.count);
+        })
+    );
 
-    hooks.on(
-        'test.inspector.filter',
-        ((value: string) => {
-            return value.toUpperCase();
-        }) as (v: unknown) => unknown,
-        { kind: 'filter' }
+    hookDisposers.push(
+        hooks.on(
+            'test.inspector.filter',
+            ((value: string) => {
+                return value.toUpperCase();
+            }) as (v: unknown) => unknown,
+            { kind: 'filter' }
+        )
     );
 
     // 5. Add a dashboard plugin with a test button
-    registerDashboardPlugin({
+    const dashboardHandle = registerDashboardPlugin({
         id: 'hook-inspector-test',
         icon: 'pixelarticons:zap',
         label: 'Hook Test',
@@ -93,14 +104,26 @@ export default defineNuxtPlugin(() => {
     });
 
     // Register the rapid test hooks
-    hooks.on('test.rapid.action1', () => console.log('Rapid 1'));
-    hooks.on('test.rapid.action2', () => console.log('Rapid 2'));
-    hooks.on('test.rapid.action3', () => console.log('Rapid 3'));
-    hooks.on('test.rapid.filter1', (v: any) => v, { kind: 'filter' });
-    hooks.on('test.rapid.filter2', (v: any) => v, { kind: 'filter' });
-    hooks.on('test.rapid.burst', (payload: any) => {
-        console.log('Burst', payload.iteration);
-    });
+    hookDisposers.push(
+        hooks.on('test.rapid.action1', () => console.log('Rapid 1')),
+        hooks.on('test.rapid.action2', () => console.log('Rapid 2')),
+        hooks.on('test.rapid.action3', () => console.log('Rapid 3')),
+        hooks.on('test.rapid.filter1', (v: any) => v, { kind: 'filter' }),
+        hooks.on('test.rapid.filter2', (v: any) => v, { kind: 'filter' }),
+        hooks.on('test.rapid.burst', (payload: any) => {
+            console.log('Burst', payload.iteration);
+        })
+    );
+
+    let cleanedUp = false;
+    const cleanup = () => {
+        if (cleanedUp) return;
+        cleanedUp = true;
+        clearInterval(interval);
+        for (const dispose of hookDisposers) dispose();
+        dashboardHandle.dispose();
+    };
+    import.meta.hot?.dispose(cleanup);
 
     console.log('[HookInspectorTest] 🎯 Plugin loaded successfully!');
     console.log('[HookInspectorTest] 📊 Background hooks will fire every 2s');

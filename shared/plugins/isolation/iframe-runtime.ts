@@ -240,6 +240,7 @@ function buildUiMethodSpecs(
  * Host-side sandboxed iframe controller for isolated-client UI.
  */
 export class IframeIsolationRuntime {
+    static readonly MAX_CRASH_REPORTS = 100;
     readonly #pluginId: string;
     readonly #origin: string;
     readonly #src: string;
@@ -468,6 +469,11 @@ export class IframeIsolationRuntime {
             fatal,
         };
         this.#crashReports.push(report);
+        if (
+            this.#crashReports.length > IframeIsolationRuntime.MAX_CRASH_REPORTS
+        ) {
+            this.#crashReports.shift();
+        }
         this.#onCrash?.(report);
         if (fatal) {
             this.teardown('crash');

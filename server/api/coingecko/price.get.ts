@@ -13,6 +13,11 @@ import { defineEventHandler, getQuery, setResponseStatus, setHeader } from 'h3';
 
 const COINGECKO_URL = 'https://api.coingecko.com/api/v3/simple/price';
 const CACHE_TTL_MS = 30 * 1000;
+const CACHE_MAX_ENTRIES = 128;
+const FETCH_TIMEOUT_MS = 10_000;
+const MAX_IDS = 50;
+const MAX_VS_CURRENCIES = 20;
+const MAX_QUERY_ITEM_LENGTH = 100;
 
 type CachedEntry = {
     value: Record<string, Record<string, number>>;
@@ -27,8 +32,49 @@ function isFresh(entry: CachedEntry): boolean {
     return Date.now() - entry.storedAt < CACHE_TTL_MS;
 }
 
+function normalizeQueryList(
+    raw: string,
+    maxItems: number
+): { items: string[]; value: string } | null {
+    const items = Array.from(
+        new Set(
+            raw
+                .split(',')
+                .map((item) => item.trim().toLowerCase())
+                .filter(Boolean)
+        )
+    ).sort();
+    if (
+        items.length === 0 ||
+        items.length > maxItems ||
+        items.some((item) => item.length > MAX_QUERY_ITEM_LENGTH)
+    ) {
+        return null;
+    }
+    return { items, value: items.join(',') };
+}
+
 function buildCacheKey(ids: string, vsCurrencies: string): string {
     return `${ids}|${vsCurrencies}`;
+}
+
+function readCache(cacheKey: string): CachedEntry | undefined {
+    const entry = cache.get(cacheKey);
+    if (!entry) return undefined;
+    // Map insertion order doubles as a tiny LRU without another dependency.
+    cache.delete(cacheKey);
+    cache.set(cacheKey, entry);
+    return entry;
+}
+
+function writeCache(cacheKey: string, entry: CachedEntry): void {
+    cache.delete(cacheKey);
+    cache.set(cacheKey, entry);
+    while (cache.size > CACHE_MAX_ENTRIES) {
+        const oldestKey = cache.keys().next().value as string | undefined;
+        if (!oldestKey) break;
+        cache.delete(oldestKey);
+    }
 }
 
 /**
@@ -71,19 +117,33 @@ function simulatedPrice(
  */
 export default defineEventHandler(async (event) => {
     const query = getQuery(event);
-    const ids = typeof query.ids === 'string' ? query.ids.trim() : '';
-    const vsCurrencies =
+    const rawIds = typeof query.ids === 'string' ? query.ids.trim() : '';
+    const rawVsCurrencies =
         typeof query.vs_currencies === 'string'
             ? query.vs_currencies.trim()
             : '';
 
-    if (!ids || !vsCurrencies) {
+    if (!rawIds || !rawVsCurrencies) {
         setResponseStatus(event, 400);
         return { error: 'Missing ids or vs_currencies query params.' };
     }
 
+    const normalizedIds = normalizeQueryList(rawIds, MAX_IDS);
+    const normalizedVsCurrencies = normalizeQueryList(
+        rawVsCurrencies,
+        MAX_VS_CURRENCIES
+    );
+    if (!normalizedIds || !normalizedVsCurrencies) {
+        setResponseStatus(event, 400);
+        return {
+            error: `Invalid query. Use at most ${MAX_IDS} coin IDs and ${MAX_VS_CURRENCIES} currencies.`,
+        };
+    }
+    const ids = normalizedIds.value;
+    const vsCurrencies = normalizedVsCurrencies.value;
+
     const cacheKey = buildCacheKey(ids, vsCurrencies);
-    const cached = cache.get(cacheKey);
+    const cached = readCache(cacheKey);
 
     if (cached && isFresh(cached)) {
         setHeader(event, 'X-Or3-Cache', cached.simulated ? 'simulated' : 'hit');
@@ -106,6 +166,7 @@ export default defineEventHandler(async (event) => {
 
         const response = await fetch(url.toString(), {
             headers: { accept: 'application/json' },
+            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         });
 
         if (response.ok) {
@@ -114,7 +175,7 @@ export default defineEventHandler(async (event) => {
                 Record<string, number>
             >;
             const entry = { value: data, storedAt: Date.now() };
-            cache.set(cacheKey, entry);
+            writeCache(cacheKey, entry);
             return entry;
         }
 
@@ -125,15 +186,11 @@ export default defineEventHandler(async (event) => {
                 return cached;
             }
 
-            const idsList = ids.split(',').map((id) => id.trim());
-            const vsList = vsCurrencies.split(',').map((id) => id.trim());
             const simulated: Record<string, Record<string, number>> = {};
 
-            for (const coinId of idsList) {
-                if (!coinId) continue;
+            for (const coinId of normalizedIds.items) {
                 simulated[coinId] = {};
-                for (const vs of vsList) {
-                    if (!vs) continue;
+                for (const vs of normalizedVsCurrencies.items) {
                     simulated[coinId][vs] = simulatedPrice(coinId, vs);
                 }
             }
@@ -143,7 +200,7 @@ export default defineEventHandler(async (event) => {
                 storedAt: Date.now(),
                 simulated: true,
             };
-            cache.set(cacheKey, entry);
+            writeCache(cacheKey, entry);
             return entry;
         }
 

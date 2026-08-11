@@ -383,6 +383,7 @@ export type IsolatedServerHealth = {
  * Host controller for an isolated-server child process.
  */
 export class IsolatedServerRuntime {
+    static readonly MAX_CRASH_REPORTS = 100;
     readonly #pluginId: string;
     readonly #workspaceId: string;
     readonly #generation: number;
@@ -688,6 +689,11 @@ export class IsolatedServerRuntime {
             ...(exitCode !== undefined ? { exitCode } : {}),
         };
         this.#crashReports.push(report);
+        if (
+            this.#crashReports.length > IsolatedServerRuntime.MAX_CRASH_REPORTS
+        ) {
+            this.#crashReports.shift();
+        }
         this.#onCrash?.(report);
         if (fatal && this.#child) {
             this.terminate('crash');

@@ -1,6 +1,6 @@
 # useCommandPaletteShortcut
 
-Global keyboard handler for the command palette. It binds Cmd/Ctrl+K to open the palette and Escape to close it, then prewarms the search module during idle time.
+Global keyboard handler for the command palette. It binds Cmd/Ctrl+K to open the palette and Escape to close it, then preloads the search code during idle time.
 
 ## Purpose
 
@@ -8,7 +8,7 @@ Global keyboard handler for the command palette. It binds Cmd/Ctrl+K to open the
 
 -   `Cmd+K` or `Ctrl+K` — opens the palette (capture phase, so it wins over pane-local handlers). Repeated presses refocus instead of stacking overlays.
 -   `Escape` — closes the palette when it is open.
--   Idle time schedules `warm()` so the first open is instant.
+-   Idle time preloads the coordinator code. Workspace content is indexed only when the palette is opened, avoiding an always-resident copy of every searchable record.
 
 Listeners are removed on unmount.
 

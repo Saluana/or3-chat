@@ -665,7 +665,9 @@ async function copyColor(key: ColorKey) {
     if (!val || !val.startsWith('#')) return;
     try {
         await copyToClipboard(val);
-        console.log('[ColorPaletteSection] Copied color:', val);
+        if (import.meta.dev) {
+            console.log('[ColorPaletteSection] Copied color:', val);
+        }
     } catch {
         console.error('[ColorPaletteSection] Copy failed');
     }

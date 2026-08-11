@@ -83,12 +83,20 @@ export default defineNuxtRouteMiddleware(async (to) => {
         const status = getStatus(error);
 
         if (status === 404) {
-            console.log('[admin-auth middleware] Admin session route unavailable (404), redirecting to login');
+            if (import.meta.dev) {
+                console.log(
+                    '[admin-auth middleware] Admin session route unavailable (404), redirecting to login'
+                );
+            }
             return navigateTo('/admin/login');
         }
 
         if (status === 401 || status === 403) {
-            console.log('[admin-auth middleware] Not authenticated, redirecting to login');
+            if (import.meta.dev) {
+                console.log(
+                    '[admin-auth middleware] Not authenticated, redirecting to login'
+                );
+            }
             return navigateTo('/admin/login');
         }
 

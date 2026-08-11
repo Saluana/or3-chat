@@ -9,7 +9,7 @@ import { scheduleCommandPalettePrewarm } from '~/core/search/command-palette/pre
 import { useCommandPalette } from './useCommandPalette';
 
 export function useCommandPaletteShortcut(): void {
-    const { open, close, isOpen, warm } = useCommandPalette();
+    const { open, close, isOpen } = useCommandPalette();
 
     function onKeydown(event: KeyboardEvent): void {
         // Never hijack composition or an event another handler already claimed.
@@ -30,8 +30,8 @@ export function useCommandPaletteShortcut(): void {
     onMounted(() => {
         window.addEventListener('keydown', onKeydown, { capture: true });
         window.addEventListener('keydown', onEscape);
-        // Warm the search chunk while the app is idle so the first open is instant.
-        scheduleCommandPalettePrewarm(warm);
+        // Preload code only; workspace-wide indexes are built on first open.
+        scheduleCommandPalettePrewarm();
     });
 
     onBeforeUnmount(() => {

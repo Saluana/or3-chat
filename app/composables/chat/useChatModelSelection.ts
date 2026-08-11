@@ -78,10 +78,11 @@ export function useChatModelSelection(options: {
         selectedModel.value = modelId;
     }
 
+    let disposed = false;
     onMounted(async () => {
         const catalogHydration = fetchModels().catch(() => undefined);
         await getFavoriteModels();
-        if (!process.client) return;
+        if (!process.client || disposed) return;
         if (persistedModel.value) {
             selectedModel.value = persistedModel.value;
         }
@@ -90,6 +91,7 @@ export function useChatModelSelection(options: {
         await catalogHydration;
     });
     onBeforeUnmount(() => {
+        disposed = true;
         if (process.client) {
             window.removeEventListener(
                 'or3:model-selected',

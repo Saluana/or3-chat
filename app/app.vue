@@ -5,7 +5,7 @@
         <FatalErrorBoundary>
             <!-- Use NuxtLayout to avoid warning when layouts/ are present -->
             <NuxtLayout>
-                <NuxtPage :transition="false" keepalive />
+                <NuxtPage :transition="false" :keepalive="{ max: 3 }" />
             </NuxtLayout>
         </FatalErrorBoundary>
     </UApp>

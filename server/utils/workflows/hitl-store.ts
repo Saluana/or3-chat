@@ -26,6 +26,7 @@ type PendingHitl = {
     jobId: string;
     resolve: (response: HITLResponse) => void;
     reject: (error: Error) => void;
+    timeout?: ReturnType<typeof setTimeout>;
 };
 
 const pendingRequests = new Map<string, PendingHitl>();
@@ -82,20 +83,32 @@ function getPersistedResponse(
 
 export function registerHitlRequest(
     requestId: string,
-    pending: Omit<PendingHitl, 'resolve' | 'reject'>
+    pending: Omit<PendingHitl, 'resolve' | 'reject' | 'timeout'>
 ): Promise<HITLResponse> {
     return new Promise((resolve, reject) => {
-        pendingRequests.set(requestId, {
+        pendingRequests
+            .get(requestId)
+            ?.reject(new Error(`HITL request replaced: ${requestId}`));
+        const entry: PendingHitl = {
             ...pending,
             resolve: (response) => {
+                if (pendingRequests.get(requestId) !== entry) return;
+                if (entry.timeout) clearTimeout(entry.timeout);
                 pendingRequests.delete(requestId);
                 resolve(response);
             },
             reject: (error) => {
+                if (pendingRequests.get(requestId) !== entry) return;
+                if (entry.timeout) clearTimeout(entry.timeout);
                 pendingRequests.delete(requestId);
                 reject(error);
             },
-        });
+        };
+        entry.timeout = setTimeout(() => {
+            entry.reject(new Error(`HITL request timed out: ${requestId}`));
+        }, HITL_WAIT_TIMEOUT_MS);
+        entry.timeout.unref?.();
+        pendingRequests.set(requestId, entry);
 
         const startedAt = Date.now();
         const poll = async () => {
@@ -110,6 +123,7 @@ export function registerHitlRequest(
             try {
                 const provider = await getJobProvider();
                 const job = await provider.getJob(current.jobId, current.userId);
+                if (pendingRequests.get(requestId) !== current) return;
                 const requestState = getPersistedRequestState(job, requestId);
                 if (!requestState) {
                     setTimeout(() => {

@@ -403,7 +403,9 @@ async function handleLayerUpload(file: File, which: 'contentBg1' | 'contentBg2' 
         else if (which === 'sidebarBg')
             set({ backgrounds: { sidebar: { url: token } } });
             
-        console.log('[BackgroundLayersSection] Image saved:', meta.hash.slice(0, 8));
+        if (import.meta.dev) {
+            console.log('[BackgroundLayersSection] Image saved:', meta.hash.slice(0, 8));
+        }
     } catch (e: any) {
         console.error('[BackgroundLayersSection] Upload failed:', e?.message);
     }

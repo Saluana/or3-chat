@@ -74,9 +74,14 @@ export default defineNitroPlugin((nitro) => {
         event.node.res.once('close', complete);
     });
 
-    // Register shutdown handlers
-    process.on('SIGTERM', () => handleShutdown('SIGTERM'));
-    process.on('SIGINT', () => handleShutdown('SIGINT'));
+    const onSigterm = () => void handleShutdown('SIGTERM');
+    const onSigint = () => void handleShutdown('SIGINT');
+    process.on('SIGTERM', onSigterm);
+    process.on('SIGINT', onSigint);
+    nitro.hooks.hook('close', () => {
+        process.off('SIGTERM', onSigterm);
+        process.off('SIGINT', onSigint);
+    });
 
     console.info('[shutdown] Graceful shutdown handlers registered');
 });

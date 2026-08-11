@@ -42,7 +42,19 @@ interface HookMetricSeriesState {
 export interface HookDiagnosticsLegacySource {
     read(): {
         readonly timings: Readonly<Record<string, readonly number[]>>;
+        readonly timingStats?: Readonly<
+            Record<
+                string,
+                Readonly<{
+                    count: number;
+                    total: number;
+                    min: number;
+                    max: number;
+                }>
+            >
+        >;
         readonly errors: Readonly<Record<string, number>>;
+        readonly overflow?: HookMetricOverflowSnapshot;
     };
     reset(metric?: HookMetricKind): void;
 }
@@ -185,10 +197,10 @@ export class HookDiagnostics {
     #legacySnapshot(): HookDiagnosticsSnapshot {
         const source = this.#legacySource!.read();
         const series: HookMetricSeriesSnapshot[] = [];
-        let overflowEventCount = 0;
-        let overflowTimingCount = 0;
-        let overflowErrorCount = 0;
-        let overflowTimingTotal = 0;
+        let overflowEventCount = source.overflow?.eventCount ?? 0;
+        let overflowTimingCount = source.overflow?.timingCount ?? 0;
+        let overflowErrorCount = source.overflow?.errorCount ?? 0;
+        let overflowTimingTotal = source.overflow?.timingTotal ?? 0;
         const append = (snapshot: HookMetricSeriesSnapshot) => {
             if (series.length < HOOK_DIAGNOSTIC_SERIES_CAPACITY) {
                 series.push(Object.freeze(snapshot));
@@ -203,6 +215,7 @@ export class HookDiagnostics {
             }
         };
         for (const [name, samples] of Object.entries(source.timings)) {
+            const aggregate = source.timingStats?.[name];
             let total = 0;
             let min = Number.POSITIVE_INFINITY;
             let max = Number.NEGATIVE_INFINITY;
@@ -217,10 +230,10 @@ export class HookDiagnostics {
             append({
                 metric: 'timing',
                 name,
-                count: samples.length,
-                total,
-                min: samples.length ? min : 0,
-                max: samples.length ? max : 0,
+                count: aggregate?.count ?? samples.length,
+                total: aggregate?.total ?? total,
+                min: aggregate?.min ?? (samples.length ? min : 0),
+                max: aggregate?.max ?? (samples.length ? max : 0),
                 recent,
             });
         }

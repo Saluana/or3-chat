@@ -66,6 +66,20 @@ export function applyThemeClasses(
         }
     };
 
+    const releaseElement = (element: Element) => {
+        if (!(element instanceof HTMLElement) || element.isConnected) return;
+        const classes = owned.get(element);
+        if (!classes) return;
+        for (const className of classes) element.classList.remove(className);
+        owned.delete(element);
+    };
+
+    const releaseRemovedSubtree = (node: Node) => {
+        if (!(node instanceof Element)) return;
+        releaseElement(node);
+        node.querySelectorAll('*').forEach(releaseElement);
+    };
+
     const applyEntry = ([selector, config]: [string, CSSelectorConfig]) => {
         if (!config.class) return;
 
@@ -118,6 +132,11 @@ export function applyThemeClasses(
     const observeAdditions = () => {
         if (typeof MutationObserver === 'undefined' || cancelled) return;
         observer = new MutationObserver((records) => {
+            for (const record of records) {
+                for (const node of record.removedNodes) {
+                    releaseRemovedSubtree(node);
+                }
+            }
             for (const record of records) {
                 for (const node of record.addedNodes) {
                     if (!(node instanceof Element)) continue;

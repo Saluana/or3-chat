@@ -22,7 +22,9 @@ export default defineNuxtPlugin(() => {
     const features = runtimeConfig.public.features;
     
     if (!features?.workflows?.enabled) {
-        console.log('[workflows] Plugin disabled via runtime config');
+        if (import.meta.dev) {
+            console.log('[workflows] Plugin disabled via runtime config');
+        }
         return;
     }
     

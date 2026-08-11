@@ -73,6 +73,7 @@ export interface HookEngine {
     off(disposer: () => void): void;
 
     _diagnostics: {
+        // Rolling windows: 128 samples per hook, 2,048 distinct hook names.
         timings: Record<string, number[]>;
         errors: Record<string, number>;
         callbacks(actionOrFilter?: HookKind): number;

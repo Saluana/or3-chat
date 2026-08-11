@@ -110,6 +110,7 @@ function buildLogicMethodSpecs(
  * Plugin code reaches host services only through grant-checked RPC.
  */
 export class WorkerIsolationRuntime {
+    static readonly MAX_CRASH_REPORTS = 100;
     readonly #pluginId: string;
     readonly #createWorker: IsolatedWorkerFactory;
     readonly #moduleUrl: string;
@@ -281,6 +282,11 @@ export class WorkerIsolationRuntime {
             fatal,
         };
         this.#crashReports.push(report);
+        if (
+            this.#crashReports.length > WorkerIsolationRuntime.MAX_CRASH_REPORTS
+        ) {
+            this.#crashReports.shift();
+        }
         this.#onCrash?.(report);
         if (fatal && this.#worker) {
             this.terminate('crash');

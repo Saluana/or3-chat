@@ -16,6 +16,7 @@ import { getActiveSyncGatewayAdapter } from '../../sync/gateway/registry';
 
 const WORKFLOW_POST_TYPE = 'workflow-entry';
 const CACHE_TTL_MS = 30_000;
+const MAX_WORKSPACE_CACHES = 100;
 const PULL_LIMIT = 500;
 const MAX_PULL_PAGES = 200;
 
@@ -26,6 +27,7 @@ type WorkspaceWorkflowCache = {
     hydrated: boolean;
     expiresAt: number;
     posts: Map<string, WorkflowPostPayload>;
+    refreshPromise?: Promise<WorkspaceWorkflowCache>;
 };
 
 const workspaceCaches = new Map<string, WorkspaceWorkflowCache>();
@@ -69,15 +71,40 @@ function asNumber(value: unknown): number | undefined {
     return undefined;
 }
 
+function pruneWorkspaceCaches(now: number, activeWorkspaceId: string): void {
+    for (const [workspaceId, cache] of workspaceCaches) {
+        if (
+            workspaceId !== activeWorkspaceId &&
+            !cache.refreshPromise &&
+            cache.expiresAt <= now
+        ) {
+            workspaceCaches.delete(workspaceId);
+        }
+    }
+}
+
 function getWorkspaceCache(workspaceId: string): WorkspaceWorkflowCache {
+    pruneWorkspaceCaches(Date.now(), workspaceId);
     let cache = workspaceCaches.get(workspaceId);
     if (!cache) {
+        while (workspaceCaches.size >= MAX_WORKSPACE_CACHES) {
+            const oldest = Array.from(workspaceCaches.entries()).find(
+                ([candidateId, candidate]) =>
+                    candidateId !== workspaceId && !candidate.refreshPromise
+            );
+            if (!oldest) break;
+            workspaceCaches.delete(oldest[0]);
+        }
         cache = {
             cursor: 0,
             hydrated: false,
             expiresAt: 0,
             posts: new Map<string, WorkflowPostPayload>(),
         };
+        workspaceCaches.set(workspaceId, cache);
+    } else {
+        // Touch the entry so insertion order tracks recent workspace use.
+        workspaceCaches.delete(workspaceId);
         workspaceCaches.set(workspaceId, cache);
     }
     return cache;
@@ -115,9 +142,10 @@ function applyPostChange(
     posts.set(change.pk, payload);
 }
 
-async function refreshWorkspaceCache(
+async function hydrateWorkspaceCache(
     event: H3Event,
-    workspaceId: string
+    workspaceId: string,
+    cache: WorkspaceWorkflowCache
 ): Promise<WorkspaceWorkflowCache> {
     const adapter = getActiveSyncGatewayAdapter();
     if (!adapter) {
@@ -125,13 +153,12 @@ async function refreshWorkspaceCache(
     }
 
     const now = Date.now();
-    const cache = getWorkspaceCache(workspaceId);
     const shouldFullRefresh = !cache.hydrated || cache.expiresAt <= now;
 
     let cursor = shouldFullRefresh ? 0 : cache.cursor;
-    if (shouldFullRefresh) {
-        cache.posts.clear();
-    }
+    const posts = shouldFullRefresh
+        ? new Map<string, WorkflowPostPayload>()
+        : new Map(cache.posts);
 
     let hasMore = true;
     let pages = 0;
@@ -152,7 +179,7 @@ async function refreshWorkspaceCache(
         });
 
         for (const change of result.changes) {
-            applyPostChange(cache.posts, change);
+            applyPostChange(posts, change);
         }
 
         cursor = result.nextCursor;
@@ -161,8 +188,27 @@ async function refreshWorkspaceCache(
 
     cache.cursor = cursor;
     cache.hydrated = true;
-    cache.expiresAt = now + CACHE_TTL_MS;
+    cache.expiresAt = Date.now() + CACHE_TTL_MS;
+    cache.posts = posts;
     return cache;
+}
+
+async function refreshWorkspaceCache(
+    event: H3Event,
+    workspaceId: string
+): Promise<WorkspaceWorkflowCache> {
+    const cache = getWorkspaceCache(workspaceId);
+    if (cache.refreshPromise) return await cache.refreshPromise;
+
+    const refreshPromise = hydrateWorkspaceCache(event, workspaceId, cache);
+    cache.refreshPromise = refreshPromise;
+    try {
+        return await refreshPromise;
+    } finally {
+        if (cache.refreshPromise === refreshPromise) {
+            delete cache.refreshPromise;
+        }
+    }
 }
 
 function resolveWorkflowVersion(workflow: WorkflowData): string | undefined {

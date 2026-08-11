@@ -355,7 +355,11 @@ export class SubscriptionManager {
                 elapsedMs,
             });
 
-            console.log(`[SubscriptionManager] Bootstrap complete: ${totalPulled} changes in ${elapsedMs}ms`);
+            if (import.meta.dev) {
+                console.log(
+                    `[SubscriptionManager] Bootstrap complete: ${totalPulled} changes in ${elapsedMs}ms`
+                );
+            }
         } finally {
             this.isBootstrapping = false;
         }
@@ -458,9 +462,11 @@ export class SubscriptionManager {
             if (!this.isCurrentGeneration(generation)) return;
         }
 
-        console.log(
-            `[SubscriptionManager] Snapshot bootstrap complete: ${totalPulled} records/changes in ${elapsedMs}ms`
-        );
+        if (import.meta.dev) {
+            console.log(
+                `[SubscriptionManager] Snapshot bootstrap complete: ${totalPulled} records/changes in ${elapsedMs}ms`
+            );
+        }
     }
 
     /**

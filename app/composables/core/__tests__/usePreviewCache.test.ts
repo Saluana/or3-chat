@@ -67,6 +67,49 @@ describe('usePreviewCache', () => {
         });
     });
 
+    it('coalesces concurrent loads for the same key', async () => {
+        const cache = usePreviewCache({ maxUrls: 10, maxBytes: 1000 });
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        const loader = vi.fn(async () => {
+            await gate;
+            return { url: 'blob:shared', bytes: 5 };
+        });
+
+        const first = cache.ensure('shared', loader);
+        const second = cache.ensure('shared', loader, 1);
+        release();
+
+        await expect(Promise.all([first, second])).resolves.toEqual([
+            'blob:shared',
+            'blob:shared',
+        ]);
+        expect(loader).toHaveBeenCalledTimes(1);
+        expect(cache.metrics()).toMatchObject({ urls: 1, bytes: 5 });
+    });
+
+    it('revokes a load that completes after the cache was flushed', async () => {
+        const cache = usePreviewCache({ maxUrls: 10, maxBytes: 1000 });
+        let resolveLoad!: (value: { url: string; bytes: number }) => void;
+        const pending = cache.ensure(
+            'late',
+            () =>
+                new Promise((resolve) => {
+                    resolveLoad = resolve;
+                })
+        );
+
+        cache.flushAll();
+        resolveLoad({ url: 'blob:late', bytes: 12 });
+
+        await expect(pending).resolves.toBeUndefined();
+        expect(cache.peek('late')).toBeUndefined();
+        expect(cache.metrics()).toMatchObject({ urls: 0, bytes: 0 });
+        expect(revokeObjectUrl).toHaveBeenCalledWith('blob:late');
+    });
+
     it('treats omitted byte counts as zero', async () => {
         const cache = usePreviewCache({ maxUrls: 10, maxBytes: 1000 });
 

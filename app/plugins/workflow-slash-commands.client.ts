@@ -317,7 +317,9 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     const or3Config = useOr3Config();
     if (!or3Config.features.workflows.enabled) {
-        console.log('[workflow-slash] Workflows disabled via OR3 config');
+        if (import.meta.dev) {
+            console.log('[workflow-slash] Workflows disabled via OR3 config');
+        }
         return;
     }
 
@@ -335,7 +337,9 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     // Check feature flag
     if (slashConfig.enabled === false || !workflowSlashEnabled) {
-        console.log('[workflow-slash] Plugin disabled via feature flag');
+        if (import.meta.dev) {
+            console.log('[workflow-slash] Plugin disabled via feature flag');
+        }
         return;
     }
 
@@ -1552,7 +1556,9 @@ export default defineNuxtPlugin((nuxtApp) => {
                     return [...list, module.WorkflowNode, SlashCommandExtension];
                 });
 
-                console.log('[workflow-slash] Extension registered');
+                if (import.meta.dev) {
+                    console.log('[workflow-slash] Extension registered');
+                }
             },
             { kind: 'action' }
         )
@@ -1745,14 +1751,16 @@ export default defineNuxtPlugin((nuxtApp) => {
             }
 
             // Log workflow structure for debugging
-            console.log('[workflow-slash] Workflow structure:', {
-                id: workflowPost.id,
-                title: workflowPost.title,
-                hasNodes: Array.isArray(workflowPost.meta.nodes),
-                hasEdges: Array.isArray(workflowPost.meta.edges),
-                nodesCount: Array.isArray(workflowPost.meta.nodes) ? workflowPost.meta.nodes.length : 'N/A',
-                edgesCount: Array.isArray(workflowPost.meta.edges) ? workflowPost.meta.edges.length : 'N/A'
-            });
+            if (import.meta.dev) {
+                console.log('[workflow-slash] Workflow structure:', {
+                    id: workflowPost.id,
+                    title: workflowPost.title,
+                    hasNodes: Array.isArray(workflowPost.meta.nodes),
+                    hasEdges: Array.isArray(workflowPost.meta.edges),
+                    nodesCount: Array.isArray(workflowPost.meta.nodes) ? workflowPost.meta.nodes.length : 'N/A',
+                    edgesCount: Array.isArray(workflowPost.meta.edges) ? workflowPost.meta.edges.length : 'N/A'
+                });
+            }
 
             // Execute the workflow
             if (import.meta.dev) {

@@ -171,9 +171,11 @@ export function useModelStore() {
     }
 
     async function invalidate() {
-        console.info(
-            '[models-cache] invalidate called — clearing memory + Dexie (if available)'
-        );
+        if (import.meta.dev) {
+            console.info(
+                '[models-cache] invalidate called — clearing memory + Dexie (if available)'
+            );
+        }
         catalog.value = [];
         lastLoadedAt.value = undefined;
         if (!canUseDexie()) return;
@@ -221,14 +223,18 @@ export function useModelStore() {
         if (inFlight && !opts?.force) return inFlight;
 
         const fetchPromise = (async () => {
-            console.info('[models-cache] fetching models from network');
+            if (import.meta.dev) {
+                console.info('[models-cache] fetching models from network');
+            }
             try {
                 const list = await modelsService.fetchModels(opts);
                 catalog.value = list;
                 lastLoadedAt.value = Date.now();
-                console.info(
-                    '[models-cache] network fetch successful — updated memory, persisting to Dexie'
-                );
+                if (import.meta.dev) {
+                    console.info(
+                        '[models-cache] network fetch successful — updated memory, persisting to Dexie'
+                    );
+                }
                 // Removed network source console.log
                 // persist async (don't block response)
                 saveToDexie(list).catch(() => {});

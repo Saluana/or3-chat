@@ -103,7 +103,9 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
             await stopSyncEngine();
         }
 
-        console.log('[sync-engine] Starting sync engine for workspace:', workspaceId);
+        if (import.meta.dev) {
+            console.log('[sync-engine] Starting sync engine for workspace:', workspaceId);
+        }
 
         // Get or create provider
         const provider = getActiveSyncProvider();
@@ -151,7 +153,7 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
             gcManager,
         };
 
-        console.log('[sync-engine] Sync engine started');
+        if (import.meta.dev) console.log('[sync-engine] Sync engine started');
     })();
 
     try {
@@ -168,7 +170,7 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
 async function stopSyncEngine(): Promise<void> {
     if (stopInFlight) return stopInFlight;
 
-    console.log('[sync-engine] Stopping sync engine');
+    if (import.meta.dev) console.log('[sync-engine] Stopping sync engine');
 
     if (authRetryTimeout) {
         clearTimeout(authRetryTimeout);
@@ -209,7 +211,7 @@ async function stopSyncEngine(): Promise<void> {
 
         engineState = null;
         stopInFlight = null;
-        console.log('[sync-engine] Sync engine stopped');
+        if (import.meta.dev) console.log('[sync-engine] Sync engine stopped');
     })();
 
     return stopInFlight;
@@ -244,7 +246,7 @@ export default defineNuxtPlugin(async () => {
 
     // Only run when SSR auth and sync are enabled
     if (!runtimeConfig.public.ssrAuthEnabled || !runtimeConfig.public.sync?.enabled) {
-        console.log('[sync-engine] Sync disabled, skipping sync');
+        if (import.meta.dev) console.log('[sync-engine] Sync disabled, skipping sync');
         return;
     }
     authTokenBroker = useAuthTokenBroker();
@@ -258,7 +260,9 @@ export default defineNuxtPlugin(async () => {
             registerSyncProvider(gatewayProvider);
         }
         setActiveSyncProvider(providerId);
-        console.log('[sync-engine] Registered gateway sync provider:', providerId);
+        if (import.meta.dev) {
+            console.log('[sync-engine] Registered gateway sync provider:', providerId);
+        }
     } catch (error) {
         console.error('[sync-engine] Failed to register sync provider:', error);
         return;

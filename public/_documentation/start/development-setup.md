@@ -99,6 +99,20 @@ OPENROUTER_API_KEY=sk-or-xxxxxxxxxxxxxxxxxxxxxxxx
 These are optional for normal local development. Restart the dev server after
 changing environment files so Nuxt picks them up.
 
+### Developing sibling OR3 packages
+
+OR3 Chat normally uses the versioned packages installed in `node_modules` so
+long-running Vite sessions keep a bounded module graph. When working across a
+multi-repository checkout, opt into sibling source packages explicitly:
+
+```bash
+OR3_USE_LOCAL_PACKAGES=true bun run dev
+```
+
+This aliases adjacent `or3-vsc` and `or3-workflows` source trees into both the
+client and server builds. Enable it only while editing those packages because
+their larger source graphs make each HMR invalidation more expensive.
+
 ---
 
 ## 5. Dev server flags
@@ -106,6 +120,7 @@ changing environment files so Nuxt picks them up.
 -   Nuxt serves the app at **http://localhost:3000/** by default.
 -   Pass extra flags after `--` (e.g., `bun run dev -- --https --open`).
 -   Expect warm-up time on first boot while Nuxt generates `.nuxt/` and Vite builds chunks.
+-   Nuxt DevTools remains available, but its Vite Inspect and timeline collectors are disabled because they retain transform and hook history across long HMR sessions.
 
 ---
 

@@ -1080,9 +1080,11 @@
  * Or3Scroll rows default to overflow:hidden, which clips retro offset
  * shadows on .unified-sb-item. Allow the hard shadow to paint, and lift
  * the hovered row above neighbors so the right/bottom edge stays intact.
+ * flow-root keeps child margins inside the ResizeObserver measurement.
  */
 [data-theme='retro'] .sidebar-scroll.or3-scroll .or3-scroll-item {
 	overflow: visible;
+	display: flow-root;
 	position: relative;
 }
 

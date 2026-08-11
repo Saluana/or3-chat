@@ -60,6 +60,7 @@ const sqliteNativeTraceIncludes =
           ? []
           : [resolve(__dirname, 'node_modules/better-sqlite3/lib/index.js')];
 
+const useLocalPackages = process.env.OR3_USE_LOCAL_PACKAGES === 'true';
 const localPackageCandidates = [
     {
         find: /^or3-scroll$/,
@@ -87,14 +88,17 @@ const localPackageCandidates = [
         ),
     },
 ];
-const localPackageAliases = localPackageCandidates.filter(({ replacement }) =>
-    existsSync(replacement)
-);
+const localPackageAliases = useLocalPackages
+    ? localPackageCandidates.filter(({ replacement }) =>
+          existsSync(replacement)
+      )
+    : [];
 const localWorkflowCoreSource = resolve(
     __dirname,
     '../or3-workflows/packages/workflow-core/src/index.ts',
 );
-const hasLocalWorkflowCoreSource = existsSync(localWorkflowCoreSource);
+const hasLocalWorkflowCoreSource =
+    useLocalPackages && existsSync(localWorkflowCoreSource);
 
 function isPackageInstalled(pkgName: string): boolean {
     return existsSync(resolve(__dirname, 'node_modules', pkgName));
@@ -781,9 +785,11 @@ export default defineNuxtConfig({
     },
     devtools: {
         enabled: process.env.NODE_ENV !== 'production',
-
+        // Vite Inspect retains resolution and transform history across HMR.
+        // Keep the DevTools UI available without the unbounded inspector state.
+        viteInspect: false,
         timeline: {
-            enabled: process.env.NODE_ENV !== 'production',
+            enabled: false,
         },
     },
     modules: [
@@ -1175,11 +1181,9 @@ export default defineNuxtConfig({
                 'tiptap-markdown',
                 'zod',
             ],
-            exclude: [
-                'or3-scroll',
-                'or3-workflow-core',
-                'or3-workflow-vue',
-            ],
+            exclude: localPackageAliases.length
+                ? ['or3-scroll', 'or3-workflow-core', 'or3-workflow-vue']
+                : [],
         },
         server: {
             fs: {

@@ -78,7 +78,9 @@ export default defineNuxtPlugin(() => {
     // Check OR3 config feature flag (master toggle)
     const or3Config = useOr3Config();
     if (!or3Config.features.mentions.enabled) {
-        console.log('[mentions] Plugin disabled via OR3 config');
+        if (import.meta.dev) {
+            console.log('[mentions] Plugin disabled via OR3 config');
+        }
         return;
     }
 
@@ -88,7 +90,9 @@ export default defineNuxtPlugin(() => {
 
     // If both sources are disabled, no point in initializing
     if (!documentsEnabled && !conversationsEnabled) {
-        console.log('[mentions] All mention sources disabled, skipping initialization');
+        if (import.meta.dev) {
+            console.log('[mentions] All mention sources disabled, skipping initialization');
+        }
         return;
     }
 

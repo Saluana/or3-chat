@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createHookEngine as createV1HookEngine } from '../hook-engine-core';
 import { createHookEngineV2 } from '../hook-engine-v2';
+import { HOOK_DIAGNOSTIC_SAMPLE_CAPACITY } from '../hook-diagnostics';
 
 describe.each([
     ['V1', createV1HookEngine],
@@ -8,7 +9,7 @@ describe.each([
 ] as const)(
     'V1 _diagnostics compatibility fixture (%s)',
     (_runtime, createHookEngine) => {
-        it('preserves direct plugin reads, unbounded samples, resets, errors, and callback counts', () => {
+        it('preserves direct plugin reads with bounded samples, resets, errors, and callback counts', () => {
             const engine = createHookEngine();
             const sampleCount = 1_025;
             const timingHook = 'fixture:action:timings';
@@ -28,7 +29,7 @@ describe.each([
             engine.doActionSync(errorHook);
 
             expect(engine._diagnostics.timings[timingHook]).toHaveLength(
-                sampleCount * 2,
+                HOOK_DIAGNOSTIC_SAMPLE_CAPACITY,
             );
             expect(
                 engine._diagnostics.timings[timingHook]?.every(Number.isFinite),
@@ -45,12 +46,16 @@ describe.each([
 
             expect(engine._diagnostics.timings).toEqual({});
             expect(engine._diagnostics.errors).toEqual({});
-            expect(oldTimings[timingHook]).toHaveLength(sampleCount * 2);
+            expect(oldTimings[timingHook]).toHaveLength(
+                HOOK_DIAGNOSTIC_SAMPLE_CAPACITY,
+            );
             expect(oldErrors[errorHook]).toBe(2);
 
             engine.doActionSync(timingHook);
             expect(engine._diagnostics.timings[timingHook]).toHaveLength(2);
-            expect(oldTimings[timingHook]).toHaveLength(sampleCount * 2);
+            expect(oldTimings[timingHook]).toHaveLength(
+                HOOK_DIAGNOSTIC_SAMPLE_CAPACITY,
+            );
         });
     },
 );

@@ -102,9 +102,12 @@ const registryVersion = ref(0);
 // the cursor cannot replace the preview they chose to inspect.
 const hoverLock = ref<'keyboard' | 'pointer' | null>('keyboard');
 const pointerArmedKey = ref<string | null>(null);
+const COORDINATOR_IDLE_DISPOSE_MS = 2 * 60 * 1000;
 
 let coordinator: PaletteCoordinator | null = null;
 let coordinatorPromise: Promise<PaletteCoordinator> | null = null;
+let coordinatorIdleTimer: ReturnType<typeof setTimeout> | null = null;
+let coordinatorLoadGeneration = 0;
 let unsubscribeSnapshot: (() => void) | null = null;
 let unbindLifecycle: (() => void) | null = null;
 let hostContext: PaletteHostContext | null = null;
@@ -141,6 +144,20 @@ export function refreshPaletteRegistrySnapshot(): void {
     registryVersion.value += 1;
 }
 
+function cancelCoordinatorIdleDispose(): void {
+    if (!coordinatorIdleTimer) return;
+    clearTimeout(coordinatorIdleTimer);
+    coordinatorIdleTimer = null;
+}
+
+function scheduleCoordinatorIdleDispose(): void {
+    cancelCoordinatorIdleDispose();
+    coordinatorIdleTimer = setTimeout(() => {
+        coordinatorIdleTimer = null;
+        if (!isOpen.value) disposeCommandPalette();
+    }, COORDINATOR_IDLE_DISPOSE_MS);
+}
+
 function applySnapshot(snapshot: PaletteCoordinatorSnapshot): void {
     results.value = snapshot.results;
     statuses.value = snapshot.statuses;
@@ -157,13 +174,19 @@ function applySnapshot(snapshot: PaletteCoordinatorSnapshot): void {
 }
 
 async function ensureCoordinator(): Promise<PaletteCoordinator> {
+    cancelCoordinatorIdleDispose();
     if (coordinator) return coordinator;
     if (!coordinatorPromise) {
+        const loadGeneration = coordinatorLoadGeneration;
         coordinatorPromise = (async () => {
             const module = await loadCommandPaletteSearchModule();
             const created = module.createPaletteCoordinator({
                 canOpenNewPane: () => hostContext?.canOpenNewPane() ?? false,
             });
+            if (loadGeneration !== coordinatorLoadGeneration) {
+                created.dispose();
+                return created;
+            }
             coordinator = created;
             unsubscribeSnapshot = created.subscribe(applySnapshot);
             try {
@@ -180,6 +203,8 @@ async function ensureCoordinator(): Promise<PaletteCoordinator> {
 
 /** Release coordinator resources. Used by tests and full teardown. */
 export function disposeCommandPalette(): void {
+    cancelCoordinatorIdleDispose();
+    coordinatorLoadGeneration += 1;
     releasePreview();
     unsubscribeSnapshot?.();
     unsubscribeSnapshot = null;
@@ -190,8 +215,10 @@ export function disposeCommandPalette(): void {
     coordinatorPromise = null;
     isOpen.value = false;
     query.value = '';
+    loading.value = false;
     results.value = [];
     statuses.value = [];
+    parsedCategoryId.value = undefined;
     activeKey.value = null;
     hoverLock.value = 'keyboard';
     pointerArmedKey.value = null;
@@ -347,6 +374,7 @@ async function hydrateActivePreview(): Promise<void> {
 }
 
 function open(): void {
+    cancelCoordinatorIdleDispose();
     if (isOpen.value) {
         focusToken.value += 1;
         return;
@@ -362,6 +390,7 @@ function open(): void {
     pointerArmedKey.value = null;
     void (async () => {
         const instance = await ensureCoordinator();
+        if (!isOpen.value || instance !== coordinator) return;
         applySnapshot(instance.getSnapshot());
         instance.setQuery(query.value);
     })();
@@ -386,6 +415,7 @@ function close(): void {
             // Restoring focus is best-effort.
         }
     }
+    scheduleCoordinatorIdleDispose();
 }
 
 function setQuery(next: string): void {
@@ -572,6 +602,7 @@ export function useCommandPalette(): CommandPaletteController {
         },
         warm: async () => {
             await ensureCoordinator();
+            if (!isOpen.value) scheduleCoordinatorIdleDispose();
         },
         getCoordinator: () => coordinator,
     };

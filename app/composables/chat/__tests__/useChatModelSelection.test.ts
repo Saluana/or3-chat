@@ -76,6 +76,26 @@ describe('useChatModelSelection', () => {
         expect(modelStore.getFavoriteModels).toHaveBeenCalledOnce();
     });
 
+    it('does not register the model event listener after unmount', async () => {
+        let release!: () => void;
+        modelStore.getFavoriteModels.mockReturnValue(
+            new Promise((resolve) => {
+                release = () => resolve([]);
+            })
+        );
+        const addEventListener = vi.spyOn(window, 'addEventListener');
+        const { wrapper } = mountModelSelection();
+
+        wrapper.unmount();
+        release();
+        await flushPromises();
+
+        expect(addEventListener).not.toHaveBeenCalledWith(
+            'or3:model-selected',
+            expect.any(Function)
+        );
+    });
+
     it('recognizes reasoning models without an explicit effort list', async () => {
         modelStore.favoriteModels!.value = [
             model({

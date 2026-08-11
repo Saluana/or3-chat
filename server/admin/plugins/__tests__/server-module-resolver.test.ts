@@ -83,6 +83,41 @@ describe('ServerModuleResolver', () => {
         await expect(first.handler({} as never)).resolves.toEqual({ ok: true });
     });
 
+    it('evicts the least-recently-used handler when the cache is full', async () => {
+        const { packages, pointers, stored } = await setupPackage(
+            'export default async () => ({ ok: true });\n'
+        );
+        const importModule = vi.fn(async () => ({
+            default: async () => ({ ok: true }),
+        }));
+        const resolver = new ServerModuleResolver({
+            packages,
+            pointers,
+            importModule,
+            maxCacheEntries: 1,
+        });
+
+        await resolver.resolveHandler({
+            pluginId: 'alpha',
+            packageDigest: stored.digest,
+            handlerPath: 'server/health.get.mjs',
+        });
+        await resolver.resolveHandler({
+            pluginId: 'alpha',
+            packageDigest: stored.digest,
+            handlerPath: 'server/other.get.mjs',
+        });
+        expect(resolver.cacheSize).toBe(1);
+
+        const reloaded = await resolver.resolveHandler({
+            pluginId: 'alpha',
+            packageDigest: stored.digest,
+            handlerPath: 'server/health.get.mjs',
+        });
+        expect(reloaded.cacheHit).toBe(false);
+        expect(importModule).toHaveBeenCalledTimes(3);
+    });
+
     it('loads a different digest as new code', async () => {
         const { packages, pointers, stored } = await setupPackage(
             'export default async () => ({ version: 1 });\n'

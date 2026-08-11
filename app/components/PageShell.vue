@@ -1799,10 +1799,9 @@ if (process.client) {
     const root = document.documentElement;
     const observer = new MutationObserver(syncTheme);
     observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    onUnmounted(() => observer.disconnect());
     if (import.meta.hot) {
         import.meta.hot.dispose(() => observer.disconnect());
-    } else {
-        onUnmounted(() => observer.disconnect());
     }
 }
 const themeAriaLabel = computed(() =>

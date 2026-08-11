@@ -280,7 +280,9 @@ const workspaceDbCache = new LRUCache<string, Or3DB>({
 
         try {
             db.close();
-            console.debug(`[db:client] Closed evicted workspace DB: ${workspaceId}`);
+            if (import.meta.dev) {
+                console.debug(`[db:client] Closed evicted workspace DB: ${workspaceId}`);
+            }
         } catch (error) {
             console.warn(`[db:client] Failed to close workspace DB ${workspaceId}:`, error);
         }
@@ -464,12 +466,16 @@ export function getWorkspaceDb(workspaceId: string): Or3DB {
         ) {
             workspaceDbCache.get(activeWorkspaceId);
         }
-        console.debug(`[db:client] Workspace DB cache full (${workspaceDbCache.size}/${MAX_CACHED_WORKSPACE_DBS}), will evict LRU`);
+        if (import.meta.dev) {
+            console.debug(`[db:client] Workspace DB cache full (${workspaceDbCache.size}/${MAX_CACHED_WORKSPACE_DBS}), will evict LRU`);
+        }
     }
 
     const created = new Or3DB(`or3-db-${workspaceId}`);
     workspaceDbCache.set(workspaceId, created);
-    console.debug(`[db:client] Created workspace DB: ${workspaceId} (cache: ${workspaceDbCache.size}/${MAX_CACHED_WORKSPACE_DBS})`);
+    if (import.meta.dev) {
+        console.debug(`[db:client] Created workspace DB: ${workspaceId} (cache: ${workspaceDbCache.size}/${MAX_CACHED_WORKSPACE_DBS})`);
+    }
     return created;
 }
 

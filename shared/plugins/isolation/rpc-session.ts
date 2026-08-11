@@ -48,6 +48,7 @@ type PendingCall = {
 };
 
 let idCounter = 0;
+const MAX_SEEN_RPC_IDS = 10_000;
 
 function defaultGenerateId(): string {
     idCounter += 1;
@@ -108,6 +109,7 @@ export class RpcSession {
         }
 
         const id = options.id ?? this.#generateId();
+        this.#pruneSeen();
         if (this.#pending.has(id) || this.#seenIds.has(id)) {
             return {
                 ok: false,
@@ -222,7 +224,7 @@ export class RpcSession {
         if (this.#seenIds.has(id)) {
             return 'replay';
         }
-        this.#seenIds.set(id, this.#now());
+        this.#rememberSeen(id);
         return 'accepted';
     }
 
@@ -244,15 +246,28 @@ export class RpcSession {
         const pending = this.#pending.get(id);
         if (!pending) {
             // Late response after settle — record for replay awareness.
-            this.#seenIds.set(id, this.#now());
+            this.#rememberSeen(id);
             return;
         }
         this.#pending.delete(id);
         if (pending.timer !== null) {
             clearTimeout(pending.timer);
         }
-        this.#seenIds.set(id, this.#now());
+        this.#rememberSeen(id);
         pending.resolve(result);
+    }
+
+    #rememberSeen(id: string): void {
+        this.#pruneSeen();
+        this.#seenIds.delete(id);
+        this.#seenIds.set(id, this.#now());
+        while (this.#seenIds.size > MAX_SEEN_RPC_IDS) {
+            const oldestId = this.#seenIds.keys().next().value as
+                | string
+                | undefined;
+            if (!oldestId) break;
+            this.#seenIds.delete(oldestId);
+        }
     }
 
     #pruneSeen(): void {
@@ -260,7 +275,10 @@ export class RpcSession {
         for (const [id, at] of this.#seenIds) {
             if (at < cutoff) {
                 this.#seenIds.delete(id);
+                continue;
             }
+            // Entries are inserted in timestamp order by #rememberSeen.
+            break;
         }
     }
 }

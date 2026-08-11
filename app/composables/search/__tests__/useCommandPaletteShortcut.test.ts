@@ -97,9 +97,11 @@ describe('useCommandPaletteShortcut', () => {
         wrapper.unmount();
     });
 
-    it('schedules the idle prewarm once mounted', () => {
+    it('schedules the idle code preload once mounted', () => {
         const wrapper = mount(Host);
         expect(schedulePrewarm).toHaveBeenCalledTimes(1);
+        expect(schedulePrewarm).toHaveBeenCalledWith();
+        expect(warm).not.toHaveBeenCalled();
         wrapper.unmount();
     });
 

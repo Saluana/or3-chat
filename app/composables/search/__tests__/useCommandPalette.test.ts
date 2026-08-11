@@ -155,6 +155,24 @@ describe('useCommandPalette', () => {
         expect(palette.errorMessage.value).toBeNull();
     });
 
+    it('releases the search indexes after the palette stays closed', async () => {
+        vi.useFakeTimers();
+        try {
+            const palette = useCommandPalette();
+            palette.open();
+            await Promise.resolve();
+            vi.mocked(coordinator.dispose).mockClear();
+
+            palette.close();
+            await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
+
+            expect(coordinator.dispose).toHaveBeenCalledTimes(1);
+            expect(palette.getCoordinator()).toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('groups results and selects the first selectable row', async () => {
         const palette = useCommandPalette();
         palette.open();

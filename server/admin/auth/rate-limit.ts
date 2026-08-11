@@ -16,7 +16,7 @@ import {
 
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_ATTEMPTS = 5;
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Clean up every 5 minutes
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 const MAX_STORE_SIZE = 10000; // Bound memory usage - evict oldest when full
 
 function isRateLimitDisabled(): boolean {
@@ -30,21 +30,22 @@ interface RateLimitEntry {
 
 // In-memory storage: Map<key, RateLimitEntry>
 const rateLimitStore = new Map<string, RateLimitEntry>();
+let nextCleanupAt = 0;
 
-// Periodic cleanup to prevent unbounded memory growth
-// Use unref() to allow process to exit cleanly
-const cleanupInterval = setInterval(() => {
-    const now = Date.now();
+function pruneExpired(now: number): void {
+    if (now < nextCleanupAt) return;
+    nextCleanupAt = now + CLEANUP_INTERVAL_MS;
     for (const [key, entry] of rateLimitStore) {
         if (now - entry.windowStart > WINDOW_MS) {
             rateLimitStore.delete(key);
         }
     }
-}, CLEANUP_INTERVAL_MS);
+}
 
-// Allow process to exit even if interval is pending
-if (typeof cleanupInterval.unref === 'function') {
-    cleanupInterval.unref();
+function makeRoomFor(key: string): void {
+    if (rateLimitStore.size < MAX_STORE_SIZE || rateLimitStore.has(key)) return;
+    const oldestKey = rateLimitStore.keys().next().value as string | undefined;
+    if (oldestKey) rateLimitStore.delete(oldestKey);
 }
 
 /**
@@ -78,6 +79,7 @@ export function checkRateLimit(
 
     const key = getRateLimitKey(ip, username);
     const now = Date.now();
+    pruneExpired(now);
     const entry = rateLimitStore.get(key);
 
     if (!entry) {
@@ -127,15 +129,10 @@ export function checkRateLimit(
 export function recordFailedAttempt(ip: string, username: string): void {
     const key = getRateLimitKey(ip, username);
     const now = Date.now();
+    pruneExpired(now);
     const entry = rateLimitStore.get(key);
 
-    // Evict oldest entry if at capacity (LRU-style: Map preserves insertion order)
-    if (rateLimitStore.size >= MAX_STORE_SIZE && !rateLimitStore.has(key)) {
-        const oldestKey = rateLimitStore.keys().next().value;
-        if (oldestKey) {
-            rateLimitStore.delete(oldestKey);
-        }
-    }
+    makeRoomFor(key);
 
     if (!entry || now - entry.windowStart > WINDOW_MS) {
         // Start new window
@@ -195,14 +192,16 @@ export function checkGenericRateLimit(
 
     const key = `${category}:${ip}`;
     const now = Date.now();
+    pruneExpired(now);
     const entry = rateLimitStore.get(key);
-    
+
     // 20 requests per minute for generic admin API operations
     const maxRequests = 20;
     const windowMs = 60 * 1000; // 1 minute
 
     if (!entry) {
         // First attempt
+        makeRoomFor(key);
         rateLimitStore.set(key, {
             count: 1,
             windowStart: now,

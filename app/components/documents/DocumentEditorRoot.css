@@ -27,6 +27,8 @@
     gap: 0.15rem;
     min-width: 0;
     flex: 1 1 auto;
+    /* The horizontal scroll container clips overflow-y; reserve room for active outlines. */
+    padding-block: 2px;
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior-x: contain;

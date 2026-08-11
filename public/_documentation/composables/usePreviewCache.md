@@ -10,6 +10,7 @@ In-memory LRU-ish cache for preview assets (images, PDFs, etc.). It wraps blob U
 
 -   Normalises preview options via `resolvePreviewCacheOptions`
 -   Provides `ensure()` to fetch or reuse cached URLs
+-   Coalesces concurrent `ensure()` calls for the same key into one loader
 -   Tracks hits/misses/evictions for telemetry
 -   Supports pinning entries to avoid eviction while in view
 -   Offers helpers to promote, release, drop, and flush entries
@@ -57,7 +58,7 @@ const url = await cache.ensure(hash, () => buildPreview(hash), 1);
 
 -   `promote(key)` when a preview becomes visible
 -   `release(key)` when it scrolls off-screen
--   `drop(key)` or `flushAll()` to manually clear
+-   `drop(key)` or `flushAll()` to manually clear; pending loaders are invalidated and any blob URL they later produce is revoked
 
 ### 4. Monitor usage
 
@@ -92,9 +93,10 @@ const cache = usePreviewCache(options?: Partial<PreviewCacheOptions>);
 
 1. **Options resolution** — Merges partial overrides with defaults via `resolvePreviewCacheOptions`.
 2. **Map storage** — Maintains a `Map<key, CacheEntry>` with metadata (`bytes`, `pin`, `lastAccess`).
-3. **LRU eviction** — When limits are exceeded, entries sort by pin weight then `lastAccess`; unpinned, least-recent entries fall out first.
-4. **Blob revocation** — `remove()` revokes object URLs via `URL.revokeObjectURL` to avoid leaks.
-5. **Metrics** — Hits/misses/evictions counters increment inside `ensure()`/`evictIfNeeded()`; `metrics()` packages them for dashboards.
+3. **In-flight coalescing** — One loader runs per key. Concurrent callers share its promise, and the highest requested pin is applied to the resulting entry.
+4. **LRU eviction** — When limits are exceeded, entries sort by pin weight then `lastAccess`; unpinned, least-recent entries fall out first.
+5. **Blob revocation** — `remove()` revokes object URLs via `URL.revokeObjectURL`. A loader invalidated by `drop()` or `flushAll()` also revokes its URL instead of repopulating the cache.
+6. **Metrics** — Hits/misses/evictions counters increment inside `ensure()`/`evictIfNeeded()`; `metrics()` packages them for dashboards.
 
 ---
 

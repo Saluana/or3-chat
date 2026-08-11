@@ -88,6 +88,34 @@ describe('rpc-session (8.2)', () => {
         expect(session.rememberInboundId('inbound-1')).toBe('replay');
     });
 
+    it('prunes completed outbound ids after the replay window', async () => {
+        let now = 0;
+        const session = new RpcSession({
+            now: () => now,
+            send: (envelope) => {
+                if (envelope.kind === 'request') {
+                    queueMicrotask(() => {
+                        session.receive(
+                            createRpcResponse({ id: envelope.id, result: true })
+                        );
+                    });
+                }
+            },
+        });
+
+        await expect(
+            session.call('storage.get', {}, { id: 'reusable' })
+        ).resolves.toMatchObject({ ok: true });
+        await expect(
+            session.call('storage.get', {}, { id: 'reusable' })
+        ).resolves.toMatchObject({ ok: false, code: 'replay' });
+
+        now = 60_001;
+        await expect(
+            session.call('storage.get', {}, { id: 'reusable' })
+        ).resolves.toMatchObject({ ok: true });
+    });
+
     it('ignores late responses after settle', async () => {
         vi.useFakeTimers();
         try {

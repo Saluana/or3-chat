@@ -214,6 +214,7 @@ describe('document editor theme contract', () => {
         expect(retroCss).toContain(
             ".sidebar-scroll.or3-scroll .or3-scroll-item {\n\toverflow: visible;"
         );
+        expect(retroCss).toContain('display: flow-root;');
         expect(retroCss).toContain('margin-right: 3px;');
         expect(retroCss).toContain(
             '.sidebar-scroll.or3-scroll .or3-scroll-item:hover'

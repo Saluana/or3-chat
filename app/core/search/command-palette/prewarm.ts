@@ -28,12 +28,10 @@ export function getCommandPaletteModuleLoadGeneration(): number {
 }
 
 /**
- * Request an idle prewarm after the app is interactive.
- * Falls back to immediate warm if idle callbacks are unavailable.
+ * Preload the command-palette code after the app is interactive without
+ * hydrating the workspace-wide search indexes until the palette is opened.
  */
-export function scheduleCommandPalettePrewarm(
-    warm: () => Promise<void>
-): void {
+export function scheduleCommandPalettePrewarm(): void {
     if (prewarmScheduled) return;
     prewarmScheduled = true;
 
@@ -41,7 +39,6 @@ export function scheduleCommandPalettePrewarm(
         void (async () => {
             try {
                 await loadCommandPaletteSearchModule();
-                await warm();
             } catch {
                 // Prewarm is best-effort.
             }

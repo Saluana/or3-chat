@@ -15,7 +15,7 @@
  *
  * Constraints:
  * - In-memory only and resets on server restart.
- * - Cleanup runs on a fixed interval to remove expired entries.
+ * - Expired entries are pruned opportunistically without a process timer.
  */
 
 type RateLimitEntry = {
@@ -24,6 +24,17 @@ type RateLimitEntry = {
 };
 
 const store = new Map<string, RateLimitEntry>();
+const MAX_STORE_SIZE = 10_000;
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+let nextCleanupAt = 0;
+
+function pruneExpired(now: number): void {
+    if (now < nextCleanupAt) return;
+    nextCleanupAt = now + CLEANUP_INTERVAL_MS;
+    for (const [key, entry] of store) {
+        if (now > entry.resetAt) store.delete(key);
+    }
+}
 
 /**
  * Purpose:
@@ -54,11 +65,16 @@ export async function checkRateLimit(
 ): Promise<boolean> {
     const now = Date.now();
     const windowMs = options.window * 1000;
+    pruneExpired(now);
 
     const entry = store.get(key);
 
     if (!entry || now > entry.resetAt) {
         // New window
+        if (!entry && store.size >= MAX_STORE_SIZE) {
+            const oldestKey = store.keys().next().value as string | undefined;
+            if (oldestKey) store.delete(oldestKey);
+        }
         store.set(key, {
             count: 1,
             resetAt: now + windowMs,
@@ -88,6 +104,7 @@ export async function checkRateLimit(
 export function getRateLimitStatus(
     key: string
 ): { remaining: number; resetAt: number } | null {
+    pruneExpired(Date.now());
     const entry = store.get(key);
     if (!entry) return null;
 
@@ -96,14 +113,3 @@ export function getRateLimitStatus(
         resetAt: entry.resetAt,
     };
 }
-
-// Cleanup old entries every 5 minutes without keeping build/prerender workers alive.
-const cleanupInterval = setInterval(() => {
-    const now = Date.now();
-    for (const [key, entry] of store.entries()) {
-        if (now > entry.resetAt) {
-            store.delete(key);
-        }
-    }
-}, 5 * 60 * 1000);
-cleanupInterval.unref?.();

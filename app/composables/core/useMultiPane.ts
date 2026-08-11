@@ -6,6 +6,7 @@ import {
     computed,
     onScopeDispose,
     getCurrentScope,
+    markRaw,
     toValue,
     type Ref,
     type ComputedRef,
@@ -646,7 +647,9 @@ export function useMultiPane(
         ) {
             return;
         }
-        pane.messages = loadedMessages;
+        // Loaded history is replaced as a unit; recursively proxying every
+        // message/content payload only adds memory and does not drive updates.
+        pane.messages = markRaw(loadedMessages);
         if (oldId !== requested)
             void hooks.doAction('ui.pane.thread:action:changed', {
                 pane,

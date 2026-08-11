@@ -18,6 +18,12 @@ interface CacheEntry {
     pin: number;
 }
 
+interface PendingLoad {
+    pin: number;
+    cancelled: boolean;
+    promise: Promise<string | undefined>;
+}
+
 type LoaderResult = { url: string; bytes?: number };
 type Loader = () => Promise<unknown>;
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -55,12 +61,23 @@ export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
     const options: PreviewCacheOptions = resolvePreviewCacheOptions(opts);
 
     const map = new Map<string, CacheEntry>();
+    const inflight = new Map<string, PendingLoad>();
     let totalBytes = 0;
     let hits = 0;
     let misses = 0;
     let evictions = 0;
 
     let accessCounter = 0;
+
+    function revokeUrl(url: string): void {
+        try {
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            if (import.meta.dev) {
+                console.error('[preview-cache] revoke failed', error);
+            }
+        }
+    }
 
     function metrics(): PreviewCacheMetrics {
         return {
@@ -99,48 +116,71 @@ export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
             return existing.url;
         }
 
+        const pending = inflight.get(key);
+        if (pending) {
+            pending.pin = Math.max(pending.pin, pin);
+            hits++;
+            return await pending.promise;
+        }
+
         misses++;
-        
+        const pendingLoad = {} as PendingLoad;
+        const promise = (async () => {
+            try {
+                const result = await loader();
+
+                if (!isRecord(result)) {
+                    throw new Error(
+                        'Loader returned invalid result: expected object'
+                    );
+                }
+                if (typeof result.url !== 'string' || !result.url) {
+                    throw new Error(
+                        'Loader returned invalid url: expected non-empty string'
+                    );
+                }
+
+                const url = result.url;
+                if (pendingLoad.cancelled) {
+                    revokeUrl(url);
+                    return undefined;
+                }
+
+                const normalizedBytes = Number.isFinite(result.bytes)
+                    ? Number(result.bytes)
+                    : 0;
+                const entry: CacheEntry = {
+                    url,
+                    bytes: normalizedBytes,
+                    lastAccess: ++accessCounter,
+                    pin: pendingLoad.pin,
+                };
+
+                map.set(key, entry);
+                totalBytes += normalizedBytes;
+                evictIfNeeded();
+                return entry.url;
+            } catch (error) {
+                // Failed loads do not count as cache misses because no entry exists.
+                misses--;
+                if (import.meta.dev) {
+                    console.error(
+                        '[preview-cache] Loader failed for key:',
+                        key,
+                        error
+                    );
+                }
+                throw error;
+            }
+        })();
+        pendingLoad.pin = pin;
+        pendingLoad.cancelled = false;
+        pendingLoad.promise = promise;
+        inflight.set(key, pendingLoad);
         try {
-            const result = await loader();
-            
-            // Validate loader result
-            if (!isRecord(result)) {
-                throw new Error('Loader returned invalid result: expected object');
-            }
-            if (typeof result.url !== 'string' || !result.url) {
-                throw new Error(
-                    'Loader returned invalid url: expected non-empty string'
-                );
-            }
-            
-            const url = result.url;
-            const normalizedBytes = Number.isFinite(result.bytes)
-                ? Number(result.bytes)
-                : 0;
-            
-            // Only mutate state after successful validation
-            const entry: CacheEntry = {
-                url,
-                bytes: normalizedBytes,
-                lastAccess: ++accessCounter,
-                pin,
-            };
-            
-            map.set(key, entry);
-            totalBytes += normalizedBytes;
-            evictIfNeeded();
-            
-            return entry.url;
-        } catch (error) {
-            // Decrement misses since this didn't result in a cache entry
-            misses--;
-            
-            if (import.meta.dev) {
-                console.error('[preview-cache] Loader failed for key:', key, error);
-            }
-            
-            throw error;
+            return await promise;
+        } finally {
+            if (inflight.get(key) === pendingLoad) inflight.delete(key);
         }
     }
 
@@ -163,17 +203,14 @@ export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
         if (!entry) return undefined;
         map.delete(key);
         totalBytes -= entry.bytes;
-        try {
-            URL.revokeObjectURL(entry.url);
-        } catch (error) {
-            if (import.meta.dev) {
-                console.error('[preview-cache] revoke failed', error);
-            }
-        }
+        revokeUrl(entry.url);
         return entry;
     }
 
     function drop(key: string): boolean {
+        const pending = inflight.get(key);
+        if (pending) pending.cancelled = true;
+        inflight.delete(key);
         const entry = remove(key);
         if (!entry) return false;
         logMetrics('drop');
@@ -211,6 +248,8 @@ export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
     }
 
     function flushAll(): string[] {
+        for (const pending of inflight.values()) pending.cancelled = true;
+        inflight.clear();
         const removed: string[] = [];
         for (const key of Array.from(map.keys())) {
             const entry = remove(key);

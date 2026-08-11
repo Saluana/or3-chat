@@ -44,7 +44,7 @@ Lightweight hook engine that powers OR3’s action/filter system with priority s
 | `removeAllCallbacks`    | `(priority?)`                          | Drops all callbacks, optionally by priority.           |
 | `currentPriority`       | `() => number \| false`                | Reports the priority currently executing.              |
 
-Diagnostics live under `_diagnostics` with per-hook timing arrays and error counts.
+Diagnostics live under `_diagnostics` with per-hook timing arrays and error counts. Timing arrays retain the latest 128 samples, and both timing and error maps accept at most 2,048 distinct hook names. Runtime V2 snapshots preserve lifetime aggregates while bounding retained samples.
 
 ---
 
@@ -70,7 +70,7 @@ Diagnostics live under `_diagnostics` with per-hook timing arrays and error coun
 -   Favor the typed wrapper (`createTypedHookEngine`) or composable (`useHooks`) for better DX.
 -   Always return the transformed value from filters; returning `undefined` will propagate.
 -   Use `onceAction` for analytics pings or onboarding to avoid manual cleanup.
--   Inspect `hooks._diagnostics.timings` in devtools to spot slow listeners.
+-   Inspect `hooks._diagnostics.timings` in devtools to spot slow listeners; each array is a rolling window of the latest 128 callback samples.
 
 ---
 

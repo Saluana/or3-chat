@@ -1,3 +1,8 @@
+import {
+    HOOK_DIAGNOSTIC_SAMPLE_CAPACITY,
+    HOOK_DIAGNOSTIC_SERIES_CAPACITY,
+} from './hook-diagnostics';
+
 export type HookKind = 'action' | 'filter';
 
 export type HookFn = (...args: unknown[]) => unknown;
@@ -88,12 +93,21 @@ function globToRegExp(glob: string): RegExp {
 }
 
 const regexCache = new Map<string, RegExp>();
+const REGEX_CACHE_CAPACITY = 512;
 
 function getRegex(glob: string): RegExp {
     let regex = regexCache.get(glob);
-    if (!regex) {
-        regex = globToRegExp(glob);
+    if (regex) {
+        regexCache.delete(glob);
         regexCache.set(glob, regex);
+        return regex;
+    }
+    regex = globToRegExp(glob);
+    regexCache.set(glob, regex);
+    while (regexCache.size > REGEX_CACHE_CAPACITY) {
+        const oldestGlob = regexCache.keys().next().value as string | undefined;
+        if (!oldestGlob) break;
+        regexCache.delete(oldestGlob);
     }
     return regex;
 }
@@ -309,17 +323,34 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
 
     function recordTiming(name: string, ms: number) {
         if (Object.hasOwn(diagnostics.timings, name)) {
-            diagnostics.timings[name]!.push(ms);
+            const samples = diagnostics.timings[name]!;
+            if (samples.length >= HOOK_DIAGNOSTIC_SAMPLE_CAPACITY) {
+                samples.shift();
+            }
+            samples.push(ms);
             return;
         }
-
+        if (
+            Object.keys(diagnostics.timings).length >=
+            HOOK_DIAGNOSTIC_SERIES_CAPACITY
+        ) {
+            return;
+        }
         diagnostics.timings[name] = [ms];
     }
 
     function recordError(name: string) {
-        diagnostics.errors[name] = Object.hasOwn(diagnostics.errors, name)
-            ? diagnostics.errors[name]! + 1
-            : 1;
+        if (Object.hasOwn(diagnostics.errors, name)) {
+            diagnostics.errors[name] = diagnostics.errors[name]! + 1;
+            return;
+        }
+        if (
+            Object.keys(diagnostics.errors).length >=
+            HOOK_DIAGNOSTIC_SERIES_CAPACITY
+        ) {
+            return;
+        }
+        diagnostics.errors[name] = 1;
     }
 
     function logCallbackError(error: unknown, name: string, isFilter: boolean) {

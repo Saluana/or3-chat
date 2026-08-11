@@ -188,6 +188,7 @@ export class ServerModuleResolver {
     readonly #pointers: PluginPackagePointerStore;
     readonly #importModule: (moduleUrl: string) => Promise<unknown>;
     readonly #enabled: boolean;
+    readonly #maxCacheEntries: number;
     readonly #cache = new Map<string, CachedModule>();
 
     constructor(options: {
@@ -195,6 +196,7 @@ export class ServerModuleResolver {
         readonly pointers?: PluginPackagePointerStore;
         readonly importModule?: (moduleUrl: string) => Promise<unknown>;
         readonly enabled?: boolean;
+        readonly maxCacheEntries?: number;
     } = {}) {
         this.#packages = options.packages ?? new ImmutablePluginPackageStore();
         this.#pointers = options.pointers ?? new PluginPackagePointerStore(undefined, this.#packages);
@@ -202,6 +204,12 @@ export class ServerModuleResolver {
             options.importModule ??
             ((moduleUrl: string) => import(/* @vite-ignore */ moduleUrl) as Promise<unknown>);
         this.#enabled = options.enabled !== false;
+        const requestedMaxCacheEntries = options.maxCacheEntries ?? 256;
+        this.#maxCacheEntries =
+            Number.isFinite(requestedMaxCacheEntries) &&
+            requestedMaxCacheEntries > 0
+                ? Math.floor(requestedMaxCacheEntries)
+                : 256;
     }
 
     get cacheSize(): number {
@@ -243,6 +251,8 @@ export class ServerModuleResolver {
         const cacheId = cacheKeyString(normalizedKey);
         const cached = this.#cache.get(cacheId);
         if (cached) {
+            this.#cache.delete(cacheId);
+            this.#cache.set(cacheId, cached);
             return Object.freeze({
                 key: normalizedKey,
                 moduleUrl: cached.moduleUrl,
@@ -270,6 +280,13 @@ export class ServerModuleResolver {
             handler: imported.handler,
         });
         this.#cache.set(cacheId, record);
+        while (this.#cache.size > this.#maxCacheEntries) {
+            const oldestId = this.#cache.keys().next().value as
+                | string
+                | undefined;
+            if (!oldestId) break;
+            this.#cache.delete(oldestId);
+        }
         return Object.freeze({
             key: normalizedKey,
             moduleUrl: record.moduleUrl,

@@ -36,7 +36,7 @@ const palette = useCommandPalette();
 
 ## Notes
 
--   The search coordinator module is lazy-loaded; `warm()` preloads it during idle time.
+-   The search coordinator code is preloaded during idle time, while workspace indexes are built on first open. After the palette remains closed for two minutes, the coordinator and its indexes are disposed; reopening rebuilds them from current workspace data.
 -   Selection lock semantics: keyboard selection wins until the pointer moves; clicked selections stay locked until another explicit click.
 
 ## Related

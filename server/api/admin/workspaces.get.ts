@@ -17,7 +17,7 @@ import { isAdminEnabled } from '../../utils/admin/is-admin-enabled';
 import { getAdminFromCookie } from '../../admin/auth/jwt';
 
 const CACHE_TTL = 30000; // 30 seconds
-const CLEANUP_INTERVAL = 60000; // 1 minute
+const CACHE_MAX_ENTRIES = 256;
 
 interface WorkspaceListResult {
     items: Array<{
@@ -37,15 +37,14 @@ interface WorkspaceListResult {
 // In-memory cache for workspace lists
 const cache = new Map<string, { data: WorkspaceListResult; timestamp: number }>();
 
-// Periodic cleanup to prevent unbounded cache growth
-setInterval(() => {
-    const cutoff = Date.now() - (CACHE_TTL * 2);
-    for (const [key, value] of cache.entries()) {
+function pruneCache(): void {
+    const cutoff = Date.now() - CACHE_TTL * 2;
+    for (const [key, value] of cache) {
         if (value.timestamp < cutoff) {
             cache.delete(key);
         }
     }
-}, CLEANUP_INTERVAL);
+}
 
 /**
  * GET /api/admin/workspaces
@@ -69,6 +68,7 @@ setInterval(() => {
  * - `perPage`: Number (max 100)
  */
 export default defineEventHandler(async (event) => {
+    pruneCache();
     // Admin must be enabled
     if (!isAdminEnabled(event)) {
         throw createError({
@@ -99,6 +99,8 @@ export default defineEventHandler(async (event) => {
     // Check cache
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        cache.delete(cacheKey);
+        cache.set(cacheKey, cached);
         return cached.data;
     }
 
@@ -115,6 +117,11 @@ export default defineEventHandler(async (event) => {
 
     // Cache result
     cache.set(cacheKey, { data: result, timestamp: Date.now() });
+    while (cache.size > CACHE_MAX_ENTRIES) {
+        const oldestKey = cache.keys().next().value as string | undefined;
+        if (!oldestKey) break;
+        cache.delete(oldestKey);
+    }
 
     return result;
 });

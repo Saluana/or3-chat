@@ -133,7 +133,9 @@ async function migrateFromLocalStorage(): Promise<AiSettingsV1 | null> {
         
         // Mark as migrated by removing from localStorage
         localStorage.removeItem(LEGACY_STORAGE_KEY);
-        console.log('[useAiSettings] Migrated settings from localStorage to KV');
+        if (import.meta.dev) {
+            console.log('[useAiSettings] Migrated settings from localStorage to KV');
+        }
         
         return settings;
     } catch {

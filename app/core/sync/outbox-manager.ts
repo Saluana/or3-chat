@@ -724,7 +724,9 @@ export class OutboxManager {
 
         if (corruptIds.length > 0) {
             await this.db.pending_ops.where('id').anyOf(corruptIds).delete();
-            console.log(`[OutboxManager] Purged ${corruptIds.length} corrupt ops`);
+            if (import.meta.dev) {
+                console.log(`[OutboxManager] Purged ${corruptIds.length} corrupt ops`);
+            }
         }
 
         return corruptIds.length;
