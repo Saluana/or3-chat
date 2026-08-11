@@ -11,6 +11,8 @@
                             avatarBox: 'w-full h-full rounded-[inherit]',
                             userButtonTrigger: 'p-0 w-full h-full focus:shadow-none',
                             userButtonAvatarBox: 'w-full h-full',
+                            userButtonPopoverRootBox: '!z-[100]',
+                            userButtonPopoverCard: '!z-[100]',
                         },
                     }"
                 />
@@ -121,3 +123,14 @@ const buttonProps = computed(() => {
     };
 });
 </script>
+
+<!-- Clerk teleports account UI outside this component. Keep its portals above
+     the mobile More sheet (z-index: 80) without lowering the sheet itself. -->
+<style>
+.cl-userButtonPopoverRootBox,
+.cl-userButtonPopoverCard,
+.cl-modalBackdrop,
+.cl-modalContent {
+    z-index: 100 !important;
+}
+</style>

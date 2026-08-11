@@ -10,6 +10,9 @@
             <component
                 :is="workflowStatusComponent"
                 :workflow-state="props.message.workflowState"
+                :can-resume="canRetry"
+                :resume-disabled="!workflowExecutionEnabled"
+                @resume="retryFromHere"
             />
         </div>
 
@@ -54,24 +57,6 @@
                         @click="copyResult"
                     ></UButton>
                 </UTooltip>
-                <UTooltip
-                    v-if="canRetry"
-                    :delay-duration="500"
-                    :text="
-                        workflowExecutionEnabled
-                            ? 'Resume from last checkpoint'
-                            : 'Workflow execution disabled'
-                    "
-                    :teleport="true"
-                >
-                    <UButton
-                        v-bind="retryButtonProps"
-                        aria-label="Resume workflow"
-                        :disabled="!workflowExecutionEnabled"
-                        @click="retryFromHere"
-                    />
-                </UTooltip>
-                <!-- Add more actions like Retry/Stop here if needed in future -->
             </UFieldGroup>
         </div>
     </div>
@@ -132,8 +117,13 @@ const outputContent = computed(() => {
     return '';
 });
 
-// Show the result box when there is any content (streaming or final)
-const showResultBox = computed(() => outputContent.value.length > 0);
+// Intermediate content belongs in the focused run inspector. The standalone
+// artifact appears only after the workflow has actually completed.
+const showResultBox = computed(
+    () =>
+        props.message.workflowState?.executionState === 'completed' &&
+        outputContent.value.length > 0
+);
 
 const canRetry = computed(() => {
     const wf = props.message.workflowState;
@@ -167,23 +157,6 @@ const copyButtonProps = computed(() => {
     return {
         icon: useIcon('chat.message.copy').value,
         color: 'neutral' as const,
-        variant: 'ghost' as const,
-        size: 'xs' as const,
-        ...overrides.value,
-    };
-});
-
-const retryButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'message',
-        identifier: 'message.retry',
-        isNuxtUI: true,
-    });
-
-    return {
-        icon: useIcon('ui.refresh').value,
-        color: 'primary' as const,
         variant: 'ghost' as const,
         size: 'xs' as const,
         ...overrides.value,

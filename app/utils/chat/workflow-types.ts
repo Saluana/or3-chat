@@ -112,10 +112,15 @@ export interface NodeState {
     /** Streaming text (cleared on completion, output gets final value) */
     streamingText?: string;
 
+    /** Live provider reasoning trace, retained for the run inspector. */
+    reasoningText?: string;
+
+    /** True when the retained reasoning trace only contains the latest portion. */
+    reasoningTruncated?: boolean;
+
     /**
      * A concise, user-facing activity while the model works before it has
-     * started producing visible output. Raw reasoning is intentionally not
-     * retained or rendered in chat.
+     * started producing visible output.
      */
     activity?: 'thinking';
 
@@ -157,6 +162,12 @@ export interface BranchState {
 
     /** Streaming text */
     streamingText?: string;
+
+    /** Live provider reasoning trace for this branch. */
+    reasoningText?: string;
+
+    /** True when the retained reasoning trace only contains the latest portion. */
+    reasoningTruncated?: boolean;
 
     /** Tool calls executed by this branch */
     toolCalls?: ToolCallState[];
@@ -215,6 +226,9 @@ export interface WorkflowMessageData {
 
     /** Execution order (list of nodeIds in execution sequence) */
     executionOrder: string[];
+
+    /** Stable workflow-definition order, including nodes that have not started. */
+    nodeOrder?: string[];
 
     /** Last node that produced output */
     lastActiveNodeId?: string | null;
@@ -376,6 +390,9 @@ export interface UiWorkflowState {
     /** Execution order */
     executionOrder: string[];
 
+    /** Stable workflow-definition order, including pending nodes. */
+    nodeOrder?: string[];
+
     /** Last node that produced output */
     lastActiveNodeId?: string | null;
 
@@ -411,6 +428,24 @@ export interface UiWorkflowState {
 
     /** Version counter for reactivity */
     version?: number;
+}
+
+/** Maximum live reasoning retained per node/branch in the synced message. */
+export const WORKFLOW_REASONING_TRACE_LIMIT = 12_000;
+
+export function appendWorkflowReasoningTrace(
+    current: string | undefined,
+    delta: string,
+    limit = WORKFLOW_REASONING_TRACE_LIMIT,
+): { text: string; truncated: boolean } {
+    const combined = `${current || ''}${delta}`;
+    if (combined.length <= limit) {
+        return { text: combined, truncated: false };
+    }
+    return {
+        text: combined.slice(combined.length - limit),
+        truncated: true,
+    };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

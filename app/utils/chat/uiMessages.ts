@@ -181,6 +181,7 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
             executionState: raw.data.executionState,
             nodeStates: raw.data.nodeStates,
             executionOrder: raw.data.executionOrder,
+            nodeOrder: raw.data.nodeOrder,
             currentNodeId: raw.data.currentNodeId,
             branches: raw.data.branches,
             hitlRequests: raw.data.hitlRequests,

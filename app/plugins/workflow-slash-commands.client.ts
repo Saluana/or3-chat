@@ -824,6 +824,24 @@ export default defineNuxtPlugin((nuxtApp) => {
         // Create accumulator
         const accumulator = createWorkflowStreamAccumulator();
         accumulator.setWorkflowInfo(workflowPost.id, workflowPost.title);
+        const workflowNodes = Array.isArray(workflowPost.meta.nodes)
+            ? workflowPost.meta.nodes
+            : [];
+        accumulator.setNodePlan(
+            workflowNodes.map((node) => {
+                const data = node.data as {
+                    label?: string;
+                    model?: string;
+                    modelId?: string;
+                };
+                return {
+                    id: node.id,
+                    label: data.label || node.id,
+                    type: node.type || 'unknown',
+                    modelId: data.model || data.modelId,
+                };
+            })
+        );
         const displayPrompt = prompt;
         const basePrompt =
             prompt && prompt.trim().length > 0

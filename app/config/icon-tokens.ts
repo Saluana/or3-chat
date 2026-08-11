@@ -199,8 +199,9 @@ export const DEFAULT_ICONS = {
     'workflow.status.running': 'pixelarticons:loader',
     'workflow.status.completed': 'pixelarticons:check',
     'workflow.status.error': 'pixelarticons:close',
+    'workflow.status.cancelled': 'pixelarticons:close',
     'workflow.status.stopped': 'pixelarticons:pause',
-    'workflow.status.pending': 'pixelarticons:clock',
+    'workflow.status.pending': 'pixelarticons:circle',
 
     // Notifications
     'notification.bell': 'pixelarticons:notification',

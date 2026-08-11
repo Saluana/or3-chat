@@ -31,6 +31,12 @@ describe('normalizeTerminalWorkflowState', () => {
             executionState: 'error',
             currentNodeId: null,
             failedNodeId: 'writer',
+            nodeStates: {
+                writer: {
+                    status: 'active',
+                    finishedAt: expect.any(Number),
+                },
+            },
             result: {
                 success: false,
                 error: 'Provider request failed',

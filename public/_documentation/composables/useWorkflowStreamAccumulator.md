@@ -14,11 +14,12 @@ Reactive accumulator for workflow execution streaming. It receives per-node exec
 | Method | Description |
 | ------ | ----------- |
 | `setWorkflowInfo(id, name)` | Set workflow identity. |
+| `setNodePlan(nodes)` | Preload the stable run timeline, including steps that have not started. |
 | `setAttachments(attachments?)` | Attach files available to the run. |
 | `setImageCaption(caption?)` | Store an auto-generated image caption. |
 | `nodeStart(nodeId, label, type, modelId?)` | Mark a node as running. |
 | `nodeToken(nodeId, token)` | Append a streamed token to a node. |
-| `nodeReasoning(nodeId, token)` | Append a reasoning token to a node. |
+| `nodeReasoning(nodeId, token)` | Append a bounded live reasoning trace to a node for the run inspector. |
 | `nodeFinish(nodeId, output)` | Mark a node complete with its output. |
 | `nodeError(nodeId, error)` | Mark a node failed. |
 | `routeSelected(nodeId, route)` | Record a routed branch choice. |
@@ -63,6 +64,7 @@ watch(
 
 -   `state.executionState` is `'running'` initially and moves to a terminal value on finalize.
 -   `state.version` increments on every update, which is ideal for lightweight watchers.
+-   Reasoning streams are shown separately from output and retain the latest 12,000 characters per node or branch so long runs remain safe to sync.
 
 ## Related
 

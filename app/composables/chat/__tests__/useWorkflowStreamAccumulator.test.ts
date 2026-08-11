@@ -68,24 +68,68 @@ describe('useWorkflowStreamAccumulator', () => {
         );
     });
 
-    it('shows model-thinking activity without retaining raw reasoning', () => {
+    it('streams model reasoning into the focused run inspector state', () => {
         const accumulator = createWorkflowStreamAccumulator();
         accumulator.nodeStart('node-1', 'Test Node', 'agent');
 
-        accumulator.nodeReasoning('node-1', 'private reasoning');
+        accumulator.nodeReasoning('node-1', 'live reasoning');
+        vi.runAllTimers();
 
         expect(accumulator.state.nodeStates['node-1']!.activity).toBe(
             'thinking'
+        );
+        expect(accumulator.state.nodeStates['node-1']!.reasoningText).toBe(
+            'live reasoning'
         );
         expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe('');
 
         accumulator.nodeToken('node-1', 'Visible response');
         vi.runAllTimers();
 
-        expect(accumulator.state.nodeStates['node-1']!.activity).toBeUndefined();
+        expect(
+            accumulator.state.nodeStates['node-1']!.activity
+        ).toBeUndefined();
         expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe(
             'Visible response'
         );
+        expect(accumulator.state.nodeStates['node-1']!.reasoningText).toBe(
+            'live reasoning'
+        );
+    });
+
+    it('bounds retained reasoning while preserving the latest trace', () => {
+        const accumulator = createWorkflowStreamAccumulator();
+        accumulator.nodeStart('node-1', 'Test Node', 'agent');
+
+        accumulator.nodeReasoning('node-1', 'a'.repeat(12_000));
+        accumulator.nodeReasoning('node-1', 'latest');
+        vi.runAllTimers();
+
+        const node = accumulator.state.nodeStates['node-1']!;
+        expect(node.reasoningText).toHaveLength(12_000);
+        expect(node.reasoningText).toMatch(/latest$/);
+        expect(node.reasoningTruncated).toBe(true);
+    });
+
+    it('prepopulates pending nodes from the workflow plan', () => {
+        const accumulator = createWorkflowStreamAccumulator();
+        accumulator.setNodePlan([
+            { id: 'start', label: 'Start', type: 'start' },
+            {
+                id: 'writer',
+                label: 'Writer',
+                type: 'agent',
+                modelId: 'openai/test',
+            }
+        ]);
+
+        expect(accumulator.state.nodeOrder).toEqual(['start', 'writer']);
+        expect(accumulator.state.executionOrder).toEqual([]);
+        expect(accumulator.state.nodeStates.writer).toMatchObject({
+            status: 'pending',
+            label: 'Writer',
+            modelId: 'openai/test',
+        });
     });
 
     it('tracks parallel branches', () => {

@@ -23,7 +23,9 @@ export default defineTheme({
         'Classic retro aesthetic with pixel-perfect styling and nostalgic vibes',
     isDefault: false,
     stylesheets: ['~/theme/retro/styles.css'],
+    borderWidthSubtle: '1px',
     borderWidth: '2px',
+    borderWidthStrong: '2px',
     borderRadius: '3px',
     // Material Design 3 color palette for retro theme
     // These will generate CSS variables for both light and dark modes

@@ -38,6 +38,7 @@ export function normalizeTerminalWorkflowState(
     }
 
     const completed = status === 'complete';
+    const terminalAt = Date.now();
     const failedNodeId = completed
         ? null
         : state.failedNodeId ??
@@ -46,6 +47,44 @@ export function normalizeTerminalWorkflowState(
           null;
     return {
         ...state,
+        nodeStates: Object.fromEntries(
+            Object.entries(state.nodeStates).map(([nodeId, node]) => [
+                nodeId,
+                node.status === 'active' && !node.finishedAt
+                    ? {
+                          ...node,
+                          finishedAt: terminalAt,
+                          toolCalls: node.toolCalls?.map((toolCall) =>
+                              toolCall.status === 'active' &&
+                              !toolCall.finishedAt
+                                  ? { ...toolCall, finishedAt: terminalAt }
+                                  : toolCall
+                          ),
+                      }
+                    : node,
+            ])
+        ),
+        branches: state.branches
+            ? Object.fromEntries(
+                  Object.entries(state.branches).map(([branchId, branch]) => [
+                      branchId,
+                      branch.status === 'active'
+                          ? {
+                                ...branch,
+                                toolCalls: branch.toolCalls?.map((toolCall) =>
+                                    toolCall.status === 'active' &&
+                                    !toolCall.finishedAt
+                                        ? {
+                                              ...toolCall,
+                                              finishedAt: terminalAt,
+                                          }
+                                        : toolCall
+                                ),
+                            }
+                          : branch,
+                  ])
+              )
+            : state.branches,
         executionState: completed
             ? 'completed'
             : status === 'aborted'

@@ -91,7 +91,10 @@ import type {
     HitlRequestState,
     UiWorkflowState,
 } from '~/utils/chat/workflow-types';
-import { deriveStartNodeId } from '~/utils/chat/workflow-types';
+import {
+    appendWorkflowReasoningTrace,
+    deriveStartNodeId,
+} from '~/utils/chat/workflow-types';
 import type { ToolCallEventWithNode } from 'or3-workflow-core';
 import type { Attachment } from 'or3-workflow-core';
 
@@ -117,6 +120,8 @@ export interface WorkflowStreamingState {
     nodeStates: Record<string, NodeState>;
     /** Execution order (list of nodeIds) */
     executionOrder: string[];
+    /** Stable workflow-definition order, including pending nodes */
+    nodeOrder: string[];
     /** Last node that produced output */
     lastActiveNodeId: string | null;
     /** Final node id reported by the engine */
@@ -168,6 +173,14 @@ export interface WorkflowStreamAccumulatorApi {
 
     // Identification
     setWorkflowInfo(id: string, name: string): void;
+    setNodePlan(
+        nodes: Array<{
+            id: string;
+            label: string;
+            type: string;
+            modelId?: string;
+        }>
+    ): void;
 
     // Attachments
     setAttachments(attachments?: Attachment[]): void;
@@ -298,6 +311,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         executionState: 'running',
         nodeStates: {},
         executionOrder: [],
+        nodeOrder: [],
         lastActiveNodeId: null,
         finalNodeId: null,
         currentNodeId: null,
@@ -313,7 +327,9 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
 
     // Pending updates for RAF batching
     let pendingNodeTokens: Map<string, string[]> = new Map();
+    let pendingNodeReasoning: Map<string, string[]> = new Map();
     let pendingBranchTokens: Map<string, string[]> = new Map();
+    let pendingBranchReasoning: Map<string, string[]> = new Map();
     let pendingWorkflowTokens: string[] = [];
     let rafId: number | null = null;
     let finalized = false;
@@ -331,6 +347,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             imageCaption: state.imageCaption,
             nodeStates: {},
             executionOrder: [],
+            nodeOrder: [],
             lastActiveNodeId: null,
             finalNodeId: null,
             currentNodeId: null,
@@ -524,6 +541,22 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         }
         pendingNodeTokens.clear();
 
+        for (const [scopedNodeId, tokens] of pendingNodeReasoning) {
+            const { targetState, nodeId } = resolveScopedTarget(scopedNodeId);
+            const node = targetState.nodeStates[nodeId];
+            if (!node) continue;
+            const next = appendWorkflowReasoningTrace(
+                node.reasoningText,
+                tokens.join('')
+            );
+            node.reasoningText = next.text;
+            node.reasoningTruncated =
+                Boolean(node.reasoningTruncated) || next.truncated;
+            node.activity = 'thinking';
+            touchedStates.add(targetState);
+        }
+        pendingNodeReasoning.clear();
+
         // Flush branch tokens
         for (const [key, tokens] of pendingBranchTokens) {
             const parsed = parseBranchKey(key);
@@ -539,6 +572,23 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             touchedStates.add(targetState);
         }
         pendingBranchTokens.clear();
+
+        for (const [key, tokens] of pendingBranchReasoning) {
+            const parsed = parseBranchKey(key);
+            if (!parsed) continue;
+            const { targetState } = resolveScopedTarget(parsed.nodeId);
+            const branch = targetState.branches?.[key];
+            if (!branch) continue;
+            const next = appendWorkflowReasoningTrace(
+                branch.reasoningText,
+                tokens.join('')
+            );
+            branch.reasoningText = next.text;
+            branch.reasoningTruncated =
+                Boolean(branch.reasoningTruncated) || next.truncated;
+            touchedStates.add(targetState);
+        }
+        pendingBranchReasoning.clear();
 
         // Flush workflow tokens
         if (pendingWorkflowTokens.length > 0) {
@@ -629,14 +679,10 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
 
     function nodeReasoning(nodeId: string, token: string) {
         if (finalized || !token) return;
-
-        // Surface the lifecycle without displaying private model reasoning.
-        const { targetState, nodeId: localNodeId } =
-            resolveScopedTarget(nodeId);
-        const node = targetState.nodeStates[localNodeId];
-        if (!node || node.streamingText) return;
-        node.activity = 'thinking';
-        touchState(targetState);
+        const existing = pendingNodeReasoning.get(nodeId) || [];
+        existing.push(token);
+        pendingNodeReasoning.set(nodeId, existing);
+        scheduleFlush();
     }
 
     function nodeFinish(nodeId: string, output: string) {
@@ -800,11 +846,15 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
     function branchReasoning(
         nodeId: string,
         branchId: string,
-        label: string,
+        _label: string,
         token: string
     ) {
-        // Treat reasoning tokens like normal branch tokens for streaming
-        branchToken(nodeId, branchId, label, token);
+        if (finalized || !token) return;
+        const key = `${nodeId}:${branchId}`;
+        const existing = pendingBranchReasoning.get(key) || [];
+        existing.push(token);
+        pendingBranchReasoning.set(key, existing);
+        scheduleFlush();
     }
 
     function branchComplete(
@@ -1153,7 +1203,9 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             rafId = null;
         }
         pendingNodeTokens.clear();
+        pendingNodeReasoning.clear();
         pendingBranchTokens.clear();
+        pendingBranchReasoning.clear();
         finalized = false;
         totalTokens = 0;
 
@@ -1162,6 +1214,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         state.executionState = 'running';
         state.nodeStates = {};
         state.executionOrder = [];
+        state.nodeOrder = [];
         state.lastActiveNodeId = null;
         state.finalNodeId = null;
         state.currentNodeId = null;
@@ -1241,6 +1294,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
             executionState: state.executionState,
             nodeStates: plainNodeStates,
             executionOrder: [...state.executionOrder],
+            nodeOrder: [...state.nodeOrder],
             currentNodeId: state.currentNodeId,
             lastActiveNodeId: state.lastActiveNodeId,
             finalNodeId: state.finalNodeId,
@@ -1281,6 +1335,29 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         touchState(state);
     }
 
+    function setNodePlan(
+        nodes: Array<{
+            id: string;
+            label: string;
+            type: string;
+            modelId?: string;
+        }>
+    ) {
+        state.nodeOrder = nodes.map((node) => node.id);
+        for (const plan of nodes) {
+            const existing = state.nodeStates[plan.id];
+            state.nodeStates[plan.id] = {
+                status: existing?.status ?? 'pending',
+                label: existing?.label || plan.label,
+                type: existing?.type || plan.type,
+                modelId: existing?.modelId || plan.modelId,
+                output: existing?.output || '',
+                ...existing,
+            };
+        }
+        touchState(state);
+    }
+
     function setAttachments(attachments?: Attachment[]) {
         state.attachments = attachments;
         propagateToSubflows((target) => {
@@ -1311,6 +1388,7 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
     return {
         state,
         setWorkflowInfo,
+        setNodePlan,
         setAttachments,
         setImageCaption,
         nodeStart,

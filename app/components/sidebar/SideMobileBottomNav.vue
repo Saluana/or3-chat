@@ -1450,4 +1450,17 @@ const createItemProps = computed(() => {
     font-weight: 700;
     letter-spacing: 0.02em;
 }
+
+/* Provider account menus are portalled to <body>. Their popper wrapper must
+   remain above the mobile More sheet, including the SQLite/basic-auth stack. */
+[data-reka-popper-content-wrapper]:has(.basic-auth-account-menu) {
+    z-index: 100 !important;
+}
+
+/* Any modal launched from More is a body-level Reka portal. Lift both its
+   scrim and dialog above the sheet while the sheet remains mounted. */
+body:has(.more-sheet-root) > [data-slot='overlay'],
+body:has(.more-sheet-root) > [data-slot='content'][role='dialog'] {
+    z-index: 100 !important;
+}
 </style>

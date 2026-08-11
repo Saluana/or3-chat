@@ -13,7 +13,10 @@ import { logBackgroundEvent } from '../background-jobs/logging';
 import { executeServerTool, listServerTools } from '../chat/tool-registry';
 import { getNotificationEmitter } from '../notifications/registry';
 import { emitBackgroundJobWebhookEvent } from '../webhooks/hook-emissions';
-import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
+import {
+    appendWorkflowReasoningTrace,
+    type WorkflowMessageData,
+} from '~/utils/chat/workflow-types';
 import {
     DEFAULT_WORKFLOW_MODEL,
     OpenRouterExecutionAdapter,
@@ -89,9 +92,30 @@ function createWorkflowState(params: {
     workflowId: string;
     workflowName: string;
     prompt: string;
+    workflow: WorkflowData;
     attachments?: Attachment[];
     initialVersion?: number;
 }): WorkflowMessageData {
+    const nodeOrder = params.workflow.nodes.map((node) => node.id);
+    const nodeStates = Object.fromEntries(
+        params.workflow.nodes.map((node) => {
+            const data = node.data as {
+                label?: string;
+                model?: string;
+                modelId?: string;
+            };
+            return [
+                node.id,
+                {
+                    status: 'pending' as const,
+                    label: data.label || node.id,
+                    type: node.type,
+                    modelId: data.model || data.modelId,
+                    output: '',
+                },
+            ];
+        })
+    );
     return {
         type: 'workflow-execution',
         workflowId: params.workflowId,
@@ -99,8 +123,9 @@ function createWorkflowState(params: {
         prompt: params.prompt,
         attachments: params.attachments,
         executionState: 'running',
-        nodeStates: {},
+        nodeStates,
         executionOrder: [],
+        nodeOrder,
         currentNodeId: null,
         finalOutput: '',
         version: params.initialVersion ?? 0,
@@ -394,6 +419,7 @@ async function runWorkflowInBackground(
         workflowId: params.workflowId,
         workflowName: params.workflowName,
         prompt: params.prompt,
+        workflow: params.workflow,
         attachments: params.attachments,
         initialVersion: params.resumeStateVersion,
     }) as WorkflowStateWithJournal;
@@ -663,11 +689,19 @@ async function runWorkflowInBackground(
                     nodeType: info?.type || 'unknown',
                     nodeLabel: info?.label || nodeId,
                 });
+                const plannedState = workflowState.nodeStates[nodeId];
                 workflowState.nodeStates[nodeId] = {
+                    ...plannedState,
                     status: 'active',
-                    label: info?.label || nodeId,
-                    type: info?.type || 'unknown',
+                    label: info?.label || plannedState?.label || nodeId,
+                    type: info?.type || plannedState?.type || 'unknown',
                     output: '',
+                    streamingText: '',
+                    reasoningText: '',
+                    reasoningTruncated: false,
+                    startedAt: Date.now(),
+                    finishedAt: undefined,
+                    error: undefined,
                 };
                 if (!workflowState.executionOrder.includes(nodeId)) {
                     workflowState.executionOrder.push(nodeId);
@@ -693,6 +727,8 @@ async function runWorkflowInBackground(
                     nodeState.status = 'completed';
                     nodeState.output = output;
                     nodeState.streamingText = '';
+                    nodeState.activity = undefined;
+                    nodeState.finishedAt = Date.now();
                 }
                 workflowState.nodeOutputs = {
                     ...(workflowState.nodeOutputs ?? {}),
@@ -716,6 +752,7 @@ async function runWorkflowInBackground(
                 if (nodeState) {
                     nodeState.status = 'error';
                     nodeState.error = error.message;
+                    nodeState.finishedAt = Date.now();
                 }
                 workflowState.executionState = 'error';
                 workflowState.failedNodeId = nodeId;
@@ -739,7 +776,14 @@ async function runWorkflowInBackground(
             onReasoning: (nodeId, token) => {
                 if (!token) return;
                 const nodeState = workflowState.nodeStates[nodeId];
-                if (nodeState && !nodeState.streamingText) {
+                if (nodeState) {
+                    const next = appendWorkflowReasoningTrace(
+                        nodeState.reasoningText,
+                        token
+                    );
+                    nodeState.reasoningText = next.text;
+                    nodeState.reasoningTruncated =
+                        Boolean(nodeState.reasoningTruncated) || next.truncated;
                     nodeState.activity = 'thinking';
                     workflowState.version = (workflowState.version ?? 0) + 1;
                     emitWorkflowStreamingState();

@@ -133,6 +133,8 @@ describe('document editor theme contract', () => {
         expect(retroTheme.colors.dark?.error).toBe('#FF8A8A');
         expect(retroTheme.colors.warning).toBe('#9A4D00');
         expect(retroTheme.colors.dark?.warning).toBe('#FFB86A');
+        expect(retroTheme.borderWidthSubtle).toBe('1px');
+        expect(retroTheme.borderWidthStrong).toBe('2px');
         expect(retroCss).toContain('.settings-overlay');
         expect(retroCss).toContain("button[aria-label^='Remove']");
         expect(blankCss).not.toContain('.settings-overlay .quick-action-number');
