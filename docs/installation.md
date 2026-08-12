@@ -168,6 +168,12 @@ health, and keeps the previous image/data snapshot as the immediate rollback
 point. If the new version fails deep health, it restores the previous version
 and snapshot automatically.
 
+For adopted legacy volumes owned by an older runtime UID, the updater changes
+only the volume mount root and re-extracts the checksummed backup as the target
+runtime user. It never applies a recursive ownership rewrite. If startup or
+the stronger SQLite readiness check fails, it restores the recorded legacy
+root owner, image, configuration, and backup before reporting failure.
+
 To target a specific published version:
 
 ```bash

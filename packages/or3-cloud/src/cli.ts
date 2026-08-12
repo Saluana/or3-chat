@@ -28,7 +28,7 @@ import { createGunzip } from 'node:zlib';
 
 const execFile = promisify(execFileCallback);
 
-export const PACKAGE_VERSION = '0.1.35';
+export const PACKAGE_VERSION = '0.1.36';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -630,11 +630,17 @@ async function assertSafeComposeBinding(directory: string, mode: Mode, env: Reco
   }
 }
 
-const HEALTH_SCRIPT = "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async response=>{const body=await response.json().catch(()=>({}));if(!response.ok||body.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))";
+const HEALTH_SCRIPT = "const fs=require('node:fs');try{fs.accessSync('/data',fs.constants.R_OK|fs.constants.W_OK);for(const path of [process.env.OR3_BASIC_AUTH_DB_PATH,process.env.OR3_SQLITE_DB_PATH].filter(Boolean)){const fd=fs.openSync(path,'r+');fs.closeSync(fd)}}catch{process.exit(1)}fetch('http://127.0.0.1:3000/api/health?deep=true').then(async response=>{const body=await response.json().catch(()=>({}));if(!response.ok||body.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))";
 const MAINTENANCE_SCRIPT = "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async response=>{const body=await response.json().catch(()=>({}));const m=body?.providers?.sync?.details?.maintenance;if(m)console.log(JSON.stringify(m))}).catch(()=>{})";
 const CONTAINER_NODE = '/nodejs/bin/node';
 const LEGACY_CONTAINER_NODE = '/usr/local/bin/node';
-const CONTAINER_HEALTH_SHELL = `if [ -x ${CONTAINER_NODE} ]; then exec ${CONTAINER_NODE} -e "$1"; elif [ -x ${LEGACY_CONTAINER_NODE} ]; then exec ${LEGACY_CONTAINER_NODE} -e "$1"; else exit 127; fi`;
+const CONTAINER_NODE_SHELL = `if [ -x ${CONTAINER_NODE} ]; then exec ${CONTAINER_NODE} -e "$1"; elif [ -x ${LEGACY_CONTAINER_NODE} ]; then exec ${LEGACY_CONTAINER_NODE} -e "$1"; else exit 127; fi`;
+const MANAGED_RUNTIME_UID = 65532;
+const MANAGED_RUNTIME_GID = 65532;
+
+function containerNodeCommand(script: string) {
+  return ['sh', '-c', CONTAINER_NODE_SHELL, 'or3-node', script];
+}
 
 async function waitForDeepHealthWithArgs(composeCommand: string[], directory: string, secrets: string[] = []) {
   const deadline = Date.now() + DEEP_HEALTH_TIMEOUT_MS;
@@ -642,7 +648,7 @@ async function waitForDeepHealthWithArgs(composeCommand: string[], directory: st
   while (Date.now() < deadline) {
     const result = await run('docker', [
       ...composeCommand,
-      'exec', '-T', 'or3', 'sh', '-c', CONTAINER_HEALTH_SHELL, 'or3-health', HEALTH_SCRIPT,
+      'exec', '-T', 'or3', ...containerNodeCommand(HEALTH_SCRIPT),
     ], directory);
     if (result.ok) return;
     lastError = redact(result.stderr, secrets);
@@ -654,6 +660,36 @@ async function waitForDeepHealthWithArgs(composeCommand: string[], directory: st
 async function ensureDocker() {
   await requireCommand('docker', ['info'], 'Docker Engine');
   await requireCommand('docker', ['compose', 'version'], 'Docker Compose v2');
+}
+
+type VolumeRootOwnership = { uid: number; gid: number };
+
+async function managedVolumeRootOwnership(image: string, volume: string): Promise<VolumeRootOwnership> {
+  const result = await run('docker', [
+    'run', '--rm', '--network', 'none', '--read-only', '--user', '0:0', '--cap-drop', 'ALL',
+    '-v', `${volume}:/data:ro`, '--entrypoint', 'sh', image, '-c', "stat -c '%u:%g' /data",
+  ]);
+  if (!result.ok) throw new Error(`Could not inspect managed volume ${volume}. ${result.stderr.trim()}`);
+  const match = result.stdout.trim().match(/^(\d+):(\d+)$/);
+  if (!match) throw new Error(`Managed volume ${volume} returned an invalid root ownership value.`);
+  return { uid: Number(match[1]), gid: Number(match[2]) };
+}
+
+async function setManagedVolumeRootOwnership(image: string, volume: string, ownership: VolumeRootOwnership) {
+  if (!Number.isSafeInteger(ownership.uid) || ownership.uid < 0 || !Number.isSafeInteger(ownership.gid) || ownership.gid < 0) {
+    throw new Error('Refusing an invalid managed volume root UID/GID.');
+  }
+  const result = await run('docker', [
+    'run', '--rm', '--network', 'none', '--read-only', '--user', '0:0',
+    '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL', '--cap-add', 'CHOWN',
+    '-v', `${volume}:/data`, '--entrypoint', 'sh', image, '-c',
+    `chown ${ownership.uid}:${ownership.gid} /data`,
+  ]);
+  if (!result.ok) throw new Error(`Could not set managed volume ${volume} root ownership. ${result.stderr.trim()}`);
+  const actual = await managedVolumeRootOwnership(image, volume);
+  if (actual.uid !== ownership.uid || actual.gid !== ownership.gid) {
+    throw new Error(`Managed volume ${volume} root ownership verification failed.`);
+  }
 }
 
 async function portAvailable(port: number) {
@@ -1928,12 +1964,35 @@ async function updateCommand(directory: string, flags: Flags) {
     const backup = await createBackup(loaded.directory, state, env);
     await updatePending(loaded.directory, state, { backupId: backup.backupId });
     const nextEnv = { ...env, OR3_VERSION: targetVersion, OR3_IMAGE: targetImage };
-    await writeSecure(deploymentPaths(loaded.directory).env, serializeEnv(nextEnv));
+    const previousRootOwnership = await managedVolumeRootOwnership(targetImage, state.volumeName);
+    const migrateLegacyVolume = previousRootOwnership.uid !== MANAGED_RUNTIME_UID || previousRootOwnership.gid !== MANAGED_RUNTIME_GID;
     try {
+      await stopProject(loaded.directory, state.mode);
+      if (migrateLegacyVolume) {
+        // Change only the mount root, then recreate every data entry from the
+        // checksummed backup as the target runtime user. Avoid recursive chown:
+        // it would erase heterogeneous ownership without a reversible record.
+        await setManagedVolumeRootOwnership(targetImage, state.volumeName, {
+          uid: MANAGED_RUNTIME_UID,
+          gid: MANAGED_RUNTIME_GID,
+        });
+      }
+      await writeSecure(deploymentPaths(loaded.directory).env, serializeEnv(nextEnv));
+      if (migrateLegacyVolume) {
+        await restoreVolumeArchive(loaded.directory, state.mode, nextEnv, backup.backupDir);
+      }
       await startProject(loaded.directory, state.mode, nextEnv);
     } catch (error) {
       await writeSecure(deploymentPaths(loaded.directory).env, serializeEnv(oldEnv));
-      await restoreBackupData(loaded.directory, state, oldEnv, backup.backupDir);
+      try {
+        await stopProject(loaded.directory, state.mode).catch(() => undefined);
+        if (migrateLegacyVolume) {
+          await setManagedVolumeRootOwnership(targetImage, state.volumeName, previousRootOwnership);
+        }
+        await restoreBackupData(loaded.directory, state, oldEnv, backup.backupDir);
+      } catch (restoreError) {
+        throw new Error(`Update to ${targetVersion} failed, and automatic backup restoration also failed: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}. Original update error: ${error instanceof Error ? error.message : String(error)}`);
+      }
       const oldDigest = await imageDigest(state.image);
       state.imageDigest = oldDigest;
       state.lastError = `Update to ${targetVersion} failed and was restored: ${redact(error instanceof Error ? error.message : String(error), secretValues(oldEnv))}`;
@@ -2588,7 +2647,7 @@ async function runCredentialsResetScript(directory: string, mode: Mode, values: 
       '-e', `OR3_RESET_OWNER_PASSWORD=${values.ownerPassword}`,
       '-e', `OR3_RESET_ADMIN_USERNAME=${values.adminUsername}`,
       '-e', `OR3_RESET_ADMIN_PASSWORD=${values.adminPassword}`,
-      'or3', CONTAINER_NODE, '-e', script,
+      'or3', ...containerNodeCommand(script),
     ]),
   ], directory);
   if (!result.ok) throw new Error(`${result.command}\n${redact(result.stderr, [values.ownerPassword, values.adminPassword])}`);
@@ -2602,7 +2661,7 @@ async function verifyCredentialsInsideContainer(directory: string, mode: Mode, v
       '-e', `OR3_RESET_OWNER_PASSWORD=${values.ownerPassword}`,
       '-e', `OR3_RESET_ADMIN_USERNAME=${values.adminUsername}`,
       '-e', `OR3_RESET_ADMIN_PASSWORD=${values.adminPassword}`,
-      'or3', CONTAINER_NODE, '-e', CREDENTIALS_VERIFY_SCRIPT,
+      'or3', ...containerNodeCommand(CREDENTIALS_VERIFY_SCRIPT),
     ]),
   ], directory);
   if (!result.ok) throw new Error(`Credential verification inside the OR3 container failed. ${redact(result.stderr, [values.ownerPassword, values.adminPassword])}`);
@@ -2713,7 +2772,7 @@ const health = await probeDeepHealth(directory, state.mode);
 
 /** Renders the provider maintenance state (SQLite history GC) from deep health. */
 async function printMaintenanceSummary(directory: string, mode: Mode) {
-  const result = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', CONTAINER_NODE, '-e', MAINTENANCE_SCRIPT])], directory);
+  const result = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', ...containerNodeCommand(MAINTENANCE_SCRIPT)])], directory);
   if (!result.ok || !result.stdout.trim()) return;
   try {
     const maintenance = JSON.parse(result.stdout.trim()) as {
@@ -2886,7 +2945,7 @@ async function removeCommand(directory: string, flags: Flags) {
 
 /** Bounded single-shot health probe for status: ok | degraded | unreachable. */
 async function probeDeepHealth(directory: string, mode: Mode) {
-  const result = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', CONTAINER_NODE, '-e', HEALTH_SCRIPT])], directory);
+  const result = await run('docker', [...composeArgs(directory, mode, ['exec', '-T', 'or3', ...containerNodeCommand(HEALTH_SCRIPT)])], directory);
   if (result.ok) return 'ok' as const;
   const ps = await run('docker', [...composeArgs(directory, mode, ['ps', '-q', 'or3'])], directory);
   if (ps.ok && ps.stdout.trim()) return 'degraded' as const;

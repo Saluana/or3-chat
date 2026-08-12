@@ -54,9 +54,9 @@ services:
         - CMD-SHELL
         - >-
           if [ -x /nodejs/bin/node ]; then
-            exec /nodejs/bin/node -e "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok||b.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))";
+            exec /nodejs/bin/node -e "const fs=require('node:fs');try{fs.accessSync('/data',fs.constants.R_OK|fs.constants.W_OK);for(const p of [process.env.OR3_BASIC_AUTH_DB_PATH,process.env.OR3_SQLITE_DB_PATH].filter(Boolean)){const fd=fs.openSync(p,'r+');fs.closeSync(fd)}}catch{process.exit(1)}fetch('http://127.0.0.1:3000/api/health?deep=true').then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok||b.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))";
           elif [ -x /usr/local/bin/node ]; then
-            exec /usr/local/bin/node -e "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok||b.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))";
+            exec /usr/local/bin/node -e "const fs=require('node:fs');try{fs.accessSync('/data',fs.constants.R_OK|fs.constants.W_OK);for(const p of [process.env.OR3_BASIC_AUTH_DB_PATH,process.env.OR3_SQLITE_DB_PATH].filter(Boolean)){const fd=fs.openSync(p,'r+');fs.closeSync(fd)}}catch{process.exit(1)}fetch('http://127.0.0.1:3000/api/health?deep=true').then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok||b.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))";
           else exit 127; fi
       interval: 10s
       timeout: 5s

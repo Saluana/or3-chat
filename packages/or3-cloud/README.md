@@ -52,6 +52,10 @@ npx @or3/cloud restart
 
 Do not run `docker compose down --volumes` on a normal deployment: it deletes
 the application data. Use `backup` before an update or any destructive action.
+When an adopted legacy deployment used a different container UID, `update`
+rebuilds the data from its checksummed pre-update backup as the hardened
+runtime user. It does not recursively rewrite file ownership in place, and a
+failed migration restores the recorded legacy root owner and snapshot.
 For a destructive purge, export a fresh backup to a new directory on another
 filesystem first; `remove --purge-data --yes` verifies that export before it
 will delete anything.

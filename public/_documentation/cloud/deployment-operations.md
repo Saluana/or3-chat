@@ -91,6 +91,9 @@ OR3_TRUST_PROXY=true
 
 - Liveness/readiness endpoint: `GET /api/health`
 - Deep checks: `GET /api/health?deep=true`
+- The managed container probe also requires read/write access to `/data` and
+  opens the Basic Auth and sync SQLite files read/write. An HTTP-only green
+  response cannot hide a volume-ownership or database-open failure.
 - Track HTTP rates for:
   - `/api/sync/push` and `/api/sync/pull`
   - `/api/storage/*`
@@ -100,6 +103,12 @@ OR3_TRUST_PROXY=true
   - 401/403 spikes (auth/authorization)
   - 429 spikes (rate limits)
   - 5xx spikes
+
+Managed updates of adopted legacy volumes rebuild data from the checksummed
+pre-update archive as the hardened runtime UID. Only the volume mount root is
+re-owned; the updater does not recursively change per-file ownership in place.
+The previous root owner and backup remain the automatic recovery path until
+the replacement passes deep health.
 
 ## Logging
 

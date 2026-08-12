@@ -65,6 +65,7 @@ test('compose.yaml deep health treats degraded as unhealthy', () => {
   expect(healthcheck).toContain('CMD-SHELL');
   expect(healthcheck).toContain('/nodejs/bin/node');
   expect(healthcheck).toContain('/usr/local/bin/node');
+  expect(healthcheck).toContain("fs.openSync(p,'r+')");
   expect(healthcheck).toContain("b.status!=='ok'");
   expect(healthcheck).toContain('process.exit(1)');
   expect(healthcheck).toContain('interval: 10s');
@@ -78,8 +79,22 @@ test('container-side CLI probes support current and legacy explicit Node paths',
   const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
   expect(cli).toContain("const CONTAINER_NODE = '/nodejs/bin/node';");
   expect(cli).toContain("const LEGACY_CONTAINER_NODE = '/usr/local/bin/node';");
-  expect(cli).toContain("'sh', '-c', CONTAINER_HEALTH_SHELL, 'or3-health', HEALTH_SCRIPT");
+  expect(cli).toContain("'sh', '-c', CONTAINER_NODE_SHELL, 'or3-node', script");
   expect(cli).not.toContain("'or3', 'node', '-e'");
+  expect(cli).not.toContain("'or3', CONTAINER_NODE, '-e'");
+});
+
+test('updates rebuild legacy-owned data from the checksummed backup without recursive chown', () => {
+  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  expect(cli).toContain('const MANAGED_RUNTIME_UID = 65532;');
+  expect(cli).toContain("'--network', 'none', '--read-only', '--user', '0:0'");
+  expect(cli).toContain("'--cap-drop', 'ALL', '--cap-add', 'CHOWN'");
+  expect(cli).not.toContain('chown -R');
+  const update = cli.slice(cli.indexOf('async function updateCommand'), cli.indexOf('async function resolveBackup'));
+  expect(update).toContain('await setManagedVolumeRootOwnership(targetImage, state.volumeName, {');
+  expect(update).toContain('await restoreVolumeArchive(loaded.directory, state.mode, nextEnv, backup.backupDir);');
+  expect(update).toContain('await setManagedVolumeRootOwnership(targetImage, state.volumeName, previousRootOwnership);');
+  expect(update.indexOf('await stopProject(loaded.directory, state.mode);')).toBeLessThan(update.indexOf('uid: MANAGED_RUNTIME_UID'));
 });
 
 test('restore and adoption stream private archives into the managed volume', () => {
