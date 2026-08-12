@@ -156,16 +156,16 @@ jobs:
             sleep 1
           done
           curl --insecure --fail "https://localhost/api/health?deep=true"
-          OR3_SMOKE_URL=https://localhost NODE_TLS_REJECT_UNAUTHORIZED=0 \
-            node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write
+          (cd "$smoke" && OR3_SMOKE_URL=https://localhost NODE_TLS_REJECT_UNAUTHORIZED=0 \
+            node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
           docker compose --project-directory "$smoke" --env-file "$smoke/.env" \
             -f "$smoke/compose.yaml" -f "$smoke/compose.public.yaml" restart or3
           for attempt in $(seq 1 60); do
             curl --insecure --fail --silent "https://localhost/api/health?deep=true" && break
             sleep 1
           done
-          OR3_SMOKE_URL=https://localhost NODE_TLS_REJECT_UNAUTHORIZED=0 \
-            node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify
+          (cd "$smoke" && OR3_SMOKE_URL=https://localhost NODE_TLS_REJECT_UNAUTHORIZED=0 \
+            node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
       - if: always()
         run: |
           managed="$RUNNER_TEMP/or3-cloud-managed"
