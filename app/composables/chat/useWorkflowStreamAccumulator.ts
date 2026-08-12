@@ -1347,12 +1347,12 @@ export function createWorkflowStreamAccumulator(): WorkflowStreamAccumulatorApi 
         for (const plan of nodes) {
             const existing = state.nodeStates[plan.id];
             state.nodeStates[plan.id] = {
+                ...existing,
                 status: existing?.status ?? 'pending',
                 label: existing?.label || plan.label,
                 type: existing?.type || plan.type,
                 modelId: existing?.modelId || plan.modelId,
                 output: existing?.output || '',
-                ...existing,
             };
         }
         touchState(state);

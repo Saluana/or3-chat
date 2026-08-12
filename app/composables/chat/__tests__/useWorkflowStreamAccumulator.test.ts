@@ -132,6 +132,27 @@ describe('useWorkflowStreamAccumulator', () => {
         });
     });
 
+    it('fills missing plan metadata without resetting active node state', () => {
+        const accumulator = createWorkflowStreamAccumulator();
+        accumulator.nodeStart('writer', 'Writer', 'agent');
+
+        accumulator.setNodePlan([
+            {
+                id: 'writer',
+                label: 'Writer',
+                type: 'agent',
+                modelId: 'openai/test',
+            },
+        ]);
+
+        expect(accumulator.state.nodeStates.writer).toMatchObject({
+            status: 'active',
+            label: 'Writer',
+            type: 'agent',
+            modelId: 'openai/test',
+        });
+    });
+
     it('tracks parallel branches', () => {
         const accumulator = createWorkflowStreamAccumulator();
         accumulator.nodeStart('parallel-1', 'Parallel Node', 'parallel');
