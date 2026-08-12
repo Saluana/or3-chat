@@ -20,6 +20,8 @@ on:
       - "scripts/docker/**"
       - "scripts/release/**"
       - ".github/workflows/deployment-smoke.yml"
+      - ".github/workflows/release-cloud-candidate.yml"
+      - ".github/workflows/release-cloud.yml"
 
 concurrency:
   group: deployment-smoke-${{ github.event.pull_request.number || github.ref }}
@@ -66,7 +68,7 @@ jobs:
           next_version="$(node -p "const [major, minor, patch] = process.argv[1].split('.'); major+'.'+minor+'.'+(Number(patch)+1)" "$version")"
           OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true \
             node packages/or3-cloud/dist/cli.mjs init "$managed" --local --port 3017 --admin-email smoke@example.com
-          curl --fail "http://127.0.0.1:3017/api/health?deep=true"
+          (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" verify)
           (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" doctor)
           (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
           backup_output="$(cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" backup)"
@@ -78,6 +80,7 @@ jobs:
           (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" update --to "$next_version")
           (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
           (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" rollback --yes)
+          (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" verify)
           (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
           captured_secret="$(sed -n 's/^OR3_BASIC_AUTH_JWT_SECRET=//p' "$managed/.env")"
           test -n "$captured_secret"

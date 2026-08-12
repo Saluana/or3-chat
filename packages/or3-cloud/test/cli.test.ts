@@ -28,6 +28,7 @@ import {
   snapshotManagedAssets,
   stateFromEnv,
   supportedImageArchitectures,
+  validateVerificationHealth,
   validatePassword,
 } from '../src/cli';
 import { ADMIN_PASSWORD_POLICY_VECTORS } from '../../../shared/cloud/wizard/admin-password-policy-vectors';
@@ -217,6 +218,26 @@ test('rejects unknown command flags before a deployment can start', () => {
   );
   expect(() => assertCommandFlags('update', { to: '0.1.13', yes: true })).toThrow(
     'Unknown option for update: --yes',
+  );
+  expect(() => assertCommandFlags('verify', { public: true })).not.toThrow();
+});
+
+test('accepts only the fixed managed provider profile during production verification', () => {
+  const health = {
+    status: 'ok',
+    providers: {
+      auth: { provider: 'basic-auth' },
+      sync: { provider: 'sqlite' },
+      storage: { provider: 'fs' },
+    },
+  };
+  expect(validateVerificationHealth(health)).toEqual(health);
+  expect(() => validateVerificationHealth({
+    ...health,
+    providers: { ...health.providers, sync: { provider: 'convex' } },
+  })).toThrow('Basic Auth + SQLite + filesystem');
+  expect(() => validateVerificationHealth({ status: 'degraded', providers: health.providers })).toThrow(
+    'Basic Auth + SQLite + filesystem',
   );
 });
 

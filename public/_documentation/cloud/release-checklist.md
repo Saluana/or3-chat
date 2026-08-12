@@ -6,10 +6,10 @@ against the exact production candidate.
 
 ## 1. Reproducible Code Gate
 
-Run from the `or3-chat` package:
+Run from a clean isolated `or3-chat` worktree with the exact unused version:
 
 ```bash
-bun run release:check
+bun run release:prepare -- --version <version> --registry --full
 ```
 
 The command must complete successfully. It verifies:
@@ -18,15 +18,16 @@ The command must complete successfully. It verifies:
 - deterministic cloud browser harnesses for auth gating, offline recovery,
   workspace-switch races, and adapter fault handling
 - OR3 Cloud CLI bundle
-- type-check, tests, and package build for Basic Auth, SQLite, filesystem, S3,
-  Clerk, and Convex providers
-- SSR production build
-- static production build
+- exact published-version availability for the fixed Basic Auth, SQLite, and
+  filesystem provider profile (provider source qualification remains in each
+  provider repository)
+- fixed-profile SSR production build
 - populated-workspace performance profile
-- production JavaScript and CSS artifact budgets
+- SSR production JavaScript and CSS artifact budgets
 
-Do not promote a candidate from a dirty worktree. Record the clean commit SHA
-and retain the complete command output with the release artifacts.
+Do not promote a candidate from a dirty worktree. The preflight rejects one,
+including untracked files. Record the clean commit SHA and retain
+`output/release/preflight.json` with the release artifacts.
 
 ## 2. Staging Promotion Gate
 
@@ -95,6 +96,15 @@ A release may be promoted only when the reproducible code gate passes and every
 applicable staging and scale-specific item above has recorded evidence. Code
 completion alone creates a **release candidate**, not an automatic production
 promotion.
+
+For the supported Basic Auth + SQLite + filesystem distribution, manually run
+`Qualify OR3 Cloud Candidate` on the intended commit before creating a tag. It
+builds once, scans both architectures, upgrades from the current public release,
+rolls back, upgrades again, verifies persistence, and publishes a receipt bound
+to the source SHA, image digest, and tarball hashes. Only after it succeeds may
+you push `v<version>`. The tag workflow cannot rebuild: it promotes the receipt's
+exact digest and publishes the receipt's exact tarball. A missing or mismatched
+receipt fails closed.
 
 ## Related
 

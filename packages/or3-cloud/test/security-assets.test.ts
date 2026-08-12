@@ -8,6 +8,7 @@ const RUNTIME_ENTRYPOINT = resolve(import.meta.dir, '../../../scripts/docker/run
 const DOCKERFILE = resolve(import.meta.dir, '../../../Dockerfile');
 const CLOUD_CLI_SOURCE = resolve(import.meta.dir, '../src/cli.ts');
 const RELEASE_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/release-cloud.yml');
+const CANDIDATE_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/release-cloud-candidate.yml');
 const ROOT_MANIFEST = resolve(import.meta.dir, '../../../package.json');
 const BROWSER_SMOKE = resolve(import.meta.dir, '../../../scripts/release/smoke-browser.mjs');
 
@@ -130,15 +131,20 @@ test('compose failures capture redacted state before cleanup', () => {
 });
 
 test('release smoke re-resolves amd64 after architecture-specific scans', () => {
-  const workflow = readFileSync(RELEASE_WORKFLOW, 'utf8');
+  const workflow = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
   const smoke = workflow.slice(
-    workflow.indexOf('- name: Smoke-test the qualifying image on amd64'),
-    workflow.indexOf('# Clean-browser journey'),
+    workflow.indexOf('- name: Exercise upgrade, rollback, persistence, and production verification'),
+    workflow.indexOf('- uses: docker/setup-qemu-action@v3'),
   );
   const pull = smoke.indexOf('docker pull --platform linux/amd64 "$OR3_IMAGE"');
-  const init = smoke.indexOf('or3 init "$smoke"');
-  expect(pull).toBeGreaterThan(-1);
-  expect(init).toBeGreaterThan(pull);
+  const init = smoke.indexOf('init "$managed"');
+  // The anonymous amd64 pull is an earlier candidate gate and the lifecycle
+  // must consume the same candidate identity rather than build another image.
+  expect(workflow).toContain('docker pull --platform linux/amd64 "$OR3_IMAGE"');
+  expect(workflow).toContain('OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE"');
+  expect(workflow.match(/docker\/build-push-action@v6/g)?.length).toBe(1);
+  expect(init).toBeGreaterThan(-1);
+  expect(pull).toBe(-1);
 });
 
 test('clean browser smoke uses the explicit super-admin elevation route', () => {
@@ -164,14 +170,27 @@ test('clean browser smoke proves owner session hydration before leaving sign-in'
 test('release digest verification uses buildx-compatible manifest output', () => {
   const workflow = readFileSync(RELEASE_WORKFLOW, 'utf8');
   expect(workflow).not.toContain('.Index.Digest');
-  expect(workflow.match(/awk '\$1 == "Digest:"/g)?.length).toBe(2);
+  expect(workflow).toContain('candidate-receipt.mjs verify');
+  expect(workflow).toContain('imagetools create --tag "$RELEASE_IMAGE" "$candidate_image@$candidate_digest"');
+  expect(workflow).not.toContain('docker/build-push-action');
 });
 
 test('npm publication identifies the qualified tarball as a local file', () => {
   const workflow = readFileSync(RELEASE_WORKFLOW, 'utf8');
   expect(workflow).toContain(
-    'npm publish "./release-artifact/or3-cloud-${{ needs.qualify.outputs.version }}.tgz" --access public',
+    'npm publish "./release-artifact/or3-cloud-${{ needs.promote.outputs.version }}.tgz" --access public',
   );
+});
+
+test('candidate evidence is source-qualified and cannot publish a release', () => {
+  const candidate = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
+  expect(candidate).toContain('candidate-$VERSION-$SOURCE_SHA');
+  expect(candidate).toContain('candidate-evidence-$VERSION-$SOURCE_SHA');
+  expect(candidate).toContain('sha=$(git rev-parse HEAD)');
+  expect(candidate).toContain('bun run release:prepare -- --version "$VERSION" --registry --full');
+  expect(candidate).toContain('or3 verify');
+  expect(candidate).not.toContain('npm publish');
+  expect(candidate).not.toContain('contents: write');
 });
 
 test('compose.yaml hardens the or3 container', () => {

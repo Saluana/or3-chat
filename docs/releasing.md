@@ -4,6 +4,7 @@ Normal OR3 Cloud releases publish one versioned application image and one
 operator package. The release version must match in:
 
 - `package.json` at the repository root;
+- root version metadata in `package-lock.json`;
 - `packages/or3-cloud/package.json`;
 - `packages/or3-cloud/src/cli.ts` (`PACKAGE_VERSION`);
 - `ghcr.io/saluana/or3-chat:<version>`; and
@@ -29,22 +30,27 @@ workflow. A one-time manual publication is only an operator decision; if used,
 publish the exact `npm pack` artifact with `--access public` and never reuse the
 version.
 
-## Before tagging
+## Prepare and qualify before tagging
 
-Run the focused package checks:
+Use one command from a clean isolated worktree:
 
 ```bash
-bun run scripts/release/check-cloud-package.mjs --registry
-bun run cloud:package:check
-bun run --cwd packages/or3-cloud pack:check
-bun run check:docs
+bun run release:prepare -- --version <version> --registry --full
 ```
 
-Before creating the tag, build the fixed-profile image locally and run the
-complete managed lifecycle from `.github/workflows/deployment-smoke.yml`:
-init, doctor, write, backup, restore, rollback, deliberately unhealthy update
-recovery, adoption, and persistence verification. This is the pre-tag gate;
-the tag workflow is intentionally the only automatic release build.
+This refuses dirty source, inconsistent versions (including lock metadata),
+used Git/npm/GHCR versions, missing providers, package drift, failing tests,
+browser harnesses, type errors, or documentation drift. It writes a small
+machine-readable report to `output/release/preflight.json`.
+
+Then use GitHub Actions to manually run **Qualify OR3 Cloud Candidate** on the
+exact intended branch/commit and enter the same version. Do not create the tag
+yet. The candidate workflow builds the multi-architecture image once, scans
+both platforms, upgrades a deployment from the current npm release, runs
+rollback and a second update, executes `or3 verify`, checks persistence and the
+clean-browser journey, and records immutable source/image/tarball identities in
+`candidate-receipt.json`. It publishes only source-qualified candidate evidence;
+it cannot publish npm or the public version image.
 
 When the default profile changed, verify the exact build-time provider versions
 in `packages/create-or3-chat/first-party-versions.json` are already available
@@ -62,7 +68,8 @@ image during this release.
 
 ## Release
 
-Commit the version and source changes, then push the matching tag:
+After the candidate workflow succeeds, push the matching tag at that exact
+commit:
 
 ```bash
 git tag v<version>
@@ -71,30 +78,27 @@ git push origin v<version>
 
 The `Release OR3 Cloud` workflow then:
 
-1. checks the version contract and provider registry entries;
-2. rejects a version that already exists in npm; an existing image is resumed
-   only when its source revision and version labels match the tag exactly;
-3. builds the Nuxt output once on the native runner, then packages amd64 and
-   arm64 runtime images with Basic Auth + SQLite + filesystem build flags;
-4. verifies the pinned distroless + BusyBox backup/restore command contract,
-   scans both runtime architectures, and verifies their manifest entries;
-5. runs the login, persistence, restart, and clean-browser journey on amd64
-   plus the same runtime contract and a native SQLite query on arm64;
-6. publishes `ghcr.io/saluana/or3-chat:<version>`;
-7. hands one qualified artifact to an isolated npm trusted-publishing job,
-   which re-verifies the public image digest before publishing
-   `@or3/cloud@<version>`; and
-8. retries exact npm and `npx` verification until registry propagation ends.
+1. finds evidence whose version and source SHA exactly match the tag;
+2. re-hashes the tarball, resolves the candidate digest, and verifies the image
+   revision/version labels;
+3. promotes that exact manifest digest to `ghcr.io/saluana/or3-chat:<version>`
+   without rebuilding;
+4. publishes the exact qualified tarball as `@or3/cloud@<version>` in an
+   isolated trusted-publishing job; and
+5. retries exact npm and `npx` verification until registry propagation ends.
 
 The workflow's image digest is the deployment identity. Copy it into the
 release notes with the supported profile and any migration/rollback warnings.
 
 ## Failure handling
 
-If image qualification fails, do not publish the npm package. Fix the source
-and use a new version if the image was already pushed. If npm publication is
-accepted but registry reads return 404/ETARGET, wait and rerun exact-version
-verification; do not change source or reuse the version.
+If candidate qualification fails, fix the source and bump the version before
+qualifying again because candidate identities are single-use. Do not tag a
+failed candidate. If promotion succeeds but npm has a transient failure, rerun
+the tag workflow unchanged: it may continue only when the public image digest
+exactly matches the receipt. If npm accepted the package but reads return
+404/ETARGET, wait for propagation; do not republish, change source, or reuse the
+version.
 
 If a release needs a correction after publication, bump the version. The old
 image and package remain available for rollback and support.
@@ -113,9 +117,9 @@ npm deprecate 'create-or3-chat@<0.1.12' 'Use npx @or3/cloud init; the creator is
 
 ## Release checklist
 
-- `bun run release:cloud:check` passes.
-- `bun run cloud:package:check` passes.
-- `bun run check:docs` passes (and, on qualification, executes the exact packed Cloud CLI).
+- `bun run release:prepare -- --version <version> --registry --full` passes in a clean worktree.
+- The candidate workflow succeeds before the release tag exists.
+- The tag and candidate receipt contain the same source SHA and version.
 - `npm pack --dry-run` contains only the Cloud CLI and deployment assets.
 - The exact default provider versions exist on npm.
 - The complete local managed lifecycle in `deployment-smoke.yml` passes before

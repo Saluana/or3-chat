@@ -41,6 +41,7 @@ Run these from the deployment directory created by `init`:
 
 ```sh
 npx @or3/cloud doctor
+npx @or3/cloud verify
 npx @or3/cloud backup
 npx @or3/cloud update
 npx @or3/cloud rollback --yes
@@ -52,6 +53,13 @@ npx @or3/cloud stop
 npx @or3/cloud restart
 ```
 
+Run `verify` after every update and before declaring a deployment healthy. It
+checks the managed image digest, deep provider health, Basic Auth sign-in,
+session hydration, SQLite sync, a disposable filesystem upload/download/delete
+cycle, both SQLite databases, volume ownership, proxy runtime settings, and a
+bounded window of serious container logs. On a public VPS, require the real
+HTTPS path (with no redirects) using `npx @or3/cloud verify --public`.
+
 Do not run `docker compose down --volumes` on a normal deployment: it deletes
 the application data. Use `backup` before an update or any destructive action.
 When an adopted legacy deployment used a different container UID, `update`
@@ -62,7 +70,7 @@ Updates also replace the generated Compose/Caddy files from the target CLI.
 Those files are checksummed into the pre-update backup and restored on a failed
 update, rollback, restore, or interrupted-operation recovery.
 When selecting an exact version, run the matching CLI package, for example
-`npx --yes @or3/cloud@0.1.38 update --to 0.1.38`; the CLI refuses mismatched
+`npx --yes @or3/cloud@0.1.39 update --to 0.1.39`; the CLI refuses mismatched
 package and image versions so their generated assets cannot drift.
 For a destructive purge, export a fresh backup to a new directory on another
 filesystem first; `remove --purge-data --yes` verifies that export before it

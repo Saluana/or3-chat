@@ -102,7 +102,13 @@ forwarding headers); otherwise proxy-supplied client identity is untrusted.
   the target CLI's generated assets atomically; failure, rollback, restore, and
   interrupted-operation recovery reinstall the matching backed-up assets.
   An exact-version update must use the same package and image version, such as
-  `npx --yes @or3/cloud@0.1.38 update --to 0.1.38`.
+  `npx --yes @or3/cloud@0.1.39 update --to 0.1.39`.
+- After every deployment or update, run `npx @or3/cloud verify`. For a public
+  VPS, run `npx @or3/cloud verify --public` so success requires the real HTTPS
+  origin with no redirect loop. Verification covers the managed image digest,
+  deep Basic Auth + SQLite + filesystem health, authenticated session and sync,
+  a disposable storage write/read/delete probe, SQLite integrity and ownership,
+  proxy runtime settings, and a bounded recent-log scan.
 - Track HTTP rates for:
   - `/api/sync/push` and `/api/sync/pull`
   - `/api/storage/*`

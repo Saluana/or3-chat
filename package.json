@@ -2,7 +2,7 @@
     "name": "or3-chat",
     "type": "module",
     "private": false,
-    "version": "0.1.38",
+    "version": "0.1.39",
     "license": "GPL-3.0",
     "engines": {
         "node": ">=24"
@@ -74,6 +74,7 @@
         "cloud:package:build": "bun run --cwd packages/or3-cloud build",
         "cloud:package:check": "bun run --cwd packages/or3-cloud check",
         "release:cloud:check": "bun run scripts/release/check-cloud-package.mjs",
+        "release:prepare": "bun run scripts/release/prepare-release.ts",
         "check:lock-drift": "node scripts/release/check-lock-drift.mjs",
         "check:docs": "node scripts/release/check-docs.mjs",
         "release:check": "bun run scripts/release/check-or3-cloud.ts",
