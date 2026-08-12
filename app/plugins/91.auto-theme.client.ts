@@ -170,10 +170,19 @@ function applyOverrides(
     resolvedProps: Record<string, unknown>,
     identifier?: string
 ) {
+    const previous = lastAppliedResolution.get(el);
+    if (
+        previous?.props === resolvedProps &&
+        previous.identifier === identifier &&
+        isAppliedThemeIntact(el, resolvedProps, identifier)
+    ) {
+        return;
+    }
     const propsWithIdentifier = identifier
         ? { ...resolvedProps, identifier }
         : resolvedProps;
     applyToElement(el, propsWithIdentifier);
+    lastAppliedResolution.set(el, { props: resolvedProps, identifier });
 }
 
 /**
@@ -189,6 +198,46 @@ interface AppliedDomThemeState {
 }
 
 const appliedDomTheme = new WeakMap<HTMLElement, AppliedDomThemeState>();
+const lastAppliedResolution = new WeakMap<
+    HTMLElement,
+    { props: Record<string, unknown>; identifier?: string }
+>();
+
+function isAppliedThemeIntact(
+    el: HTMLElement,
+    props: Record<string, unknown>,
+    identifier?: string
+): boolean {
+    if (!appliedDomTheme.has(el)) return false;
+
+    const expectedAttributes = new Map<string, string>();
+    if (identifier) expectedAttributes.set('data-id', identifier);
+    if (props.color) expectedAttributes.set('data-theme-color', String(props.color));
+    if (props.variant) expectedAttributes.set('data-theme-variant', String(props.variant));
+    if (props.size) expectedAttributes.set('data-theme-size', String(props.size));
+    for (const [key, value] of Object.entries(props)) {
+        if (!key.startsWith('data-') || value === undefined || value === null) continue;
+        expectedAttributes.set(key, String(value));
+    }
+    for (const [name, value] of expectedAttributes) {
+        if (el.getAttribute(name) !== value) return false;
+    }
+
+    if (typeof props.class === 'string') {
+        for (const className of props.class.split(/\s+/).filter(Boolean)) {
+            if (!el.classList.contains(className)) return false;
+        }
+    }
+
+    if (props.style && typeof props.style === 'object') {
+        for (const [property, value] of Object.entries(props.style)) {
+            if (typeof value !== 'string') continue;
+            if (el.style.getPropertyValue(property) !== value) return false;
+        }
+    }
+
+    return true;
+}
 
 function restoreDomTheme(el: HTMLElement): void {
     const state = appliedDomTheme.get(el);
@@ -400,6 +449,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         beforeUnmount(el) {
             stops.get(el)?.();
             stops.delete(el);
+            lastAppliedResolution.delete(el);
             restoreDomTheme(el);
             // Clean up data attributes
             el.removeAttribute('data-v-theme');

@@ -346,7 +346,10 @@ export interface ThemeDefinition {
     /** CSS stylesheets to load automatically when the theme is available */
     stylesheets?: string[];
 
-    /** Nuxt UI config extensions */
+    /**
+     * Canonical Nuxt UI component recipes for this theme. These are merged
+     * after the immutable application config and any legacy app.config patch.
+     */
     ui?: Record<string, unknown>;
 
     /** Custom prop-to-class mappings for this theme */

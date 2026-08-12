@@ -226,7 +226,15 @@
             <Transition name="inspector-backdrop">
                 <div v-if="inspectorOpen" class="inspector-backdrop" @click="inspectorOpen = false" />
             </Transition>
-            <Transition name="document-inspector">
+            <div
+                v-if="!inspectorDefaultApplied"
+                class="document-inspector document-inspector-placeholder"
+                aria-hidden="true"
+            />
+            <Transition
+                name="document-inspector"
+                :css="inspectorTransitionsReady"
+            >
                 <DocumentInspector v-if="inspectorOpen" :editor="editor" :document-id="documentId" :create-checkpoint="createManualCheckpoint" :outline="outline" :active-outline-id="activeOutlineId" :stats="stats" :saved-at="state.record?.updated_at" :plugin-panels="inspectorPanels" :initial-tab="inspectorTab" @update:active-tab="inspectorTab = $event" @close="inspectorOpen = false" @outline-select="onOutlineSelect" @restore="onInspectorRestore" />
             </Transition>
         </div>
@@ -413,7 +421,8 @@ let captureTimer: ReturnType<typeof setTimeout> | undefined;
 let revisionTimer: ReturnType<typeof setTimeout> | undefined;
 let unregisterSession: (() => void) | undefined;
 let lastAutomaticRevisionAt = 0;
-let inspectorDefaultApplied = false;
+const inspectorDefaultApplied = ref(false);
+const inspectorTransitionsReady = ref(false);
 let suppressFindAutofocus = false;
 let loadedDocumentId: string | undefined;
 
@@ -820,13 +829,15 @@ watch(
 
 watch(
     [responsiveHydrated, paneWidthPx, isMobile],
-    () => {
-        if (!responsiveHydrated.value || inspectorDefaultApplied) return;
+    async () => {
+        if (!responsiveHydrated.value || inspectorDefaultApplied.value) return;
         // Wait for a real pane measurement on desktop so narrow split panes
         // don't inherit the wide-layout "inspector open" default.
         if (!isMobile.value && paneWidthPx.value <= 0) return;
-        inspectorDefaultApplied = true;
+        inspectorDefaultApplied.value = true;
         inspectorOpen.value = !isCompactToolbar.value;
+        await nextTick();
+        inspectorTransitionsReady.value = true;
     },
     { immediate: true },
 );

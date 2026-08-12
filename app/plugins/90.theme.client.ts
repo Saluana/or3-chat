@@ -10,6 +10,7 @@ import type { CompiledTheme, ThemePlugin } from '~/theme/_shared/types';
 import {
     applyThemeClasses,
     removeThemeClasses,
+    deactivateThemeCSS,
     loadThemeCSS,
     unloadThemeCSS,
 } from '~/theme/_shared/css-selector-runtime';
@@ -17,6 +18,7 @@ import { revokeBackgroundBlobs } from '~/core/theme/backgrounds';
 import {
     loadThemeManifest,
     loadThemeStylesheets,
+    deactivateThemeStylesheets,
     unloadThemeStylesheets,
     type ThemeManifestEntry,
 } from '~/theme/_shared/theme-manifest';
@@ -94,7 +96,11 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     const initialPatch = (nuxtApp.payload as any)?.data
         ?.__or3ThemeAppConfigPatch;
+    const appliedThemeConfigKeys = new Set<string>();
     if (initialPatch && typeof initialPatch === 'object') {
+        for (const key of Object.keys(initialPatch)) {
+            appliedThemeConfigKeys.add(key);
+        }
         replaceReactiveObject(
             appConfig,
             computeEffectiveAppConfig(baseAppConfig, { appPatch: initialPatch })
@@ -109,18 +115,58 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         string,
         Record<string, any> | null
     >();
+    const effectiveAppConfigCache = new Map<
+        string,
+        Record<string, unknown>
+    >();
 
     const applyEffectiveAppConfig = (
         theme?: CompiledTheme | null,
         patch?: Record<string, unknown> | null
     ) => {
-        replaceReactiveObject(
-            appConfig,
-            computeEffectiveAppConfig(baseAppConfig, {
+        const cacheKey = theme?.name ?? '__base__';
+        let effective = effectiveAppConfigCache.get(cacheKey);
+        if (!effective) {
+            effective = computeEffectiveAppConfig(baseAppConfig, {
                 appPatch: patch,
                 uiPatch: theme?.ui,
-            })
-        );
+            });
+            effectiveAppConfigCache.set(cacheKey, effective);
+        }
+
+        const nextKeys = new Set(Object.keys(patch ?? {}));
+        if (theme?.ui) nextKeys.add('ui');
+        const keysToUpdate = new Set([
+            ...appliedThemeConfigKeys,
+            ...nextKeys,
+        ]);
+
+        for (const key of keysToUpdate) {
+            if (!(key in effective)) {
+                delete appConfig[key];
+                continue;
+            }
+            const current = appConfig[key];
+            const value = effective[key];
+            if (
+                current &&
+                value &&
+                typeof current === 'object' &&
+                typeof value === 'object' &&
+                !Array.isArray(current) &&
+                !Array.isArray(value)
+            ) {
+                replaceReactiveObject(
+                    current as Record<string, unknown>,
+                    value as Record<string, unknown>
+                );
+            } else if (!Object.is(current, value)) {
+                appConfig[key] = cloneDeep(value);
+            }
+        }
+
+        appliedThemeConfigKeys.clear();
+        for (const key of nextKeys) appliedThemeConfigKeys.add(key);
     };
 
     const runtimeConfig = useRuntimeConfig();
@@ -308,6 +354,8 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         themeRegistry.clear();
         resolverRegistry.clear();
         themeAppConfigOverrides.clear();
+        effectiveAppConfigCache.clear();
+        appliedThemeConfigKeys.clear();
         resolversVersion.value = 0;
     });
 
@@ -340,6 +388,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         loadingThemes: new Map<string, Promise<boolean>>(),
     };
     const activationCoordinator = new ThemeActivationCoordinator();
+    let appliedThemeName: string | null = null;
     const syncActiveComponents = () => {
         const theme = themeRegistry.get(activeTheme.value);
         const manifest = themeManifest.get(activeTheme.value);
@@ -475,6 +524,10 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             target = DEFAULT_THEME;
         }
 
+        if (target === activeTheme.value && appliedThemeName === target) {
+            return;
+        }
+
         const activation = await setActiveThemeSafe(target, {
             availableThemes,
             defaultTheme: DEFAULT_THEME,
@@ -518,12 +571,12 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             }
 
             if (previousTheme?.hasStyleSelectors) {
-                unloadThemeCSS(previousTheme.name);
+                deactivateThemeCSS(previousTheme.name);
             }
 
             const previousManifest = themeManifest.get(previousThemeName);
             if (previousManifest) {
-                unloadThemeStylesheets(previousManifest.name);
+                deactivateThemeStylesheets(previousManifest.name);
             }
         }
 
@@ -562,6 +615,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         syncActiveComponents();
 
         bumpResolversVersion();
+        appliedThemeName = target;
     };
 
     // Initialize: ensure default theme is available

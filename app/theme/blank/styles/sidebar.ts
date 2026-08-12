@@ -243,6 +243,11 @@ export const sidebarCssSelectors = {
             fontWeight: '600',
         },
     },
+    '.time-group-header': {
+        style: {
+            marginBottom: '0.25rem',
+        },
+    },
     '.project-empty-state': {
         style: {
             borderRadius: 'var(--md-border-radius-small, var(--md-border-radius))',

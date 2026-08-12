@@ -4,13 +4,14 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ICONS, type IconToken } from '~/config/icon-tokens';
 import blankIcons from '../../blank/icons.config';
-import blankAppConfig from '../../blank/app.config';
-import retroAppConfig from '../../retro/app.config';
+import blankTheme from '../../blank/theme';
 import { documentsStyles as blankDocumentStyles } from '../../blank/styles/documents';
 import { documentsStyles as retroDocumentStyles } from '../../retro/styles/documents';
 import retroTheme from '../../retro/theme';
 
 const THEME_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const blankUi = blankTheme.ui as any;
+const retroUi = retroTheme.ui as any;
 
 const editorIconTokens = [
     'editor.document',
@@ -68,6 +69,21 @@ describe('document editor theme contract', () => {
     it('blank document AI composer shares the chat composer radius token', () => {
         const composer = blankDocumentStyles['.document-editor-root .document-ai-composer']?.style;
         expect(composer?.borderRadius).toBe('var(--chat-composer-border-radius, 28px)');
+    });
+
+    it('blank document inspector uses the standard theme border tokens', () => {
+        const inspector = blankDocumentStyles['.document-editor-root .document-inspector']?.style;
+        expect(inspector?.borderLeft).toBe(
+            'var(--md-border-width) solid color-mix(in srgb, var(--md-border-color) 70%, transparent)'
+        );
+    });
+
+    it('blank document editor does not draw a focus border around the writing canvas', () => {
+        const editor =
+            blankDocumentStyles[
+                '.document-editor-root .document-content .ProseMirror:focus-visible'
+            ]?.style;
+        expect(editor?.outline).toBe('none');
     });
 
     it('retro polishes the document formatting toolbar without touching blank', () => {
@@ -311,20 +327,20 @@ describe('document editor theme contract', () => {
     });
 
     it.each([
-        ['blank', blankAppConfig],
-        ['retro', retroAppConfig],
-    ])('%s theme styles the Nuxt UI controls used by the editor', (_name, config) => {
-        expect(config.ui).toHaveProperty('button');
-        expect(config.ui).toHaveProperty('input');
-        expect(config.ui).toHaveProperty('textarea');
-        expect(config.ui).toHaveProperty('select');
-        expect(config.ui).toHaveProperty('selectMenu');
-        expect(config.ui).toHaveProperty('tabs');
-        expect(config.ui).toHaveProperty('card');
+        ['blank', blankUi],
+        ['retro', retroUi],
+    ])('%s theme styles the Nuxt UI controls used by the editor', (_name, ui) => {
+        expect(ui).toHaveProperty('button');
+        expect(ui).toHaveProperty('input');
+        expect(ui).toHaveProperty('textarea');
+        expect(ui).toHaveProperty('select');
+        expect(ui).toHaveProperty('selectMenu');
+        expect(ui).toHaveProperty('tabs');
+        expect(ui).toHaveProperty('card');
     });
 
     it('retro modal titles use a readable face and truncate instead of wrapping awkwardly', () => {
-        const title = retroAppConfig.ui.modal.slots.title;
+        const title = retroUi.modal.slots.title;
         expect(title).toContain('font-vt323');
         expect(title).toContain('truncate');
         expect(title).toContain('min-w-0');
@@ -332,19 +348,19 @@ describe('document editor theme contract', () => {
     });
 
     it.each([
-        ['blank', blankAppConfig],
-        ['retro', retroAppConfig],
-    ])('%s theme keeps pill and link tabs visually distinct', (_name, config) => {
-        const variants = config.ui.tabs.variants.variant;
+        ['blank', blankUi],
+        ['retro', retroUi],
+    ])('%s theme keeps pill and link tabs visually distinct', (_name, ui) => {
+        const variants = ui.tabs.variants.variant;
         expect(variants.pill.list).toContain('bg-[var(--md-surface-container-low)]');
         expect(variants.link.list).toContain('bg-transparent');
         expect(variants.link.list).not.toContain('surface-container');
     });
 
     it.each([
-        ['blank', blankAppConfig],
-        ['retro', retroAppConfig],
-    ])('%s theme centers square Nuxt UI buttons', (_name, config) => {
-        expect(config.ui.button.variants.square.true).toContain('justify-center');
+        ['blank', blankUi],
+        ['retro', retroUi],
+    ])('%s theme centers square Nuxt UI buttons', (_name, ui) => {
+        expect(ui.button.variants.square.true).toContain('justify-center');
     });
 });

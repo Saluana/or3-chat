@@ -16,6 +16,7 @@
                     <!-- Time Group Header -->
                     <SidebarGroupHeader
                         v-if="item.type === 'time-group-header'"
+                        class="time-group-header"
                         :label="item.label"
                         :collapsed="collapsedGroups.has(item.groupKey)"
                         @toggle="toggleGroup(item.groupKey)"
@@ -76,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue';
+import { ref, computed, onUnmounted } from 'vue';
 import { Or3Scroll } from 'or3-scroll';
 import 'or3-scroll/style.css';
 import { usePaginatedSidebarItems } from '~/composables/sidebar/usePaginatedSidebarItems';
@@ -123,9 +124,6 @@ const resolvedEmptyDescription = computed(() => {
     }
     return 'Start something new to populate this list.';
 });
-
-// Watch query for reset
-watch(query, () => void reset());
 
 // Local state for collapsed groups
 const collapsedGroups = ref(new Set<TimeGroup>());

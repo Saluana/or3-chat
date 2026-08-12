@@ -146,10 +146,15 @@ If you use `style`, build the static CSS file:
 bun run theme:build-css
 ```
 
-## Step 7: Update app config and icons (optional)
+## Step 7: Update Nuxt UI recipes and icons (optional)
 
-- `app/theme/<theme>/app.config.ts` merges into full app config.
+- `theme.ui` in `app/theme/<theme>/theme.ts` owns Nuxt UI slot and variant
+  recipes.
 - `app/theme/<theme>/icons.config.ts` overrides icon tokens.
+
+Legacy installed themes with `app.config.ts` still load, but should move their
+`ui` object into `defineTheme({ ui: ... })`. During compatibility loading,
+`theme.ui` wins if both locations define the same value.
 
 ## Step 8: Test
 

@@ -52,6 +52,30 @@ import {
 } from './theme-token-presets';
 const backgroundTokenResolver = createThemeBackgroundTokenResolver();
 
+interface MergedThemeApplicationState {
+    themeName: string;
+    mode: 'light' | 'dark';
+    contrastClass: string;
+    typography: string;
+    shape: string;
+    density: string;
+    elevation: string;
+    colors: string;
+    backgrounds: string;
+    ui: string;
+}
+
+let lastAppliedState: MergedThemeApplicationState | null = null;
+
+/** Reset module state for isolated DOM tests. */
+export function __resetMergedThemeApplicationState(): void {
+    lastAppliedState = null;
+}
+
+function sectionSignature(value: unknown): string {
+    return JSON.stringify(value ?? null);
+}
+
 /**
  * Purpose:
  * Apply the merged theme (base theme + user overrides) to the live DOM.
@@ -97,19 +121,70 @@ export async function applyMergedTheme(
         return;
     }
 
-    // Get base theme backgrounds from loaded theme
-    const baseBackgrounds = resolveModeBackgrounds(theme.backgrounds, mode);
-
     const r = document.documentElement.style;
+    const nextState: MergedThemeApplicationState = {
+        themeName: activeThemeName,
+        mode,
+        contrastClass:
+            document.documentElement.className.match(/(?:high|medium)-contrast/)?.[0] ?? '',
+        typography: sectionSignature(overrides.typography),
+        shape: sectionSignature(overrides.shape),
+        density: sectionSignature(overrides.density),
+        elevation: sectionSignature(overrides.elevation),
+        colors: sectionSignature(overrides.colors),
+        backgrounds: sectionSignature(overrides.backgrounds),
+        ui: sectionSignature(overrides.ui),
+    };
+    const previous = lastAppliedState;
 
-    // 1. Apply typography
+    if (!previous || previous.typography !== nextState.typography) {
+        applyTypographyOverrides(r, overrides);
+    }
+    if (!previous || previous.shape !== nextState.shape) {
+        applyShapeOverrides(r, overrides);
+    }
+    if (!previous || previous.density !== nextState.density) {
+        applyDensityOverrides(r, overrides);
+    }
+    if (!previous || previous.elevation !== nextState.elevation) {
+        applyElevationOverrides(r, overrides);
+    }
+    if (!previous || previous.colors !== nextState.colors) {
+        applyColorOverrides(r, overrides);
+    }
+
+    const backgroundsChanged =
+        !previous ||
+        previous.themeName !== nextState.themeName ||
+        previous.mode !== nextState.mode ||
+        previous.contrastClass !== nextState.contrastClass ||
+        previous.backgrounds !== nextState.backgrounds ||
+        previous.ui !== nextState.ui;
+    if (backgroundsChanged) {
+        const baseBackgrounds = resolveModeBackgrounds(theme.backgrounds, mode);
+        const committed = await applyBackgroundOverrides(
+            r,
+            baseBackgrounds,
+            overrides,
+            shouldCommit
+        );
+        if (!committed) return;
+    }
+
+    lastAppliedState = nextState;
+}
+
+function applyTypographyOverrides(
+    style: CSSStyleDeclaration,
+    overrides: UserThemeOverrides
+): void {
     if (overrides.typography?.baseFontPx) {
-        r.setProperty(
+        style.setProperty(
             '--app-font-size-root',
-            overrides.typography.baseFontPx + 'px'
+            `${overrides.typography.baseFontPx}px`
         );
     } else {
-        r.removeProperty('--app-font-size-root'); // use theme default
+        style.removeProperty('--app-font-size-root');
     }
 
     const legacyFontChoice = overrides.typography?.useSystemFont
@@ -117,24 +192,22 @@ export async function applyMergedTheme(
         : 'theme';
     const bodyFontChoice = overrides.typography?.bodyFont;
     const headingFontChoice = overrides.typography?.headingFont;
-
     if (
         bodyFontChoice !== undefined ||
         overrides.typography?.useSystemFont !== undefined
     ) {
-        r.setProperty(
+        style.setProperty(
             '--app-font-sans-current',
             resolveUserFontStack(bodyFontChoice ?? legacyFontChoice, 'body')
         );
     } else {
-        r.removeProperty('--app-font-sans-current');
+        style.removeProperty('--app-font-sans-current');
     }
-
     if (
         headingFontChoice !== undefined ||
         overrides.typography?.useSystemFont !== undefined
     ) {
-        r.setProperty(
+        style.setProperty(
             '--app-font-heading-current',
             resolveUserFontStack(
                 headingFontChoice ?? legacyFontChoice,
@@ -142,64 +215,66 @@ export async function applyMergedTheme(
             )
         );
     } else {
-        r.removeProperty('--app-font-heading-current');
+        style.removeProperty('--app-font-heading-current');
     }
+}
 
-    // 2. Apply tiered shape overrides. The middle tokens remain the
-    // compatibility defaults for existing component styles.
+function applyShapeOverrides(
+    style: CSSStyleDeclaration,
+    overrides: UserThemeOverrides
+): void {
     if (overrides.shape?.enabled) {
         applyPixelOverride(
-            r,
+            style,
             '--md-border-width-subtle',
             overrides.shape.borderWidthSubtlePx
         );
-        if (overrides.shape.borderWidthPx !== undefined) {
-            r.setProperty(
-                '--md-border-width',
-                `${overrides.shape.borderWidthPx}px`
-            );
-        } else r.removeProperty('--md-border-width');
         applyPixelOverride(
-            r,
+            style,
+            '--md-border-width',
+            overrides.shape.borderWidthPx
+        );
+        applyPixelOverride(
+            style,
             '--md-border-width-strong',
             overrides.shape.borderWidthStrongPx
         );
-
         applyPixelOverride(
-            r,
+            style,
             '--md-border-radius-small',
             overrides.shape.borderRadiusSmallPx
         );
-        if (overrides.shape.borderRadiusPx !== undefined) {
-            r.setProperty(
-                '--md-border-radius',
-                `${overrides.shape.borderRadiusPx}px`
-            );
-        } else r.removeProperty('--md-border-radius');
         applyPixelOverride(
-            r,
+            style,
+            '--md-border-radius',
+            overrides.shape.borderRadiusPx
+        );
+        applyPixelOverride(
+            style,
             '--md-border-radius-large',
             overrides.shape.borderRadiusLargePx
         );
     } else {
-        r.removeProperty('--md-border-width');
-        r.removeProperty('--md-border-radius');
-        r.removeProperty('--md-border-width-subtle');
-        r.removeProperty('--md-border-width-strong');
-        r.removeProperty('--md-border-radius-small');
-        r.removeProperty('--md-border-radius-large');
+        for (const property of [
+            '--md-border-width',
+            '--md-border-radius',
+            '--md-border-width-subtle',
+            '--md-border-width-strong',
+            '--md-border-radius-small',
+            '--md-border-radius-large',
+        ]) {
+            style.removeProperty(property);
+        }
     }
+}
 
-    // 3. Apply per-mode appearance presets. Theme/default selections remove
-    // only the inline properties owned by this runtime, exposing authored
-    // theme tokens (or a component's literal fallback) again.
-    applyDensityOverrides(r, overrides);
-    applyElevationOverrides(r, overrides);
-
-    // 4. Apply color palette overrides
+function applyColorOverrides(
+    style: CSSStyleDeclaration,
+    overrides: UserThemeOverrides
+): void {
     if (overrides.colors?.enabled) {
         for (const [key, cssVar] of Object.entries(COLOR_TOKEN_REGISTRY)) {
-            const val = (overrides.colors as Record<string, unknown>)[key];
+            const value = (overrides.colors as Record<string, unknown>)[key];
             const targets = [
                 cssVar,
                 ...(COLOR_TOKEN_ALIASES[
@@ -207,24 +282,31 @@ export async function applyMergedTheme(
                 ] ?? []),
             ];
             for (const target of targets) {
-                if (val && typeof val === 'string') r.setProperty(target, val);
-                else r.removeProperty(target);
+                if (value && typeof value === 'string') {
+                    style.setProperty(target, value);
+                } else {
+                    style.removeProperty(target);
+                }
             }
         }
-    } else {
-        // Remove overrides to let base theme values cascade
-        const overrideVariables = new Set([
-            ...Object.values(COLOR_TOKEN_REGISTRY),
-            ...Object.values(COLOR_TOKEN_ALIASES).flatMap(
-                (aliases) => aliases ?? []
-            ),
-        ]);
-        for (const cssVar of overrideVariables) {
-            r.removeProperty(cssVar);
-        }
+        return;
     }
 
-    // 5. Build merged backgrounds
+    const overrideVariables = new Set([
+        ...Object.values(COLOR_TOKEN_REGISTRY),
+        ...Object.values(COLOR_TOKEN_ALIASES).flatMap(
+            (aliases) => aliases ?? []
+        ),
+    ]);
+    for (const cssVar of overrideVariables) style.removeProperty(cssVar);
+}
+
+async function applyBackgroundOverrides(
+    style: CSSStyleDeclaration,
+    baseBackgrounds: ThemeBackgrounds | undefined,
+    overrides: UserThemeOverrides,
+    shouldCommit?: () => boolean
+): Promise<boolean> {
     const mergedBackgrounds = buildMergedBackgrounds(
         baseBackgrounds,
         overrides
@@ -233,12 +315,11 @@ export async function applyMergedTheme(
         resolveToken: backgroundTokenResolver,
         shouldCommit,
     });
+    if (shouldCommit && !shouldCommit()) return false;
 
-    // 6. Apply background color overrides (if enabled)
     const themeBaseColor = mergedBackgrounds.content?.base?.color;
     const themeOverlayColor = mergedBackgrounds.content?.overlay?.color;
     const themeSidebarColor = mergedBackgrounds.sidebar?.color;
-
     if (overrides.backgrounds?.enabled) {
         const bgColorMap: Array<[string, string]> = [
             [
@@ -255,33 +336,37 @@ export async function applyMergedTheme(
             ],
         ];
         for (const [color, cssVar] of bgColorMap) {
-            if (color) r.setProperty(cssVar, color);
+            if (color) style.setProperty(cssVar, color);
         }
     } else {
         if (!hasColor(themeBaseColor)) {
-            r.removeProperty('--app-content-bg-1-color');
+            style.removeProperty('--app-content-bg-1-color');
         }
         if (!hasColor(themeOverlayColor)) {
-            r.removeProperty('--app-content-bg-2-color');
+            style.removeProperty('--app-content-bg-2-color');
         }
         if (!hasColor(themeSidebarColor)) {
-            r.removeProperty('--app-sidebar-bg-color');
+            style.removeProperty('--app-sidebar-bg-color');
         }
     }
 
-    // 7. Handle gradient visibility (UI-specific)
     if (overrides.backgrounds?.headerGradient?.enabled !== undefined) {
-        r.setProperty(
+        style.setProperty(
             '--app-header-gradient-display',
             overrides.backgrounds.headerGradient.enabled ? 'block' : 'none'
         );
-    } else r.removeProperty('--app-header-gradient-display');
+    } else {
+        style.removeProperty('--app-header-gradient-display');
+    }
     if (overrides.backgrounds?.bottomNavGradient?.enabled !== undefined) {
-        r.setProperty(
+        style.setProperty(
             '--app-bottomnav-gradient-display',
             overrides.backgrounds.bottomNavGradient.enabled ? 'block' : 'none'
         );
-    } else r.removeProperty('--app-bottomnav-gradient-display');
+    } else {
+        style.removeProperty('--app-bottomnav-gradient-display');
+    }
+    return true;
 }
 
 function applyDensityOverrides(

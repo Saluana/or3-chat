@@ -204,7 +204,7 @@ const themeButtonProps = computed(() => {
     border-color: var(--md-primary) !important;
 }
 .theme-option-btn:focus-visible {
-    outline: var(--app-focus-ring-width, 3px) solid
+    outline: var(--app-focus-ring-width, 2px) solid
         var(--md-focus-ring, var(--md-primary));
     outline-offset: var(--app-focus-ring-offset, 2px);
 }

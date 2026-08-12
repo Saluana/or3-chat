@@ -3,8 +3,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import blankAppConfig from '../../blank/app.config';
-import retroAppConfig from '../../retro/app.config';
+import blankTheme from '../../blank/theme';
+import retroTheme from '../../retro/theme';
 
 const MOBILE_FONT_CLASS = 'max-lg:text-[16px]!';
 const THEME_ROOT = resolve(
@@ -12,17 +12,19 @@ const THEME_ROOT = resolve(
     '..',
     '..'
 );
+const blankUi = blankTheme.ui as any;
+const retroUi = retroTheme.ui as any;
 
 describe('mobile form-control font-size contract', () => {
     it.each([
-        ['blank', blankAppConfig],
-        ['retro', retroAppConfig],
-    ] as const)('%s config keeps Nuxt UI editable controls mobile-safe', (_name, config) => {
-        expect(config.ui.input.slots.base).toContain(MOBILE_FONT_CLASS);
-        expect(config.ui.textarea.slots.base).toContain(MOBILE_FONT_CLASS);
-        expect(config.ui.select.slots.base).toContain(MOBILE_FONT_CLASS);
-        expect(config.ui.selectMenu.slots.base).toContain(MOBILE_FONT_CLASS);
-        expect(config.ui.selectMenu.slots.input).toContain(MOBILE_FONT_CLASS);
+        ['blank', blankUi],
+        ['retro', retroUi],
+    ] as const)('%s theme keeps Nuxt UI editable controls mobile-safe', (_name, ui) => {
+        expect(ui.input.slots.base).toContain(MOBILE_FONT_CLASS);
+        expect(ui.textarea.slots.base).toContain(MOBILE_FONT_CLASS);
+        expect(ui.select.slots.base).toContain(MOBILE_FONT_CLASS);
+        expect(ui.selectMenu.slots.base).toContain(MOBILE_FONT_CLASS);
+        expect(ui.selectMenu.slots.input).toContain(MOBILE_FONT_CLASS);
     });
 
     it.each(['blank', 'retro'] as const)(

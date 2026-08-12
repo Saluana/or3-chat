@@ -763,7 +763,7 @@ watch(
     left: 1.18rem;
 }
 .palette-toggle input:focus-visible + .palette-toggle-track {
-    outline: var(--app-focus-ring-width, 3px) solid
+    outline: var(--app-focus-ring-width, 2px) solid
         var(--md-focus-ring, var(--theme-editor-accent));
     outline-offset: var(--app-focus-ring-offset, 2px);
 }
@@ -824,9 +824,9 @@ watch(
 .color-list-item:focus-visible {
     position: relative;
     z-index: 1;
-    outline: var(--app-focus-ring-width, 3px) solid
+    outline: var(--app-focus-ring-width, 2px) solid
         var(--md-focus-ring, var(--theme-editor-accent));
-    outline-offset: calc(-1 * var(--app-focus-ring-width, 3px));
+    outline-offset: calc(-1 * var(--app-focus-ring-width, 2px));
 }
 .color-list-swatch,
 .color-editor-swatch {

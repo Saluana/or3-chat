@@ -273,11 +273,10 @@ describe('RuntimeResolver', () => {
                 isNuxtUI: true,
             });
 
-            // Classes should be concatenated in specificity order (highest first)
+            // Generic classes come first so later class-merging keeps the most
+            // specific utility when two declarations conflict.
             const classes = result.props.class as string;
-            expect(classes).toContain('identifier');
-            expect(classes).toContain('context');
-            expect(classes).toContain('base');
+            expect(classes).toBe('base context identifier');
         });
 
         it('should handle empty classes gracefully', () => {

@@ -76,6 +76,10 @@
   font-weight: 600;
 }
 
+[data-theme="blank"] .time-group-header {
+  margin-bottom: 0.25rem;
+}
+
 [data-theme="blank"] .project-empty-state {
   border-radius: var(--md-border-radius-small, var(--md-border-radius));
 }
@@ -353,6 +357,10 @@
   font-family: var(--font-sans);
 }
 
+[data-theme="blank"] .document-editor-root .document-content .ProseMirror:focus-visible {
+  outline: none;
+}
+
 [data-theme="blank"] .document-editor-root .editor-topbar {
   border-bottom: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color);
 }
@@ -363,7 +371,7 @@
 }
 
 [data-theme="blank"] .document-editor-root .document-inspector {
-  border-left: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color);
+  border-left: var(--md-border-width) solid color-mix(in srgb, var(--md-border-color) 70%, transparent);
   box-shadow: none;
 }
 

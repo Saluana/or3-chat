@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     applyThemeClasses,
     removeThemeClasses,
+    deactivateThemeCSS,
     loadThemeCSS,
     unloadThemeCSS,
 } from '../css-selector-runtime';
@@ -94,10 +95,18 @@ describe('CSS Selector Runtime', () => {
                 },
             };
 
-            applyThemeClasses('test-theme', selectors);
+            const OriginalMutationObserver = globalThis.MutationObserver;
+            const observerSpy = vi.fn();
+            globalThis.MutationObserver = observerSpy as never;
+            try {
+                applyThemeClasses('test-theme', selectors);
+            } finally {
+                globalThis.MutationObserver = OriginalMutationObserver;
+            }
 
             // No classes should be added
             expect(element.className).toBe('test-element');
+            expect(observerSpy).not.toHaveBeenCalled();
         });
 
         it('should handle invalid selectors gracefully', () => {
@@ -290,6 +299,25 @@ describe('CSS Selector Runtime', () => {
                 'link[data-theme-css="test-theme"]'
             );
             expect(links.length).toBe(1);
+        });
+
+        it('re-enables a cached inactive stylesheet', async () => {
+            const firstLoad = loadThemeCSS('test-theme');
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            const link = document.querySelector(
+                'link[data-theme-css="test-theme"]'
+            ) as HTMLLinkElement;
+            link.dispatchEvent(new Event('load'));
+            await firstLoad;
+
+            deactivateThemeCSS('test-theme');
+            expect(link.disabled).toBe(true);
+            await loadThemeCSS('test-theme');
+
+            expect(link.disabled).toBe(false);
+            expect(
+                document.querySelectorAll('link[data-theme-css="test-theme"]')
+            ).toHaveLength(1);
         });
 
         it('should resolve even if CSS file does not exist', async () => {

@@ -31,13 +31,12 @@
                 'max-md:absolute max-md:inset-0 max-md:w-full max-md:shadow-xl',
                 'max-md:transition-transform max-md:duration-200 max-md:ease-out',
                 side === 'right' ? 'max-md:right-0' : 'max-md:left-0',
-                // Only apply slide-away transforms AFTER hydration to avoid SSR mismatch
-                hydrated
-                    ? !open
-                        ? side === 'right'
-                            ? 'max-md:translate-x-full'
-                            : 'max-md:-translate-x-full'
-                        : ''
+                // The uncontrolled SSR/client state starts closed, so keeping the
+                // mobile drawer off-canvas is deterministic before hydration too.
+                !open
+                    ? side === 'right'
+                        ? 'max-md:translate-x-full'
+                        : 'max-md:-translate-x-full'
                     : '',
                 initialized
                     ? 'md:transition-[width] md:duration-200 md:ease-out'
@@ -258,7 +257,6 @@ const initialized = ref(false);
 const hydrated = ref(false);
 
 onMounted(() => {
-    hydrated.value = true;
     hydrated.value = true;
     // Open if defaultOpen & desktop
     if (props.defaultOpen && isDesktop.value) {

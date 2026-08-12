@@ -26,7 +26,6 @@ You can also add:
 
 ```
 app/theme/my-theme/
-  app.config.ts     # optional app config patch
   icons.config.ts   # optional icon overrides
   styles/           # optional TS style helpers
 ```
@@ -63,6 +62,14 @@ export default defineTheme({
     button: { variant: 'solid', size: 'md' },
     'button.chat': { variant: 'ghost' },
     'button#chat.send': { color: 'primary', size: 'lg' },
+  },
+
+  ui: {
+    input: {
+      slots: {
+        base: 'h-[var(--app-control-height-medium,36px)] rounded-[var(--md-border-radius-small,var(--md-border-radius))]',
+      },
+    },
   },
 });
 ```

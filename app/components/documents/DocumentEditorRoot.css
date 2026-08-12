@@ -262,6 +262,7 @@
 
 .inspector-backdrop { display: none; }
 .document-inspector { flex: 0 0 320px; }
+.document-inspector-placeholder { visibility: hidden; pointer-events: none; }
 .document-inspector-enter-active, .document-inspector-leave-active { overflow: hidden; transition: flex-basis max(240ms, var(--app-motion-duration-slow, 240ms)) var(--app-motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1)), min-width max(240ms, var(--app-motion-duration-slow, 240ms)) var(--app-motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1)), width max(240ms, var(--app-motion-duration-slow, 240ms)) var(--app-motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1)), opacity max(180ms, var(--app-motion-duration-medium, 180ms)) var(--app-motion-easing-standard, ease), transform max(240ms, var(--app-motion-duration-slow, 240ms)) var(--app-motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1)); }
 .document-inspector-enter-from, .document-inspector-leave-to { width: 0 !important; min-width: 0 !important; flex-basis: 0 !important; opacity: 0; transform: translateX(1rem); }
 .document-inspector-enter-to, .document-inspector-leave-from { opacity: 1; transform: translateX(0); }
@@ -272,6 +273,10 @@
 .document-inspector { flex-basis: 300px; min-width: 300px; }
 .document-canvas,
 .ai-composer-dock { width: min(var(--editor-canvas), calc(100% - 2.25rem)); }
+}
+
+@container (max-width: 899px) {
+.document-inspector-placeholder { display: none; }
 }
 
 @container (max-width: 719px) {

@@ -168,6 +168,15 @@ describe('workspace profile mobile expanded sidebar', () => {
         vi.unstubAllGlobals();
     });
 
+    it('keeps the initially closed mobile drawer off-canvas', () => {
+        const wrapper = mountRealExpandedSidebar();
+
+        expect(wrapper.get('[data-testid="sidebar"]').classes()).toContain(
+            'max-md:-translate-x-full'
+        );
+        wrapper.unmount();
+    });
+
     it('renders the profile mobile default through the real expanded slot', async () => {
         isMobile.value = true;
         setResolvedWorkspaceProfile(
