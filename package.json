@@ -154,6 +154,7 @@
         "cross-spawn": "^7.0.6",
         "dexie": "~4.4.0",
         "dexie-export-import": "^4.1.4",
+        "fflate": "^0.8.3",
         "gpt-tokenizer": "^3.4.0",
         "jsonwebtoken": "^9.0.3",
         "katex": "^0.16.47",

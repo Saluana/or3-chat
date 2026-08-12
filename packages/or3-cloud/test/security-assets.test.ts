@@ -8,6 +8,7 @@ const RUNTIME_ENTRYPOINT = resolve(import.meta.dir, '../../../scripts/docker/run
 const DOCKERFILE = resolve(import.meta.dir, '../../../Dockerfile');
 const CLOUD_CLI_SOURCE = resolve(import.meta.dir, '../src/cli.ts');
 const RELEASE_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/release-cloud.yml');
+const ROOT_MANIFEST = resolve(import.meta.dir, '../../../package.json');
 
 function asset(name: string): string {
   return readFileSync(resolve(ASSET_ROOT, name), 'utf8');
@@ -47,6 +48,13 @@ test('Dockerfile builds shared Nuxt output only once on the native runner', () =
   expect(toolsStage).not.toContain('\nRUN ');
   expect(dockerfile).toContain('COPY --from=runtime-tools /bin/ /bin/');
   expect(dockerfile).toContain('ENTRYPOINT ["/nodejs/bin/node"');
+});
+
+test('fixed-profile image declares the extension archive runtime', () => {
+  const manifest = JSON.parse(readFileSync(ROOT_MANIFEST, 'utf8')) as {
+    dependencies?: Record<string, string>;
+  };
+  expect(manifest.dependencies?.fflate).toBe('^0.8.3');
 });
 
 test('compose.yaml deep health treats degraded as unhealthy', () => {
