@@ -153,15 +153,27 @@ function declarationRecord(declaration: ts.Declaration) {
 
 function signatureRecord(checker: ts.TypeChecker, signature: ts.Signature) {
     const declaration = signature.getDeclaration();
+    const declarationSnapshot = declaration ? declarationRecord(declaration) : null;
     const declaredReturnType = declaration && ts.isFunctionLike(declaration) && declaration.type
         ? declaration.type.getText(declaration.getSourceFile())
         : null;
     const flags = ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope;
+    // TypeScript expands inferred return types through ambient platform
+    // libraries. That made the ledger differ between macOS and Linux for
+    // signatures containing Buffer/typed arrays even though the emitted
+    // public declaration was identical. The declaration snapshot is the
+    // authoritative inferred-type gate, so keep this ledger source-stable for
+    // unannotated returns and retain resolved types for explicit contracts.
+    const hasInferredReturn = declaredReturnType === null && declarationSnapshot !== null;
     return {
-        signature: checker.signatureToString(signature, declaration, flags, ts.SignatureKind.Call),
+        signature: hasInferredReturn
+            ? declarationSnapshot.text
+            : checker.signatureToString(signature, declaration, flags, ts.SignatureKind.Call),
         declaredReturnType,
-        resolvedReturnType: checker.typeToString(checker.getReturnTypeOfSignature(signature), declaration, flags),
-        declaration: declaration ? declarationRecord(declaration) : null,
+        resolvedReturnType: hasInferredReturn
+            ? null
+            : checker.typeToString(checker.getReturnTypeOfSignature(signature), declaration, flags),
+        declaration: declarationSnapshot,
     };
 }
 
