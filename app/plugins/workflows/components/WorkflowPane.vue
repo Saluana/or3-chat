@@ -1055,19 +1055,19 @@ watch(
     align-items: center;
     gap: var(--workflow-toolbar-gap);
     padding-block: 0.4rem;
-    padding-inline-start: calc(
-        var(--or3-pane-chrome-left-clearance, 0px) +
-            max(
-                0.65rem,
-                calc((100% - var(--workflow-toolbar-canvas)) / 2)
-            )
+    padding-inline-start: max(
+        calc(var(--or3-pane-chrome-left-clearance, 0px) + 0.65rem),
+        calc(
+            var(--or3-pane-chrome-left-clearance, 0px) +
+                (100% - var(--workflow-toolbar-canvas)) / 2
+        )
     );
-    padding-inline-end: calc(
-        var(--or3-pane-chrome-right-clearance, 0px) +
-            max(
-                0.65rem,
-                calc((100% - var(--workflow-toolbar-canvas)) / 2)
-            )
+    padding-inline-end: max(
+        calc(var(--or3-pane-chrome-right-clearance, 0px) + 0.65rem),
+        calc(
+            var(--or3-pane-chrome-right-clearance, 0px) +
+                (100% - var(--workflow-toolbar-canvas)) / 2
+        )
     );
     border-bottom: var(--workflow-toolbar-border-width) solid
         var(--md-border-color);

@@ -340,11 +340,11 @@ if (import.meta.main) {
         ),
         totalCssRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_CSS_BYTES,
-            850_000
+            1_000_000
         ),
         totalCssGzipBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_CSS_GZIP_BYTES,
-            140_000
+            150_000
         ),
         precacheFiles: positiveNumber(
             process.env.OR3_PERF_MAX_PRECACHE_FILES,

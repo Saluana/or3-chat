@@ -1477,18 +1477,24 @@ describe('Edge Cases and Robustness', () => {
     });
 
     describe('reasoning tokens', () => {
-        it('handles nodeReasoning like nodeToken', async () => {
+        it('retains node reasoning separately from visible output', async () => {
             accumulator.nodeStart('node-1', 'Node', 'agent');
             accumulator.nodeReasoning('node-1', 'Thinking...');
 
             await flushRAF(vi);
 
-            expect(accumulator.state.nodeStates['node-1']!.streamingText).toBe(
+            expect(accumulator.state.nodeStates['node-1']!.reasoningText).toBe(
                 'Thinking...'
+            );
+            expect(
+                accumulator.state.nodeStates['node-1']!.streamingText
+            ).toBe('');
+            expect(accumulator.state.nodeStates['node-1']!.activity).toBe(
+                'thinking'
             );
         });
 
-        it('handles branchReasoning like branchToken', async () => {
+        it('retains branch reasoning separately from visible output', async () => {
             accumulator.nodeStart('parallel-1', 'Parallel', 'parallel');
             accumulator.branchStart('parallel-1', 'branch-a', 'A');
             accumulator.branchReasoning(
@@ -1501,8 +1507,11 @@ describe('Edge Cases and Robustness', () => {
             await flushRAF(vi);
 
             expect(
-                accumulator.state.branches['parallel-1:branch-a']!.streamingText
+                accumulator.state.branches['parallel-1:branch-a']!.reasoningText
             ).toBe('Reasoning...');
+            expect(
+                accumulator.state.branches['parallel-1:branch-a']!.streamingText
+            ).toBe('');
         });
     });
 });

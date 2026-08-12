@@ -69,7 +69,7 @@ describe('extension manifest version dispatch', () => {
 
     it('normalizes the stored first-party V1 manifest without adding a version field', async () => {
         const source = await readFile(
-            resolve(process.cwd(), 'extensions/themes/cyberpunk/or3.manifest.json'),
+            resolve(process.cwd(), 'app/theme/cyberpunk/or3.manifest.json'),
             'utf8'
         );
 

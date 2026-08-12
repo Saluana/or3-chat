@@ -69,11 +69,15 @@ describe('blank theme mobile control sizing', () => {
         expect(blankStyles).toContain('.sidebar-mode-badge');
     });
 
-    it('keeps Nuxt UI mobile variants at least 44px without changing desktop sizes', () => {
+    it('keeps tokenized desktop fallbacks and 44px mobile variants', () => {
         const buttonSizes = blankAppConfig.ui.button.variants.size;
         expect(buttonSizes.xs.base).toContain('h-[24px]');
-        expect(buttonSizes.sm.base).toContain('h-[32px]');
-        expect(buttonSizes.md.base).toContain('h-[36px]');
+        expect(buttonSizes.sm.base).toContain(
+            'h-[var(--app-control-height-small,32px)]',
+        );
+        expect(buttonSizes.md.base).toContain(
+            'h-[var(--app-control-height-medium,36px)]',
+        );
         expect(buttonSizes.xs.base).toContain('max-md:min-h-[44px]!');
         expect(buttonSizes.sm.base).toContain('max-md:min-h-[44px]!');
         expect(buttonSizes.md.base).toContain('max-md:min-h-[44px]!');

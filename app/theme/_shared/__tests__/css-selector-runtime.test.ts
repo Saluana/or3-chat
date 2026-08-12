@@ -7,6 +7,17 @@ import {
 } from '../css-selector-runtime';
 import type { CSSelectorConfig } from '../types';
 
+const TEST_THEME_NAMES = [
+    'test-theme',
+    'detached-node-theme',
+    'remove-theme',
+    'multi-remove-theme',
+    'ownership-theme',
+    'stale-selector-theme',
+    'theme1',
+    'theme2',
+];
+
 describe('CSS Selector Runtime', () => {
     let container: HTMLDivElement;
 
@@ -17,6 +28,10 @@ describe('CSS Selector Runtime', () => {
     });
 
     afterEach(() => {
+        for (const themeName of TEST_THEME_NAMES) {
+            removeThemeClasses(themeName);
+        }
+
         // Clean up
         document.body.removeChild(container);
 
@@ -350,8 +365,10 @@ describe('CSS Selector Runtime', () => {
             const el1 = container.querySelector('.element1') as HTMLElement;
             const el2 = container.querySelector('.element2') as HTMLElement;
 
-            expect(el1.classList.contains('theme1-class')).toBe(true);
-            expect(el2.classList.contains('theme1-class')).toBe(true);
+            await vi.waitFor(() => {
+                expect(el1.classList.contains('theme1-class')).toBe(true);
+                expect(el2.classList.contains('theme1-class')).toBe(true);
+            });
 
             // Switch to theme 2
             removeThemeClasses('theme1');
@@ -367,13 +384,12 @@ describe('CSS Selector Runtime', () => {
 
             applyThemeClasses('theme2', theme2Selectors);
 
-            // Wait for chunked processing to complete
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            expect(el1.classList.contains('theme1-class')).toBe(false);
-            expect(el1.classList.contains('theme2-class')).toBe(true);
-            expect(el2.classList.contains('theme1-class')).toBe(false);
-            expect(el2.classList.contains('theme2-class')).toBe(true);
+            await vi.waitFor(() => {
+                expect(el1.classList.contains('theme1-class')).toBe(false);
+                expect(el1.classList.contains('theme2-class')).toBe(true);
+                expect(el2.classList.contains('theme1-class')).toBe(false);
+                expect(el2.classList.contains('theme2-class')).toBe(true);
+            });
         });
     });
 });

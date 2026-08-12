@@ -77,15 +77,10 @@ describe('Background Job Provider Factory', () => {
             expect(provider.name).toBe('memory');
         });
 
-        it('should return convex provider when configured with convexUrl', async () => {
+        it('should return the registered convex provider when selected', async () => {
             mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: {
                     storageProvider: 'convex',
-                },
-                public: {
-                    sync: {
-                        convexUrl: 'https://test.convex.cloud',
-                    },
                 },
             });
 
@@ -93,45 +88,16 @@ describe('Background Job Provider Factory', () => {
             expect(provider.name).toBe('convex');
         });
 
-        it('should fall back to memory when convex is selected but no URL is configured', async () => {
-            const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-            mockUseRuntimeConfig.mockReturnValue({
-                backgroundJobs: {
-                    storageProvider: 'convex',
-                },
-                public: {
-                    sync: {
-                        convexUrl: undefined,
-                    },
-                },
-            });
-
-            const provider = await getJobProvider();
-            expect(provider.name).toBe('memory');
-            expect(consoleWarnSpy).toHaveBeenCalledWith(
-                expect.stringContaining('Convex URL not configured')
-            );
-
-            consoleWarnSpy.mockRestore();
-        });
-
-        it('should fall back to memory for unimplemented redis provider', async () => {
-            const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
+        it('should fail fast for an unregistered provider', async () => {
             mockUseRuntimeConfig.mockReturnValue({
                 backgroundJobs: {
                     storageProvider: 'redis',
                 },
             });
 
-            const provider = await getJobProvider();
-            expect(provider.name).toBe('memory');
-            expect(consoleWarnSpy).toHaveBeenCalledWith(
-                expect.stringContaining('Redis provider not yet implemented')
+            await expect(getJobProvider()).rejects.toThrow(
+                'Provider "redis" is not registered'
             );
-
-            consoleWarnSpy.mockRestore();
         });
 
         it('should cache provider instance after first call', async () => {

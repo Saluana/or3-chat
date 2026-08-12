@@ -1,0 +1,8 @@
+{
+  "kind": "theme",
+  "id": "cyberpunk",
+  "name": "Cyberpunk",
+  "version": "1.0.0",
+  "description": "Neon-drenched dark theme with electric cyan, hot red accents, and angular UI inspired by cyberpunk game interfaces",
+  "capabilities": []
+}

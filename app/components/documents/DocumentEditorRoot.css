@@ -11,8 +11,8 @@
     align-items: center;
     gap: 0.15rem;
     padding-block: 0.4rem;
-    padding-inline-start: calc(var(--or3-pane-chrome-left-clearance, 0px) + max(0.65rem, calc((100% - var(--editor-canvas)) / 2)));
-    padding-inline-end: calc(var(--or3-pane-chrome-right-clearance, 0px) + max(0.65rem, calc((100% - var(--editor-canvas)) / 2)));
+    padding-inline-start: max(calc(var(--or3-pane-chrome-left-clearance, 0px) + 0.65rem), calc(var(--or3-pane-chrome-left-clearance, 0px) + (100% - var(--editor-canvas)) / 2));
+    padding-inline-end: max(calc(var(--or3-pane-chrome-right-clearance, 0px) + 0.65rem), calc(var(--or3-pane-chrome-right-clearance, 0px) + (100% - var(--editor-canvas)) / 2));
     border-bottom: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color);
     background: var(--doc-toolbar-surface);
     box-shadow: 0 5px 18px rgb(0 0 0 / 3%);

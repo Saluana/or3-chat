@@ -42,11 +42,12 @@
  * **Event → State Mapping Invariants**
  * - `nodeStart` → creates NodeState, adds to executionOrder, sets currentNodeId
  * - `nodeToken` → appends to node.streamingText (batched via RAF)
- * - `nodeReasoning` → marks the node as thinking without exposing raw model reasoning
+ * - `nodeReasoning` → retains a bounded inspector trace and marks the node as thinking
  * - `nodeFinish` → sets node.output, moves streamingText to output, marks complete
  * - `nodeError` → sets node.error, failedNodeId, executionState = 'failed'
  * - `branchStart` → creates BranchState under `nodeId:branchId` key
  * - `branchToken` → appends to branch.streamingText (batched via RAF)
+ * - `branchReasoning` → retains a bounded inspector trace separately from visible output
  * - `branchComplete` → moves branch.streamingText to branch.output, marks complete
  * - `workflowToken` → appends to finalStreamingText (batched via RAF), for leaf aggregation
  * - `finalize` → commits pending batches, sets executionState, isActive = false, error if provided

@@ -257,6 +257,24 @@ function cleanupWorkspaceResources(dbName: string, workspaceId: string): void {
     cleanupSyncCircuitBreakers(workspaceId);
 }
 
+function closeWorkspaceDb(db: Or3DB, workspaceId: string): void {
+    cleanupWorkspaceResources(db.name, workspaceId);
+
+    try {
+        db.close();
+        if (import.meta.dev) {
+            console.debug(
+                `[db:client] Closed evicted workspace DB: ${workspaceId}`
+            );
+        }
+    } catch (error) {
+        console.warn(
+            `[db:client] Failed to close workspace DB ${workspaceId}:`,
+            error
+        );
+    }
+}
+
 const workspaceDbCache = new LRUCache<string, Or3DB>({
     max: MAX_CACHED_WORKSPACE_DBS,
     ttl: WORKSPACE_DB_TTL_MS,
@@ -271,21 +289,18 @@ const workspaceDbCache = new LRUCache<string, Or3DB>({
             queueMicrotask(() => {
                 if (workspaceKey === activeWorkspaceId && db === activeDb) {
                     workspaceDbCache.set(workspaceKey, db);
+                    return;
                 }
+
+                // The active workspace changed before the deferred re-pin.
+                // Close the now-orphaned handle instead of leaking a live
+                // IndexedDB connection outside the cache.
+                closeWorkspaceDb(db, workspaceKey);
             });
             return;
         }
 
-        cleanupWorkspaceResources(db.name, workspaceKey);
-
-        try {
-            db.close();
-            if (import.meta.dev) {
-                console.debug(`[db:client] Closed evicted workspace DB: ${workspaceId}`);
-            }
-        } catch (error) {
-            console.warn(`[db:client] Failed to close workspace DB ${workspaceId}:`, error);
-        }
+        closeWorkspaceDb(db, workspaceKey);
     },
 });
 

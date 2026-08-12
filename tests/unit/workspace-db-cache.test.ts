@@ -23,10 +23,10 @@ const mockDb = {
 describe('Workspace DB Cache LRU', () => {
     afterEach(async () => {
         const { keys } = getWorkspaceDbCacheStats();
+        setActiveWorkspaceDb(null);
         for (const key of keys) {
             evictWorkspaceDb(key);
         }
-        setActiveWorkspaceDb(null);
         await Promise.all(
             keys.map((key) => Dexie.delete(`or3-db-${key}`))
         );
@@ -138,6 +138,19 @@ describe('Workspace DB Cache LRU', () => {
         expect(active.isOpen()).toBe(true);
         expect(getWorkspaceDb(workspaceId)).toBe(active);
         await expect(active.kv.count()).resolves.toBe(0);
+    });
+
+    it('closes an evicted active DB when the workspace changes before re-pin', async () => {
+        const workspaceId = `ws-active-switch-${crypto.randomUUID()}`;
+        const active = setActiveWorkspaceDb(workspaceId);
+        await active.open();
+
+        evictWorkspaceDb(workspaceId);
+        setActiveWorkspaceDb(null);
+        await Promise.resolve();
+
+        expect(active.isOpen()).toBe(false);
+        await Dexie.delete(active.name);
     });
 
     it('reopens a cached workspace cleanly after browser storage eviction', async () => {

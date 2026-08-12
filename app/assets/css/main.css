@@ -21,9 +21,6 @@
 /* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
 @import "~/assets/css/nuxt-ui-map.css";
 
-/* Generic prose styles (theme-agnostic, renamed from prose-retro) */
-@import "./or3-prose.css";
-
 /* Theme-specific styles are loaded dynamically by the theme system via loadThemeStylesheets() */
 /* DO NOT import theme styles here - they should only load when their theme is active */
 
