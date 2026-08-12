@@ -1,83 +1,151 @@
-name: Tests
+name: PR checks
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '23 9 * * 1-5'
   pull_request:
-    paths:
-      - 'app/**'
-      - 'server/**'
-      - 'shared/**'
-      - 'packages/or3-skills/**'
-      - 'tests/**'
-      - 'scripts/**'
-      - 'docs/**'
-      - 'README.md'
-      - 'packages/or3-cloud/README.md'
-      - 'public/_documentation/cloud/**'
-      - 'vitest.config.ts'
-      - 'package.json'
-      - 'bun.lock'
-      - '.github/workflows/tests.yml'
   push:
-    branches: [main]
-    paths:
-      - 'app/**'
-      - 'server/**'
-      - 'shared/**'
-      - 'packages/or3-skills/**'
-      - 'tests/**'
-      - 'scripts/**'
-      - 'docs/**'
-      - 'README.md'
-      - 'packages/or3-cloud/README.md'
-      - 'public/_documentation/cloud/**'
-      - 'vitest.config.ts'
-      - 'package.json'
-      - 'bun.lock'
-      - '.github/workflows/tests.yml'
+    branches: [main, or3-cloud]
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   core:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    name: Core and affected contracts
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: changes
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          filters: |
+            banned_imports:
+              - 'app/**'
+              - 'server/**'
+            cloud:
+              - '.dockerignore'
+              - 'Dockerfile'
+              - 'compose*.yaml'
+              - 'modules/**'
+              - 'packages/or3-cloud/**'
+              - 'packages/create-or3-chat/first-party-versions.json'
+              - 'scripts/docker/**'
+              - 'scripts/release/**'
+              - '.github/workflows/extended-validation.yml'
+              - '.github/workflows/release-cloud-candidate.yml'
+              - '.github/workflows/release-cloud.yml'
+            plugin_runtime:
+              - 'app/composables/**'
+              - 'app/core/hooks/**'
+              - 'app/plugins/examples/**'
+              - 'app/utils/chat/**'
+              - 'server/hooks/**'
+              - 'server/utils/chat/**'
+              - 'shared/hooks/**'
+              - 'shared/plugins/**'
+              - 'scripts/plugin-runtime/**'
+              - 'scripts/__tests__/plugin-runtime-compatibility-snapshots.test.ts'
+              - 'scripts/__tests__/plugin-runtime-example-fixtures.test.ts'
+              - 'tests/plugin-runtime/**'
+              - 'planning/complete/plugin-runtime-v2/**'
+              - 'nuxt.config.ts'
+              - 'vitest.config.ts'
+            perf_search:
+              - 'app/components/search/**'
+              - 'app/composables/search/**'
+              - 'app/core/search/command-palette/**'
+              - 'scripts/performance/report.ts'
+            perf_sync:
+              - 'app/core/sync/**'
+              - 'shared/sync/**'
+            perf_workspace:
+              - 'scripts/performance/populated-workspace.perf.ts'
+              - 'scripts/performance/report.ts'
+            perf_browser:
+              - 'tests/e2e/performance-budgets.e2e.ts'
+            perf_build:
+              - 'scripts/performance/production-build.perf.ts'
+              - 'scripts/performance/report.ts'
+              - 'scripts/__tests__/production-build-performance.test.ts'
+              - 'nuxt.config.ts'
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
-      - run: bun run check:docs
-      - run: bun run test
-      - run: bun run test:scripts
-      - run: bun run test:release-policy
-      - run: bun run test:all
+      - name: Check banned provider imports
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.banned_imports == 'true'
+        run: bash scripts/check-banned-imports.sh
+      - name: Check documentation
+        run: bun run check:docs
+      - name: Run core tests
+        run: bun run test
+      - name: Run script tests
+        run: bun run test:scripts
+      - name: Run release policy tests
+        run: bun run test:release-policy
+      - name: Run skills package tests
         working-directory: packages/or3-skills
-
-  full:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+        run: bun run test:all
+      - name: Check Cloud package contracts
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.cloud == 'true'
+        run: |
+          bun run release:cloud:check
+          bun run cloud:package:check
+      - name: Prepare plugin declarations
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.plugin_runtime == 'true'
+        run: bunx nuxt prepare
+      - name: Check plugin compatibility ledger and snapshots
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.plugin_runtime == 'true'
+        run: bun run plugin-runtime:compatibility:check
+      - name: Run plugin compatibility contracts
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.plugin_runtime == 'true'
+        run: bun run test:plugin-compatibility
+      - name: Compile plugin compatibility fixtures
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.plugin_runtime == 'true'
+        run: |
+          bun run plugin-runtime:examples:check
+          bun run plugin-runtime:external-v1:check
+      - name: Check command-palette performance budget (advisory)
+        continue-on-error: true
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_search == 'true'
+        run: bun run command-palette:benchmarks:check
+      - name: Check sync performance budgets (advisory)
+        continue-on-error: true
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_sync == 'true'
+        run: bun run sync:benchmarks:check
+      - name: Check populated-workspace budget (advisory)
+        continue-on-error: true
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_workspace == 'true'
+        run: bun run performance:workspace:check
+      - name: Install Chromium for affected browser budget
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_browser == 'true'
+        run: bunx playwright install --with-deps chromium
+      - name: Check browser performance budgets (advisory)
+        continue-on-error: true
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_browser == 'true'
+        run: bun run performance:browser:check
+      - name: Build affected production application
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_build == 'true'
+        run: bun run build
+      - name: Check production build budget (advisory)
+        continue-on-error: true
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_build == 'true'
+        run: bun run performance:production-build:check
+      - name: Upload affected performance reports
+        if: always() && (github.event_name == 'workflow_dispatch' || steps.changes.outputs.perf_search == 'true' || steps.changes.outputs.perf_sync == 'true' || steps.changes.outputs.perf_workspace == 'true' || steps.changes.outputs.perf_browser == 'true' || steps.changes.outputs.perf_build == 'true')
+        uses: actions/upload-artifact@v7
         with:
-          bun-version: 1.3.14
-      - run: bun install --frozen-lockfile
-      - run: bun run test:full
-
-  browser-critical:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
-      - run: bun install --frozen-lockfile
-      - run: bunx playwright install --with-deps chromium
-      - run: bun run test:e2e:storage
-      - run: bun run test:e2e:admin-auth
+          name: affected-performance-${{ github.sha }}
+          path: |
+            output/performance/*.json
+            output/playwright/*.json
+            test-results/**
+          if-no-files-found: warn
+          retention-days: 14

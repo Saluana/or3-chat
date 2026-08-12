@@ -2,7 +2,7 @@
   "$schema": "./compatibility-ledger.modules.schema.json",
   "version": 1,
   "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-  "behaviorProfiles": "planning/plugin-runtime-v2/compatibility-profiles.json",
+  "behaviorProfiles": "planning/complete/plugin-runtime-v2/compatibility-profiles.json",
   "modules": [
     { "source": "app/composables/index.ts", "runtime": "client", "publicPaths": ["~/composables"], "docs": ["public/_documentation/start/plugin-quickstart.md"] },
     { "source": "app/composables/admin/useAdminPlugins.ts", "runtime": "client", "publicPaths": ["~/composables/admin/useAdminPlugins"], "docs": ["public/_documentation/start/plugin-quickstart.md"], "behaviorProfileIds": ["registry.admin-extensions"] },

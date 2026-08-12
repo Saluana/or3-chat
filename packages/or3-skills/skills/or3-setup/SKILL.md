@@ -41,9 +41,11 @@ implementation. Route those requests using the
    Clerk/Convex, custom, or remote-computer setup.
 2. Inspect existing configuration before proposing writes. State files,
    providers, data paths, and operations that could replace data or deploy.
-3. Prefer the wizard: `bun run or3-cloud:init`. Use its `--dry-run`,
-   `--instance-dir`, and `--env-file` options when they clarify scope. Let it
-   make timestamped backups unless the user explicitly declines.
+3. For normal local or VPS installs, prefer the managed operator:
+   `npx @or3/cloud init --local` or `npx @or3/cloud init --public --domain
+   <hostname>`. Use the repository-local `bun run or3-cloud:init` wizard only
+   for source development or custom-provider deployments; use its `--dry-run`,
+   `--instance-dir`, and `--env-file` options when they clarify scope.
 4. Use existing configuration APIs or the wizard for changes. Preserve unknown
    environment lines and keep provider-specific server credentials server-only.
 5. Validate with the checkout's `bun run or3-cloud:validate` and, when

@@ -123,7 +123,8 @@ await requireCommand('Documentation and packed CLI checks', 'bun', ['run', 'chec
 await requireCommand('Cloud tarball dry run', 'bun', ['run', '--cwd', 'packages/or3-cloud', 'pack:check']);
 await requireCommand('Clean fixed-profile production typecheck', 'bun', ['run', 'type-check'], fixedProfile);
 if (full) {
-    await requireCommand('Host test suite', 'bun', ['run', 'test'], fixedProfile);
+    await requireCommand('Complete host test suite', 'bun', ['run', 'test:full'], fixedProfile);
+    await requireCommand('OR3 skills package tests', 'bun', ['run', '--cwd', 'packages/or3-skills', 'test:all'], fixedProfile);
     await requireCommand('Cloud browser harnesses', 'bun', ['run', 'test:e2e:cloud'], fixedProfile);
     await requireCommand('Populated workspace performance gate', 'bun', ['run', 'performance:workspace:check'], fixedProfile);
     await requireCommand('Fixed-profile SSR production build', 'bun', ['run', 'build'], fixedProfile);

@@ -7,6 +7,8 @@ import {
     isReactive,
     toRaw,
     type Component,
+    type ComputedRef,
+    type DeepReadonly,
     type ShallowRef,
 } from 'vue';
 import {
@@ -473,7 +475,7 @@ export function unregisterDashboardPlugin(id: string) {
  * const plugins = useDashboardPlugins();
  * ```
  */
-export function useDashboardPlugins() {
+export function useDashboardPlugins(): ComputedRef<DashboardPlugin[]> {
     return computed(() => {
         const items: typeof reactiveList.items = useV2Surface()
             ? (pluginV2Kernel.items.value as typeof reactiveList.items)
@@ -789,10 +791,26 @@ export async function resolveDashboardPluginPageComponent(
     return comp;
 }
 
+interface DashboardNavigationController {
+    state: DeepReadonly<DashboardNavigationState>;
+    resolvedPageComponent: DeepReadonly<ShallowRef<Component | null>>;
+    dashboardItems: ComputedRef<DashboardPlugin[]>;
+    landingPages: ComputedRef<DashboardPluginPage[]>;
+    headerPluginLabel: ComputedRef<string>;
+    activePageTitle: ComputedRef<string>;
+    openPlugin: (pluginId: string) => Promise<DashboardNavigationResult>;
+    openPage: (
+        pluginId: string,
+        pageId: string
+    ) => Promise<DashboardNavigationResult>;
+    goBack: () => void;
+    reset: () => void;
+}
+
 /** Manage dashboard landing/page navigation and async component ownership. */
 export function useDashboardNavigation(
     options: UseDashboardNavigationOptions = {}
-) {
+): DashboardNavigationController {
     const navigationRuntime = getDashboardNavigationRuntime();
     if (options.baseItems !== undefined) {
         navigationRuntime.baseItems.value = [...options.baseItems];

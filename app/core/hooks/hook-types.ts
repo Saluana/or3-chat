@@ -63,9 +63,43 @@ import type {
     SyncScopePayload,
     ThreadCreateEntity,
     ThreadEntity,
-} from './hook-domain-types';
+} from '~~/shared/hooks/hook-domain-types';
 
-export * from './hook-domain-types';
+// Keep these names explicit: Nuxt's auto-import scanner does not follow a
+// wildcard type re-export, and V1 plugins rely on these public type imports.
+export type {
+    AccessDecision,
+    AttachmentEntity,
+    DbCreatePayload,
+    DbDeletePayload,
+    DbUpdatePayload,
+    DocumentEntity,
+    FileEntity,
+    KvEntry,
+    MessageCreateEntity,
+    MessageEntity,
+    NotificationAction,
+    NotificationCreatePayload,
+    NotificationEntity,
+    Permission,
+    PostCreateEntity,
+    PostEntity,
+    ProjectEntity,
+    PromptEntity,
+    SessionContext,
+    StorageFileDownloadAfterPayload,
+    StorageFileDownloadBeforePayload,
+    StorageFileGcPayload,
+    StorageFileUploadAfterPayload,
+    StorageFileUploadBeforePayload,
+    StorageFileUploadPolicyPayload,
+    StorageFileUrlOptionsPayload,
+    SyncPendingOpPayload,
+    SyncScopePayload,
+    ThreadCreateEntity,
+    ThreadEntity,
+    WorkspaceRole,
+} from '~~/shared/hooks/hook-domain-types';
 
 export interface EditorInstance {
     commands: Record<string, unknown>;

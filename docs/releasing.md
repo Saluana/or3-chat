@@ -13,6 +13,23 @@ operator package. The release version must match in:
 Published npm versions and image tags are immutable. Never force-move a tag or
 republish a version with different contents.
 
+## CI lanes
+
+Normal pull requests run one fast **PR checks** workflow. It installs once,
+runs the core/docs/release/skills checks, and adds Cloud, plugin-runtime, or
+advisory performance checks only when those surfaces changed. Generic version
+and lockfile edits do not launch unrelated performance or deployment suites.
+Configure the `or3-cloud` branch protection rule to require **PR checks / Core
+and affected contracts**; the workflow intentionally runs on every pull
+request so that required status is never left pending by a path filter.
+
+The **Extended validation** workflow runs on weekday schedules and on demand.
+Its manual `suite` selector can run `tests`, `performance`, `plugin-runtime`,
+or `deployment` independently; `all` runs every suite. Performance budgets are
+strict here, and the deployment suite exercises the complete disposable Cloud
+lifecycle. Package publication remains isolated in the candidate and tag
+workflows below.
+
 ## Registry setup
 
 Before the first release, create or verify the public `@or3` npm scope and
@@ -122,8 +139,8 @@ npm deprecate 'create-or3-chat@<0.1.12' 'Use npx @or3/cloud init; the creator is
 - The tag and candidate receipt contain the same source SHA and version.
 - `npm pack --dry-run` contains only the Cloud CLI and deployment assets.
 - The exact default provider versions exist on npm.
-- The complete local managed lifecycle in `deployment-smoke.yml` passes before
-  the tag is created.
+- The `deployment` suite in **Extended validation** passes before the tag is
+  created.
 - The public GHCR image pulls from a clean machine.
 - Basic Auth login, deep health, conversation persistence, and file persistence
   pass after container restart.

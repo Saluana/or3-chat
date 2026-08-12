@@ -598,7 +598,7 @@ export interface KvUpsertByNameInput {
 ### TypeScript reference
 
 ```ts
-// Source: app/core/hooks/hook-domain-types.ts (re-exported by hook-types.ts)
+// Source: shared/hooks/hook-domain-types.ts (re-exported by hook-types.ts)
 export interface MessageEntity {
     id: string;
     thread_id: string;
@@ -758,7 +758,7 @@ export interface DbDeletePayload<T = unknown> {
 
 ## Auth, sync, storage, and notification payloads
 
-These payloads power the cloud-facing hook families. They all live in `app/core/hooks/hook-domain-types.ts` and are re-exported through `hook-types.ts`.
+These payloads power the cloud-facing hook families. They all live in `shared/hooks/hook-domain-types.ts` and are re-exported through `hook-types.ts`.
 
 | Name                              | Kind      | Description                                                                        |
 | --------------------------------- | --------- | ---------------------------------------------------------------------------------- |
@@ -780,7 +780,7 @@ These payloads power the cloud-facing hook families. They all live in `app/core/
 | `StorageFileGcPayload`            | interface | Garbage collection result (deleted count, workspace).                              |
 
 ```ts
-// Source: app/core/hooks/hook-domain-types.ts
+// Source: shared/hooks/hook-domain-types.ts
 export type Permission =
     | 'workspace.read'
     | 'workspace.write'

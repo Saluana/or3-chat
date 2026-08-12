@@ -1,4 +1,11 @@
-import { computed, reactive, shallowRef, defineAsyncComponent, type Component } from 'vue';
+import {
+    computed,
+    reactive,
+    shallowRef,
+    defineAsyncComponent,
+    type Component,
+    type ComputedRef,
+} from 'vue';
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
 import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 
@@ -31,9 +38,14 @@ export interface AdminPluginApi {
     registerAdminWidget: (def: AdminWidgetDef) => void;
 }
 
-export const state = reactive({
-    pages: [] as AdminPageDef[],
-    widgets: [] as AdminWidgetDef[],
+interface AdminPluginState {
+    pages: AdminPageDef[];
+    widgets: AdminWidgetDef[];
+}
+
+export const state: AdminPluginState = reactive({
+    pages: [],
+    widgets: [],
 });
 
 const MAX_CACHE_SIZE = 50;
@@ -120,13 +132,15 @@ export function registerAdminWidget(def: AdminWidgetDef) {
     }
 }
 
-export function useAdminPages() {
+export function useAdminPages(): ComputedRef<AdminPageDef[]> {
     return computed(() =>
         [...state.pages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     );
 }
 
-export function useAdminWidgets(slot?: AdminWidgetDef['slot']) {
+export function useAdminWidgets(
+    slot?: AdminWidgetDef['slot']
+): ComputedRef<AdminWidgetDef[]> {
     return computed(() => {
         const list = slot
             ? state.widgets.filter((widget) => widget.slot === slot)

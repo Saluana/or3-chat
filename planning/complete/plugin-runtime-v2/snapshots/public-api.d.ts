@@ -24,7 +24,7 @@ export declare function useGlobalRegistry<T extends object>(key: string, init: (
 export declare function createRegistry<T extends RegistryItem>(globalKey: string, sortFn?: (a: T, b: T) => number): RegistryApi<T>;
 
 // ---- app/composables/admin/useAdminPlugins.ts ----
-import { type Component } from 'vue';
+import { type Component, type ComputedRef } from 'vue';
 export type AdminPageDef = {
     id: string;
     label: string;
@@ -49,538 +49,22 @@ export interface AdminPluginApi {
     registerAdminPage: (def: AdminPageDef) => void;
     registerAdminWidget: (def: AdminWidgetDef) => void;
 }
-export declare const state: {
-    pages: {
-        id: string;
-        label: string;
-        path?: string | undefined;
-        order?: number | undefined;
-        component: import("vue").FunctionalComponent<any, {}, any, {}> | {
-            new (...args: any[]): any;
-            __isFragment?: never;
-            __isTeleport?: never;
-            __isSuspense?: never;
-        } | (() => Promise<Component | {
-            default: Component;
-        }>) | {
-            [x: string]: any;
-            setup?: ((this: void, props: import("@vue/shared").LooseRequired<any>, ctx: {
-                attrs: {
-                    [x: string]: unknown;
-                };
-                slots: Readonly<{
-                    [name: string]: import("vue").Slot<any> | undefined;
-                }>;
-                emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void);
-                expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void;
-            }) => any) | undefined;
-            name?: string | undefined;
-            template?: string | object | undefined;
-            render?: Function | undefined;
-            components?: Record<string, Component<any, any, any, import("vue").ComputedOptions, import("vue").MethodOptions, {}, any>> | undefined;
-            directives?: Record<string, import("vue").Directive<any, any, string, any>> | undefined;
-            inheritAttrs?: boolean | undefined;
-            emits?: any;
-            slots?: {} | undefined;
-            expose?: string[] | undefined;
-            serverPrefetch?: (() => void | Promise<any>) | undefined;
-            compilerOptions?: {
-                isCustomElement?: ((tag: string) => boolean) | undefined;
-                whitespace?: "preserve" | "condense" | undefined;
-                comments?: boolean | undefined;
-                delimiters?: [string, string] | undefined;
-            } | undefined;
-            call?: ((this: unknown, ...args: unknown[]) => never) | undefined;
-            __isFragment?: never | undefined;
-            __isTeleport?: never | undefined;
-            __isSuspense?: never | undefined;
-            __defaults?: {} | undefined;
-            compatConfig?: {
-                GLOBAL_MOUNT?: boolean | "suppress-warning" | undefined;
-                GLOBAL_MOUNT_CONTAINER?: boolean | "suppress-warning" | undefined;
-                GLOBAL_EXTEND?: boolean | "suppress-warning" | undefined;
-                GLOBAL_PROTOTYPE?: boolean | "suppress-warning" | undefined;
-                GLOBAL_SET?: boolean | "suppress-warning" | undefined;
-                GLOBAL_DELETE?: boolean | "suppress-warning" | undefined;
-                GLOBAL_OBSERVABLE?: boolean | "suppress-warning" | undefined;
-                GLOBAL_PRIVATE_UTIL?: boolean | "suppress-warning" | undefined;
-                CONFIG_SILENT?: boolean | "suppress-warning" | undefined;
-                CONFIG_DEVTOOLS?: boolean | "suppress-warning" | undefined;
-                CONFIG_KEY_CODES?: boolean | "suppress-warning" | undefined;
-                CONFIG_PRODUCTION_TIP?: boolean | "suppress-warning" | undefined;
-                CONFIG_IGNORED_ELEMENTS?: boolean | "suppress-warning" | undefined;
-                CONFIG_WHITESPACE?: boolean | "suppress-warning" | undefined;
-                CONFIG_OPTION_MERGE_STRATS?: boolean | "suppress-warning" | undefined;
-                INSTANCE_SET?: boolean | "suppress-warning" | undefined;
-                INSTANCE_DELETE?: boolean | "suppress-warning" | undefined;
-                INSTANCE_DESTROY?: boolean | "suppress-warning" | undefined;
-                INSTANCE_EVENT_EMITTER?: boolean | "suppress-warning" | undefined;
-                INSTANCE_EVENT_HOOKS?: boolean | "suppress-warning" | undefined;
-                INSTANCE_CHILDREN?: boolean | "suppress-warning" | undefined;
-                INSTANCE_LISTENERS?: boolean | "suppress-warning" | undefined;
-                INSTANCE_SCOPED_SLOTS?: boolean | "suppress-warning" | undefined;
-                INSTANCE_ATTRS_CLASS_STYLE?: boolean | "suppress-warning" | undefined;
-                OPTIONS_DATA_FN?: boolean | "suppress-warning" | undefined;
-                OPTIONS_DATA_MERGE?: boolean | "suppress-warning" | undefined;
-                OPTIONS_BEFORE_DESTROY?: boolean | "suppress-warning" | undefined;
-                OPTIONS_DESTROYED?: boolean | "suppress-warning" | undefined;
-                WATCH_ARRAY?: boolean | "suppress-warning" | undefined;
-                PROPS_DEFAULT_THIS?: boolean | "suppress-warning" | undefined;
-                V_ON_KEYCODE_MODIFIER?: boolean | "suppress-warning" | undefined;
-                CUSTOM_DIR?: boolean | "suppress-warning" | undefined;
-                ATTR_FALSE_VALUE?: boolean | "suppress-warning" | undefined;
-                ATTR_ENUMERATED_COERCION?: boolean | "suppress-warning" | undefined;
-                TRANSITION_CLASSES?: boolean | "suppress-warning" | undefined;
-                TRANSITION_GROUP_ROOT?: boolean | "suppress-warning" | undefined;
-                COMPONENT_ASYNC?: boolean | "suppress-warning" | undefined;
-                COMPONENT_FUNCTIONAL?: boolean | "suppress-warning" | undefined;
-                COMPONENT_V_MODEL?: boolean | "suppress-warning" | undefined;
-                RENDER_FUNCTION?: boolean | "suppress-warning" | undefined;
-                FILTERS?: boolean | "suppress-warning" | undefined;
-                PRIVATE_APIS?: boolean | "suppress-warning" | undefined;
-                MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined;
-            } | undefined;
-            data?: ((this: any, vm: any) => any) | undefined;
-            computed?: import("vue").ComputedOptions | undefined;
-            methods?: import("vue").MethodOptions | undefined;
-            watch?: {
-                [x: string]: (string | import("vue").WatchCallback | ({
-                    handler: import("vue").WatchCallback | string;
-                } & import("vue").WatchOptions<boolean>)) | (string | import("vue").WatchCallback | ({
-                    handler: import("vue").WatchCallback | string;
-                } & import("vue").WatchOptions<boolean>))[];
-            } | undefined;
-            provide?: import("vue").ComponentProvideOptions | undefined;
-            inject?: {} | string[] | undefined;
-            filters?: Record<string, Function> | undefined;
-            mixins?: any[] | undefined;
-            extends?: any;
-            beforeCreate?: (() => any) | undefined;
-            created?: (() => any) | undefined;
-            beforeMount?: (() => any) | undefined;
-            mounted?: (() => any) | undefined;
-            beforeUpdate?: (() => any) | undefined;
-            updated?: (() => any) | undefined;
-            activated?: (() => any) | undefined;
-            deactivated?: (() => any) | undefined;
-            beforeDestroy?: (() => any) | undefined;
-            beforeUnmount?: (() => any) | undefined;
-            destroyed?: (() => any) | undefined;
-            unmounted?: (() => any) | undefined;
-            renderTracked?: ((e: import("vue").DebuggerEvent) => void) | undefined;
-            renderTriggered?: ((e: import("vue").DebuggerEvent) => void) | undefined;
-            errorCaptured?: ((err: unknown, instance: import("vue").ComponentPublicInstance | null, info: string) => boolean | void) | undefined;
-            delimiters?: [string, string] | undefined;
-            __differentiator?: string | number | symbol | undefined;
-            __isBuiltIn?: boolean | undefined;
-            __file?: string | undefined;
-            __name?: string | undefined;
-            beforeRouteEnter?: (import("vue-router").TypesConfig extends Record<"beforeRouteEnter", infer T> ? T : import("vue-router").NavigationGuardWithThis<undefined>) | undefined;
-            beforeRouteUpdate?: (import("vue-router").TypesConfig extends Record<"beforeRouteUpdate", infer T> ? T : import("vue-router").NavigationGuard) | undefined;
-            beforeRouteLeave?: (import("vue-router").TypesConfig extends Record<"beforeRouteLeave", infer T> ? T : import("vue-router").NavigationGuard) | undefined;
-            head?: ((nuxtApp: import("#app").NuxtApp) => import("@unhead/vue").UseHeadInput) | undefined;
-        };
-    }[];
-    widgets: {
-        id: string;
-        slot: "overview" | "workspace" | "plugins" | "themes" | "system";
-        order?: number | undefined;
-        component: import("vue").FunctionalComponent<any, {}, any, {}> | {
-            new (...args: any[]): any;
-            __isFragment?: never;
-            __isTeleport?: never;
-            __isSuspense?: never;
-        } | (() => Promise<Component | {
-            default: Component;
-        }>) | {
-            [x: string]: any;
-            setup?: ((this: void, props: import("@vue/shared").LooseRequired<any>, ctx: {
-                attrs: {
-                    [x: string]: unknown;
-                };
-                slots: Readonly<{
-                    [name: string]: import("vue").Slot<any> | undefined;
-                }>;
-                emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void);
-                expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void;
-            }) => any) | undefined;
-            name?: string | undefined;
-            template?: string | object | undefined;
-            render?: Function | undefined;
-            components?: Record<string, Component<any, any, any, import("vue").ComputedOptions, import("vue").MethodOptions, {}, any>> | undefined;
-            directives?: Record<string, import("vue").Directive<any, any, string, any>> | undefined;
-            inheritAttrs?: boolean | undefined;
-            emits?: any;
-            slots?: {} | undefined;
-            expose?: string[] | undefined;
-            serverPrefetch?: (() => void | Promise<any>) | undefined;
-            compilerOptions?: {
-                isCustomElement?: ((tag: string) => boolean) | undefined;
-                whitespace?: "preserve" | "condense" | undefined;
-                comments?: boolean | undefined;
-                delimiters?: [string, string] | undefined;
-            } | undefined;
-            call?: ((this: unknown, ...args: unknown[]) => never) | undefined;
-            __isFragment?: never | undefined;
-            __isTeleport?: never | undefined;
-            __isSuspense?: never | undefined;
-            __defaults?: {} | undefined;
-            compatConfig?: {
-                GLOBAL_MOUNT?: boolean | "suppress-warning" | undefined;
-                GLOBAL_MOUNT_CONTAINER?: boolean | "suppress-warning" | undefined;
-                GLOBAL_EXTEND?: boolean | "suppress-warning" | undefined;
-                GLOBAL_PROTOTYPE?: boolean | "suppress-warning" | undefined;
-                GLOBAL_SET?: boolean | "suppress-warning" | undefined;
-                GLOBAL_DELETE?: boolean | "suppress-warning" | undefined;
-                GLOBAL_OBSERVABLE?: boolean | "suppress-warning" | undefined;
-                GLOBAL_PRIVATE_UTIL?: boolean | "suppress-warning" | undefined;
-                CONFIG_SILENT?: boolean | "suppress-warning" | undefined;
-                CONFIG_DEVTOOLS?: boolean | "suppress-warning" | undefined;
-                CONFIG_KEY_CODES?: boolean | "suppress-warning" | undefined;
-                CONFIG_PRODUCTION_TIP?: boolean | "suppress-warning" | undefined;
-                CONFIG_IGNORED_ELEMENTS?: boolean | "suppress-warning" | undefined;
-                CONFIG_WHITESPACE?: boolean | "suppress-warning" | undefined;
-                CONFIG_OPTION_MERGE_STRATS?: boolean | "suppress-warning" | undefined;
-                INSTANCE_SET?: boolean | "suppress-warning" | undefined;
-                INSTANCE_DELETE?: boolean | "suppress-warning" | undefined;
-                INSTANCE_DESTROY?: boolean | "suppress-warning" | undefined;
-                INSTANCE_EVENT_EMITTER?: boolean | "suppress-warning" | undefined;
-                INSTANCE_EVENT_HOOKS?: boolean | "suppress-warning" | undefined;
-                INSTANCE_CHILDREN?: boolean | "suppress-warning" | undefined;
-                INSTANCE_LISTENERS?: boolean | "suppress-warning" | undefined;
-                INSTANCE_SCOPED_SLOTS?: boolean | "suppress-warning" | undefined;
-                INSTANCE_ATTRS_CLASS_STYLE?: boolean | "suppress-warning" | undefined;
-                OPTIONS_DATA_FN?: boolean | "suppress-warning" | undefined;
-                OPTIONS_DATA_MERGE?: boolean | "suppress-warning" | undefined;
-                OPTIONS_BEFORE_DESTROY?: boolean | "suppress-warning" | undefined;
-                OPTIONS_DESTROYED?: boolean | "suppress-warning" | undefined;
-                WATCH_ARRAY?: boolean | "suppress-warning" | undefined;
-                PROPS_DEFAULT_THIS?: boolean | "suppress-warning" | undefined;
-                V_ON_KEYCODE_MODIFIER?: boolean | "suppress-warning" | undefined;
-                CUSTOM_DIR?: boolean | "suppress-warning" | undefined;
-                ATTR_FALSE_VALUE?: boolean | "suppress-warning" | undefined;
-                ATTR_ENUMERATED_COERCION?: boolean | "suppress-warning" | undefined;
-                TRANSITION_CLASSES?: boolean | "suppress-warning" | undefined;
-                TRANSITION_GROUP_ROOT?: boolean | "suppress-warning" | undefined;
-                COMPONENT_ASYNC?: boolean | "suppress-warning" | undefined;
-                COMPONENT_FUNCTIONAL?: boolean | "suppress-warning" | undefined;
-                COMPONENT_V_MODEL?: boolean | "suppress-warning" | undefined;
-                RENDER_FUNCTION?: boolean | "suppress-warning" | undefined;
-                FILTERS?: boolean | "suppress-warning" | undefined;
-                PRIVATE_APIS?: boolean | "suppress-warning" | undefined;
-                MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined;
-            } | undefined;
-            data?: ((this: any, vm: any) => any) | undefined;
-            computed?: import("vue").ComputedOptions | undefined;
-            methods?: import("vue").MethodOptions | undefined;
-            watch?: {
-                [x: string]: (string | import("vue").WatchCallback | ({
-                    handler: import("vue").WatchCallback | string;
-                } & import("vue").WatchOptions<boolean>)) | (string | import("vue").WatchCallback | ({
-                    handler: import("vue").WatchCallback | string;
-                } & import("vue").WatchOptions<boolean>))[];
-            } | undefined;
-            provide?: import("vue").ComponentProvideOptions | undefined;
-            inject?: {} | string[] | undefined;
-            filters?: Record<string, Function> | undefined;
-            mixins?: any[] | undefined;
-            extends?: any;
-            beforeCreate?: (() => any) | undefined;
-            created?: (() => any) | undefined;
-            beforeMount?: (() => any) | undefined;
-            mounted?: (() => any) | undefined;
-            beforeUpdate?: (() => any) | undefined;
-            updated?: (() => any) | undefined;
-            activated?: (() => any) | undefined;
-            deactivated?: (() => any) | undefined;
-            beforeDestroy?: (() => any) | undefined;
-            beforeUnmount?: (() => any) | undefined;
-            destroyed?: (() => any) | undefined;
-            unmounted?: (() => any) | undefined;
-            renderTracked?: ((e: import("vue").DebuggerEvent) => void) | undefined;
-            renderTriggered?: ((e: import("vue").DebuggerEvent) => void) | undefined;
-            errorCaptured?: ((err: unknown, instance: import("vue").ComponentPublicInstance | null, info: string) => boolean | void) | undefined;
-            delimiters?: [string, string] | undefined;
-            __differentiator?: string | number | symbol | undefined;
-            __isBuiltIn?: boolean | undefined;
-            __file?: string | undefined;
-            __name?: string | undefined;
-            beforeRouteEnter?: (import("vue-router").TypesConfig extends Record<"beforeRouteEnter", infer T> ? T : import("vue-router").NavigationGuardWithThis<undefined>) | undefined;
-            beforeRouteUpdate?: (import("vue-router").TypesConfig extends Record<"beforeRouteUpdate", infer T> ? T : import("vue-router").NavigationGuard) | undefined;
-            beforeRouteLeave?: (import("vue-router").TypesConfig extends Record<"beforeRouteLeave", infer T> ? T : import("vue-router").NavigationGuard) | undefined;
-            head?: ((nuxtApp: import("#app").NuxtApp) => import("@unhead/vue").UseHeadInput) | undefined;
-        };
-    }[];
-};
+interface AdminPluginState {
+    pages: AdminPageDef[];
+    widgets: AdminWidgetDef[];
+}
+export declare const state: AdminPluginState;
 export declare function registerAdminPage(def: AdminPageDef): void;
 export declare function registerAdminWidget(def: AdminWidgetDef): void;
-export declare function useAdminPages(): import("vue").ComputedRef<{
-    id: string;
-    label: string;
-    path?: string | undefined;
-    order?: number | undefined;
-    component: import("vue").FunctionalComponent<any, {}, any, {}> | {
-        new (...args: any[]): any;
-        __isFragment?: never;
-        __isTeleport?: never;
-        __isSuspense?: never;
-    } | (() => Promise<Component | {
-        default: Component;
-    }>) | {
-        [x: string]: any;
-        setup?: ((this: void, props: import("@vue/shared").LooseRequired<any>, ctx: {
-            attrs: {
-                [x: string]: unknown;
-            };
-            slots: Readonly<{
-                [name: string]: import("vue").Slot<any> | undefined;
-            }>;
-            emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void);
-            expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void;
-        }) => any) | undefined;
-        name?: string | undefined;
-        template?: string | object | undefined;
-        render?: Function | undefined;
-        components?: Record<string, Component<any, any, any, import("vue").ComputedOptions, import("vue").MethodOptions, {}, any>> | undefined;
-        directives?: Record<string, import("vue").Directive<any, any, string, any>> | undefined;
-        inheritAttrs?: boolean | undefined;
-        emits?: any;
-        slots?: {} | undefined;
-        expose?: string[] | undefined;
-        serverPrefetch?: (() => void | Promise<any>) | undefined;
-        compilerOptions?: {
-            isCustomElement?: ((tag: string) => boolean) | undefined;
-            whitespace?: "preserve" | "condense" | undefined;
-            comments?: boolean | undefined;
-            delimiters?: [string, string] | undefined;
-        } | undefined;
-        call?: ((this: unknown, ...args: unknown[]) => never) | undefined;
-        __isFragment?: never | undefined;
-        __isTeleport?: never | undefined;
-        __isSuspense?: never | undefined;
-        __defaults?: {} | undefined;
-        compatConfig?: {
-            GLOBAL_MOUNT?: boolean | "suppress-warning" | undefined;
-            GLOBAL_MOUNT_CONTAINER?: boolean | "suppress-warning" | undefined;
-            GLOBAL_EXTEND?: boolean | "suppress-warning" | undefined;
-            GLOBAL_PROTOTYPE?: boolean | "suppress-warning" | undefined;
-            GLOBAL_SET?: boolean | "suppress-warning" | undefined;
-            GLOBAL_DELETE?: boolean | "suppress-warning" | undefined;
-            GLOBAL_OBSERVABLE?: boolean | "suppress-warning" | undefined;
-            GLOBAL_PRIVATE_UTIL?: boolean | "suppress-warning" | undefined;
-            CONFIG_SILENT?: boolean | "suppress-warning" | undefined;
-            CONFIG_DEVTOOLS?: boolean | "suppress-warning" | undefined;
-            CONFIG_KEY_CODES?: boolean | "suppress-warning" | undefined;
-            CONFIG_PRODUCTION_TIP?: boolean | "suppress-warning" | undefined;
-            CONFIG_IGNORED_ELEMENTS?: boolean | "suppress-warning" | undefined;
-            CONFIG_WHITESPACE?: boolean | "suppress-warning" | undefined;
-            CONFIG_OPTION_MERGE_STRATS?: boolean | "suppress-warning" | undefined;
-            INSTANCE_SET?: boolean | "suppress-warning" | undefined;
-            INSTANCE_DELETE?: boolean | "suppress-warning" | undefined;
-            INSTANCE_DESTROY?: boolean | "suppress-warning" | undefined;
-            INSTANCE_EVENT_EMITTER?: boolean | "suppress-warning" | undefined;
-            INSTANCE_EVENT_HOOKS?: boolean | "suppress-warning" | undefined;
-            INSTANCE_CHILDREN?: boolean | "suppress-warning" | undefined;
-            INSTANCE_LISTENERS?: boolean | "suppress-warning" | undefined;
-            INSTANCE_SCOPED_SLOTS?: boolean | "suppress-warning" | undefined;
-            INSTANCE_ATTRS_CLASS_STYLE?: boolean | "suppress-warning" | undefined;
-            OPTIONS_DATA_FN?: boolean | "suppress-warning" | undefined;
-            OPTIONS_DATA_MERGE?: boolean | "suppress-warning" | undefined;
-            OPTIONS_BEFORE_DESTROY?: boolean | "suppress-warning" | undefined;
-            OPTIONS_DESTROYED?: boolean | "suppress-warning" | undefined;
-            WATCH_ARRAY?: boolean | "suppress-warning" | undefined;
-            PROPS_DEFAULT_THIS?: boolean | "suppress-warning" | undefined;
-            V_ON_KEYCODE_MODIFIER?: boolean | "suppress-warning" | undefined;
-            CUSTOM_DIR?: boolean | "suppress-warning" | undefined;
-            ATTR_FALSE_VALUE?: boolean | "suppress-warning" | undefined;
-            ATTR_ENUMERATED_COERCION?: boolean | "suppress-warning" | undefined;
-            TRANSITION_CLASSES?: boolean | "suppress-warning" | undefined;
-            TRANSITION_GROUP_ROOT?: boolean | "suppress-warning" | undefined;
-            COMPONENT_ASYNC?: boolean | "suppress-warning" | undefined;
-            COMPONENT_FUNCTIONAL?: boolean | "suppress-warning" | undefined;
-            COMPONENT_V_MODEL?: boolean | "suppress-warning" | undefined;
-            RENDER_FUNCTION?: boolean | "suppress-warning" | undefined;
-            FILTERS?: boolean | "suppress-warning" | undefined;
-            PRIVATE_APIS?: boolean | "suppress-warning" | undefined;
-            MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined;
-        } | undefined;
-        data?: ((this: any, vm: any) => any) | undefined;
-        computed?: import("vue").ComputedOptions | undefined;
-        methods?: import("vue").MethodOptions | undefined;
-        watch?: {
-            [x: string]: (string | import("vue").WatchCallback | ({
-                handler: import("vue").WatchCallback | string;
-            } & import("vue").WatchOptions<boolean>)) | (string | import("vue").WatchCallback | ({
-                handler: import("vue").WatchCallback | string;
-            } & import("vue").WatchOptions<boolean>))[];
-        } | undefined;
-        provide?: import("vue").ComponentProvideOptions | undefined;
-        inject?: {} | string[] | undefined;
-        filters?: Record<string, Function> | undefined;
-        mixins?: any[] | undefined;
-        extends?: any;
-        beforeCreate?: (() => any) | undefined;
-        created?: (() => any) | undefined;
-        beforeMount?: (() => any) | undefined;
-        mounted?: (() => any) | undefined;
-        beforeUpdate?: (() => any) | undefined;
-        updated?: (() => any) | undefined;
-        activated?: (() => any) | undefined;
-        deactivated?: (() => any) | undefined;
-        beforeDestroy?: (() => any) | undefined;
-        beforeUnmount?: (() => any) | undefined;
-        destroyed?: (() => any) | undefined;
-        unmounted?: (() => any) | undefined;
-        renderTracked?: ((e: import("vue").DebuggerEvent) => void) | undefined;
-        renderTriggered?: ((e: import("vue").DebuggerEvent) => void) | undefined;
-        errorCaptured?: ((err: unknown, instance: import("vue").ComponentPublicInstance | null, info: string) => boolean | void) | undefined;
-        delimiters?: [string, string] | undefined;
-        __differentiator?: string | number | symbol | undefined;
-        __isBuiltIn?: boolean | undefined;
-        __file?: string | undefined;
-        __name?: string | undefined;
-        beforeRouteEnter?: (import("vue-router").TypesConfig extends Record<"beforeRouteEnter", infer T> ? T : import("vue-router").NavigationGuardWithThis<undefined>) | undefined;
-        beforeRouteUpdate?: (import("vue-router").TypesConfig extends Record<"beforeRouteUpdate", infer T> ? T : import("vue-router").NavigationGuard) | undefined;
-        beforeRouteLeave?: (import("vue-router").TypesConfig extends Record<"beforeRouteLeave", infer T> ? T : import("vue-router").NavigationGuard) | undefined;
-        head?: ((nuxtApp: import("#app").NuxtApp) => import("@unhead/vue").UseHeadInput) | undefined;
-    };
-}[]>;
-export declare function useAdminWidgets(slot?: AdminWidgetDef['slot']): import("vue").ComputedRef<{
-    id: string;
-    slot: "overview" | "workspace" | "plugins" | "themes" | "system";
-    order?: number | undefined;
-    component: import("vue").FunctionalComponent<any, {}, any, {}> | {
-        new (...args: any[]): any;
-        __isFragment?: never;
-        __isTeleport?: never;
-        __isSuspense?: never;
-    } | (() => Promise<Component | {
-        default: Component;
-    }>) | {
-        [x: string]: any;
-        setup?: ((this: void, props: import("@vue/shared").LooseRequired<any>, ctx: {
-            attrs: {
-                [x: string]: unknown;
-            };
-            slots: Readonly<{
-                [name: string]: import("vue").Slot<any> | undefined;
-            }>;
-            emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void);
-            expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void;
-        }) => any) | undefined;
-        name?: string | undefined;
-        template?: string | object | undefined;
-        render?: Function | undefined;
-        components?: Record<string, Component<any, any, any, import("vue").ComputedOptions, import("vue").MethodOptions, {}, any>> | undefined;
-        directives?: Record<string, import("vue").Directive<any, any, string, any>> | undefined;
-        inheritAttrs?: boolean | undefined;
-        emits?: any;
-        slots?: {} | undefined;
-        expose?: string[] | undefined;
-        serverPrefetch?: (() => void | Promise<any>) | undefined;
-        compilerOptions?: {
-            isCustomElement?: ((tag: string) => boolean) | undefined;
-            whitespace?: "preserve" | "condense" | undefined;
-            comments?: boolean | undefined;
-            delimiters?: [string, string] | undefined;
-        } | undefined;
-        call?: ((this: unknown, ...args: unknown[]) => never) | undefined;
-        __isFragment?: never | undefined;
-        __isTeleport?: never | undefined;
-        __isSuspense?: never | undefined;
-        __defaults?: {} | undefined;
-        compatConfig?: {
-            GLOBAL_MOUNT?: boolean | "suppress-warning" | undefined;
-            GLOBAL_MOUNT_CONTAINER?: boolean | "suppress-warning" | undefined;
-            GLOBAL_EXTEND?: boolean | "suppress-warning" | undefined;
-            GLOBAL_PROTOTYPE?: boolean | "suppress-warning" | undefined;
-            GLOBAL_SET?: boolean | "suppress-warning" | undefined;
-            GLOBAL_DELETE?: boolean | "suppress-warning" | undefined;
-            GLOBAL_OBSERVABLE?: boolean | "suppress-warning" | undefined;
-            GLOBAL_PRIVATE_UTIL?: boolean | "suppress-warning" | undefined;
-            CONFIG_SILENT?: boolean | "suppress-warning" | undefined;
-            CONFIG_DEVTOOLS?: boolean | "suppress-warning" | undefined;
-            CONFIG_KEY_CODES?: boolean | "suppress-warning" | undefined;
-            CONFIG_PRODUCTION_TIP?: boolean | "suppress-warning" | undefined;
-            CONFIG_IGNORED_ELEMENTS?: boolean | "suppress-warning" | undefined;
-            CONFIG_WHITESPACE?: boolean | "suppress-warning" | undefined;
-            CONFIG_OPTION_MERGE_STRATS?: boolean | "suppress-warning" | undefined;
-            INSTANCE_SET?: boolean | "suppress-warning" | undefined;
-            INSTANCE_DELETE?: boolean | "suppress-warning" | undefined;
-            INSTANCE_DESTROY?: boolean | "suppress-warning" | undefined;
-            INSTANCE_EVENT_EMITTER?: boolean | "suppress-warning" | undefined;
-            INSTANCE_EVENT_HOOKS?: boolean | "suppress-warning" | undefined;
-            INSTANCE_CHILDREN?: boolean | "suppress-warning" | undefined;
-            INSTANCE_LISTENERS?: boolean | "suppress-warning" | undefined;
-            INSTANCE_SCOPED_SLOTS?: boolean | "suppress-warning" | undefined;
-            INSTANCE_ATTRS_CLASS_STYLE?: boolean | "suppress-warning" | undefined;
-            OPTIONS_DATA_FN?: boolean | "suppress-warning" | undefined;
-            OPTIONS_DATA_MERGE?: boolean | "suppress-warning" | undefined;
-            OPTIONS_BEFORE_DESTROY?: boolean | "suppress-warning" | undefined;
-            OPTIONS_DESTROYED?: boolean | "suppress-warning" | undefined;
-            WATCH_ARRAY?: boolean | "suppress-warning" | undefined;
-            PROPS_DEFAULT_THIS?: boolean | "suppress-warning" | undefined;
-            V_ON_KEYCODE_MODIFIER?: boolean | "suppress-warning" | undefined;
-            CUSTOM_DIR?: boolean | "suppress-warning" | undefined;
-            ATTR_FALSE_VALUE?: boolean | "suppress-warning" | undefined;
-            ATTR_ENUMERATED_COERCION?: boolean | "suppress-warning" | undefined;
-            TRANSITION_CLASSES?: boolean | "suppress-warning" | undefined;
-            TRANSITION_GROUP_ROOT?: boolean | "suppress-warning" | undefined;
-            COMPONENT_ASYNC?: boolean | "suppress-warning" | undefined;
-            COMPONENT_FUNCTIONAL?: boolean | "suppress-warning" | undefined;
-            COMPONENT_V_MODEL?: boolean | "suppress-warning" | undefined;
-            RENDER_FUNCTION?: boolean | "suppress-warning" | undefined;
-            FILTERS?: boolean | "suppress-warning" | undefined;
-            PRIVATE_APIS?: boolean | "suppress-warning" | undefined;
-            MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined;
-        } | undefined;
-        data?: ((this: any, vm: any) => any) | undefined;
-        computed?: import("vue").ComputedOptions | undefined;
-        methods?: import("vue").MethodOptions | undefined;
-        watch?: {
-            [x: string]: (string | import("vue").WatchCallback | ({
-                handler: import("vue").WatchCallback | string;
-            } & import("vue").WatchOptions<boolean>)) | (string | import("vue").WatchCallback | ({
-                handler: import("vue").WatchCallback | string;
-            } & import("vue").WatchOptions<boolean>))[];
-        } | undefined;
-        provide?: import("vue").ComponentProvideOptions | undefined;
-        inject?: {} | string[] | undefined;
-        filters?: Record<string, Function> | undefined;
-        mixins?: any[] | undefined;
-        extends?: any;
-        beforeCreate?: (() => any) | undefined;
-        created?: (() => any) | undefined;
-        beforeMount?: (() => any) | undefined;
-        mounted?: (() => any) | undefined;
-        beforeUpdate?: (() => any) | undefined;
-        updated?: (() => any) | undefined;
-        activated?: (() => any) | undefined;
-        deactivated?: (() => any) | undefined;
-        beforeDestroy?: (() => any) | undefined;
-        beforeUnmount?: (() => any) | undefined;
-        destroyed?: (() => any) | undefined;
-        unmounted?: (() => any) | undefined;
-        renderTracked?: ((e: import("vue").DebuggerEvent) => void) | undefined;
-        renderTriggered?: ((e: import("vue").DebuggerEvent) => void) | undefined;
-        errorCaptured?: ((err: unknown, instance: import("vue").ComponentPublicInstance | null, info: string) => boolean | void) | undefined;
-        delimiters?: [string, string] | undefined;
-        __differentiator?: string | number | symbol | undefined;
-        __isBuiltIn?: boolean | undefined;
-        __file?: string | undefined;
-        __name?: string | undefined;
-        beforeRouteEnter?: (import("vue-router").TypesConfig extends Record<"beforeRouteEnter", infer T> ? T : import("vue-router").NavigationGuardWithThis<undefined>) | undefined;
-        beforeRouteUpdate?: (import("vue-router").TypesConfig extends Record<"beforeRouteUpdate", infer T> ? T : import("vue-router").NavigationGuard) | undefined;
-        beforeRouteLeave?: (import("vue-router").TypesConfig extends Record<"beforeRouteLeave", infer T> ? T : import("vue-router").NavigationGuard) | undefined;
-        head?: ((nuxtApp: import("#app").NuxtApp) => import("@unhead/vue").UseHeadInput) | undefined;
-    };
-}[]>;
+export declare function useAdminPages(): ComputedRef<AdminPageDef[]>;
+export declare function useAdminWidgets(slot?: AdminWidgetDef['slot']): ComputedRef<AdminWidgetDef[]>;
 export declare function resolveAdminComponent(def: {
     id: string;
     component: AdminComponent;
 }): Component<any, any, any, import("vue").ComputedOptions, import("vue").MethodOptions, {}, any>;
 export declare function createAdminPluginApi(): AdminPluginApi;
 export declare function loadAdminPlugins(): Promise<void>;
+export {};
 
 // ---- app/composables/chat/useMessageActions.ts ----
 /**
@@ -758,6 +242,7 @@ export {};
 // ---- app/composables/core/usePaneApps.ts ----
 import { type Component, type ComputedRef } from 'vue';
 import { type RegistrationHandle } from '~~/shared/plugins/registration-handle';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 /**
  * Pane app definition: describes a custom pane application that can be registered
  * and opened in the multi-pane workspace.
@@ -789,6 +274,12 @@ export interface PaneAppDef {
      * Optional ordering (lower = earlier in sorted lists). Defaults to 200.
      */
     order?: number;
+    /** Optional owning plugin id used for workspace policy lookup. */
+    pluginId?: string;
+    /** Optional access policy for this pane app. */
+    access?: PluginGatePolicy;
+    /** Replace this app's record in the current workspace tab. */
+    replaceRecordInCurrentTab?: boolean;
 }
 export type RegisteredPaneApp = PaneAppDef;
 /**
@@ -807,7 +298,7 @@ export type RegisteredPaneApp = PaneAppDef;
  *
  * Non-Goals:
  * - Does not lazy load or render apps itself
- * - Does not provide access control for pane apps
+ * - Access policies affect discovery and lookup, not server-side authorization
  *
  * @example
  * ```ts
@@ -827,9 +318,12 @@ export declare function usePaneApps(): {
 };
 
 // ---- app/composables/dashboard/useDashboardPlugins.ts ----
-import { type Component } from 'vue';
+import { type Component, type ComputedRef, type DeepReadonly, type ShallowRef } from 'vue';
 import { type PluginGatePolicy } from '~~/shared/plugins/access-policy';
 import { type RegistrationHandle } from '~~/shared/plugins/registration-handle';
+import type { DashboardNavigationResult, DashboardNavigationState, UseDashboardNavigationOptions } from '~/core/dashboard/dashboard-navigation-types';
+export type { DashboardNavigationError, DashboardNavigationErrorCode, DashboardNavigationResult, DashboardNavigationState, UseDashboardNavigationOptions, } from '~/core/dashboard/dashboard-navigation-types';
+export { getPluginCapabilities, hasAllCapabilities, hasAnyCapability, hasCapability, } from '~/core/dashboard/plugin-capabilities';
 export interface DashboardPlugin {
     /** Unique id across all dashboard plugins */
     id: string;
@@ -861,6 +355,8 @@ export interface DashboardPlugin {
     capabilities?: string[];
     /** Optional access gate policy for this plugin. */
     access?: PluginGatePolicy;
+    /** Owning installable plugin id used for workspace policy lookup. */
+    pluginId?: string;
 }
 export interface DashboardPluginPage {
     /** Unique within the plugin. */
@@ -879,31 +375,12 @@ export interface DashboardPluginPage {
     } | Component>);
     /** Optional access gate policy for this page. */
     access?: PluginGatePolicy;
+    /** Whether this page is currently available in the active client. */
+    isAvailable?: () => boolean;
 }
-export type DashboardNavigationErrorCode = 'missing-plugin' | 'missing-page' | 'handler-error' | 'resolve-error';
-export interface DashboardNavigationError {
-    code: DashboardNavigationErrorCode;
-    message: string;
-    pluginId?: string;
-    pageId?: string;
-    cause?: unknown;
-}
-export interface DashboardNavigationState {
-    view: 'dashboard' | 'page';
-    activePluginId: string | null;
-    activePageId: string | null;
-    loadingPage: boolean;
-    error: DashboardNavigationError | null;
-}
-export type DashboardNavigationResult = {
-    ok: true;
-} | {
-    ok: false;
-    error: DashboardNavigationError;
-};
-export interface UseDashboardNavigationOptions {
-    baseItems?: DashboardPlugin[];
-}
+export declare function subscribeDashboardRegistry(listener: () => void): () => void;
+/** @internal Shared with focused dashboard policy helpers. */
+export declare function getRegisteredDashboardPlugin(pluginId: string): DashboardPlugin | undefined;
 /**
  * Purpose:
  * Register a dashboard plugin for discovery and navigation.
@@ -973,161 +450,7 @@ export declare function unregisterDashboardPlugin(id: string): void;
  * const plugins = useDashboardPlugins();
  * ```
  */
-export declare function useDashboardPlugins(): import("vue").ComputedRef<{
-    id: string;
-    icon: string;
-    label: string;
-    description?: string | undefined;
-    order?: number | undefined;
-    handler?: ((ctx: {
-        id: string;
-    }) => void | Promise<void>) | undefined;
-    pages?: {
-        id: string;
-        title: string;
-        icon?: string | undefined;
-        order?: number | undefined;
-        description?: string | undefined;
-        component: import("vue").FunctionalComponent<any, {}, any, {}> | {
-            new (...args: any[]): any;
-            __isFragment?: never;
-            __isTeleport?: never;
-            __isSuspense?: never;
-        } | {
-            [x: string]: any;
-            setup?: ((this: void, props: import("@vue/shared").LooseRequired<any>, ctx: {
-                attrs: {
-                    [x: string]: unknown;
-                };
-                slots: Readonly<{
-                    [name: string]: import("vue").Slot<any> | undefined;
-                }>;
-                emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void);
-                expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void;
-            }) => any) | undefined;
-            name?: string | undefined;
-            template?: string | object | undefined;
-            render?: Function | undefined;
-            components?: Record<string, Component<any, any, any, import("vue").ComputedOptions, import("vue").MethodOptions, {}, any>> | undefined;
-            directives?: Record<string, import("vue").Directive<any, any, string, any>> | undefined;
-            inheritAttrs?: boolean | undefined;
-            emits?: any;
-            slots?: {} | undefined;
-            expose?: string[] | undefined;
-            serverPrefetch?: (() => void | Promise<any>) | undefined;
-            compilerOptions?: {
-                isCustomElement?: ((tag: string) => boolean) | undefined;
-                whitespace?: "preserve" | "condense" | undefined;
-                comments?: boolean | undefined;
-                delimiters?: [string, string] | undefined;
-            } | undefined;
-            call?: ((this: unknown, ...args: unknown[]) => never) | undefined;
-            __isFragment?: never | undefined;
-            __isTeleport?: never | undefined;
-            __isSuspense?: never | undefined;
-            __defaults?: {} | undefined;
-            compatConfig?: {
-                GLOBAL_MOUNT?: boolean | "suppress-warning" | undefined;
-                GLOBAL_MOUNT_CONTAINER?: boolean | "suppress-warning" | undefined;
-                GLOBAL_EXTEND?: boolean | "suppress-warning" | undefined;
-                GLOBAL_PROTOTYPE?: boolean | "suppress-warning" | undefined;
-                GLOBAL_SET?: boolean | "suppress-warning" | undefined;
-                GLOBAL_DELETE?: boolean | "suppress-warning" | undefined;
-                GLOBAL_OBSERVABLE?: boolean | "suppress-warning" | undefined;
-                GLOBAL_PRIVATE_UTIL?: boolean | "suppress-warning" | undefined;
-                CONFIG_SILENT?: boolean | "suppress-warning" | undefined;
-                CONFIG_DEVTOOLS?: boolean | "suppress-warning" | undefined;
-                CONFIG_KEY_CODES?: boolean | "suppress-warning" | undefined;
-                CONFIG_PRODUCTION_TIP?: boolean | "suppress-warning" | undefined;
-                CONFIG_IGNORED_ELEMENTS?: boolean | "suppress-warning" | undefined;
-                CONFIG_WHITESPACE?: boolean | "suppress-warning" | undefined;
-                CONFIG_OPTION_MERGE_STRATS?: boolean | "suppress-warning" | undefined;
-                INSTANCE_SET?: boolean | "suppress-warning" | undefined;
-                INSTANCE_DELETE?: boolean | "suppress-warning" | undefined;
-                INSTANCE_DESTROY?: boolean | "suppress-warning" | undefined;
-                INSTANCE_EVENT_EMITTER?: boolean | "suppress-warning" | undefined;
-                INSTANCE_EVENT_HOOKS?: boolean | "suppress-warning" | undefined;
-                INSTANCE_CHILDREN?: boolean | "suppress-warning" | undefined;
-                INSTANCE_LISTENERS?: boolean | "suppress-warning" | undefined;
-                INSTANCE_SCOPED_SLOTS?: boolean | "suppress-warning" | undefined;
-                INSTANCE_ATTRS_CLASS_STYLE?: boolean | "suppress-warning" | undefined;
-                OPTIONS_DATA_FN?: boolean | "suppress-warning" | undefined;
-                OPTIONS_DATA_MERGE?: boolean | "suppress-warning" | undefined;
-                OPTIONS_BEFORE_DESTROY?: boolean | "suppress-warning" | undefined;
-                OPTIONS_DESTROYED?: boolean | "suppress-warning" | undefined;
-                WATCH_ARRAY?: boolean | "suppress-warning" | undefined;
-                PROPS_DEFAULT_THIS?: boolean | "suppress-warning" | undefined;
-                V_ON_KEYCODE_MODIFIER?: boolean | "suppress-warning" | undefined;
-                CUSTOM_DIR?: boolean | "suppress-warning" | undefined;
-                ATTR_FALSE_VALUE?: boolean | "suppress-warning" | undefined;
-                ATTR_ENUMERATED_COERCION?: boolean | "suppress-warning" | undefined;
-                TRANSITION_CLASSES?: boolean | "suppress-warning" | undefined;
-                TRANSITION_GROUP_ROOT?: boolean | "suppress-warning" | undefined;
-                COMPONENT_ASYNC?: boolean | "suppress-warning" | undefined;
-                COMPONENT_FUNCTIONAL?: boolean | "suppress-warning" | undefined;
-                COMPONENT_V_MODEL?: boolean | "suppress-warning" | undefined;
-                RENDER_FUNCTION?: boolean | "suppress-warning" | undefined;
-                FILTERS?: boolean | "suppress-warning" | undefined;
-                PRIVATE_APIS?: boolean | "suppress-warning" | undefined;
-                MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined;
-            } | undefined;
-            data?: ((this: any, vm: any) => any) | undefined;
-            computed?: import("vue").ComputedOptions | undefined;
-            methods?: import("vue").MethodOptions | undefined;
-            watch?: {
-                [x: string]: (string | import("vue").WatchCallback | ({
-                    handler: import("vue").WatchCallback | string;
-                } & import("vue").WatchOptions<boolean>)) | (string | import("vue").WatchCallback | ({
-                    handler: import("vue").WatchCallback | string;
-                } & import("vue").WatchOptions<boolean>))[];
-            } | undefined;
-            provide?: import("vue").ComponentProvideOptions | undefined;
-            inject?: {} | string[] | undefined;
-            filters?: Record<string, Function> | undefined;
-            mixins?: any[] | undefined;
-            extends?: any;
-            beforeCreate?: (() => any) | undefined;
-            created?: (() => any) | undefined;
-            beforeMount?: (() => any) | undefined;
-            mounted?: (() => any) | undefined;
-            beforeUpdate?: (() => any) | undefined;
-            updated?: (() => any) | undefined;
-            activated?: (() => any) | undefined;
-            deactivated?: (() => any) | undefined;
-            beforeDestroy?: (() => any) | undefined;
-            beforeUnmount?: (() => any) | undefined;
-            destroyed?: (() => any) | undefined;
-            unmounted?: (() => any) | undefined;
-            renderTracked?: ((e: import("vue").DebuggerEvent) => void) | undefined;
-            renderTriggered?: ((e: import("vue").DebuggerEvent) => void) | undefined;
-            errorCaptured?: ((err: unknown, instance: import("vue").ComponentPublicInstance | null, info: string) => boolean | void) | undefined;
-            delimiters?: [string, string] | undefined;
-            __differentiator?: string | number | symbol | undefined;
-            __isBuiltIn?: boolean | undefined;
-            __file?: string | undefined;
-            __name?: string | undefined;
-            beforeRouteEnter?: (import("vue-router").TypesConfig extends Record<"beforeRouteEnter", infer T> ? T : import("vue-router").NavigationGuardWithThis<undefined>) | undefined;
-            beforeRouteUpdate?: (import("vue-router").TypesConfig extends Record<"beforeRouteUpdate", infer T> ? T : import("vue-router").NavigationGuard) | undefined;
-            beforeRouteLeave?: (import("vue-router").TypesConfig extends Record<"beforeRouteLeave", infer T> ? T : import("vue-router").NavigationGuard) | undefined;
-            head?: ((nuxtApp: import("#app").NuxtApp) => import("@unhead/vue").UseHeadInput) | undefined;
-        } | (() => Promise<{
-            default?: Component;
-        } | Component>);
-        access?: {
-            authRequired?: boolean | undefined;
-            requiredEntitlements?: string[] | undefined;
-            requiredWorkspaceRoles?: ("owner" | "editor" | "viewer")[] | undefined;
-            mode?: "any" | "all" | undefined;
-        } | undefined;
-    }[] | undefined;
-    capabilities?: string[] | undefined;
-    access?: {
-        authRequired?: boolean | undefined;
-        requiredEntitlements?: string[] | undefined;
-        requiredWorkspaceRoles?: ("owner" | "editor" | "viewer")[] | undefined;
-        mode?: "any" | "all" | undefined;
-    } | undefined;
-}[]>;
+export declare function useDashboardPlugins(): ComputedRef<DashboardPlugin[]>;
 /**
  * Purpose:
  * Inspect registered dashboard plugin IDs.
@@ -1208,7 +531,7 @@ export declare function unregisterDashboardPluginPage(pluginId: string, pageId?:
  * const pages = useDashboardPluginPages(() => activePluginId.value);
  * ```
  */
-export declare function useDashboardPluginPages(pluginId: () => string | undefined): import("vue").ComputedRef<DashboardPluginPage[]>;
+export declare function useDashboardPluginPages(pluginId: () => string | undefined): ComputedRef<DashboardPluginPage[]>;
 /**
  * Purpose:
  * Retrieve a sorted list of pages for a plugin.
@@ -1270,475 +593,20 @@ export declare function getDashboardPluginPage(pluginId: string, pageId: string)
  * ```
  */
 export declare function resolveDashboardPluginPageComponent(pluginId: string, pageId: string): Promise<Component | undefined>;
-/**
- * Purpose:
- * Manage dashboard navigation state across landing and page views.
- *
- * Behavior:
- * Merges base items with registered plugins, tracks current view, and
- * resolves page components on demand.
- *
- * Constraints:
- * - Base items overwrite registered items by ID
- * - Errors are stored in reactive navigation state
- *
- * Non-Goals:
- * - Rendering navigation UI
- *
- * @example
- * ```ts
- * const {
- *   dashboardItems,
- *   openPlugin,
- *   openPage,
- * } = useDashboardNavigation();
- * ```
- */
-export declare function useDashboardNavigation(options?: UseDashboardNavigationOptions): {
-    state: {
-        readonly view: "dashboard" | "page";
-        readonly activePluginId: string | null;
-        readonly activePageId: string | null;
-        readonly loadingPage: boolean;
-        readonly error: {
-            readonly code: DashboardNavigationErrorCode;
-            readonly message: string;
-            readonly pluginId?: string | undefined;
-            readonly pageId?: string | undefined;
-            readonly cause?: Readonly<unknown> | undefined;
-        } | null;
-    };
-    resolvedPageComponent: Readonly<import("vue").Ref<import("vue").FunctionalComponent<any, {}, any, {}> | {
-        new (...args: any[]): any;
-        __isFragment?: never;
-        __isTeleport?: never;
-        __isSuspense?: never;
-    } | {
-        readonly [x: string]: any;
-        readonly setup?: ((this: void, props: import("@vue/shared").LooseRequired<any>, ctx: {
-            attrs: {
-                [x: string]: unknown;
-            };
-            slots: Readonly<{
-                [name: string]: import("vue").Slot<any> | undefined;
-            }>;
-            emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void);
-            expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void;
-        }) => any) | undefined;
-        readonly name?: string | undefined;
-        readonly template?: string | object | undefined;
-        readonly render?: Function | undefined;
-        readonly components?: {
-            readonly [x: string]: import("vue").FunctionalComponent<any, {}, any, {}> | {
-                new (...args: any[]): any;
-                __isFragment?: never;
-                __isTeleport?: never;
-                __isSuspense?: never;
-            } | /*elided*/ any;
-        } | undefined;
-        readonly directives?: {
-            readonly [x: string]: import("vue").FunctionDirective<any, any, string, any> | {
-                readonly created?: import("vue").DirectiveHook<any, null, any, string, any> | undefined;
-                readonly beforeMount?: import("vue").DirectiveHook<any, null, any, string, any> | undefined;
-                readonly mounted?: import("vue").DirectiveHook<any, null, any, string, any> | undefined;
-                readonly beforeUpdate?: import("vue").DirectiveHook<any, import("vue").VNode<any, any, {
-                    [key: string]: any;
-                }>, any, string, any> | undefined;
-                readonly updated?: import("vue").DirectiveHook<any, import("vue").VNode<any, any, {
-                    [key: string]: any;
-                }>, any, string, any> | undefined;
-                readonly beforeUnmount?: import("vue").DirectiveHook<any, null, any, string, any> | undefined;
-                readonly unmounted?: import("vue").DirectiveHook<any, null, any, string, any> | undefined;
-                readonly getSSRProps?: ((binding: import("vue").DirectiveBinding<any, string, any>, vnode: import("vue").VNode) => {
-                    [x: string]: unknown;
-                } | undefined) | undefined;
-                readonly deep?: boolean | undefined;
-            };
-        } | undefined;
-        readonly inheritAttrs?: boolean | undefined;
-        readonly emits?: any;
-        readonly slots?: {} | undefined;
-        readonly expose?: readonly string[] | undefined;
-        readonly serverPrefetch?: (() => void | Promise<any>) | undefined;
-        readonly compilerOptions?: {
-            readonly isCustomElement?: ((tag: string) => boolean) | undefined;
-            readonly whitespace?: "preserve" | "condense" | undefined;
-            readonly comments?: boolean | undefined;
-            readonly delimiters?: readonly [string, string] | undefined;
-        } | undefined;
-        readonly call?: ((this: unknown, ...args: unknown[]) => never) | undefined;
-        readonly __isFragment?: never | undefined;
-        readonly __isTeleport?: never | undefined;
-        readonly __isSuspense?: never | undefined;
-        readonly __defaults?: {} | undefined;
-        readonly compatConfig?: {
-            readonly GLOBAL_MOUNT?: boolean | "suppress-warning" | undefined;
-            readonly GLOBAL_MOUNT_CONTAINER?: boolean | "suppress-warning" | undefined;
-            readonly GLOBAL_EXTEND?: boolean | "suppress-warning" | undefined;
-            readonly GLOBAL_PROTOTYPE?: boolean | "suppress-warning" | undefined;
-            readonly GLOBAL_SET?: boolean | "suppress-warning" | undefined;
-            readonly GLOBAL_DELETE?: boolean | "suppress-warning" | undefined;
-            readonly GLOBAL_OBSERVABLE?: boolean | "suppress-warning" | undefined;
-            readonly GLOBAL_PRIVATE_UTIL?: boolean | "suppress-warning" | undefined;
-            readonly CONFIG_SILENT?: boolean | "suppress-warning" | undefined;
-            readonly CONFIG_DEVTOOLS?: boolean | "suppress-warning" | undefined;
-            readonly CONFIG_KEY_CODES?: boolean | "suppress-warning" | undefined;
-            readonly CONFIG_PRODUCTION_TIP?: boolean | "suppress-warning" | undefined;
-            readonly CONFIG_IGNORED_ELEMENTS?: boolean | "suppress-warning" | undefined;
-            readonly CONFIG_WHITESPACE?: boolean | "suppress-warning" | undefined;
-            readonly CONFIG_OPTION_MERGE_STRATS?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_SET?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_DELETE?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_DESTROY?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_EVENT_EMITTER?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_EVENT_HOOKS?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_CHILDREN?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_LISTENERS?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_SCOPED_SLOTS?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_ATTRS_CLASS_STYLE?: boolean | "suppress-warning" | undefined;
-            readonly OPTIONS_DATA_FN?: boolean | "suppress-warning" | undefined;
-            readonly OPTIONS_DATA_MERGE?: boolean | "suppress-warning" | undefined;
-            readonly OPTIONS_BEFORE_DESTROY?: boolean | "suppress-warning" | undefined;
-            readonly OPTIONS_DESTROYED?: boolean | "suppress-warning" | undefined;
-            readonly WATCH_ARRAY?: boolean | "suppress-warning" | undefined;
-            readonly PROPS_DEFAULT_THIS?: boolean | "suppress-warning" | undefined;
-            readonly V_ON_KEYCODE_MODIFIER?: boolean | "suppress-warning" | undefined;
-            readonly CUSTOM_DIR?: boolean | "suppress-warning" | undefined;
-            readonly ATTR_FALSE_VALUE?: boolean | "suppress-warning" | undefined;
-            readonly ATTR_ENUMERATED_COERCION?: boolean | "suppress-warning" | undefined;
-            readonly TRANSITION_CLASSES?: boolean | "suppress-warning" | undefined;
-            readonly TRANSITION_GROUP_ROOT?: boolean | "suppress-warning" | undefined;
-            readonly COMPONENT_ASYNC?: boolean | "suppress-warning" | undefined;
-            readonly COMPONENT_FUNCTIONAL?: boolean | "suppress-warning" | undefined;
-            readonly COMPONENT_V_MODEL?: boolean | "suppress-warning" | undefined;
-            readonly RENDER_FUNCTION?: boolean | "suppress-warning" | undefined;
-            readonly FILTERS?: boolean | "suppress-warning" | undefined;
-            readonly PRIVATE_APIS?: boolean | "suppress-warning" | undefined;
-            readonly MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined;
-        } | undefined;
-        readonly data?: ((this: any, vm: any) => any) | undefined;
-        readonly computed?: {
-            readonly [x: string]: import("vue").ComputedGetter<any> | {
-                readonly get: import("vue").ComputedGetter<any>;
-                readonly set: import("vue").ComputedSetter<any>;
-            };
-        } | undefined;
-        readonly methods?: {
-            readonly [x: string]: Function;
-        } | undefined;
-        readonly watch?: {
-            readonly [x: string]: string | import("vue").WatchCallback | {
-                readonly handler: import("vue").WatchCallback | string;
-                readonly immediate?: boolean | undefined;
-                readonly deep?: boolean | number | undefined;
-                readonly once?: boolean | undefined;
-                readonly flush?: "pre" | "post" | "sync" | undefined;
-                readonly onTrack?: ((event: import("vue").DebuggerEvent) => void) | undefined;
-                readonly onTrigger?: ((event: import("vue").DebuggerEvent) => void) | undefined;
-            } | readonly (string | import("vue").WatchCallback | {
-                readonly handler: import("vue").WatchCallback | string;
-                readonly immediate?: boolean | undefined;
-                readonly deep?: boolean | number | undefined;
-                readonly once?: boolean | undefined;
-                readonly flush?: "pre" | "post" | "sync" | undefined;
-                readonly onTrack?: ((event: import("vue").DebuggerEvent) => void) | undefined;
-                readonly onTrigger?: ((event: import("vue").DebuggerEvent) => void) | undefined;
-            })[];
-        } | undefined;
-        readonly provide?: Function | {
-            readonly [x: string]: Readonly<unknown>;
-            readonly [x: symbol]: Readonly<unknown>;
-        } | undefined;
-        readonly inject?: readonly string[] | {} | undefined;
-        readonly filters?: {
-            readonly [x: string]: Function;
-        } | undefined;
-        readonly mixins?: readonly any[] | undefined;
-        readonly extends?: any;
-        readonly beforeCreate?: (() => any) | undefined;
-        readonly created?: (() => any) | undefined;
-        readonly beforeMount?: (() => any) | undefined;
-        readonly mounted?: (() => any) | undefined;
-        readonly beforeUpdate?: (() => any) | undefined;
-        readonly updated?: (() => any) | undefined;
-        readonly activated?: (() => any) | undefined;
-        readonly deactivated?: (() => any) | undefined;
-        readonly beforeDestroy?: (() => any) | undefined;
-        readonly beforeUnmount?: (() => any) | undefined;
-        readonly destroyed?: (() => any) | undefined;
-        readonly unmounted?: (() => any) | undefined;
-        readonly renderTracked?: ((e: import("vue").DebuggerEvent) => void) | undefined;
-        readonly renderTriggered?: ((e: import("vue").DebuggerEvent) => void) | undefined;
-        readonly errorCaptured?: ((err: unknown, instance: import("vue").ComponentPublicInstance | null, info: string) => boolean | void) | undefined;
-        readonly delimiters?: readonly [string, string] | undefined;
-        readonly __differentiator?: string | number | symbol | undefined;
-        readonly __isBuiltIn?: boolean | undefined;
-        readonly __file?: string | undefined;
-        readonly __name?: string | undefined;
-        readonly beforeRouteEnter?: (import("vue-router").TypesConfig extends Record<"beforeRouteEnter", infer T> ? T : import("vue-router").NavigationGuardWithThis<undefined>) | undefined;
-        readonly beforeRouteUpdate?: (import("vue-router").TypesConfig extends Record<"beforeRouteUpdate", infer T> ? T : import("vue-router").NavigationGuard) | undefined;
-        readonly beforeRouteLeave?: (import("vue-router").TypesConfig extends Record<"beforeRouteLeave", infer T> ? T : import("vue-router").NavigationGuard) | undefined;
-        readonly head?: ((nuxtApp: import("#app").NuxtApp) => import("@unhead/vue").UseHeadInput) | undefined;
-    } | null, import("vue").FunctionalComponent<any, {}, any, {}> | {
-        new (...args: any[]): any;
-        __isFragment?: never;
-        __isTeleport?: never;
-        __isSuspense?: never;
-    } | {
-        readonly [x: string]: any;
-        readonly setup?: ((this: void, props: import("@vue/shared").LooseRequired<any>, ctx: {
-            attrs: {
-                [x: string]: unknown;
-            };
-            slots: Readonly<{
-                [name: string]: import("vue").Slot<any> | undefined;
-            }>;
-            emit: ((event: unknown, ...args: any[]) => void) | ((event: string, ...args: any[]) => void);
-            expose: <Exposed extends Record<string, any> = Record<string, any>>(exposed?: Exposed) => void;
-        }) => any) | undefined;
-        readonly name?: string | undefined;
-        readonly template?: string | object | undefined;
-        readonly render?: Function | undefined;
-        readonly components?: {
-            readonly [x: string]: import("vue").FunctionalComponent<any, {}, any, {}> | {
-                new (...args: any[]): any;
-                __isFragment?: never;
-                __isTeleport?: never;
-                __isSuspense?: never;
-            } | /*elided*/ any;
-        } | undefined;
-        readonly directives?: {
-            readonly [x: string]: import("vue").FunctionDirective<any, any, string, any> | {
-                readonly created?: import("vue").DirectiveHook<any, null, any, string, any> | undefined;
-                readonly beforeMount?: import("vue").DirectiveHook<any, null, any, string, any> | undefined;
-                readonly mounted?: import("vue").DirectiveHook<any, null, any, string, any> | undefined;
-                readonly beforeUpdate?: import("vue").DirectiveHook<any, import("vue").VNode<any, any, {
-                    [key: string]: any;
-                }>, any, string, any> | undefined;
-                readonly updated?: import("vue").DirectiveHook<any, import("vue").VNode<any, any, {
-                    [key: string]: any;
-                }>, any, string, any> | undefined;
-                readonly beforeUnmount?: import("vue").DirectiveHook<any, null, any, string, any> | undefined;
-                readonly unmounted?: import("vue").DirectiveHook<any, null, any, string, any> | undefined;
-                readonly getSSRProps?: ((binding: import("vue").DirectiveBinding<any, string, any>, vnode: import("vue").VNode) => {
-                    [x: string]: unknown;
-                } | undefined) | undefined;
-                readonly deep?: boolean | undefined;
-            };
-        } | undefined;
-        readonly inheritAttrs?: boolean | undefined;
-        readonly emits?: any;
-        readonly slots?: {} | undefined;
-        readonly expose?: readonly string[] | undefined;
-        readonly serverPrefetch?: (() => void | Promise<any>) | undefined;
-        readonly compilerOptions?: {
-            readonly isCustomElement?: ((tag: string) => boolean) | undefined;
-            readonly whitespace?: "preserve" | "condense" | undefined;
-            readonly comments?: boolean | undefined;
-            readonly delimiters?: readonly [string, string] | undefined;
-        } | undefined;
-        readonly call?: ((this: unknown, ...args: unknown[]) => never) | undefined;
-        readonly __isFragment?: never | undefined;
-        readonly __isTeleport?: never | undefined;
-        readonly __isSuspense?: never | undefined;
-        readonly __defaults?: {} | undefined;
-        readonly compatConfig?: {
-            readonly GLOBAL_MOUNT?: boolean | "suppress-warning" | undefined;
-            readonly GLOBAL_MOUNT_CONTAINER?: boolean | "suppress-warning" | undefined;
-            readonly GLOBAL_EXTEND?: boolean | "suppress-warning" | undefined;
-            readonly GLOBAL_PROTOTYPE?: boolean | "suppress-warning" | undefined;
-            readonly GLOBAL_SET?: boolean | "suppress-warning" | undefined;
-            readonly GLOBAL_DELETE?: boolean | "suppress-warning" | undefined;
-            readonly GLOBAL_OBSERVABLE?: boolean | "suppress-warning" | undefined;
-            readonly GLOBAL_PRIVATE_UTIL?: boolean | "suppress-warning" | undefined;
-            readonly CONFIG_SILENT?: boolean | "suppress-warning" | undefined;
-            readonly CONFIG_DEVTOOLS?: boolean | "suppress-warning" | undefined;
-            readonly CONFIG_KEY_CODES?: boolean | "suppress-warning" | undefined;
-            readonly CONFIG_PRODUCTION_TIP?: boolean | "suppress-warning" | undefined;
-            readonly CONFIG_IGNORED_ELEMENTS?: boolean | "suppress-warning" | undefined;
-            readonly CONFIG_WHITESPACE?: boolean | "suppress-warning" | undefined;
-            readonly CONFIG_OPTION_MERGE_STRATS?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_SET?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_DELETE?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_DESTROY?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_EVENT_EMITTER?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_EVENT_HOOKS?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_CHILDREN?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_LISTENERS?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_SCOPED_SLOTS?: boolean | "suppress-warning" | undefined;
-            readonly INSTANCE_ATTRS_CLASS_STYLE?: boolean | "suppress-warning" | undefined;
-            readonly OPTIONS_DATA_FN?: boolean | "suppress-warning" | undefined;
-            readonly OPTIONS_DATA_MERGE?: boolean | "suppress-warning" | undefined;
-            readonly OPTIONS_BEFORE_DESTROY?: boolean | "suppress-warning" | undefined;
-            readonly OPTIONS_DESTROYED?: boolean | "suppress-warning" | undefined;
-            readonly WATCH_ARRAY?: boolean | "suppress-warning" | undefined;
-            readonly PROPS_DEFAULT_THIS?: boolean | "suppress-warning" | undefined;
-            readonly V_ON_KEYCODE_MODIFIER?: boolean | "suppress-warning" | undefined;
-            readonly CUSTOM_DIR?: boolean | "suppress-warning" | undefined;
-            readonly ATTR_FALSE_VALUE?: boolean | "suppress-warning" | undefined;
-            readonly ATTR_ENUMERATED_COERCION?: boolean | "suppress-warning" | undefined;
-            readonly TRANSITION_CLASSES?: boolean | "suppress-warning" | undefined;
-            readonly TRANSITION_GROUP_ROOT?: boolean | "suppress-warning" | undefined;
-            readonly COMPONENT_ASYNC?: boolean | "suppress-warning" | undefined;
-            readonly COMPONENT_FUNCTIONAL?: boolean | "suppress-warning" | undefined;
-            readonly COMPONENT_V_MODEL?: boolean | "suppress-warning" | undefined;
-            readonly RENDER_FUNCTION?: boolean | "suppress-warning" | undefined;
-            readonly FILTERS?: boolean | "suppress-warning" | undefined;
-            readonly PRIVATE_APIS?: boolean | "suppress-warning" | undefined;
-            readonly MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3) | undefined;
-        } | undefined;
-        readonly data?: ((this: any, vm: any) => any) | undefined;
-        readonly computed?: {
-            readonly [x: string]: import("vue").ComputedGetter<any> | {
-                readonly get: import("vue").ComputedGetter<any>;
-                readonly set: import("vue").ComputedSetter<any>;
-            };
-        } | undefined;
-        readonly methods?: {
-            readonly [x: string]: Function;
-        } | undefined;
-        readonly watch?: {
-            readonly [x: string]: string | import("vue").WatchCallback | {
-                readonly handler: import("vue").WatchCallback | string;
-                readonly immediate?: boolean | undefined;
-                readonly deep?: boolean | number | undefined;
-                readonly once?: boolean | undefined;
-                readonly flush?: "pre" | "post" | "sync" | undefined;
-                readonly onTrack?: ((event: import("vue").DebuggerEvent) => void) | undefined;
-                readonly onTrigger?: ((event: import("vue").DebuggerEvent) => void) | undefined;
-            } | readonly (string | import("vue").WatchCallback | {
-                readonly handler: import("vue").WatchCallback | string;
-                readonly immediate?: boolean | undefined;
-                readonly deep?: boolean | number | undefined;
-                readonly once?: boolean | undefined;
-                readonly flush?: "pre" | "post" | "sync" | undefined;
-                readonly onTrack?: ((event: import("vue").DebuggerEvent) => void) | undefined;
-                readonly onTrigger?: ((event: import("vue").DebuggerEvent) => void) | undefined;
-            })[];
-        } | undefined;
-        readonly provide?: Function | {
-            readonly [x: string]: Readonly<unknown>;
-            readonly [x: symbol]: Readonly<unknown>;
-        } | undefined;
-        readonly inject?: readonly string[] | {} | undefined;
-        readonly filters?: {
-            readonly [x: string]: Function;
-        } | undefined;
-        readonly mixins?: readonly any[] | undefined;
-        readonly extends?: any;
-        readonly beforeCreate?: (() => any) | undefined;
-        readonly created?: (() => any) | undefined;
-        readonly beforeMount?: (() => any) | undefined;
-        readonly mounted?: (() => any) | undefined;
-        readonly beforeUpdate?: (() => any) | undefined;
-        readonly updated?: (() => any) | undefined;
-        readonly activated?: (() => any) | undefined;
-        readonly deactivated?: (() => any) | undefined;
-        readonly beforeDestroy?: (() => any) | undefined;
-        readonly beforeUnmount?: (() => any) | undefined;
-        readonly destroyed?: (() => any) | undefined;
-        readonly unmounted?: (() => any) | undefined;
-        readonly renderTracked?: ((e: import("vue").DebuggerEvent) => void) | undefined;
-        readonly renderTriggered?: ((e: import("vue").DebuggerEvent) => void) | undefined;
-        readonly errorCaptured?: ((err: unknown, instance: import("vue").ComponentPublicInstance | null, info: string) => boolean | void) | undefined;
-        readonly delimiters?: readonly [string, string] | undefined;
-        readonly __differentiator?: string | number | symbol | undefined;
-        readonly __isBuiltIn?: boolean | undefined;
-        readonly __file?: string | undefined;
-        readonly __name?: string | undefined;
-        readonly beforeRouteEnter?: (import("vue-router").TypesConfig extends Record<"beforeRouteEnter", infer T> ? T : import("vue-router").NavigationGuardWithThis<undefined>) | undefined;
-        readonly beforeRouteUpdate?: (import("vue-router").TypesConfig extends Record<"beforeRouteUpdate", infer T> ? T : import("vue-router").NavigationGuard) | undefined;
-        readonly beforeRouteLeave?: (import("vue-router").TypesConfig extends Record<"beforeRouteLeave", infer T> ? T : import("vue-router").NavigationGuard) | undefined;
-        readonly head?: ((nuxtApp: import("#app").NuxtApp) => import("@unhead/vue").UseHeadInput) | undefined;
-    } | null>>;
-    dashboardItems: import("vue").ComputedRef<DashboardPlugin[]>;
-    landingPages: import("vue").ComputedRef<DashboardPluginPage[]>;
-    headerPluginLabel: import("vue").ComputedRef<string>;
-    activePageTitle: import("vue").ComputedRef<string>;
+interface DashboardNavigationController {
+    state: DeepReadonly<DashboardNavigationState>;
+    resolvedPageComponent: DeepReadonly<ShallowRef<Component | null>>;
+    dashboardItems: ComputedRef<DashboardPlugin[]>;
+    landingPages: ComputedRef<DashboardPluginPage[]>;
+    headerPluginLabel: ComputedRef<string>;
+    activePageTitle: ComputedRef<string>;
     openPlugin: (pluginId: string) => Promise<DashboardNavigationResult>;
     openPage: (pluginId: string, pageId: string) => Promise<DashboardNavigationResult>;
     goBack: () => void;
     reset: () => void;
-};
-/**
- * Purpose:
- * Check whether a plugin declares a capability string.
- *
- * Behavior:
- * Returns true only when the plugin exists and lists the capability.
- *
- * Constraints:
- * - Returns false when the plugin is missing
- *
- * Non-Goals:
- * - Permission enforcement
- *
- * @example
- * ```ts
- * const canRead = hasCapability('my-plugin', 'canReadMessages');
- * ```
- */
-export declare function hasCapability(pluginId: string, capability: string): boolean;
-/**
- * Purpose:
- * Read all declared capabilities for a plugin.
- *
- * Behavior:
- * Returns a copy of the capability list or an empty array.
- *
- * Constraints:
- * - Returns empty list when the plugin is missing
- *
- * Non-Goals:
- * - Validation of capability names
- *
- * @example
- * ```ts
- * const caps = getPluginCapabilities('my-plugin');
- * ```
- */
-export declare function getPluginCapabilities(pluginId: string): string[];
-/**
- * Purpose:
- * Validate that a plugin declares every required capability.
- *
- * Behavior:
- * Returns true when all provided capabilities are present.
- *
- * Constraints:
- * - Returns false when the plugin is missing
- *
- * Non-Goals:
- * - Authorization enforcement
- *
- * @example
- * ```ts
- * const ok = hasAllCapabilities('my-plugin', [
- *   'canReadMessages',
- *   'canSend',
- * ]);
- * ```
- */
-export declare function hasAllCapabilities(pluginId: string, capabilities: string[]): boolean;
-/**
- * Purpose:
- * Validate that a plugin declares at least one of the listed capabilities.
- *
- * Behavior:
- * Returns true when any capability is present.
- *
- * Constraints:
- * - Returns false when the plugin is missing
- *
- * Non-Goals:
- * - Authorization enforcement
- *
- * @example
- * ```ts
- * const ok = hasAnyCapability('my-plugin', ['canWriteDocs', 'canSend']);
- * ```
- */
-export declare function hasAnyCapability(pluginId: string, capabilities: string[]): boolean;
+}
+/** Manage dashboard landing/page navigation and async component ownership. */
+export declare function useDashboardNavigation(options?: UseDashboardNavigationOptions): DashboardNavigationController;
 
 // ---- app/composables/documents/useDocumentHistoryActions.ts ----
 /**
@@ -1872,7 +740,7 @@ export declare function unregisterDocumentHistoryAction(id: string): void;
  * const actions = useDocumentHistoryActions();
  * ```
  */
-export declare function useDocumentHistoryActions(): import("vue").ComputedRef<readonly DocumentHistoryAction[]>;
+export declare function useDocumentHistoryActions(): import("vue").ComputedRef<DocumentHistoryAction[]>;
 /**
  * Purpose:
  * Inspect the registry by ID for debugging or collision checks.
@@ -2150,6 +1018,7 @@ export declare function useEditorInspectorPanels(): import("vue").ComputedRef<Ed
 // ---- app/composables/editor/useEditorNodes.ts ----
 import type { Node, Mark, Extension } from '@tiptap/core';
 import type { LazyEditorExtensionFactory } from './useEditorExtensionLoader';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 /**
  * @module app/composables/editor/useEditorNodes
  *
@@ -2187,6 +1056,10 @@ import type { LazyEditorExtensionFactory } from './useEditorExtensionLoader';
 export interface EditorNode {
     /** Unique id (stable across reloads). */
     id: string;
+    /** Owning plugin used for enabled-state and server access checks. */
+    pluginId?: string;
+    /** Optional per-contribution access requirements. */
+    access?: PluginGatePolicy;
     /** TipTap Node extension instance. */
     extension: Node;
     /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
@@ -2212,6 +1085,10 @@ export interface EditorNode {
 export interface EditorMark {
     /** Unique id (stable across reloads). */
     id: string;
+    /** Owning plugin used for enabled-state and server access checks. */
+    pluginId?: string;
+    /** Optional per-contribution access requirements. */
+    access?: PluginGatePolicy;
     /** TipTap Mark extension instance. */
     extension: Mark;
     /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
@@ -2237,6 +1114,10 @@ export interface EditorMark {
 export interface EditorExtension {
     /** Unique id (stable across reloads). */
     id: string;
+    /** Owning plugin used for enabled-state and server access checks. */
+    pluginId?: string;
+    /** Optional per-contribution access requirements. */
+    access?: PluginGatePolicy;
     /** TipTap Extension instance. */
     extension?: Extension;
     /** Optional lazy factory to create the extension without pulling TipTap into entry. */
@@ -2440,6 +1321,7 @@ export declare function listRegisteredEditorExtensionIds(): string[];
 // ---- app/composables/editor/useEditorToolbar.ts ----
 import { type Ref } from 'vue';
 import type { Editor } from '@tiptap/vue-3';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 /**
  * @module app/composables/editor/useEditorToolbar
  *
@@ -2475,6 +1357,10 @@ import type { Editor } from '@tiptap/vue-3';
 export interface EditorToolbarButton {
     /** Unique id (stable across reloads). */
     id: string;
+    /** Owning plugin used for enabled-state and server access checks. */
+    pluginId?: string;
+    /** Optional per-contribution access requirements. */
+    access?: PluginGatePolicy;
     /** Icon name (passed to UButton icon prop). */
     icon: string;
     /** Tooltip text. */
@@ -2562,8 +1448,13 @@ export declare function useEditorToolbarButtons(editorRef: Ref<Editor | null>): 
 export declare function listRegisteredEditorToolbarButtonIds(): string[];
 
 // ---- app/composables/history/createHistoryActionRegistry.ts ----
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 export interface HistoryActionRegistryItem<TDocument> {
     id: string;
+    /** Owning plugin used for enabled-state and server access checks. */
+    pluginId?: string;
+    /** Optional per-contribution access requirements. */
+    access?: PluginGatePolicy;
     icon: string;
     label: string;
     order?: number;
@@ -2629,6 +1520,7 @@ import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import type { ExtendedToolDefinition, ToolHandler } from '~/utils/chat/tool-registry';
 import type { RegistrationHandle } from '~~/shared/plugins/registration-handle';
 import { type LegacyCleanupReport } from '~~/shared/plugins/legacy-plugin-scope';
+import type { PaletteCommandDefinition, PaletteCommandHandler, PalettePostSourceDefinition } from '~/core/search/command-palette/types';
 export type WorkspacePluginSource = 'builtin' | 'extension';
 export interface Or3WorkspacePluginApi {
     registerDashboardPlugin: (plugin: DashboardPlugin) => RegistrationHandle;
@@ -2636,6 +1528,8 @@ export interface Or3WorkspacePluginApi {
     registerPaneApp: (def: PaneAppDef) => RegistrationHandle;
     registerMessageAction: (action: ChatMessageAction) => RegistrationHandle;
     registerTool: (def: ExtendedToolDefinition, handler: ToolHandler) => RegistrationHandle;
+    registerCommandPalettePostSource: (definition: PalettePostSourceDefinition) => RegistrationHandle;
+    registerCommandPaletteCommand: (definition: PaletteCommandDefinition, handler: PaletteCommandHandler) => RegistrationHandle;
     onCleanup: (fn: () => void | Promise<void>) => void;
 }
 export interface Or3WorkspacePlugin {
@@ -2647,8 +1541,10 @@ export interface ManagedWorkspacePluginRuntime {
     dispose: (reason?: unknown) => Promise<LegacyCleanupReport>;
 }
 /** Internal manager adapter. The public V1 factory below intentionally hides its report. */
-export declare function createManagedWorkspacePluginRuntime(): ManagedWorkspacePluginRuntime;
-export declare function createWorkspacePluginApi(): {
+export declare function createManagedWorkspacePluginRuntime(options?: {
+    pluginId?: string;
+}): ManagedWorkspacePluginRuntime;
+export declare function createWorkspacePluginApi(pluginId?: string): {
     api: Or3WorkspacePluginApi;
     dispose: () => void;
 };
@@ -2664,6 +1560,7 @@ export declare function listWorkspacePluginInstances(): Array<{
 
 // ---- app/composables/projects/useProjectTreeActions.ts ----
 import { type RegistryItem } from '#imports';
+import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 export type ProjectTreeKind = 'chat' | 'doc';
 export type ShowOnKind = 'root' | 'all' | 'chat' | 'doc';
 export interface ProjectTreeChild {
@@ -2691,6 +1588,10 @@ export interface ProjectTreeHandlerCtx {
 export interface ProjectTreeAction extends RegistryItem {
     /** Unique id (stable across reloads). */
     id: string;
+    /** Owning plugin used for enabled-state and server access checks. */
+    pluginId?: string;
+    /** Optional per-contribution access requirements. */
+    access?: PluginGatePolicy;
     /** Icon name (passed to UButton icon prop). */
     icon: string;
     /** Label text. */
@@ -2706,7 +1607,7 @@ export declare function registerProjectTreeAction(action: ProjectTreeAction): vo
 /** Unregister an action by id (optional utility). */
 export declare function unregisterProjectTreeAction(id: string): void;
 /** Accessor for actions applicable to a specific message. */
-export declare function useProjectTreeActions(): import("vue").ComputedRef<readonly ProjectTreeAction[]>;
+export declare function useProjectTreeActions(): import("vue").ComputedRef<ProjectTreeAction[]>;
 /** Convenience for plugin authors to check existing action ids. */
 export declare function listRegisteredProjectTreeActionIds(): string[];
 
@@ -4276,7 +3177,7 @@ export declare function registerThreadHistoryAction(action: ThreadHistoryAction)
 /** Unregister an action by id (optional utility). */
 export declare function unregisterThreadHistoryAction(id: string): void;
 /** Accessor for actions applicable to a specific message. */
-export declare function useThreadHistoryActions(): import("vue").ComputedRef<readonly ThreadHistoryAction[]>;
+export declare function useThreadHistoryActions(): import("vue").ComputedRef<ThreadHistoryAction[]>;
 /** Convenience for plugin authors to check existing action ids. */
 export declare function listRegisteredThreadHistoryActionIds(): string[];
 
@@ -4405,6 +3306,8 @@ import type { ChatMessage } from '~/utils/chat/types';
 import type { ORMessage } from '~/core/auth/openrouter-build';
 import type { WorkflowStreamingState } from '~/composables/chat/useWorkflowStreamAccumulator';
 import type { WorkflowMessageData } from '~/utils/chat/workflow-types';
+import type { AccessDecision, AttachmentEntity, DbCreatePayload, DbDeletePayload, DbUpdatePayload, DocumentEntity, FileEntity, KvEntry, MessageCreateEntity, MessageEntity, NotificationAction, NotificationCreatePayload, NotificationEntity, PostCreateEntity, PostEntity, ProjectEntity, PromptEntity, SessionContext, StorageFileDownloadAfterPayload, StorageFileDownloadBeforePayload, StorageFileGcPayload, StorageFileUploadAfterPayload, StorageFileUploadBeforePayload, StorageFileUploadPolicyPayload, StorageFileUrlOptionsPayload, SyncPendingOpPayload, SyncScopePayload, ThreadCreateEntity, ThreadEntity } from '~~/shared/hooks/hook-domain-types';
+export type { AccessDecision, AttachmentEntity, DbCreatePayload, DbDeletePayload, DbUpdatePayload, DocumentEntity, FileEntity, KvEntry, MessageCreateEntity, MessageEntity, NotificationAction, NotificationCreatePayload, NotificationEntity, Permission, PostCreateEntity, PostEntity, ProjectEntity, PromptEntity, SessionContext, StorageFileDownloadAfterPayload, StorageFileDownloadBeforePayload, StorageFileGcPayload, StorageFileUploadAfterPayload, StorageFileUploadBeforePayload, StorageFileUploadPolicyPayload, StorageFileUrlOptionsPayload, SyncPendingOpPayload, SyncScopePayload, ThreadCreateEntity, ThreadEntity, WorkspaceRole, } from '~~/shared/hooks/hook-domain-types';
 export interface EditorInstance {
     commands: Record<string, unknown>;
     getJSON: () => Record<string, unknown>;
@@ -4513,7 +3416,15 @@ export interface DocumentAiEditRequestPayload {
     prompt: string;
     scope: 'selection' | 'section' | 'document';
     context: string;
+    references: Array<{
+        id: string;
+        source: 'document' | 'chat';
+        label: string;
+    }>;
+    referenceContext: string;
     tokenEstimate: number;
+    maxIterations?: number;
+    chunkWordLimit?: number;
 }
 export interface DocumentAiEditResultPayload {
     request: DocumentAiEditRequestPayload;
@@ -4628,291 +3539,6 @@ export interface BranchContextAfterPayload {
 export interface KvUpsertByNameInput {
     name: string;
     value: unknown;
-}
-/** DB entity: message */
-export interface MessageEntity {
-    id: string;
-    thread_id: string;
-    role: string;
-    pending?: boolean;
-    data?: unknown;
-    index: number;
-    created_at: number;
-    updated_at?: number;
-}
-/** DB entity: message create input */
-export interface MessageCreateEntity {
-    id?: string;
-    thread_id: string;
-    role: string;
-    pending?: boolean;
-    data?: unknown;
-    index?: number;
-    created_at?: number;
-    updated_at?: number;
-    file_hashes?: string | string[] | null;
-    error?: string | null;
-    deleted?: boolean;
-    stream_id?: string | null;
-    clock?: number;
-}
-/** DB entity: thread */
-export interface ThreadEntity {
-    id: string;
-    title?: string | null;
-    created_at: number;
-    updated_at: number;
-    last_message_at?: number | null;
-    parent_thread_id?: string | null;
-    anchor_message_id?: string | null;
-    anchor_index?: number | null;
-    branch_mode?: 'reference' | 'copy' | null;
-    status: string;
-    deleted: boolean;
-    pinned: boolean;
-    clock: number;
-    forked: boolean;
-    project_id?: string | null;
-    system_prompt_id?: string | null;
-}
-/** DB entity: thread create input */
-export interface ThreadCreateEntity {
-    id?: string;
-    title?: string | null;
-    created_at?: number;
-    updated_at?: number;
-    last_message_at?: number | null;
-    parent_thread_id?: string | null;
-    anchor_message_id?: string | null;
-    anchor_index?: number | null;
-    branch_mode?: 'reference' | 'copy' | null;
-    status?: string;
-    deleted?: boolean;
-    pinned?: boolean;
-    clock?: number;
-    forked?: boolean;
-    project_id?: string | null;
-    system_prompt_id?: string | null;
-}
-/** DB entity: document */
-export interface DocumentEntity {
-    id: string;
-    title?: string;
-    content?: string;
-    file_hashes?: string | null;
-    created_at?: number;
-    updated_at?: number;
-}
-/** DB entity: file */
-export interface FileEntity {
-    hash: string;
-    name: string;
-    mime: string;
-    size: number;
-    ref_count?: number;
-}
-/** DB entity: project */
-export interface ProjectEntity {
-    id: string;
-    name: string;
-    description?: string | null;
-    data: unknown;
-    created_at: number;
-    updated_at: number;
-    deleted: boolean;
-    clock: number;
-}
-/** DB entity: post */
-export interface PostEntity {
-    id: string;
-    title?: string;
-    body?: string;
-    created_at?: number;
-    updated_at?: number;
-}
-/** DB entity: post create input */
-export interface PostCreateEntity {
-    id?: string;
-    title: string;
-    content?: string;
-    postType?: string;
-    created_at?: number;
-    updated_at?: number;
-    deleted?: boolean;
-    meta?: unknown;
-    file_hashes?: string | null;
-}
-/** DB entity: prompt */
-export interface PromptEntity {
-    id: string;
-    name: string;
-    text: string;
-}
-/** DB entity: attachment */
-export interface AttachmentEntity {
-    id: string;
-    message_id?: string;
-    file_hash?: string;
-}
-/** DB entity: key-value entry */
-export interface KvEntry {
-    id: string;
-    name: string;
-    value?: string | null;
-    created_at: number;
-    updated_at: number;
-    clock: number;
-}
-/** Auth permission model. */
-export type Permission = 'workspace.read' | 'workspace.write' | 'workspace.settings.manage' | 'users.manage' | 'plugins.manage' | 'admin.access';
-/** Workspace membership role. */
-export type WorkspaceRole = 'owner' | 'editor' | 'viewer';
-/** Authorization decision returned by can(). */
-export interface AccessDecision {
-    allowed: boolean;
-    permission: Permission;
-    reason?: 'unauthenticated' | 'forbidden' | 'unknown-permission';
-    userId?: string;
-    workspaceId?: string;
-    role?: WorkspaceRole;
-    resource?: {
-        kind: string;
-        id?: string;
-    };
-}
-/** Server-side session context resolved from auth provider. */
-export interface SessionContext {
-    authenticated: boolean;
-    provider?: string;
-    providerUserId?: string;
-    user?: {
-        id: string;
-        email?: string;
-        displayName?: string;
-    };
-    workspace?: {
-        id: string;
-        name: string;
-    };
-    role?: WorkspaceRole;
-    expiresAt?: string;
-    /** Monotonic revision for membership/role/workspace authorization state. */
-    authorizationRevision?: number;
-    /**
-     * Indicates if this user has deployment-wide admin access.
-     * Set by the canonical store based on admin_users table.
-     */
-    deploymentAdmin?: boolean;
-}
-/** Sync scope for workspace-scoped operations. */
-export interface SyncScopePayload {
-    workspaceId: string;
-    projectId?: string;
-}
-/** Sync pending operation payload for hooks. */
-export interface SyncPendingOpPayload {
-    id: string;
-    tableName: string;
-    operation: 'put' | 'delete';
-    pk: string;
-    payload?: unknown;
-    stamp: {
-        deviceId: string;
-        opId: string;
-        hlc: string;
-        clock: number;
-    };
-    createdAt: number;
-    attempts: number;
-    nextAttemptAt?: number;
-    status: 'pending' | 'in_flight' | 'retry_wait' | 'failed_retryable' | 'failed_permanent' | 'applied' | 'discarded' | 'syncing' | 'failed';
-}
-/** Notification action button/link configuration */
-export interface NotificationAction {
-    id: string;
-    label: string;
-    kind: 'navigate' | 'callback';
-    target?: {
-        threadId?: string;
-        documentId?: string;
-        route?: string;
-    };
-    data?: Record<string, unknown>;
-}
-/** Payload for creating a notification via hooks */
-export interface NotificationCreatePayload {
-    type: string;
-    title: string;
-    body?: string;
-    threadId?: string;
-    documentId?: string;
-    actions?: NotificationAction[];
-}
-/** Full notification entity from database */
-export interface NotificationEntity {
-    id: string;
-    workspace_id?: string;
-    user_id: string;
-    thread_id?: string;
-    document_id?: string;
-    type: string;
-    title: string;
-    body?: string;
-    actions?: NotificationAction[];
-    read_at?: number;
-    deleted: boolean;
-    deleted_at?: number;
-    created_at: number;
-    updated_at: number;
-    clock: number;
-}
-export interface StorageFileUploadBeforePayload {
-    hash: string;
-    workspace_id: string;
-    size_bytes: number;
-}
-export interface StorageFileUploadAfterPayload {
-    hash: string;
-    workspace_id: string;
-    storage_id: string;
-}
-export interface StorageFileDownloadBeforePayload {
-    hash: string;
-    workspace_id: string;
-}
-export interface StorageFileDownloadAfterPayload {
-    hash: string;
-    workspace_id: string;
-    size_bytes: number;
-}
-export interface StorageFileUrlOptionsPayload {
-    hash: string;
-    expiry_ms: number;
-    disposition?: string;
-}
-export interface StorageFileUploadPolicyPayload {
-    hash: string;
-    mime_type: string;
-    size_bytes: number;
-}
-export interface StorageFileGcPayload {
-    deleted_count: number;
-    workspace_id: string;
-}
-export interface DbCreatePayload<T = unknown> {
-    entity: T;
-    tableName: string;
-}
-export interface DbUpdatePayload<T = unknown> {
-    existing: T;
-    updated: T;
-    patch: Partial<T>;
-    tableName: string;
-}
-export interface DbDeletePayload<T = unknown> {
-    entity: T;
-    id: string;
-    tableName: string;
 }
 declare global {
     interface Or3ActionHooks {
@@ -5350,17 +3976,47 @@ export declare function createTypedHookEngine(engine: HookEngine): TypedHookEngi
 export {};
 
 // ---- app/core/hooks/useHooks.ts ----
+/**
+ * @module app/core/hooks/useHooks.ts
+ *
+ * Purpose:
+ * Composable that provides access to the global `TypedHookEngine` instance.
+ * This is the primary entry point for hook registration and dispatch in
+ * components, composables, and plugins.
+ *
+ * Behavior:
+ * - Resolves the typed hook engine from a client-side cache (set by the
+ *   `00-hooks` plugin) or from the Nuxt app context (`$hooks`)
+ * - Throws if the engine is not available (indicates the `00-hooks` plugin
+ *   has not loaded, which is a fatal configuration error)
+ *
+ * Constraints:
+ * - Prefer `tryGetHooks()` from async / non-setup paths so `inject()` is
+ *   never called outside Vue setup
+ * - Client cache is a singleton; SSR must not write the global cache
+ *
+ * @see core/hooks/typed-hooks.ts for the TypedHookEngine interface
+ * @see plugins/00-hooks for engine initialization
+ */
 import { type TypedHookEngine } from './typed-hooks';
+/**
+ * Capture the typed hook engine during client plugin setup so async paths
+ * (storage queue, error reporting, media prefetch) can resolve hooks without
+ * calling `useNuxtApp()` / `inject()` outside Vue setup.
+ */
+export declare function setHookEngine(engine: TypedHookEngine | null): void;
+/**
+ * Non-injecting accessor for async / utility code.
+ * Returns null when the client plugin has not installed an engine yet.
+ */
+export declare function tryGetHooks(): TypedHookEngine | null;
 /**
  * Return a typed wrapper around the global HookEngine.
  *
  * Behavior:
- * - Returns the typed hook engine provided by the 00-hooks plugin
- * - Throws in dev if the hook engine is not available (indicates plugin not loaded)
- * - In production, throws an error to avoid silent failures
- *
- * This ensures all hooks go through the same engine instance and prevents
- * the creation of disconnected fallback engines that would cause hooks to not fire.
+ * - Prefers the client cache when present (safe outside setup)
+ * - Falls back to Nuxt `$hooks` when cache is empty (setup / tests / SSR)
+ * - Throws if the engine is not available
  */
 export declare function useHooks(): TypedHookEngine;
 
@@ -5383,6 +4039,7 @@ export declare function useHooks(): TypedHookEngine;
  */
 import { type Ref } from 'vue';
 import type { ToolDefinition, ToolExecutionAdmission, ToolExecutionContext, ToolRuntime } from './types';
+import type { WorkflowToolRegistrationPolicy } from '~~/shared/chat/workflow-tool-policy';
 /**
  * `ToolHandler`
  *
@@ -5419,6 +4076,7 @@ export interface RegisteredTool {
     enabled: Ref<boolean>;
     lastError: Ref<string | null>;
     runtime: ToolRuntime;
+    workflowPolicy?: WorkflowToolRegistrationPolicy;
     /** Removes this exact registration; returns false after replacement/disposal. */
     dispose: () => boolean;
     _owner: symbol;
@@ -5428,6 +4086,7 @@ interface RegisterOptions {
     override?: boolean;
     enabled?: boolean;
     runtime?: ToolRuntime;
+    workflowPolicy?: WorkflowToolRegistrationPolicy;
 }
 /**
  * `ToolRegistryState`
@@ -5628,6 +4287,7 @@ export declare function createTypedAdminHookEngine(engine: HookEngine): TypedAdm
  * - Server-only runtime; no Vue or localStorage.
  */
 import type { ToolDefinition, ToolExecutionAdmission, ToolExecutionContext, ToolRuntime } from '~/utils/chat/types';
+import type { WorkflowToolRegistrationPolicy } from '~~/shared/chat/workflow-tool-policy';
 export type LegacyToolHandler<TArgs = Record<string, unknown>> = (args: TArgs) => Promise<string> | string;
 export type ContextualToolHandler<TArgs = Record<string, unknown>> = (args: TArgs, context: ToolExecutionContext) => Promise<string> | string;
 export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;
@@ -5636,12 +4296,14 @@ export interface RegisteredServerTool {
     handler: ContextualToolHandler<Record<string, unknown>>;
     runtime: ToolRuntime;
     timeoutMs: number;
+    workflowPolicy?: WorkflowToolRegistrationPolicy;
     owner: symbol;
 }
 export interface RegisterServerToolOptions {
     runtime?: ToolRuntime;
     timeoutMs?: number;
     override?: boolean;
+    workflowPolicy?: WorkflowToolRegistrationPolicy;
 }
 export declare function registerServerTool<TArgs extends Record<string, unknown> = Record<string, unknown>>(definition: ToolDefinition, handler: ToolHandler<TArgs>, opts?: RegisterServerToolOptions): () => boolean;
 export declare function unregisterServerTool(name: string): void;

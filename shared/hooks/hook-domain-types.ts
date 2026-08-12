@@ -1,5 +1,5 @@
 /**
- * Data contracts shared by hook payloads.
+ * Shared data contracts used by hook payloads.
  *
  * These interfaces deliberately contain no hook-name or callback machinery.
  * Keeping domain records separate prevents the hook registry's type-level

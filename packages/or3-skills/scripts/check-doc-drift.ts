@@ -36,7 +36,7 @@ const DOCUMENT_ASSERTIONS = [
   },
   {
     path: 'public/_documentation/cloud/or3-cloud-wizard.md',
-    text: 'bun run or3-cloud:init',
+    text: 'npx @or3/cloud init --local',
     code: 'setup-guidance-changed',
   },
   {
