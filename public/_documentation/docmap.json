@@ -1151,7 +1151,7 @@
                     "name": "deployment-operations.md",
                     "path": "/cloud/deployment-operations",
                     "category": "Operations",
-                    "summary": "Operational runbook for OR3 Cloud SSR deployments."
+                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including the post-update production verification command."
                 },
                 {
                     "name": "environment-reference.md",

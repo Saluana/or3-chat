@@ -28,7 +28,7 @@ import { createGunzip } from 'node:zlib';
 
 const execFile = promisify(execFileCallback);
 
-export const PACKAGE_VERSION = '0.1.38';
+export const PACKAGE_VERSION = '0.1.39';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -266,6 +266,7 @@ const COMMAND_FLAGS: Record<string, readonly string[]> = {
   restore: ['yes'],
   rollback: ['yes'],
   doctor: [],
+  verify: ['public'],
   recover: [],
   adopt: ['from'],
   credentials: ['yes', 'owner-password', 'admin-password'],
@@ -634,6 +635,25 @@ async function assertSafeComposeBinding(directory: string, mode: Mode, env: Reco
 
 const HEALTH_SCRIPT = "const fs=require('node:fs');try{fs.accessSync('/data',fs.constants.R_OK|fs.constants.W_OK);for(const path of [process.env.OR3_BASIC_AUTH_DB_PATH,process.env.OR3_SQLITE_DB_PATH].filter(Boolean)){const fd=fs.openSync(path,'r+');fs.closeSync(fd)}}catch{process.exit(1)}fetch('http://127.0.0.1:3000/api/health?deep=true').then(async response=>{const body=await response.json().catch(()=>({}));if(!response.ok||body.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))";
 const MAINTENANCE_SCRIPT = "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async response=>{const body=await response.json().catch(()=>({}));const m=body?.providers?.sync?.details?.maintenance;if(m)console.log(JSON.stringify(m))}).catch(()=>{})";
+const VERIFY_DATABASES_SCRIPT = `
+const fs = require('node:fs');
+const Database = require('/app/.output/server/node_modules/better-sqlite3');
+const results = [];
+for (const path of [process.env.OR3_BASIC_AUTH_DB_PATH, process.env.OR3_SQLITE_DB_PATH].filter(Boolean)) {
+  const info = fs.statSync(path);
+  if (info.uid !== 65532 || info.gid !== 65532) throw new Error(path + ' must be owned by 65532:65532');
+  const db = new Database(path, { readonly: true, fileMustExist: true });
+  const quickCheck = db.pragma('quick_check', { simple: true });
+  const tables = db.prepare("select count(*) as count from sqlite_master where type = 'table'").get().count;
+  db.close();
+  if (quickCheck !== 'ok') throw new Error(path + ' quick_check failed: ' + quickCheck);
+  results.push({ path, quickCheck, tables });
+}
+if (process.env.OR3_FORCE_HTTPS === 'true' && process.env.NUXT_SECURITY_PROXY_TRUST_PROXY !== 'true') {
+  throw new Error('NUXT_SECURITY_PROXY_TRUST_PROXY must be true for a managed public deployment');
+}
+console.log(JSON.stringify(results));
+`;
 const CONTAINER_NODE = '/nodejs/bin/node';
 const LEGACY_CONTAINER_NODE = '/usr/local/bin/node';
 const CONTAINER_NODE_SHELL = `if [ -x ${CONTAINER_NODE} ]; then exec ${CONTAINER_NODE} -e "$1"; elif [ -x ${LEGACY_CONTAINER_NODE} ]; then exec ${LEGACY_CONTAINER_NODE} -e "$1"; else exit 127; fi`;
@@ -1634,6 +1654,7 @@ Usage:
   npx @or3/cloud rollback --yes
   npx @or3/cloud credentials reset --yes [--owner-password <p> --admin-password <p>]
   npx @or3/cloud doctor
+  npx @or3/cloud verify [--public]
   npx @or3/cloud recover
   npx @or3/cloud adopt --from <v1-directory> [directory]
   npx @or3/cloud status
@@ -1650,6 +1671,7 @@ Options:
   --keep <n>                     Backups to retain when pruning (default: 5)
   --force                        Prune backups even when referenced by the rollback point
   --tail <n>                     Log lines to show (default: 200)
+  --public                       Require verification through the public HTTPS origin
   --purge-data                   Remove data volumes and managed files (with remove)
   --yes                          Confirm a destructive restore, rollback, credentials reset, or purge
   --help                         Show this help
@@ -2336,6 +2358,204 @@ async function doctorCommand(directory: string) {
     throw new Error(`Doctor found ${failures.length} issue(s). Run: ${diagnostics(resolved, state?.mode ?? 'local')}`);
   }
   console.log('OR3 Cloud doctor passed.');
+}
+
+type VerificationHealth = {
+  status: 'ok';
+  providers: {
+    auth: { provider: 'basic-auth' };
+    sync: { provider: 'sqlite' };
+    storage: { provider: 'fs' };
+  };
+};
+
+export function validateVerificationHealth(value: unknown): VerificationHealth {
+  const health = value as Partial<VerificationHealth> | null;
+  if (
+    !health ||
+    health.status !== 'ok' ||
+    health.providers?.auth?.provider !== 'basic-auth' ||
+    health.providers?.sync?.provider !== 'sqlite' ||
+    health.providers?.storage?.provider !== 'fs'
+  ) {
+    throw new Error('Public deep health does not report the managed Basic Auth + SQLite + filesystem profile.');
+  }
+  return health as VerificationHealth;
+}
+
+async function verificationFetch(url: URL, init: RequestInit = {}) {
+  return fetch(url, {
+    ...init,
+    redirect: 'manual',
+    signal: AbortSignal.timeout(20_000),
+  });
+}
+
+async function verificationJson(
+  baseUrl: URL,
+  path: string,
+  options: { body?: unknown; cookie?: string; method?: 'GET' | 'POST' } = {},
+) {
+  const method = options.method ?? (options.body === undefined ? 'GET' : 'POST');
+  const response = await verificationFetch(new URL(path, baseUrl), {
+    method,
+    headers: {
+      accept: 'application/json',
+      ...(options.body === undefined ? {} : { 'content-type': 'application/json' }),
+      ...(options.cookie ? { cookie: options.cookie } : {}),
+      ...(method === 'GET' ? {} : { origin: baseUrl.origin }),
+    },
+    ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+  });
+  if (response.status !== 200) {
+    const detail = (await response.text().catch(() => '')).slice(0, 300);
+    throw new Error(`${response.url} returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
+  }
+  return response.json() as Promise<Record<string, any>>;
+}
+
+async function verifyPublicApplication(baseUrl: URL, env: Record<string, string>) {
+  const root = await verificationFetch(baseUrl);
+  if (root.status !== 200) throw new Error(`${baseUrl} returned HTTP ${root.status}; redirects are not accepted during verification.`);
+
+  const health = validateVerificationHealth(await verificationJson(baseUrl, '/api/health?deep=true'));
+  const email = env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
+  const password = env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD;
+  if (!email || !password) throw new Error('Bootstrap credentials are missing from the managed .env.');
+  const signIn = await verificationFetch(new URL('/api/basic-auth/sign-in', baseUrl), {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/json', origin: baseUrl.origin },
+    body: JSON.stringify({ email, password }),
+  });
+  if (signIn.status !== 200) throw new Error(`Public Basic Auth sign-in returned HTTP ${signIn.status}.`);
+  const responseHeaders = signIn.headers as Headers & { getSetCookie?: () => string[] };
+  const setCookies = responseHeaders.getSetCookie?.() ?? [signIn.headers.get('set-cookie')].filter((value): value is string => Boolean(value));
+  const cookie = setCookies.map((value) => value.split(';', 1)[0]).join('; ');
+  if (!cookie) throw new Error('Public Basic Auth sign-in did not set a session cookie.');
+
+  const session = await verificationJson(baseUrl, '/api/auth/session', { cookie });
+  if (session.session?.user?.email !== email || !session.session?.workspace?.id) {
+    throw new Error('Public session hydration did not return the bootstrap user and workspace.');
+  }
+  const workspaceId = String(session.session.workspace.id);
+  const pull = await verificationJson(baseUrl, '/api/sync/pull', {
+    cookie,
+    body: { scope: { workspaceId }, cursor: 0, limit: 1, tables: ['messages'] },
+  });
+  if (!Array.isArray(pull.changes) || typeof pull.nextCursor !== 'number') {
+    throw new Error('Public SQLite sync pull returned an invalid response.');
+  }
+
+  const probeBytes = Buffer.concat([
+    Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489', 'hex'),
+    randomBytes(8),
+  ]);
+  const hash = `sha256:${createHash('sha256').update(probeBytes).digest('hex')}`;
+  let storageId: string | undefined;
+  try {
+    const presign = await verificationJson(baseUrl, '/api/storage/presign-upload', {
+      cookie,
+      body: {
+        workspace_id: workspaceId,
+        hash,
+        mime_type: 'image/png',
+        size_bytes: probeBytes.length,
+        disposition: 'inline',
+      },
+    });
+    storageId = typeof presign.storageId === 'string' ? presign.storageId : undefined;
+    if (typeof presign.url !== 'string') throw new Error('Filesystem storage did not return an upload URL.');
+    const upload = await verificationFetch(new URL(presign.url, baseUrl), {
+      method: typeof presign.method === 'string' ? presign.method : 'PUT',
+      headers: {
+        'content-type': 'image/png',
+        cookie,
+        ...(presign.headers && typeof presign.headers === 'object' ? presign.headers : {}),
+      },
+      body: probeBytes,
+    });
+    if (!upload.ok) throw new Error(`Filesystem verification upload returned HTTP ${upload.status}.`);
+    await verificationJson(baseUrl, '/api/storage/commit', {
+      cookie,
+      body: {
+        workspace_id: workspaceId,
+        hash,
+        storage_id: storageId,
+        storage_provider_id: 'fs',
+        mime_type: 'image/png',
+        size_bytes: probeBytes.length,
+        name: 'or3-production-verification.png',
+        kind: 'image',
+      },
+    });
+    const downloadGrant = await verificationJson(baseUrl, '/api/storage/presign-download', {
+      cookie,
+      body: { workspace_id: workspaceId, hash, storage_id: storageId, disposition: 'attachment' },
+    });
+    if (typeof downloadGrant.url !== 'string') throw new Error('Filesystem storage did not return a download URL.');
+    const download = await verificationFetch(new URL(downloadGrant.url, baseUrl), { headers: { cookie } });
+    if (!download.ok || !Buffer.from(await download.arrayBuffer()).equals(probeBytes)) {
+      throw new Error('Filesystem verification download did not match the uploaded probe.');
+    }
+  } finally {
+    if (storageId) {
+      await verificationJson(baseUrl, '/api/storage/delete', {
+        cookie,
+        body: { workspace_id: workspaceId, hash, storage_id: storageId },
+      });
+    }
+  }
+  return health;
+}
+
+async function verifyCommand(directory: string, flags: Flags, positionals: string[]) {
+  if (positionals.length) throw new Error('verify accepts no positional arguments.');
+  if (flags.public !== undefined && !boolFlag(flags, 'public')) throw new Error('--public does not accept a value.');
+  await ensureDocker();
+  const loaded = await loadManaged(directory);
+  assertDeploymentDirectoryIdentity(directory, loaded.state);
+  assertNoPending(loaded.state);
+  if (boolFlag(flags, 'public') && loaded.state.mode !== 'public') {
+    throw new Error('--public requires a managed public deployment.');
+  }
+  if (loaded.env.OR3_VERSION !== loaded.state.appVersion || loaded.env.OR3_IMAGE !== loaded.state.image) {
+    throw new Error('Managed state and .env version/image do not match.');
+  }
+  const digest = await imageDigest(loaded.state.image);
+  if (digest !== loaded.state.imageDigest) {
+    throw new Error(`Managed image digest differs from state. Expected ${loaded.state.imageDigest}, found ${digest}.`);
+  }
+  await waitForDeepHealth(loaded.directory, loaded.state.mode, secretValues(loaded.env));
+  const baseUrl = new URL(
+    loaded.state.mode === 'public'
+      ? `https://${loaded.state.domain}`
+      : `http://127.0.0.1:${loaded.state.port}`,
+  );
+  await verifyPublicApplication(baseUrl, loaded.env);
+  const databaseCheck = await run('docker', [
+    ...composeArgs(loaded.directory, loaded.state.mode, ['exec', '-T', 'or3', ...containerNodeCommand(VERIFY_DATABASES_SCRIPT)]),
+  ], loaded.directory);
+  if (!databaseCheck.ok) throw new Error(`SQLite integrity or runtime proxy verification failed. ${databaseCheck.stderr.trim()}`);
+  const databases = JSON.parse(databaseCheck.stdout.trim()) as Array<{ path: string; quickCheck: string; tables: number }>;
+  if (databases.length !== 2 || databases.some((entry) => entry.quickCheck !== 'ok' || entry.tables < 1)) {
+    throw new Error('SQLite verification did not confirm both managed databases.');
+  }
+  const services = loaded.state.mode === 'public' ? ['or3', 'caddy'] : ['or3'];
+  const logs = await run('docker', composeArgs(loaded.directory, loaded.state.mode, [
+    'logs', '--no-color', '--since', '10m', '--tail', '250', ...services,
+  ]), loaded.directory);
+  if (!logs.ok) throw new Error(`Could not read bounded deployment logs. ${logs.stderr.trim()}`);
+  const serious = `${logs.stdout}\n${logs.stderr}`.split(/\r?\n/).filter((line) =>
+    /\b(?:fatal|panic|oomkilled)\b|unhandled (?:rejection|exception)|out of memory/i.test(line),
+  );
+  if (serious.length) throw new Error(`Recent deployment logs contain serious errors:\n${redact(serious.slice(-20).join('\n'), secretValues(loaded.env))}`);
+  console.log(`✓ OR3 ${loaded.state.appVersion} image digest matches managed state`);
+  console.log(`✓ ${baseUrl.origin} root and deep health return HTTP 200 without redirects`);
+  console.log('✓ Basic Auth sign-in, session hydration, and SQLite sync pull passed');
+  console.log('✓ Filesystem storage write/read/delete probe passed');
+  console.log('✓ auth.sqlite and sync.sqlite quick_check passed with managed ownership');
+  console.log('✓ Recent bounded logs contain no fatal, panic, unhandled, or OOM events');
+  console.log('OR3 production verification passed.');
 }
 
 async function readSourceVolume(sourceDirectory: string) {
@@ -3080,6 +3300,7 @@ async function main(argv = process.argv.slice(2)) {
     if (command === 'rollback') return await rollbackCommand(process.cwd(), parsed.flags);
     if (command === 'credentials') return await credentialsCommand(process.cwd(), parsed.positionals, parsed.flags);
     if (command === 'doctor') return await doctorCommand(process.cwd());
+    if (command === 'verify') return await verifyCommand(process.cwd(), parsed.flags, parsed.positionals);
     if (command === 'recover') return await recoverCommand(process.cwd());
     if (command === 'adopt') return await adoptCommand(parsed.positionals, parsed.flags);
     if (command === 'status') return await statusCommand(process.cwd());
