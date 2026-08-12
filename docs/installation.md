@@ -177,8 +177,11 @@ root owner, image, configuration, and backup before reporting failure.
 To target a specific published version:
 
 ```bash
-npx @or3/cloud update --to <exact-version>
+npx --yes @or3/cloud@<exact-version> update --to <exact-version>
 ```
+
+The package version and `--to` version must match because the CLI installs the
+Compose/Caddy assets shipped with that exact image release.
 
 Do not use `docker compose down --volumes` during normal operation or upgrades;
 that deletes the authentication database, SQLite data, and uploaded files.

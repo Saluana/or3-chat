@@ -98,6 +98,11 @@ forwarding headers); otherwise proxy-supplied client identity is untrusted.
 - The managed container probe also requires read/write access to `/data` and
   opens the Basic Auth and sync SQLite files read/write. An HTTP-only green
   response cannot hide a volume-ownership or database-open failure.
+- Managed backups include checksummed Compose/Caddy assets. `update` installs
+  the target CLI's generated assets atomically; failure, rollback, restore, and
+  interrupted-operation recovery reinstall the matching backed-up assets.
+  An exact-version update must use the same package and image version, such as
+  `npx --yes @or3/cloud@0.1.38 update --to 0.1.38`.
 - Track HTTP rates for:
   - `/api/sync/push` and `/api/sync/pull`
   - `/api/storage/*`

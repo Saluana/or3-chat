@@ -58,6 +58,12 @@ When an adopted legacy deployment used a different container UID, `update`
 rebuilds the data from its checksummed pre-update backup as the hardened
 runtime user. It does not recursively rewrite file ownership in place, and a
 failed migration restores the recorded legacy root owner and snapshot.
+Updates also replace the generated Compose/Caddy files from the target CLI.
+Those files are checksummed into the pre-update backup and restored on a failed
+update, rollback, restore, or interrupted-operation recovery.
+When selecting an exact version, run the matching CLI package, for example
+`npx --yes @or3/cloud@0.1.38 update --to 0.1.38`; the CLI refuses mismatched
+package and image versions so their generated assets cannot drift.
 For a destructive purge, export a fresh backup to a new directory on another
 filesystem first; `remove --purge-data --yes` verifies that export before it
 will delete anything.

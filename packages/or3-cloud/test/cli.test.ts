@@ -1,4 +1,7 @@
 import { expect, test } from 'bun:test';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   assertCommandFlags,
   assertEnoughFreeSpace,
@@ -11,21 +14,58 @@ import {
   buildCredentialsResetScript,
   buildEnv,
   checkResolvedLoopbackBinding,
+  copyAssets,
   isVersion,
   parseEnv,
   parseFlags,
   purgeVolumesFromState,
   redact,
   requiredArchiveSpace,
+  restoreManagedAssets,
   selectPruneTargets,
   serializeInitialCredentials,
   serializeEnv,
+  snapshotManagedAssets,
   stateFromEnv,
   supportedImageArchitectures,
   validatePassword,
 } from '../src/cli';
 import { ADMIN_PASSWORD_POLICY_VECTORS } from '../../../shared/cloud/wizard/admin-password-policy-vectors';
 import { MANAGED_PROFILE_SHARED_ENV } from '../../../shared/cloud/wizard/managed-profile-contract';
+
+test('snapshots and restores checksummed managed deployment assets', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'or3-cloud-assets-'));
+  const backup = join(directory, 'backup');
+  try {
+    await copyAssets(directory, 'public');
+    const originalCompose = await readFile(join(directory, 'compose.yaml'), 'utf8');
+    const managedAssetSha256 = await snapshotManagedAssets(directory, 'public', backup);
+    const manifest = {
+      schemaVersion: 1 as const,
+      backupId: 'backup-assets-test',
+      createdAt: new Date().toISOString(),
+      appVersion: '0.1.38',
+      image: 'ghcr.io/saluana/or3-chat:0.1.38',
+      imageDigest: `sha256:${'a'.repeat(64)}`,
+      dataSha256: 'b'.repeat(64),
+      managedAssetSha256,
+      mode: 'public' as const,
+    };
+
+    await writeFile(join(directory, 'compose.yaml'), 'stale compose\n');
+    expect(await restoreManagedAssets(directory, backup, manifest)).toBe(true);
+    expect(await readFile(join(directory, 'compose.yaml'), 'utf8')).toBe(originalCompose);
+    expect((await stat(join(directory, 'compose.yaml'))).mode & 0o777).toBe(0o644);
+
+    await writeFile(join(backup, 'managed-assets', 'compose.yaml'), 'tampered\n');
+    await expect(restoreManagedAssets(directory, backup, manifest)).rejects.toThrow(
+      'managed asset checksum mismatch',
+    );
+    expect(await readFile(join(directory, 'compose.yaml'), 'utf8')).toBe(originalCompose);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test('round trips the generated env format without losing values', () => {
   const source = {

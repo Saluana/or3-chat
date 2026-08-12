@@ -28,7 +28,7 @@ import { createGunzip } from 'node:zlib';
 
 const execFile = promisify(execFileCallback);
 
-export const PACKAGE_VERSION = '0.1.37';
+export const PACKAGE_VERSION = '0.1.38';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -104,6 +104,8 @@ export type BackupManifest = {
   /** Uncompressed live-volume bytes measured immediately before archiving. */
   dataBytes?: number;
   configSha256?: string;
+  /** Checksums for the generated Compose/Caddy files needed by this release. */
+  managedAssetSha256?: Record<string, string>;
   mode: Mode;
   domain?: string;
   composeProject?: string;
@@ -935,15 +937,103 @@ async function readPassword(flags: Flags) {
   return password;
 }
 
-async function copyAssets(directory: string, mode: Mode) {
-  await copyFile(join(ASSET_ROOT, 'compose.yaml'), join(directory, 'compose.yaml'));
-  await chmod(join(directory, 'compose.yaml'), 0o644);
-  if (mode === 'public') {
-    await copyFile(join(ASSET_ROOT, 'compose.public.yaml'), join(directory, 'compose.public.yaml'));
-    await copyFile(join(ASSET_ROOT, 'Caddyfile'), join(directory, 'Caddyfile'));
-    await chmod(join(directory, 'compose.public.yaml'), 0o644);
-    await chmod(join(directory, 'Caddyfile'), 0o644);
+export function managedAssetNames(mode: Mode) {
+  return ['compose.yaml', ...(mode === 'public' ? ['compose.public.yaml', 'Caddyfile'] : [])];
+}
+
+async function installManagedAssets(directory: string, assets: Map<string, Buffer>) {
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const token = randomBytes(4).toString('hex');
+  const staged: Array<{ destination: string; replacement: string; rollback?: string }> = [];
+  try {
+    for (const [name, contents] of assets) {
+      const destination = join(directory, name);
+      const replacement = `${destination}.next-${token}`;
+      const entry: { destination: string; replacement: string; rollback?: string } = {
+        destination,
+        replacement,
+      };
+      staged.push(entry);
+      await writeFile(replacement, contents, { mode: 0o644 });
+      await chmod(replacement, 0o644);
+      if (await fileExists(destination)) {
+        entry.rollback = `${destination}.previous-${token}`;
+        await copyFile(destination, entry.rollback);
+        await chmod(entry.rollback, 0o644);
+      }
+    }
+    const applied: typeof staged = [];
+    try {
+      for (const entry of staged) {
+        await rename(entry.replacement, entry.destination);
+        applied.push(entry);
+        await chmod(entry.destination, 0o644);
+      }
+    } catch (error) {
+      for (const entry of applied.reverse()) {
+        if (entry.rollback) await rename(entry.rollback, entry.destination);
+        else await rm(entry.destination, { force: true });
+      }
+      throw error;
+    }
+  } finally {
+    for (const entry of staged) {
+      await rm(entry.replacement, { force: true }).catch(() => undefined);
+      if (entry.rollback) await rm(entry.rollback, { force: true }).catch(() => undefined);
+    }
   }
+}
+
+export async function copyAssets(directory: string, mode: Mode) {
+  const assets = new Map<string, Buffer>();
+  for (const name of managedAssetNames(mode)) {
+    assets.set(name, await readFile(join(ASSET_ROOT, name)));
+  }
+  await installManagedAssets(directory, assets);
+}
+
+export async function snapshotManagedAssets(directory: string, mode: Mode, backupDir: string) {
+  const assetDir = join(backupDir, 'managed-assets');
+  await mkdir(assetDir, { recursive: true, mode: 0o700 });
+  await chmod(assetDir, 0o700);
+  const checksums: Record<string, string> = {};
+  for (const name of managedAssetNames(mode)) {
+    const destination = join(assetDir, name);
+    await copySecure(join(directory, name), destination);
+    checksums[name] = await sha256File(destination);
+  }
+  return checksums;
+}
+
+async function verifiedManagedAssetContents(backupPath: string, manifest: BackupManifest) {
+  const checksums = manifest.managedAssetSha256;
+  if (!checksums) return undefined;
+  const expected = managedAssetNames(manifest.mode).sort();
+  const actual = Object.keys(checksums).sort();
+  if (actual.length !== expected.length || actual.some((name, index) => name !== expected[index])) {
+    throw new Error(`Backup ${manifest.backupId} has an invalid managed asset inventory.`);
+  }
+  const assets = new Map<string, Buffer>();
+  for (const name of expected) {
+    const expectedSha = checksums[name];
+    if (!expectedSha || !/^[0-9a-f]{64}$/i.test(expectedSha)) {
+      throw new Error(`Backup ${manifest.backupId} has an invalid checksum for managed asset ${name}.`);
+    }
+    const source = join(backupPath, 'managed-assets', name);
+    const actualSha = await sha256File(source);
+    if (actualSha !== expectedSha) {
+      throw new Error(`Backup managed asset checksum mismatch for ${name}. Expected ${expectedSha}, got ${actualSha}.`);
+    }
+    assets.set(name, await readFile(source));
+  }
+  return assets;
+}
+
+export async function restoreManagedAssets(directory: string, backupPath: string, manifest: BackupManifest) {
+  const assets = await verifiedManagedAssetContents(backupPath, manifest);
+  if (!assets) return false;
+  await installManagedAssets(directory, assets);
+  return true;
 }
 
 async function checkPublicPrerequisites(domain: string) {
@@ -1382,6 +1472,7 @@ async function createBackup(directory: string, state: ManagedState, env: Record<
     await stopProject(directory, state.mode);
     await volumeArchive(directory, state.mode, env, backupDir);
     await copySecure(deploymentPaths(directory).env, join(backupDir, 'config.env'));
+    const managedAssetSha256 = await snapshotManagedAssets(directory, state.mode, backupDir);
     const manifest: BackupManifest = {
       schemaVersion: 1,
       backupId,
@@ -1392,6 +1483,7 @@ async function createBackup(directory: string, state: ManagedState, env: Record<
       dataSha256: await sha256File(join(backupDir, 'data.tgz')),
       dataBytes: volumeSize,
       configSha256: await sha256File(join(backupDir, 'config.env')),
+      managedAssetSha256,
       mode: state.mode,
       domain: state.domain,
       composeProject: state.composeProject,
@@ -1443,6 +1535,7 @@ async function readManifest(backupPath: string) {
     const configActual = await sha256File(join(backupPath, 'config.env'));
     if (configActual !== manifest.configSha256) throw new Error(`Backup configuration checksum mismatch for ${manifest.backupId}.`);
   }
+  await verifiedManagedAssetContents(backupPath, manifest);
   return manifest;
 }
 
@@ -1491,6 +1584,7 @@ async function restoreBackupData(directory: string, state: ManagedState, env: Re
     stopAttempted = true;
     await stopProject(directory, state.mode);
     await copySecure(join(backupPath, 'config.env'), deploymentPaths(directory).env);
+    await restoreManagedAssets(directory, backupPath, manifest);
     await restoreVolumeArchive(directory, state.mode, backupEnv, backupPath);
     const restoredEnv = parseEnv(await readText(deploymentPaths(directory).env));
     await startProject(directory, state.mode, restoredEnv);
@@ -1725,8 +1819,12 @@ async function recoverCommand(directory: string) {
         throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
       }
       assertBackupMatchesDeployment(manifest, backupEnv, loaded.state, loaded.env);
+      if (pending.targetVersion !== PACKAGE_VERSION) {
+        throw new Error(`This interrupted update targets OR3 ${pending.targetVersion}. Run \`npx --yes @or3/cloud@${pending.targetVersion} recover\` so the image and generated assets match.`);
+      }
       try {
         if (pending.targetImageDigest) await pullAndRequireImage(pending.targetImage, pending.targetImageDigest, `OR3 ${pending.targetVersion}`);
+        await copyAssets(loaded.directory, loaded.state.mode);
         await startProject(loaded.directory, loaded.state.mode, loaded.env);
       } catch (replacementError) {
         await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath);
@@ -1880,6 +1978,11 @@ async function backupExportCommand(directory: string, backupId: string, destinat
     for (const file of ['data.tgz', 'config.env', 'manifest.json']) {
       await copySecure(join(backupPath, file), join(dest, file));
     }
+    if (manifest.managedAssetSha256) {
+      for (const name of managedAssetNames(manifest.mode)) {
+        await copySecure(join(backupPath, 'managed-assets', name), join(dest, 'managed-assets', name));
+      }
+    }
     const dataSha = await sha256File(join(dest, 'data.tgz'));
     if (dataSha !== manifest.dataSha256) {
       throw new Error(`Exported data.tgz checksum mismatch for ${manifest.backupId}. Expected ${manifest.dataSha256}, got ${dataSha}.`);
@@ -1890,6 +1993,7 @@ async function backupExportCommand(directory: string, backupId: string, destinat
         throw new Error(`Exported config.env checksum mismatch for ${manifest.backupId}.`);
       }
     }
+    await readManifest(dest);
     const destinationDevice = (await stat(dest)).dev;
     await mkdir(deploymentPaths(directory).exports, { recursive: true, mode: 0o700 });
     const receipt: BackupExportReceipt = {
@@ -1902,7 +2006,12 @@ async function backupExportCommand(directory: string, backupId: string, destinat
       configSha256: manifest.configSha256,
     };
     await writeSecure(join(deploymentPaths(directory).exports, `${manifest.backupId}.json`), `${JSON.stringify(receipt, null, 2)}\n`);
-    const bytes = (await stat(join(dest, 'data.tgz'))).size + (await stat(join(dest, 'config.env'))).size + (await stat(join(dest, 'manifest.json'))).size;
+    let bytes = (await stat(join(dest, 'data.tgz'))).size + (await stat(join(dest, 'config.env'))).size + (await stat(join(dest, 'manifest.json'))).size;
+    if (manifest.managedAssetSha256) {
+      for (const name of managedAssetNames(manifest.mode)) {
+        bytes += (await stat(join(dest, 'managed-assets', name))).size;
+      }
+    }
     console.log(`Exported backup ${manifest.backupId} (${bytes} bytes) to ${dest}`);
     console.log('The exported copy contains credentials and secrets. It is owner-only (0600); keep it off-host.');
     if ((await stat(backupPath)).dev === destinationDevice) {
@@ -1945,6 +2054,9 @@ async function updateCommand(directory: string, flags: Flags) {
   await waitForDeepHealth(loaded.directory, state.mode, secretValues(env));
   const targetVersion = stringFlag(flags, 'to')?.trim() ?? PACKAGE_VERSION;
   if (!isVersion(targetVersion)) throw new Error(`--to must be a complete semantic version such as ${PACKAGE_VERSION}.`);
+  if (targetVersion !== PACKAGE_VERSION) {
+    throw new Error(`This CLI contains deployment assets for OR3 ${PACKAGE_VERSION}. Run \`npx --yes @or3/cloud@${targetVersion} update --to ${targetVersion}\` so the image and generated assets match.`);
+  }
   if (targetVersion === state.appVersion) throw new Error(`The deployment is already on OR3 ${targetVersion}.`);
   const targetImage = imageFor(targetVersion);
   const targetDigest = await pullImage(targetImage);
@@ -1978,6 +2090,7 @@ async function updateCommand(directory: string, flags: Flags) {
         });
       }
       await writeSecure(deploymentPaths(loaded.directory).env, serializeEnv(nextEnv));
+      await copyAssets(loaded.directory, state.mode);
       if (migrateLegacyVolume) {
         await restoreVolumeArchive(loaded.directory, state.mode, nextEnv, backup.backupDir);
       }

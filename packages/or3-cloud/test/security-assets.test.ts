@@ -102,6 +102,17 @@ test('updates rebuild legacy-owned data from the checksummed backup without recu
   expect(update.indexOf('await stopProject(loaded.directory, state.mode);')).toBeLessThan(update.indexOf('uid: MANAGED_RUNTIME_UID'));
 });
 
+test('updates and recovery install generated assets with checksummed rollback coverage', () => {
+  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  expect(cli).toContain('const managedAssetSha256 = await snapshotManagedAssets(directory, state.mode, backupDir);');
+  expect(cli).toContain('await copyAssets(loaded.directory, state.mode);');
+  expect(cli).toContain('await copyAssets(loaded.directory, loaded.state.mode);');
+  expect(cli).toContain('await restoreManagedAssets(directory, backupPath, manifest);');
+  expect(cli).toContain('await verifiedManagedAssetContents(backupPath, manifest);');
+  expect(cli).toContain('targetVersion !== PACKAGE_VERSION');
+  expect(cli).toContain('pending.targetVersion !== PACKAGE_VERSION');
+});
+
 test('restore and adoption stream private archives into the managed volume', () => {
   const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
   expect(cli).toContain('pipeline(createReadStream(source), child.stdin)');
