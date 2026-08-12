@@ -2,7 +2,7 @@
     "name": "or3-chat",
     "type": "module",
     "private": false,
-    "version": "0.1.36",
+    "version": "0.1.37",
     "license": "GPL-3.0",
     "engines": {
         "node": ">=24"

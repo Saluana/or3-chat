@@ -8,6 +8,10 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 3000
+      # Nuxt only applies nested runtime-config overrides from NUXT_* names.
+      # Bridge the managed OR3 setting so Caddy's sanitized forwarding headers
+      # are trusted and HTTPS enforcement cannot redirect back to itself.
+      NUXT_SECURITY_PROXY_TRUST_PROXY: "${OR3_TRUST_PROXY:-false}"
       OR3_BASIC_AUTH_DB_PATH: /data/auth.sqlite
       OR3_SQLITE_DB_PATH: /data/sync.sqlite
       OR3_STORAGE_FS_ROOT: /data/storage

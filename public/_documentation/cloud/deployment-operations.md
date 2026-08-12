@@ -87,6 +87,10 @@ OR3_FORCE_HTTPS=true
 OR3_TRUST_PROXY=true
 ```
 
+Managed Compose maps `OR3_TRUST_PROXY` to Nuxt's nested runtime setting. Keep
+it enabled only behind the bundled Caddy proxy (or another proxy that replaces
+forwarding headers); otherwise proxy-supplied client identity is untrusted.
+
 ## Monitoring and Health Checks
 
 - Liveness/readiness endpoint: `GET /api/health`

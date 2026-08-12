@@ -66,6 +66,7 @@ running a prebuilt image directly, but are not required for the wizard:
 | `NUXT_STORAGE_PROVIDER`, `NUXT_PUBLIC_STORAGE_PROVIDER` | `NUXT_PUBLIC_STORAGE_PROVIDER` (or Docker-only `OR3_STORAGE_PROVIDER`) |
 | `NUXT_ADMIN_AUTH_USERNAME`, `NUXT_ADMIN_AUTH_PASSWORD`, `NUXT_ADMIN_AUTH_JWT_SECRET`, `NUXT_ADMIN_AUTH_JWT_EXPIRY` | matching `OR3_ADMIN_*` settings |
 | `NUXT_SECURITY_FORCE_HTTPS` | `OR3_FORCE_HTTPS` (middleware override) |
+| `NUXT_SECURITY_PROXY_TRUST_PROXY` | `OR3_TRUST_PROXY` (managed Compose runtime bridge) |
 
 Nuxt also supports runtime overrides such as `NUXT_OPENROUTER_BASE_URL`,
 `NUXT_OPENROUTER_ALLOW_USER_OVERRIDE`, `NUXT_OPENROUTER_REQUIRE_USER_KEY`,

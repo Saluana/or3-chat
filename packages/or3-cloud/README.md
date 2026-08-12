@@ -32,6 +32,8 @@ npx @or3/cloud init --public --domain cloud.example.com
 
 OR3 Cloud uses Caddy to obtain and renew HTTPS certificates. It does not
 change your DNS, firewall, Cloudflare, or Tailscale settings.
+The managed public profile forwards its proxy-trust setting into Nuxt runtime
+configuration so HTTPS API requests are not redirected back to themselves.
 
 ## Day-to-day commands
 

@@ -40,6 +40,11 @@ test('local compose.yaml has no Caddy service', () => {
   expect(compose).not.toMatch(/^\s*caddy:/m);
 });
 
+test('compose.yaml bridges managed proxy trust into Nuxt runtime config', () => {
+  const compose = asset('compose.yaml');
+  expect(compose).toContain('NUXT_SECURITY_PROXY_TRUST_PROXY: "${OR3_TRUST_PROXY:-false}"');
+});
+
 test('Dockerfile builds shared Nuxt output only once on the native runner', () => {
   const dockerfile = readFileSync(DOCKERFILE, 'utf8');
   expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:.* AS build$/m);
