@@ -62,7 +62,9 @@ test('compose.yaml deep health treats degraded as unhealthy', () => {
   const compose = asset('compose.yaml');
   const healthcheck = compose.slice(compose.indexOf('healthcheck:'));
   expect(healthcheck).toContain('deep=true');
+  expect(healthcheck).toContain('CMD-SHELL');
   expect(healthcheck).toContain('/nodejs/bin/node');
+  expect(healthcheck).toContain('/usr/local/bin/node');
   expect(healthcheck).toContain("b.status!=='ok'");
   expect(healthcheck).toContain('process.exit(1)');
   expect(healthcheck).toContain('interval: 10s');
@@ -72,9 +74,11 @@ test('compose.yaml deep health treats degraded as unhealthy', () => {
   expect(compose).toContain('stop_grace_period: 25s');
 });
 
-test('container-side CLI probes use the runtime Node executable explicitly', () => {
+test('container-side CLI probes support current and legacy explicit Node paths', () => {
   const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
   expect(cli).toContain("const CONTAINER_NODE = '/nodejs/bin/node';");
+  expect(cli).toContain("const LEGACY_CONTAINER_NODE = '/usr/local/bin/node';");
+  expect(cli).toContain("'sh', '-c', CONTAINER_HEALTH_SHELL, 'or3-health', HEALTH_SCRIPT");
   expect(cli).not.toContain("'or3', 'node', '-e'");
 });
 

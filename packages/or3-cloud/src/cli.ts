@@ -28,7 +28,7 @@ import { createGunzip } from 'node:zlib';
 
 const execFile = promisify(execFileCallback);
 
-export const PACKAGE_VERSION = '0.1.34';
+export const PACKAGE_VERSION = '0.1.35';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
 const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url)));
 const STATE_SCHEMA_VERSION = 1;
@@ -633,12 +633,17 @@ async function assertSafeComposeBinding(directory: string, mode: Mode, env: Reco
 const HEALTH_SCRIPT = "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async response=>{const body=await response.json().catch(()=>({}));if(!response.ok||body.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))";
 const MAINTENANCE_SCRIPT = "fetch('http://127.0.0.1:3000/api/health?deep=true').then(async response=>{const body=await response.json().catch(()=>({}));const m=body?.providers?.sync?.details?.maintenance;if(m)console.log(JSON.stringify(m))}).catch(()=>{})";
 const CONTAINER_NODE = '/nodejs/bin/node';
+const LEGACY_CONTAINER_NODE = '/usr/local/bin/node';
+const CONTAINER_HEALTH_SHELL = `if [ -x ${CONTAINER_NODE} ]; then exec ${CONTAINER_NODE} -e "$1"; elif [ -x ${LEGACY_CONTAINER_NODE} ]; then exec ${LEGACY_CONTAINER_NODE} -e "$1"; else exit 127; fi`;
 
 async function waitForDeepHealthWithArgs(composeCommand: string[], directory: string, secrets: string[] = []) {
   const deadline = Date.now() + DEEP_HEALTH_TIMEOUT_MS;
   let lastError = 'health check did not complete';
   while (Date.now() < deadline) {
-    const result = await run('docker', [...composeCommand, 'exec', '-T', 'or3', CONTAINER_NODE, '-e', HEALTH_SCRIPT], directory);
+    const result = await run('docker', [
+      ...composeCommand,
+      'exec', '-T', 'or3', 'sh', '-c', CONTAINER_HEALTH_SHELL, 'or3-health', HEALTH_SCRIPT,
+    ], directory);
     if (result.ok) return;
     lastError = redact(result.stderr, secrets);
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 1000));
