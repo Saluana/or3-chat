@@ -300,10 +300,18 @@ const activePageProps = computed(() => {
         resetToDefault,
     };
 
-    // For the home page, pass all the existing props
+    // The home page queries its own bounded item list. Do not feed the full
+    // search/plugin entity collections into its reactive prop graph.
     if (activePageId.value === 'sidebar-home') {
         return {
-            ...props,
+            expandedProjects: props.expandedProjects,
+            activeSections: props.activeSections,
+            displayProjects: props.displayProjects,
+            sidebarQuery: props.sidebarQuery,
+            activeDocumentIds: props.activeDocumentIds,
+            activeThreadIds: props.activeThreadIds,
+            sidebarFooterActions: props.sidebarFooterActions,
+            resolvedSidebarSections: props.resolvedSidebarSections,
             ...pageControlProps,
         };
     }

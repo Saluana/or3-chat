@@ -9,6 +9,11 @@ export const documentsStyles = {
             fontFamily: 'var(--font-sans)',
         },
     },
+    '.document-editor-root .document-content .ProseMirror:focus-visible': {
+        style: {
+            outline: 'none',
+        },
+    },
     '.document-editor-root .editor-topbar': {
         style: {
             borderBottom: 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color)',
@@ -23,7 +28,8 @@ export const documentsStyles = {
     },
     '.document-editor-root .document-inspector': {
         style: {
-            borderLeft: 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color)',
+            borderLeft:
+                'var(--md-border-width) solid color-mix(in srgb, var(--md-border-color) 70%, transparent)',
             boxShadow: 'none',
         },
     },

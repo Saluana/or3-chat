@@ -218,14 +218,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, watch, onUnmounted } from 'vue';
+import { ref, computed, reactive, onUnmounted } from 'vue';
 import type { Component } from 'vue';
 
 // Component name for KeepAlive matching
 defineOptions({
     name: 'sidebar-home',
 });
-import type { Post, Project, Thread } from '~/db';
+import type { Project } from '~/db';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 import { Or3Scroll, type Or3ScrollRef } from 'or3-scroll';
 import { usePaginatedSidebarItems } from '~/composables/sidebar/usePaginatedSidebarItems';
@@ -289,20 +289,13 @@ interface SidebarPageProps {
 
 const props = defineProps<
     {
-        activeThread?: string;
-        items: Thread[];
-        projects: SidebarProject[];
         expandedProjects: string[];
-        docs: Post[];
-        listHeight: number;
         activeSections: {
             projects: boolean;
             chats: boolean;
             docs: boolean;
         };
-        displayThreads: Thread[];
         displayProjects: SidebarProject[];
-        displayDocuments?: Post[];
         sidebarQuery: string;
         activeDocumentIds: string[];
         activeThreadIds: string[];
@@ -376,17 +369,13 @@ const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 
 // Paginated items
 const sidebarQuery = computed(() => props.sidebarQuery.trim());
-const { items, loading, reset } = usePaginatedSidebarItems({
+const { items, loading } = usePaginatedSidebarItems({
     query: sidebarQuery,
     type: documentsEnabled.value ? 'all' : 'thread',
 });
 
 const iconChats = useIcon('sidebar.page.messages');
 const iconDocs = useIcon('sidebar.note');
-
-watch(sidebarQuery, () => {
-    void reset();
-});
 
 // All active IDs for highlighting
 const allActiveIds = computed(() => [

@@ -8,7 +8,9 @@ vi.mock('../backgrounds', () => ({
 }));
 
 // Now we can safely import
-const { applyMergedTheme } = await import('../apply-merged-theme');
+const { applyMergedTheme, __resetMergedThemeApplicationState } = await import(
+    '../apply-merged-theme'
+);
 const { applyThemeBackgrounds } = await import('../backgrounds');
 
 const mockLoadTheme = vi.fn();
@@ -21,6 +23,7 @@ const mockThemePlugin = {
 
 describe('applyMergedTheme', () => {
     beforeEach(() => {
+        __resetMergedThemeApplicationState();
         // Setup DOM
         document.documentElement.style.cssText = '';
 
@@ -476,6 +479,31 @@ describe('applyMergedTheme', () => {
         expect(style.getPropertyValue('--app-bottomnav-gradient-display')).toBe(
             'block'
         );
+    });
+
+    it('does not resolve backgrounds again when only density changes', async () => {
+        const backgrounds = { enabled: false } as const;
+        const first: UserThemeOverrides = {
+            density: { enabled: true, preset: 'compact' },
+            backgrounds,
+            colors: { enabled: false },
+            typography: {},
+            ui: {},
+        };
+        await applyMergedTheme('light', first, mockThemePlugin as any);
+        vi.mocked(applyThemeBackgrounds).mockClear();
+
+        await applyMergedTheme(
+            'light',
+            {
+                ...first,
+                density: { enabled: true, preset: 'spacious' },
+            },
+            mockThemePlugin as any
+        );
+
+        expect(document.documentElement.dataset.density).toBe('spacious');
+        expect(applyThemeBackgrounds).not.toHaveBeenCalled();
     });
 
     it('should return early if theme plugin not found', async () => {

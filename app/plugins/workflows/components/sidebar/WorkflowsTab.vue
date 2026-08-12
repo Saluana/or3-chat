@@ -389,10 +389,10 @@ async function handleUpdateWorkflowDetails() {
                         :key="workflow.id"
                         role="button"
                         tabindex="0"
-                        class="workflow-list-item group relative min-w-0 flex items-start gap-2.5 px-2.5 py-2.5 rounded-[var(--md-border-radius)] cursor-pointer transition-colors duration-200 theme-btn retro-press"
+                        class="workflow-list-item unified-sb-item group relative min-w-0 flex items-start gap-2.5 px-2.5 py-2.5 rounded-[var(--md-border-radius)] cursor-pointer transition-colors duration-200 theme-btn retro-press"
                         :class="
                             activeWorkflowIds.has(workflow.id)
-                                ? 'bg-[color:var(--md-primary)]/12 dark:bg-[color:var(--md-primary)]/20'
+                                ? 'bg-[color:var(--md-primary)]/12 dark:bg-[color:var(--md-primary)]/20 text-[color:var(--md-primary)] unified-sb-item-active'
                                 : 'hover:bg-[var(--md-surface-hover)]'
                         "
                         @click="openWorkflow(workflow.id)"

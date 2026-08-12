@@ -36,40 +36,67 @@ describe('theme manifest app config integration', () => {
         expect(base).toEqual({ ui: { button: { size: 'md' } }, productName: 'OR3' });
     });
 
-    it('loads app.config.ts for themes that provide one', async () => {
-        const { entries: manifest } = await loadThemeManifest();
-        const blankEntry = manifest.find((entry) => entry.dirName === 'blank');
+    it('applies the canonical theme.ui patch after a legacy app config patch', () => {
+        const effective = computeEffectiveAppConfig(
+            { ui: { input: { color: 'base', size: 'md' } } },
+            {
+                appPatch: { ui: { input: { color: 'legacy' } } },
+                uiPatch: { input: { color: 'theme' } },
+            }
+        );
 
-        expect(blankEntry).toBeTruthy();
-        expect(blankEntry?.appConfigLoader).toBeTypeOf('function');
-
-        if (!blankEntry) return;
-
-        const config = (await loadThemeAppConfig(blankEntry)) as {
-            ui?: {
-                button?: {
-                    variants?: { size?: Record<string, { base?: string }> };
-                };
-            };
-        } | null;
-        expect(config).toBeTruthy();
-        const squareBase =
-            config?.ui?.button?.variants?.size?.['sb-square']?.base ?? '';
-        expect(squareBase).toContain('h-[');
-        expect(squareBase).toContain('w-[');
+        expect(effective.ui).toEqual({
+            input: { color: 'theme', size: 'md' },
+        });
     });
 
-    it('loads app.config.ts for retro theme', async () => {
-        const { entries: manifest } = await loadThemeManifest();
-        const retroEntry = manifest.find((entry) => entry.dirName === 'retro');
+    it.each(['blank', 'retro', 'cyberpunk'])(
+        '%s authors Nuxt UI config in theme.ts only',
+        async (themeName) => {
+            const { entries: manifest } = await loadThemeManifest();
+            const entry = manifest.find(
+                (candidate) => candidate.dirName === themeName
+            );
 
-        expect(retroEntry).toBeTruthy();
-        expect(retroEntry?.appConfigLoader).toBeTypeOf('function');
+            expect(entry).toBeTruthy();
+            expect(entry?.appConfigLoader).toBeUndefined();
 
-        if (!retroEntry) return;
+            if (!entry) return;
 
-        const config = await loadThemeAppConfig(retroEntry);
-        expect(config).toBeTruthy();
+            const definition = (await entry.loader()).default;
+            const ui = definition.ui as
+                | {
+                      button?: {
+                          variants?: {
+                              size?: Record<string, { base?: string }>;
+                          };
+                      };
+                  }
+                | undefined;
+            expect(ui).toBeTruthy();
+            expect(await loadThemeAppConfig(entry)).toBeNull();
+
+            if (themeName === 'blank') {
+                const squareBase =
+                    ui?.button?.variants?.size?.['sb-square']?.base ?? '';
+                expect(squareBase).toContain('h-[');
+                expect(squareBase).toContain('w-[');
+            }
+        }
+    );
+
+    it('keeps the legacy app config loader for installed-theme compatibility', async () => {
+        const mockEntry = {
+            name: 'legacy-theme',
+            dirName: 'legacy',
+            loader: async () => ({ default: {} as never }),
+            stylesheets: [],
+            isDefault: false,
+            hasCssSelectorStyles: false,
+            appConfigLoader: async () => ({ default: { legacy: true } }),
+        };
+
+        expect(await loadThemeAppConfig(mockEntry)).toEqual({ legacy: true });
     });
 
     it('returns null when a theme entry has no appConfigLoader', async () => {

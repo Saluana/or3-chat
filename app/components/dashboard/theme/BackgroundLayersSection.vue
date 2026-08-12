@@ -598,7 +598,7 @@ watch(
     left: 1.18rem;
 }
 .background-toggle input:focus-visible + .background-toggle-track {
-    outline: var(--app-focus-ring-width, 3px) solid
+    outline: var(--app-focus-ring-width, 2px) solid
         var(--md-focus-ring, var(--background-editor-accent));
     outline-offset: var(--app-focus-ring-offset, 2px);
 }
@@ -647,9 +647,9 @@ watch(
         var(--background-editor-accent);
 }
 .background-layer-item:focus-visible {
-    outline: var(--app-focus-ring-width, 3px) solid
+    outline: var(--app-focus-ring-width, 2px) solid
         var(--md-focus-ring, var(--background-editor-accent));
-    outline-offset: calc(-1 * var(--app-focus-ring-width, 3px));
+    outline-offset: calc(-1 * var(--app-focus-ring-width, 2px));
 }
 .background-layer-thumb {
     position: relative;

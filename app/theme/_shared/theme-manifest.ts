@@ -90,7 +90,7 @@ export interface ThemeManifestEntry {
     isDefault: boolean;
     /** Whether cssSelectors include style blocks (requires static CSS) */
     hasCssSelectorStyles: boolean;
-    /** Optional theme-specific app config loader */
+    /** @deprecated Compatibility loader; new themes author UI in theme.ts. */
     appConfigLoader?: ThemeAppConfigLoader;
     /** Optional theme-specific icons loader */
     iconsLoader?: ThemeIconsLoader;
@@ -225,11 +225,12 @@ export async function loadThemeStylesheets(
             return existingInFlight;
         }
 
-        const existingLink = doc.querySelector(
+        const existingLink = doc.querySelector<HTMLLinkElement>(
             `link[data-theme-stylesheet="${entry.name}"][href="${href}"]`
         );
 
         if (existingLink) {
+            existingLink.disabled = false;
             return;
         }
 
@@ -259,6 +260,18 @@ export async function loadThemeStylesheets(
     });
 
     await Promise.all(promises);
+}
+
+/** Keep emitted theme stylesheets parsed but disable their rules while inactive. */
+export function deactivateThemeStylesheets(themeName: string): void {
+    if (typeof document === 'undefined') return;
+    document
+        .querySelectorAll<HTMLLinkElement>(
+            `link[data-theme-stylesheet="${themeName}"]`
+        )
+        .forEach((link) => {
+            link.disabled = true;
+        });
 }
 
 /**
@@ -300,7 +313,8 @@ export function updateManifestEntry(
  * `loadThemeAppConfig`
  *
  * Purpose:
- * Loads a theme specific app.config override if present.
+ * Loads a legacy theme-specific app.config override if present.
+ * New themes author Nuxt UI recipes in ThemeDefinition.ui.
  */
 export async function loadThemeAppConfig(
     entry: ThemeManifestEntry

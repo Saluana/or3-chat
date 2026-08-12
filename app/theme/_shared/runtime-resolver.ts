@@ -374,7 +374,8 @@ export class RuntimeResolver {
      * Merge matching overrides by specificity
      *
      * Merging rules:
-     * - Classes are concatenated (highest specificity first)
+     * - Classes are concatenated from generic to specific so class-merging
+     *   consumers retain the most specific utility on conflicts
      * - UI objects are deep merged
      * - Other props: highest specificity wins
      *
@@ -392,11 +393,12 @@ export class RuntimeResolver {
 
             for (const [key, value] of Object.entries(override.props)) {
                 if (key === 'class') {
-                    // Concatenate classes (highest specificity first)
+                    // Iterate low -> high and append so contextual/identifier
+                    // utilities are last, matching the prop cascade above.
                     const existingClass = merged[key];
                     const existingClassStr = typeof existingClass === 'string' ? existingClass : '';
                     merged[key] =
-                        String(value) + (existingClassStr ? ` ${existingClassStr}` : '');
+                        (existingClassStr ? `${existingClassStr} ` : '') + String(value);
                 } else if (key === 'ui') {
                     const existingUi = merged[key];
                     merged[key] = this.deepMerge(

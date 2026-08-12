@@ -21,9 +21,11 @@ approvals, artifacts, and cancellation.
 The browser plugin and the server-side OR3 Connect device probe both use the
 framework-free `@or3/intern-client`. Credentials stay in headers, errors are
 redacted, requests time out, and SSE reconnects with a stable cursor and
-replay deduplication. Host switches abort old requests and reject events from
-the prior host generation. Remote action failures preserve the canonical
-prior state.
+replay deduplication. Established streams also enforce a 60-second inactivity
+deadline that resets on every byte (including heartbeat comments); callers can
+override or explicitly disable it with `inactivityTimeoutMs`. Host switches
+abort old requests and reject events from the prior host generation. Remote
+action failures preserve the canonical prior state.
 
 ### Enrollment and storage boundary
 

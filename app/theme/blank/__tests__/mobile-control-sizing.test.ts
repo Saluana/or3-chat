@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import blankAppConfig from '../app.config';
+import blankTheme from '../theme';
+
+const blankUi = blankTheme.ui as any;
 
 const blankStyles = readFileSync(
     resolve(process.cwd(), 'app/theme/blank/styles.css'),
@@ -70,7 +72,7 @@ describe('blank theme mobile control sizing', () => {
     });
 
     it('keeps tokenized desktop fallbacks and 44px mobile variants', () => {
-        const buttonSizes = blankAppConfig.ui.button.variants.size;
+        const buttonSizes = blankUi.button.variants.size;
         expect(buttonSizes.xs.base).toContain('h-[24px]');
         expect(buttonSizes.sm.base).toContain(
             'h-[var(--app-control-height-small,32px)]',
@@ -81,9 +83,9 @@ describe('blank theme mobile control sizing', () => {
         expect(buttonSizes.xs.base).toContain('max-md:min-h-[44px]!');
         expect(buttonSizes.sm.base).toContain('max-md:min-h-[44px]!');
         expect(buttonSizes.md.base).toContain('max-md:min-h-[44px]!');
-        expect(blankAppConfig.ui.modal.slots.close).toContain('max-md:min-h-[44px]!');
-        expect(blankAppConfig.ui.toast.slots.close).toContain('max-md:min-h-[44px]!');
-        expect(blankAppConfig.ui.tabs.slots.trigger).toContain('max-md:min-h-[44px]!');
+        expect(blankUi.modal.slots.close).toContain('max-md:min-h-[44px]!');
+        expect(blankUi.toast.slots.close).toContain('max-md:min-h-[44px]!');
+        expect(blankUi.tabs.slots.trigger).toContain('max-md:min-h-[44px]!');
     });
 
     it('uses compact visible controls with expanded hit areas in the mobile composer', () => {

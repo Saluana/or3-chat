@@ -121,7 +121,7 @@ function selectMode(mode: 'light' | 'dark') {
     translate: 0 var(--md-border-width-subtle);
 }
 .theme-mode-option:focus-visible {
-    outline: var(--app-focus-ring-width, 3px) solid
+    outline: var(--app-focus-ring-width, 2px) solid
         var(--md-focus-ring, var(--md-primary));
     outline-offset: var(--app-focus-ring-offset, 2px);
 }

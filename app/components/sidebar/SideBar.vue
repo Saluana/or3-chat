@@ -169,6 +169,7 @@ import {
     onMounted,
     onUnmounted,
     ref,
+    shallowRef,
     watch,
     computed,
     nextTick,
@@ -249,8 +250,8 @@ interface SideNavContentInstance extends ComponentPublicInstance {
 }
 
 const sideNavContentRef = ref<SideNavContentInstance | null>(null);
-const items = ref<Thread[]>([]);
-const projects = ref<SidebarProject[]>([]);
+const items = shallowRef<Thread[]>([]);
+const projects = shallowRef<SidebarProject[]>([]);
 const expandedProjects = ref<string[]>([]);
 const listHeight = ref(400);
 import { useSidebarSearch } from '~/composables/sidebar/useSidebarSearch';
@@ -270,7 +271,7 @@ import {
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import type { ComponentPublicInstance } from 'vue';
 // Documents live query (docs only) to feed search
-const docs = ref<Post[]>([]);
+const docs = shallowRef<Post[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;
 
 const DEFAULT_PAGE_ID = 'sidebar-home';

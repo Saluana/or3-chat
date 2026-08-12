@@ -381,7 +381,7 @@ function copyColor() {
     outline-offset: 2px;
 }
 .background-preview:focus-visible {
-    outline: var(--app-focus-ring-width, 3px) solid
+    outline: var(--app-focus-ring-width, 2px) solid
         var(--md-focus-ring, var(--background-editor-accent));
     outline-offset: var(--app-focus-ring-offset, 2px);
 }
@@ -481,7 +481,7 @@ function copyColor() {
     background: var(--md-primary-hover, var(--md-primary));
 }
 .background-layout-options button:focus-visible {
-    outline: var(--app-focus-ring-width, 3px) solid
+    outline: var(--app-focus-ring-width, 2px) solid
         var(--md-focus-ring, var(--background-editor-accent));
     outline-offset: var(--app-focus-ring-offset, 2px);
 }

@@ -21,8 +21,7 @@ Example layout:
 
 ```
 app/theme/blank/
-  theme.ts             # Required theme definition
-  app.config.ts        # Optional Nuxt app config patch
+  theme.ts             # Required definition, tokens, and Nuxt UI recipes
   icons.config.ts      # Optional icon overrides
   styles.css           # Optional stylesheet (loaded via stylesheets[])
   styles/              # Optional theme-specific TS style helpers
@@ -81,7 +80,7 @@ Key fields you can use:
 - `overrides`: selector-driven component overrides resolved at runtime.
 - `cssSelectors`: direct DOM targeting for third-party or legacy elements.
 - `stylesheets`: optional CSS files to load per theme.
-- `ui`: Nuxt UI config merged into `app.config.ui`.
+- `ui`: canonical Nuxt UI component recipes merged into `app.config.ui`.
 - `propMaps`: map `variant`/`size`/`color` props to classes for non-Nuxt UI components.
 - `backgrounds`: theme background layers (applied via `app/core/theme/backgrounds.ts`).
 - `icons`: inlined icon overrides (or use `icons.config.ts`).
@@ -168,7 +167,8 @@ manually or use `cssSelectors` instead.
 
 When a theme becomes active, the theme plugin:
 
-1. Loads theme definition, theme-specific `app.config.ts`, and optional icons.
+1. Loads the theme definition and optional icons. Legacy installed themes may
+   still provide `app.config.ts` while they migrate.
 2. Compiles overrides (`app/theme/_shared/runtime-compile.ts`) and instantiates
    a `RuntimeResolver`.
 3. Injects CSS variables into a per-theme `<style>` tag.
@@ -333,14 +333,27 @@ cssSelectors: {
 }
 ```
 
-## App config and Nuxt UI integration
+## Visual ownership and Nuxt UI integration
 
-Theme-specific config can be provided in two places:
+Every visual decision has one authoring owner:
 
-- `theme.ui` in `theme.ts` (merged into `app.config.ui`)
-- `app/theme/<theme>/app.config.ts` (merged into the full app config)
+- Shared values such as color, radius, focus color, density, motion, and
+  elevation belong to tokens in `theme.ts`.
+- Generic Nuxt UI component recipes belong to `theme.ui` in `theme.ts`.
+- Context-specific app controls belong to `theme.overrides`.
+- Stylesheets are an escape hatch for pseudo-elements, animations, third-party
+  DOM, and selectors the component APIs cannot express.
 
-Both are applied when the theme activates.
+Do not restyle a generic input, button, select, or tab in the stylesheet when
+`theme.ui` can express the same decision. Density is likewise opt-in: component
+recipes consume the appropriate small/medium/large token instead of relying on
+a global selector that resizes every interactive element.
+
+At runtime the app config order is immutable base config, legacy
+`app.config.ts` compatibility patch, then canonical `theme.ui`. Contextual
+component overrides are applied afterward, from generic to specific, so an
+identifier override wins over a context override and a context override wins
+over the generic component recipe.
 
 ## Icons
 

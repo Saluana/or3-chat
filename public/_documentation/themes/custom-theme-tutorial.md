@@ -36,9 +36,8 @@ The final structure for a fully-featured theme looks like this:
 
 ```
 app/theme/ocean-dark/
-  theme.ts              ← required — color palette, fonts, overrides
+  theme.ts              ← required — tokens, UI recipes, overrides
   or3.manifest.json     ← required for ZIP install
-  app.config.ts         ← optional — Nuxt UI slot/variant patches
   icons.config.ts       ← optional — semantic icon overrides
   styles.css            ← optional — scoped CSS for third-party/legacy DOM
   assets/
@@ -245,12 +244,14 @@ token names.
 
 ## Part 4 — Patch Nuxt UI slots (optional)
 
-Create `app.config.ts` to override Nuxt UI component slots. This is how the
-cyberpunk theme applies its monospace modal headers and border-aware tooltips:
+Add a `ui` field to the same `defineTheme()` object to override Nuxt UI
+component slots. This keeps a control's generic appearance in the theme's
+single authoring entrypoint:
 
 ```ts
-// app/theme/ocean-dark/app.config.ts
-export default {
+// app/theme/ocean-dark/theme.ts
+export default defineTheme({
+  // ...name, colors, tokens, and overrides...
   ui: {
     tooltip: {
       slots: {
@@ -271,12 +272,12 @@ export default {
       },
     },
   },
-};
+});
 ```
 
-> **Important**: `app.config.ts` patches are merged into the global app config
-> when your theme is active. Be surgical — only override what you need.
-> Overriding entire component configs can break other components.
+> **Important**: Be surgical — only override the slots and variants you need.
+> Put context-specific controls in `overrides`, and reserve `styles.css` for
+> effects or selectors that the component APIs cannot express.
 
 ---
 
@@ -419,7 +420,6 @@ console.log(`Packaged → ${id}-v1.0.0.zip`);
 ocean-dark-v1.0.0.zip
   or3.manifest.json        ← must be at root
   theme.ts
-  app.config.ts
   icons.config.ts
   styles.css
   assets/

@@ -20,9 +20,12 @@ Theme Definition (app/theme/*/theme.ts)
 `app/theme/_shared/theme-manifest.ts` uses `import.meta.glob` to find:
 
 - `app/theme/*/theme.ts`
-- optional `app.config.ts`
 - optional `icons.config.ts`
 - optional `*.css` stylesheets
+
+The loader still recognizes a legacy `app.config.ts` from installed themes for
+compatibility, but new and shipped themes author Nuxt UI recipes in
+`theme.ts → ui`.
 
 Each theme becomes a `ThemeManifestEntry` with loaders and metadata.
 
@@ -60,11 +63,26 @@ Activating a theme does the following:
 4. Loads `/themes/<name>.css` if `cssSelectors.style` exists.
 5. Applies `cssSelectors.class` via `applyThemeClasses()`.
 6. Applies background layers (`app/core/theme/backgrounds.ts`).
-7. Merges `app.config.ts` and `theme.ui` into `app.config`.
+7. Merges the immutable app config, an optional legacy app-config patch, and
+   canonical `theme.ui`, in that order.
 8. Registers theme icons with `iconRegistry`.
 9. Registers packaged workspace profiles
    (`app/plugins/92.workspace-profile-theme.client.ts`) as choices, with the
    theme's `recommendedWorkspaceProfileId` surfaced as a recommendation.
+
+### Visual ownership and cascade
+
+- Theme tokens own shared values.
+- `theme.ui` owns generic Nuxt UI controls.
+- `theme.overrides` owns context- and identifier-specific controls.
+- Theme stylesheets own only CSS-only effects, complex selectors, and
+  third-party DOM.
+
+Runtime override classes are ordered generic → context → identifier. This
+keeps the most specific utility last for class-merging consumers. Density never
+targets every native interactive element; each component opts into its intended
+small, medium, or large token. Focus indicators are also attached explicitly
+with `:focus-visible`, rather than through a global input selector.
 
 ### User theme overrides
 

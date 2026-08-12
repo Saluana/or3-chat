@@ -35,3 +35,42 @@
     width: 20px;
     height: 20px;
 }
+
+/* Reserve the final chrome footprint while persisted tabs are restored. */
+.workspace-chrome-placeholder {
+    flex: 0 0 var(--or3-workspace-chrome-size, 48px);
+    min-height: var(--or3-workspace-chrome-size, 48px);
+    width: 100%;
+    border-bottom: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid
+        var(--md-border-color);
+    background: var(--or3-workspace-chrome-bg, var(--md-surface));
+}
+
+:global(html[data-density]) .workspace-chrome-placeholder {
+    flex-basis: var(--app-control-height-large, 48px);
+    min-height: var(--app-control-height-large, 48px);
+}
+
+@media (max-width: 767px) {
+    .workspace-chrome-placeholder {
+        flex-basis: calc(
+            var(--or3-workspace-chrome-mobile-size, 52px) +
+                env(safe-area-inset-top)
+        );
+        min-height: calc(
+            var(--or3-workspace-chrome-mobile-size, 52px) +
+                env(safe-area-inset-top)
+        );
+    }
+
+    :global(html[data-density]) .workspace-chrome-placeholder {
+        flex-basis: calc(
+            var(--or3-workspace-chrome-mobile-size, 52px) +
+                env(safe-area-inset-top)
+        );
+        min-height: calc(
+            var(--or3-workspace-chrome-mobile-size, 52px) +
+                env(safe-area-inset-top)
+        );
+    }
+}

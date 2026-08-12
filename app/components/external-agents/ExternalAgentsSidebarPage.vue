@@ -151,10 +151,10 @@
             v-for="item in group.items"
             :key="item.key"
             type="button"
-            class="agent-session-row group w-full rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-2.5 py-2 text-left transition-colors hover:bg-[var(--md-surface-hover)] focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
+            class="agent-session-row unified-sb-item theme-btn retro-press group w-full rounded-[var(--md-border-radius-small,var(--md-border-radius))] px-2.5 py-2 text-left transition-colors hover:bg-[var(--md-surface-hover)] focus-visible:outline-2 focus-visible:outline-[var(--md-primary)]"
             :class="
               activeRecordId === item.recordId
-                ? 'bg-[var(--md-surface-active)]'
+                ? 'bg-[color:var(--md-primary)]/12 dark:bg-[color:var(--md-primary)]/20 text-[color:var(--md-primary)] unified-sb-item-active'
                 : ''
             "
             :aria-current="
@@ -162,7 +162,7 @@
             "
             @click="openHistory(item)"
           >
-            <div class="flex items-start gap-2">
+            <div class="flex w-full min-w-0 items-start gap-2 overflow-hidden">
               <span class="mt-1 grid size-4 shrink-0 place-items-center">
                 <UIcon
                   v-if="item.status === 'running' || item.status === 'queued'"
@@ -1888,12 +1888,16 @@ onBeforeUnmount(() => {
 }
 
 .external-agents-sidebar--retro {
-  background: color-mix(in srgb, var(--md-surface) 32%, transparent);
+  background: transparent;
 }
 
 .external-agents-sidebar--retro .agent-sidebar-header {
-  background: color-mix(in srgb, var(--md-surface) 28%, transparent);
+  background: transparent;
   border-bottom: 0;
+}
+
+.external-agents-sidebar--retro .agent-session-row {
+  width: calc(100% - 3px);
 }
 
 .external-agents-sidebar--cyberpunk {
@@ -1972,11 +1976,11 @@ onBeforeUnmount(() => {
   color: var(--md-on-surface);
 }
 
-.agent-session-row:hover {
+.external-agents-sidebar:not(.external-agents-sidebar--retro) .agent-session-row:hover {
   background: var(--agent-sidebar-row-hover);
 }
 
-.agent-session-row[aria-current="page"] {
+.external-agents-sidebar:not(.external-agents-sidebar--retro) .agent-session-row[aria-current="page"] {
   color: var(--md-on-surface);
   background: var(--agent-sidebar-row-active);
   box-shadow: inset 0 0 0 1px

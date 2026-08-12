@@ -155,6 +155,11 @@
                 </template>
             </WorkspaceChrome>
             <div
+                v-else-if="workspaceTabsLayoutReserved"
+                class="workspace-chrome-placeholder"
+                aria-hidden="true"
+            />
+            <div
                 v-if="!workspaceTabsChromeVisible"
                 id="top-nav"
                 :class="{
@@ -283,7 +288,7 @@
             <div
                 ref="paneContainerRef"
                 :class="[
-                    workspaceTabsChromeVisible
+                    workspaceTabsLayoutReserved
                         ? 'pt-0 flex-1 min-h-0'
                         : showTopOffset
                           ? 'pt-[46px] h-full'
@@ -536,6 +541,9 @@ const canCreateAgentTab = computed(() => {
 const workspaceTabsHydrated = ref(false);
 const workspaceTabsChromeVisible = computed(
     () => workspaceTabsEnabled.value && workspaceTabsHydrated.value
+);
+const workspaceTabsLayoutReserved = computed(
+    () => workspaceTabsEnabled.value
 );
 const minPaneWidth = 280;
 const { isMobile } = useResponsiveState();
@@ -2029,7 +2037,7 @@ const paneChromeClearanceStyle = computed(() => {
     const hasOverlayChrome =
         !workspaceTabsChromeVisible.value && !showTopOffset.value;
     return {
-        '--or3-workspace-chrome-height': workspaceTabsChromeVisible.value
+        '--or3-workspace-chrome-height': workspaceTabsLayoutReserved.value
             ? isMobile.value
                 ? 'calc(var(--or3-workspace-chrome-mobile-size, 52px) + env(safe-area-inset-top))'
                 : 'var(--or3-workspace-chrome-size, 48px)'

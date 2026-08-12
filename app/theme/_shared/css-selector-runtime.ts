@@ -45,7 +45,12 @@ export function applyThemeClasses(
     selectors: Record<string, CSSelectorConfig>
 ): ThemeClassSession {
     activeSessions.get(themeName)?.remove();
-    const entries = Object.entries(selectors);
+    const entries = Object.entries(selectors).flatMap(
+        ([selector, config]) => {
+            const classes = config.class?.split(/\s+/).filter(Boolean) ?? [];
+            return classes.length > 0 ? [{ selector, classes }] : [];
+        }
+    );
     const owned = new Map<HTMLElement, Set<string>>();
     let cancelled = false;
     let frame: number | ReturnType<typeof setTimeout> | null = null;
@@ -80,12 +85,13 @@ export function applyThemeClasses(
         node.querySelectorAll('*').forEach(releaseElement);
     };
 
-    const applyEntry = ([selector, config]: [string, CSSelectorConfig]) => {
-        if (!config.class) return;
-
-        const classes = config.class.split(/\s+/).filter(Boolean);
-        if (classes.length === 0) return;
-
+    const applyEntry = ({
+        selector,
+        classes,
+    }: {
+        selector: string;
+        classes: string[];
+    }) => {
         try {
             const elements = document.querySelectorAll(selector);
 
@@ -140,9 +146,7 @@ export function applyThemeClasses(
             for (const record of records) {
                 for (const node of record.addedNodes) {
                     if (!(node instanceof Element)) continue;
-                    for (const [selector, config] of entries) {
-                        const classes = config.class?.split(/\s+/).filter(Boolean) ?? [];
-                        if (classes.length === 0) continue;
+                    for (const { selector, classes } of entries) {
                         try {
                             if (node.matches(selector)) addClasses(node, classes);
                             node.querySelectorAll(selector).forEach((el) => addClasses(el, classes));
@@ -214,11 +218,12 @@ export function removeThemeClasses(
  */
 export async function loadThemeCSS(themeName: string): Promise<void> {
     // Check if CSS is already loaded
-    const existingLink = document.querySelector(
+    const existingLink = document.querySelector<HTMLLinkElement>(
         `link[data-theme-css="${themeName}"]`
     );
 
     if (existingLink) {
+        existingLink.disabled = false;
         return Promise.resolve();
     }
 
@@ -244,6 +249,14 @@ export async function loadThemeCSS(themeName: string): Promise<void> {
 
         document.head.appendChild(link);
     });
+}
+
+/** Keep parsed theme CSS cached while preventing its rules from applying. */
+export function deactivateThemeCSS(themeName: string): void {
+    const link = document.querySelector<HTMLLinkElement>(
+        `link[data-theme-css="${themeName}"]`
+    );
+    if (link) link.disabled = true;
 }
 
 /**

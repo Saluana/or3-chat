@@ -443,32 +443,14 @@ html {
 	background: var(--md-primary-container);
 }
 
-/* Density-only adaptations preserve every existing theme's baseline. The
-   runtime adds data-density only for an active non-default user preset, so
-   original component geometry remains the fallback for unmodified themes. */
-html[data-density] :where(
-	button,
-	input:not([type='hidden']):not([type='checkbox']):not([type='radio']):not([type='range']),
-	select,
-	textarea,
-	[role='button'],
-	[role='menuitem'],
-	[role='tab']
-) {
-	min-height: var(--app-control-height-medium, 36px);
-}
+/* Density is opt-in. Nuxt UI sizes consume the shared tokens from theme.ts;
+   custom controls are listed below by semantic component class. Never apply a
+   density height to every button/input/role because tabs, icon controls, and
+   multi-line cards deliberately use different tiers. */
 
 html[data-density] .page-link-btn {
-	min-height: var(--app-control-height-large, 52px);
-	gap: var(--app-space-control, 0.75rem);
-}
-
-/* These cards carry a title and description, so the compact control tier is
-   too small. Keep their content breathing room without changing one-line
-   controls elsewhere. */
-html[data-density='compact'] .page-link-btn {
-	min-height: 64px !important;
-	padding-block: max(0.75rem, var(--app-space-control, 0.75rem)) !important;
+	min-height: max(64px, var(--app-control-height-large, 52px));
+	padding-block: max(0.75rem, var(--app-space-control, 0.75rem));
 	gap: max(0.75rem, var(--app-space-control, 0.75rem));
 }
 
@@ -495,15 +477,6 @@ html[data-density='comfortable']
 	/* Keep the scrollable tab rail (tab + 2px top/bottom safety pad) inside
 	   the compact chrome rather than letting overflow-y crop it. */
 	--or3-chrome-padding-block: 4px;
-}
-
-html[data-density] .workspace-chrome:not(.workspace-chrome--mobile)
-	.workspace-tab,
-html[data-density] .workspace-chrome:not(.workspace-chrome--mobile)
-	.workspace-tab-new {
-	/* The generic control minimum is intentionally larger than compact/spacious
-	   tab rows. Keep these purpose-built tabs at their selected small tier. */
-	min-height: var(--or3-workspace-tab-size, 32px);
 }
 
 html[data-density] .workspace-tab-context button {
@@ -644,27 +617,6 @@ html [class~='duration-1000'] {
 }
 
 @media (max-width: 767px), (pointer: coarse) {
-	html[data-density] :where(
-		button,
-		input:not([type='hidden']):not([type='checkbox']):not([type='radio']):not([type='range']),
-		select,
-		textarea,
-		[role='button'],
-		[role='menuitem'],
-		[role='tab']
-	) {
-		min-height: max(44px, var(--app-control-height-medium, 36px));
-	}
-
-	html[data-density] :where(
-		button,
-		[role='button'],
-		[role='menuitem'],
-		[role='tab']
-	) {
-		min-width: max(44px, var(--app-control-height-medium, 36px));
-	}
-
 	html[data-density] .theme-mode-option,
 	html[data-density] .shape-toggle,
 	html[data-density] #dashboard-theme-appearance-section .appearance-toggle,

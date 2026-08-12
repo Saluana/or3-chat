@@ -192,6 +192,9 @@ for (const theme of themes) {
                             await expect(
                                 page.locator('.workspace-chrome').first()
                             ).toHaveCSS('padding-top', '4px');
+                            await expect(
+                                page.locator('.page-link-btn').first()
+                            ).toHaveCSS('min-height', '64px');
 
                             await appearance
                                 .locator('#theme-density-preset')
@@ -247,6 +250,23 @@ for (const theme of themes) {
                         await expect(
                             page.getByRole('tab', { name: 'Theme' })
                         ).toHaveCSS('transition-duration', '0.1s');
+
+                        if (!viewport.mobile) {
+                            await page
+                                .getByRole('button', {
+                                    name: 'Close',
+                                    exact: true,
+                                })
+                                .click();
+                            const search = page.getByRole('textbox', {
+                                name: 'Search chats, documents, and projects',
+                            });
+                            await search.click();
+                            await expect(search).toHaveCSS(
+                                'outline-style',
+                                'none'
+                            );
+                        }
                     } finally {
                         await context.close().catch(() => undefined);
                     }
