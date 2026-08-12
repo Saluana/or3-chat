@@ -300,22 +300,31 @@ async function signInOwner(page, email, password) {
     await dialog.locator('input[type="email"]').fill(email);
     await dialog.locator('input[type="password"]').fill(password);
     await dialog.locator('button[type="submit"]').click();
+    // The anonymous shell can already contain the chat input behind the
+    // sign-in modal. Require the authenticated session and provisioned
+    // workspace before navigating elsewhere, or the in-flight sign-in request
+    // can be aborted while this check reports a false positive.
+    const session = await waitForOwnerSession(page, email);
     await waitForVisible(
         page.locator('#chat-input-main'),
         'workspace/chat shell did not render after owner sign-in'
     );
+    return session;
 }
 
 async function verifyAdminAccess(page, username, password) {
-    // The admin-auth middleware redirects /admin to /admin/login; in dev the
-    // client-side redirect can abort the initial navigation, so commit first
-    // and then wait for the login form.
-    await page.goto(`${baseUrl}/admin`, { waitUntil: 'commit' }).catch(() => {});
+    // A signed-in deployment admin is allowed onto the workspace-scoped
+    // /admin surface. Navigate to the explicit login route so this journey
+    // deterministically exercises elevation to the separate super-admin
+    // session instead of depending on the user's current grant state.
+    await page.goto(`${baseUrl}/admin/login`, { waitUntil: 'domcontentloaded' });
     const usernameInput = page.locator('#admin-username');
     try {
         await usernameInput.waitFor({ state: 'visible', timeout: SHELL_TIMEOUT });
     } catch {
-        throw new Error('[browser-smoke] admin login form did not render');
+        throw new Error(
+            `[browser-smoke] admin login form did not render at ${page.url()}`
+        );
     }
     // Allow the client-side form to hydrate before filling/submitting.
     await page.waitForTimeout(2000);
@@ -418,7 +427,7 @@ async function main() {
         console.log('PASS anonymous visit shows the invite-only sign-in gate');
 
         // 2. Owner sign-in via the UI.
-        await signInOwner(page, email, password);
+        const ownerSession = await signInOwner(page, email, password);
         console.log('PASS owner sign-in via the UI');
 
         // 3. Admin access.
@@ -438,8 +447,7 @@ async function main() {
         console.log('PASS workspace/chat shell and composer render');
 
         // 5. Storage upload/download driven from the browser context.
-        const session = await waitForOwnerSession(page, email);
-        await verifyStorageRoundTrip(page, session.session.workspace.id);
+        await verifyStorageRoundTrip(page, ownerSession.session.workspace.id);
         console.log('PASS storage upload/download round-trip via the browser context');
 
         // 6. Logout.

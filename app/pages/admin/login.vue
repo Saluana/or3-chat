@@ -146,7 +146,10 @@ onMounted(async () => {
             }
         );
 
-        if (session.authenticated) {
+        // Workspace admins intentionally stay on this page so they can enter
+        // the separate super-admin credentials for deployment-wide tasks.
+        // This mirrors the server admin gate's elevation behavior.
+        if (session.authenticated && session.kind === 'super_admin') {
             await router.replace(resolveAdminLanding(session.kind));
         }
     } catch {

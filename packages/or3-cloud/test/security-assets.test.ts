@@ -9,6 +9,7 @@ const DOCKERFILE = resolve(import.meta.dir, '../../../Dockerfile');
 const CLOUD_CLI_SOURCE = resolve(import.meta.dir, '../src/cli.ts');
 const RELEASE_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/release-cloud.yml');
 const ROOT_MANIFEST = resolve(import.meta.dir, '../../../package.json');
+const BROWSER_SMOKE = resolve(import.meta.dir, '../../../scripts/release/smoke-browser.mjs');
 
 function asset(name: string): string {
   return readFileSync(resolve(ASSET_ROOT, name), 'utf8');
@@ -103,6 +104,26 @@ test('release smoke re-resolves amd64 after architecture-specific scans', () => 
   const init = smoke.indexOf('or3 init "$smoke"');
   expect(pull).toBeGreaterThan(-1);
   expect(init).toBeGreaterThan(pull);
+});
+
+test('clean browser smoke uses the explicit super-admin elevation route', () => {
+  const smoke = readFileSync(BROWSER_SMOKE, 'utf8');
+  expect(smoke).toContain("page.goto(`${baseUrl}/admin/login`, { waitUntil: 'domcontentloaded' })");
+  expect(smoke).not.toContain("page.goto(`${baseUrl}/admin`, { waitUntil: 'commit' })");
+});
+
+test('clean browser smoke proves owner session hydration before leaving sign-in', () => {
+  const smoke = readFileSync(BROWSER_SMOKE, 'utf8');
+  const signIn = smoke.slice(
+    smoke.indexOf('async function signInOwner'),
+    smoke.indexOf('async function verifyAdminAccess'),
+  );
+  const submit = signIn.indexOf("dialog.locator('button[type=\"submit\"]').click()");
+  const session = signIn.indexOf('waitForOwnerSession(page, email)');
+  const shell = signIn.indexOf("page.locator('#chat-input-main')");
+  expect(submit).toBeGreaterThan(-1);
+  expect(session).toBeGreaterThan(submit);
+  expect(shell).toBeGreaterThan(session);
 });
 
 test('release digest verification uses buildx-compatible manifest output', () => {
