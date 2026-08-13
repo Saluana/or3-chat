@@ -122,6 +122,10 @@ export type ManagedState = {
     previousBackupPath?: string;
     phase?: 'prepared' | 'snapshot-created' | 'target-mutating' | 'restoring-previous' | 'starting-target' | 'starting-previous';
     previousRootOwnership?: { uid: number; gid: number };
+    /** Whether the managed app was running before a standalone backup. */
+    initialAppRunning?: boolean;
+    /** Whether an adopted source should be restarted if adoption fails. */
+    sourceInitiallyRunning?: boolean;
     targetVersion?: string;
     targetImage?: string;
     targetImageDigest?: string;
@@ -301,7 +305,7 @@ export function redact(text: string, secrets: string[] = []) {
   let output = text;
   for (const secret of secrets.filter(Boolean)) output = output.replaceAll(secret, '[REDACTED]');
   output = output.replace(
-    /((?:PASSWORD|SECRET|TOKEN|JWT)\s*[=:]\s*)([^\s\n]+)/gi,
+    /((?:PASSWORD|SECRET|TOKEN|JWT)\s*[=:]\s*)(?!\[REDACTED\])([^\r\n]+)/gi,
     '$1[REDACTED]'
   );
   return output;
@@ -1337,6 +1341,21 @@ function composeProjectNames(directory: string) {
   };
 }
 
+async function assertDockerProjectAbsent(project: string) {
+  for (const [resource, args] of [
+    ['container', ['ps', '-aq', '--filter', `label=com.docker.compose.project=${project}`]],
+    ['network', ['network', 'ls', '-q', '--filter', `label=com.docker.compose.project=${project}`]],
+  ] as Array<[string, string[]]>) {
+    const result = await run('docker', args);
+    if (!result.ok) {
+      throw new Error(`Could not inspect Docker ${resource}s for Compose project ${project}. Refusing to continue while the daemon state is unknown. ${result.stderr.trim()}`);
+    }
+    if (result.stdout.trim()) {
+      throw new Error(`Docker ${resource}s already exist for Compose project ${project}. Choose a different target directory or inspect the existing project before continuing.`);
+    }
+  }
+}
+
 /**
  * Dashboard updates are available only when this CLI can see a local Unix
  * Docker socket and has a concrete Unix identity to pass into the isolated
@@ -1722,6 +1741,18 @@ async function clearPending(directory: string, state: ManagedState) {
 
 async function stopProject(directory: string, mode: Mode) {
   await compose(directory, mode, ['stop', 'or3']);
+}
+
+async function projectServiceRunning(directory: string, mode: Mode) {
+  const result = await run('docker', composeArgs(directory, mode, ['ps', '--status', 'running', '-q', 'or3']), directory);
+  if (!result.ok) throw new Error(`Could not determine whether OR3 is running. ${result.stderr.trim()}`);
+  return Boolean(result.stdout.trim());
+}
+
+async function sourceServiceRunning(directory: string, composeFiles: string[]) {
+  const result = await run('docker', [...sourceComposeArgs(directory, composeFiles), 'ps', '--status', 'running', '-q', 'or3'], directory);
+  if (!result.ok) throw new Error(`Could not determine whether the V1 OR3 service is running. ${result.stderr.trim()}`);
+  return Boolean(result.stdout.trim());
 }
 
 async function removeDashboardOperator(directory: string, mode: Mode) {
@@ -2203,12 +2234,14 @@ async function createBackup(
   directory: string,
   state: ManagedState,
   env: Record<string, string>,
-  options: { restartAfter?: boolean } = {},
+  options: { restartAfter?: boolean; backupId?: string; initiallyRunning?: boolean } = {},
 ) {
   const restartAfter = options.restartAfter ?? true;
   await requireImageDigest(state.image, state.imageDigest, 'Current deployment');
-  const backupId = id('backup');
+  const backupId = options.backupId ?? id('backup');
+  if (!BACKUP_ID_PATTERN.test(backupId)) throw new Error(`Backup ID ${backupId} is invalid.`);
   const backupDir = backupDirectory(directory, backupId);
+  const initiallyRunning = options.initiallyRunning ?? await projectServiceRunning(directory, state.mode);
   // Preflight before anything is created: the archive needs the live volume
   // size plus reserve headroom on the deployment filesystem.
   const volumeSize = await dataVolumeSize(directory, state.mode, env);
@@ -2251,8 +2284,9 @@ async function createBackup(
     const manifestContents = `${JSON.stringify(manifest, null, 2)}\n`;
     await writeSecure(join(backupDir, 'manifest.json'), manifestContents);
     await writeBackupAuthentication(directory, backupDir, manifestContents);
+    const verifiedManifest = await readManifest(backupDir, directory);
     manifestWritten = true;
-    return { backupId, backupDir, manifest };
+    return { backupId, backupDir, manifest: verifiedManifest };
   } catch (error) {
     if (!manifestWritten) {
       await removeNamedBackupArtifact(directory, backupId).catch(() => undefined);
@@ -2260,7 +2294,7 @@ async function createBackup(
     }
     throw error;
   } finally {
-    if (stopAttempted && restartAfter) {
+    if (stopAttempted && restartAfter && initiallyRunning) {
       try {
         await startProject(directory, state.mode, env);
       } catch (error) {
@@ -2295,6 +2329,17 @@ async function readManifest(backupPath: string, authenticatedForDirectory?: stri
   }
   await verifiedManagedAssetContents(backupPath, manifest);
   return manifest;
+}
+
+async function cleanupJournaledPartialBackup(directory: string, backupId?: string, backupPath?: string) {
+  if (!backupId || !backupPath || !BACKUP_ID_PATTERN.test(backupId)) return;
+  const expectedPath = resolve(backupDirectory(directory, backupId));
+  if (resolve(backupPath) !== expectedPath || !await fileExists(expectedPath)) return;
+  try {
+    await readManifest(expectedPath, directory);
+  } catch {
+    await removeNamedBackupArtifact(directory, backupId);
+  }
 }
 
 async function dataVolumeFreeBytes(directory: string, mode: Mode, env: Record<string, string>) {
@@ -2458,9 +2503,13 @@ async function initCommand(positionals: string[], flags: Flags) {
   }
   await ensureDocker();
   const names = composeProjectNames(directory);
+  await assertDockerProjectAbsent(names.project);
   for (const volume of [names.volume, ...(mode === 'public' ? [names.caddyData, names.caddyConfig] : [])]) {
     const existing = await run('docker', ['volume', 'inspect', volume]);
     if (existing.ok) throw new Error(`Docker volume ${volume} already exists. Choose a new directory or inspect it before initializing.`);
+    if (existing.exitCode !== 1 || !/no such volume/i.test(`${existing.stdout}\n${existing.stderr}`)) {
+      throw new Error(`Could not confirm whether Docker volume ${volume} exists. Refusing initialization until Docker returns an explicit not-found result. ${existing.stderr.trim()}`);
+    }
   }
   const email = await resolveAdminEmail(flags);
   const password = await readPassword(flags);
@@ -2553,6 +2602,14 @@ async function recoverCommand(directory: string) {
     return;
   }
   try {
+    if (pending.phase === 'prepared') {
+      if (pending.operation === 'backup' || pending.operation === 'update' || pending.operation === 'adopt') {
+        await cleanupJournaledPartialBackup(loaded.directory, pending.backupId, pending.backupPath);
+      }
+      if (pending.operation === 'restore' || pending.operation === 'rollback') {
+        await cleanupJournaledPartialBackup(loaded.directory, pending.previousBackupId, pending.previousBackupPath);
+      }
+    }
     if (pending.operation === 'credentials-reset') {
       const nextEnv = pending.credentialReset?.nextEnv;
       if (!nextEnv) throw new Error('The incomplete credential reset has no protected recovery data. Restore a backup rather than guessing credentials.');
@@ -2628,6 +2685,13 @@ async function recoverCommand(directory: string) {
       await restoreVolumeArchive(loaded.directory, loaded.state.mode, loaded.env, sourceBackupPath);
     }
 
+    if (pending.operation === 'backup' && pending.initialAppRunning === false) {
+      loaded.state.lastError = undefined;
+      await clearPending(loaded.directory, loaded.state);
+      console.log('Recovered the incomplete backup operation and preserved the intentionally stopped OR3 service.');
+      return;
+    }
+
     // Init and backup keep the current .env as the intended deployment.
     // Starting is idempotent and commits only its observed image digest after
     // deep health passes. Adoption additionally replays its verified source
@@ -2659,7 +2723,9 @@ async function recoverCommand(directory: string) {
         const sourceFiles = ['-f', join(pending.sourceDirectory, 'compose.yaml')];
         const sourceModeValue = sourceMode(pending.sourceDirectory, sourceEnv) as Mode;
         if (sourceModeValue === 'public') sourceFiles.push('-f', join(pending.sourceDirectory, 'compose.public.yaml'));
-        await restartSource(pending.sourceDirectory, sourceFiles, secretValues(sourceEnv));
+        if (pending.sourceInitiallyRunning !== false) {
+          await restartSource(pending.sourceDirectory, sourceFiles, secretValues(sourceEnv));
+        }
       } catch (recovery) {
         loaded.state.lastError += ` Original deployment recovery failed: ${recovery instanceof Error ? recovery.message : String(recovery)}`;
       }
@@ -2679,12 +2745,21 @@ async function backupCreateCommand(directory: string) {
   await ensureDocker();
   const loaded = await loadManaged(directory);
   assertNoPending(loaded.state);
+  const backupId = id('backup');
+  const initialAppRunning = await projectServiceRunning(loaded.directory, loaded.state.mode);
   const pending: PendingOperation = {
-    id: id('backup'), operation: 'backup', startedAt: now(), message: 'Creating a stopped-volume backup',
+    id: id('backup-operation'),
+    operation: 'backup',
+    startedAt: now(),
+    message: 'Creating a stopped-volume backup',
+    backupId,
+    backupPath: backupDirectory(loaded.directory, backupId),
+    initialAppRunning,
+    phase: 'prepared',
   };
   await markPending(loaded.directory, loaded.state, pending);
   try {
-    const result = await createBackup(loaded.directory, loaded.state, loaded.env);
+    const result = await createBackup(loaded.directory, loaded.state, loaded.env, { backupId, initiallyRunning: initialAppRunning });
     await clearPending(loaded.directory, loaded.state);
     // Retention is deliberately after the verified snapshot is committed and
     // OR3 is healthy. A corrupt older artifact must not turn a successful
@@ -2839,6 +2914,7 @@ async function updateCommand(directory: string, flags: Flags) {
   const targetImage = imageAtDigest(targetImageTag, targetDigest);
   const oldEnv = { ...env };
   const targetDeploymentId = env.OR3_DEPLOYMENT_ID ?? state.deploymentId ?? id('deployment');
+  const backupId = id('backup');
   const pending: PendingOperation = {
     id: id('update'),
     operation: 'update',
@@ -2848,10 +2924,13 @@ async function updateCommand(directory: string, flags: Flags) {
     targetImage,
     targetImageDigest: targetDigest,
     targetDeploymentId,
+    backupId,
+    backupPath: backupDirectory(loaded.directory, backupId),
+    phase: 'prepared',
   };
   await markPending(loaded.directory, state, pending);
   try {
-    const backup = await createBackup(loaded.directory, state, env, { restartAfter: false });
+    const backup = await createBackup(loaded.directory, state, env, { restartAfter: false, backupId });
     await updatePending(loaded.directory, state, {
       backupId: backup.backupId,
       backupPath: backup.backupDir,
@@ -2981,8 +3060,9 @@ async function createPreMutationSnapshot(
   directory: string,
   state: ManagedState,
   env: Record<string, string>,
+  backupId: string,
 ) {
-  return await createBackup(directory, state, env, { restartAfter: false });
+  return await createBackup(directory, state, env, { restartAfter: false, backupId });
 }
 
 /**
@@ -3042,7 +3122,12 @@ async function restoreCommand(directory: string, flags: Flags, positionals: stri
   };
   await markPending(loaded.directory, loaded.state, pending);
   try {
-    const previous = await createPreMutationSnapshot(loaded.directory, loaded.state, loaded.env);
+    const previousBackupId = id('backup-before-restore');
+    await updatePending(loaded.directory, loaded.state, {
+      previousBackupId,
+      previousBackupPath: backupDirectory(loaded.directory, previousBackupId),
+    });
+    const previous = await createPreMutationSnapshot(loaded.directory, loaded.state, loaded.env, previousBackupId);
     await updatePending(loaded.directory, loaded.state, {
       previousBackupId: previous.backupId,
       previousBackupPath: previous.backupDir,
@@ -3128,7 +3213,12 @@ async function rollbackCommand(directory: string, flags: Flags) {
   };
   await markPending(loaded.directory, loaded.state, pending);
   try {
-    const previous = await createPreMutationSnapshot(loaded.directory, loaded.state, loaded.env);
+    const previousBackupId = id('backup-before-rollback');
+    await updatePending(loaded.directory, loaded.state, {
+      previousBackupId,
+      previousBackupPath: backupDirectory(loaded.directory, previousBackupId),
+    });
+    const previous = await createPreMutationSnapshot(loaded.directory, loaded.state, loaded.env, previousBackupId);
     await updatePending(loaded.directory, loaded.state, {
       previousBackupId: previous.backupId,
       previousBackupPath: previous.backupDir,
@@ -3616,7 +3706,9 @@ async function adoptCommand(positionals: string[], flags: Flags) {
   if (!Number.isInteger(sourcePort) || sourcePort < 1 || sourcePort > 65535) throw new Error('V1 project has an invalid OR3 port.');
   if (mode === 'public' && [80, 443].includes(sourcePort)) throw new Error('V1 public deployment uses a Caddy port for OR3; adoption requires a separate OR3 port.');
   assertSupportedSourceCompose(sourceConfig.stdout, sourceVolume, sourcePort);
+  const sourceInitiallyRunning = await sourceServiceRunning(sourceDirectory, sourceComposeFiles);
   const targetNames = composeProjectNames(targetDirectory);
+  await assertDockerProjectAbsent(targetNames.project);
   for (const volume of [targetNames.volume, ...(mode === 'public' ? [targetNames.caddyData, targetNames.caddyConfig] : [])]) {
     const existing = await run('docker', ['volume', 'inspect', volume]);
     if (existing.ok) throw new Error(`Docker volume ${volume} already exists. Choose a new adoption target directory.`);
@@ -3672,15 +3764,20 @@ async function adoptCommand(positionals: string[], flags: Flags) {
     adminPassword: password,
   }));
   const state = stateFromEnv(targetDirectory, targetEnv, mode, 'adopt', digest);
+  const sourceBackupId = id('backup-adopt-source');
+  const sourceBackupDir = backupDirectory(targetDirectory, sourceBackupId);
   await markPending(targetDirectory, state, {
     id: id('adopt'),
     operation: 'adopt',
     startedAt: now(),
     message: `Adopting ${sourceDirectory}`,
     sourceDirectory,
+    sourceInitiallyRunning,
+    backupId: sourceBackupId,
+    backupPath: sourceBackupDir,
+    phase: 'prepared',
   });
   let sourceStopAttempted = false;
-  let sourceBackupDir: string | undefined;
   try {
     sourceStopAttempted = true;
     const sourceStop = await run('docker', [...sourceComposeArgs(sourceDirectory, sourceComposeFiles), 'stop'], sourceDirectory);
@@ -3691,8 +3788,6 @@ async function adoptCommand(positionals: string[], flags: Flags) {
         if (!await portAvailable(publicPort)) throw new Error(`Public port ${publicPort} is still in use after stopping the V1 deployment.`);
       }
     }
-    const sourceBackupId = id('backup-adopt-source');
-    sourceBackupDir = backupDirectory(targetDirectory, sourceBackupId);
     await mkdir(sourceBackupDir, { recursive: true, mode: 0o700 });
     await copySecure(join(sourceDirectory, '.env'), join(sourceBackupDir, 'config.env'));
     await archiveExternalVolume(sourceImage, sourceVolume, sourceBackupDir);
@@ -3716,7 +3811,8 @@ async function adoptCommand(positionals: string[], flags: Flags) {
     const sourceManifestContents = `${JSON.stringify(sourceManifest, null, 2)}\n`;
     await writeSecure(join(sourceBackupDir, 'manifest.json'), sourceManifestContents);
     await writeBackupAuthentication(targetDirectory, sourceBackupDir, sourceManifestContents);
-    await updatePending(targetDirectory, state, { backupId: sourceBackupId });
+    await readManifest(sourceBackupDir, targetDirectory);
+    await updatePending(targetDirectory, state, { phase: 'snapshot-created' });
     await restoreVolumeArchive(targetDirectory, mode, targetEnv, sourceBackupDir);
     await startProject(targetDirectory, mode, targetEnv);
     await clearPending(targetDirectory, state);
@@ -3726,7 +3822,7 @@ async function adoptCommand(positionals: string[], flags: Flags) {
   } catch (error) {
     await compose(targetDirectory, mode, ['down']).catch(() => undefined);
     let sourceRecoveryError = '';
-    if (sourceStopAttempted) {
+    if (sourceStopAttempted && sourceInitiallyRunning) {
       try {
         await restartSource(sourceDirectory, sourceComposeFiles, secretValues(sourceEnv));
       } catch (recovery) {

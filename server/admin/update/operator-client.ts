@@ -16,16 +16,72 @@ export type DashboardUpdateStatus = {
     kind: 'managed';
     enabled: true;
     currentVersion: string | null;
+    checkedAt?: string;
     latestVersion?: string;
     updateAvailable?: boolean;
+    checkError?: string;
+    incompatibilityReason?: string;
     job: DashboardUpdateJob | null;
 };
 
 export type DashboardUpdateUnavailable = {
-    kind: 'unsupported';
+    kind: 'unsupported' | 'unavailable';
     enabled: false;
     reason: string;
 };
+
+const versionPattern = /^\d+\.\d+\.\d+$/;
+const requestIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const phases = new Set(['queued', 'running', 'succeeded', 'failed', 'needs_attention']);
+
+function record(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function exactKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>) {
+    return Object.keys(value).every((key) => allowed.has(key));
+}
+
+function timestamp(value: unknown) {
+    return typeof value === 'string' && value.length <= 64 && Number.isFinite(Date.parse(value));
+}
+
+function optionalText(value: unknown, maximum = 4096) {
+    return value === undefined || (typeof value === 'string' && value.length <= maximum);
+}
+
+function validJob(value: unknown): value is DashboardUpdateJob {
+    if (!record(value) || !exactKeys(value, new Set(['id', 'targetVersion', 'phase', 'startedAt', 'completedAt', 'error']))) return false;
+    return typeof value.id === 'string'
+        && requestIdPattern.test(value.id)
+        && typeof value.targetVersion === 'string'
+        && versionPattern.test(value.targetVersion)
+        && typeof value.phase === 'string'
+        && phases.has(value.phase)
+        && timestamp(value.startedAt)
+        && (value.completedAt === undefined || timestamp(value.completedAt))
+        && optionalText(value.error);
+}
+
+export function validateDashboardUpdateStatus(value: unknown): DashboardUpdateStatus {
+    if (!record(value) || !exactKeys(value, new Set([
+        'kind', 'enabled', 'currentVersion', 'checkedAt', 'latestVersion', 'updateAvailable',
+        'checkError', 'incompatibilityReason', 'job',
+    ]))) {
+        throw new DashboardOperatorError('The dashboard update operator returned an invalid response contract.');
+    }
+    const valid = value.kind === 'managed'
+        && value.enabled === true
+        && (value.currentVersion === null || (typeof value.currentVersion === 'string' && versionPattern.test(value.currentVersion)))
+        && (value.checkedAt === undefined || timestamp(value.checkedAt))
+        && (value.latestVersion === undefined || (typeof value.latestVersion === 'string' && versionPattern.test(value.latestVersion)))
+        && (value.updateAvailable === undefined || typeof value.updateAvailable === 'boolean')
+        && optionalText(value.checkError)
+        && optionalText(value.incompatibilityReason)
+        && (value.job === null || validJob(value.job));
+    if (!valid) throw new DashboardOperatorError('The dashboard update operator returned an invalid response contract.');
+    return value as DashboardUpdateStatus;
+}
 
 export class DashboardOperatorError extends Error {
     constructor(
@@ -43,9 +99,9 @@ function messageFrom(value: unknown, fallback: string) {
     return fallback;
 }
 
-async function operatorRequest<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+async function operatorRequest(method: 'GET' | 'POST', path: string, body?: unknown): Promise<DashboardUpdateStatus> {
     const payload = body === undefined ? undefined : JSON.stringify(body);
-    return await new Promise<T>((resolve, reject) => {
+    return await new Promise<DashboardUpdateStatus>((resolve, reject) => {
         let settled = false;
         const fail = (error: Error) => {
             if (settled) return;
@@ -91,8 +147,13 @@ async function operatorRequest<T>(method: 'GET' | 'POST', path: string, body?: u
                         fail(new DashboardOperatorError(messageFrom(parsed, 'The dashboard update operator rejected the request.'), response.statusCode));
                         return;
                     }
-                    settled = true;
-                    resolve(parsed as T);
+                    try {
+                        const validated = validateDashboardUpdateStatus(parsed);
+                        settled = true;
+                        resolve(validated);
+                    } catch (error) {
+                        fail(error instanceof Error ? error : new DashboardOperatorError('The dashboard update operator returned an invalid response contract.'));
+                    }
                 });
             }
         );
@@ -105,7 +166,7 @@ async function operatorRequest<T>(method: 'GET' | 'POST', path: string, body?: u
 
 function unavailableReason(error: unknown) {
     const code = (error as NodeJS.ErrnoException | undefined)?.code;
-    if (code === 'ENOENT' || code === 'ECONNREFUSED') {
+    if (code === 'ENOENT') {
         return 'This OR3 installation was not set up for dashboard updates. Update it once from the host CLI to enable them.';
     }
     return 'The dashboard update operator is unavailable. Check the managed deployment status on the host.';
@@ -113,15 +174,20 @@ function unavailableReason(error: unknown) {
 
 export async function getDashboardUpdateStatus(): Promise<DashboardUpdateStatus | DashboardUpdateUnavailable> {
     try {
-        return await operatorRequest<DashboardUpdateStatus>('GET', '/status');
+        return await operatorRequest('GET', '/status');
     } catch (error) {
-        return { kind: 'unsupported', enabled: false, reason: unavailableReason(error) };
+        const code = (error as NodeJS.ErrnoException | undefined)?.code;
+        return {
+            kind: code === 'ENOENT' ? 'unsupported' : 'unavailable',
+            enabled: false,
+            reason: error instanceof DashboardOperatorError ? error.message : unavailableReason(error),
+        };
     }
 }
 
 export async function checkDashboardUpdate() {
     try {
-        return await operatorRequest<DashboardUpdateStatus>('POST', '/check');
+        return await operatorRequest('POST', '/check');
     } catch (error) {
         if (error instanceof DashboardOperatorError) throw error;
         throw new DashboardOperatorError(unavailableReason(error));
@@ -130,7 +196,7 @@ export async function checkDashboardUpdate() {
 
 export async function startDashboardUpdate(requestId: string, targetVersion: string) {
     try {
-        return await operatorRequest<DashboardUpdateStatus>('POST', '/start', { requestId, targetVersion });
+        return await operatorRequest('POST', '/start', { requestId, targetVersion });
     } catch (error) {
         if (error instanceof DashboardOperatorError) throw error;
         throw new DashboardOperatorError(unavailableReason(error));

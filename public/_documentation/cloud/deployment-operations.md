@@ -103,6 +103,10 @@ forwarding headers); otherwise proxy-supplied client identity is untrusted.
   modified or foreign archive. `update` installs the target CLI's generated
   assets atomically; failure, rollback, restore, and interrupted-operation
   recovery reinstall the matching backed-up assets.
+  Backup creation journals the exact artifact before archiving, validates the
+  completed artifact through the restore reader before reporting success, and
+  lets `recover` remove only a journal-bound incomplete artifact. Standalone
+  backup and failed adoption preserve an intentionally stopped source service.
   An exact-version update must use the same package and image version, such as
   `npx --yes @or3/cloud@0.1.39 update --to 0.1.39`.
 - The backup authentication key is not included in an exported archive. Escrow
@@ -153,6 +157,10 @@ The authenticated package pins both qualified container image digests, so a
 replaced GHCR tag fails closed. A stale dashboard-owned update is recovered
 through its exact target CLI; unrelated/manual work stays locked for host-side
 `npx @or3/cloud recover`.
+Release-check state is atomic and durable across reloads and sidecar restarts.
+The web boundary validates the exact status/job schema, distinguishes an
+unsupported host from an unavailable or corrupt operator, and returns HTTP 202
+when an asynchronous update is accepted.
 
 ## Logging
 

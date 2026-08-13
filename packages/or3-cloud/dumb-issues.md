@@ -301,7 +301,7 @@ Enumeration validates only schema/id/date, never checks checksums, and does not 
 
 **Fix:** strictly validate types, ID/path equality, inventory, and checksums before retention; retain `keep` verified backups; prune only after restart and verification succeed.
 
-## 30. [MEDIUM] The operator image is accidentally frozen at the first enabling release
+## 30. [DONE — MEDIUM] The operator image is accidentally frozen at the first enabling release
 
 **Location:** `packages/or3-cloud/src/cli.ts:2222-2231`
 
@@ -311,7 +311,7 @@ Once `OR3_DASHBOARD_UPDATES_ENABLED=true`, update skips `dashboardOperatorEnv()`
 
 **Fix:** use the separate pinned protocol runtime. Upgrade that digest only through an explicit bridge/protocol migration that safely supervises replacement.
 
-## 31. [MEDIUM] Check results disappear on the next status request
+## 31. [DONE — MEDIUM] Check results disappear on the next status request
 
 **Location:** `packages/or3-cloud/assets/dashboard-operator.mjs:159-185`; `app/components/admin/system/AdminSystemUpdateCard.vue:74-100`
 
@@ -321,7 +321,7 @@ Once `OR3_DASHBOARD_UPDATES_ENABLED=true`, update skips `dashboardOperatorEnv()`
 
 **Fix:** atomically persist a typed release-check result with `checkedAt`, failure state, incompatibility reason, and last successful result.
 
-## 32. [MEDIUM] The application trusts arbitrary operator JSON as typed state
+## 32. [DONE — MEDIUM] The application trusts arbitrary operator JSON as typed state
 
 **Location:** `server/admin/update/operator-client.ts:46-100,114-137`
 
@@ -331,7 +331,7 @@ The client parses JSON and resolves `parsed as T` without runtime validation. A 
 
 **Fix:** define one shared discriminated schema, validate exact keys at both boundaries, and distinguish unsupported from unavailable/protocol-corrupt responses.
 
-## 33. [MEDIUM] The accepted start route returns HTTP 200 instead of 202
+## 33. [DONE — MEDIUM] The accepted start route returns HTTP 200 instead of 202
 
 **Location:** `server/api/admin/update/start.post.ts:8-21`; required mapping in `planning/admin-dashboard-updates/design.md:135-156`
 
@@ -341,7 +341,7 @@ The Unix operator returns 202, but the Nuxt client discards that status and the 
 
 **Fix:** preserve/map the operator result and call `setResponseStatus(event, 202)` for accepted/idempotent active jobs.
 
-## 34. [MEDIUM] The app mounts operator IPC even when the operator is disabled
+## 34. [DONE — MEDIUM] The app mounts operator IPC even when the operator is disabled
 
 **Location:** `packages/or3-cloud/assets/compose.yaml:22-27`; `packages/or3-cloud/src/cli.ts:953-960`
 
@@ -351,7 +351,7 @@ The base app service always bind-mounts `.or3-cloud/operator-ipc`, while the CLI
 
 **Fix:** add the app IPC mount only in the conditional operator overlay and precreate/probe it before enabling.
 
-## 35. [MEDIUM] Adoption backups cannot be pruned
+## 35. [DONE — MEDIUM] Adoption backups cannot be pruned
 
 **Location:** `packages/or3-cloud/src/cli.ts:41,1256-1277,2884`
 
@@ -361,7 +361,7 @@ Cleanup accepts only `backup-*`, while adoption creates `adopt-source-*`. Once r
 
 **Fix:** generate a valid `backup-adopt-source-*` ID or add a strictly validated backup-kind field used consistently by creation, enumeration, and deletion.
 
-## 36. [MEDIUM] Backup can report success for state it cannot restore
+## 36. [DONE — MEDIUM] Backup can report success for state it cannot restore
 
 **Location:** `packages/or3-cloud/src/cli.ts:1379-1393,1877-1882,2060-2077`
 
@@ -371,7 +371,7 @@ Cleanup accepts only `backup-*`, while adoption creates `adopt-source-*`. Once r
 
 **Fix:** require full state/environment consistency before backup/update and re-read/fully validate the completed artifact before reporting success.
 
-## 37. [MEDIUM] Backup and recovery do not preserve intentional stopped state
+## 37. [DONE — MEDIUM] Backup and recovery do not preserve intentional stopped state
 
 **Location:** `packages/or3-cloud/src/cli.ts:1597-1657,1895-1975,2876-2920`
 
@@ -381,7 +381,7 @@ Backup unconditionally starts OR3 after any stop attempt. Generic recovery also 
 
 **Fix:** journal initial service states and restore them exactly.
 
-## 38. [MEDIUM] Crash leftovers are invisible and unbounded
+## 38. [DONE — MEDIUM] Crash leftovers are invisible and unbounded
 
 **Location:** `packages/or3-cloud/src/cli.ts:1482-1509,1597-1647,2064-2070,2220-2222,2884-2895`
 
@@ -391,7 +391,7 @@ Backup IDs are allocated inside the worker and are not journaled until after com
 
 **Fix:** allocate and journal the exact artifact ID/path before creation; recovery may then resume or remove only that validated artifact.
 
-## 39. [MEDIUM] Docker API failures are treated as proof that volumes do not exist
+## 39. [DONE — MEDIUM] Docker API failures are treated as proof that volumes do not exist
 
 **Location:** `packages/or3-cloud/src/cli.ts:1830-1833,2852-2856`
 
@@ -401,7 +401,7 @@ Init/adopt proceed whenever `docker volume inspect` is not `ok`. They do not dis
 
 **Fix:** continue only on the daemon's explicit not-found result; fail closed on every other error and also inspect project-labeled containers/networks.
 
-## 40. [MEDIUM] Redaction leaks secrets containing whitespace
+## 40. [DONE — MEDIUM] Redaction leaks secrets containing whitespace
 
 **Location:** `packages/or3-cloud/src/cli.ts:240-247,370-395,583-590,1243-1253`
 
@@ -511,7 +511,7 @@ Port availability and host architecture come from the Node client, not the daemo
 
 **Fix:** query daemon architecture via `docker info`; perform host-port validation at the daemon or treat validated container startup as authoritative.
 
-## 51. [MEDIUM] Dangerous commands silently ignore positional arguments
+## 51. [DONE — MEDIUM] Dangerous commands silently ignore positional arguments
 
 **Location:** `packages/or3-cloud/src/cli.ts:250-270,2302-2308,3418-3454`
 
@@ -541,7 +541,7 @@ When `managedAssetSha256` is absent, `restoreManagedAssets()` silently returns f
 
 **Fix:** refuse legacy assetless restores with exact recovery instructions, or fetch authenticated assets for the backup release.
 
-## 54. [MEDIUM] Invalid password-file input leaves a poisoned partial init
+## 54. [DONE — MEDIUM] Invalid password-file input leaves a poisoned partial init
 
 **Location:** `packages/or3-cloud/src/cli.ts:230-233,480-489,1040-1060,1804-1861`
 
@@ -561,7 +561,7 @@ If restoring one `.previous-*` file fails, the rollback loop aborts. The outer `
 
 **Fix:** attempt all rollback entries, aggregate errors, retain backups until the restored set is verified, and fsync commits.
 
-## 56. [LOW] Purge leaves the operator executable behind
+## 56. [DONE — LOW] Purge leaves the operator executable behind
 
 **Location:** `packages/or3-cloud/src/cli.ts:3393-3406`
 

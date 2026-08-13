@@ -74,6 +74,12 @@ carry a deployment-local authentication tag, so an altered or foreign archive
 cannot supply configuration or executable Compose assets. Every mutating
 command holds one deployment-wide lease; do not delete `.or3-cloud` lock or
 recovery files by hand.
+Backup artifacts are allocated in that journal before archiving, fully
+revalidated before success is reported, and safely removed by `recover` if a
+hard interruption leaves an incomplete artifact. A standalone backup and a
+failed adoption preserve whether the original app was intentionally stopped.
+Initialization and adoption also fail closed unless Docker explicitly confirms
+that the target volumes, project containers, and networks do not exist.
 
 The authentication key is intentionally not embedded in an exported archive.
 Escrow an owner-only copy of `.or3-cloud/backup-auth.key` separately in an
@@ -94,6 +100,11 @@ probe. Click **Check for updates**, then approve the exact latest release. The
 card uses the same managed updater as the CLI: it makes a verified backup,
 waits for deep health, and restores the prior release and data if the update
 fails. Hosts that do not pass the probe remain CLI-only.
+
+Release-check results, including the last successful latest version and a
+bounded failure or compatibility reason, persist across page reloads and
+operator restarts. Accepted asynchronous starts return HTTP 202; corrupt or
+unavailable operator responses are reported separately from unsupported hosts.
 
 The application container never receives the Docker socket. A separate,
 socket-only operator sidecar is the only container with Docker access, and it

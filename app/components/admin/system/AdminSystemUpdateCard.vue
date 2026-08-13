@@ -12,7 +12,7 @@
 
         <p v-if="loading" class="mt-5 text-sm opacity-60">Checking managed deployment…</p>
 
-        <template v-else-if="status?.kind === 'unsupported'">
+        <template v-else-if="status?.kind === 'unsupported' || status?.kind === 'unavailable'">
             <p class="mt-5 text-sm opacity-70">{{ status.reason }}</p>
         </template>
 
@@ -33,6 +33,9 @@
             </p>
             <p v-else-if="status.job && ['failed', 'needs_attention'].includes(status.job.phase)" class="mt-4 text-sm text-[var(--md-sys-color-error,#b91c1c)]">
                 {{ status.job.error || 'The previous update did not complete.' }}
+            </p>
+            <p v-else-if="status.checkError" class="mt-4 text-sm text-[var(--md-sys-color-error,#b91c1c)]">
+                {{ status.checkError }}
             </p>
             <p v-else-if="status.updateAvailable === false" class="mt-4 text-sm opacity-70">You are up to date.</p>
             <p v-else-if="status.updateAvailable" class="mt-4 text-sm text-[var(--md-primary)]">Version {{ status.latestVersion }} is ready.</p>

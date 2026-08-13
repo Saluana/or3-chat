@@ -45,12 +45,15 @@ export type DashboardUpdateStatus =
           kind: 'managed';
           enabled: true;
           currentVersion: string | null;
+          checkedAt?: string;
           latestVersion?: string;
           updateAvailable?: boolean;
+          checkError?: string;
+          incompatibilityReason?: string;
           job: DashboardUpdateJob | null;
       }
     | {
-          kind: 'unsupported';
+          kind: 'unsupported' | 'unavailable';
           enabled: false;
           reason: string;
       };

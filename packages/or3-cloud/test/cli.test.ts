@@ -326,6 +326,9 @@ test('redacts known values and secret-shaped environment output', () => {
   expect(redact('OR3_BASIC_AUTH_JWT_SECRET=abc123 password=hidden', ['abc123'])).toBe(
     'OR3_BASIC_AUTH_JWT_SECRET=[REDACTED] password=[REDACTED]',
   );
+  expect(redact('OR3_ADMIN_PASSWORD=A secret with spaces & punctuation!\nnext=visible')).toBe(
+    'OR3_ADMIN_PASSWORD=[REDACTED]\nnext=visible',
+  );
 });
 
 test('records immutable state metadata', () => {

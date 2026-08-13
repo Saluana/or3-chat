@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { provenanceStatement, validStartInput } from '../assets/dashboard-operator.mjs';
+import { provenanceStatement, validDashboardUpdateJob, validReleaseCheck, validStartInput } from '../assets/dashboard-operator.mjs';
 
 const ASSET_ROOT = resolve(import.meta.dir, '../assets');
 const RUNTIME_ENTRYPOINT = resolve(import.meta.dir, '../../../scripts/docker/runtime-entrypoint.mjs');
@@ -108,6 +108,35 @@ test('dashboard operator accepts only the exact start payload contract', () => {
   expect(validStartInput({ ...valid, command: 'docker system prune' })).toBe(false);
   expect(validStartInput({ ...valid, requestId: '../operator.sock' })).toBe(false);
   expect(validStartInput({ ...valid, targetVersion: '0.1.39 || true' })).toBe(false);
+});
+
+test('dashboard operator persists only bounded release-check state', () => {
+  const successful = {
+    schemaVersion: 1,
+    checkedAt: '2026-08-13T12:00:00.000Z',
+    lastSuccessful: {
+      checkedAt: '2026-08-13T12:00:00.000Z',
+      latestVersion: '0.1.40',
+      updateAvailable: true,
+    },
+  };
+  expect(validReleaseCheck(successful)).toBe(true);
+  expect(validReleaseCheck({ ...successful, injected: true })).toBe(false);
+  expect(validReleaseCheck({ ...successful, failure: 'x'.repeat(4097) })).toBe(false);
+});
+
+test('dashboard operator accepts only bounded persisted job state', () => {
+  const job = {
+    id: '123e4567-e89b-42d3-a456-426614174000',
+    targetVersion: '0.1.40',
+    phase: 'failed',
+    startedAt: '2026-08-13T12:00:00.000Z',
+    completedAt: '2026-08-13T12:05:00.000Z',
+    error: 'update failed',
+  };
+  expect(validDashboardUpdateJob(job)).toBe(true);
+  expect(validDashboardUpdateJob({ ...job, injected: true })).toBe(false);
+  expect(validDashboardUpdateJob({ ...job, error: 'x'.repeat(4097) })).toBe(false);
 });
 
 test('dashboard operator binds provenance to the OR3 tagged release workflow', () => {

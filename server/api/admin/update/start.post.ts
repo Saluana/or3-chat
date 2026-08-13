@@ -1,4 +1,4 @@
-import { createError, defineEventHandler, readBody } from 'h3';
+import { createError, defineEventHandler, readBody, setResponseStatus } from 'h3';
 import { requireAdminApiContext } from '../../../admin/api';
 import { DashboardOperatorError, startDashboardUpdate } from '../../../admin/update/operator-client';
 
@@ -12,7 +12,9 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'A valid update request is required.' });
     }
     try {
-        return await startDashboardUpdate(body.requestId, body.targetVersion);
+        const result = await startDashboardUpdate(body.requestId, body.targetVersion);
+        setResponseStatus(event, 202);
+        return result;
     } catch (error) {
         if (error instanceof DashboardOperatorError) {
             throw createError({ statusCode: error.statusCode, statusMessage: error.message });

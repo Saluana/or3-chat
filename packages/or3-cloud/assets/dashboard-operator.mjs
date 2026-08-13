@@ -10,6 +10,7 @@ const socketPath = process.env.OR3_DASHBOARD_OPERATOR_SOCKET || '/run/or3-operat
 const deploymentDirectory = process.cwd();
 const cloudDirectory = join(deploymentDirectory, '.or3-cloud');
 const jobPath = join(cloudDirectory, 'dashboard-update.json');
+const releaseCheckPath = join(cloudDirectory, 'dashboard-update-check.json');
 const statePath = join(cloudDirectory, 'state.json');
 const leaseOwnerPath = join(cloudDirectory, 'operation-lease', 'owner.json');
 const npmCli = '/usr/local/lib/node_modules/npm/bin/npm-cli.js';
@@ -56,17 +57,83 @@ function compareVersions(left, right) {
 
 async function readJob() {
   try {
-    return JSON.parse(await readFile(jobPath, 'utf8'));
+    const job = JSON.parse(await readFile(jobPath, 'utf8'));
+    if (!validDashboardUpdateJob(job)) throw new Error('The dashboard update job record is invalid.');
+    return job;
   } catch (error) {
     if (error && typeof error === 'object' && error.code === 'ENOENT') return null;
     throw error;
   }
 }
 
+function exactKeys(value, allowed) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    && Object.keys(value).every((key) => allowed.has(key));
+}
+
+function validTimestamp(value) {
+  return typeof value === 'string' && value.length <= 64 && Number.isFinite(Date.parse(value));
+}
+
+export function validDashboardUpdateJob(job) {
+  if (!exactKeys(job, new Set(['id', 'targetVersion', 'phase', 'startedAt', 'completedAt', 'error']))) return false;
+  return typeof job.id === 'string'
+    && requestIdPattern.test(job.id)
+    && typeof job.targetVersion === 'string'
+    && stableVersion.test(job.targetVersion)
+    && ['queued', 'running', 'succeeded', 'failed', 'needs_attention'].includes(job.phase)
+    && validTimestamp(job.startedAt)
+    && (job.completedAt === undefined || validTimestamp(job.completedAt))
+    && (job.error === undefined || (typeof job.error === 'string' && job.error.length <= 4096));
+}
+
+function validSuccessfulCheck(value) {
+  return exactKeys(value, new Set(['checkedAt', 'latestVersion', 'updateAvailable']))
+    && validTimestamp(value.checkedAt)
+    && typeof value.latestVersion === 'string'
+    && stableVersion.test(value.latestVersion)
+    && typeof value.updateAvailable === 'boolean';
+}
+
+export function validReleaseCheck(value) {
+  return exactKeys(value, new Set(['schemaVersion', 'checkedAt', 'failure', 'incompatibilityReason', 'lastSuccessful']))
+    && value.schemaVersion === 1
+    && validTimestamp(value.checkedAt)
+    && (value.failure === undefined || (typeof value.failure === 'string' && value.failure.length <= 4096))
+    && (value.incompatibilityReason === undefined || (typeof value.incompatibilityReason === 'string' && value.incompatibilityReason.length <= 4096))
+    && (value.lastSuccessful === undefined || validSuccessfulCheck(value.lastSuccessful));
+}
+
+async function readReleaseCheck() {
+  try {
+    const checked = JSON.parse(await readFile(releaseCheckPath, 'utf8'));
+    if (!validReleaseCheck(checked)) throw new Error('The dashboard release-check record is invalid.');
+    return checked;
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+async function writeReleaseCheck(checked) {
+  if (!validReleaseCheck(checked)) throw new Error('Refusing to persist an invalid dashboard release-check result.');
+  await mkdir(dirname(releaseCheckPath), { recursive: true, mode: 0o700 });
+  const temporary = `${releaseCheckPath}.${randomUUID()}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(checked, null, 2)}\n`, { mode: 0o600 });
+  await chmod(temporary, 0o600);
+  await rename(temporary, releaseCheckPath);
+  await chmod(releaseCheckPath, 0o600);
+}
+
 async function writeJob(job) {
+  const persisted = {
+    ...job,
+    ...(typeof job.error === 'string' ? { error: job.error.slice(0, 4096) } : {}),
+  };
+  if (!validDashboardUpdateJob(persisted)) throw new Error('Refusing to persist an invalid dashboard update job.');
   await mkdir(dirname(jobPath), { recursive: true, mode: 0o700 });
   const temporary = `${jobPath}.${randomUUID()}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(job, null, 2)}\n`, { mode: 0o600 });
+  await writeFile(temporary, `${JSON.stringify(persisted, null, 2)}\n`, { mode: 0o600 });
   await chmod(temporary, 0o600);
   await rename(temporary, jobPath);
   await chmod(jobPath, 0o600);
@@ -175,11 +242,16 @@ async function assertUpdateReady() {
 
 async function status() {
   const version = await currentVersion();
-  const job = await readJob();
+  const [job, checked] = await Promise.all([readJob(), readReleaseCheck()]);
   return {
     kind: 'managed',
     enabled: true,
     currentVersion: version,
+    checkedAt: checked?.checkedAt,
+    latestVersion: checked?.lastSuccessful?.latestVersion,
+    updateAvailable: checked?.lastSuccessful?.updateAvailable,
+    checkError: checked?.failure,
+    incompatibilityReason: checked?.incompatibilityReason,
     job: job ? {
       id: job.id,
       targetVersion: job.targetVersion,
@@ -193,16 +265,42 @@ async function status() {
 
 async function check() {
   await assertUpdateReady();
-  const [current, latest] = await Promise.all([currentVersion(), release()]);
-  if (!current || !stableVersion.test(current)) throw new Error('The managed deployment does not have a valid current release version.');
-  if (compareVersions(current, latest.minimumSourceVersion) < 0) {
-    throw new Error(`OR3 ${latest.version} requires dashboard-update source version ${latest.minimumSourceVersion} or newer. Update once with the host CLI before using the dashboard bridge.`);
+  const previous = await readReleaseCheck();
+  const checkedAt = new Date().toISOString();
+  try {
+    const [current, latest] = await Promise.all([currentVersion(), release()]);
+    if (!current || !stableVersion.test(current)) throw new Error('The managed deployment does not have a valid current release version.');
+    if (compareVersions(current, latest.minimumSourceVersion) < 0) {
+      const incompatibilityReason = `OR3 ${latest.version} requires dashboard-update source version ${latest.minimumSourceVersion} or newer. Update once with the host CLI before using the dashboard bridge.`;
+      await writeReleaseCheck({
+        schemaVersion: 1,
+        checkedAt,
+        failure: incompatibilityReason,
+        incompatibilityReason,
+        lastSuccessful: previous?.lastSuccessful,
+      });
+      throw new Error(incompatibilityReason);
+    }
+    const lastSuccessful = {
+      checkedAt,
+      latestVersion: latest.version,
+      updateAvailable: compareVersions(latest.version, current) > 0,
+    };
+    await writeReleaseCheck({ schemaVersion: 1, checkedAt, lastSuccessful });
+    return await status();
+  } catch (error) {
+    const message = (error instanceof Error ? error.message : String(error)).slice(0, 4096);
+    const persisted = await readReleaseCheck().catch(() => previous);
+    if (persisted?.checkedAt !== checkedAt) {
+      await writeReleaseCheck({
+        schemaVersion: 1,
+        checkedAt,
+        failure: message,
+        lastSuccessful: previous?.lastSuccessful,
+      });
+    }
+    throw error;
   }
-  return {
-    ...(await status()),
-    latestVersion: latest.version,
-    updateAvailable: compareVersions(latest.version, current) > 0,
-  };
 }
 
 function updaterEnvironment(installDirectory, job, imageDigest) {
