@@ -176,6 +176,13 @@ When an earlier protocol-compatible release exists, the tagged release gate
 upgrades a disposable installation through the operator, verifies
 concurrent-start rejection, persistence, and deep health, then exercises
 rollback.
+The Unix socket is limited to the deployment group, mutation requests are
+rate-limited, and the operator writes a non-secret `0600` JSONL audit trail at
+`.or3-cloud/dashboard-update-audit.jsonl`. Docker API write access remains
+host-root-equivalent despite the sidecar's dropped capabilities and read-only
+root filesystem. Treat the operator as a host-root trust component; disable
+the overlay and use host CLI updates when application-process compromise must
+remain outside that boundary.
 `doctor` also validates the operator container image, deployment label, three
 required mounts, IPC types/modes, absence of an orphaned disabled operator,
 daemon-side Caddy port publication, and an actual public HTTPS 200 response.

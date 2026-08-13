@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { provenanceStatement, validDashboardUpdateJob, validReleaseCheck, validStartInput } from '../assets/dashboard-operator.mjs';
+import { consumeRateLimit, provenanceStatement, validDashboardUpdateJob, validReleaseCheck, validStartInput } from '../assets/dashboard-operator.mjs';
 
 const ASSET_ROOT = resolve(import.meta.dir, '../assets');
 const RUNTIME_ENTRYPOINT = resolve(import.meta.dir, '../../../scripts/docker/runtime-entrypoint.mjs');
@@ -66,6 +66,7 @@ test('dashboard updates isolate Docker access to the operator sidecar', () => {
   expect(operator).toContain('io.or3.cloud.deployment-id: ${OR3_DEPLOYMENT_ID}');
   expect(operator).toContain('cap_drop:');
   expect(operator).toContain('- ALL');
+  expect(operator).toContain('host-root-equivalent');
   const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
   expect(cli).toContain('await chmod(ipc, 0o710);');
 });
@@ -85,6 +86,8 @@ test('dashboard operator verifies exact release provenance before executing pack
   expect(operator).toContain("await verify(bundle");
   expect(operator).toContain("npmRequire('sigstore')");
   expect(operator).toContain("await trustedProvenance(expectedRelease) !== provenanceFingerprint");
+  expect(operator).toContain("const auditPath = join(cloudDirectory, 'dashboard-update-audit.jsonl')");
+  expect(operator).toContain("await audit('update_accepted'");
   expect(operator).toContain('void chmod(socketPath, 0o660)');
   expect(operator).toContain('function recreateOperatorAfterCommit(environment)');
   expect(operator).toContain("'up', '-d', '--no-deps', '--force-recreate', 'or3-operator'");
@@ -111,6 +114,14 @@ test('dashboard operator accepts only the exact start payload contract', () => {
   expect(validStartInput({ ...valid, command: 'docker system prune' })).toBe(false);
   expect(validStartInput({ ...valid, requestId: '../operator.sock' })).toBe(false);
   expect(validStartInput({ ...valid, targetVersion: '0.1.39 || true' })).toBe(false);
+});
+
+test('dashboard operator bounds mutation request rates', () => {
+  const attempts: number[] = [];
+  expect(consumeRateLimit(attempts, 1_000, 2, 1_000)).toBe(true);
+  expect(consumeRateLimit(attempts, 1_100, 2, 1_000)).toBe(true);
+  expect(consumeRateLimit(attempts, 1_200, 2, 1_000)).toBe(false);
+  expect(consumeRateLimit(attempts, 2_001, 2, 1_000)).toBe(true);
 });
 
 test('dashboard update polling is bounded and announces state changes', () => {

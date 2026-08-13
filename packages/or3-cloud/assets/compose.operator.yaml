@@ -19,6 +19,9 @@ services:
           create_host_path: false
 
   or3-operator:
+    # SECURITY TRUST BOUNDARY: read-write Docker API access is
+    # host-root-equivalent. The controls below reduce accidental surface; they
+    # do not sandbox a compromised operator from the host Docker daemon.
     image: ${OR3_OPERATOR_IMAGE}
     labels:
       io.or3.cloud.deployment-id: ${OR3_DEPLOYMENT_ID}

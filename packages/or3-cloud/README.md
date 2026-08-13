@@ -147,6 +147,14 @@ recovered automatically with its exact target CLI; unrelated/manual operations
 remain locked for host-side `recover`. Existing deployments gain the card after
 one normal exact-version CLI update. Remote Docker hosts remain CLI-only.
 
+The operator socket is deployment-group-only, mutation requests are bounded,
+and accepted/rejected operations are recorded without secrets in
+`.or3-cloud/dashboard-update-audit.jsonl`. These are operational controls, not
+a host sandbox: the dedicated operator has read-write Docker API access and is
+therefore a host-root trust component. Application-process code execution is
+inside the dashboard-update trust boundary; disable the operator overlay and
+use host CLI updates when that tradeoff is unacceptable.
+
 Managed registration is invite-only: the bootstrap owner signs in first and
 invites additional users from the in-product admin flow. Guest access and
 anonymous registration stay disabled. Uploading/installing custom plugins or

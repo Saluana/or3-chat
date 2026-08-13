@@ -681,19 +681,25 @@ The tag workflow fails immediately whenever npm already serves the version. If n
 
 **Fix:** when the version exists, compare public integrity, shasum, provenance, and receipt identity. Continue verification only for an exact match; reject every mismatch and never republish.
 
-## 66. [MEDIUM] The privileged Unix API is world-writable and has no defense-in-depth authorization
+## 66. [PARTIAL — MEDIUM] The privileged Unix API is world-writable and has no defense-in-depth authorization
 
 **Location:** `packages/or3-cloud/assets/dashboard-operator.mjs:468-531`
 
-The socket is chmod `0666`; `/check` and `/start` authenticate no peer or capability. The read-only app bind prevents file writes, not socket connections. Any server-side code execution or request primitive in the large Nuxt process bypasses the super-admin/CSRF HTTP route and can directly force a verified update, backup, downtime, and rollback path.
+The socket was world-writable and `/check` plus `/start` authenticated no peer
+or capability. It is now `0660` inside a `0710` directory, limited to the
+deployment group; mutation requests are rate-limited and recorded in a `0600`
+JSONL audit file. The read-only app bind prevents file writes, not socket
+connections. Any server-side code execution in the Nuxt process can still
+bypass the super-admin/CSRF HTTP route and force a verified but disruptive
+update path.
 
 **Consequence:** the browser/API authorization boundary is the only thing preventing unprivileged update initiation; compromise of the app process immediately gains the operator's closed-but-disruptive control plane.
 
 **Fix:** use the narrowest group/mode possible, rate-limit and audit operations, validate peer credentials where supported, and add an operator-verifiable, short-lived authorization proof. Document that application RCE remains inside this trust boundary.
 
-## 67. [MEDIUM] `cap_drop` does not sandbox a process holding the Docker socket
+## 67. [ACCEPTED RISK — MEDIUM] `cap_drop` does not sandbox a process holding the Docker socket
 
-**Location:** `packages/or3-cloud/assets/compose.yaml:81-99`
+**Location:** `packages/or3-cloud/assets/compose.operator.yaml:21-58`
 
 The operator receives the Docker socket read-write and the whole deployment directory read-write. Docker API access is host-root-equivalent; non-root UID, read-only container root, and dropped Linux capabilities do not materially contain a compromised operator.
 

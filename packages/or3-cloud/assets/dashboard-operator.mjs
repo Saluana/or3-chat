@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { chmod, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { appendFile, chmod, mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,7 @@ const deploymentDirectory = process.cwd();
 const cloudDirectory = join(deploymentDirectory, '.or3-cloud');
 const jobPath = join(cloudDirectory, 'dashboard-update.json');
 const releaseCheckPath = join(cloudDirectory, 'dashboard-update-check.json');
+const auditPath = join(cloudDirectory, 'dashboard-update-audit.jsonl');
 const statePath = join(cloudDirectory, 'state.json');
 const leaseOwnerPath = join(cloudDirectory, 'operation-lease', 'owner.json');
 const npmCli = '/usr/local/lib/node_modules/npm/bin/npm-cli.js';
@@ -28,6 +29,38 @@ const maxAttestationBytes = 1024 * 1024;
 const maxProcessOutputBytes = 64 * 1024;
 const maxUpdateDurationMs = 15 * 60 * 1000;
 let updateClaimed = false;
+const checkAttempts = [];
+const startAttempts = [];
+let auditQueue = Promise.resolve();
+
+export function consumeRateLimit(attempts, now, limit, windowMs) {
+  while (attempts.length && attempts[0] <= now - windowMs) attempts.shift();
+  if (attempts.length >= limit) return false;
+  attempts.push(now);
+  return true;
+}
+
+function audit(event, details = {}) {
+  auditQueue = auditQueue.then(async () => {
+    await mkdir(cloudDirectory, { recursive: true, mode: 0o700 });
+    try {
+      if ((await stat(auditPath)).size >= 1024 * 1024) {
+        await rm(`${auditPath}.previous`, { force: true });
+        await rename(auditPath, `${auditPath}.previous`);
+      }
+    } catch (error) {
+      if (!error || typeof error !== 'object' || error.code !== 'ENOENT') throw error;
+    }
+    await appendFile(auditPath, `${JSON.stringify({ ...details, at: new Date().toISOString(), event })}\n`, {
+      encoding: 'utf8',
+      mode: 0o600,
+    });
+    await chmod(auditPath, 0o600);
+  }).catch((error) => {
+    console.error(`Could not append dashboard update audit event ${event}:`, error instanceof Error ? error.message : String(error));
+  });
+  return auditQueue;
+}
 
 function envValue(text, key) {
   const line = text.split(/\r?\n/).find((entry) => entry.startsWith(`${key}=`));
@@ -610,6 +643,7 @@ async function finish(server, job, error) {
   job.completedAt = new Date().toISOString();
   if (error) job.error = error instanceof Error ? error.message : 'The update did not complete. OR3 restored the previous verified deployment when possible.';
   await writeJob(job);
+  await audit(error ? 'update_failed' : 'update_succeeded', { jobId: job.id, targetVersion: job.targetVersion });
   // A successful run restarts this narrowly scoped service so it reloads the
   // just-installed operator program. Failed first-time enablement exits cleanly
   // because the restored .env no longer declares the profile.
@@ -740,26 +774,50 @@ async function main() {
   const server = createServer(async (request, response) => {
     try {
       if (request.method === 'GET' && request.url === '/status') return send(response, 200, await status());
-      if (request.method === 'POST' && request.url === '/check') return send(response, 200, await check());
+      if (request.method === 'POST' && request.url === '/check') {
+        if (!consumeRateLimit(checkAttempts, Date.now(), 30, 60_000)) {
+          await audit('check_rate_limited');
+          return send(response, 429, { message: 'Release checks are temporarily rate limited.' });
+        }
+        const checked = await check();
+        await audit('release_checked', { latestVersion: checked.latestVersion, updateAvailable: checked.updateAvailable });
+        return send(response, 200, checked);
+      }
       if (request.method === 'POST' && request.url === '/start') {
+        if (!consumeRateLimit(startAttempts, Date.now(), 6, 60_000)) {
+          await audit('start_rate_limited');
+          return send(response, 429, { message: 'Update starts are temporarily rate limited.' });
+        }
         const input = await body(request);
-        if (!validStartInput(input)) return send(response, 400, { message: 'A valid update request is required.' });
-        if (updateClaimed) return send(response, 409, { message: 'An update is already starting or running.' });
+        if (!validStartInput(input)) {
+          await audit('start_rejected_invalid');
+          return send(response, 400, { message: 'A valid update request is required.' });
+        }
+        if (updateClaimed) {
+          await audit('start_rejected_busy', { requestId: input.requestId, targetVersion: input.targetVersion });
+          return send(response, 409, { message: 'An update is already starting or running.' });
+        }
         updateClaimed = true;
         try {
           const checked = await check();
           if (!checked.updateAvailable) {
             updateClaimed = false;
+            await audit('start_rejected_no_update', { requestId: input.requestId, targetVersion: input.targetVersion });
             return send(response, 409, { message: 'No newer supported release is available.' });
           }
           if (input.targetVersion !== checked.latestVersion) {
             updateClaimed = false;
+            await audit('start_rejected_stale_target', { requestId: input.requestId, targetVersion: input.targetVersion });
             return send(response, 409, { message: 'The requested version is no longer the verified latest release. Check again.' });
           }
           const previous = await readJob();
           if (previous && activePhases.has(previous.phase)) {
             updateClaimed = false;
-            if (previous.id === input.requestId) return send(response, 202, { ...checked, job: previous });
+            if (previous.id === input.requestId) {
+              await audit('start_replayed', { jobId: previous.id, targetVersion: previous.targetVersion });
+              return send(response, 202, { ...checked, job: previous });
+            }
+            await audit('start_rejected_busy', { requestId: input.requestId, targetVersion: input.targetVersion });
             return send(response, 409, { message: 'An update is already running.' });
           }
           const job = {
@@ -769,6 +827,7 @@ async function main() {
             startedAt: new Date().toISOString(),
           };
           await writeJob(job);
+          await audit('update_accepted', { jobId: job.id, targetVersion: job.targetVersion });
           send(response, 202, { ...checked, job });
           queueMicrotask(async () => {
             try {
