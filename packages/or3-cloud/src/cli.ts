@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { execFile as execFileCallback, spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { lookup } from 'node:dns/promises';
@@ -13,6 +13,7 @@ import {
   mkdir,
   readFile,
   readdir,
+  realpath,
   rename,
   rm,
   stat,
@@ -39,6 +40,8 @@ const BACKUP_RETENTION_KEEP = 5;
 const PURGE_REQUIRES_BACKUP_WITHIN_MS = 24 * 60 * 60 * 1000;
 const FREE_SPACE_HEADROOM_BYTES = 64 * 1024 * 1024;
 const BACKUP_ID_PATTERN = /^backup-[0-9A-Za-z-]+$/;
+const MANAGED_ASSET_INVENTORY_VERSION = 3;
+const DASHBOARD_LEASE_STALE_MS = 30_000;
 const SECRET_KEYS = [
   'OR3_BASIC_AUTH_JWT_SECRET',
   'OR3_BASIC_AUTH_REFRESH_SECRET',
@@ -57,13 +60,23 @@ const DEPLOYMENT_ENV_KEYS = [
   'OR3_PORT',
   'OR3_PUBLIC_DOMAIN',
 ] as const;
+const DEPLOYMENT_ID_ENV_KEY = 'OR3_DEPLOYMENT_ID';
 
 type Mode = 'local' | 'public';
 type Operation = 'init' | 'update' | 'restore' | 'adopt' | 'credentials-reset';
 type PendingOperation = NonNullable<ManagedState['incompleteOperation']>;
+type LeaseOwner = {
+  schemaVersion: 1;
+  nonce: string;
+  command: string;
+  origin: 'cli' | 'dashboard';
+  pid: number;
+  acquiredAt: string;
+  heartbeatAt: string;
+  jobId?: string;
+};
 type DashboardOperatorEnv = {
   OR3_DASHBOARD_UPDATES_ENABLED: 'true';
-  COMPOSE_PROFILES: 'dashboard-updates';
   OR3_OPERATOR_IMAGE: string;
   OR3_DEPLOYMENT_DIR: string;
   OR3_OPERATOR_UID: string;
@@ -79,6 +92,10 @@ export type ManagedState = {
   volumeName: string;
   caddyDataVolume?: string;
   caddyConfigVolume?: string;
+  /** Fresh deployments bind their Docker resources to this random identity. */
+  deploymentId?: string;
+  /** Canonical path at initialization; moved copies need an explicit migration. */
+  deploymentRoot?: string;
   appVersion: string;
   image: string;
   imageDigest: string;
@@ -93,10 +110,23 @@ export type ManagedState = {
     startedAt: string;
     message: string;
     sourceDirectory?: string;
+    origin?: 'cli' | 'dashboard';
+    dashboardJobId?: string;
     backupId?: string;
+    /** Canonical source path for an external restore; never reconstruct it from an ID. */
+    backupPath?: string;
+    backupDataSha256?: string;
+    backupConfigSha256?: string;
+    /** Verified pre-mutation snapshot used to restore a failed restore/rollback. */
+    previousBackupId?: string;
+    previousBackupPath?: string;
+    phase?: 'prepared' | 'snapshot-created' | 'target-mutating' | 'restoring-previous' | 'starting-target' | 'starting-previous';
+    previousRootOwnership?: { uid: number; gid: number };
     targetVersion?: string;
     targetImage?: string;
     targetImageDigest?: string;
+    /** Identity assigned to a legacy deployment only when its target assets are installed. */
+    targetDeploymentId?: string;
     credentialReset?: {
       nextEnv: Record<string, string>;
     };
@@ -125,6 +155,7 @@ export type BackupManifest = {
   volumeName?: string;
   caddyDataVolume?: string;
   caddyConfigVolume?: string;
+  deploymentId?: string;
   port?: number;
 };
 
@@ -155,6 +186,32 @@ type CommandResult = {
   command: string;
   exitCode: number | null;
 };
+
+const PROCESS_ENV_PASSTHROUGH = [
+  'PATH',
+  'HOME',
+  'USER',
+  'LOGNAME',
+  'SHELL',
+  'TMPDIR',
+  'TMP',
+  'TEMP',
+  'XDG_CONFIG_HOME',
+  'XDG_RUNTIME_DIR',
+  'SSL_CERT_FILE',
+  'SSL_CERT_DIR',
+  'HTTP_PROXY',
+  'HTTPS_PROXY',
+  'NO_PROXY',
+  'http_proxy',
+  'https_proxy',
+  'no_proxy',
+  'DOCKER_HOST',
+  'DOCKER_CONTEXT',
+  'DOCKER_TLS_VERIFY',
+  'DOCKER_CERT_PATH',
+  'DOCKER_CONFIG',
+] as const;
 
 const ALLOWED_ENV_KEYS = new Set([
   'SSR_AUTH_ENABLED',
@@ -228,6 +285,9 @@ export function serializeInitialCredentials(input: {
 }
 
 export function validatePassword(password: string) {
+  if (password.includes('\0') || /\r|\n/.test(password)) {
+    throw new Error('The administrator password may not contain NUL or newline characters.');
+  }
   if (password.length < 12 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
     throw new Error('The administrator password must be at least 12 characters and contain uppercase, lowercase, and numeric characters.');
   }
@@ -300,6 +360,26 @@ export function assertCommandFlags(command: string, flags: Flags) {
   }
 }
 
+/** Reject positional typos before any command can act on the current directory. */
+export function assertCommandPositionals(command: string, positionals: string[]) {
+  if (command === 'backup' || command === 'credentials') return;
+  if (command === 'init' || command === 'adopt') {
+    if (positionals.length > 1) throw new Error(`${command} accepts at most one target directory.`);
+    return;
+  }
+  if (command === 'restore') {
+    if (positionals.length !== 1) throw new Error('restore requires exactly one backup ID or absolute backup path.');
+    return;
+  }
+  if (command === 'logs') {
+    if (positionals.length > 1) throw new Error('logs accepts at most one service name.');
+    return;
+  }
+  if (positionals.length > 0) {
+    throw new Error(`${command} accepts no positional arguments. Run npx @or3/cloud ${command} --help.`);
+  }
+}
+
 function stringFlag(flags: Flags, key: string) {
   const value = flags[key];
   return typeof value === 'string' ? value : undefined;
@@ -324,6 +404,10 @@ function imageFor(version: string) {
   const testImage = process.env.OR3_CLOUD_TEST_IMAGE?.trim();
   if (testImage) return testImage;
   return `${IMAGE_REPOSITORY}:${version}`;
+}
+
+function operatorImageFor(version: string) {
+  return process.env.OR3_CLOUD_TEST_OPERATOR_IMAGE?.trim() || `${IMAGE_REPOSITORY}:${version}-operator`;
 }
 
 function sanitizeName(value: string, fallback = 'or3-cloud') {
@@ -367,14 +451,41 @@ function validateDomain(domain: string) {
   }
 }
 
-async function run(command: string, args: string[], cwd?: string): Promise<CommandResult> {
+function composeProcessEnv(directory: string): NodeJS.ProcessEnv {
+  const safe: NodeJS.ProcessEnv = {};
+  for (const key of PROCESS_ENV_PASSTHROUGH) {
+    if (process.env[key] !== undefined) safe[key] = process.env[key];
+  }
+  const envPath = join(directory, '.env');
+  try {
+    // Compose reads the full file through `env_file`; only OR3 interpolation
+    // values belong in its process environment. In particular, never let a
+    // managed .env replace PATH or smuggle COMPOSE_* control variables into
+    // the Docker client invocation.
+    for (const [key, value] of Object.entries(parseEnv(readFileSync(envPath, 'utf8')))) {
+      if (key.startsWith('OR3_')) safe[key] = value;
+    }
+    return safe;
+  } catch (error) {
+    throw new Error(`Could not read managed Compose environment ${envPath}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function commandEnvironment(command: string, args: string[], cwd?: string, supplied?: NodeJS.ProcessEnv) {
+  if (supplied) return supplied;
+  return command === 'docker' && args[0] === 'compose' && cwd
+    ? composeProcessEnv(cwd)
+    : process.env;
+}
+
+async function run(command: string, args: string[], cwd?: string, environment?: NodeJS.ProcessEnv): Promise<CommandResult> {
   const printable = `${command} ${args.map(quote).join(' ')}`;
   try {
     const result = await execFile(command, args, {
       cwd,
       maxBuffer: 4 * 1024 * 1024,
       encoding: 'utf8',
-      env: process.env,
+      env: commandEnvironment(command, args, cwd, environment),
     });
     return {
       ok: true,
@@ -504,8 +615,54 @@ function deploymentPaths(directory: string) {
     operations: join(cloud, 'operations'),
     backups: join(cloud, 'backups'),
     exports: join(cloud, 'exports'),
+    lease: join(cloud, 'operation-lease'),
+    backupAuthKey: join(cloud, 'backup-auth.key'),
     operatorIpc: join(cloud, 'operator-ipc'),
   };
+}
+
+async function backupAuthenticationKey(directory: string, create = false) {
+  const keyPath = deploymentPaths(directory).backupAuthKey;
+  try {
+    const key = (await readText(keyPath)).trim();
+    if (!/^[0-9a-f]{64}$/i.test(key)) throw new Error('invalid format');
+    return key;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw new Error(`Backup authentication key at ${keyPath} is invalid or unreadable. Restore is refused until it is repaired from the deployment owner’s secure key material.`);
+    }
+    if (!create) {
+      throw new Error(`This deployment has no backup authentication key at ${keyPath}. Backups created by older CLI versions are intentionally not trusted for restore. Create a new verified backup before attempting a destructive restore.`);
+    }
+    const key = randomBytes(32).toString('hex');
+    await writeSecure(keyPath, `${key}\n`);
+    return key;
+  }
+}
+
+function backupAuthenticationTag(key: string, manifestContents: string) {
+  return createHmac('sha256', Buffer.from(key, 'hex')).update(manifestContents).digest('hex');
+}
+
+async function writeBackupAuthentication(directory: string, backupPath: string, manifestContents: string) {
+  const key = await backupAuthenticationKey(directory, true);
+  await writeSecure(join(backupPath, 'manifest.auth'), `${backupAuthenticationTag(key, manifestContents)}\n`);
+}
+
+async function assertBackupAuthentication(directory: string, backupPath: string, manifestContents: string) {
+  const key = await backupAuthenticationKey(directory);
+  let provided: Buffer;
+  try {
+    const value = (await readText(join(backupPath, 'manifest.auth'))).trim();
+    if (!/^[0-9a-f]{64}$/i.test(value)) throw new Error('invalid authentication tag');
+    provided = Buffer.from(value, 'hex');
+  } catch {
+    throw new Error(`Backup at ${backupPath} has no valid deployment authentication tag. Refusing to restore or export an unauthenticated backup.`);
+  }
+  const expected = Buffer.from(backupAuthenticationTag(key, manifestContents), 'hex');
+  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+    throw new Error(`Backup authentication failed for ${backupPath}. Refusing to trust data, configuration, or managed assets from another deployment.`);
+  }
 }
 
 async function readState(directory: string): Promise<ManagedState> {
@@ -524,11 +681,118 @@ async function writeState(directory: string, state: ManagedState) {
 async function readDirectoryEmpty(directory: string) {
   try {
     const entries = await readdir(directory);
-    if (entries.length) throw new Error(`Refusing to use non-empty directory ${directory}. Choose a new directory or run adopt explicitly.`);
+    const nonLeaseEntries = entries.filter((entry) => entry !== '.or3-cloud');
+    if (nonLeaseEntries.length) throw new Error(`Refusing to use non-empty directory ${directory}. Choose a new directory or run adopt explicitly.`);
+    if (entries.includes('.or3-cloud')) {
+      const cloudEntries = await readdir(join(directory, '.or3-cloud'));
+      if (cloudEntries.some((entry) => entry !== 'operation-lease')) {
+        throw new Error(`Refusing to use non-empty directory ${directory}. Choose a new directory or run adopt explicitly.`);
+      }
+    }
     return false;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return true;
     throw error;
+  }
+}
+
+async function readLeaseOwner(leasePath: string): Promise<LeaseOwner | undefined> {
+  try {
+    const owner = JSON.parse(await readText(join(leasePath, 'owner.json'))) as Partial<LeaseOwner>;
+    if (
+      owner.schemaVersion !== 1
+      || typeof owner.nonce !== 'string'
+      || typeof owner.command !== 'string'
+      || (owner.origin !== 'cli' && owner.origin !== 'dashboard')
+      || !Number.isSafeInteger(owner.pid)
+      || typeof owner.acquiredAt !== 'string'
+      || typeof owner.heartbeatAt !== 'string'
+    ) return undefined;
+    return owner as LeaseOwner;
+  } catch {
+    return undefined;
+  }
+}
+
+function cliLeaseOwnerIsGone(owner: LeaseOwner) {
+  if (owner.origin !== 'cli') return false;
+  try {
+    process.kill(owner.pid, 0);
+    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ESRCH';
+  }
+}
+
+function dashboardLeaseOwnerIsStale(owner: LeaseOwner, jobId?: string) {
+  if (owner.origin !== 'dashboard' || (jobId && owner.jobId !== jobId)) return false;
+  const heartbeat = Date.parse(owner.heartbeatAt);
+  return Number.isFinite(heartbeat) && Date.now() - heartbeat > DASHBOARD_LEASE_STALE_MS;
+}
+
+async function acquireDeploymentLease(directory: string, command: string) {
+  const leasePath = deploymentPaths(directory).lease;
+  await mkdir(dirname(leasePath), { recursive: true, mode: 0o700 });
+  const nonce = randomBytes(16).toString('hex');
+  const owner: LeaseOwner = {
+    schemaVersion: 1,
+    nonce,
+    command,
+    origin: process.env.OR3_DASHBOARD_UPDATE_JOB_ID ? 'dashboard' : 'cli',
+    jobId: process.env.OR3_DASHBOARD_UPDATE_JOB_ID?.trim() || undefined,
+    pid: process.pid,
+    acquiredAt: now(),
+    heartbeatAt: now(),
+  };
+  try {
+    await mkdir(leasePath, { recursive: false, mode: 0o700 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    const active = await readLeaseOwner(leasePath);
+    if (active && (cliLeaseOwnerIsGone(active) || dashboardLeaseOwnerIsStale(active, owner.jobId))) {
+      const stalePath = `${leasePath}.stale-${randomBytes(8).toString('hex')}`;
+      try {
+        await rename(leasePath, stalePath);
+        await rm(stalePath, { recursive: true, force: true });
+        await mkdir(leasePath, { recursive: false, mode: 0o700 });
+      } catch (reclaimError) {
+        throw new Error(`Another OR3 Cloud operation owns ${directory}. Refusing to race its lifecycle lock. ${reclaimError instanceof Error ? reclaimError.message : String(reclaimError)}`);
+      }
+    } else {
+      const detail = active
+        ? `${active.command} (${active.origin}) acquired at ${active.acquiredAt}`
+        : 'an unreadable owner record';
+      throw new Error(`Another OR3 Cloud operation owns ${directory}: ${detail}. Refusing to run concurrently.`);
+    }
+  }
+  try {
+    await writeSecure(join(leasePath, 'owner.json'), `${JSON.stringify(owner, null, 2)}\n`);
+  } catch (error) {
+    await rm(leasePath, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
+  const heartbeat = setInterval(() => {
+    owner.heartbeatAt = now();
+    // A transient heartbeat write failure must not become an unhandled
+    // rejection that kills the lifecycle process. The atomic lease directory
+    // remains owned; CLI leases also retain the live-PID check, while a stale
+    // dashboard lease still requires the full recovery protocol before reuse.
+    void writeSecure(join(leasePath, 'owner.json'), `${JSON.stringify(owner, null, 2)}\n`).catch(() => undefined);
+  }, 5_000);
+  heartbeat.unref();
+  return async () => {
+    clearInterval(heartbeat);
+    const current = await readLeaseOwner(leasePath);
+    if (current?.nonce === nonce) await rm(leasePath, { recursive: true, force: true });
+  };
+}
+
+async function withDeploymentLease<T>(directory: string, command: string, action: () => Promise<T>) {
+  const release = await acquireDeploymentLease(directory, command);
+  try {
+    return await action();
+  } finally {
+    await release();
   }
 }
 
@@ -541,23 +805,33 @@ function dashboardUpdatesEnabled(directory: string) {
 }
 
 function composeArgs(directory: string, mode: Mode, command: string[] = []) {
+  const env = parseEnv(readFileSync(join(directory, '.env'), 'utf8'));
+  const project = env.OR3_COMPOSE_PROJECT;
+  if (!project) throw new Error(`Managed Compose environment at ${join(directory, '.env')} has no OR3_COMPOSE_PROJECT.`);
   const files = ['-f', join(directory, 'compose.yaml')];
   if (mode === 'public') files.push('-f', join(directory, 'compose.public.yaml'));
-  const profile = dashboardUpdatesEnabled(directory) ? ['--profile', 'dashboard-updates'] : [];
+  if (dashboardUpdatesEnabled(directory)) {
+    const operatorOverlay = join(directory, 'compose.operator.yaml');
+    if (!existsSync(operatorOverlay)) {
+      throw new Error('Dashboard updates are enabled but compose.operator.yaml is missing. Run `npx @or3/cloud recover` before operating on this deployment.');
+    }
+    files.push('-f', operatorOverlay);
+  }
   return [
     'compose',
+    '--project-name',
+    project,
     '--project-directory',
     directory,
     '--env-file',
     join(directory, '.env'),
-    ...profile,
     ...files,
     ...command,
   ];
 }
 
 function diagnostics(directory: string, mode: Mode) {
-  const files = `-f ${quote(join(directory, 'compose.yaml'))}${mode === 'public' ? ` -f ${quote(join(directory, 'compose.public.yaml'))}` : ''}`;
+  const files = `-f ${quote(join(directory, 'compose.yaml'))}${mode === 'public' ? ` -f ${quote(join(directory, 'compose.public.yaml'))}` : ''}${dashboardUpdatesEnabled(directory) ? ` -f ${quote(join(directory, 'compose.operator.yaml'))}` : ''}`;
   return `cd ${quote(directory)} && docker compose --env-file ${quote(join(directory, '.env'))} ${files} ps && docker compose --env-file ${quote(join(directory, '.env'))} ${files} logs --tail=200`;
 }
 
@@ -592,14 +866,18 @@ async function compose(directory: string, mode: Mode, command: string[], secrets
 }
 
 type ComposeService = {
+  image?: string;
+  network_mode?: string;
   ports?: Array<Record<string, unknown>>;
   volumes?: Array<Record<string, unknown>>;
   environment?: Record<string, unknown> | string[];
+  labels?: Record<string, unknown> | string[];
 };
 
 type ComposeConfig = {
+  name?: string;
   services?: Record<string, ComposeService>;
-  volumes?: Record<string, { name?: string }>;
+  volumes?: Record<string, { name?: string; labels?: Record<string, unknown> | string[] }>;
 };
 
 function parseComposeConfig(text: string): ComposeConfig {
@@ -622,6 +900,16 @@ function composeEnvironmentValue(service: ComposeService, key: string) {
   return typeof value === 'string' ? value : undefined;
 }
 
+function composeLabelValue(service: ComposeService, key: string) {
+  const labels = service.labels;
+  if (Array.isArray(labels)) {
+    const line = labels.find((value) => value.startsWith(`${key}=`));
+    return line?.slice(key.length + 1);
+  }
+  const value = labels?.[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
 function composePublishedPort(port: Record<string, unknown>) {
   const target = Number(port.target);
   const published = Number(port.published);
@@ -634,6 +922,7 @@ export function checkResolvedLoopbackBinding(config: string, expectedPort?: numb
     const parsed = parseComposeConfig(config);
     const service = parsed.services?.or3;
     if (!service) return false;
+    if (service.network_mode) return false;
     const ports = (service.ports ?? []).map(composePublishedPort);
     const appPorts = ports.filter(({ target }) => target === 3000);
     if (!appPorts.length) return false;
@@ -652,8 +941,75 @@ async function resolvedComposeConfig(directory: string, mode: Mode) {
 
 async function assertSafeComposeBinding(directory: string, mode: Mode, env: Record<string, string>) {
   const config = await resolvedComposeConfig(directory, mode);
+  const parsed = parseComposeConfig(config);
+  const service = parsed.services?.or3;
+  if (parsed.name !== undefined && parsed.name !== env.OR3_COMPOSE_PROJECT) {
+    throw new Error('Resolved Compose configuration does not use the managed project name. Refusing to operate on another deployment.');
+  }
   if (!checkResolvedLoopbackBinding(config, Number(env.OR3_PORT))) {
     throw new Error('Resolved Compose configuration must publish OR3 port 3000 only on 127.0.0.1. Refusing to expose the application directly.');
+  }
+  if (!service || service.image !== env.OR3_IMAGE) {
+    throw new Error('Resolved Compose configuration does not use the managed immutable OR3 image reference. Refusing to start an unexpected image.');
+  }
+  if (env.OR3_DEPLOYMENT_ID && composeLabelValue(service, 'io.or3.cloud.deployment-id') !== env.OR3_DEPLOYMENT_ID) {
+    throw new Error('Resolved Compose configuration does not carry the managed deployment identity label. Refusing to start an unbound project.');
+  }
+  const dataMount = (service.volumes ?? []).find((mount) => mount.target === '/data');
+  const source = typeof dataMount?.source === 'string' ? dataMount.source : '';
+  const volumeName = source ? parsed.volumes?.[source]?.name : undefined;
+  if (dataMount?.type !== 'volume' || volumeName !== env.OR3_VOLUME_NAME) {
+    throw new Error('Resolved Compose configuration does not bind the managed OR3 data volume. Refusing to operate on an unexpected volume.');
+  }
+  const volumeLabels = source ? parsed.volumes?.[source]?.labels : undefined;
+  const deploymentLabel = Array.isArray(volumeLabels)
+    ? volumeLabels.find((value) => value.startsWith('io.or3.cloud.deployment-id='))?.slice('io.or3.cloud.deployment-id='.length)
+    : volumeLabels?.['io.or3.cloud.deployment-id'];
+  if (env.OR3_DEPLOYMENT_ID && deploymentLabel !== env.OR3_DEPLOYMENT_ID) {
+    throw new Error('Resolved managed data volume lacks the expected deployment identity label.');
+  }
+  if (env.OR3_DASHBOARD_UPDATES_ENABLED === 'true') {
+    const operator = parsed.services?.['or3-operator'];
+    if (
+      !operator
+      || operator.network_mode
+      || operator.image !== env.OR3_OPERATOR_IMAGE
+      || (env.OR3_DEPLOYMENT_ID && composeLabelValue(operator, 'io.or3.cloud.deployment-id') !== env.OR3_DEPLOYMENT_ID)
+    ) {
+      throw new Error('Resolved dashboard operator does not match the managed digest-qualified deployment bridge. Refusing to start it.');
+    }
+    if (process.env.OR3_CLOUD_SKIP_PULL !== 'true' && !/@sha256:[0-9a-f]{64}$/i.test(env.OR3_OPERATOR_IMAGE ?? '')) {
+      throw new Error('The dashboard operator image is not digest-qualified. Refusing to start a mutable privileged runtime.');
+    }
+  }
+}
+
+async function assertRunningAppImage(directory: string, mode: Mode, expectedImage: string) {
+  const container = await run('docker', composeArgs(directory, mode, ['ps', '-q', 'or3']), directory);
+  const containerId = container.stdout.trim();
+  if (!container.ok || !containerId) throw new Error('OR3 started without a running application container.');
+  const image = await run('docker', ['inspect', '--format', '{{.Image}}', containerId], directory);
+  if (!image.ok || !image.stdout.trim()) throw new Error('Could not inspect the image of the running OR3 container.');
+  const expectedDigest = expectedImage.match(/@((?:sha256:)[0-9a-f]{64})$/i)?.[1];
+  if (!expectedDigest && process.env.OR3_CLOUD_SKIP_PULL === 'true') {
+    const expectedId = await run('docker', ['image', 'inspect', '--format', '{{.Id}}', expectedImage], directory);
+    if (!expectedId.ok || expectedId.stdout.trim() !== image.stdout.trim()) {
+      throw new Error('The local qualification fixture started a different OR3 image than the one selected by the managed environment.');
+    }
+    return;
+  }
+  if (!expectedDigest) throw new Error(`Managed OR3 image ${expectedImage} is not digest-qualified.`);
+  const repoDigests = await run('docker', ['image', 'inspect', '--format', '{{json .RepoDigests}}', image.stdout.trim()], directory);
+  if (!repoDigests.ok) throw new Error('Could not inspect repository digests for the running OR3 container.');
+  let values: string[];
+  try {
+    values = JSON.parse(repoDigests.stdout.trim()) as string[];
+  } catch {
+    throw new Error('The running OR3 container has no readable repository digests.');
+  }
+  const expected = `${imageRepository(expectedImage)}@${expectedDigest}`;
+  if (!values.includes(expected)) {
+    throw new Error(`The running OR3 container image does not match the managed digest ${expectedDigest}. Refusing to commit startup.`);
   }
 }
 
@@ -773,6 +1129,21 @@ function packagedImageDigest(version: string) {
   return digest;
 }
 
+function packagedOperatorImageDigest(version: string) {
+  let manifest: { version?: unknown; or3Cloud?: { operatorImageDigest?: unknown } };
+  try {
+    manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8'));
+  } catch {
+    return undefined;
+  }
+  if (manifest.version !== version || manifest.or3Cloud?.operatorImageDigest === undefined) return undefined;
+  const digest = manifest.or3Cloud.operatorImageDigest;
+  if (typeof digest !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(digest)) {
+    throw new Error('This @or3/cloud package contains an invalid dashboard operator image digest. Refusing to enable a mutable privileged runtime.');
+  }
+  return digest;
+}
+
 function expectedImageDigest(version: string) {
   const packaged = packagedImageDigest(version);
   const supplied = process.env.OR3_EXPECTED_IMAGE_DIGEST?.trim();
@@ -781,6 +1152,18 @@ function expectedImageDigest(version: string) {
   }
   if (packaged && supplied && packaged !== supplied) {
     throw new Error('The requested image digest does not match the authenticated @or3/cloud package.');
+  }
+  return packaged ?? supplied;
+}
+
+function expectedOperatorImageDigest(version: string) {
+  const packaged = packagedOperatorImageDigest(version);
+  const supplied = process.env.OR3_EXPECTED_OPERATOR_IMAGE_DIGEST?.trim();
+  if (supplied && !/^sha256:[0-9a-f]{64}$/.test(supplied)) {
+    throw new Error('OR3_EXPECTED_OPERATOR_IMAGE_DIGEST must be a complete sha256 digest.');
+  }
+  if (packaged && supplied && packaged !== supplied) {
+    throw new Error('The requested dashboard operator digest does not match the authenticated @or3/cloud package.');
   }
   return packaged ?? supplied;
 }
@@ -820,6 +1203,23 @@ function imageRepository(image: string) {
   return colon > slash ? reference.slice(0, colon) : reference;
 }
 
+/**
+ * Compose must receive an immutable reference. The one intentional exception
+ * is the isolated local-image qualification fixture, whose image ID is not a
+ * registry manifest digest and therefore cannot be used as repository@digest.
+ */
+function imageAtDigest(image: string, digest: string) {
+  if (!/^sha256:[0-9a-f]{64}$/i.test(digest)) {
+    throw new Error(`Could not bind ${image} to a complete immutable image digest.`);
+  }
+  if (image.includes('@')) {
+    if (!image.endsWith(`@${digest}`)) throw new Error(`Image reference ${image} does not match expected digest ${digest}.`);
+    return image;
+  }
+  if (process.env.OR3_CLOUD_SKIP_PULL === 'true') return image;
+  return `${imageRepository(image)}@${digest}`;
+}
+
 async function requireImageDigest(image: string, expected: string, label: string) {
   const actual = await imageDigest(image);
   if (actual !== expected) {
@@ -834,6 +1234,25 @@ async function pullAndRequireImage(image: string, expected: string, label: strin
     throw new Error(`${label} image digest mismatch for ${image}. Expected ${expected}, found ${actual}. The registry tag may have moved; refusing to mutate the deployment.`);
   }
   return actual;
+}
+
+async function assertImageReleaseIdentity(image: string, version: string) {
+  const result = await run('docker', ['image', 'inspect', '--format', '{{json .Config.Labels}}', image]);
+  if (!result.ok) throw new Error(`Could not inspect release labels for ${image}. ${result.stderr.trim()}`);
+  let labels: Record<string, unknown>;
+  try {
+    labels = JSON.parse(result.stdout.trim()) as Record<string, unknown>;
+  } catch {
+    throw new Error(`OR3 image ${image} has no readable release labels.`);
+  }
+  if (
+    labels['org.opencontainers.image.source'] !== 'https://github.com/Saluana/or3-chat'
+    || labels['org.opencontainers.image.version'] !== version
+    || typeof labels['org.opencontainers.image.revision'] !== 'string'
+    || !/^[0-9a-f]{40}$/i.test(labels['org.opencontainers.image.revision'])
+  ) {
+    throw new Error(`OR3 image ${image} does not carry the expected source/version release labels for ${version}.`);
+  }
 }
 
 async function imageDigest(image: string) {
@@ -925,29 +1344,44 @@ function composeProjectNames(directory: string) {
  */
 async function dashboardOperatorEnv(directory: string, version: string): Promise<DashboardOperatorEnv | undefined> {
   if (process.platform !== 'linux' || !process.getuid || !process.getgid) return undefined;
+  const expectedDigest = expectedOperatorImageDigest(version);
+  // Development and packages published before the dedicated runtime remains
+  // CLI-only rather than falling back to the full application image.
+  if (!expectedDigest) return undefined;
   const configured = process.env.DOCKER_HOST?.trim();
   if (configured && !configured.startsWith('unix://')) return undefined;
   const socket = configured ? configured.slice('unix://'.length) : '/var/run/docker.sock';
   if (!isAbsolute(socket)) return undefined;
+  let socketStat;
+  let uid: number;
+  let gid: number;
   try {
-    const socketStat = await stat(socket);
+    socketStat = await stat(socket);
     if (!socketStat.isSocket()) return undefined;
-    const uid = process.getuid();
-    const gid = process.getgid();
+    uid = process.getuid();
+    gid = process.getgid();
     if (!Number.isSafeInteger(uid) || uid < 0 || !Number.isSafeInteger(gid) || gid < 0) return undefined;
-    return {
-      OR3_DASHBOARD_UPDATES_ENABLED: 'true',
-      COMPOSE_PROFILES: 'dashboard-updates',
-      OR3_OPERATOR_IMAGE: imageFor(version),
-      OR3_DEPLOYMENT_DIR: resolve(directory),
-      OR3_OPERATOR_UID: String(uid),
-      OR3_OPERATOR_GID: String(gid),
-      OR3_DOCKER_SOCKET: socket,
-      OR3_DOCKER_GID: String(socketStat.gid),
-    };
   } catch {
     return undefined;
   }
+  const operatorTag = operatorImageFor(version);
+  let digest: string;
+  try {
+    digest = await pullImage(operatorTag, expectedDigest);
+    await assertSupportedHostArchitecture(operatorTag);
+    await assertImageReleaseIdentity(operatorTag, version);
+  } catch {
+    return undefined;
+  }
+  return {
+    OR3_DASHBOARD_UPDATES_ENABLED: 'true',
+    OR3_OPERATOR_IMAGE: imageAtDigest(operatorTag, digest),
+    OR3_DEPLOYMENT_DIR: resolve(directory),
+    OR3_OPERATOR_UID: String(uid!),
+    OR3_OPERATOR_GID: String(gid!),
+    OR3_DOCKER_SOCKET: socket,
+    OR3_DOCKER_GID: String(socketStat!.gid),
+  };
 }
 
 async function prepareDashboardOperatorIpc(directory: string, enabled: boolean) {
@@ -956,14 +1390,72 @@ async function prepareDashboardOperatorIpc(directory: string, enabled: boolean) 
   // The app's fixed container UID needs to traverse its read-only bind mount
   // to connect to the socket. Execute-only access prevents it from listing
   // this host-owned directory or creating another socket beside it.
-  await mkdir(ipc, { recursive: true, mode: 0o711 });
-  await chmod(ipc, 0o711);
+  await mkdir(ipc, { recursive: true, mode: 0o710 });
+  await chmod(ipc, 0o710);
+}
+
+/**
+ * A socket stat is not enough to enable a host-root control plane. Exercise
+ * the exact image, user, group, Docker socket, and writable deployment bind
+ * before adding the Compose overlay.
+ */
+async function verifyDashboardOperatorBridge(directory: string, operator?: DashboardOperatorEnv) {
+  if (!operator) return false;
+  const probe = `.operator-probe-${randomBytes(8).toString('hex')}`;
+  const result = await run('docker', [
+    'run', '--rm', '--network', 'none', '--read-only',
+    '--user', `${operator.OR3_OPERATOR_UID}:${operator.OR3_OPERATOR_GID}`,
+    '--group-add', operator.OR3_DOCKER_GID,
+    '--mount', `type=bind,src=${operator.OR3_DOCKER_SOCKET},dst=/var/run/docker.sock`,
+    '--mount', `type=bind,src=${operator.OR3_DEPLOYMENT_DIR},dst=/deployment`,
+    '--workdir', '/deployment', '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m',
+    '--entrypoint', 'sh', operator.OR3_OPERATOR_IMAGE,
+    '-c', `docker version --format '{{.Server.Version}}' >/dev/null && umask 077 && : > .or3-cloud/operator-ipc/${probe} && test -O .or3-cloud/operator-ipc/${probe} && rm .or3-cloud/operator-ipc/${probe}`,
+  ], directory);
+  if (!result.ok) {
+    return false;
+  }
+  return true;
+}
+
+async function prepareVerifiedDashboardOperator(directory: string, version: string) {
+  const candidate = await dashboardOperatorEnv(directory, version);
+  if (!candidate) return undefined;
+  try {
+    await prepareDashboardOperatorIpc(directory, true);
+    if (await verifyDashboardOperatorBridge(directory, candidate)) return candidate;
+  } catch {
+    // An existing root-owned or inaccessible IPC directory is not a reason to
+    // fail an otherwise supported CLI deployment. Leave this host CLI-only.
+  }
+  await rm(deploymentPaths(directory).operatorIpc, { recursive: true, force: true }).catch(() => undefined);
+  console.warn('Dashboard updates are unavailable on this Docker setup; the deployment will remain host-CLI managed.');
+  return undefined;
+}
+
+const DASHBOARD_OPERATOR_ENV_KEYS = [
+  'OR3_DASHBOARD_UPDATES_ENABLED',
+  'OR3_OPERATOR_IMAGE',
+  'OR3_DEPLOYMENT_DIR',
+  'OR3_OPERATOR_UID',
+  'OR3_OPERATOR_GID',
+  'OR3_DOCKER_SOCKET',
+  'OR3_DOCKER_GID',
+] as const;
+
+function withoutDashboardOperator(env: Record<string, string>) {
+  const result = { ...env };
+  for (const key of DASHBOARD_OPERATOR_ENV_KEYS) delete result[key];
+  return result;
 }
 
 export function buildEnv(input: {
   mode: Mode;
   version: string;
   directory: string;
+  /** Immutable repository@digest reference resolved before this file is written. */
+  image?: string;
+  deploymentId?: string;
   email: string;
   password: string;
   domain?: string;
@@ -976,7 +1468,8 @@ export function buildEnv(input: {
   const publicOrigin = input.mode === 'public' ? `https://${input.domain}` : `http://127.0.0.1:${input.port}`;
   const values: Record<string, string> = {
     OR3_VERSION: input.version,
-    OR3_IMAGE: imageFor(input.version),
+    OR3_IMAGE: input.image ?? imageFor(input.version),
+    OR3_DEPLOYMENT_ID: input.deploymentId ?? id('deployment'),
     OR3_COMPOSE_PROJECT: names.project,
     OR3_VOLUME_NAME: names.volume,
     OR3_CADDY_DATA_VOLUME: names.caddyData,
@@ -1064,7 +1557,15 @@ async function readPassword(flags: Flags) {
 }
 
 export function managedAssetNames(mode: Mode) {
-  return ['compose.yaml', 'dashboard-operator.mjs', ...(mode === 'public' ? ['compose.public.yaml', 'Caddyfile'] : [])];
+  return ['compose.yaml', 'compose.operator.yaml', 'dashboard-operator.mjs', ...(mode === 'public' ? ['compose.public.yaml', 'Caddyfile'] : [])];
+}
+
+function managedAssetNamesForInventory(mode: Mode, inventoryVersion?: number) {
+  if (inventoryVersion === MANAGED_ASSET_INVENTORY_VERSION) return managedAssetNames(mode);
+  if (inventoryVersion === 2) {
+    return ['compose.yaml', 'dashboard-operator.mjs', ...(mode === 'public' ? ['compose.public.yaml', 'Caddyfile'] : [])];
+  }
+  return ['compose.yaml', ...(mode === 'public' ? ['compose.public.yaml', 'Caddyfile'] : [])];
 }
 
 async function installManagedAssets(directory: string, assets: Map<string, Buffer>) {
@@ -1126,7 +1627,7 @@ export async function snapshotManagedAssets(directory: string, mode: Mode, backu
   for (const name of managedAssetNames(mode)) {
     // The first dashboard-capable update must still snapshot and roll back a
     // deployment created before the operator asset existed.
-    if (name === 'dashboard-operator.mjs' && !await fileExists(join(directory, name))) continue;
+    if ((name === 'dashboard-operator.mjs' || name === 'compose.operator.yaml') && !await fileExists(join(directory, name))) continue;
     const destination = join(assetDir, name);
     await copySecure(join(directory, name), destination);
     checksums[name] = await sha256File(destination);
@@ -1137,13 +1638,10 @@ export async function snapshotManagedAssets(directory: string, mode: Mode, backu
 async function verifiedManagedAssetContents(backupPath: string, manifest: BackupManifest) {
   const checksums = manifest.managedAssetSha256;
   if (!checksums) return undefined;
-  const expected = (manifest.managedAssetInventoryVersion === 2
-    ? managedAssetNames(manifest.mode)
-    : ['compose.yaml', ...(manifest.mode === 'public' ? ['compose.public.yaml', 'Caddyfile'] : [])]
-  ).sort();
+  const expected = managedAssetNamesForInventory(manifest.mode, manifest.managedAssetInventoryVersion).sort();
   const actual = Object.keys(checksums).sort();
   if (
-    (manifest.managedAssetInventoryVersion !== undefined && manifest.managedAssetInventoryVersion !== 2)
+    (manifest.managedAssetInventoryVersion !== undefined && manifest.managedAssetInventoryVersion !== 2 && manifest.managedAssetInventoryVersion !== MANAGED_ASSET_INVENTORY_VERSION)
     || actual.length !== expected.length
     || actual.some((name, index) => name !== expected[index])
   ) {
@@ -1169,8 +1667,11 @@ export async function restoreManagedAssets(directory: string, backupPath: string
   const assets = await verifiedManagedAssetContents(backupPath, manifest);
   if (!assets) return false;
   await installManagedAssets(directory, assets);
-  if (manifest.managedAssetInventoryVersion !== 2) {
+  if (manifest.managedAssetInventoryVersion !== 2 && manifest.managedAssetInventoryVersion !== MANAGED_ASSET_INVENTORY_VERSION) {
     await rm(join(directory, 'dashboard-operator.mjs'), { force: true });
+  }
+  if (manifest.managedAssetInventoryVersion !== MANAGED_ASSET_INVENTORY_VERSION) {
+    await rm(join(directory, 'compose.operator.yaml'), { force: true });
   }
   return true;
 }
@@ -1187,6 +1688,9 @@ async function checkPublicPrerequisites(domain: string) {
 }
 
 async function markPending(directory: string, state: ManagedState, operation: PendingOperation) {
+  const dashboardJobId = process.env.OR3_DASHBOARD_UPDATE_JOB_ID?.trim();
+  operation.origin = dashboardJobId ? 'dashboard' : 'cli';
+  if (dashboardJobId) operation.dashboardJobId = dashboardJobId;
   state.incompleteOperation = operation;
   await writeState(directory, state);
   await writeSecure(join(deploymentPaths(directory).operations, `${operation.id}.json`), `${JSON.stringify(operation, null, 2)}\n`);
@@ -1220,10 +1724,21 @@ async function stopProject(directory: string, mode: Mode) {
   await compose(directory, mode, ['stop', 'or3']);
 }
 
+async function removeDashboardOperator(directory: string, mode: Mode) {
+  if (!dashboardUpdatesEnabled(directory)) return;
+  await compose(directory, mode, ['rm', '--stop', '--force', 'or3-operator']);
+}
+
 async function startProject(directory: string, mode: Mode, env: Record<string, string>) {
   await assertSafeComposeBinding(directory, mode, env);
-  await compose(directory, mode, ['up', '-d', '--wait', '--wait-timeout', '180'], secretValues(env));
+  // A dashboard-origin update runs inside the operator service. Recreating the
+  // whole project here can kill that process before it commits its terminal
+  // journal state. Keep its supervisor and proxy running; replace only the
+  // application service, then let the operator restart itself after commit.
+  const services = process.env.OR3_DASHBOARD_UPDATE_JOB_ID ? ['or3'] : [];
+  await compose(directory, mode, ['up', '-d', '--wait', '--wait-timeout', '180', ...services], secretValues(env));
   await waitForDeepHealth(directory, mode, secretValues(env));
+  await assertRunningAppImage(directory, mode, env.OR3_IMAGE);
 }
 
 function backupDirectory(directory: string, backupId: string) {
@@ -1276,6 +1791,20 @@ async function removeNamedBackupArtifact(directory: string, backupId: string) {
   await rm(join(deploymentPaths(directory).exports, `${backupId}.json`), { force: true });
 }
 
+async function removeEnumeratedBackupArtifact(directory: string, backup: BackupListing) {
+  const backupsRoot = resolve(deploymentPaths(directory).backups);
+  const target = resolve(backup.path);
+  if (
+    dirname(target) !== backupsRoot
+    || basename(target) !== backup.backupId
+    || !BACKUP_ID_PATTERN.test(backup.backupId)
+  ) {
+    throw new Error(`Refusing to prune an untrusted backup path ${backup.path}.`);
+  }
+  await rm(target, { recursive: true, force: true });
+  await rm(join(deploymentPaths(directory).exports, `${backup.backupId}.json`), { force: true });
+}
+
 type BackupListing = {
   backupId: string;
   createdAt: string;
@@ -1285,38 +1814,32 @@ type BackupListing = {
   dataSha256: string;
 };
 
-/** Reads a backup manifest for listing/pruning without checksum verification. */
-async function readBackupManifestMetadata(backupPath: string): Promise<BackupManifest | null> {
-  try {
-    const manifest = JSON.parse(await readText(join(backupPath, 'manifest.json'))) as BackupManifest;
-    if (manifest.schemaVersion !== 1 || !manifest.backupId || !manifest.createdAt) return null;
-    return manifest;
-  } catch {
-    return null;
-  }
-}
-
-/** Enumerates complete backups (manifest present) newest first. */
+/** Enumerates only fully verified backups; retention must never make policy from corrupt metadata. */
 async function enumerateBackups(directory: string): Promise<BackupListing[]> {
   const backupsRoot = deploymentPaths(directory).backups;
   let entries: string[] = [];
   try {
     entries = await readdir(backupsRoot);
-  } catch {
-    return [];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw new Error(`Could not enumerate managed backups at ${backupsRoot}: ${error instanceof Error ? error.message : String(error)}`);
   }
   const result: BackupListing[] = [];
   for (const entry of entries) {
+    if (!BACKUP_ID_PATTERN.test(entry)) {
+      throw new Error(`Backup store contains an unexpected artifact ${join(backupsRoot, entry)}. Refusing to use it for retention; inspect or remove it explicitly.`);
+    }
     const path = join(backupsRoot, entry);
-    const manifest = await readBackupManifestMetadata(path);
-    if (!manifest) continue;
+    const manifest = await readManifest(path, directory);
+    if (manifest.backupId !== entry) {
+      throw new Error(`Backup directory ${path} does not match manifest ID ${manifest.backupId}. Refusing to use it for retention.`);
+    }
+    if (!Number.isFinite(Date.parse(manifest.createdAt))) {
+      throw new Error(`Backup ${manifest.backupId} has an invalid creation time.`);
+    }
     let bytes = 0;
-    try {
-      for (const file of ['data.tgz', 'config.env', 'manifest.json']) {
-        bytes += (await stat(join(path, file))).size;
-      }
-    } catch {
-      bytes = 0;
+    for (const file of ['data.tgz', 'config.env', 'manifest.json', 'manifest.auth']) {
+      bytes += (await stat(join(path, file))).size;
     }
     result.push({
       backupId: manifest.backupId,
@@ -1370,8 +1893,10 @@ async function pruneBackups(directory: string, state: ManagedState, keep: number
     console.log(`--force --yes will permanently delete: ${targets.join(', ')}`);
   }
   for (const backupId of targets) {
-    await removeNamedBackupArtifact(directory, backupId);
-    console.log(`Deleted backup ${backupId} at ${backupDirectory(directory, backupId)}`);
+    const backup = backups.find((entry) => entry.backupId === backupId);
+    if (!backup) throw new Error(`Retention selected backup ${backupId}, but its verified path disappeared before deletion.`);
+    await removeEnumeratedBackupArtifact(directory, backup);
+    console.log(`Deleted backup ${backupId} at ${backup.path}`);
   }
   return targets.length;
 }
@@ -1391,6 +1916,39 @@ function assertDeploymentIdentity(state: ManagedState, env: Record<string, strin
       throw new Error(`Managed state does not match ${key} in .env. Refusing to operate on an unexpected deployment identity.`);
     }
   }
+  const pending = state.incompleteOperation;
+  let pendingTargetImage: string | undefined;
+  if (pending?.targetImage) {
+    try {
+      pendingTargetImage = pending.targetImageDigest
+        ? imageAtDigest(pending.targetImage, pending.targetImageDigest)
+        : pending.targetImage;
+    } catch {
+      pendingTargetImage = undefined;
+    }
+  }
+  const journaledTarget = Boolean(
+    pending
+    && (pending.operation === 'update' || pending.operation === 'restore' || pending.operation === 'rollback')
+    && pending.targetVersion
+    && pendingTargetImage
+    && env.OR3_VERSION === pending.targetVersion
+    && env.OR3_IMAGE === pendingTargetImage,
+  );
+  const journaledIdentityMigration = Boolean(
+    journaledTarget
+    && !state.deploymentId
+    && pending?.targetDeploymentId
+    && env[DEPLOYMENT_ID_ENV_KEY] === pending.targetDeploymentId,
+  );
+  if (state.deploymentId || env[DEPLOYMENT_ID_ENV_KEY]) {
+    if ((!state.deploymentId || env[DEPLOYMENT_ID_ENV_KEY] !== state.deploymentId) && !journaledIdentityMigration) {
+      throw new Error('Managed state does not match OR3_DEPLOYMENT_ID in .env. Refusing to operate on an unexpected deployment identity.');
+    }
+  }
+  if ((env.OR3_VERSION !== state.appVersion || env.OR3_IMAGE !== state.image) && !journaledTarget) {
+    throw new Error('Managed state does not match OR3_VERSION or OR3_IMAGE in .env. Refusing to create a backup or mutate an unverified release configuration.');
+  }
 }
 
 /**
@@ -1401,6 +1959,9 @@ function assertDeploymentIdentity(state: ManagedState, env: Record<string, strin
  */
 function assertDeploymentDirectoryIdentity(directory: string, state: ManagedState) {
   const resolved = resolve(directory);
+  if (state.deploymentRoot && resolve(state.deploymentRoot) !== resolved) {
+    throw new Error(`Managed deployment root is ${state.deploymentRoot}, not ${resolved}. Refusing to operate on a copied or relocated deployment; perform an explicit relocation before mutation.`);
+  }
   const names = composeProjectNames(resolved);
   const mismatches: string[] = [];
   if (state.composeProject !== names.project) {
@@ -1452,6 +2013,16 @@ export function assertBackupMatchesDeployment(manifest: BackupManifest, backupEn
   if (manifest.caddyConfigVolume !== undefined && manifest.caddyConfigVolume !== state.caddyConfigVolume) {
     throw new Error(`Backup ${manifest.backupId} belongs to a different Caddy config volume.`);
   }
+  if (state.deploymentId && (manifest.deploymentId !== state.deploymentId || backupEnv.OR3_DEPLOYMENT_ID !== state.deploymentId)) {
+    // The first identity-aware update may retain one authenticated pre-update
+    // snapshot whose older assets have no deployment label. It is safe to use
+    // only for the same Compose/volume identity checked above; any supplied
+    // conflicting identity remains a hard refusal.
+    const legacySnapshot = manifest.deploymentId === undefined && backupEnv.OR3_DEPLOYMENT_ID === undefined;
+    if (!legacySnapshot) {
+      throw new Error(`Backup ${manifest.backupId} belongs to a different immutable deployment identity.`);
+    }
+  }
   if (manifest.port !== undefined && manifest.port !== state.port) {
     throw new Error(`Backup ${manifest.backupId} belongs to port ${manifest.port}, not ${state.port}.`);
   }
@@ -1481,7 +2052,11 @@ async function streamCommandToFile(
   }
   await mkdir(dirname(destination), { recursive: true, mode: 0o700 });
   const temporary = `${destination}.${randomBytes(8).toString('hex')}.partial`;
-  const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(command, args, {
+    cwd,
+    env: commandEnvironment(command, args, cwd),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   let stderr = '';
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk: string) => {
@@ -1517,7 +2092,11 @@ async function streamFileToCommand(
   cwd?: string,
   secrets: string[] = [],
 ) {
-  const child = spawn(command, args, { cwd, stdio: ['pipe', 'ignore', 'pipe'] });
+  const child = spawn(command, args, {
+    cwd,
+    env: commandEnvironment(command, args, cwd),
+    stdio: ['pipe', 'ignore', 'pipe'],
+  });
   let stderr = '';
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk: string) => {
@@ -1573,7 +2152,12 @@ async function archiveExternalVolume(image: string, volume: string, backupDir: s
   // backups on ordinary Linux Docker hosts.
   await streamCommandToFile(
     'docker',
-    ['run', '--rm', '--user', '0:0', '-v', `${volume}:/source:ro`, image, 'sh', '-c', 'tar czf - -C /source .'],
+    [
+      'run', '--rm', '--network', 'none', '--read-only', '--user', '0:0',
+      '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL', '--cap-add', 'DAC_READ_SEARCH',
+      '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m', '-v', `${volume}:/source:ro`,
+      image, 'sh', '-c', 'tar czf - -C /source .',
+    ],
     join(backupDir, 'data.tgz'),
   );
 }
@@ -1582,11 +2166,19 @@ async function restoreVolumeArchive(directory: string, mode: Mode, env: Record<s
   // Host backups intentionally stay 0700/0600. Stream the archive over stdin
   // so the normal image user can write its owned /data volume without either
   // exposing the backup through a bind mount or forcing a capability-less root.
+  const clear = await run('docker', composeArgs(directory, mode, [
+    'run', '--rm', '-T', '--no-deps', '--user', '0:0', '--read-only',
+    '--cap-drop', 'ALL', '--cap-add', 'DAC_OVERRIDE', '--cap-add', 'FOWNER',
+    '--entrypoint', 'sh', 'or3', '-c', 'find /data -mindepth 1 -delete',
+  ]), directory);
+  if (!clear.ok) {
+    throw new Error(`Could not safely clear the managed data volume before restore. ${redact(clear.stderr, secretValues(env))}`);
+  }
   await streamFileToCommand(
     'docker',
     composeArgs(directory, mode, [
       'run', '--rm', '-T', '--no-deps', '--entrypoint', 'sh', 'or3', '-c',
-      'find /data -mindepth 1 -delete && tar xzf - -C /data',
+      'tar xzf - -C /data',
     ]),
     join(backupPath, 'data.tgz'),
     directory,
@@ -1594,7 +2186,26 @@ async function restoreVolumeArchive(directory: string, mode: Mode, env: Record<s
   );
 }
 
-async function createBackup(directory: string, state: ManagedState, env: Record<string, string>) {
+async function validateVolumeArchive(directory: string, mode: Mode, env: Record<string, string>, backupPath: string) {
+  await streamFileToCommand(
+    'docker',
+    composeArgs(directory, mode, [
+      'run', '--rm', '-T', '--no-deps', '--entrypoint', 'sh', 'or3', '-c',
+      'tar tzf - >/dev/null',
+    ]),
+    join(backupPath, 'data.tgz'),
+    directory,
+    secretValues(env),
+  );
+}
+
+async function createBackup(
+  directory: string,
+  state: ManagedState,
+  env: Record<string, string>,
+  options: { restartAfter?: boolean } = {},
+) {
+  const restartAfter = options.restartAfter ?? true;
   await requireImageDigest(state.image, state.imageDigest, 'Current deployment');
   const backupId = id('backup');
   const backupDir = backupDirectory(directory, backupId);
@@ -1623,22 +2234,24 @@ async function createBackup(directory: string, state: ManagedState, env: Record<
       dataBytes: volumeSize,
       configSha256: await sha256File(join(backupDir, 'config.env')),
       managedAssetSha256,
-      managedAssetInventoryVersion: managedAssetSha256['dashboard-operator.mjs'] ? 2 : undefined,
+      managedAssetInventoryVersion: managedAssetSha256['compose.operator.yaml']
+        ? MANAGED_ASSET_INVENTORY_VERSION
+        : managedAssetSha256['dashboard-operator.mjs']
+          ? 2
+          : undefined,
       mode: state.mode,
       domain: state.domain,
       composeProject: state.composeProject,
       volumeName: state.volumeName,
       caddyDataVolume: state.caddyDataVolume,
       caddyConfigVolume: state.caddyConfigVolume,
+      deploymentId: state.deploymentId,
       port: state.port,
     };
-    await writeSecure(join(backupDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    const manifestContents = `${JSON.stringify(manifest, null, 2)}\n`;
+    await writeSecure(join(backupDir, 'manifest.json'), manifestContents);
+    await writeBackupAuthentication(directory, backupDir, manifestContents);
     manifestWritten = true;
-    try {
-      await pruneBackups(directory, state, BACKUP_RETENTION_KEEP, false);
-    } catch (error) {
-      console.log(`Warning: automatic backup retention could not run: ${error instanceof Error ? error.message : String(error)}`);
-    }
     return { backupId, backupDir, manifest };
   } catch (error) {
     if (!manifestWritten) {
@@ -1647,7 +2260,7 @@ async function createBackup(directory: string, state: ManagedState, env: Record<
     }
     throw error;
   } finally {
-    if (stopAttempted) {
+    if (stopAttempted && restartAfter) {
       try {
         await startProject(directory, state.mode, env);
       } catch (error) {
@@ -1657,14 +2270,19 @@ async function createBackup(directory: string, state: ManagedState, env: Record<
   }
 }
 
-async function readManifest(backupPath: string) {
-  const manifest = JSON.parse(await readText(join(backupPath, 'manifest.json'))) as BackupManifest;
+async function readManifest(backupPath: string, authenticatedForDirectory?: string) {
+  const manifestContents = await readText(join(backupPath, 'manifest.json'));
+  if (authenticatedForDirectory) await assertBackupAuthentication(authenticatedForDirectory, backupPath, manifestContents);
+  const manifest = JSON.parse(manifestContents) as BackupManifest;
   if (
     manifest.schemaVersion !== 1 ||
-    !manifest.backupId ||
+    !BACKUP_ID_PATTERN.test(manifest.backupId) ||
+    !Number.isFinite(Date.parse(manifest.createdAt)) ||
     !isVersion(manifest.appVersion) ||
     !manifest.image ||
     !/^sha256:[0-9a-f]{64}$/i.test(manifest.imageDigest) ||
+    !/^[0-9a-f]{64}$/i.test(manifest.dataSha256) ||
+    !/^[0-9a-f]{64}$/i.test(manifest.configSha256 ?? '') ||
     (manifest.dataBytes !== undefined && (!Number.isSafeInteger(manifest.dataBytes) || manifest.dataBytes < 0))
   ) {
     throw new Error(`Invalid backup manifest at ${backupPath}.`);
@@ -1703,44 +2321,55 @@ async function assertRestoreFreeSpace(
   const archiveBytes = await gzipUncompressedBytes(join(backupPath, 'data.tgz'));
   const requiredBytes = Math.max(manifest.dataBytes ?? 0, archiveBytes);
   const freeBytes = await dataVolumeFreeBytes(directory, state.mode, env);
-  assertEnoughFreeSpace(freeBytes, requiredBytes, 'Restore');
+  // Extraction first replaces the current managed volume contents. Its used
+  // bytes are reclaimable capacity, unlike a backup archive written beside it.
+  const reclaimableBytes = await dataVolumeSize(directory, state.mode, env);
+  assertEnoughFreeSpace(freeBytes + reclaimableBytes, requiredBytes, 'Restore');
 }
 
 async function restoreBackupData(directory: string, state: ManagedState, env: Record<string, string>, backupPath: string) {
-  const manifest = await readManifest(backupPath);
+  const manifest = await readManifest(backupPath, directory);
   const backupEnv = parseEnv(await readText(join(backupPath, 'config.env')));
   if (backupEnv.OR3_VERSION !== manifest.appVersion || backupEnv.OR3_IMAGE !== manifest.image) {
     throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
   }
   assertBackupMatchesDeployment(manifest, backupEnv, state, env);
   if (manifest.imageDigest) await requireImageDigest(manifest.image, manifest.imageDigest, `Backup ${manifest.backupId}`);
+  await validateVolumeArchive(directory, state.mode, env, backupPath);
   // Preflight the filesystem Docker will actually extract into. A compressed
   // tarball's byte size and the backup directory's filesystem cannot prove
   // there is room in /data.
   await assertRestoreFreeSpace(directory, state, env, manifest, backupPath);
-  let started = false;
-  let stopAttempted = false;
-  try {
-    stopAttempted = true;
-    await stopProject(directory, state.mode);
-    await copySecure(join(backupPath, 'config.env'), deploymentPaths(directory).env);
-    await restoreManagedAssets(directory, backupPath, manifest);
-    await restoreVolumeArchive(directory, state.mode, backupEnv, backupPath);
-    const restoredEnv = parseEnv(await readText(deploymentPaths(directory).env));
-    await startProject(directory, state.mode, restoredEnv);
-    started = true;
-  } catch (error) {
-    let restartError = '';
-    if (stopAttempted && !started) {
-      try {
-        const recoveryEnv = parseEnv(await readText(deploymentPaths(directory).env));
-        await startProject(directory, state.mode, recoveryEnv);
-      } catch (recovery) {
-        restartError = ` OR3 could not be restarted: ${recovery instanceof Error ? recovery.message : String(recovery)}`;
+  // An inventory older than v3 cannot safely re-enable the overlay: its
+  // archived assets do not contain compose.operator.yaml. Treat it as a
+  // CLI-only snapshot rather than leaving an orphaned Docker-socket sidecar.
+  const restoresOperatorOverlay = manifest.managedAssetInventoryVersion === MANAGED_ASSET_INVENTORY_VERSION
+    && Boolean(manifest.managedAssetSha256?.['compose.operator.yaml']);
+  const restoredEnv = restoresOperatorOverlay
+    ? {
+        ...backupEnv,
+        OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest),
       }
-    }
-    throw new Error(`Restore failed for ${manifest.backupId}: ${error instanceof Error ? error.message : String(error)}${restartError}`);
+    : withoutDashboardOperator({
+        ...backupEnv,
+        OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest),
+      });
+
+  await stopProject(directory, state.mode);
+  if (
+    dashboardUpdatesEnabled(directory)
+    && restoredEnv.OR3_DASHBOARD_UPDATES_ENABLED !== 'true'
+    && !process.env.OR3_DASHBOARD_UPDATE_JOB_ID
+  ) {
+    await removeDashboardOperator(directory, state.mode);
   }
+  // Older releases stored a mutable tag in config.env. The signed manifest
+  // records its immutable digest, so rewrite only that reference before
+  // Compose sees it; all other backup fields remain the authenticated data.
+  await writeSecure(deploymentPaths(directory).env, serializeEnv(restoredEnv));
+  await restoreManagedAssets(directory, backupPath, manifest);
+  await restoreVolumeArchive(directory, state.mode, restoredEnv, backupPath);
+  await startProject(directory, state.mode, restoredEnv);
   return manifest;
 }
 
@@ -1752,6 +2381,8 @@ export function stateFromEnv(directory: string, env: Record<string, string>, mod
     volumeName: env.OR3_VOLUME_NAME,
     caddyDataVolume: mode === 'public' ? env.OR3_CADDY_DATA_VOLUME : undefined,
     caddyConfigVolume: mode === 'public' ? env.OR3_CADDY_CONFIG_VOLUME : undefined,
+    deploymentId: env.OR3_DEPLOYMENT_ID,
+    deploymentRoot: resolve(directory),
     appVersion: env.OR3_VERSION,
     image: env.OR3_IMAGE,
     imageDigest: digest,
@@ -1834,17 +2465,18 @@ async function initCommand(positionals: string[], flags: Flags) {
   const email = await resolveAdminEmail(flags);
   const password = await readPassword(flags);
   const version = PACKAGE_VERSION;
-  const image = imageFor(version);
-  const digest = await pullImage(image, expectedImageDigest(version));
-  await assertSupportedHostArchitecture(image);
+  const imageTag = imageFor(version);
+  const digest = await pullImage(imageTag, expectedImageDigest(version));
+  await assertSupportedHostArchitecture(imageTag);
+  await assertImageReleaseIdentity(imageTag, version);
+  const image = imageAtDigest(imageTag, digest);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await chmod(directory, 0o700);
   await mkdir(deploymentPaths(directory).operations, { recursive: true, mode: 0o700 });
   await mkdir(deploymentPaths(directory).backups, { recursive: true, mode: 0o700 });
-  const operator = await dashboardOperatorEnv(directory, version);
-  await prepareDashboardOperatorIpc(directory, Boolean(operator));
+  const operator = await prepareVerifiedDashboardOperator(directory, version);
   await copyAssets(directory, mode);
-  const env = buildEnv({ mode, version, directory, email, password, domain, port, dashboardOperator: operator });
+  const env = buildEnv({ mode, version, directory, image, email, password, domain, port, dashboardOperator: operator });
   await writeSecure(deploymentPaths(directory).env, serializeEnv(env));
   await writeSecure(join(directory, '.or3-initial-credentials'), serializeInitialCredentials({
     bootstrapEmail: email,
@@ -1879,6 +2511,7 @@ async function loadManaged(directory = process.cwd()) {
   const state = await readState(resolved);
   const env = parseEnv(await readText(deploymentPaths(resolved).env));
   assertDeploymentIdentity(state, env);
+  assertDeploymentDirectoryIdentity(resolved, state);
   return { directory: resolved, state, env };
 }
 
@@ -1890,6 +2523,25 @@ function operationToStateOperation(operation: PendingOperation['operation'], fal
 async function commitRecoveredState(directory: string, previous: ManagedState, next: ManagedState) {
   await removeOperationRecord(directory, previous.incompleteOperation?.id);
   await writeState(directory, next);
+}
+
+async function commitPreMutationRecovery(
+  directory: string,
+  state: ManagedState,
+  message: string,
+) {
+  const restoredEnv = parseEnv(await readText(deploymentPaths(directory).env));
+  const recovered = stateFromEnv(
+    directory,
+    restoredEnv,
+    state.mode,
+    state.lastSuccessfulOperation,
+    await imageDigest(restoredEnv.OR3_IMAGE),
+  );
+  recovered.rollback = state.rollback;
+  recovered.lastError = message;
+  await commitRecoveredState(directory, state, recovered);
+  return recovered;
 }
 
 async function recoverCommand(directory: string) {
@@ -1912,34 +2564,32 @@ async function recoverCommand(directory: string) {
     }
 
     if (pending.operation === 'restore' || pending.operation === 'rollback') {
-      if (!pending.backupId) throw new Error(`The incomplete ${pending.operation} has no recorded backup ID.`);
-      const backupPath = await resolveBackup(loaded.directory, pending.backupId);
-      const manifest = await readManifest(backupPath);
-      const backupEnv = parseEnv(await readText(join(backupPath, 'config.env')));
-      if (backupEnv.OR3_VERSION !== manifest.appVersion || backupEnv.OR3_IMAGE !== manifest.image) {
-        throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
+      if (pending.phase === 'prepared' || pending.phase === 'snapshot-created') {
+        // The target was not yet allowed to mutate the deployment. A snapshot
+        // can leave OR3 stopped, so make the known-good deployment healthy
+        // again instead of replaying a requested restore whose boundary is
+        // unknown after an interruption.
+        await startProject(loaded.directory, loaded.state.mode, loaded.env);
+        loaded.state.lastError = undefined;
+        await clearPending(loaded.directory, loaded.state);
+        console.log(`Recovered the incomplete ${pending.operation} before data replacement. OR3 ${loaded.state.appVersion} is deeply healthy.`);
+        return;
       }
-      if (
-        (pending.targetVersion && pending.targetVersion !== manifest.appVersion) ||
-        (pending.targetImage && pending.targetImage !== manifest.image) ||
-        (pending.targetImageDigest && pending.targetImageDigest !== manifest.imageDigest)
-      ) {
-        throw new Error(`Backup ${manifest.backupId} does not match the recorded ${pending.operation} target.`);
+      if (!pending.previousBackupPath && !pending.previousBackupId) {
+        throw new Error(`The incomplete ${pending.operation} has no verified pre-mutation snapshot. Refusing to replay a target that may have been partially restored; inspect the deployment and restore an authenticated backup explicitly.`);
       }
-      assertBackupMatchesDeployment(manifest, backupEnv, loaded.state, loaded.env);
-      await pullAndRequireImage(manifest.image, manifest.imageDigest, `Backup ${manifest.backupId}`);
-      await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath);
-      const restoredEnv = parseEnv(await readText(deploymentPaths(loaded.directory).env));
-      const restored = stateFromEnv(loaded.directory, restoredEnv, loaded.state.mode, 'restore', await imageDigest(restoredEnv.OR3_IMAGE));
-      restored.lastError = undefined;
-      await commitRecoveredState(loaded.directory, loaded.state, restored);
-      console.log(`Recovered the incomplete ${pending.operation} operation from backup ${manifest.backupId}. OR3 ${restored.appVersion} is deeply healthy.`);
+      const previous = await restorePreMutationSnapshot(loaded.directory, loaded.state, loaded.env);
+      const recovered = await commitPreMutationRecovery(
+        loaded.directory,
+        loaded.state,
+        `Interrupted ${pending.operation} was rolled back to pre-mutation snapshot ${previous.manifest.backupId}.`,
+      );
+      console.log(`Recovered the incomplete ${pending.operation} by restoring pre-mutation snapshot ${previous.manifest.backupId}. OR3 ${recovered.appVersion} is deeply healthy.`);
       return;
     }
 
     if (pending.operation === 'update') {
-      const oldDeployment = loaded.env.OR3_VERSION === loaded.state.appVersion && loaded.env.OR3_IMAGE === loaded.state.image;
-      if (oldDeployment) {
+      if (pending.phase === 'prepared' || pending.phase === 'snapshot-created') {
         await pullAndRequireImage(loaded.state.image, loaded.state.imageDigest, 'Current deployment');
         await startProject(loaded.directory, loaded.state.mode, loaded.env);
         const recovered = stateFromEnv(loaded.directory, loaded.env, loaded.state.mode, loaded.state.lastSuccessfulOperation, await imageDigest(loaded.env.OR3_IMAGE));
@@ -1949,55 +2599,23 @@ async function recoverCommand(directory: string) {
         console.log(`Recovered the incomplete update before the replacement was applied. OR3 ${recovered.appVersion} is deeply healthy.`);
         return;
       }
-      if (
-        !pending.backupId ||
-        loaded.env.OR3_VERSION !== pending.targetVersion ||
-        loaded.env.OR3_IMAGE !== pending.targetImage
-      ) {
-        throw new Error('The incomplete update has an unknown .env version/image. Refusing to guess which image or data should be live.');
+      if (!pending.backupPath && !pending.backupId) {
+        throw new Error('The incomplete update has no verified pre-update snapshot. Refusing to guess which image or data should be live.');
       }
-      const backupPath = await resolveBackup(loaded.directory, pending.backupId);
-      const manifest = await readManifest(backupPath);
-      const backupEnv = parseEnv(await readText(join(backupPath, 'config.env')));
-      if (backupEnv.OR3_VERSION !== manifest.appVersion || backupEnv.OR3_IMAGE !== manifest.image) {
-        throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
-      }
-      assertBackupMatchesDeployment(manifest, backupEnv, loaded.state, loaded.env);
-      if (pending.targetVersion !== PACKAGE_VERSION) {
-        throw new Error(`This interrupted update targets OR3 ${pending.targetVersion}. Run \`npx --yes @or3/cloud@${pending.targetVersion} recover\` so the image and generated assets match.`);
-      }
-      try {
-        if (pending.targetImageDigest) await pullAndRequireImage(pending.targetImage, pending.targetImageDigest, `OR3 ${pending.targetVersion}`);
-        await copyAssets(loaded.directory, loaded.state.mode);
-        await startProject(loaded.directory, loaded.state.mode, loaded.env);
-      } catch (replacementError) {
-        await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath);
-        const restoredEnv = parseEnv(await readText(deploymentPaths(loaded.directory).env));
-        const restored = stateFromEnv(loaded.directory, restoredEnv, loaded.state.mode, loaded.state.lastSuccessfulOperation, await imageDigest(restoredEnv.OR3_IMAGE));
-        restored.rollback = loaded.state.rollback;
-        restored.lastError = `Interrupted update was restored: ${redact(replacementError instanceof Error ? replacementError.message : String(replacementError), secretValues(restoredEnv))}`;
-        await commitRecoveredState(loaded.directory, loaded.state, restored);
-        console.log(`Recovered the incomplete update by restoring backup ${manifest.backupId}. OR3 ${restored.appVersion} is deeply healthy.`);
-        return;
-      }
-      const updated = stateFromEnv(loaded.directory, loaded.env, loaded.state.mode, 'update', await imageDigest(loaded.env.OR3_IMAGE));
-      updated.rollback = {
-        appVersion: loaded.state.appVersion,
-        image: loaded.state.image,
-        imageDigest: loaded.state.imageDigest,
-        backupId: pending.backupId,
-        createdAt: now(),
-      };
-      updated.lastError = undefined;
-      await commitRecoveredState(loaded.directory, loaded.state, updated);
-      console.log(`Recovered the incomplete update. OR3 ${updated.appVersion} is deeply healthy.`);
+      const previous = await restorePreMutationSnapshot(loaded.directory, loaded.state, loaded.env);
+      const recovered = await commitPreMutationRecovery(
+        loaded.directory,
+        loaded.state,
+        `Interrupted update was rolled back to pre-update snapshot ${previous.manifest.backupId}.`,
+      );
+      console.log(`Recovered the incomplete update by restoring pre-update snapshot ${previous.manifest.backupId}. OR3 ${recovered.appVersion} is deeply healthy.`);
       return;
     }
 
     if (pending.operation === 'adopt') {
       if (!pending.backupId) throw new Error('The incomplete adoption has no source backup ID. Refusing to claim that data was transferred.');
       const sourceBackupPath = await resolveBackup(loaded.directory, pending.backupId);
-      const sourceManifest = await readManifest(sourceBackupPath);
+      const sourceManifest = await readManifest(sourceBackupPath, loaded.directory);
       if (
         sourceManifest.mode !== loaded.state.mode ||
         sourceManifest.appVersion !== loaded.state.appVersion ||
@@ -2068,6 +2686,10 @@ async function backupCreateCommand(directory: string) {
   try {
     const result = await createBackup(loaded.directory, loaded.state, loaded.env);
     await clearPending(loaded.directory, loaded.state);
+    // Retention is deliberately after the verified snapshot is committed and
+    // OR3 is healthy. A corrupt older artifact must not turn a successful
+    // backup into an incomplete operation or cause the new copy to be lost.
+    await pruneBackups(loaded.directory, loaded.state, BACKUP_RETENTION_KEEP, false);
     console.log(`Backup ${result.backupId} created at ${result.backupDir}`);
     console.log(`SHA-256: ${result.manifest.dataSha256}`);
   } catch (error) {
@@ -2108,22 +2730,30 @@ async function backupPruneCommand(directory: string, flags: Flags) {
 
 async function backupExportCommand(directory: string, backupId: string, destination: string) {
   const backupPath = await resolveBackup(directory, backupId);
-  const manifest = await readManifest(backupPath);
+  const manifest = await readManifest(backupPath, directory);
   const dest = resolve(destination);
   const source = resolve(backupPath);
+  const deploymentRoot = await realpath(directory);
   if (source === dest || dest.startsWith(`${source}${sep}`)) {
     throw new Error('Choose a destination directory different from the backup itself.');
   }
   if (await fileExists(dest)) throw new Error(`Destination ${dest} already exists. Choose a new empty destination so an export can never merge with unrelated files.`);
   await mkdir(dirname(dest), { recursive: true, mode: 0o700 });
+  const canonicalDestination = join(await realpath(dirname(dest)), basename(dest));
+  if (canonicalDestination === deploymentRoot || canonicalDestination.startsWith(`${deploymentRoot}${sep}`)) {
+    throw new Error('Backup exports must live outside the managed deployment directory so `remove --purge-data` can never delete the remaining copy.');
+  }
   await mkdir(dest, { mode: 0o700 });
   try {
+    if (await realpath(dest) !== canonicalDestination) {
+      throw new Error('Backup export destination changed while it was being created. Refusing to write an export through an unexpected path.');
+    }
     await chmod(dest, 0o700);
-    for (const file of ['data.tgz', 'config.env', 'manifest.json']) {
+    for (const file of ['data.tgz', 'config.env', 'manifest.json', 'manifest.auth']) {
       await copySecure(join(backupPath, file), join(dest, file));
     }
     if (manifest.managedAssetSha256) {
-      for (const name of managedAssetNames(manifest.mode)) {
+      for (const name of managedAssetNamesForInventory(manifest.mode, manifest.managedAssetInventoryVersion)) {
         await copySecure(join(backupPath, 'managed-assets', name), join(dest, 'managed-assets', name));
       }
     }
@@ -2137,7 +2767,7 @@ async function backupExportCommand(directory: string, backupId: string, destinat
         throw new Error(`Exported config.env checksum mismatch for ${manifest.backupId}.`);
       }
     }
-    await readManifest(dest);
+    await readManifest(dest, directory);
     const destinationDevice = (await stat(dest)).dev;
     await mkdir(deploymentPaths(directory).exports, { recursive: true, mode: 0o700 });
     const receipt: BackupExportReceipt = {
@@ -2150,9 +2780,9 @@ async function backupExportCommand(directory: string, backupId: string, destinat
       configSha256: manifest.configSha256,
     };
     await writeSecure(join(deploymentPaths(directory).exports, `${manifest.backupId}.json`), `${JSON.stringify(receipt, null, 2)}\n`);
-    let bytes = (await stat(join(dest, 'data.tgz'))).size + (await stat(join(dest, 'config.env'))).size + (await stat(join(dest, 'manifest.json'))).size;
+    let bytes = (await stat(join(dest, 'data.tgz'))).size + (await stat(join(dest, 'config.env'))).size + (await stat(join(dest, 'manifest.json'))).size + (await stat(join(dest, 'manifest.auth'))).size;
     if (manifest.managedAssetSha256) {
-      for (const name of managedAssetNames(manifest.mode)) {
+      for (const name of managedAssetNamesForInventory(manifest.mode, manifest.managedAssetInventoryVersion)) {
         bytes += (await stat(join(dest, 'managed-assets', name))).size;
       }
     }
@@ -2202,10 +2832,13 @@ async function updateCommand(directory: string, flags: Flags) {
     throw new Error(`This CLI contains deployment assets for OR3 ${PACKAGE_VERSION}. Run \`npx --yes @or3/cloud@${targetVersion} update --to ${targetVersion}\` so the image and generated assets match.`);
   }
   if (targetVersion === state.appVersion) throw new Error(`The deployment is already on OR3 ${targetVersion}.`);
-  const targetImage = imageFor(targetVersion);
-  const targetDigest = await pullImage(targetImage, expectedImageDigest(targetVersion));
-  await assertSupportedHostArchitecture(targetImage);
+  const targetImageTag = imageFor(targetVersion);
+  const targetDigest = await pullImage(targetImageTag, expectedImageDigest(targetVersion));
+  await assertSupportedHostArchitecture(targetImageTag);
+  await assertImageReleaseIdentity(targetImageTag, targetVersion);
+  const targetImage = imageAtDigest(targetImageTag, targetDigest);
   const oldEnv = { ...env };
+  const targetDeploymentId = env.OR3_DEPLOYMENT_ID ?? state.deploymentId ?? id('deployment');
   const pending: PendingOperation = {
     id: id('update'),
     operation: 'update',
@@ -2214,23 +2847,40 @@ async function updateCommand(directory: string, flags: Flags) {
     targetVersion,
     targetImage,
     targetImageDigest: targetDigest,
+    targetDeploymentId,
   };
   await markPending(loaded.directory, state, pending);
   try {
-    const backup = await createBackup(loaded.directory, state, env);
-    await updatePending(loaded.directory, state, { backupId: backup.backupId });
-    const operator = env.OR3_DASHBOARD_UPDATES_ENABLED === 'true'
-      ? undefined
-      : await dashboardOperatorEnv(loaded.directory, targetVersion);
-    await prepareDashboardOperatorIpc(loaded.directory, Boolean(operator));
+    const backup = await createBackup(loaded.directory, state, env, { restartAfter: false });
+    await updatePending(loaded.directory, state, {
+      backupId: backup.backupId,
+      backupPath: backup.backupDir,
+      backupDataSha256: backup.manifest.dataSha256,
+      backupConfigSha256: backup.manifest.configSha256,
+      phase: 'snapshot-created',
+    });
+    // Resolve the dedicated operator runtime for every target version. Keeping
+    // an old privileged image after an application update defeats the digest
+    // binding and leaves security fixes behind. A host-CLI update can safely
+    // remove an unavailable bridge before changing the overlay; a dashboard
+    // update lets its current supervisor exit cleanly after the commit.
+    const operator = await prepareVerifiedDashboardOperator(loaded.directory, targetVersion);
+    if (env.OR3_DASHBOARD_UPDATES_ENABLED === 'true' && !operator && !process.env.OR3_DASHBOARD_UPDATE_JOB_ID) {
+      await removeDashboardOperator(loaded.directory, state.mode);
+    }
     const nextEnv = {
-      ...env,
+      ...withoutDashboardOperator(env),
       OR3_VERSION: targetVersion,
       OR3_IMAGE: targetImage,
+      OR3_DEPLOYMENT_ID: targetDeploymentId,
       ...(operator ?? {}),
     };
     const previousRootOwnership = await managedVolumeRootOwnership(targetImage, state.volumeName);
     const migrateLegacyVolume = previousRootOwnership.uid !== MANAGED_RUNTIME_UID || previousRootOwnership.gid !== MANAGED_RUNTIME_GID;
+    await updatePending(loaded.directory, state, {
+      phase: 'target-mutating',
+      previousRootOwnership,
+    });
     try {
       await stopProject(loaded.directory, state.mode);
       if (migrateLegacyVolume) {
@@ -2249,6 +2899,7 @@ async function updateCommand(directory: string, flags: Flags) {
       }
       await startProject(loaded.directory, state.mode, nextEnv);
     } catch (error) {
+      await updatePending(loaded.directory, state, { phase: 'restoring-previous' });
       await writeSecure(deploymentPaths(loaded.directory).env, serializeEnv(oldEnv));
       try {
         await stopProject(loaded.directory, state.mode).catch(() => undefined);
@@ -2259,14 +2910,12 @@ async function updateCommand(directory: string, flags: Flags) {
       } catch (restoreError) {
         throw new Error(`Update to ${targetVersion} failed, and automatic backup restoration also failed: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}. Original update error: ${error instanceof Error ? error.message : String(error)}`);
       }
-      const oldDigest = await imageDigest(state.image);
-      state.imageDigest = oldDigest;
-      state.lastError = `Update to ${targetVersion} failed and was restored: ${redact(error instanceof Error ? error.message : String(error), secretValues(oldEnv))}`;
-      const operationId = pending.id;
-      delete state.incompleteOperation;
-      await removeOperationRecord(loaded.directory, operationId);
-      await writeState(loaded.directory, state);
-      throw new Error(state.lastError);
+      const recovered = await commitPreMutationRecovery(
+        loaded.directory,
+        state,
+        `Update to ${targetVersion} failed and was restored: ${redact(error instanceof Error ? error.message : String(error), secretValues(oldEnv))}`,
+      );
+      throw new Error(recovered.lastError);
     }
     const digest = await requireImageDigest(targetImage, targetDigest, `OR3 ${targetVersion}`);
     state.rollback = {
@@ -2279,9 +2928,12 @@ async function updateCommand(directory: string, flags: Flags) {
     state.appVersion = targetVersion;
     state.image = targetImage;
     state.imageDigest = digest;
+    state.deploymentId = targetDeploymentId;
+    state.deploymentRoot = resolve(loaded.directory);
     state.lastSuccessfulOperation = 'update';
     state.lastError = undefined;
     await clearPending(loaded.directory, state);
+    await pruneBackups(loaded.directory, state, BACKUP_RETENTION_KEEP, false);
     console.log(`OR3 updated to ${targetVersion}. Image digest: ${digest}`);
     console.log(`Rollback point: ${backup.backupId}. Keep it until login, chat, and file checks pass.`);
   } catch (error) {
@@ -2294,9 +2946,65 @@ async function updateCommand(directory: string, flags: Flags) {
 }
 
 async function resolveBackup(directory: string, value: string) {
+  if (!isAbsolute(value) && !BACKUP_ID_PATTERN.test(value)) {
+    throw new Error(`Backup ID "${value}" is invalid. Use an OR3-generated backup ID or an absolute external backup path.`);
+  }
   const candidate = isAbsolute(value) ? value : backupDirectory(directory, value);
   if (!await fileExists(join(candidate, 'manifest.json'))) throw new Error(`Backup ${value} was not found in ${deploymentPaths(directory).backups}.`);
   return resolve(candidate);
+}
+
+async function recordedBackupPath(directory: string, pending: PendingOperation, previous = false) {
+  const path = previous ? pending.previousBackupPath : pending.backupPath;
+  const backupId = previous ? pending.previousBackupId : pending.backupId;
+  const resolved = path
+    ? resolve(path)
+    : backupId
+      ? await resolveBackup(directory, backupId)
+      : undefined;
+  if (!resolved || !await fileExists(join(resolved, 'manifest.json'))) {
+    throw new Error(`The incomplete ${pending.operation} has no readable ${previous ? 'pre-mutation' : 'target'} backup source.`);
+  }
+  const manifest = await readManifest(resolved, directory);
+  if (!previous) {
+    if (pending.backupDataSha256 && pending.backupDataSha256 !== manifest.dataSha256) {
+      throw new Error(`The recorded target backup at ${resolved} no longer has its expected data checksum.`);
+    }
+    if (pending.backupConfigSha256 && pending.backupConfigSha256 !== manifest.configSha256) {
+      throw new Error(`The recorded target backup at ${resolved} no longer has its expected configuration checksum.`);
+    }
+  }
+  return { path: resolved, manifest };
+}
+
+async function createPreMutationSnapshot(
+  directory: string,
+  state: ManagedState,
+  env: Record<string, string>,
+) {
+  return await createBackup(directory, state, env, { restartAfter: false });
+}
+
+/**
+ * Restores the verified snapshot taken immediately before a destructive
+ * operation. Keeping this separate from the requested target prevents recovery
+ * from "blessing" a partially restored target after an interruption.
+ */
+async function restorePreMutationSnapshot(
+  directory: string,
+  state: ManagedState,
+  env: Record<string, string>,
+) {
+  const pending = state.incompleteOperation;
+  if (!pending) throw new Error('No incomplete operation is available to restore.');
+  const previous = await recordedBackupPath(directory, pending, true);
+  await updatePending(directory, state, { phase: 'restoring-previous' });
+  if (pending.previousRootOwnership) {
+    await pullAndRequireImage(state.image, state.imageDigest, 'Previous deployment');
+    await setManagedVolumeRootOwnership(state.image, state.volumeName, pending.previousRootOwnership);
+  }
+  await restoreBackupData(directory, state, env, previous.path);
+  return previous;
 }
 
 async function restoreCommand(directory: string, flags: Flags, positionals: string[]) {
@@ -2307,7 +3015,7 @@ async function restoreCommand(directory: string, flags: Flags, positionals: stri
   const backupValue = positionals[0];
   if (!backupValue) throw new Error('restore requires a backup ID or path.');
   const backupPath = await resolveBackup(loaded.directory, backupValue);
-  const manifest = await readManifest(backupPath);
+  const manifest = await readManifest(backupPath, loaded.directory);
   const backupEnv = parseEnv(await readText(join(backupPath, 'config.env')));
   if (backupEnv.OR3_VERSION !== manifest.appVersion || backupEnv.OR3_IMAGE !== manifest.image) {
     throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
@@ -2324,12 +3032,23 @@ async function restoreCommand(directory: string, flags: Flags, positionals: stri
     startedAt: now(),
     message: `Restoring backup ${manifest.backupId}`,
     backupId: manifest.backupId,
+    backupPath,
+    backupDataSha256: manifest.dataSha256,
+    backupConfigSha256: manifest.configSha256,
     targetVersion: manifest.appVersion,
     targetImage: manifest.image,
     targetImageDigest: manifest.imageDigest,
+    phase: 'prepared',
   };
   await markPending(loaded.directory, loaded.state, pending);
   try {
+    const previous = await createPreMutationSnapshot(loaded.directory, loaded.state, loaded.env);
+    await updatePending(loaded.directory, loaded.state, {
+      previousBackupId: previous.backupId,
+      previousBackupPath: previous.backupDir,
+      phase: 'snapshot-created',
+    });
+    await updatePending(loaded.directory, loaded.state, { phase: 'target-mutating' });
     await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath);
     const restoredEnv = parseEnv(await readText(deploymentPaths(loaded.directory).env));
     const digest = await imageDigest(restoredEnv.OR3_IMAGE);
@@ -2339,8 +3058,36 @@ async function restoreCommand(directory: string, flags: Flags, positionals: stri
     await writeState(loaded.directory, nextState);
     console.log(`Restored ${manifest.backupId}. Verify sign-in, a conversation, and a previously uploaded file.`);
   } catch (error) {
-    loaded.state.lastError = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));
-    await writeState(loaded.directory, loaded.state);
+    const original = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));
+    const phase = loaded.state.incompleteOperation?.phase;
+    const targetMayHaveMutated = phase === 'target-mutating' || phase === 'restoring-previous' || phase === 'starting-target';
+    if (targetMayHaveMutated && (loaded.state.incompleteOperation?.previousBackupPath || loaded.state.incompleteOperation?.previousBackupId)) {
+      let recoveredMessage: string;
+      try {
+        const previous = await restorePreMutationSnapshot(loaded.directory, loaded.state, loaded.env);
+        recoveredMessage = `Restore of ${manifest.backupId} failed and the pre-restore snapshot ${previous.manifest.backupId} was restored: ${original}`;
+        await commitPreMutationRecovery(loaded.directory, loaded.state, recoveredMessage);
+      } catch (recoveryError) {
+        const recovery = redact(recoveryError instanceof Error ? recoveryError.message : String(recoveryError), secretValues(loaded.env));
+        loaded.state.lastError = `Restore of ${manifest.backupId} failed, and automatic restoration of the pre-restore snapshot also failed: ${recovery}. Original restore error: ${original}`;
+        await writeState(loaded.directory, loaded.state);
+        throw new Error(loaded.state.lastError);
+      }
+      throw new Error(recoveredMessage!);
+    }
+    // No target mutation was recorded. A stopped backup snapshot is harmless,
+    // but OR3 may be down; return the original deployment to health before
+    // removing the no-longer-actionable operation record.
+    try {
+      await startProject(loaded.directory, loaded.state.mode, loaded.env);
+      loaded.state.lastError = `Restore of ${manifest.backupId} stopped before data replacement: ${original}`;
+      await clearPending(loaded.directory, loaded.state);
+    } catch (restartError) {
+      const restart = redact(restartError instanceof Error ? restartError.message : String(restartError), secretValues(loaded.env));
+      loaded.state.lastError = `Restore of ${manifest.backupId} stopped before data replacement, but the original deployment could not restart: ${restart}. Original restore error: ${original}`;
+      await writeState(loaded.directory, loaded.state);
+      throw new Error(loaded.state.lastError);
+    }
     throw error;
   }
 }
@@ -2353,7 +3100,7 @@ async function rollbackCommand(directory: string, flags: Flags) {
   const point = loaded.state.rollback;
   if (!point) throw new Error('No immediate rollback point is recorded for this deployment.');
   const backupPath = await resolveBackup(loaded.directory, point.backupId);
-  const manifest = await readManifest(backupPath);
+  const manifest = await readManifest(backupPath, loaded.directory);
   if (manifest.appVersion !== point.appVersion || manifest.image !== point.image || manifest.imageDigest !== point.imageDigest) {
     throw new Error(`Rollback point ${point.backupId} no longer matches its recorded image/version. Refusing to mutate the deployment.`);
   }
@@ -2371,12 +3118,23 @@ async function rollbackCommand(directory: string, flags: Flags) {
     startedAt: now(),
     message: `Rolling back to ${point.appVersion}`,
     backupId: point.backupId,
+    backupPath,
+    backupDataSha256: manifest.dataSha256,
+    backupConfigSha256: manifest.configSha256,
     targetVersion: point.appVersion,
     targetImage: point.image,
     targetImageDigest: point.imageDigest,
+    phase: 'prepared',
   };
   await markPending(loaded.directory, loaded.state, pending);
   try {
+    const previous = await createPreMutationSnapshot(loaded.directory, loaded.state, loaded.env);
+    await updatePending(loaded.directory, loaded.state, {
+      previousBackupId: previous.backupId,
+      previousBackupPath: previous.backupDir,
+      phase: 'snapshot-created',
+    });
+    await updatePending(loaded.directory, loaded.state, { phase: 'target-mutating' });
     await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath);
     const restoredEnv = parseEnv(await readText(deploymentPaths(loaded.directory).env));
     const nextState = stateFromEnv(loaded.directory, restoredEnv, loaded.state.mode, 'restore', await imageDigest(restoredEnv.OR3_IMAGE));
@@ -2385,8 +3143,33 @@ async function rollbackCommand(directory: string, flags: Flags) {
     await writeState(loaded.directory, nextState);
     console.log(`Rolled back to OR3 ${nextState.appVersion}. Verify sign-in, chat, and file access.`);
   } catch (error) {
-    loaded.state.lastError = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));
-    await writeState(loaded.directory, loaded.state);
+    const original = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));
+    const phase = loaded.state.incompleteOperation?.phase;
+    const targetMayHaveMutated = phase === 'target-mutating' || phase === 'restoring-previous' || phase === 'starting-target';
+    if (targetMayHaveMutated && (loaded.state.incompleteOperation?.previousBackupPath || loaded.state.incompleteOperation?.previousBackupId)) {
+      let recoveredMessage: string;
+      try {
+        const previous = await restorePreMutationSnapshot(loaded.directory, loaded.state, loaded.env);
+        recoveredMessage = `Rollback to ${point.appVersion} failed and the pre-rollback snapshot ${previous.manifest.backupId} was restored: ${original}`;
+        await commitPreMutationRecovery(loaded.directory, loaded.state, recoveredMessage);
+      } catch (recoveryError) {
+        const recovery = redact(recoveryError instanceof Error ? recoveryError.message : String(recoveryError), secretValues(loaded.env));
+        loaded.state.lastError = `Rollback to ${point.appVersion} failed, and automatic restoration of the pre-rollback snapshot also failed: ${recovery}. Original rollback error: ${original}`;
+        await writeState(loaded.directory, loaded.state);
+        throw new Error(loaded.state.lastError);
+      }
+      throw new Error(recoveredMessage!);
+    }
+    try {
+      await startProject(loaded.directory, loaded.state.mode, loaded.env);
+      loaded.state.lastError = `Rollback to ${point.appVersion} stopped before data replacement: ${original}`;
+      await clearPending(loaded.directory, loaded.state);
+    } catch (restartError) {
+      const restart = redact(restartError instanceof Error ? restartError.message : String(restartError), secretValues(loaded.env));
+      loaded.state.lastError = `Rollback to ${point.appVersion} stopped before data replacement, but the original deployment could not restart: ${restart}. Original rollback error: ${original}`;
+      await writeState(loaded.directory, loaded.state);
+      throw new Error(loaded.state.lastError);
+    }
     throw error;
   }
 }
@@ -2733,6 +3516,9 @@ export function assertSupportedSource(sourceDirectory: string, sourceEnv: Record
   if (sourceEnv.SSR_AUTH_ENABLED === 'false' || sourceEnv.OR3_GUEST_ACCESS_ENABLED === 'true') {
     throw new Error('V1 project does not require authenticated access; adoption expects the supported authenticated profile.');
   }
+  if (sourceEnv.OR3_AUTH_REGISTRATION_MODE !== 'invite_only' || sourceEnv.OR3_AUTH_AUTO_PROVISION !== 'false') {
+    throw new Error('V1 project does not use the managed invite-only registration policy. Adoption refuses to carry open registration into OR3 Cloud.');
+  }
   if (sourceEnv.OR3_SYNC_PROVIDER !== 'sqlite' || sourceEnv.OR3_STORAGE_FS_ROOT === undefined || sourceEnv.NUXT_PUBLIC_STORAGE_PROVIDER !== 'fs') {
     throw new Error('V1 project is not the supported Basic Auth + SQLite + filesystem profile.');
   }
@@ -2793,6 +3579,9 @@ async function adoptCommand(positionals: string[], flags: Flags) {
   if (!await fileExists(join(sourceDirectory, 'or3-release.json'))) throw new Error(`V1 release metadata is missing at ${sourceDirectory}/or3-release.json.`);
   const release = JSON.parse(await readText(join(sourceDirectory, 'or3-release.json'))) as { or3Version?: string };
   if (!release.or3Version || !isVersion(release.or3Version)) throw new Error('V1 release metadata does not contain a usable OR3 version.');
+  if (release.or3Version !== PACKAGE_VERSION) {
+    throw new Error(`V1 is on OR3 ${release.or3Version}, but this CLI ships managed assets for ${PACKAGE_VERSION}. Run the matching @or3/cloud version or perform a qualified host CLI update before adoption.`);
+  }
   const sourceEnv = parseEnv(await readText(join(sourceDirectory, '.env')));
   const providers = await readText(join(sourceDirectory, 'or3.providers.generated.ts'));
   assertSupportedSource(sourceDirectory, sourceEnv, providers);
@@ -2807,15 +3596,17 @@ async function adoptCommand(positionals: string[], flags: Flags) {
     ...sourceComposeFiles, 'config', '--format', 'json',
   ], sourceDirectory);
   if (!sourceConfig.ok) throw new Error(`The V1 Compose configuration is invalid. ${redact(sourceConfig.stderr, secretValues(sourceEnv))}`);
-  const image = imageFor(release.or3Version);
+  const sourceImage = imageFor(release.or3Version);
   if (sourceEnv.OR3_VERSION && sourceEnv.OR3_VERSION !== release.or3Version) {
     throw new Error(`V1 OR3_VERSION ${sourceEnv.OR3_VERSION} does not match or3-release.json ${release.or3Version}.`);
   }
-  if (sourceEnv.OR3_IMAGE && sourceEnv.OR3_IMAGE !== image) {
-    throw new Error(`V1 OR3_IMAGE ${sourceEnv.OR3_IMAGE} does not match the published image for ${release.or3Version}.`);
+  const digest = await pullImage(sourceImage, expectedImageDigest(release.or3Version));
+  await assertSupportedHostArchitecture(sourceImage);
+  await assertImageReleaseIdentity(sourceImage, release.or3Version);
+  const image = imageAtDigest(sourceImage, digest);
+  if (sourceEnv.OR3_IMAGE && sourceEnv.OR3_IMAGE !== sourceImage && sourceEnv.OR3_IMAGE !== image) {
+    throw new Error(`V1 OR3_IMAGE ${sourceEnv.OR3_IMAGE} does not match the authenticated image for ${release.or3Version}.`);
   }
-  const digest = await pullImage(image, expectedImageDigest(release.or3Version));
-  await assertSupportedHostArchitecture(image);
   const sourceVolume = await readSourceVolume(sourceDirectory);
   const email = sourceEnv.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
   const password = sourceEnv.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD;
@@ -2825,13 +3616,34 @@ async function adoptCommand(positionals: string[], flags: Flags) {
   if (!Number.isInteger(sourcePort) || sourcePort < 1 || sourcePort > 65535) throw new Error('V1 project has an invalid OR3 port.');
   if (mode === 'public' && [80, 443].includes(sourcePort)) throw new Error('V1 public deployment uses a Caddy port for OR3; adoption requires a separate OR3 port.');
   assertSupportedSourceCompose(sourceConfig.stdout, sourceVolume, sourcePort);
+  const targetNames = composeProjectNames(targetDirectory);
+  for (const volume of [targetNames.volume, ...(mode === 'public' ? [targetNames.caddyData, targetNames.caddyConfig] : [])]) {
+    const existing = await run('docker', ['volume', 'inspect', volume]);
+    if (existing.ok) throw new Error(`Docker volume ${volume} already exists. Choose a new adoption target directory.`);
+    if (existing.exitCode !== 1 || !/no such volume/i.test(`${existing.stdout}\n${existing.stderr}`)) {
+      throw new Error(`Could not confirm whether Docker volume ${volume} exists. Refusing adoption until Docker returns an explicit not-found result. ${existing.stderr.trim()}`);
+    }
+  }
   await mkdir(targetDirectory, { recursive: true, mode: 0o700 });
+  await chmod(targetDirectory, 0o700);
   await mkdir(deploymentPaths(targetDirectory).operations, { recursive: true, mode: 0o700 });
   await mkdir(deploymentPaths(targetDirectory).backups, { recursive: true, mode: 0o700 });
+  const operator = await prepareVerifiedDashboardOperator(targetDirectory, release.or3Version);
   await copyAssets(targetDirectory, mode);
   const copiedSecrets: Record<string, string> = {};
   for (const key of SECRET_KEYS) if (sourceEnv[key]) copiedSecrets[key] = sourceEnv[key];
-  const targetEnv = buildEnv({ mode, version: release.or3Version, directory: targetDirectory, email, password, domain, port: sourcePort, secrets: copiedSecrets });
+  const targetEnv = buildEnv({
+    mode,
+    version: release.or3Version,
+    directory: targetDirectory,
+    image,
+    email,
+    password,
+    domain,
+    port: sourcePort,
+    secrets: copiedSecrets,
+    dashboardOperator: operator,
+  });
   for (const key of ALLOWED_ENV_KEYS) if (sourceEnv[key] !== undefined) targetEnv[key] = sourceEnv[key];
   Object.assign(targetEnv, {
     OR3_VERSION: release.or3Version,
@@ -2848,12 +3660,10 @@ async function adoptCommand(positionals: string[], flags: Flags) {
     OR3_ALLOWED_ORIGINS: mode === 'public' ? `https://${domain}` : `http://127.0.0.1:${sourcePort}`,
     OR3_FORCE_HTTPS: mode === 'public' ? 'true' : 'false',
     OR3_TRUST_PROXY: mode === 'public' ? 'true' : 'false',
+    OR3_AUTH_REGISTRATION_MODE: 'invite_only',
+    OR3_AUTH_AUTO_PROVISION: 'false',
+    OR3_GUEST_ACCESS_ENABLED: 'false',
   });
-  const targetNames = composeProjectNames(targetDirectory);
-  for (const volume of [targetNames.volume, ...(mode === 'public' ? [targetNames.caddyData, targetNames.caddyConfig] : [])]) {
-    const existing = await run('docker', ['volume', 'inspect', volume]);
-    if (existing.ok) throw new Error(`Docker volume ${volume} already exists. Choose a new adoption target directory.`);
-  }
   await writeSecure(deploymentPaths(targetDirectory).env, serializeEnv(targetEnv));
   await writeSecure(join(targetDirectory, '.or3-initial-credentials'), serializeInitialCredentials({
     bootstrapEmail: email,
@@ -2881,11 +3691,11 @@ async function adoptCommand(positionals: string[], flags: Flags) {
         if (!await portAvailable(publicPort)) throw new Error(`Public port ${publicPort} is still in use after stopping the V1 deployment.`);
       }
     }
-    const sourceBackupId = id('adopt-source');
+    const sourceBackupId = id('backup-adopt-source');
     sourceBackupDir = backupDirectory(targetDirectory, sourceBackupId);
     await mkdir(sourceBackupDir, { recursive: true, mode: 0o700 });
     await copySecure(join(sourceDirectory, '.env'), join(sourceBackupDir, 'config.env'));
-    await archiveExternalVolume(image, sourceVolume, sourceBackupDir);
+    await archiveExternalVolume(sourceImage, sourceVolume, sourceBackupDir);
     const sourceManifest: BackupManifest = {
       schemaVersion: 1,
       backupId: sourceBackupId,
@@ -2903,7 +3713,9 @@ async function adoptCommand(positionals: string[], flags: Flags) {
       caddyConfigVolume: sourceEnv.OR3_CADDY_CONFIG_VOLUME,
       port: sourcePort,
     };
-    await writeSecure(join(sourceBackupDir, 'manifest.json'), `${JSON.stringify(sourceManifest, null, 2)}\n`);
+    const sourceManifestContents = `${JSON.stringify(sourceManifest, null, 2)}\n`;
+    await writeSecure(join(sourceBackupDir, 'manifest.json'), sourceManifestContents);
+    await writeBackupAuthentication(targetDirectory, sourceBackupDir, sourceManifestContents);
     await updatePending(targetDirectory, state, { backupId: sourceBackupId });
     await restoreVolumeArchive(targetDirectory, mode, targetEnv, sourceBackupDir);
     await startProject(targetDirectory, mode, targetEnv);
@@ -3352,8 +4164,11 @@ async function assertPurgeHasVerifiedExport(directory: string, backups: BackupLi
     if (new Date(backup.createdAt).getTime() < cutoff) continue;
     const receipt = await readBackupExportReceipt(directory, backup.backupId);
     if (!receipt || !await fileExists(receipt.destination)) continue;
+    const deploymentRoot = await realpath(directory);
     try {
-      const exported = await readManifest(receipt.destination);
+      const canonicalDestination = await realpath(receipt.destination);
+      if (canonicalDestination === deploymentRoot || canonicalDestination.startsWith(`${deploymentRoot}${sep}`)) continue;
+      const exported = await readManifest(receipt.destination, directory);
       const sourceDevice = (await stat(backup.path)).dev;
       const destinationDevice = (await stat(receipt.destination)).dev;
       if (
@@ -3391,11 +4206,20 @@ async function removeCommand(directory: string, flags: Flags) {
   // filesystem, rather than treating a local backup as disaster recovery.
   const exportReceipt = await assertPurgeHasVerifiedExport(directory, await enumerateBackups(directory), Date.now());
   const volumes = purgeVolumesFromState(state);
-  const managedFiles = ['.env', '.or3-cloud', 'compose.yaml', ...(state.mode === 'public' ? ['compose.public.yaml', 'Caddyfile'] : []), '.or3-initial-credentials'];
+  const managedFiles = [
+    '.env',
+    '.or3-cloud',
+    ...managedAssetNames(state.mode),
+    '.or3-initial-credentials',
+  ];
   console.log('Removing exactly these targets:');
   for (const volume of volumes) console.log(`  docker volume ${volume}`);
   for (const file of managedFiles) console.log(`  ${join(directory, file)}`);
   await compose(directory, state.mode, ['down']);
+  // Recheck immediately before deletion. A moved mount or symlink cannot turn
+  // the receipt that authorized this purge into a descendant of the purge
+  // target after the operator confirmed it.
+  await assertPurgeHasVerifiedExport(directory, await enumerateBackups(directory), Date.now());
   for (const volume of volumes) {
     const result = await run('docker', ['volume', 'rm', volume], directory);
     if (!result.ok) throw new Error(`${result.command}\n${result.stderr}`);
@@ -3415,6 +4239,31 @@ async function probeDeepHealth(directory: string, mode: Mode) {
   return 'unreachable' as const;
 }
 
+const MUTATING_COMMANDS = new Set([
+  'init',
+  'update',
+  'backup',
+  'verify',
+  'restore',
+  'rollback',
+  'credentials',
+  'recover',
+  'adopt',
+  'start',
+  'stop',
+  'restart',
+  'remove',
+]);
+
+function mutationDirectory(command: string, positionals: string[], flags: Flags) {
+  if (command === 'init') return resolve(process.cwd(), positionals[0] ?? 'or3-cloud');
+  if (command === 'adopt') {
+    const sourceDirectory = requireStringFlag(flags, 'from');
+    return resolve(process.cwd(), positionals[0] ?? `${basename(sourceDirectory)}-managed`);
+  }
+  return process.cwd();
+}
+
 async function main(argv = process.argv.slice(2)) {
   const [command = 'help', ...rest] = argv;
   if (command === '--help' || command === 'help') return help();
@@ -3423,23 +4272,30 @@ async function main(argv = process.argv.slice(2)) {
   try {
     if (parsed.flags.help) return help();
     assertCommandFlags(command, parsed.flags);
-    if (command === 'init') return await initCommand(parsed.positionals, parsed.flags);
-    if (command === 'update') return await updateCommand(process.cwd(), parsed.flags);
-    if (command === 'backup') return await backupCommand(process.cwd(), parsed.positionals, parsed.flags);
-    if (command === 'restore') return await restoreCommand(process.cwd(), parsed.flags, parsed.positionals);
-    if (command === 'rollback') return await rollbackCommand(process.cwd(), parsed.flags);
-    if (command === 'credentials') return await credentialsCommand(process.cwd(), parsed.positionals, parsed.flags);
-    if (command === 'doctor') return await doctorCommand(process.cwd());
-    if (command === 'verify') return await verifyCommand(process.cwd(), parsed.flags, parsed.positionals);
-    if (command === 'recover') return await recoverCommand(process.cwd());
-    if (command === 'adopt') return await adoptCommand(parsed.positionals, parsed.flags);
-    if (command === 'status') return await statusCommand(process.cwd());
-    if (command === 'logs') return await logsCommand(process.cwd(), parsed.flags, parsed.positionals);
-    if (command === 'start') return await startCommand(process.cwd());
-    if (command === 'stop') return await stopCommand(process.cwd());
-    if (command === 'restart') return await restartCommand(process.cwd());
-    if (command === 'remove') return await removeCommand(process.cwd(), parsed.flags);
-    throw new Error(`Unknown command "${command}". Run npx @or3/cloud --help.`);
+    assertCommandPositionals(command, parsed.positionals);
+    const dispatch = async () => {
+      if (command === 'init') return await initCommand(parsed.positionals, parsed.flags);
+      if (command === 'update') return await updateCommand(process.cwd(), parsed.flags);
+      if (command === 'backup') return await backupCommand(process.cwd(), parsed.positionals, parsed.flags);
+      if (command === 'restore') return await restoreCommand(process.cwd(), parsed.flags, parsed.positionals);
+      if (command === 'rollback') return await rollbackCommand(process.cwd(), parsed.flags);
+      if (command === 'credentials') return await credentialsCommand(process.cwd(), parsed.positionals, parsed.flags);
+      if (command === 'doctor') return await doctorCommand(process.cwd());
+      if (command === 'verify') return await verifyCommand(process.cwd(), parsed.flags, parsed.positionals);
+      if (command === 'recover') return await recoverCommand(process.cwd());
+      if (command === 'adopt') return await adoptCommand(parsed.positionals, parsed.flags);
+      if (command === 'status') return await statusCommand(process.cwd());
+      if (command === 'logs') return await logsCommand(process.cwd(), parsed.flags, parsed.positionals);
+      if (command === 'start') return await startCommand(process.cwd());
+      if (command === 'stop') return await stopCommand(process.cwd());
+      if (command === 'restart') return await restartCommand(process.cwd());
+      if (command === 'remove') return await removeCommand(process.cwd(), parsed.flags);
+      throw new Error(`Unknown command "${command}". Run npx @or3/cloud --help.`);
+    };
+    if (MUTATING_COMMANDS.has(command)) {
+      return await withDeploymentLease(mutationDirectory(command, parsed.positionals, parsed.flags), command, dispatch);
+    }
+    return await dispatch();
   } catch (error) {
     console.error(`\nOR3 Cloud failed: ${redact(error instanceof Error ? error.message : String(error))}`);
     process.exitCode = 1;

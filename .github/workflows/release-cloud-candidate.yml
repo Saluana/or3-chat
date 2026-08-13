@@ -60,6 +60,7 @@ jobs:
         run: |
           set -euo pipefail
           candidate="ghcr.io/saluana/or3-chat:candidate-$VERSION-$SOURCE_SHA"
+          operator="ghcr.io/saluana/or3-chat:candidate-operator-$VERSION-$SOURCE_SHA"
           evidence="ghcr.io/saluana/or3-chat:candidate-evidence-$VERSION-$SOURCE_SHA"
           if docker manifest inspect "$candidate" >/dev/null 2>&1; then
             echo "$candidate already exists; candidate identities are single-use."
@@ -69,7 +70,12 @@ jobs:
             echo "$evidence already exists; candidate identities are single-use."
             exit 1
           fi
+          if docker manifest inspect "$operator" >/dev/null 2>&1; then
+            echo "$operator already exists; candidate identities are single-use."
+            exit 1
+          fi
           echo "image=$candidate" >> "$GITHUB_OUTPUT"
+          echo "operator=$operator" >> "$GITHUB_OUTPUT"
           echo "evidence=$evidence" >> "$GITHUB_OUTPUT"
       - name: Build the candidate image once
         uses: docker/build-push-action@v6
@@ -97,6 +103,21 @@ jobs:
             NUXT_PUBLIC_STORAGE_PROVIDER=fs
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Build the dedicated dashboard operator runtime
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: dashboard-operator
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.candidate.outputs.operator }}
+          provenance: true
+          sbom: false
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.source.outputs.sha }}
+            org.opencontainers.image.version=${{ inputs.version }}
       - name: Verify manifest and anonymous pull
         id: image
         env:
@@ -116,22 +137,45 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify dedicated operator manifest
+        id: operator-image
+        env:
+          OR3_OPERATOR_IMAGE: ${{ steps.candidate.outputs.operator }}
+        run: |
+          set -euo pipefail
+          inspect="$(docker buildx imagetools inspect "$OR3_OPERATOR_IMAGE")"
+          grep -q 'linux/amd64' <<<"$inspect"
+          grep -q 'linux/arm64' <<<"$inspect"
+          digest="$(awk '$1 == "Digest:" { print $2; exit }' <<<"$inspect")"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          docker logout ghcr.io
+          docker pull --platform linux/amd64 "$OR3_OPERATOR_IMAGE"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Bind and pack the operator to the qualified image digest
         id: pack
         working-directory: packages/or3-cloud
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          OPERATOR_IMAGE_DIGEST: ${{ steps.operator-image.outputs.digest }}
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"
-          node -e 'const p=require("./package.json"); if(p.version!==process.env.VERSION||p.or3Cloud?.imageDigest!==process.env.IMAGE_DIGEST)process.exit(1)'
+          npm pkg set "or3Cloud.operatorImageDigest=$OPERATOR_IMAGE_DIGEST"
+          node -e 'const p=require("./package.json"); if(p.version!==process.env.VERSION||p.or3Cloud?.imageDigest!==process.env.IMAGE_DIGEST||p.or3Cloud?.operatorImageDigest!==process.env.OPERATOR_IMAGE_DIGEST)process.exit(1)'
           mkdir -p "$GITHUB_WORKSPACE/release-artifact"
           npm pack --ignore-scripts --pack-destination "$GITHUB_WORKSPACE/release-artifact"
           tarball="$GITHUB_WORKSPACE/release-artifact/or3-cloud-$VERSION.tgz"
           test -f "$tarball"
           packed_digest="$(tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s).or3Cloud?.imageDigest||""))')"
           test "$packed_digest" = "$IMAGE_DIGEST"
+          packed_operator_digest="$(tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s).or3Cloud?.operatorImageDigest||""))')"
+          test "$packed_operator_digest" = "$OPERATOR_IMAGE_DIGEST"
           echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
       - name: Check documentation against the exact tarball
         env:
@@ -158,20 +202,30 @@ jobs:
       - name: Exercise upgrade, rollback, persistence, and production verification
         env:
           CANDIDATE_IMAGE: ${{ steps.candidate.outputs.image }}
+          CANDIDATE_OPERATOR_IMAGE: ${{ steps.candidate.outputs.operator }}
           CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
         run: |
           set -euo pipefail
           managed="$RUNNER_TEMP/or3-cloud-candidate"
           previous_version="$(npm view @or3/cloud version)"
+          compose_args() {
+            local args=(--project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml")
+            if [ -f "$managed/compose.operator.yaml" ] && grep -q "^OR3_DASHBOARD_UPDATES_ENABLED='true'$" "$managed/.env"; then
+              args+=(-f "$managed/compose.operator.yaml")
+            fi
+            printf '%s\n' "${args[@]}"
+          }
           cleanup() {
             if [ -f "$managed/.env" ] && [ -f "$managed/compose.yaml" ]; then
-              docker compose --project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml" down --volumes 2>/dev/null || true
+              mapfile -t args < <(compose_args)
+              docker compose "${args[@]}" down --volumes --remove-orphans 2>/dev/null || true
             fi
           }
           diagnostics() {
             if [ -f "$managed/.env" ] && [ -f "$managed/compose.yaml" ]; then
-              docker compose --project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml" ps -a || true
-              docker compose --project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml" logs --tail=200 || true
+              mapfile -t args < <(compose_args)
+              docker compose "${args[@]}" ps -a || true
+              docker compose "${args[@]}" logs --tail=200 || true
             fi
           }
           trap 'status=$?; if [ "$status" -ne 0 ]; then diagnostics; fi; cleanup; exit "$status"' EXIT
@@ -182,8 +236,17 @@ jobs:
           (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
           (cd "$managed" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
 
-          (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" \
+          (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" OR3_CLOUD_TEST_OPERATOR_IMAGE="$CANDIDATE_OPERATOR_IMAGE" OR3_EXPECTED_OPERATOR_IMAGE_DIGEST="${{ steps.operator-image.outputs.digest }}" \
             npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 update --to "${{ inputs.version }}")
+          # Exercise the actual privileged bridge from the unprivileged app
+          # container. The candidate itself is intentionally not published to
+          # npm yet, so this cannot start a synthetic release; status and an
+          # invalid /start prove the mounted Unix API and input boundary.
+          test -S "$managed/.or3-cloud/operator-ipc/operator.sock"
+          (cd "$managed" && docker compose --env-file .env -f compose.yaml -f compose.operator.yaml exec -T or3 /nodejs/bin/node -e '
+            const http=require("node:http");
+            const request=(method,path,body)=>new Promise((resolve,reject)=>{const r=http.request({socketPath:"/run/or3-operator/operator.sock",method,path,headers:body?{"content-type":"application/json"}:{ }},x=>{let s="";x.on("data",c=>s+=c);x.on("end",()=>resolve({status:x.statusCode,body:s}))});r.on("error",reject);if(body)r.end(JSON.stringify(body));else r.end()});
+            (async()=>{const status=await request("GET","/status");if(status.status!==200||!JSON.parse(status.body).enabled)process.exit(1);const bad=await request("POST","/start",{});if(bad.status!==400)process.exit(1)})().catch(()=>process.exit(1));')
           (cd "$managed" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
           (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
           manifest="$(find "$managed/.or3-cloud/backups" -name manifest.json -print | sort | tail -1)"
@@ -194,7 +257,7 @@ jobs:
           (cd "$managed" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
           (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
 
-          (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" \
+          (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" OR3_CLOUD_TEST_OPERATOR_IMAGE="$CANDIDATE_OPERATOR_IMAGE" OR3_EXPECTED_OPERATOR_IMAGE_DIGEST="${{ steps.operator-image.outputs.digest }}" \
             npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 update --to "${{ inputs.version }}")
           (cd "$managed" && npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
           (cd "$managed" && docker compose --env-file .env -f compose.yaml restart or3)
@@ -217,12 +280,14 @@ jobs:
       - name: Create the immutable qualification receipt
         env:
           CANDIDATE_IMAGE: ${{ steps.candidate.outputs.image }}
+          CANDIDATE_OPERATOR_IMAGE: ${{ steps.candidate.outputs.operator }}
           CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
         run: |
           node scripts/release/candidate-receipt.mjs create \
             --version "${{ inputs.version }}" \
             --source-sha "${{ steps.source.outputs.sha }}" \
             --image "$CANDIDATE_IMAGE" \
+            --operator-image "$CANDIDATE_OPERATOR_IMAGE" \
             --tarball "$CANDIDATE_TARBALL" \
             --output release-artifact/candidate-receipt.json \
             --run-id "$GITHUB_RUN_ID"

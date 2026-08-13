@@ -3,6 +3,8 @@ services:
     # Pinned to the exact patch release and image digest so a floating tag
     # cannot silently change proxy behavior or the base image.
     image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    labels:
+      io.or3.cloud.deployment-id: ${OR3_DEPLOYMENT_ID}
     depends_on:
       or3:
         # This gates Caddy's initial startup only. A later unhealthy OR3
@@ -44,5 +46,9 @@ services:
 volumes:
   caddy-data:
     name: ${OR3_CADDY_DATA_VOLUME}
+    labels:
+      io.or3.cloud.deployment-id: ${OR3_DEPLOYMENT_ID}
   caddy-config:
     name: ${OR3_CADDY_CONFIG_VOLUME}
+    labels:
+      io.or3.cloud.deployment-id: ${OR3_DEPLOYMENT_ID}

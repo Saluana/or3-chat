@@ -112,7 +112,11 @@ jobs:
         run: |
           version="$(node -p "require('./package.json').version")"
           image="ghcr.io/saluana/or3-chat:$version"
+          source="$(git rev-parse HEAD)"
           docker build \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=$source" \
+            --label "org.opencontainers.image.version=$version" \
             --build-arg SSR_AUTH_ENABLED=true \
             --build-arg AUTH_PROVIDER=basic-auth \
             --build-arg OR3_GUEST_ACCESS_ENABLED=false \
@@ -126,14 +130,46 @@ jobs:
           CMD ["/nodejs/bin/node", "-e", "process.exit(1)"]
           EOF
           docker build -f "$RUNNER_TEMP/Dockerfile.unhealthy" -t or3-cloud-unhealthy .
+      - name: Prove the base Compose file stays valid without dashboard variables
+        run: |
+          set -euo pipefail
+          smoke="$RUNNER_TEMP/or3-cloud-cli-only-compose"
+          version="$(node -p "require('./package.json').version")"
+          mkdir -p "$smoke"
+          cp packages/or3-cloud/assets/compose.yaml "$smoke/compose.yaml"
+          cat > "$smoke/.env" <<EOF
+          OR3_COMPOSE_PROJECT=or3-cloud-cli-only-compose
+          OR3_IMAGE=ghcr.io/saluana/or3-chat:$version
+          OR3_DEPLOYMENT_ID=cli-only-compose-smoke
+          OR3_TRUST_PROXY=false
+          OR3_PORT=3016
+          OR3_VOLUME_NAME=or3-cloud-cli-only-compose-data
+          EOF
+          resolved="$(docker compose --project-directory "$smoke" --env-file "$smoke/.env" -f "$smoke/compose.yaml" config --format json)"
+          ! grep -q 'or3-operator' <<<"$resolved"
+          ! grep -q 'operator-ipc' <<<"$resolved"
       - name: Exercise managed local lifecycle
         run: |
           version="$(node -p "require('./package.json').version")"
           image="ghcr.io/saluana/or3-chat:$version"
           managed="$RUNNER_TEMP/or3-cloud-managed"
-          next_version="$(node -p "const [major, minor, patch] = process.argv[1].split('.'); major+'.'+minor+'.'+(Number(patch)+1)" "$version")"
+          previous_version="$(node -p "const [major, minor, patch] = process.argv[1].split('.'); major+'.'+minor+'.'+Math.max(0, Number(patch)-1)" "$version")"
           OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true \
             node packages/or3-cloud/dist/cli.mjs init "$managed" --local --port 3017 --admin-email smoke@example.com
+          # The test image is deliberately identical for both fixture releases.
+          # Only the managed metadata is moved back one patch so the current
+          # CLI exercises its real exact-version update path.
+          node -e '
+            const fs = require("fs");
+            const dir = process.argv[1];
+            const previous = process.argv[2];
+            const env = `${dir}/.env`;
+            fs.writeFileSync(env, fs.readFileSync(env, "utf8").replace(/^OR3_VERSION=.*$/m, `OR3_VERSION=${previous}`));
+            const statePath = `${dir}/.or3-cloud/state.json`;
+            const state = JSON.parse(fs.readFileSync(statePath, "utf8"));
+            state.appVersion = previous;
+            fs.writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
+          ' "$managed" "$previous_version"
           (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" verify)
           (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" doctor)
           (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
@@ -143,7 +179,7 @@ jobs:
           test -n "$backup_id"
           (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" restore "$backup_id" --yes)
           (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
-          (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" update --to "$next_version")
+          (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" update --to "$version")
           (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
           (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" rollback --yes)
           (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" verify)
@@ -151,7 +187,7 @@ jobs:
           captured_secret="$(sed -n 's/^OR3_BASIC_AUTH_JWT_SECRET=//p' "$managed/.env")"
           test -n "$captured_secret"
           set +e
-          (cd "$managed" && OR3_CLOUD_TEST_IMAGE=or3-cloud-unhealthy OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" update --to "$next_version") > "$RUNNER_TEMP/update-failed.log" 2>&1
+          (cd "$managed" && OR3_CLOUD_TEST_IMAGE=or3-cloud-unhealthy OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" update --to "$version") > "$RUNNER_TEMP/update-failed.log" 2>&1
           failed_update_status=$?
           set -e
           cat "$RUNNER_TEMP/update-failed.log"
@@ -166,6 +202,17 @@ jobs:
             sleep 1
           done
           curl --fail "http://127.0.0.1:3017/api/health?deep=true"
+          node -e '
+            const fs = require("fs");
+            const dir = process.argv[1];
+            const version = process.argv[2];
+            const env = `${dir}/.env`;
+            fs.writeFileSync(env, fs.readFileSync(env, "utf8").replace(/^OR3_VERSION=.*$/m, `OR3_VERSION=${version}`));
+            const statePath = `${dir}/.or3-cloud/state.json`;
+            const state = JSON.parse(fs.readFileSync(statePath, "utf8"));
+            state.appVersion = version;
+            fs.writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
+          ' "$managed" "$version"
           printf '{"or3Version":"%s"}\n' "$version" > "$managed/or3-release.json"
           printf '%s\n' \
             "import basicAuth from 'or3-provider-basic-auth/nuxt'" \

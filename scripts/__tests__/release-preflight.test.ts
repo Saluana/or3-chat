@@ -43,6 +43,8 @@ describe('qualified candidate receipts', () => {
         sourceSha: 'a'.repeat(40),
         candidateImage: `ghcr.io/saluana/or3-chat:candidate-1.2.3-${'a'.repeat(40)}`,
         candidateDigest: `sha256:${'b'.repeat(64)}`,
+        operatorCandidateImage: `ghcr.io/saluana/or3-chat:candidate-operator-1.2.3-${'a'.repeat(40)}`,
+        operatorCandidateDigest: `sha256:${'d'.repeat(64)}`,
         tarballFile: 'or3-cloud-1.2.3.tgz',
         tarballSha256: 'c'.repeat(64),
         tarballIntegrity: `sha512-${Buffer.from('integrity').toString('base64')}`,
@@ -55,5 +57,6 @@ describe('qualified candidate receipts', () => {
         expect(() => assertCandidateReceipt({ ...receipt, sourceSha: 'main' })).toThrow('immutable release evidence');
         expect(() => assertCandidateReceipt({ ...receipt, candidateDigest: 'latest' })).toThrow('immutable release evidence');
         expect(() => assertCandidateReceipt({ ...receipt, candidateImage: 'ghcr.io/saluana/or3-chat:latest' })).toThrow('immutable release evidence');
+        expect(() => assertCandidateReceipt({ ...receipt, operatorCandidateDigest: 'latest' })).toThrow('immutable release evidence');
     });
 });

@@ -18,8 +18,9 @@ Save the file in a password manager, then delete it. Open
 [http://127.0.0.1:3000](http://127.0.0.1:3000) and sign in.
 
 The published Cloud image supports `linux/amd64` and `linux/arm64` and uses
-Basic Auth + SQLite + filesystem storage. The CLI checks the image manifest
-before it writes deployment state.
+Basic Auth + SQLite + filesystem storage. The CLI checks the image manifest,
+source/version labels, and then writes a digest-qualified image reference; it
+also verifies the image of the running container before committing state.
 
 ## Run it publicly on a VPS
 
@@ -68,7 +69,16 @@ runtime user. It does not recursively rewrite file ownership in place, and a
 failed migration restores the recorded legacy root owner and snapshot.
 Updates also replace the generated Compose/Caddy files from the target CLI.
 Those files are checksummed into the pre-update backup and restored on a failed
-update, rollback, restore, or interrupted-operation recovery.
+update, rollback, restore, or interrupted-operation recovery. Backups also
+carry a deployment-local authentication tag, so an altered or foreign archive
+cannot supply configuration or executable Compose assets. Every mutating
+command holds one deployment-wide lease; do not delete `.or3-cloud` lock or
+recovery files by hand.
+
+The authentication key is intentionally not embedded in an exported archive.
+Escrow an owner-only copy of `.or3-cloud/backup-auth.key` separately in an
+encrypted secret store; put that key back in the recovered deployment before
+restoring an off-host archive.
 When selecting an exact version, run the matching CLI package, for example
 `npx --yes @or3/cloud@0.1.39 update --to 0.1.39`; the CLI refuses mismatched
 package and image versions so their generated assets cannot drift.
@@ -78,23 +88,26 @@ will delete anything.
 
 ## Dashboard updates
 
-New managed Linux deployments with a local Docker socket expose a **Dashboard
-Update** card to super admins under **Admin → Operations**. Click **Check for
-updates**, then approve the exact latest release. The card uses the same
-managed updater as the CLI: it makes a verified backup, waits for deep health,
-and restores the prior release and data if the update fails.
+New managed Linux deployments expose a **Dashboard Update** card only when a
+local Linux Docker socket passes the CLI's disposable, exact-mount bridge
+probe. Click **Check for updates**, then approve the exact latest release. The
+card uses the same managed updater as the CLI: it makes a verified backup,
+waits for deep health, and restores the prior release and data if the update
+fails. Hosts that do not pass the probe remain CLI-only.
 
 The application container never receives the Docker socket. A separate,
 socket-only operator sidecar is the only container with Docker access, and it
-accepts only status, release-check, and exact-version update requests. Before
-running privileged release code, it installs with lifecycle scripts disabled,
-verifies the npm registry signature and SLSA provenance, and requires that the
-signed package came from this repository's tagged `release-cloud.yml` workflow.
-That authenticated package also pins the qualified GHCR image digest, so moving
-or replacing the version tag is rejected before the image can run.
-If the operator is interrupted, it fails closed and asks for host-side `recover`
-instead of guessing. Existing deployments gain the card after one normal
-exact-version CLI update. Remote Docker hosts remain CLI-only.
+accepts only status, release-check, and exact-version update requests. It runs
+in a dedicated digest-pinned operator image—not the web application image.
+Before running privileged release code, it installs with lifecycle scripts
+disabled, verifies the npm registry signature and the exact SLSA bundle, and
+requires that the signed package came from this repository's tagged
+`release-cloud.yml` workflow. That authenticated package pins both qualified
+GHCR image digests, so moving or replacing a version tag is rejected before an
+image can run. A stale dashboard-owned update is recovered automatically with
+its exact target CLI; unrelated/manual operations remain locked for host-side
+`recover`. Existing deployments gain the card after one normal exact-version
+CLI update. Remote Docker hosts remain CLI-only.
 
 Managed registration is invite-only: the bootstrap owner signs in first and
 invites additional users from the in-product admin flow. Guest access and

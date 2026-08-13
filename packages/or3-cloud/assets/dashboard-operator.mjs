@@ -1,7 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -10,7 +11,10 @@ const deploymentDirectory = process.cwd();
 const cloudDirectory = join(deploymentDirectory, '.or3-cloud');
 const jobPath = join(cloudDirectory, 'dashboard-update.json');
 const statePath = join(cloudDirectory, 'state.json');
+const leaseOwnerPath = join(cloudDirectory, 'operation-lease', 'owner.json');
 const npmCli = '/usr/local/lib/node_modules/npm/bin/npm-cli.js';
+const npmRequire = createRequire('/usr/local/lib/node_modules/npm/package.json');
+const nodeBinary = '/usr/local/bin/node';
 const registryOrigin = 'https://registry.npmjs.org';
 const packageName = '@or3/cloud';
 const expectedRepository = 'https://github.com/Saluana/or3-chat';
@@ -21,6 +25,7 @@ const activePhases = new Set(['queued', 'running']);
 const maxRegistryBytes = 256 * 1024;
 const maxAttestationBytes = 1024 * 1024;
 const maxProcessOutputBytes = 64 * 1024;
+const maxUpdateDurationMs = 15 * 60 * 1000;
 let updateClaimed = false;
 
 function envValue(text, key) {
@@ -110,18 +115,27 @@ function validSha512Integrity(value) {
   return digest.length === 64 && digest.toString('base64') === encoded;
 }
 
-async function release() {
-  const metadata = await registryJson(`${registryOrigin}/@or3%2fcloud/latest`, maxRegistryBytes);
+async function release(requestedVersion) {
+  const metadataPath = requestedVersion
+    ? `/@or3%2fcloud/${encodeURIComponent(requestedVersion)}`
+    : '/@or3%2fcloud/latest';
+  const metadata = await registryJson(`${registryOrigin}${metadataPath}`, maxRegistryBytes);
   const version = typeof metadata?.version === 'string' ? metadata.version : '';
   const integrity = typeof metadata?.dist?.integrity === 'string' ? metadata.dist.integrity : '';
   const tarball = metadata?.dist?.tarball;
   const attestationUrl = metadata?.dist?.attestations?.url;
   const fileCount = metadata?.dist?.fileCount;
   const unpackedSize = metadata?.dist?.unpackedSize;
+  const minimumSourceVersion = metadata?.or3Cloud?.dashboardUpdateMinimumSourceVersion;
+  const operatorImageDigest = metadata?.or3Cloud?.operatorImageDigest;
   if (
     metadata?.name !== packageName
     || !stableVersion.test(version)
     || metadata?.or3Cloud?.dashboardUpdateProtocol !== 1
+    || typeof minimumSourceVersion !== 'string'
+    || !stableVersion.test(minimumSourceVersion)
+    || typeof operatorImageDigest !== 'string'
+    || !/^sha256:[0-9a-f]{64}$/.test(operatorImageDigest)
     || !validSha512Integrity(integrity)
     || !exactRegistryUrl(tarball, `/@or3/cloud/-/cloud-${version}.tgz`)
     || !exactRegistryUrl(attestationUrl, `/-/npm/v1/attestations/@or3%2fcloud@${version}`)
@@ -135,7 +149,10 @@ async function release() {
   ) {
     throw new Error('The latest OR3 release is not a valid dashboard-update release.');
   }
-  return { version, integrity, tarball, attestationUrl };
+  if (requestedVersion && version !== requestedVersion) {
+    throw new Error(`The OR3 release service did not return the requested exact updater version ${requestedVersion}.`);
+  }
+  return { version, integrity, tarball, attestationUrl, minimumSourceVersion, operatorImageDigest };
 }
 
 async function managedState() {
@@ -178,6 +195,9 @@ async function check() {
   await assertUpdateReady();
   const [current, latest] = await Promise.all([currentVersion(), release()]);
   if (!current || !stableVersion.test(current)) throw new Error('The managed deployment does not have a valid current release version.');
+  if (compareVersions(current, latest.minimumSourceVersion) < 0) {
+    throw new Error(`OR3 ${latest.version} requires dashboard-update source version ${latest.minimumSourceVersion} or newer. Update once with the host CLI before using the dashboard bridge.`);
+  }
   return {
     ...(await status()),
     latestVersion: latest.version,
@@ -206,6 +226,7 @@ function runProcess(file, args, options) {
   const child = spawn(file, args, {
     cwd: options.cwd,
     env: options.env,
+    detached: process.platform !== 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   return new Promise((resolve, reject) => {
@@ -218,10 +239,26 @@ function runProcess(file, args, options) {
       if (error) reject(error);
       else resolve(result);
     };
+    const terminate = () => {
+      if (!child.pid) return;
+      if (process.platform !== 'win32') {
+        try {
+          process.kill(-child.pid, 'SIGTERM');
+          const force = setTimeout(() => {
+            try { process.kill(-child.pid, 'SIGKILL'); } catch {}
+          }, 5_000);
+          force.unref();
+          return;
+        } catch {
+          // The group may already be gone; fall back to the direct child.
+        }
+      }
+      child.kill('SIGTERM');
+    };
     const append = (chunk) => {
       output += chunk.toString('utf8');
       if (Buffer.byteLength(output) > (options.maxOutputBytes || maxProcessOutputBytes)) {
-        child.kill('SIGKILL');
+        terminate();
         finish(new Error('The updater command returned too much output.'));
       }
     };
@@ -231,7 +268,7 @@ function runProcess(file, args, options) {
     child.once('close', (code, signal) => finish(undefined, { code, signal, output }));
     const timer = options.timeoutMs
       ? setTimeout(() => {
-          child.kill('SIGKILL');
+          terminate();
           finish(new Error('The updater command timed out.'));
         }, options.timeoutMs)
       : undefined;
@@ -278,12 +315,30 @@ async function trustedProvenance(expectedRelease) {
     ? response.attestations.filter((entry) => entry?.predicateType === 'https://slsa.dev/provenance/v1')
     : [];
   if (provenance.length !== 1) throw new Error('The OR3 package is missing its unique build provenance.');
-  const envelope = provenance[0]?.bundle?.dsseEnvelope;
+  const bundle = provenance[0]?.bundle;
+  const envelope = bundle?.dsseEnvelope;
   if (!Array.isArray(envelope?.signatures) || envelope.signatures.length !== 1 || typeof envelope.signatures[0]?.sig !== 'string') {
     throw new Error('The OR3 package provenance signature is invalid.');
   }
+  // Verify the exact DSSE bundle that supplies the policy fields below. npm's
+  // separate audit command verifies the installed tarball; it does not make a
+  // second, unauthenticated registry response suitable policy input.
+  let verify;
+  try {
+    ({ verify } = npmRequire('sigstore'));
+  } catch {
+    throw new Error('The operator runtime does not contain the Sigstore verifier required for dashboard updates.');
+  }
+  try {
+    await verify(bundle, {
+      tufCachePath: join('/tmp', 'or3-dashboard-sigstore'),
+      tufForceCache: false,
+    });
+  } catch (error) {
+    throw new Error(`The OR3 package provenance bundle could not be cryptographically verified: ${error instanceof Error ? error.message : String(error)}`);
+  }
   provenanceStatement(envelope.payload, expectedRelease);
-  return JSON.stringify({ payload: envelope.payload, signatures: envelope.signatures });
+  return createHash('sha256').update(JSON.stringify(bundle)).digest('hex');
 }
 
 async function verifyInstalledUpdater(installDirectory, expectedRelease, job, provenanceFingerprint) {
@@ -300,7 +355,9 @@ async function verifyInstalledUpdater(installDirectory, expectedRelease, job, pr
     || manifest?.repository?.directory !== 'packages/or3-cloud'
     || manifest?.bin?.or3 !== './dist/cli.mjs'
     || manifest?.or3Cloud?.dashboardUpdateProtocol !== 1
+    || !stableVersion.test(manifest?.or3Cloud?.dashboardUpdateMinimumSourceVersion || '')
     || !/^sha256:[0-9a-f]{64}$/.test(manifest?.or3Cloud?.imageDigest || '')
+    || !/^sha256:[0-9a-f]{64}$/.test(manifest?.or3Cloud?.operatorImageDigest || '')
     || dependencyGroups.some((key) => manifest?.[key] && Object.keys(manifest[key]).length)
   ) {
     throw new Error('The installed updater package does not match the trusted OR3 package contract.');
@@ -317,7 +374,7 @@ async function verifyInstalledUpdater(installDirectory, expectedRelease, job, pr
   ) {
     throw new Error('The installed updater package does not match the verified npm release.');
   }
-  const audit = await runProcess('/nodejs/bin/node', [
+  const audit = await runProcess(nodeBinary, [
     npmCli,
     'audit',
     'signatures',
@@ -345,11 +402,7 @@ async function verifyInstalledUpdater(installDirectory, expectedRelease, job, pr
   };
 }
 
-async function runUpdate(job) {
-  const expectedRelease = await release();
-  if (expectedRelease.version !== job.targetVersion) {
-    throw new Error('The verified latest release changed before the update started. Check again.');
-  }
+async function withVerifiedUpdater(expectedRelease, job, action) {
   const installDirectory = join('/tmp', `or3-dashboard-update-${job.id}`);
   await rm(installDirectory, { recursive: true, force: true });
   await mkdir(installDirectory, { recursive: false, mode: 0o700 });
@@ -359,7 +412,7 @@ async function runUpdate(job) {
       private: true,
       dependencies: { [packageName]: expectedRelease.version },
     }, null, 2)}\n`, { mode: 0o600 });
-    const installed = await runProcess('/nodejs/bin/node', [
+    const installed = await runProcess(nodeBinary, [
       npmCli,
       'install',
       '--save-exact',
@@ -374,19 +427,74 @@ async function runUpdate(job) {
     });
     if (installed.code !== 0) throw new Error('The verified updater package could not be installed.');
     const updater = await verifyInstalledUpdater(installDirectory, expectedRelease, job, provenanceFingerprint);
-    const updated = await runProcess('/nodejs/bin/node', [updater.cli, 'update', '--to', job.targetVersion], {
-      cwd: deploymentDirectory,
-      env: updaterEnvironment(installDirectory, job, updater.imageDigest),
-      maxOutputBytes: 256 * 1024,
-    });
-    if (updated.code !== 0) throw new Error('The managed updater did not complete successfully.');
+    return await action(updater, installDirectory);
   } finally {
     await rm(installDirectory, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 
+async function runUpdate(job) {
+  const expectedRelease = await release();
+  if (expectedRelease.version !== job.targetVersion) {
+    throw new Error('The verified latest release changed before the update started. Check again.');
+  }
+  await withVerifiedUpdater(expectedRelease, job, async (updater, installDirectory) => {
+    const updated = await runProcess(nodeBinary, [updater.cli, 'update', '--to', job.targetVersion], {
+      cwd: deploymentDirectory,
+      env: updaterEnvironment(installDirectory, job, updater.imageDigest),
+      maxOutputBytes: 256 * 1024,
+      timeoutMs: maxUpdateDurationMs,
+    });
+    if (updated.code !== 0) throw new Error('The managed updater did not complete successfully.');
+  });
+}
+
+async function runRecovery(job) {
+  const expectedRelease = await release(job.targetVersion);
+  await withVerifiedUpdater(expectedRelease, job, async (updater, installDirectory) => {
+    const recovered = await runProcess(nodeBinary, [updater.cli, 'recover'], {
+      cwd: deploymentDirectory,
+      env: updaterEnvironment(installDirectory, job, updater.imageDigest),
+      maxOutputBytes: 256 * 1024,
+      timeoutMs: maxUpdateDurationMs,
+    });
+    if (recovered.code !== 0) throw new Error('The exact dashboard updater could not recover the interrupted operation.');
+  });
+}
+
 function closeAfter(server, code) {
   setTimeout(() => server.close(() => process.exit(code)), 250).unref();
+}
+
+/**
+ * A dashboard-origin update cannot recreate its own container before the CLI
+ * has committed terminal state. Once the job is durable, ask Docker to replace
+ * only this sidecar from the newly written digest-qualified overlay. The
+ * detached Docker client survives the current container's termination.
+ */
+function recreateOperatorAfterCommit(environment) {
+  const project = envValue(environment, 'OR3_COMPOSE_PROJECT');
+  if (!project) return;
+  try {
+    const child = spawn('docker', [
+      'compose',
+      '--project-name', project,
+      '--project-directory', deploymentDirectory,
+      '--env-file', join(deploymentDirectory, '.env'),
+      '-f', join(deploymentDirectory, 'compose.yaml'),
+      '-f', join(deploymentDirectory, 'compose.operator.yaml'),
+      'up', '-d', '--no-deps', '--force-recreate', 'or3-operator',
+    ], {
+      cwd: deploymentDirectory,
+      env: process.env,
+      detached: process.platform !== 'win32',
+      stdio: 'ignore',
+    });
+    child.unref();
+  } catch {
+    // The durable terminal job and restart policy still leave a host-CLI
+    // recovery path if Docker cannot schedule the sidecar replacement.
+  }
 }
 
 async function finish(server, job, error) {
@@ -399,11 +507,16 @@ async function finish(server, job, error) {
   // because the restored .env no longer declares the profile.
   let enabled = true;
   try {
-    enabled = envValue(await deploymentEnv(), 'OR3_DASHBOARD_UPDATES_ENABLED') === 'true';
+    const environment = await deploymentEnv();
+    enabled = envValue(environment, 'OR3_DASHBOARD_UPDATES_ENABLED') === 'true';
+    if (enabled) recreateOperatorAfterCommit(environment);
   } catch {
     // Keep the service restart-on-failure behavior when state cannot be read.
   }
-  closeAfter(server, !error || enabled ? 75 : 0);
+  // A disabled bridge must stay down after a host update/restore. When it is
+  // still enabled, restart the sidecar so Docker recreates it from the just
+  // committed digest-qualified overlay and reloads the operator asset.
+  closeAfter(server, enabled ? 75 : 0);
 }
 
 async function reconcileInterruptedJob() {
@@ -418,15 +531,62 @@ async function reconcileInterruptedJob() {
     await writeJob(job);
     return;
   }
-  job.completedAt = new Date().toISOString();
   if (state.incompleteOperation) {
-    job.phase = 'needs_attention';
-    job.error = 'The update was interrupted. Run `npx @or3/cloud recover` on the host, then check again.';
+    const pending = state.incompleteOperation;
+    if (
+      pending.operation !== 'update'
+      || pending.origin !== 'dashboard'
+      || pending.dashboardJobId !== job.id
+      || pending.targetVersion !== job.targetVersion
+    ) {
+      job.phase = 'needs_attention';
+      job.completedAt = new Date().toISOString();
+      job.error = 'A different or unowned managed operation is incomplete. It was left for host-CLI recovery.';
+      await writeJob(job);
+      return;
+    }
+    let activeLease = false;
+    try {
+      const owner = JSON.parse(await readFile(leaseOwnerPath, 'utf8'));
+      const heartbeat = Date.parse(owner?.heartbeatAt || '');
+      activeLease = owner?.origin === 'dashboard'
+        && owner?.jobId === job.id
+        && Number.isFinite(heartbeat)
+        && Date.now() - heartbeat <= 30_000;
+    } catch {
+      // An absent lease is expected after a container/process interruption.
+    }
+    if (activeLease) {
+      const retry = setTimeout(() => { void reconcileInterruptedJob(); }, 5_000);
+      retry.unref();
+      return;
+    }
+    try {
+      job.phase = 'running';
+      delete job.error;
+      await writeJob(job);
+      await runRecovery(job);
+      state = await managedState();
+      if (state.incompleteOperation) throw new Error('The exact updater returned while its lifecycle journal remained incomplete.');
+      job.completedAt = new Date().toISOString();
+      if (state.appVersion === job.targetVersion) {
+        job.phase = 'succeeded';
+      } else {
+        job.phase = 'failed';
+        job.error = `The interrupted update was safely restored to OR3 ${state.appVersion}.`;
+      }
+    } catch (error) {
+      job.phase = 'needs_attention';
+      job.completedAt = new Date().toISOString();
+      job.error = error instanceof Error ? error.message : 'The dashboard updater could not automatically recover its interrupted operation.';
+    }
   } else if (state.appVersion === job.targetVersion) {
     job.phase = 'succeeded';
+    job.completedAt = new Date().toISOString();
     delete job.error;
   } else {
     job.phase = 'failed';
+    job.completedAt = new Date().toISOString();
     job.error = 'The update process stopped before completion. The managed deployment did not switch to the requested release.';
   }
   await writeJob(job);
@@ -468,7 +628,6 @@ export function validStartInput(input) {
 async function main() {
   await mkdir(dirname(socketPath), { recursive: true, mode: 0o700 });
   await rm(socketPath, { force: true });
-  await reconcileInterruptedJob();
 
   const server = createServer(async (request, response) => {
     try {
@@ -528,7 +687,18 @@ async function main() {
   server.listen(socketPath, () => {
     // The read-only app bind mount needs to connect as a distinct container UID.
     // The socket exposes only these three fixed operations, never Docker itself.
-    void chmod(socketPath, 0o666).catch(() => closeAfter(server, 1));
+    // The app gets a supplementary group matching the deployment owner's
+    // primary group. Keep the privileged control socket out of world-writable
+    // reach while allowing that app group to connect.
+    void chmod(socketPath, 0o660).catch(() => closeAfter(server, 1));
+    void reconcileInterruptedJob().catch(async (error) => {
+      const job = await readJob();
+      if (!job || !activePhases.has(job.phase)) return;
+      job.phase = 'needs_attention';
+      job.completedAt = new Date().toISOString();
+      job.error = error instanceof Error ? error.message : 'The dashboard updater could not inspect its interrupted operation.';
+      await writeJob(job);
+    });
   });
 }
 

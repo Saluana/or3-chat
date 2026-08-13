@@ -31,16 +31,21 @@ if (command === 'create') {
     const version = value('--version');
     const sourceSha = value('--source-sha');
     const candidateImage = value('--image');
+    const operatorCandidateImage = value('--operator-image');
     const tarball = resolve(value('--tarball'));
     const output = resolve(value('--output'));
     const workflowRunId = value('--run-id');
     const candidateDigest = await imageDigest(candidateImage);
+    const operatorCandidateDigest = await imageDigest(operatorCandidateImage);
     const { stdout: packageSource } = await execFile('tar', ['-xOf', tarball, 'package/package.json'], { encoding: 'utf8' });
     const packageManifest = JSON.parse(packageSource);
     const packageVersion = packageManifest.version;
     if (packageVersion !== version) throw new Error(`Packed CLI version ${packageVersion} does not match ${version}.`);
     if (packageManifest.or3Cloud?.imageDigest !== candidateDigest) {
         throw new Error('Packed CLI image digest does not match the qualified candidate image.');
+    }
+    if (packageManifest.or3Cloud?.operatorImageDigest !== operatorCandidateDigest) {
+        throw new Error('Packed CLI operator image digest does not match the qualified operator runtime.');
     }
     const receipt = assertCandidateReceipt({
         schemaVersion: 1,
@@ -49,6 +54,8 @@ if (command === 'create') {
         sourceSha,
         candidateImage,
         candidateDigest,
+        operatorCandidateImage,
+        operatorCandidateDigest,
         tarballFile: basename(tarball),
         tarballSha256: await sha(tarball, 'sha256'),
         tarballIntegrity: `sha512-${await sha(tarball, 'sha512')}`,
@@ -63,16 +70,23 @@ if (command === 'create') {
     const tarball = resolve(value('--tarball'));
     const expectedVersion = value('--version');
     const expectedImage = value('--image');
+    const expectedOperatorImage = value('--operator-image');
     if (receipt.version !== expectedVersion) throw new Error(`Receipt version ${receipt.version} does not match ${expectedVersion}.`);
     if (receipt.candidateImage !== expectedImage) throw new Error('Receipt candidate image does not match the source-qualified candidate identity.');
+    if (receipt.operatorCandidateImage !== expectedOperatorImage) throw new Error('Receipt operator image does not match the source-qualified candidate identity.');
     if (basename(tarball) !== receipt.tarballFile) throw new Error('Receipt tarball filename does not match the supplied artifact.');
     const { stdout: packageSource } = await execFile('tar', ['-xOf', tarball, 'package/package.json'], { encoding: 'utf8' });
-    if (JSON.parse(packageSource).or3Cloud?.imageDigest !== receipt.candidateDigest) {
+    const packageManifest = JSON.parse(packageSource);
+    if (packageManifest.or3Cloud?.imageDigest !== receipt.candidateDigest) {
         throw new Error('Qualified tarball image digest does not match the candidate receipt.');
+    }
+    if (packageManifest.or3Cloud?.operatorImageDigest !== receipt.operatorCandidateDigest) {
+        throw new Error('Qualified tarball operator digest does not match the candidate receipt.');
     }
     if (await sha(tarball, 'sha256') !== receipt.tarballSha256) throw new Error('Qualified tarball SHA-256 mismatch.');
     if (`sha512-${await sha(tarball, 'sha512')}` !== receipt.tarballIntegrity) throw new Error('Qualified tarball integrity mismatch.');
     if (await imageDigest(receipt.candidateImage) !== receipt.candidateDigest) throw new Error('Qualified candidate image digest mismatch.');
+    if (await imageDigest(receipt.operatorCandidateImage) !== receipt.operatorCandidateDigest) throw new Error('Qualified operator candidate image digest mismatch.');
     await execFile('docker', ['pull', '--platform', 'linux/amd64', `${receipt.candidateImage}@${receipt.candidateDigest}`]);
     const { stdout: labelsSource } = await execFile('docker', [
         'image', 'inspect', '--format', '{{json .Config.Labels}}', `${receipt.candidateImage}@${receipt.candidateDigest}`,
@@ -80,6 +94,13 @@ if (command === 'create') {
     const labels = JSON.parse(labelsSource);
     if (labels['org.opencontainers.image.revision'] !== receipt.sourceSha) throw new Error('Candidate image source revision label mismatch.');
     if (labels['org.opencontainers.image.version'] !== receipt.version) throw new Error('Candidate image version label mismatch.');
+    await execFile('docker', ['pull', '--platform', 'linux/amd64', `${receipt.operatorCandidateImage}@${receipt.operatorCandidateDigest}`]);
+    const { stdout: operatorLabelsSource } = await execFile('docker', [
+        'image', 'inspect', '--format', '{{json .Config.Labels}}', `${receipt.operatorCandidateImage}@${receipt.operatorCandidateDigest}`,
+    ], { encoding: 'utf8' });
+    const operatorLabels = JSON.parse(operatorLabelsSource);
+    if (operatorLabels['org.opencontainers.image.revision'] !== receipt.sourceSha) throw new Error('Candidate operator source revision label mismatch.');
+    if (operatorLabels['org.opencontainers.image.version'] !== receipt.version) throw new Error('Candidate operator version label mismatch.');
     console.log(JSON.stringify(receipt));
 } else {
     throw new Error('Usage: candidate-receipt.mjs create|verify [options]');

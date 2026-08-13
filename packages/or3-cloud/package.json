@@ -16,7 +16,8 @@
     "or3": "./dist/cli.mjs"
   },
   "or3Cloud": {
-    "dashboardUpdateProtocol": 1
+    "dashboardUpdateProtocol": 1,
+    "dashboardUpdateMinimumSourceVersion": "0.1.39"
   },
   "files": [
     "dist",

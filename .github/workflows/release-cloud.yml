@@ -24,6 +24,7 @@ jobs:
     outputs:
       version: ${{ steps.identity.outputs.version }}
       digest: ${{ steps.promote.outputs.digest }}
+      operator_digest: ${{ steps.promote.outputs.operator_digest }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -56,17 +57,19 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "source=$source" >> "$GITHUB_OUTPUT"
           echo "candidate=ghcr.io/saluana/or3-chat:candidate-$version-$source" >> "$GITHUB_OUTPUT"
+          echo "candidate_operator=ghcr.io/saluana/or3-chat:candidate-operator-$version-$source" >> "$GITHUB_OUTPUT"
           echo "evidence=ghcr.io/saluana/or3-chat:candidate-evidence-$version-$source" >> "$GITHUB_OUTPUT"
           echo "release=ghcr.io/saluana/or3-chat:$version" >> "$GITHUB_OUTPUT"
-      - name: Reject an already-published npm version
+          echo "operator_release=ghcr.io/saluana/or3-chat:${version}-operator" >> "$GITHUB_OUTPUT"
+      - name: Check npm registry state without republishing
         env:
           VERSION: ${{ steps.identity.outputs.version }}
         run: |
           set -euo pipefail
           npm_output="$(npm view "@or3/cloud@$VERSION" version 2>&1)" || npm_status=$?
           if [ "${npm_status:-0}" -eq 0 ]; then
-            echo "@or3/cloud@$VERSION already exists; published versions are immutable."
-            exit 1
+            echo "@or3/cloud@$VERSION already exists; its exact immutable artifact will be compared with the qualification receipt before publication is skipped."
+            exit 0
           fi
           if ! grep -Eq 'E404|404 Not Found|not found' <<<"$npm_output"; then
             echo "$npm_output"
@@ -98,16 +101,20 @@ jobs:
           node scripts/release/candidate-receipt.mjs verify \
             --version "$VERSION" \
             --image "${{ steps.identity.outputs.candidate }}" \
+            --operator-image "${{ steps.identity.outputs.candidate_operator }}" \
             --receipt release-artifact/candidate-receipt.json \
             --tarball "release-artifact/or3-cloud-$VERSION.tgz"
       - name: Promote the exact qualified digest without rebuilding
         id: promote
         env:
           RELEASE_IMAGE: ${{ steps.identity.outputs.release }}
+          OPERATOR_RELEASE_IMAGE: ${{ steps.identity.outputs.operator_release }}
         run: |
           set -euo pipefail
           candidate_digest="$(node -p 'require("./release-artifact/candidate-receipt.json").candidateDigest')"
           candidate_image="$(node -p 'require("./release-artifact/candidate-receipt.json").candidateImage')"
+          operator_digest="$(node -p 'require("./release-artifact/candidate-receipt.json").operatorCandidateDigest')"
+          operator_image="$(node -p 'require("./release-artifact/candidate-receipt.json").operatorCandidateImage')"
           if docker manifest inspect "$RELEASE_IMAGE" >/dev/null 2>&1; then
             release_inspect="$(docker buildx imagetools inspect "$RELEASE_IMAGE")"
             release_digest="$(awk '$1 == "Digest:" { print $2; exit }' <<<"$release_inspect")"
@@ -118,8 +125,20 @@ jobs:
           release_inspect="$(docker buildx imagetools inspect "$RELEASE_IMAGE")"
           release_digest="$(awk '$1 == "Digest:" { print $2; exit }' <<<"$release_inspect")"
           test "$release_digest" = "$candidate_digest"
+          if docker manifest inspect "$OPERATOR_RELEASE_IMAGE" >/dev/null 2>&1; then
+            operator_release_inspect="$(docker buildx imagetools inspect "$OPERATOR_RELEASE_IMAGE")"
+            existing_operator_digest="$(awk '$1 == "Digest:" { print $2; exit }' <<<"$operator_release_inspect")"
+            test "$existing_operator_digest" = "$operator_digest" || { echo "$OPERATOR_RELEASE_IMAGE exists with a different digest; refusing to overwrite it."; exit 1; }
+          else
+            docker buildx imagetools create --tag "$OPERATOR_RELEASE_IMAGE" "$operator_image@$operator_digest"
+          fi
+          operator_release_inspect="$(docker buildx imagetools inspect "$OPERATOR_RELEASE_IMAGE")"
+          published_operator_digest="$(awk '$1 == "Digest:" { print $2; exit }' <<<"$operator_release_inspect")"
+          test "$published_operator_digest" = "$operator_digest"
           echo "$release_digest" > release-artifact/digest.txt
+          echo "$published_operator_digest" > release-artifact/operator-digest.txt
           echo "digest=$release_digest" >> "$GITHUB_OUTPUT"
+          echo "operator_digest=$published_operator_digest" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v7
         with:
           name: or3-cloud-release-${{ steps.identity.outputs.version }}
@@ -150,6 +169,7 @@ jobs:
         env:
           VERSION: ${{ needs.promote.outputs.version }}
           EXPECTED_DIGEST: ${{ needs.promote.outputs.digest }}
+          EXPECTED_OPERATOR_DIGEST: ${{ needs.promote.outputs.operator_digest }}
         run: |
           set -euo pipefail
           test "$GITHUB_REF_NAME" = "v$VERSION"
@@ -159,12 +179,32 @@ jobs:
           test "$receipt_digest" = "$EXPECTED_DIGEST"
           actual="$(docker buildx imagetools inspect "ghcr.io/saluana/or3-chat:$VERSION" | awk '$1 == "Digest:" { print $2; exit }')"
           test "$actual" = "$EXPECTED_DIGEST"
+          recorded_operator="$(tr -d '[:space:]' < release-artifact/operator-digest.txt)"
+          test "$recorded_operator" = "$EXPECTED_OPERATOR_DIGEST"
+          actual_operator="$(docker buildx imagetools inspect "ghcr.io/saluana/or3-chat:$VERSION-operator" | awk '$1 == "Digest:" { print $2; exit }')"
+          test "$actual_operator" = "$EXPECTED_OPERATOR_DIGEST"
           tarball="release-artifact/or3-cloud-$VERSION.tgz"
           expected_sha="$(node -p 'require("./release-artifact/candidate-receipt.json").tarballSha256')"
           actual_sha="$(node -e 'const fs=require("fs"),c=require("crypto"); console.log(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$tarball")"
           test "$actual_sha" = "$expected_sha"
-      - name: Publish @or3/cloud
-        run: npm publish "./release-artifact/or3-cloud-${{ needs.promote.outputs.version }}.tgz" --access public
+      - name: Publish @or3/cloud or verify an exact prior publication
+        env:
+          VERSION: ${{ needs.promote.outputs.version }}
+        run: |
+          set -euo pipefail
+          expected_integrity="$(node -p 'require("./release-artifact/candidate-receipt.json").tarballIntegrity')"
+          published_integrity="$(npm view --json "@or3/cloud@$VERSION" dist.integrity 2>&1)" || npm_status=$?
+          if [ "${npm_status:-0}" -eq 0 ] && [ -n "$published_integrity" ] && [ "$published_integrity" != "null" ]; then
+            actual_integrity="$(node -e 'const s=process.argv[1]; let v; try { v=JSON.parse(s) } catch { v=s }; process.stdout.write(typeof v === "string" ? v : "")' "$published_integrity")"
+            test "$actual_integrity" = "$expected_integrity" || { echo "@or3/cloud@$VERSION already exists with a different integrity; refusing to overwrite it."; exit 1; }
+            echo "@or3/cloud@$VERSION is already published with the qualified immutable tarball; continuing verification."
+          else
+            if ! grep -Eq 'E404|404 Not Found|not found' <<<"$published_integrity"; then
+              echo "$published_integrity"
+              exit "${npm_status:-1}"
+            fi
+            npm publish "./release-artifact/or3-cloud-$VERSION.tgz" --access public
+          fi
       - name: Verify exact npm and npx propagation
         env:
           VERSION: ${{ needs.promote.outputs.version }}

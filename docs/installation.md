@@ -162,21 +162,25 @@ Run updates from the managed deployment directory:
 npx @or3/cloud update
 ```
 
-The CLI records the exact image version and digest, stops OR3 briefly to make a
-consistent `/data` backup, pulls the new image, waits for Compose and deep
-health, and keeps the previous image/data snapshot as the immediate rollback
-point. If the new version fails deep health, it restores the previous version
-and snapshot automatically.
+The CLI records the exact image version and digest, runs the service from a
+digest-qualified reference, stops OR3 briefly to make a consistent `/data`
+backup, waits for Compose and deep health, and verifies the image of the
+running container before it commits state. It keeps the previous image/data
+snapshot as the immediate rollback point. If the new version fails deep health,
+it restores the previous version and snapshot automatically.
 
 On new managed Linux deployments using a local Docker socket, the same update
 flow is also available to super admins at **Admin → Operations → Dashboard
-Update**. Existing deployments gain the card after one normal CLI update.
-Remote Docker hosts remain CLI-only. The sidecar installs the exact npm package
-with lifecycle scripts disabled, then verifies its registry signature, SLSA
-provenance, source repository, tagged release ref, and release workflow before
-executing the updater. The signed package pins the qualified container digest;
-a replaced GHCR version tag is rejected before startup. An interrupted sidecar reports that host-side
-`npx @or3/cloud recover` is required rather than starting another operation.
+Update** only after the exact operator image/mount/user bridge probe succeeds.
+Existing deployments gain the card after one normal CLI update; unsupported,
+rootless, remote, or inaccessible socket setups remain CLI-only. The separate
+operator runtime installs the exact npm package with lifecycle scripts disabled,
+then verifies its registry signature, exact SLSA bundle, source repository,
+tagged release ref, and release workflow before executing the updater. The
+signed package pins both the application and operator container digests; a
+replaced GHCR version tag is rejected before startup. A stale dashboard-owned
+operation recovers through its exact target CLI; a manual/unowned operation
+remains locked for host-side `npx @or3/cloud recover`.
 
 For adopted legacy volumes owned by an older runtime UID, the updater changes
 only the volume mount root and re-extracts the checksummed backup as the target
@@ -205,16 +209,24 @@ npx @or3/cloud backup
 ```
 
 The archive contains account, conversation, uploaded-file data, and protected
-credential state. Treat it like a password database: keep it owner-only and
-copy it to encrypted, access-controlled off-host storage (for example an
-encrypted backup volume or an access-controlled object store). A same-host
-snapshot does not protect against disk loss. Restore requires explicit
-confirmation:
+credential state. Its manifest is authenticated with a deployment-local key,
+so restore/export refuses a modified or foreign archive. Treat it like a
+password database: keep it owner-only and copy it to encrypted,
+access-controlled off-host storage (for example an encrypted backup volume or
+an access-controlled object store). A same-host snapshot does not protect
+against disk loss. Restore and rollback first journal a verified pre-mutation
+snapshot; an error restores that snapshot instead of accepting partial data.
+Restore requires explicit confirmation:
 
 ```bash
 npx @or3/cloud restore <backup-id> --yes
 npx @or3/cloud rollback --yes
 ```
+
+The archive deliberately does not contain the deployment's authentication key.
+Keep an owner-only copy of `.or3-cloud/backup-auth.key` in an encrypted secret
+store separate from the archive, then restore that key into the recovered
+deployment before using an off-host backup.
 
 Rollback restores the data snapshot associated with the previous version and
 can discard writes made after that update. After either operation, verify
@@ -251,10 +263,11 @@ The command rotates the owner and admin credentials separately and invalidates
 their existing sessions; save the new values in a password manager.
 
 If a command is interrupted, the deployment is intentionally locked. Review
-`doctor` and the printed logs, then run `npx @or3/cloud recover`; it resumes the
-recorded operation (or restores its recorded backup) and only clears the lock
-after deep health passes. If the `.env` no longer matches the recorded target,
-recovery refuses to guess and leaves the operation record for manual review.
+`doctor` and the printed logs, then run `npx @or3/cloud recover`; it restores
+the journaled verified snapshot whenever the target may have begun mutating
+data and clears the lock only after deep health passes. Do not remove the lock
+or state files manually. Dashboard-owned stale jobs can recover themselves
+with their exact target CLI; recovery refuses to guess for any other operation.
 
 ## Adopt an existing generated deployment
 

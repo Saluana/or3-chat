@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   assertCommandFlags,
+  assertCommandPositionals,
   assertEnoughFreeSpace,
   assertPurgeBackupFreshness,
   assertRemovableArtifactName,
@@ -50,7 +51,7 @@ test('snapshots and restores checksummed managed deployment assets', async () =>
       imageDigest: `sha256:${'a'.repeat(64)}`,
       dataSha256: 'b'.repeat(64),
       managedAssetSha256,
-      managedAssetInventoryVersion: 2 as const,
+      managedAssetInventoryVersion: 3 as const,
       mode: 'public' as const,
     };
 
@@ -85,6 +86,7 @@ test('first dashboard update can snapshot and restore a pre-operator deployment'
   try {
     await copyAssets(directory, 'public');
     await rm(join(directory, 'dashboard-operator.mjs'));
+    await rm(join(directory, 'compose.operator.yaml'));
     const managedAssetSha256 = await snapshotManagedAssets(directory, 'public', backup);
     expect(managedAssetSha256['dashboard-operator.mjs']).toBeUndefined();
     const manifest = {
@@ -100,9 +102,11 @@ test('first dashboard update can snapshot and restore a pre-operator deployment'
     };
     await writeFile(join(directory, 'compose.yaml'), 'stale compose\n');
     await writeFile(join(directory, 'dashboard-operator.mjs'), 'new release operator\n');
+    await writeFile(join(directory, 'compose.operator.yaml'), 'new release operator overlay\n');
     expect(await restoreManagedAssets(directory, backup, manifest)).toBe(true);
     expect(await readFile(join(directory, 'compose.yaml'), 'utf8')).toContain('services:');
     await expect(stat(join(directory, 'dashboard-operator.mjs'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(join(directory, 'compose.operator.yaml'))).rejects.toMatchObject({ code: 'ENOENT' });
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -149,6 +153,10 @@ test('serializes special credential values safely and rejects line injection', (
     adminUsername: 'admin@example.com',
     adminPassword: 'AValidPassword123',
   })).toThrow('newline');
+});
+
+test('rejects newline-bearing passwords before lifecycle side effects', () => {
+  expect(() => validatePassword('AValidPassword123\nOR3_IMAGE=attacker')).toThrow('NUL or newline');
 });
 
 test('uses the canonical administrator password policy vectors', () => {
@@ -198,7 +206,6 @@ test('adds the dashboard operator only with an explicitly resolved local socket'
     port: 3000,
     dashboardOperator: {
       OR3_DASHBOARD_UPDATES_ENABLED: 'true',
-      COMPOSE_PROFILES: 'dashboard-updates',
       OR3_OPERATOR_IMAGE: 'ghcr.io/saluana/or3-chat:0.1.39',
       OR3_DEPLOYMENT_DIR: '/srv/or3-cloud',
       OR3_OPERATOR_UID: '1000',
@@ -209,7 +216,6 @@ test('adds the dashboard operator only with an explicitly resolved local socket'
   });
   expect(env).toMatchObject({
     OR3_DASHBOARD_UPDATES_ENABLED: 'true',
-    COMPOSE_PROFILES: 'dashboard-updates',
     OR3_DOCKER_SOCKET: '/var/run/docker.sock',
   });
 });
@@ -288,6 +294,15 @@ test('rejects unknown command flags before a deployment can start', () => {
   expect(() => assertCommandFlags('verify', { public: true })).not.toThrow();
 });
 
+test('rejects unexpected positional targets before dispatch', () => {
+  expect(() => assertCommandPositionals('update', ['../staging'])).toThrow('accepts no positional arguments');
+  expect(() => assertCommandPositionals('remove', ['../staging'])).toThrow('accepts no positional arguments');
+  expect(() => assertCommandPositionals('restore', [])).toThrow('requires exactly one backup');
+  expect(() => assertCommandPositionals('restore', ['backup-one', 'backup-two'])).toThrow('requires exactly one backup');
+  expect(() => assertCommandPositionals('init', ['target'])).not.toThrow();
+  expect(() => assertCommandPositionals('adopt', ['target'])).not.toThrow();
+});
+
 test('accepts only the fixed managed provider profile during production verification', () => {
   const health = {
     status: 'ok',
@@ -338,6 +353,8 @@ test('rejects any resolved Compose binding that exposes OR3 beyond loopback', ()
   ] } } });
   expect(checkResolvedLoopbackBinding(safe, 3000)).toBe(true);
   expect(checkResolvedLoopbackBinding(unsafe, 3000)).toBe(false);
+  const hostNetwork = JSON.stringify({ services: { or3: { network_mode: 'host', ports: [{ target: 3000, published: 3000, host_ip: '127.0.0.1', protocol: 'tcp' }] } } });
+  expect(checkResolvedLoopbackBinding(hostNetwork, 3000)).toBe(false);
 });
 
 test('accepts only the fixed V1 Compose data layout', () => {
@@ -382,9 +399,67 @@ test('refuses a backup whose deployment identity does not match the live volume'
   }, backupEnv, state, env)).toThrow('different deployment identity');
 });
 
+test('permits only a journaled target environment while recovery is pending', () => {
+  const env = buildEnv({
+    mode: 'local',
+    version: '0.1.12',
+    directory: '/tmp/or3-cloud-pending-target-test',
+    email: 'admin@example.com',
+    password: 'AValidPassword123',
+    port: 3000,
+  });
+  const state = stateFromEnv('/tmp/or3-cloud-pending-target-test', env, 'local', 'init', `sha256:${'a'.repeat(64)}`);
+  delete state.deploymentId;
+  delete env.OR3_DEPLOYMENT_ID;
+  const targetDigest = `sha256:${'b'.repeat(64)}`;
+  const targetDeploymentId = 'deployment-pending-target';
+  state.incompleteOperation = {
+    id: 'update-pending',
+    operation: 'update',
+    startedAt: new Date().toISOString(),
+    message: 'test',
+    targetVersion: '0.1.13',
+    targetImage: 'ghcr.io/saluana/or3-chat:0.1.13',
+    targetImageDigest: targetDigest,
+    targetDeploymentId,
+  };
+  const targetEnv = {
+    ...env,
+    OR3_VERSION: '0.1.13',
+    OR3_IMAGE: `ghcr.io/saluana/or3-chat@${targetDigest}`,
+    OR3_DEPLOYMENT_ID: targetDeploymentId,
+  };
+  const manifest = {
+    schemaVersion: 1 as const,
+    backupId: 'backup-pending-target',
+    createdAt: new Date().toISOString(),
+    appVersion: state.appVersion,
+    image: state.image,
+    imageDigest: state.imageDigest,
+    dataSha256: 'c'.repeat(64),
+    mode: 'local' as const,
+    deploymentId: state.deploymentId,
+  };
+  expect(() => assertBackupMatchesDeployment(manifest, env, state, targetEnv)).not.toThrow();
+  expect(() => assertBackupMatchesDeployment(manifest, env, state, { ...targetEnv, OR3_IMAGE: 'attacker/image:latest' })).toThrow(
+    'Managed state does not match',
+  );
+  const upgradedState = {
+    ...state,
+    appVersion: '0.1.13',
+    image: targetEnv.OR3_IMAGE,
+    imageDigest: targetDigest,
+    deploymentId: targetDeploymentId,
+    incompleteOperation: undefined,
+  };
+  expect(() => assertBackupMatchesDeployment(manifest, env, upgradedState, targetEnv)).not.toThrow();
+});
+
 test('refuses unsupported V1 provider modules before adoption', () => {
   expect(() => assertSupportedSource('/tmp/v1', {
     AUTH_PROVIDER: 'basic-auth',
+    OR3_AUTH_REGISTRATION_MODE: 'invite_only',
+    OR3_AUTH_AUTO_PROVISION: 'false',
     OR3_SYNC_PROVIDER: 'sqlite',
     OR3_STORAGE_FS_ROOT: '/data/storage',
     NUXT_PUBLIC_STORAGE_PROVIDER: 'fs',

@@ -1,0 +1,58 @@
+# This overlay is included only after the CLI proves the local Docker socket
+# can be mounted and used by the recorded deployment owner. Keeping it out of
+# compose.yaml is intentional: Compose interpolates variables in inactive
+# profiles too, which would otherwise break CLI-only installs.
+services:
+  or3:
+    # The app needs only group write access to the operator socket; it never
+    # receives the Docker socket or the deployment bind mount.
+    group_add:
+      - "${OR3_OPERATOR_GID}"
+    volumes:
+      # The web service can connect only to the narrow Unix-socket API. It does
+      # not receive the Docker socket or managed deployment directory.
+      - type: bind
+        source: ./.or3-cloud/operator-ipc
+        target: /run/or3-operator
+        read_only: true
+        bind:
+          create_host_path: false
+
+  or3-operator:
+    image: ${OR3_OPERATOR_IMAGE}
+    labels:
+      io.or3.cloud.deployment-id: ${OR3_DEPLOYMENT_ID}
+    entrypoint: ["/usr/local/bin/node", "/operator/dashboard-operator.mjs"]
+    working_dir: ${OR3_DEPLOYMENT_DIR}
+    environment:
+      DOCKER_HOST: unix:///var/run/docker.sock
+      OR3_DASHBOARD_OPERATOR_SOCKET: /run/or3-operator/operator.sock
+    user: "${OR3_OPERATOR_UID}:${OR3_OPERATOR_GID}"
+    group_add:
+      - "${OR3_DOCKER_GID}"
+    volumes:
+      - type: bind
+        source: ${OR3_DEPLOYMENT_DIR}
+        target: ${OR3_DEPLOYMENT_DIR}
+      - type: bind
+        source: ./dashboard-operator.mjs
+        target: /operator/dashboard-operator.mjs
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${OR3_DOCKER_SOCKET}
+        target: /var/run/docker.sock
+      - type: bind
+        source: ./.or3-cloud/operator-ipc
+        target: /run/or3-operator
+        bind:
+          create_host_path: false
+    restart: on-failure
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m

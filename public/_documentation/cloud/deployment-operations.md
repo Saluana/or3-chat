@@ -98,11 +98,16 @@ forwarding headers); otherwise proxy-supplied client identity is untrusted.
 - The managed container probe also requires read/write access to `/data` and
   opens the Basic Auth and sync SQLite files read/write. An HTTP-only green
   response cannot hide a volume-ownership or database-open failure.
-- Managed backups include checksummed Compose/Caddy assets. `update` installs
-  the target CLI's generated assets atomically; failure, rollback, restore, and
-  interrupted-operation recovery reinstall the matching backed-up assets.
+- Managed backups include an authentication tag bound to a deployment-local
+  key as well as checksummed Compose/Caddy assets. Restore/export rejects a
+  modified or foreign archive. `update` installs the target CLI's generated
+  assets atomically; failure, rollback, restore, and interrupted-operation
+  recovery reinstall the matching backed-up assets.
   An exact-version update must use the same package and image version, such as
   `npx --yes @or3/cloud@0.1.39 update --to 0.1.39`.
+- The backup authentication key is not included in an exported archive. Escrow
+  an owner-only copy of `.or3-cloud/backup-auth.key` separately in an encrypted
+  secret store and restore it before using an off-host archive.
 - After every deployment or update, run `npx @or3/cloud verify`. For a public
   VPS, run `npx @or3/cloud verify --public` so success requires the real HTTPS
   origin with no redirect loop. Verification covers the managed image digest,
@@ -123,27 +128,31 @@ Managed updates of adopted legacy volumes rebuild data from the checksummed
 pre-update archive as the hardened runtime UID. Only the volume mount root is
 re-owned; the updater does not recursively change per-file ownership in place.
 The previous root owner and backup remain the automatic recovery path until
-the replacement passes deep health.
+the replacement passes deep health. Each mutation holds one deployment-wide
+lease. Do not remove `.or3-cloud` lock or recovery files manually.
 
 ## Dashboard updates
 
 For managed Linux deployments using a local Docker socket, super admins can
-open **Admin → Operations → Dashboard Update**, check the latest compatible
-release, and approve it without running Docker commands. The card invokes the
-same exact-version `@or3/cloud` updater as the host CLI: it creates a verified
-backup, runs deep health checks, and restores the prior release/data when the
-update fails. Existing deployments gain this capability after one normal CLI
-update.
+open **Admin → Operations → Dashboard Update** only after a disposable probe
+proves the exact operator image, mount, Unix identity, and Docker socket work
+together. The card invokes the same exact-version `@or3/cloud` updater as the
+host CLI: it creates a verified backup, runs deep health checks, and restores
+the prior release/data when the update fails. Existing deployments gain this
+capability after one normal CLI update; inaccessible, rootless, and remote
+Docker setups remain CLI-only.
 
-Docker access stays outside the application container. A separate operator
-sidecar has the Docker socket and deployment-directory mount; the web service
-receives only a local Unix socket with status, check, and exact-update
-operations. The sidecar disables package lifecycle scripts and verifies the
-exact package's npm signature plus SLSA provenance, including this repository,
-the matching version tag, and `.github/workflows/release-cloud.yml`, before any
-privileged updater code runs. The authenticated package pins the qualified
-container image digest, so a replaced GHCR tag fails closed. Interrupted jobs fail closed and require
-host-side `npx @or3/cloud recover`. Remote Docker hosts remain CLI-only.
+Docker access stays outside the application container. A dedicated,
+digest-pinned operator sidecar has the Docker socket and deployment-directory
+mount; the web service receives only a group-restricted local Unix socket with
+status, check, and exact-update operations. The sidecar disables package
+lifecycle scripts, cryptographically verifies the exact Sigstore provenance
+bundle, and requires this repository, the matching version tag, and
+`.github/workflows/release-cloud.yml` before any privileged updater code runs.
+The authenticated package pins both qualified container image digests, so a
+replaced GHCR tag fails closed. A stale dashboard-owned update is recovered
+through its exact target CLI; unrelated/manual work stays locked for host-side
+`npx @or3/cloud recover`.
 
 ## Logging
 

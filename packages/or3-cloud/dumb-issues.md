@@ -4,7 +4,14 @@ This reviews the current working tree as of 2026-08-12, including the uncommitte
 
 The package tests and typecheck pass. That does not make this releasable. Several release blockers, host-integrity failures, data-loss paths, and deterministic test-gate failures remain.
 
-## 1. [BLOCKER] The base Compose file is invalid when dashboard updates are unsupported
+> **Remediation status (2026-08-13):** Items marked **DONE** below are fixed in
+> this working tree and covered by the targeted CLI/assets tests plus the
+> updated disposable Compose/operator and release-gate checks. **PARTIAL**
+> items have useful regression coverage but still need the release-grade
+> end-to-end scenario described in their original finding. Their original
+> descriptions are retained as the audit record; unmarked items remain open.
+
+## 1. [DONE — BLOCKER] The base Compose file is invalid when dashboard updates are unsupported
 
 **Location:** `packages/or3-cloud/assets/compose.yaml:24-27,74-91`; `packages/or3-cloud/src/cli.ts:926-950`
 
@@ -14,7 +21,7 @@ The profiled operator service is embedded in the base file, and Compose interpol
 
 **Fix:** put the operator service and app IPC mount in a separate `compose.operator.yaml` overlay and include it only after a real enablement probe succeeds. The base Compose file must parse with no operator variables at all.
 
-## 2. [BLOCKER] `adopt` is broken on every platform
+## 2. [DONE — BLOCKER] `adopt` is broken on every platform
 
 **Location:** `packages/or3-cloud/src/cli.ts:2828-2857`
 
@@ -24,7 +31,7 @@ The profiled operator service is embedded in the base file, and Compose interpol
 
 **Fix:** use the same conditional overlay/probe path as init and update. Perform every collision and compatibility preflight before writing the target directory.
 
-## 3. [CRITICAL] Exported shell variables can redirect lifecycle commands to arbitrary images, projects, and volumes
+## 3. [DONE — CRITICAL] Exported shell variables can redirect lifecycle commands to arbitrary images, projects, and volumes
 
 **Location:** `packages/or3-cloud/src/cli.ts:370-378,543-557,653-657,1379-1393`
 
@@ -34,7 +41,7 @@ Every Docker invocation inherits `process.env`. Compose gives the caller's expor
 
 **Fix:** run Compose with a scrubbed environment, explicitly inject the parsed managed values, pass an explicit validated project name, and validate the resolved service image, volume names, project name, network mode, and mounts before mutation. Add poisoned-parent-environment tests.
 
-## 4. [CRITICAL] A tampered backup is a host-code-execution package
+## 4. [DONE — CRITICAL] A tampered backup is a host-code-execution package
 
 **Location:** `packages/or3-cloud/src/cli.ts:1660-1679,1709-1728,2296-2334`
 
@@ -44,7 +51,7 @@ Restore trusts the backup's self-declared image, digest, full `.env`, and execut
 
 **Fix:** treat backups as data, not executable configuration. Authenticate the backup with a key stored outside it, constrain image/digest to authenticated release metadata, install assets from the matching signed `@or3/cloud` release, and reconstruct managed configuration from an allowlist.
 
-## 5. [CRITICAL] The lifecycle journal is not a lock
+## 5. [DONE — CRITICAL] The lifecycle journal is not a lock
 
 **Location:** `packages/or3-cloud/src/cli.ts:1189-1217,2060-2068,2193-2218,2302-2331,2348-2378,3160-3188,3374-3382`
 
@@ -54,7 +61,7 @@ Every command separately reads `incompleteOperation`, sees no work, and later wr
 
 **Fix:** hold an atomic deployment-wide OS lease for every mutation, including start/stop/restart/remove/recover. Include a nonce and heartbeat for dashboard recovery. Keep the JSON journal for crash recovery, not mutual exclusion.
 
-## 6. [HIGH] Update reopens the app after its rollback snapshot
+## 6. [DONE — HIGH] Update reopens the app after its rollback snapshot
 
 **Location:** `packages/or3-cloud/src/cli.ts:1597-1657,2220-2235`
 
@@ -64,7 +71,7 @@ Every command separately reads `incompleteOperation`, sees no work, and later wr
 
 **Fix:** keep the service stopped from snapshot creation through commit/rollback, or use a database/filesystem snapshot with an explicit write barrier. Never reopen writes against a snapshot that will be presented as the rollback point.
 
-## 7. [HIGH] Recovery can bless a partially erased volume as healthy
+## 7. [DONE — HIGH] Recovery can bless a partially erased volume as healthy
 
 **Location:** `packages/or3-cloud/src/cli.ts:1581-1594,1895-1975,2252-2269`
 
@@ -74,7 +81,7 @@ Failed-update restoration first rewrites the old `.env`, then destructively clea
 
 **Fix:** persist explicit phases before every destructive step. Once fallback restore begins, recovery must replay and checksum-validate the recorded snapshot or swap in a fully prepared replacement volume; environment equality is not recovery evidence.
 
-## 8. [HIGH] Restore and rollback destroy the only live state before proving the replacement
+## 8. [DONE — HIGH] Restore and rollback destroy the only live state before proving the replacement
 
 **Location:** `packages/or3-cloud/src/cli.ts:1581-1594,1709-1744,2302-2390`
 
@@ -84,7 +91,7 @@ Both operations overwrite `.env` and assets, delete `/data`, and extract in plac
 
 **Fix:** restore into a fresh volume and atomically switch only after checks pass, or create and journal a verified pre-restore snapshot and restore it on every failure.
 
-## 9. [HIGH] Legacy ownership migration fails on ordinary nested root-owned data
+## 9. [DONE — HIGH] Legacy ownership migration fails on ordinary nested root-owned data
 
 **Location:** `packages/or3-cloud/src/cli.ts:713-739,1581-1594,2232-2249`
 
@@ -94,7 +101,7 @@ Migration changes only the `/data` directory's UID/GID. The subsequent `find /da
 
 **Fix:** use a narrowly hardened root helper to clear the old volume before extracting as the target UID, or restore into a new correctly owned volume and swap. Test nested root-owned directories and files.
 
-## 10. [HIGH] The ownership migration phase is absent from the recovery journal
+## 10. [DONE — HIGH] The ownership migration phase is absent from the recovery journal
 
 **Location:** `packages/or3-cloud/src/cli.ts:2209-2217,2232-2248`; recovery at `packages/or3-cloud/src/cli.ts:1895-1975`
 
@@ -104,7 +111,7 @@ The previous UID/GID and whether migration started exist only in process memory.
 
 **Fix:** journal old ownership, migration requirement, and phase before the first ownership mutation; make each recovery transition idempotent.
 
-## 11. [HIGH] Recovery forgets where an external restore came from
+## 11. [DONE — HIGH] Recovery forgets where an external restore came from
 
 **Location:** `packages/or3-cloud/src/cli.ts:1895-1935,2296-2329`
 
@@ -114,7 +121,7 @@ Restore accepts an absolute backup path, but the pending operation records only 
 
 **Fix:** copy external backups into a managed staging location before mutation, or journal the canonical path plus all immutable hashes and revalidate them during recovery.
 
-## 12. [HIGH] A crafted backup ID can overwrite managed state
+## 12. [DONE — HIGH] A crafted backup ID can overwrite managed state
 
 **Location:** `packages/or3-cloud/src/cli.ts:1660-1679,2109-2152`
 
@@ -124,7 +131,7 @@ Restore accepts an absolute backup path, but the pending operation records only 
 
 **Fix:** validate every manifest ID with the same strict generated-ID parser before path construction, and require an internal backup directory basename to equal its manifest ID.
 
-## 13. [HIGH] Purge can delete the backup it says will remain
+## 13. [DONE — HIGH] Purge can delete the backup it says will remain
 
 **Location:** `packages/or3-cloud/src/cli.ts:2113-2165,3350-3406`
 
@@ -134,7 +141,7 @@ Export rejects a destination inside the source backup, but not a destination ins
 
 **Fix:** require the canonical export destination to be outside every purge target and preferably outside the deployment root. Revalidate containment and mount identity immediately before deletion.
 
-## 14. [HIGH] Most destructive commands do not verify the deployment directory
+## 14. [DONE — HIGH] Most destructive commands do not verify the deployment directory
 
 **Location:** `packages/or3-cloud/src/cli.ts:1396-1420,1895-1975,2060-2077,2193-2294,2302-2390`
 
@@ -144,7 +151,7 @@ Recover, backup, update, restore, rollback, and doctor load managed state but do
 
 **Fix:** persist a random deployment ID and canonical root, label Docker resources with it, validate both for every command, and reject moved deployments until an explicit relocation operation updates the identity.
 
-## 15. [HIGH] Image integrity is checked on a mutable tag, not the running container
+## 15. [DONE — HIGH] Image integrity is checked on a mutable tag, not the running container
 
 **Location:** `packages/or3-cloud/src/cli.ts:788-853,963-1027,1223-1227,2271-2284`
 
@@ -154,7 +161,7 @@ Compose receives `repository:version`, while digest checks inspect whatever loca
 
 **Fix:** store and run digest-qualified references, then verify the created container's immutable image ID and repository digest before committing state.
 
-## 16. [HIGH] Historical adoption silently loses authenticated image identity
+## 16. [DONE — HIGH] Historical adoption silently loses authenticated image identity
 
 **Location:** `packages/or3-cloud/src/cli.ts:761-813,1570-1578,2793-2835`
 
@@ -164,7 +171,7 @@ Compose receives `repository:version`, while digest checks inspect whatever loca
 
 **Fix:** require the exact historical CLI/authenticated release metadata for adoption. Run archive helpers with `--network none`, read-only root, `no-new-privileges`, and dropped capabilities.
 
-## 17. [HIGH] Adoption mixes one release's image with another release's assets
+## 17. [DONE — HIGH] Adoption mixes one release's image with another release's assets
 
 **Location:** `packages/or3-cloud/src/cli.ts:2793-2835`
 
@@ -174,7 +181,7 @@ The source `or3-release.json` selects the old application image, but `copyAssets
 
 **Fix:** require the matching CLI version for adoption, or make adoption an explicit, tested migration to the current version with current authenticated image and assets.
 
-## 18. [HIGH] Adoption can preserve public self-registration
+## 18. [DONE — HIGH] Adoption can preserve public self-registration
 
 **Location:** `packages/or3-cloud/src/cli.ts:2710-2755,2832-2846`
 
@@ -184,7 +191,7 @@ The source validator rejects guest access but does not enforce `OR3_AUTH_REGISTR
 
 **Fix:** copy only necessary secrets/data settings and reapply the complete managed security profile after copying. Reject incompatible source policy before stopping it.
 
-## 19. [HIGH] Restoring a pre-operator backup leaves the privileged sidecar running
+## 19. [DONE — HIGH] Restoring a pre-operator backup leaves the privileged sidecar running
 
 **Location:** `packages/or3-cloud/src/cli.ts:1168-1175,1219-1226,1709-1744`; `packages/or3-cloud/assets/compose.yaml:74-100`
 
@@ -194,7 +201,7 @@ The source validator rejects guest access but does not enforce `OR3_AUTH_REGISTR
 
 **Fix:** explicitly stop/remove the operator while the current overlay still exists, restore old assets/env, then start without the overlay. Verify the operator container and socket are absent before commit.
 
-## 20. [HIGH] The "small operator runtime" is the full application image with Docker tooling added
+## 20. [DONE — HIGH] The "small operator runtime" is the full application image with Docker tooling added
 
 **Location:** `Dockerfile:10-13,90-118`; `packages/or3-cloud/assets/compose.yaml:74-100`; `planning/admin-dashboard-updates/design.md:33-40`
 
@@ -204,7 +211,7 @@ The operator uses `${OR3_OPERATOR_IMAGE}`, which is the normal OR3 app image. Th
 
 **Fix:** publish and pin a minimal operator-runtime image by immutable digest for the protocol major. Keep the frequently changing operator program as a verified managed asset.
 
-## 21. [HIGH] Operator enablement is based on `stat()`, not proof that the bridge works
+## 21. [DONE — HIGH] Operator enablement is based on `stat()`, not proof that the bridge works
 
 **Location:** `packages/or3-cloud/src/cli.ts:926-960`
 
@@ -214,7 +221,7 @@ The probe checks platform, path shape, and host socket metadata only. It does no
 
 **Fix:** run a disposable probe using the exact runtime, mounts, user, and supplementary group; require Docker access and host-owner file creation before enabling the overlay.
 
-## 22. [HIGH] The dashboard updater child has no timeout
+## 22. [DONE — HIGH] The dashboard updater child has no timeout
 
 **Location:** `packages/or3-cloud/assets/dashboard-operator.mjs:348-385`
 
@@ -224,7 +231,7 @@ Package installation has a timeout, but the actual `@or3/cloud update` process a
 
 **Fix:** give the updater a bounded operational deadline, maintain a deployment-wide heartbeat lease, terminate the process group safely, and reconcile through the recorded journal.
 
-## 23. [HIGH] Interrupted dashboard updates are not automatically recovered
+## 23. [DONE — HIGH] Interrupted dashboard updates are not automatically recovered
 
 **Location:** `packages/or3-cloud/assets/dashboard-operator.mjs:409-433`; `planning/admin-dashboard-updates/design.md:191-218`
 
@@ -234,7 +241,7 @@ On restart, an active job plus pending managed state is changed to `needs_attent
 
 **Fix:** record origin/job identity in the lifecycle journal and lease, then run the exact target CLI's `recover` only for stale dashboard-owned operations. Preserve unrelated manual operations for host intervention.
 
-## 24. [HIGH] Release compatibility is a protocol number with no source-version gate
+## 24. [DONE — HIGH] Release compatibility is a protocol number with no source-version gate
 
 **Location:** `packages/or3-cloud/package.json:18-20`; `packages/or3-cloud/assets/dashboard-operator.mjs:114-138,177-185`; `planning/admin-dashboard-updates/design.md:170-189`
 
@@ -244,7 +251,7 @@ Package metadata contains only `dashboardUpdateProtocol: 1`. It does not publish
 
 **Fix:** publish structured protocol plus minimum-source metadata, enforce it during check and start, and validate the pulled image's repository/revision/version labels in addition to its digest.
 
-## 25. [BLOCKER] The extended lifecycle workflow is deterministically red
+## 25. [DONE — BLOCKER] The extended lifecycle workflow is deterministically red
 
 **Location:** `.github/workflows/extended-validation.yml:131-168`; `packages/or3-cloud/src/cli.ts:2199-2203`
 
@@ -254,7 +261,7 @@ The workflow computes `next_version` and runs the current CLI with `update --to 
 
 **Fix:** build/use an exact target-version package with matching assets and image metadata, or redesign the fixture so source and target CLIs are distinct real artifacts.
 
-## 26. [HIGH] The release candidate gate never exercises the dashboard update path
+## 26. [PARTIAL — HIGH] The release candidate gate never exercises the dashboard update path
 
 **Location:** `.github/workflows/release-cloud-candidate.yml:158-201`; `planning/admin-dashboard-updates/tasks.md:105-119`
 
@@ -264,7 +271,7 @@ The candidate workflow tests host-CLI update/rollback/verify only. It never call
 
 **Fix:** add a disposable dashboard lifecycle harness bound to the exact candidate tarball and image digest, and require its evidence in the release receipt.
 
-## 27. [HIGH] Restore refuses backups that would fit after replacing current data
+## 27. [DONE — HIGH] Restore refuses backups that would fit after replacing current data
 
 **Location:** `packages/or3-cloud/src/cli.ts:433-460,1696-1707`
 
@@ -274,7 +281,7 @@ Free space is measured before deletion, then required to exceed the full uncompr
 
 **Fix:** restore into a new volume and check that volume's capacity, or account for safely reclaimable current data without weakening the no-partial-restore guarantee.
 
-## 28. [HIGH] Export regressed support for pre-operator backups
+## 28. [DONE — HIGH] Export regressed support for pre-operator backups
 
 **Location:** `packages/or3-cloud/src/cli.ts:1137-1165,2109-2157`
 
@@ -284,7 +291,7 @@ Free space is measured before deletion, then required to exceed the full uncompr
 
 **Fix:** export the exact validated inventory returned by `verifiedManagedAssetContents()`, not today's package inventory.
 
-## 29. [HIGH] Retention trusts corrupt metadata and can delete the wrong backup
+## 29. [DONE — HIGH] Retention trusts corrupt metadata and can delete the wrong backup
 
 **Location:** `packages/or3-cloud/src/cli.ts:1288-1375,1635-1655`
 
@@ -574,7 +581,7 @@ The purge file list omits `dashboard-operator.mjs`, even though `copyAssets()` a
 
 **Fix:** include a `LICENSE` file in the package (or explicitly include the root license during packaging) and assert it in the tarball gate.
 
-## 58. [HIGH] The tests barely execute the dangerous code
+## 58. [PARTIAL — HIGH] The tests barely execute the dangerous code
 
 **Location:** `packages/or3-cloud/test/cli.test.ts:1-542`; `packages/or3-cloud/test/security-assets.test.ts:52-103,188-213`
 
@@ -624,7 +631,7 @@ The card polls every five seconds instead of two, uses an unbounded fixed interv
 
 **Fix:** preserve the primary exception, attach restart failure as a cause/aggregate diagnostic, and report artifact state explicitly.
 
-## 63. [HIGH] Provenance policy is applied to a bundle that was never cryptographically verified
+## 63. [DONE — HIGH] Provenance policy is applied to a bundle that was never cryptographically verified
 
 **Location:** `packages/or3-cloud/assets/dashboard-operator.mjs:275-287,320-340`
 
@@ -634,7 +641,7 @@ The card polls every five seconds instead of two, uses an unbounded fixed interv
 
 **Fix:** independently verify the inspected Sigstore bundle and transparency evidence, or obtain a structured verified bundle from npm and run `provenanceStatement()` against that exact verified payload.
 
-## 64. [HIGH] An operator-driven update can recreate the container running the updater
+## 64. [DONE — HIGH] An operator-driven update can recreate the container running the updater
 
 **Location:** `packages/or3-cloud/src/cli.ts:1223-1227`; `packages/or3-cloud/assets/compose.yaml:74-100`
 
@@ -644,7 +651,7 @@ The operator launches the CLI inside its own container. The CLI installs new Com
 
 **Fix:** operator-origin updates must update/verify only application-facing services, commit terminal lifecycle state, then re-exec or replace the operator under an external/pinned supervisor.
 
-## 65. [HIGH] A partially successful release cannot produce a successful rerun
+## 65. [DONE — HIGH] A partially successful release cannot produce a successful rerun
 
 **Location:** `.github/workflows/release-cloud.yml:61-74`; `docs/releasing.md:110-121`
 
@@ -674,7 +681,7 @@ The operator receives the Docker socket read-write and the whole deployment dire
 
 **Fix:** put a narrowly allow-listed Docker control proxy in front of the daemon and restrict filesystem writes to exact managed paths. At minimum, model and document this service as a host-root trust component instead of presenting container hardening as a boundary.
 
-## 68. [HIGH] The required Content Security Policy does not exist
+## 68. [DONE — HIGH] The required Content Security Policy does not exist
 
 **Location:** `packages/or3-cloud/assets/Caddyfile:1-18`; `scripts/release/smoke-browser.mjs:363-382`
 

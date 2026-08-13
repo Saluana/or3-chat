@@ -27,6 +27,8 @@ test('Caddyfile sets the full security header set inside the site block', () => 
   expect(siteBlock).toContain('X-Frame-Options "DENY"');
   expect(siteBlock).toContain('Referrer-Policy "strict-origin-when-cross-origin"');
   expect(siteBlock).toContain('Permissions-Policy "camera=(), microphone=(), geolocation=()"');
+  expect(siteBlock).toContain("Content-Security-Policy \"default-src 'self'");
+  expect(siteBlock).toContain("frame-ancestors 'none'");
 });
 
 test('Caddyfile keeps SSE streaming and compression intact', () => {
@@ -51,17 +53,19 @@ test('compose.yaml bridges managed proxy trust into Nuxt runtime config', () => 
 
 test('dashboard updates isolate Docker access to the operator sidecar', () => {
   const compose = asset('compose.yaml');
-  const app = compose.slice(compose.indexOf('  or3:'), compose.indexOf('  or3-operator:'));
-  const operator = compose.slice(compose.indexOf('  or3-operator:'));
-  expect(app).toContain('./.or3-cloud/operator-ipc:/run/or3-operator:ro');
-  expect(app).not.toContain('/var/run/docker.sock');
-  expect(operator).toContain('profiles: ["dashboard-updates"]');
-  expect(operator).toContain('${OR3_DOCKER_SOCKET}:/var/run/docker.sock:rw');
-  expect(operator).toContain('./dashboard-operator.mjs:/operator/dashboard-operator.mjs:ro');
+  const operator = asset('compose.operator.yaml');
+  expect(compose).not.toContain('operator-ipc');
+  expect(compose).not.toContain('/var/run/docker.sock');
+  expect(operator).toContain('target: /run/or3-operator');
+  expect(operator).toContain('target: /var/run/docker.sock');
+  expect(operator).toContain('source: ./dashboard-operator.mjs');
+  expect(operator).toContain('target: /operator/dashboard-operator.mjs');
+  expect(operator).toContain('group_add:');
+  expect(operator).toContain('io.or3.cloud.deployment-id: ${OR3_DEPLOYMENT_ID}');
   expect(operator).toContain('cap_drop:');
   expect(operator).toContain('- ALL');
   const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
-  expect(cli).toContain('await chmod(ipc, 0o711);');
+  expect(cli).toContain('await chmod(ipc, 0o710);');
 });
 
 test('dashboard operator verifies exact release provenance before executing package code', () => {
@@ -75,7 +79,12 @@ test('dashboard operator verifies exact release provenance before executing pack
   expect(operator).toContain("manifest?.or3Cloud?.imageDigest");
   expect(operator).toContain("OR3_EXPECTED_IMAGE_DIGEST: imageDigest");
   expect(operator).toContain("maxAttestationBytes = 1024 * 1024");
+  expect(operator).toContain("await verify(bundle");
+  expect(operator).toContain("npmRequire('sigstore')");
   expect(operator).toContain("await trustedProvenance(expectedRelease) !== provenanceFingerprint");
+  expect(operator).toContain('void chmod(socketPath, 0o660)');
+  expect(operator).toContain('function recreateOperatorAfterCommit(environment)');
+  expect(operator).toContain("'up', '-d', '--no-deps', '--force-recreate', 'or3-operator'");
   expect(operator).not.toContain("'exec',\n    '--yes'");
   expect(operator).not.toContain('shell: true');
 });
@@ -84,7 +93,8 @@ test('dashboard operator rejects loose payloads and reconciles interrupted jobs'
   const operator = readFileSync(DASHBOARD_OPERATOR, 'utf8');
   expect(operator).toContain("keys.length === 2");
   expect(operator).toContain("requestIdPattern.test(input.requestId)");
-  expect(operator).toContain("await reconcileInterruptedJob();");
+  expect(operator).toContain('void reconcileInterruptedJob()');
+  expect(operator).toContain('await runRecovery(job);');
   expect(operator).toContain("job.phase = 'needs_attention'");
   expect(operator).toContain("if (updateClaimed)");
 });
@@ -144,11 +154,15 @@ test('Dockerfile builds shared Nuxt output only once on the native runner', () =
   expect(dockerfile).toMatch(/^FROM busybox:1\.37\.0-uclibc@sha256:.* AS runtime-tools$/m);
   expect(dockerfile).toMatch(/^FROM gcr\.io\/distroless\/nodejs24-debian13:.* AS runtime$/m);
   expect(dockerfile).toMatch(/^FROM docker:27\.5\.1-cli@sha256:.* AS docker-client$/m);
+  expect(dockerfile).toMatch(/^FROM node:24-bookworm-slim@sha256:.* AS dashboard-operator$/m);
   const toolsStage = dockerfile.slice(dockerfile.indexOf('FROM busybox:'), dockerfile.indexOf(' AS build'));
   expect(toolsStage).not.toContain('\nRUN ');
   expect(dockerfile).toContain('COPY --from=runtime-tools /bin/ /bin/');
   expect(dockerfile).toContain('COPY --from=docker-client /usr/local/bin/docker /usr/local/bin/docker');
   expect(dockerfile).toContain('COPY --from=docker-client /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose');
+  const appRuntime = dockerfile.slice(dockerfile.indexOf(' AS runtime\n'), dockerfile.length);
+  expect(appRuntime).not.toContain('COPY --from=docker-client');
+  expect(appRuntime).not.toContain('/usr/local/lib/node_modules/npm');
   expect(dockerfile).toContain('ENTRYPOINT ["/nodejs/bin/node"');
 });
 
@@ -198,21 +212,24 @@ test('updates rebuild legacy-owned data from the checksummed backup without recu
   expect(update.indexOf('await stopProject(loaded.directory, state.mode);')).toBeLessThan(update.indexOf('uid: MANAGED_RUNTIME_UID'));
 });
 
-test('updates and recovery install generated assets with checksummed rollback coverage', () => {
+test('updates and recovery use journaled snapshots rather than resuming a partial target', () => {
   const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
   expect(cli).toContain('const managedAssetSha256 = await snapshotManagedAssets(directory, state.mode, backupDir);');
   expect(cli).toContain('await copyAssets(loaded.directory, state.mode);');
-  expect(cli).toContain('await copyAssets(loaded.directory, loaded.state.mode);');
+  expect(cli).toContain('async function restorePreMutationSnapshot(');
+  expect(cli).toContain("phase: 'target-mutating'");
+  expect(cli).toContain('previousBackupPath: previous.backupDir');
   expect(cli).toContain('await restoreManagedAssets(directory, backupPath, manifest);');
   expect(cli).toContain('await verifiedManagedAssetContents(backupPath, manifest);');
   expect(cli).toContain('targetVersion !== PACKAGE_VERSION');
-  expect(cli).toContain('pending.targetVersion !== PACKAGE_VERSION');
+  expect(cli).toContain('Interrupted update was rolled back to pre-update snapshot');
 });
 
 test('restore and adoption stream private archives into the managed volume', () => {
   const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
   expect(cli).toContain('pipeline(createReadStream(source), child.stdin)');
-  expect(cli).toContain("'find /data -mindepth 1 -delete && tar xzf - -C /data'");
+  expect(cli).toContain("'find /data -mindepth 1 -delete'");
+  expect(cli).toContain("'tar xzf - -C /data'");
   expect(cli).not.toContain('`${backupPath}:/backup:ro`');
   expect(cli).not.toContain("'--user', '0:0', '-v', `${sourceVolume}:/source:ro`");
 });
@@ -237,7 +254,7 @@ test('release smoke re-resolves amd64 after architecture-specific scans', () => 
   // must consume the same candidate identity rather than build another image.
   expect(workflow).toContain('docker pull --platform linux/amd64 "$OR3_IMAGE"');
   expect(workflow).toContain('OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE"');
-  expect(workflow.match(/docker\/build-push-action@v6/g)?.length).toBe(1);
+  expect(workflow.match(/docker\/build-push-action@v6/g)?.length).toBe(2);
   expect(init).toBeGreaterThan(-1);
   expect(pull).toBe(-1);
 });
@@ -273,13 +290,15 @@ test('release digest verification uses buildx-compatible manifest output', () =>
 test('npm publication identifies the qualified tarball as a local file', () => {
   const workflow = readFileSync(RELEASE_WORKFLOW, 'utf8');
   expect(workflow).toContain(
-    'npm publish "./release-artifact/or3-cloud-${{ needs.promote.outputs.version }}.tgz" --access public',
+    'npm publish "./release-artifact/or3-cloud-$VERSION.tgz" --access public',
   );
+  expect(workflow).toContain('already published with the qualified immutable tarball; continuing verification.');
 });
 
 test('candidate evidence is source-qualified and cannot publish a release', () => {
   const candidate = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
   expect(candidate).toContain('candidate-$VERSION-$SOURCE_SHA');
+  expect(candidate).toContain('candidate-operator-$VERSION-$SOURCE_SHA');
   expect(candidate).toContain('candidate-evidence-$VERSION-$SOURCE_SHA');
   expect(candidate).toContain('sha=$(git rev-parse HEAD)');
   expect(candidate).toContain('bun run release:prepare -- --version "$VERSION" --registry --full');
@@ -293,10 +312,14 @@ test('authenticated cloud package binds updates to the qualified image digest', 
   const receipt = readFileSync(CANDIDATE_RECEIPT, 'utf8');
   const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
   expect(candidate).toContain('npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"');
+  expect(candidate).toContain('npm pkg set "or3Cloud.operatorImageDigest=$OPERATOR_IMAGE_DIGEST"');
   expect(candidate.indexOf('docker/build-push-action@v6')).toBeLessThan(candidate.indexOf('npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"'));
   expect(receipt).toContain("packageManifest.or3Cloud?.imageDigest !== candidateDigest");
-  expect(receipt).toContain("JSON.parse(packageSource).or3Cloud?.imageDigest !== receipt.candidateDigest");
-  expect(cli).toContain('pullImage(targetImage, expectedImageDigest(targetVersion))');
+  expect(receipt).toContain("packageManifest.or3Cloud?.imageDigest !== receipt.candidateDigest");
+  expect(receipt).toContain("packageManifest.or3Cloud?.operatorImageDigest !== receipt.operatorCandidateDigest");
+  expect(cli).toContain('pullImage(targetImageTag, expectedImageDigest(targetVersion))');
+  expect(cli).toContain('const targetImage = imageAtDigest(targetImageTag, targetDigest);');
+  expect(cli).toContain('await assertRunningAppImage(directory, mode, env.OR3_IMAGE);');
   expect(cli).toContain('The image tag may have been replaced; refusing to continue.');
 });
 

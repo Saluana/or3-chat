@@ -1,13 +1,15 @@
 # Releasing OR3 Cloud
 
-Normal OR3 Cloud releases publish one versioned application image and one
-operator package. The release version must match in:
+Normal OR3 Cloud releases publish a versioned application image, a separate
+digest-pinned dashboard-operator image, and the operator package. The release
+version must match in:
 
 - `package.json` at the repository root;
 - root version metadata in `package-lock.json`;
 - `packages/or3-cloud/package.json`;
 - `packages/or3-cloud/src/cli.ts` (`PACKAGE_VERSION`);
-- `ghcr.io/saluana/or3-chat:<version>`; and
+- `ghcr.io/saluana/or3-chat:<version>` and
+  `ghcr.io/saluana/or3-chat:<version>-operator`; and
 - the tag `v<version>`.
 
 Published npm versions and image tags are immutable. Never force-move a tag or
@@ -62,12 +64,14 @@ machine-readable report to `output/release/preflight.json`.
 
 Then use GitHub Actions to manually run **Qualify OR3 Cloud Candidate** on the
 exact intended branch/commit and enter the same version. Do not create the tag
-yet. The candidate workflow builds the multi-architecture image once, scans
-both platforms, upgrades a deployment from the current npm release, runs
-rollback and a second update, executes `or3 verify`, checks persistence and the
-clean-browser journey, and records immutable source/image/tarball identities in
-`candidate-receipt.json`. It publishes only source-qualified candidate evidence;
-it cannot publish npm or the public version image.
+yet. The candidate workflow builds and verifies both multi-architecture images,
+binds their immutable digests into the exact packed CLI, upgrades a deployment
+from the current npm release, runs rollback and a second update, calls the
+dashboard operator over its Unix socket, executes `or3 verify`, checks
+persistence and the clean-browser journey, and records immutable
+source/image/tarball identities in `candidate-receipt.json`. It publishes only
+source-qualified candidate evidence; it cannot publish npm or the public
+version images.
 
 When the default profile changed, verify the exact build-time provider versions
 in `packages/create-or3-chat/first-party-versions.json` are already available
@@ -98,24 +102,26 @@ The `Release OR3 Cloud` workflow then:
 1. finds evidence whose version and source SHA exactly match the tag;
 2. re-hashes the tarball, resolves the candidate digest, and verifies the image
    revision/version labels;
-3. promotes that exact manifest digest to `ghcr.io/saluana/or3-chat:<version>`
-   without rebuilding;
+3. promotes the exact qualified application and dashboard-operator manifest
+   digests to `ghcr.io/saluana/or3-chat:<version>` and
+   `ghcr.io/saluana/or3-chat:<version>-operator` without rebuilding;
 4. publishes the exact qualified tarball as `@or3/cloud@<version>` in an
    isolated trusted-publishing job; and
 5. retries exact npm and `npx` verification until registry propagation ends.
 
-The workflow's image digest is the deployment identity. Copy it into the
-release notes with the supported profile and any migration/rollback warnings.
+The workflow's application and operator image digests are deployment identity
+inputs. Copy both into the release notes with the supported profile and any
+migration/rollback warnings.
 
 ## Failure handling
 
 If candidate qualification fails, fix the source and bump the version before
 qualifying again because candidate identities are single-use. Do not tag a
 failed candidate. If promotion succeeds but npm has a transient failure, rerun
-the tag workflow unchanged: it may continue only when the public image digest
-exactly matches the receipt. If npm accepted the package but reads return
-404/ETARGET, wait for propagation; do not republish, change source, or reuse the
-version.
+the tag workflow unchanged: it may continue only when both public image digests
+and the npm tarball integrity exactly match the receipt. If npm accepted the
+package but reads return 404/ETARGET, wait for propagation; do not republish,
+change source, or reuse the version.
 
 If a release needs a correction after publication, bump the version. The old
 image and package remain available for rollback and support.
@@ -141,7 +147,7 @@ npm deprecate 'create-or3-chat@<0.1.12' 'Use npx @or3/cloud init; the creator is
 - The exact default provider versions exist on npm.
 - The `deployment` suite in **Extended validation** passes before the tag is
   created.
-- The public GHCR image pulls from a clean machine.
+- Both public GHCR images pull from a clean machine.
 - Basic Auth login, deep health, conversation persistence, and file persistence
   pass after container restart.
 - Backup archive checksum/list validation passes.
@@ -149,4 +155,4 @@ npm deprecate 'create-or3-chat@<0.1.12' 'Use npx @or3/cloud init; the creator is
   snapshot.
 - The exact npm version and `npx @or3/cloud@<version> --help` resolve after
   propagation.
-- Release notes include the image digest and rollback warning.
+- Release notes include both image digests and the rollback warning.
