@@ -1179,6 +1179,21 @@ function packagedOperatorImageDigest(version: string) {
   return digest;
 }
 
+function packagedSourceRevision(version: string) {
+  let manifest: { version?: unknown; or3Cloud?: { sourceRevision?: unknown } };
+  try {
+    manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8'));
+  } catch {
+    return undefined;
+  }
+  if (manifest.version !== version || manifest.or3Cloud?.sourceRevision === undefined) return undefined;
+  const revision = manifest.or3Cloud.sourceRevision;
+  if (typeof revision !== 'string' || !/^[0-9a-f]{40}$/.test(revision)) {
+    throw new Error('This @or3/cloud package contains an invalid source revision. Refusing to run an unbound release image.');
+  }
+  return revision;
+}
+
 function expectedImageDigest(version: string) {
   const packaged = packagedImageDigest(version);
   const supplied = process.env.OR3_EXPECTED_IMAGE_DIGEST?.trim();
@@ -1271,6 +1286,19 @@ async function pullAndRequireImage(image: string, expected: string, label: strin
   return actual;
 }
 
+export function assertImageReleaseLabels(image: string, labels: Record<string, unknown>, version: string, expectedRevision?: string) {
+  const revision = labels['org.opencontainers.image.revision'];
+  if (
+    labels['org.opencontainers.image.source'] !== 'https://github.com/Saluana/or3-chat'
+    || labels['org.opencontainers.image.version'] !== version
+    || typeof revision !== 'string'
+    || !/^[0-9a-f]{40}$/i.test(revision)
+    || (expectedRevision !== undefined && revision.toLowerCase() !== expectedRevision)
+  ) {
+    throw new Error(`OR3 image ${image} does not carry the expected source/version release labels for ${version}.`);
+  }
+}
+
 async function assertImageReleaseIdentity(image: string, version: string) {
   const result = await run('docker', ['image', 'inspect', '--format', '{{json .Config.Labels}}', image]);
   if (!result.ok) throw new Error(`Could not inspect release labels for ${image}. ${result.stderr.trim()}`);
@@ -1280,14 +1308,7 @@ async function assertImageReleaseIdentity(image: string, version: string) {
   } catch {
     throw new Error(`OR3 image ${image} has no readable release labels.`);
   }
-  if (
-    labels['org.opencontainers.image.source'] !== 'https://github.com/Saluana/or3-chat'
-    || labels['org.opencontainers.image.version'] !== version
-    || typeof labels['org.opencontainers.image.revision'] !== 'string'
-    || !/^[0-9a-f]{40}$/i.test(labels['org.opencontainers.image.revision'])
-  ) {
-    throw new Error(`OR3 image ${image} does not carry the expected source/version release labels for ${version}.`);
-  }
+  assertImageReleaseLabels(image, labels, version, packagedSourceRevision(version));
 }
 
 async function imageDigest(image: string) {

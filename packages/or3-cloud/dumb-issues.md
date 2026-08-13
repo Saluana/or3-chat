@@ -691,7 +691,7 @@ The public proxy sets HSTS, `nosniff`, X-Frame-Options, Referrer-Policy, and Per
 
 **Fix:** add a compatible explicit CSP at the application or proxy boundary and test the exact production response, not source text.
 
-## 69. [MEDIUM] Package provenance is not cross-bound to image source identity
+## 69. [DONE — MEDIUM] Package provenance is not cross-bound to image source identity
 
 **Location:** `packages/or3-cloud/assets/dashboard-operator.mjs:242-273`
 

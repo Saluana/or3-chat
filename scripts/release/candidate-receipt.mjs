@@ -47,6 +47,9 @@ if (command === 'create') {
     if (packageManifest.or3Cloud?.operatorImageDigest !== operatorCandidateDigest) {
         throw new Error('Packed CLI operator image digest does not match the qualified operator runtime.');
     }
+    if (packageManifest.or3Cloud?.sourceRevision !== sourceSha) {
+        throw new Error('Packed CLI source revision does not match the qualified candidate source.');
+    }
     const receipt = assertCandidateReceipt({
         schemaVersion: 1,
         kind: 'or3-cloud-qualified-candidate',
@@ -82,6 +85,9 @@ if (command === 'create') {
     }
     if (packageManifest.or3Cloud?.operatorImageDigest !== receipt.operatorCandidateDigest) {
         throw new Error('Qualified tarball operator digest does not match the candidate receipt.');
+    }
+    if (packageManifest.or3Cloud?.sourceRevision !== receipt.sourceSha) {
+        throw new Error('Qualified tarball source revision does not match the candidate receipt.');
     }
     if (await sha(tarball, 'sha256') !== receipt.tarballSha256) throw new Error('Qualified tarball SHA-256 mismatch.');
     if (`sha512-${await sha(tarball, 'sha512')}` !== receipt.tarballIntegrity) throw new Error('Qualified tarball integrity mismatch.');

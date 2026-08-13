@@ -79,6 +79,7 @@ test('dashboard operator verifies exact release provenance before executing pack
   expect(operator).toContain("statement?.predicate?.runDetails?.builder?.id !== 'https://github.com/actions/runner/github-hosted'");
   expect(operator).toContain("entries.length !== 2");
   expect(operator).toContain("manifest?.or3Cloud?.imageDigest");
+  expect(operator).toContain("manifest?.or3Cloud?.sourceRevision !== expectedRelease.sourceRevision");
   expect(operator).toContain("OR3_EXPECTED_IMAGE_DIGEST: imageDigest");
   expect(operator).toContain("maxAttestationBytes = 1024 * 1024");
   expect(operator).toContain("await verify(bundle");
@@ -157,6 +158,7 @@ test('dashboard operator binds provenance to the OR3 tagged release workflow', (
   const expectedRelease = {
     version,
     integrity: `sha512-${digestBytes.toString('base64')}`,
+    sourceRevision: 'a'.repeat(40),
   };
   const statement = {
     _type: 'https://in-toto.io/Statement/v1',
@@ -187,6 +189,9 @@ test('dashboard operator binds provenance to the OR3 tagged release workflow', (
   const malicious = structuredClone(statement);
   malicious.predicate.buildDefinition.externalParameters.workflow.repository = 'https://github.com/attacker/or3-chat';
   expect(() => provenanceStatement(encode(malicious), expectedRelease)).toThrow('does not match the trusted release workflow');
+  const wrongRevision = structuredClone(statement);
+  wrongRevision.predicate.buildDefinition.resolvedDependencies[0].digest.gitCommit = 'b'.repeat(40);
+  expect(() => provenanceStatement(encode(wrongRevision), expectedRelease)).toThrow('does not match the trusted release workflow');
 });
 
 test('Dockerfile builds shared Nuxt output only once on the native runner', () => {
@@ -375,11 +380,14 @@ test('authenticated cloud package binds updates to the qualified image digest', 
   const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
   expect(candidate).toContain('npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"');
   expect(candidate).toContain('npm pkg set "or3Cloud.operatorImageDigest=$OPERATOR_IMAGE_DIGEST"');
+  expect(candidate).toContain('npm pkg set "or3Cloud.sourceRevision=$SOURCE_REVISION"');
   expect(candidate.indexOf('docker/build-push-action@v6')).toBeLessThan(candidate.indexOf('npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"'));
   expect(receipt).toContain("packageManifest.or3Cloud?.imageDigest !== candidateDigest");
   expect(receipt).toContain("packageManifest.or3Cloud?.imageDigest !== receipt.candidateDigest");
   expect(receipt).toContain("packageManifest.or3Cloud?.operatorImageDigest !== receipt.operatorCandidateDigest");
+  expect(receipt).toContain("packageManifest.or3Cloud?.sourceRevision !== receipt.sourceSha");
   expect(cli).toContain('pullImage(targetImageTag, expectedImageDigest(targetVersion))');
+  expect(cli).toContain('revision.toLowerCase() !== expectedRevision');
   expect(cli).toContain('const targetImage = imageAtDigest(targetImageTag, targetDigest);');
   expect(cli).toContain('await assertRunningAppImage(directory, mode, env.OR3_IMAGE);');
   expect(cli).toContain('The image tag may have been replaced; refusing to continue.');

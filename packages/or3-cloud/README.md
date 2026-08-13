@@ -135,11 +135,12 @@ Before running privileged release code, it installs with lifecycle scripts
 disabled, verifies the npm registry signature and the exact SLSA bundle, and
 requires that the signed package came from this repository's tagged
 `release-cloud.yml` workflow. That authenticated package pins both qualified
-GHCR image digests, so moving or replacing a version tag is rejected before an
-image can run. A stale dashboard-owned update is recovered automatically with
-its exact target CLI; unrelated/manual operations remain locked for host-side
-`recover`. Existing deployments gain the card after one normal exact-version
-CLI update. Remote Docker hosts remain CLI-only.
+GHCR image digests and the exact source revision carried by both images, so
+moving or replacing a version tag—or mixing artifacts from different
+commits—is rejected before an image can run. A stale dashboard-owned update is
+recovered automatically with its exact target CLI; unrelated/manual operations
+remain locked for host-side `recover`. Existing deployments gain the card after
+one normal exact-version CLI update. Remote Docker hosts remain CLI-only.
 
 Managed registration is invite-only: the bootstrap owner signs in first and
 invites additional users from the in-product admin flow. Guest access and

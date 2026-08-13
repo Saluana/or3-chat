@@ -161,9 +161,10 @@ status, check, and exact-update operations. The sidecar disables package
 lifecycle scripts, cryptographically verifies the exact Sigstore provenance
 bundle, and requires this repository, the matching version tag, and
 `.github/workflows/release-cloud.yml` before any privileged updater code runs.
-The authenticated package pins both qualified container image digests, so a
-replaced GHCR tag fails closed. A stale dashboard-owned update is recovered
-through its exact target CLI; unrelated/manual work stays locked for host-side
+The authenticated package pins both qualified container image digests and the
+source revision in their OCI labels, so a replaced tag or cross-commit artifact
+mix fails closed. A stale dashboard-owned update is recovered through its exact
+target CLI; unrelated/manual work stays locked for host-side
 `npx @or3/cloud recover`.
 Release-check state is atomic and durable across reloads and sidecar restarts.
 The web boundary validates the exact status/job schema, distinguishes an

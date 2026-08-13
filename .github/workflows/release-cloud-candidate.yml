@@ -162,12 +162,14 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
           OPERATOR_IMAGE_DIGEST: ${{ steps.operator-image.outputs.digest }}
+          SOURCE_REVISION: ${{ steps.source.outputs.sha }}
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"
           npm pkg set "or3Cloud.operatorImageDigest=$OPERATOR_IMAGE_DIGEST"
-          node -e 'const p=require("./package.json"); if(p.version!==process.env.VERSION||p.or3Cloud?.imageDigest!==process.env.IMAGE_DIGEST||p.or3Cloud?.operatorImageDigest!==process.env.OPERATOR_IMAGE_DIGEST)process.exit(1)'
+          npm pkg set "or3Cloud.sourceRevision=$SOURCE_REVISION"
+          node -e 'const p=require("./package.json"); if(p.version!==process.env.VERSION||p.or3Cloud?.imageDigest!==process.env.IMAGE_DIGEST||p.or3Cloud?.operatorImageDigest!==process.env.OPERATOR_IMAGE_DIGEST||p.or3Cloud?.sourceRevision!==process.env.SOURCE_REVISION)process.exit(1)'
           bun run check
           mkdir -p "$GITHUB_WORKSPACE/release-artifact"
           npm pack --ignore-scripts --pack-destination "$GITHUB_WORKSPACE/release-artifact"
@@ -178,6 +180,8 @@ jobs:
           test "$packed_digest" = "$IMAGE_DIGEST"
           packed_operator_digest="$(tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s).or3Cloud?.operatorImageDigest||""))')"
           test "$packed_operator_digest" = "$OPERATOR_IMAGE_DIGEST"
+          packed_source_revision="$(tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s).or3Cloud?.sourceRevision||""))')"
+          test "$packed_source_revision" = "$SOURCE_REVISION"
           echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
       - name: Check documentation against the exact tarball
         env:

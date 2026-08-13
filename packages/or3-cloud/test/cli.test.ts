@@ -6,6 +6,7 @@ import {
   assertCommandFlags,
   assertCommandPositionals,
   assertEnoughFreeSpace,
+  assertImageReleaseLabels,
   assertPurgeBackupFreshness,
   assertRemovableArtifactName,
   assertSupportedSource,
@@ -36,6 +37,16 @@ import {
 } from '../src/cli';
 import { ADMIN_PASSWORD_POLICY_VECTORS } from '../../../shared/cloud/wizard/admin-password-policy-vectors';
 import { MANAGED_PROFILE_SHARED_ENV } from '../../../shared/cloud/wizard/managed-profile-contract';
+
+test('release image labels match the authenticated package source revision', () => {
+  const labels = {
+    'org.opencontainers.image.source': 'https://github.com/Saluana/or3-chat',
+    'org.opencontainers.image.version': '0.1.39',
+    'org.opencontainers.image.revision': 'a'.repeat(40),
+  };
+  expect(() => assertImageReleaseLabels('or3', labels, '0.1.39', 'a'.repeat(40))).not.toThrow();
+  expect(() => assertImageReleaseLabels('or3', labels, '0.1.39', 'b'.repeat(40))).toThrow('expected source/version release labels');
+});
 
 test('snapshots and restores checksummed managed deployment assets', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'or3-cloud-assets-'));

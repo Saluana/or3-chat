@@ -201,6 +201,7 @@ async function release(requestedVersion) {
   const unpackedSize = metadata?.dist?.unpackedSize;
   const minimumSourceVersion = metadata?.or3Cloud?.dashboardUpdateMinimumSourceVersion;
   const operatorImageDigest = metadata?.or3Cloud?.operatorImageDigest;
+  const sourceRevision = metadata?.or3Cloud?.sourceRevision;
   if (
     metadata?.name !== packageName
     || !stableVersion.test(version)
@@ -209,6 +210,8 @@ async function release(requestedVersion) {
     || !stableVersion.test(minimumSourceVersion)
     || typeof operatorImageDigest !== 'string'
     || !/^sha256:[0-9a-f]{64}$/.test(operatorImageDigest)
+    || typeof sourceRevision !== 'string'
+    || !/^[0-9a-f]{40}$/.test(sourceRevision)
     || !validSha512Integrity(integrity)
     || !exactRegistryUrl(tarball, `/@or3/cloud/-/cloud-${version}.tgz`)
     || !exactRegistryUrl(attestationUrl, `/-/npm/v1/attestations/@or3%2fcloud@${version}`)
@@ -225,7 +228,7 @@ async function release(requestedVersion) {
   if (requestedVersion && version !== requestedVersion) {
     throw new Error(`The OR3 release service did not return the requested exact updater version ${requestedVersion}.`);
   }
-  return { version, integrity, tarball, attestationUrl, minimumSourceVersion, operatorImageDigest };
+  return { version, integrity, tarball, attestationUrl, minimumSourceVersion, operatorImageDigest, sourceRevision };
 }
 
 async function managedState() {
@@ -406,7 +409,7 @@ export function provenanceStatement(payload, expectedRelease) {
     || workflow?.ref !== expectedRef
     || statement?.predicate?.runDetails?.builder?.id !== 'https://github.com/actions/runner/github-hosted'
     || !Array.isArray(dependencies)
-    || !dependencies.some((entry) => entry?.uri === `git+${expectedRepository}@${expectedRef}` && /^[0-9a-f]{40}$/.test(entry?.digest?.gitCommit || ''))
+    || !dependencies.some((entry) => entry?.uri === `git+${expectedRepository}@${expectedRef}` && entry?.digest?.gitCommit === expectedRelease.sourceRevision)
   ) {
     throw new Error('The OR3 package provenance does not match the trusted release workflow.');
   }
@@ -462,6 +465,7 @@ async function verifyInstalledUpdater(installDirectory, expectedRelease, job, pr
     || !stableVersion.test(manifest?.or3Cloud?.dashboardUpdateMinimumSourceVersion || '')
     || !/^sha256:[0-9a-f]{64}$/.test(manifest?.or3Cloud?.imageDigest || '')
     || !/^sha256:[0-9a-f]{64}$/.test(manifest?.or3Cloud?.operatorImageDigest || '')
+    || manifest?.or3Cloud?.sourceRevision !== expectedRelease.sourceRevision
     || dependencyGroups.some((key) => manifest?.[key] && Object.keys(manifest[key]).length)
   ) {
     throw new Error('The installed updater package does not match the trusted OR3 package contract.');
