@@ -60,6 +60,12 @@ session hydration, SQLite sync, a disposable filesystem upload/download/delete
 cycle, both SQLite databases, volume ownership, proxy runtime settings, and a
 bounded window of serious container logs. On a public VPS, require the real
 HTTPS path (with no redirects) using `npx @or3/cloud verify --public`.
+After changing the owner password in the app, pass the current credential only
+through an owner-only file:
+`npx @or3/cloud verify --public --verification-email owner@example.com --verification-password-file /secure/current-owner-password`.
+Verification rejects cross-origin filesystem grants and unexpected methods or
+headers, validates the storage ID before uploading, deletes its probe, and
+revokes its temporary session even when a later check fails.
 
 Do not run `docker compose down --volumes` on a normal deployment: it deletes
 the application data. Use `backup` before an update or any destructive action.
@@ -80,6 +86,11 @@ hard interruption leaves an incomplete artifact. A standalone backup and a
 failed adoption preserve whether the original app was intentionally stopped.
 Initialization and adoption also fail closed unless Docker explicitly confirms
 that the target volumes, project containers, and networks do not exist.
+Use owner/admin password files for noninteractive credential rotation. TTY
+prompts suppress input, Docker receives only environment variable names in its
+argument vector, and the admin credential file is committed with
+write/fsync/rename so journal replay cannot encounter a truncated JSON file.
+A successful rotation removes the obsolete `.or3-initial-credentials` copy.
 
 The authentication key is intentionally not embedded in an exported archive.
 Escrow an owner-only copy of `.or3-cloud/backup-auth.key` separately in an

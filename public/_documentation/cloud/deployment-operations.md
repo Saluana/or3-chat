@@ -118,6 +118,10 @@ forwarding headers); otherwise proxy-supplied client identity is untrusted.
   deep Basic Auth + SQLite + filesystem health, authenticated session and sync,
   a disposable storage write/read/delete probe, SQLite integrity and ownership,
   proxy runtime settings, and a bounded recent-log scan.
+  If the owner password changed after bootstrap, supply the current credential
+  with `--verification-email` and `--verification-password-file`; it is used
+  only for that run. Verification requires same-origin fixed-profile storage
+  grants, deletes the probe, and revokes the temporary session in `finally`.
 - Track HTTP rates for:
   - `/api/sync/push` and `/api/sync/pull`
   - `/api/storage/*`
@@ -161,6 +165,9 @@ Release-check state is atomic and durable across reloads and sidecar restarts.
 The web boundary validates the exact status/job schema, distinguishes an
 unsupported host from an unavailable or corrupt operator, and returns HTTP 202
 when an asynchronous update is accepted.
+`doctor` also validates the operator container image, deployment label, three
+required mounts, IPC types/modes, absence of an orphaned disabled operator,
+daemon-side Caddy port publication, and an actual public HTTPS 200 response.
 
 ## Logging
 

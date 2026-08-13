@@ -241,6 +241,14 @@ test('updates rebuild legacy-owned data from the checksummed backup without recu
   expect(update.indexOf('await stopProject(loaded.directory, state.mode);')).toBeLessThan(update.indexOf('uid: MANAGED_RUNTIME_UID'));
 });
 
+test('credential reset keeps plaintext passwords out of Docker arguments', () => {
+  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  expect(cli).toContain("'-e', 'OR3_RESET_OWNER_PASSWORD'");
+  expect(cli).toContain("'-e', 'OR3_RESET_ADMIN_PASSWORD'");
+  expect(cli).not.toContain('`OR3_RESET_OWNER_PASSWORD=${values.ownerPassword}`');
+  expect(cli).not.toContain('`OR3_RESET_ADMIN_PASSWORD=${values.adminPassword}`');
+});
+
 test('updates and recovery use journaled snapshots rather than resuming a partial target', () => {
   const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
   expect(cli).toContain('const managedAssetSha256 = await snapshotManagedAssets(directory, state.mode, backupDir);');

@@ -12,6 +12,7 @@ import {
   assertSupportedSourceCompose,
   assertBackupMatchesDeployment,
   assertSupportedArchitecture,
+  assertVerificationGrant,
   buildCredentialsResetScript,
   buildEnv,
   checkResolvedLoopbackBinding,
@@ -24,6 +25,7 @@ import {
   requiredArchiveSpace,
   restoreManagedAssets,
   selectPruneTargets,
+  sameOriginVerificationUrl,
   serializeInitialCredentials,
   serializeEnv,
   snapshotManagedAssets,
@@ -322,6 +324,15 @@ test('accepts only the fixed managed provider profile during production verifica
   );
 });
 
+test('verification keeps authenticated storage grants same-origin and fixed-profile', () => {
+  const base = new URL('https://chat.example.com');
+  expect(sameOriginVerificationUrl(base, '/api/storage/fs/upload?token=one', 'upload').origin).toBe(base.origin);
+  expect(() => sameOriginVerificationUrl(base, 'https://attacker.example/upload', 'upload')).toThrow('cross-origin');
+  expect(() => assertVerificationGrant({ method: 'PUT' }, 'PUT', 'upload')).not.toThrow();
+  expect(() => assertVerificationGrant({ method: 'POST' }, 'PUT', 'upload')).toThrow('unexpected upload method');
+  expect(() => assertVerificationGrant({ method: 'GET', headers: { authorization: 'leak' } }, 'GET', 'download')).toThrow('unexpected download headers');
+});
+
 test('redacts known values and secret-shaped environment output', () => {
   expect(redact('OR3_BASIC_AUTH_JWT_SECRET=abc123 password=hidden', ['abc123'])).toBe(
     'OR3_BASIC_AUTH_JWT_SECRET=[REDACTED] password=[REDACTED]',
@@ -563,6 +574,8 @@ test('credentials reset script rewrites the owner hash, revokes sessions, and ro
   expect(script).toContain('basic_auth_sessions');
   expect(script).toContain('/data/auth.sqlite');
   expect(script).toContain('admin-credentials.json');
+  expect(script).toContain('fs.fsyncSync(descriptor)');
+  expect(script).toContain('fs.renameSync(temporary, target)');
   expect(script).toContain('process.exit(1)');
   expect(script).not.toContain('ANewOwnerPassword123');
   expect(script).not.toContain('ANewAdminPassword123');
@@ -572,6 +585,8 @@ test('accepts only the new operator flags and rejects typos before dispatch', ()
   expect(() => assertCommandFlags('remove', { 'purge-data': true, yes: true })).not.toThrow();
   expect(() => assertCommandFlags('remove', { purge: true })).toThrow('Unknown option for remove: --purge');
   expect(() => assertCommandFlags('credentials', { yes: true, 'owner-password': 'x', 'admin-password': 'y' })).not.toThrow();
+  expect(() => assertCommandFlags('credentials', { yes: true, 'owner-password-file': '/owner', 'admin-password-file': '/admin' })).not.toThrow();
+  expect(() => assertCommandFlags('verify', { public: true, 'verification-email': 'owner@example.com', 'verification-password-file': '/owner' })).not.toThrow();
   expect(() => assertCommandFlags('credentials', { force: true })).toThrow('Unknown option for credentials: --force');
   expect(() => assertCommandFlags('backup', { keep: '3' })).not.toThrow();
   expect(() => assertCommandFlags('logs', { tail: '50' })).not.toThrow();

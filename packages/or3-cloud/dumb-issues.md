@@ -411,7 +411,7 @@ Init/adopt proceed whenever `docker volume inspect` is not `ok`. They do not dis
 
 **Fix:** retain raw output internally, redact exactly once at the presentation boundary with known full values first, then apply generic patterns. Test whitespace and punctuation-heavy secrets.
 
-## 41. [MEDIUM] Verification can send the authenticated cookie off-origin
+## 41. [DONE — MEDIUM] Verification can send the authenticated cookie off-origin
 
 **Location:** `packages/or3-cloud/src/cli.ts:2585-2637`
 
@@ -421,7 +421,7 @@ Presigned upload/download URLs may be absolute, and the CLI attaches the session
 
 **Fix:** enforce same-origin URLs for this fixed profile, validate `storageId` before mutation, and reject unexpected methods/headers.
 
-## 42. [MEDIUM] `verify` breaks after the owner changes their password normally
+## 42. [DONE — MEDIUM] `verify` breaks after the owner changes their password normally
 
 **Location:** `packages/or3-cloud/src/cli.ts:2552-2565,2642-2665`
 
@@ -431,7 +431,7 @@ Verification always signs in with `OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD` from `.env
 
 **Fix:** use a purpose-built authenticated health probe or require short-lived verification credentials. Do not make ongoing operability depend on a first-boot password.
 
-## 43. [MEDIUM] Every successful verification leaks another live session
+## 43. [DONE — MEDIUM] Every successful verification leaks another live session
 
 **Location:** `packages/or3-cloud/src/cli.ts:2556-2639`
 
@@ -441,7 +441,7 @@ The command signs in and never logs out or revokes the resulting session in `fin
 
 **Fix:** call the logout/revocation endpoint in `finally`, including on upload/download failure.
 
-## 44. [MEDIUM] Bootstrap and admin passwords are permanent deployment metadata
+## 44. [PARTIAL — MEDIUM] Bootstrap and admin passwords are permanent deployment metadata
 
 **Location:** `packages/or3-cloud/src/cli.ts:963-1027,1847-1854,1613-1625`
 
@@ -451,7 +451,7 @@ The initial owner and admin passwords remain in `.env`, are injected into contai
 
 **Fix:** remove bootstrap credentials after provisioning, replace verification with a non-password mechanism, and deliver runtime secrets through a narrower secret file/store instead of general Compose environment.
 
-## 45. [MEDIUM] Interactive credential reset echoes passwords
+## 45. [DONE — MEDIUM] Interactive credential reset echoes passwords
 
 **Location:** `packages/or3-cloud/src/cli.ts:2940-2995`
 
@@ -461,7 +461,7 @@ Password prompts use ordinary `readline.question`, which displays input. Unlike 
 
 **Fix:** use masked TTY input and add mutually exclusive owner/admin password-file flags.
 
-## 46. [MEDIUM] Credential reset puts plaintext passwords in process arguments
+## 46. [DONE — MEDIUM] Credential reset puts plaintext passwords in process arguments
 
 **Location:** `packages/or3-cloud/src/cli.ts:3100-3130`
 
@@ -471,7 +471,7 @@ The CLI invokes `docker compose exec -e OR3_RESET_*_PASSWORD=<value>`. Those sec
 
 **Fix:** stream a mode-0600 payload over stdin or mount a short-lived secret file and delete it after an atomic transaction.
 
-## 47. [MEDIUM] Credential reset's admin-file update is not crash-safe
+## 47. [DONE — MEDIUM] Credential reset's admin-file update is not crash-safe
 
 **Location:** `packages/or3-cloud/src/cli.ts:3025-3070,3133-3156`
 
@@ -481,7 +481,7 @@ The in-container script directly truncates/writes `admin-credentials.json`. A cr
 
 **Fix:** write/fsync/rename a temporary file, retain the previous bytes until database and file changes are verified, and make replay idempotent.
 
-## 48. [MEDIUM] `doctor` ignores the new privileged boundary and can pass a dead public deployment
+## 48. [DONE — MEDIUM] `doctor` ignores the new privileged boundary and can pass a dead public deployment
 
 **Location:** `packages/or3-cloud/src/cli.ts:2394-2491`; `planning/admin-dashboard-updates/tasks.md:71-73`
 

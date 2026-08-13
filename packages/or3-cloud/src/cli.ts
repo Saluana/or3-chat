@@ -343,10 +343,10 @@ const COMMAND_FLAGS: Record<string, readonly string[]> = {
   restore: ['yes'],
   rollback: ['yes'],
   doctor: [],
-  verify: ['public'],
+  verify: ['public', 'verification-email', 'verification-password-file'],
   recover: [],
   adopt: ['from'],
-  credentials: ['yes', 'owner-password', 'admin-password'],
+  credentials: ['yes', 'owner-password', 'owner-password-file', 'admin-password', 'admin-password-file'],
   status: [],
   logs: ['tail'],
   start: [],
@@ -2448,9 +2448,9 @@ Usage:
   npx @or3/cloud backup [list|prune [--keep <n>]|export <backup-id> <destination-dir>]
   npx @or3/cloud restore <backup-id-or-path> --yes
   npx @or3/cloud rollback --yes
-  npx @or3/cloud credentials reset --yes [--owner-password <p> --admin-password <p>]
+  npx @or3/cloud credentials reset --yes [--owner-password-file <path> --admin-password-file <path>]
   npx @or3/cloud doctor
-  npx @or3/cloud verify [--public]
+  npx @or3/cloud verify [--public] [--verification-email <email> --verification-password-file <path>]
   npx @or3/cloud recover
   npx @or3/cloud adopt --from <v1-directory> [directory]
   npx @or3/cloud status
@@ -2461,8 +2461,11 @@ Usage:
 Options:
   --admin-email <email>          Administrator email for first login
   --admin-password <password>    Explicit password (prefer --admin-password-file); for credentials reset, the new admin password
-  --admin-password-file <path>   Read the bootstrap password without shell history
+  --admin-password-file <path>   Read the bootstrap/reset admin password without shell history
   --owner-password <password>    New owner (basic auth) password for credentials reset
+  --owner-password-file <path>   Read the new owner password without shell history
+  --verification-email <email>   Current owner email used only for this verification
+  --verification-password-file <path>  Read the current owner password for this verification
   --port <port>                  Local OR3 port (default: 3000)
   --keep <n>                     Backups to retain when pruning (default: 5)
   --force                        Prune backups even when referenced by the rollback point
@@ -3335,6 +3338,55 @@ async function doctorCommand(directory: string) {
         failures.push(error instanceof Error ? error.message : String(error));
         console.log('✗ Deep health is not passing');
       }
+      try {
+        const operatorEnabled = env.OR3_DASHBOARD_UPDATES_ENABLED === 'true';
+        const operatorContainer = await run('docker', [
+          'ps', '-aq',
+          '--filter', `label=com.docker.compose.project=${state.composeProject}`,
+          '--filter', 'label=com.docker.compose.service=or3-operator',
+        ], resolved);
+        if (!operatorContainer.ok) throw new Error(`Could not inspect the dashboard operator service. ${operatorContainer.stderr.trim()}`);
+        const containerId = operatorContainer.stdout.trim();
+        if (!operatorEnabled) {
+          if (containerId) throw new Error('A dashboard operator container exists even though the bridge is disabled.');
+          console.log('✓ Dashboard operator is disabled with no orphaned service');
+        } else {
+          if (!containerId) throw new Error('Dashboard updates are enabled but the operator container is missing.');
+          const inspected = await run('docker', ['inspect', containerId]);
+          if (!inspected.ok) throw new Error(`Could not inspect dashboard operator container ${containerId}.`);
+          const container = JSON.parse(inspected.stdout)?.[0] as {
+            Config?: { Image?: string; Labels?: Record<string, string> };
+            Mounts?: Array<{ Destination?: string }>;
+          };
+          if (container.Config?.Image !== env.OR3_OPERATOR_IMAGE) throw new Error('Dashboard operator runtime image does not match the digest-qualified managed environment.');
+          if (state.deploymentId && container.Config?.Labels?.['io.or3.cloud.deployment-id'] !== state.deploymentId) {
+            throw new Error('Dashboard operator deployment identity does not match managed state.');
+          }
+          const destinations = new Set(container.Mounts?.map((mount) => mount.Destination));
+          for (const destination of ['/var/run/docker.sock', '/deployment', '/run/or3-operator']) {
+            if (!destinations.has(destination)) throw new Error(`Dashboard operator is missing its required ${destination} mount.`);
+          }
+          const ipcDirectory = await stat(paths.operatorIpc);
+          const operatorSocket = await stat(join(paths.operatorIpc, 'operator.sock'));
+          const operatorUid = Number(env.OR3_OPERATOR_UID);
+          const operatorGid = Number(env.OR3_OPERATOR_GID);
+          if (
+            (ipcDirectory.mode & 0o777) !== 0o710
+            || ipcDirectory.uid !== operatorUid
+            || ipcDirectory.gid !== operatorGid
+            || !operatorSocket.isSocket()
+            || (operatorSocket.mode & 0o777) !== 0o660
+            || operatorSocket.uid !== operatorUid
+            || operatorSocket.gid !== operatorGid
+          ) {
+            throw new Error('Dashboard operator IPC ownership boundary has unexpected owners, types, or modes.');
+          }
+          console.log('✓ Dashboard operator image, identity, mounts, and IPC modes are valid');
+        }
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : String(error));
+        console.log('✗ Dashboard operator boundary is invalid');
+      }
     }
     if (state.mode === 'public' && state.domain) {
       try {
@@ -3353,7 +3405,21 @@ async function doctorCommand(directory: string) {
         console.log(`✗ DNS: ${state.domain} does not resolve`);
       }
       for (const port of [80, 443]) {
-        console.log((await portAvailable(port)) ? `⚠ Port ${port} is not listening (Caddy may be stopped)` : `✓ Port ${port} is in use by a local service; verify it is Caddy`);
+        const mapping = await run('docker', composeArgs(resolved, state.mode, ['port', 'caddy', String(port)]), resolved);
+        if (!mapping.ok || !mapping.stdout.trim().split(/\r?\n/).some((line) => line.trim().endsWith(`:${port}`))) {
+          failures.push(`Caddy does not publish TCP ${port} through the selected Docker daemon.`);
+          console.log(`✗ Caddy does not publish TCP ${port}`);
+        } else {
+          console.log(`✓ Caddy publishes TCP ${port}`);
+        }
+      }
+      try {
+        const response = await verificationFetch(new URL(`https://${state.domain}`));
+        if (response.status !== 200) throw new Error(`Public HTTPS root returned HTTP ${response.status}; redirects are not accepted.`);
+        console.log('✓ Public HTTPS root returns HTTP 200 without redirects');
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : String(error));
+        console.log('✗ Public HTTPS root is unreachable or redirects');
       }
       console.log('ℹ Firewall: allow TCP 80/443 (and optional UDP 443) in your existing nftables or UFW rules; OR3 did not modify them.');
     }
@@ -3418,14 +3484,51 @@ async function verificationJson(
   return response.json() as Promise<Record<string, any>>;
 }
 
-async function verifyPublicApplication(baseUrl: URL, env: Record<string, string>) {
+export function sameOriginVerificationUrl(baseUrl: URL, value: unknown, label: string) {
+  if (typeof value !== 'string') throw new Error(`Filesystem storage did not return a ${label} URL.`);
+  const url = new URL(value, baseUrl);
+  if (url.origin !== baseUrl.origin) {
+    throw new Error(`Filesystem storage returned a cross-origin ${label} URL. Refusing to send the verification session to ${url.origin}.`);
+  }
+  return url;
+}
+
+export function assertVerificationGrant(value: Record<string, any>, expectedMethod: 'GET' | 'PUT', label: string) {
+  if (value.method !== undefined && value.method !== expectedMethod) {
+    throw new Error(`Filesystem storage returned unexpected ${label} method ${String(value.method)}.`);
+  }
+  if (value.headers !== undefined && (!value.headers || typeof value.headers !== 'object' || Array.isArray(value.headers) || Object.keys(value.headers).length > 0)) {
+    throw new Error(`Filesystem storage returned unexpected ${label} headers.`);
+  }
+}
+
+async function verificationCredentials(flags: Flags, env: Record<string, string>) {
+  const email = stringFlag(flags, 'verification-email')?.trim() || env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
+  const passwordFile = stringFlag(flags, 'verification-password-file');
+  if (flags['verification-email'] !== undefined && !stringFlag(flags, 'verification-email')) {
+    throw new Error('--verification-email requires a value.');
+  }
+  if (flags['verification-password-file'] !== undefined && !passwordFile) {
+    throw new Error('--verification-password-file requires a path.');
+  }
+  if (!email) throw new Error('A current owner email is required for verification.');
+  validateEmail(email);
+  const password = passwordFile
+    ? (await readText(resolve(passwordFile))).trim()
+    : env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD;
+  if (!password) {
+    throw new Error('A current owner password is required. Pass --verification-password-file after changing the bootstrap password.');
+  }
+  if (password.includes('\0') || /\r|\n/.test(password)) throw new Error('The verification password file must contain exactly one password line.');
+  return { email, password };
+}
+
+async function verifyPublicApplication(baseUrl: URL, credentials: { email: string; password: string }) {
   const root = await verificationFetch(baseUrl);
   if (root.status !== 200) throw new Error(`${baseUrl} returned HTTP ${root.status}; redirects are not accepted during verification.`);
 
   const health = validateVerificationHealth(await verificationJson(baseUrl, '/api/health?deep=true'));
-  const email = env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
-  const password = env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD;
-  if (!email || !password) throw new Error('Bootstrap credentials are missing from the managed .env.');
+  const { email, password } = credentials;
   const signIn = await verificationFetch(new URL('/api/basic-auth/sign-in', baseUrl), {
     method: 'POST',
     headers: { accept: 'application/json', 'content-type': 'application/json', origin: baseUrl.origin },
@@ -3437,79 +3540,83 @@ async function verifyPublicApplication(baseUrl: URL, env: Record<string, string>
   const cookie = setCookies.map((value) => value.split(';', 1)[0]).join('; ');
   if (!cookie) throw new Error('Public Basic Auth sign-in did not set a session cookie.');
 
-  const session = await verificationJson(baseUrl, '/api/auth/session', { cookie });
-  if (session.session?.user?.email !== email || !session.session?.workspace?.id) {
-    throw new Error('Public session hydration did not return the bootstrap user and workspace.');
-  }
-  const workspaceId = String(session.session.workspace.id);
-  const pull = await verificationJson(baseUrl, '/api/sync/pull', {
-    cookie,
-    body: { scope: { workspaceId }, cursor: 0, limit: 1, tables: ['messages'] },
-  });
-  if (!Array.isArray(pull.changes) || typeof pull.nextCursor !== 'number') {
-    throw new Error('Public SQLite sync pull returned an invalid response.');
-  }
-
-  const probeBytes = Buffer.concat([
-    Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489', 'hex'),
-    randomBytes(8),
-  ]);
-  const hash = `sha256:${createHash('sha256').update(probeBytes).digest('hex')}`;
-  let storageId: string | undefined;
   try {
-    const presign = await verificationJson(baseUrl, '/api/storage/presign-upload', {
-      cookie,
-      body: {
-        workspace_id: workspaceId,
-        hash,
-        mime_type: 'image/png',
-        size_bytes: probeBytes.length,
-        disposition: 'inline',
-      },
-    });
-    storageId = typeof presign.storageId === 'string' ? presign.storageId : undefined;
-    if (typeof presign.url !== 'string') throw new Error('Filesystem storage did not return an upload URL.');
-    const upload = await verificationFetch(new URL(presign.url, baseUrl), {
-      method: typeof presign.method === 'string' ? presign.method : 'PUT',
-      headers: {
-        'content-type': 'image/png',
-        cookie,
-        ...(presign.headers && typeof presign.headers === 'object' ? presign.headers : {}),
-      },
-      body: probeBytes,
-    });
-    if (!upload.ok) throw new Error(`Filesystem verification upload returned HTTP ${upload.status}.`);
-    await verificationJson(baseUrl, '/api/storage/commit', {
-      cookie,
-      body: {
-        workspace_id: workspaceId,
-        hash,
-        storage_id: storageId,
-        storage_provider_id: 'fs',
-        mime_type: 'image/png',
-        size_bytes: probeBytes.length,
-        name: 'or3-production-verification.png',
-        kind: 'image',
-      },
-    });
-    const downloadGrant = await verificationJson(baseUrl, '/api/storage/presign-download', {
-      cookie,
-      body: { workspace_id: workspaceId, hash, storage_id: storageId, disposition: 'attachment' },
-    });
-    if (typeof downloadGrant.url !== 'string') throw new Error('Filesystem storage did not return a download URL.');
-    const download = await verificationFetch(new URL(downloadGrant.url, baseUrl), { headers: { cookie } });
-    if (!download.ok || !Buffer.from(await download.arrayBuffer()).equals(probeBytes)) {
-      throw new Error('Filesystem verification download did not match the uploaded probe.');
+    const session = await verificationJson(baseUrl, '/api/auth/session', { cookie });
+    if (session.session?.user?.email !== email || !session.session?.workspace?.id) {
+      throw new Error('Public session hydration did not return the verification user and workspace.');
     }
-  } finally {
-    if (storageId) {
-      await verificationJson(baseUrl, '/api/storage/delete', {
+    const workspaceId = String(session.session.workspace.id);
+    const pull = await verificationJson(baseUrl, '/api/sync/pull', {
+      cookie,
+      body: { scope: { workspaceId }, cursor: 0, limit: 1, tables: ['messages'] },
+    });
+    if (!Array.isArray(pull.changes) || typeof pull.nextCursor !== 'number') {
+      throw new Error('Public SQLite sync pull returned an invalid response.');
+    }
+
+    const probeBytes = Buffer.concat([
+      Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489', 'hex'),
+      randomBytes(8),
+    ]);
+    const hash = `sha256:${createHash('sha256').update(probeBytes).digest('hex')}`;
+    let storageId: string | undefined;
+    try {
+      const presign = await verificationJson(baseUrl, '/api/storage/presign-upload', {
         cookie,
-        body: { workspace_id: workspaceId, hash, storage_id: storageId },
+        body: {
+          workspace_id: workspaceId,
+          hash,
+          mime_type: 'image/png',
+          size_bytes: probeBytes.length,
+          disposition: 'inline',
+        },
       });
+      storageId = typeof presign.storageId === 'string' && presign.storageId.trim() ? presign.storageId : undefined;
+      if (!storageId) throw new Error('Filesystem storage did not return a non-empty storage ID.');
+      assertVerificationGrant(presign, 'PUT', 'upload');
+      const upload = await verificationFetch(sameOriginVerificationUrl(baseUrl, presign.url, 'upload'), {
+        method: 'PUT',
+        headers: { 'content-type': 'image/png', cookie },
+        body: probeBytes,
+      });
+      if (!upload.ok) throw new Error(`Filesystem verification upload returned HTTP ${upload.status}.`);
+      await verificationJson(baseUrl, '/api/storage/commit', {
+        cookie,
+        body: {
+          workspace_id: workspaceId,
+          hash,
+          storage_id: storageId,
+          storage_provider_id: 'fs',
+          mime_type: 'image/png',
+          size_bytes: probeBytes.length,
+          name: 'or3-production-verification.png',
+          kind: 'image',
+        },
+      });
+      const downloadGrant = await verificationJson(baseUrl, '/api/storage/presign-download', {
+        cookie,
+        body: { workspace_id: workspaceId, hash, storage_id: storageId, disposition: 'attachment' },
+      });
+      assertVerificationGrant(downloadGrant, 'GET', 'download');
+      const download = await verificationFetch(sameOriginVerificationUrl(baseUrl, downloadGrant.url, 'download'), { headers: { cookie } });
+      if (!download.ok || !Buffer.from(await download.arrayBuffer()).equals(probeBytes)) {
+        throw new Error('Filesystem verification download did not match the uploaded probe.');
+      }
+    } finally {
+      if (storageId) {
+        await verificationJson(baseUrl, '/api/storage/delete', {
+          cookie,
+          body: { workspace_id: workspaceId, hash, storage_id: storageId },
+        });
+      }
     }
+    return health;
+  } finally {
+    await verificationJson(baseUrl, '/api/basic-auth/sign-out', {
+      cookie,
+      method: 'POST',
+    });
   }
-  return health;
 }
 
 async function verifyCommand(directory: string, flags: Flags, positionals: string[]) {
@@ -3535,7 +3642,7 @@ async function verifyCommand(directory: string, flags: Flags, positionals: strin
       ? `https://${loaded.state.domain}`
       : `http://127.0.0.1:${loaded.state.port}`,
   );
-  await verifyPublicApplication(baseUrl, loaded.env);
+  await verifyPublicApplication(baseUrl, await verificationCredentials(flags, loaded.env));
   const databaseCheck = await run('docker', [
     ...composeArgs(loaded.directory, loaded.state.mode, ['exec', '-T', 'or3', ...containerNodeCommand(VERIFY_DATABASES_SCRIPT)]),
   ], loaded.directory);
@@ -3842,27 +3949,51 @@ async function adoptCommand(positionals: string[], flags: Flags) {
  */
 async function resolveResetPasswords(flags: Flags) {
   const ownerPassword = stringFlag(flags, 'owner-password');
+  const ownerPasswordFile = stringFlag(flags, 'owner-password-file');
   const adminPassword = stringFlag(flags, 'admin-password');
-  if (ownerPassword !== undefined || adminPassword !== undefined) {
-    if (ownerPassword === undefined || adminPassword === undefined) {
-      throw new Error('Use both --owner-password and --admin-password together so a reset never applies one credential without the other.');
+  const adminPasswordFile = stringFlag(flags, 'admin-password-file');
+  if (flags['owner-password'] !== undefined && ownerPassword === undefined) throw new Error('--owner-password requires a value.');
+  if (flags['admin-password'] !== undefined && adminPassword === undefined) throw new Error('--admin-password requires a value.');
+  if (flags['owner-password-file'] !== undefined && !ownerPasswordFile) throw new Error('--owner-password-file requires a path.');
+  if (flags['admin-password-file'] !== undefined && !adminPasswordFile) throw new Error('--admin-password-file requires a path.');
+  if (ownerPassword !== undefined && ownerPasswordFile) throw new Error('Use either --owner-password or --owner-password-file, not both.');
+  if (adminPassword !== undefined && adminPasswordFile) throw new Error('Use either --admin-password or --admin-password-file, not both.');
+  const suppliedOwner = ownerPassword ?? (ownerPasswordFile ? (await readText(resolve(ownerPasswordFile))).trim() : undefined);
+  const suppliedAdmin = adminPassword ?? (adminPasswordFile ? (await readText(resolve(adminPasswordFile))).trim() : undefined);
+  if (suppliedOwner !== undefined || suppliedAdmin !== undefined) {
+    if (suppliedOwner === undefined || suppliedAdmin === undefined) {
+      throw new Error('Supply both owner and admin passwords so a reset never applies one credential without the other.');
     }
-    validatePassword(ownerPassword);
-    validatePassword(adminPassword);
-    return { ownerPassword, adminPassword };
+    validatePassword(suppliedOwner);
+    validatePassword(suppliedAdmin);
+    return { ownerPassword: suppliedOwner, adminPassword: suppliedAdmin };
   }
   if (!input.isTTY || !output.isTTY) {
-    throw new Error('--owner-password and --admin-password are required in a non-interactive session. Credentials are never generated automatically.');
+    throw new Error('--owner-password-file and --admin-password-file are required in a non-interactive session. Credentials are never generated automatically.');
   }
-  const prompt = readline.createInterface({ input, output });
+  const owner = (await maskedQuestion('New owner (basic auth) password: ')).trim();
+  validatePassword(owner);
+  const admin = (await maskedQuestion('New admin password: ')).trim();
+  validatePassword(admin);
+  return { ownerPassword: owner, adminPassword: admin };
+}
+
+async function maskedQuestion(question: string) {
+  let muted = false;
+  const maskedOutput = new Writable({
+    write(chunk, _encoding, callback) {
+      if (!muted) output.write(chunk);
+      callback();
+    },
+  });
+  const prompt = readline.createInterface({ input, output: maskedOutput, terminal: true });
   try {
-    const owner = (await prompt.question('New owner (basic auth) password: ')).trim();
-    validatePassword(owner);
-    const admin = (await prompt.question('New admin password: ')).trim();
-    validatePassword(admin);
-    return { ownerPassword: owner, adminPassword: admin };
+    const answer = prompt.question(question);
+    muted = true;
+    return await answer;
   } finally {
     prompt.close();
+    output.write('\n');
   }
 }
 
@@ -3957,24 +4088,32 @@ try {
 credentials.username = adminUsername;
 credentials.password_hash_bcrypt = adminHash;
 credentials.updated_at = new Date().toISOString();
-try {
-  fs.writeFileSync(adminCredentialsPath, JSON.stringify(credentials, null, 2) + '\\n', { mode: 0o600 });
-} catch (error) {
-  console.error('OR3 credentials reset failed: could not update the admin credentials file at ' + adminCredentialsPath + '. Nothing was changed. ' + (error && error.message ? error.message : String(error)));
-  process.exit(1);
-}
+const atomicWrite = (target, contents) => {
+  const temporary = target + '.reset-' + process.pid + '-' + Date.now();
+  const descriptor = fs.openSync(temporary, 'w', 0o600);
+  try {
+    fs.writeFileSync(descriptor, contents, 'utf8');
+    fs.fsyncSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  fs.renameSync(temporary, target);
+  const directory = fs.openSync(path.dirname(target), 'r');
+  try { fs.fsyncSync(directory); } finally { fs.closeSync(directory); }
+};
 try {
   db.transaction(() => {
     db.prepare('UPDATE basic_auth_accounts SET password_hash = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?').run(ownerHash, now, account.id);
     db.prepare('UPDATE basic_auth_sessions SET revoked_at = COALESCE(revoked_at, ?), rotation_grace_until = NULL, rotation_grace_refresh_token = NULL WHERE account_id = ?').run(now, account.id);
+    atomicWrite(adminCredentialsPath, JSON.stringify(credentials, null, 2) + '\\n');
   })();
 } catch (error) {
   if (previousCredentials !== null) {
-    try { fs.writeFileSync(adminCredentialsPath, previousCredentials, { mode: 0o600 }); } catch {}
+    try { atomicWrite(adminCredentialsPath, previousCredentials); } catch {}
   } else {
     try { fs.rmSync(adminCredentialsPath, { force: true }); } catch {}
   }
-  console.error('OR3 credentials reset failed: the authentication database rejected the update. Any partial change was rolled back. ' + (error && error.message ? error.message : String(error)));
+  console.error('OR3 credentials reset failed: the atomic database/file update did not complete. Replay is safe through the managed recovery journal. ' + (error && error.message ? error.message : String(error)));
   process.exit(1);
 }
 db.close();
@@ -4011,30 +4150,44 @@ Promise.all([
 
 async function runCredentialsResetScript(directory: string, mode: Mode, values: ReturnType<typeof credentialResetValues>) {
   const script = buildCredentialsResetScript(values);
+  const resetEnvironment = {
+    ...composeProcessEnv(directory),
+    OR3_RESET_OWNER_EMAIL: values.ownerEmail,
+    OR3_RESET_OWNER_PASSWORD: values.ownerPassword,
+    OR3_RESET_ADMIN_USERNAME: values.adminUsername,
+    OR3_RESET_ADMIN_PASSWORD: values.adminPassword,
+  };
   const result = await run('docker', [
     ...composeArgs(directory, mode, [
       'exec', '-T',
-      '-e', `OR3_RESET_OWNER_EMAIL=${values.ownerEmail}`,
-      '-e', `OR3_RESET_OWNER_PASSWORD=${values.ownerPassword}`,
-      '-e', `OR3_RESET_ADMIN_USERNAME=${values.adminUsername}`,
-      '-e', `OR3_RESET_ADMIN_PASSWORD=${values.adminPassword}`,
+      '-e', 'OR3_RESET_OWNER_EMAIL',
+      '-e', 'OR3_RESET_OWNER_PASSWORD',
+      '-e', 'OR3_RESET_ADMIN_USERNAME',
+      '-e', 'OR3_RESET_ADMIN_PASSWORD',
       'or3', ...containerNodeCommand(script),
     ]),
-  ], directory);
+  ], directory, resetEnvironment);
   if (!result.ok) throw new Error(`${result.command}\n${redact(result.stderr, [values.ownerPassword, values.adminPassword])}`);
 }
 
 async function verifyCredentialsInsideContainer(directory: string, mode: Mode, values: ReturnType<typeof credentialResetValues>) {
+  const resetEnvironment = {
+    ...composeProcessEnv(directory),
+    OR3_RESET_OWNER_EMAIL: values.ownerEmail,
+    OR3_RESET_OWNER_PASSWORD: values.ownerPassword,
+    OR3_RESET_ADMIN_USERNAME: values.adminUsername,
+    OR3_RESET_ADMIN_PASSWORD: values.adminPassword,
+  };
   const result = await run('docker', [
     ...composeArgs(directory, mode, [
       'exec', '-T',
-      '-e', `OR3_RESET_OWNER_EMAIL=${values.ownerEmail}`,
-      '-e', `OR3_RESET_OWNER_PASSWORD=${values.ownerPassword}`,
-      '-e', `OR3_RESET_ADMIN_USERNAME=${values.adminUsername}`,
-      '-e', `OR3_RESET_ADMIN_PASSWORD=${values.adminPassword}`,
+      '-e', 'OR3_RESET_OWNER_EMAIL',
+      '-e', 'OR3_RESET_OWNER_PASSWORD',
+      '-e', 'OR3_RESET_ADMIN_USERNAME',
+      '-e', 'OR3_RESET_ADMIN_PASSWORD',
       'or3', ...containerNodeCommand(CREDENTIALS_VERIFY_SCRIPT),
     ]),
-  ], directory);
+  ], directory, resetEnvironment);
   if (!result.ok) throw new Error(`Credential verification inside the OR3 container failed. ${redact(result.stderr, [values.ownerPassword, values.adminPassword])}`);
 }
 
@@ -4051,14 +4204,9 @@ async function applyCredentialReset(directory: string, state: ManagedState, next
   await runCredentialsResetScript(directory, state.mode, values);
   await writeSecure(deploymentPaths(directory).env, serializeEnv(nextEnv));
   const initialCredentials = join(directory, '.or3-initial-credentials');
-  if (await fileExists(initialCredentials)) {
-    await writeSecure(initialCredentials, serializeInitialCredentials({
-      bootstrapEmail: values.ownerEmail,
-      bootstrapPassword: values.ownerPassword,
-      adminUsername: values.adminUsername,
-      adminPassword: values.adminPassword,
-    }));
-  }
+  // The caller supplied the new values; retaining another credential copy
+  // after rotation only expands the secret blast radius.
+  await rm(initialCredentials, { force: true });
   await stopProject(directory, state.mode);
   await startProject(directory, state.mode, nextEnv);
   await verifyCredentialsInsideContainer(directory, state.mode, values);
