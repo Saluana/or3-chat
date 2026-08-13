@@ -172,6 +172,10 @@ unsupported host from an unavailable or corrupt operator, and returns HTTP 202
 when an asynchronous update is accepted. The card announces asynchronous state
 changes and polls active work every two seconds, with bounded connection-error
 backoff and a 15-minute polling limit.
+When an earlier protocol-compatible release exists, the tagged release gate
+upgrades a disposable installation through the operator, verifies
+concurrent-start rejection, persistence, and deep health, then exercises
+rollback.
 `doctor` also validates the operator container image, deployment label, three
 required mounts, IPC types/modes, absence of an orphaned disabled operator,
 daemon-side Caddy port publication, and an actual public HTTPS 200 response.

@@ -219,3 +219,104 @@ jobs:
           done
           echo "@or3/cloud@$VERSION was not available after registry propagation retries."
           exit 1
+
+  dashboard-lifecycle:
+    needs: [promote, publish-npm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Exercise the published dashboard update and rollback path
+        env:
+          VERSION: ${{ needs.promote.outputs.version }}
+        run: |
+          set -euo pipefail
+          managed="$RUNNER_TEMP/or3-cloud-dashboard-release"
+          minimum_source="$(npm view "@or3/cloud@$VERSION" or3Cloud.dashboardUpdateMinimumSourceVersion)"
+          candidate_versions="$(npm view @or3/cloud versions --json | MINIMUM_SOURCE="$minimum_source" node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const target=process.env.VERSION,minimum=process.env.MINIMUM_SOURCE;const values=JSON.parse(s);const compare=(a,b)=>{const x=a.split(".").map(Number),y=b.split(".").map(Number);for(let i=0;i<3;i+=1){if(x[i]!==y[i])return x[i]-y[i]}return 0};process.stdout.write((Array.isArray(values)?values:[values]).filter(v=>/^\d+\.\d+\.\d+$/.test(v)&&compare(v,target)<0&&compare(v,minimum)>=0).sort(compare).reverse().join("\n"))})')"
+          previous_version=""
+          while IFS= read -r candidate; do
+            [ -n "$candidate" ] || continue
+            if [ "$(npm view "@or3/cloud@$candidate" or3Cloud.dashboardUpdateProtocol)" = 1 ]; then
+              previous_version="$candidate"
+              break
+            fi
+          done <<< "$candidate_versions"
+          if [ -z "$previous_version" ]; then
+            echo "No earlier dashboard-compatible release satisfies minimum source $minimum_source; the candidate bridge probe is the inaugural-release gate."
+            exit 0
+          fi
+          compose_args() {
+            local args=(--project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml")
+            if [ -f "$managed/compose.operator.yaml" ] && grep -q "^OR3_DASHBOARD_UPDATES_ENABLED='true'$" "$managed/.env"; then
+              args+=(-f "$managed/compose.operator.yaml")
+            fi
+            printf '%s\n' "${args[@]}"
+          }
+          cleanup() {
+            if [ -n "${driver_pid:-}" ]; then
+              kill "$driver_pid" 2>/dev/null || true
+              wait "$driver_pid" 2>/dev/null || true
+            fi
+            if [ -f "$managed/.env" ] && [ -f "$managed/compose.yaml" ]; then
+              mapfile -t args < <(compose_args)
+              docker compose "${args[@]}" down --volumes --remove-orphans 2>/dev/null || true
+            fi
+          }
+          diagnostics() {
+            if [ -f "$managed/.env" ] && [ -f "$managed/compose.yaml" ]; then
+              mapfile -t args < <(compose_args)
+              docker compose "${args[@]}" ps -a || true
+              docker compose "${args[@]}" logs --tail=200 || true
+            fi
+          }
+          trap 'status=$?; if [ "$status" -ne 0 ]; then diagnostics; fi; cleanup; exit "$status"' EXIT
+
+          npx --yes "@or3/cloud@$previous_version" init "$managed" --local --port 3018 --admin-email dashboard-smoke@example.com
+          test -S "$managed/.or3-cloud/operator-ipc/operator.sock"
+          test "$(stat -c '%a' "$managed/.or3-cloud/operator-ipc")" = 710
+          test "$(stat -c '%a' "$managed/.or3-cloud/operator-ipc/operator.sock")" = 660
+          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
+          node scripts/release/smoke-dashboard-update.mjs "$managed/.or3-cloud/operator-ipc/operator.sock" "$VERSION"
+          (cd "$managed" && npx --yes "@or3/cloud@$VERSION" verify)
+          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          grep -q "^OR3_VERSION='$VERSION'$" "$managed/.env"
+
+          (cd "$managed" && npx --yes "@or3/cloud@$VERSION" rollback --yes)
+          (cd "$managed" && npx --yes "@or3/cloud@$previous_version" verify)
+          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+
+          node scripts/release/smoke-dashboard-update.mjs "$managed/.or3-cloud/operator-ipc/operator.sock" "$VERSION" > "$RUNNER_TEMP/dashboard-interrupted.log" 2>&1 &
+          driver_pid=$!
+          observed_mutation=false
+          for attempt in $(seq 1 600); do
+            phase="$(node -e 'try{process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).incompleteOperation?.phase||"")}catch{}' "$managed/.or3-cloud/state.json" || true)"
+            if [ "$phase" = target-mutating ]; then
+              observed_mutation=true
+              break
+            fi
+            kill -0 "$driver_pid" 2>/dev/null || break
+            sleep 0.1
+          done
+          test "$observed_mutation" = true
+          mapfile -t args < <(compose_args)
+          operator_id="$(docker compose "${args[@]}" ps -q or3-operator)"
+          test -n "$operator_id"
+          docker kill "$operator_id"
+          set +e
+          wait "$driver_pid"
+          driver_status=$?
+          set -e
+          test "$driver_status" -ne 0
+          grep -Eq 'ended in failed|ended in needs_attention' "$RUNNER_TEMP/dashboard-interrupted.log"
+          grep -q "^OR3_VERSION='$previous_version'$" "$managed/.env"
+          (cd "$managed" && npx --yes "@or3/cloud@$previous_version" verify)
+          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)

@@ -352,6 +352,10 @@ test('release digest verification uses buildx-compatible manifest output', () =>
   expect(workflow).toContain('candidate-receipt.mjs verify');
   expect(workflow).toContain('imagetools create --tag "$RELEASE_IMAGE" "$candidate_image@$candidate_digest"');
   expect(workflow).not.toContain('docker/build-push-action');
+  expect(workflow).toContain('dashboard-lifecycle:');
+  expect(workflow).toContain('smoke-dashboard-update.mjs');
+  expect(workflow).toContain('npx --yes "@or3/cloud@$previous_version" verify');
+  expect(workflow).toContain('No earlier dashboard-compatible release satisfies minimum source');
 });
 
 test('npm publication identifies the qualified tarball as a local file', () => {

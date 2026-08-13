@@ -127,6 +127,11 @@ While an update is active, the card announces state changes and polls every two
 seconds, backing off on connection failures and stopping after 15 minutes or a
 terminal result.
 
+Once an earlier protocol-compatible release exists, the tagged release gate
+also upgrades a disposable installation from it through this Unix API, proves
+concurrent starts serialize, checks persisted data and deep health, and rolls
+the deployment back.
+
 The application container never receives the Docker socket. A separate,
 socket-only operator sidecar is the only container with Docker access, and it
 accepts only status, release-check, and exact-version update requests. It runs

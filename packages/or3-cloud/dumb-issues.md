@@ -265,7 +265,18 @@ The workflow computes `next_version` and runs the current CLI with `update --to 
 
 **Location:** `.github/workflows/release-cloud-candidate.yml:158-201`; `planning/admin-dashboard-updates/tasks.md:105-119`
 
-The candidate workflow tests host-CLI update/rollback/verify only. It never calls the admin API/operator path and has no dashboard success, failed-target restoration, interrupted-operator, existing-install bridge, concurrency, or privilege-negative lifecycle case.
+The candidate workflow tests host-CLI update/rollback/verify and reaches the
+mounted operator for status plus an invalid-start rejection. Because the exact
+candidate package is not yet public on npm, it cannot execute a successful
+authenticated operator update at that stage.
+
+The tag workflow now adds a disposable previous-release-to-published-release
+operator update, concurrent-start rejection, persistence/deep-health checks,
+rollback, and a process interruption during the destructive phase followed by
+automatic restoration. This closes the success, concurrency, existing-install,
+and interrupted recovery paths, but it runs after immutable npm publication
+and does not yet cover a bad target image or the browser-facing admin route, so
+this remains partial.
 
 **Consequence:** a release can pass while the newly privileged update path is completely broken—as the current Compose/adopt defects demonstrate.
 
@@ -585,7 +596,16 @@ The purge file list omits `dashboard-operator.mjs`, even though `copyAssets()` a
 
 **Location:** `packages/or3-cloud/test/cli.test.ts:1-542`; `packages/or3-cloud/test/security-assets.test.ts:52-103,188-213`
 
-Coverage reports about 22.02% of CLI lines/37.89% of functions and 14.63% of operator lines/10.71% of functions. The 61 passing tests mostly import pure helpers or search source strings with `toContain()`. They do not execute Docker lifecycle dispatch, concurrent commands, interruption phases, real operator HTTP, restore failure, purge, credential transactions, or dashboard E2E.
+The original coverage measurement reported about 22.02% of CLI lines/37.89%
+of functions and 14.63% of operator lines/10.71% of functions. Much of the
+suite still imports pure helpers or searches source strings with `toContain()`;
+it does not locally execute Docker lifecycle dispatch, interruption phases,
+restore failure, or browser-driven dashboard E2E.
+
+The suite now has executable lifecycle helpers for asset snapshot/rollback,
+source identity, verification grants, purge selection, and concurrent Unix API
+starts, plus candidate/tag Docker lifecycle gates. Fault-injected operator
+recovery and browser-driven dashboard update coverage are still missing.
 
 **Consequence:** security assertions can pass because the desired text exists while runtime wiring is broken; the invalid Compose and dead adoption path both escaped.
 
