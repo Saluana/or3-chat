@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -121,8 +121,15 @@ async function writeReleaseCheck(checked) {
   const temporary = `${releaseCheckPath}.${randomUUID()}.tmp`;
   await writeFile(temporary, `${JSON.stringify(checked, null, 2)}\n`, { mode: 0o600 });
   await chmod(temporary, 0o600);
-  await rename(temporary, releaseCheckPath);
-  await chmod(releaseCheckPath, 0o600);
+  await durableRename(temporary, releaseCheckPath);
+}
+
+async function durableRename(source, destination) {
+  const file = await open(source, 'r');
+  try { await file.sync(); } finally { await file.close(); }
+  await rename(source, destination);
+  const directory = await open(dirname(destination), 'r');
+  try { await directory.sync(); } finally { await directory.close(); }
 }
 
 async function writeJob(job) {
@@ -135,8 +142,7 @@ async function writeJob(job) {
   const temporary = `${jobPath}.${randomUUID()}.tmp`;
   await writeFile(temporary, `${JSON.stringify(persisted, null, 2)}\n`, { mode: 0o600 });
   await chmod(temporary, 0o600);
-  await rename(temporary, jobPath);
-  await chmod(jobPath, 0o600);
+  await durableRename(temporary, jobPath);
 }
 
 async function registryJson(url, maxBytes) {

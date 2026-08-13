@@ -11,6 +11,7 @@ import {
   chmod,
   copyFile,
   mkdir,
+  open,
   readFile,
   readdir,
   realpath,
@@ -36,6 +37,8 @@ const ASSET_ROOT = resolve(fileURLToPath(new URL('../assets/', import.meta.url))
 const STATE_SCHEMA_VERSION = 1;
 const DEFAULT_PORT = 3000;
 const DEEP_HEALTH_TIMEOUT_MS = 180_000;
+const COMMAND_TIMEOUT_MS = 180_000;
+const STREAM_COMMAND_TIMEOUT_MS = 15 * 60_000;
 const BACKUP_RETENTION_KEEP = 5;
 const PURGE_REQUIRES_BACKUP_WITHIN_MS = 24 * 60 * 60 * 1000;
 const FREE_SPACE_HEADROOM_BYTES = 64 * 1024 * 1024;
@@ -489,6 +492,8 @@ async function run(command: string, args: string[], cwd?: string, environment?: 
       cwd,
       maxBuffer: 4 * 1024 * 1024,
       encoding: 'utf8',
+      timeout: COMMAND_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
       env: commandEnvironment(command, args, cwd, environment),
     });
     return {
@@ -522,14 +527,31 @@ async function writeSecure(path: string, content: string) {
   const temporary = `${path}.tmp-${randomBytes(4).toString('hex')}`;
   await writeFile(temporary, content, { mode: 0o600 });
   await chmod(temporary, 0o600);
-  await rename(temporary, path);
-  await chmod(path, 0o600);
+  await durableRename(temporary, path);
+}
+
+async function syncFile(path: string) {
+  const handle = await open(path, 'r');
+  try { await handle.sync(); } finally { await handle.close(); }
+}
+
+async function syncDirectory(path: string) {
+  const handle = await open(path, 'r');
+  try { await handle.sync(); } finally { await handle.close(); }
+}
+
+async function durableRename(source: string, destination: string) {
+  await syncFile(source);
+  await rename(source, destination);
+  await syncDirectory(dirname(destination));
 }
 
 async function copySecure(source: string, destination: string) {
   await mkdir(dirname(destination), { recursive: true, mode: 0o700 });
   await copyFile(source, destination);
   await chmod(destination, 0o600);
+  await syncFile(destination);
+  await syncDirectory(dirname(destination));
 }
 
 async function fileExists(path: string) {
@@ -1107,6 +1129,15 @@ async function portAvailable(port: number) {
   });
 }
 
+async function dockerDaemonIsLocal() {
+  const configured = process.env.DOCKER_HOST?.trim();
+  if (configured) return configured.startsWith('unix://') || configured.startsWith('npipe://');
+  const context = await run('docker', ['context', 'inspect', '--format', '{{.Endpoints.docker.Host}}']);
+  if (!context.ok) throw new Error(`Could not resolve the active Docker context endpoint. ${context.stderr.trim()}`);
+  const endpoint = context.stdout.trim();
+  return endpoint.startsWith('unix://') || endpoint.startsWith('npipe://');
+}
+
 async function waitForDeepHealth(directory: string, mode: Mode, secrets: string[] = []) {
   try {
     await waitForDeepHealthWithArgs(composeArgs(directory, mode), directory, secrets);
@@ -1300,14 +1331,17 @@ export function assertSupportedArchitecture(manifest: ImageManifest | null | und
   }
 }
 
-function hostArchitecture(): 'arm64' | 'amd64' {
-  if (process.arch === 'arm64') return 'arm64';
-  if (process.arch === 'x64') return 'amd64';
-  throw new Error(`OR3 supports only linux/amd64 and linux/arm64 hosts; this machine reports ${process.arch}. Install on a supported machine.`);
+async function dockerDaemonArchitecture(): Promise<'arm64' | 'amd64'> {
+  const result = await run('docker', ['info', '--format', '{{.Architecture}}']);
+  if (!result.ok) throw new Error(`Could not determine the selected Docker daemon architecture. ${result.stderr.trim()}`);
+  const architecture = result.stdout.trim().toLowerCase();
+  if (architecture === 'arm64' || architecture === 'aarch64') return 'arm64';
+  if (architecture === 'amd64' || architecture === 'x86_64') return 'amd64';
+  throw new Error(`OR3 supports only linux/amd64 and linux/arm64 Docker daemons; the selected daemon reports ${architecture || 'no architecture'}.`);
 }
 
 async function assertSupportedHostArchitecture(image: string) {
-  const hostArch = hostArchitecture();
+  const hostArch = await dockerDaemonArchitecture();
   // Qualification runs intentionally use a local, not-yet-published candidate
   // image. Its single-platform Docker image config is the authoritative source
   // there; normal operator installs still require the registry manifest list.
@@ -1591,6 +1625,7 @@ async function installManagedAssets(directory: string, assets: Map<string, Buffe
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const token = randomBytes(4).toString('hex');
   const staged: Array<{ destination: string; replacement: string; rollback?: string }> = [];
+  let retainRollbackCopies = false;
   try {
     for (const [name, contents] of assets) {
       const destination = join(directory, name);
@@ -1611,21 +1646,34 @@ async function installManagedAssets(directory: string, assets: Map<string, Buffe
     const applied: typeof staged = [];
     try {
       for (const entry of staged) {
-        await rename(entry.replacement, entry.destination);
         applied.push(entry);
-        await chmod(entry.destination, 0o644);
+        await durableRename(entry.replacement, entry.destination);
+      }
+      for (const [name, contents] of assets) {
+        if (!(await readFile(join(directory, name))).equals(contents)) {
+          throw new Error(`Managed asset ${name} did not match its staged replacement after commit.`);
+        }
       }
     } catch (error) {
+      const rollbackErrors: Error[] = [];
       for (const entry of applied.reverse()) {
-        if (entry.rollback) await rename(entry.rollback, entry.destination);
-        else await rm(entry.destination, { force: true });
+        try {
+          if (entry.rollback) await durableRename(entry.rollback, entry.destination);
+          else await rm(entry.destination, { force: true });
+        } catch (rollbackError) {
+          rollbackErrors.push(rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError)));
+        }
+      }
+      if (rollbackErrors.length > 0) {
+        retainRollbackCopies = true;
+        throw new AggregateError([error, ...rollbackErrors], 'Managed asset installation failed and one or more rollback copies could not be restored. Recovery copies were retained.');
       }
       throw error;
     }
   } finally {
     for (const entry of staged) {
       await rm(entry.replacement, { force: true }).catch(() => undefined);
-      if (entry.rollback) await rm(entry.rollback, { force: true }).catch(() => undefined);
+      if (entry.rollback && !retainRollbackCopies) await rm(entry.rollback, { force: true }).catch(() => undefined);
     }
   }
 }
@@ -1684,7 +1732,9 @@ async function verifiedManagedAssetContents(backupPath: string, manifest: Backup
 
 export async function restoreManagedAssets(directory: string, backupPath: string, manifest: BackupManifest) {
   const assets = await verifiedManagedAssetContents(backupPath, manifest);
-  if (!assets) return false;
+  if (!assets) {
+    throw new Error(`Backup ${manifest.backupId} predates authenticated managed-asset snapshots. Refusing to run its image under today's Compose/Caddy assets; restore with the exact historical @or3/cloud release after separately authenticating its assets.`);
+  }
   await installManagedAssets(directory, assets);
   if (manifest.managedAssetInventoryVersion !== 2 && manifest.managedAssetInventoryVersion !== MANAGED_ASSET_INVENTORY_VERSION) {
     await rm(join(directory, 'dashboard-operator.mjs'), { force: true });
@@ -1693,6 +1743,12 @@ export async function restoreManagedAssets(directory: string, backupPath: string
     await rm(join(directory, 'compose.operator.yaml'), { force: true });
   }
   return true;
+}
+
+function assertRestorableManagedAssets(manifest: BackupManifest) {
+  if (!manifest.managedAssetSha256) {
+    throw new Error(`Backup ${manifest.backupId} predates authenticated managed-asset snapshots. Refusing to run its image under today's Compose/Caddy assets; restore with the exact historical @or3/cloud release after separately authenticating its assets.`);
+  }
 }
 
 async function checkPublicPrerequisites(domain: string) {
@@ -2070,6 +2126,14 @@ async function sha256File(path: string) {
   return digest.digest('hex');
 }
 
+function terminateChildProcess(child: ReturnType<typeof spawn>) {
+  if (child.killed) return;
+  if (process.platform !== 'win32' && child.pid) {
+    try { process.kill(-child.pid, 'SIGKILL'); return; } catch {}
+  }
+  child.kill('SIGKILL');
+}
+
 /** Streams a container archive to a host-owned file without a root bind mount. */
 async function streamCommandToFile(
   command: string,
@@ -2086,9 +2150,15 @@ async function streamCommandToFile(
   const child = spawn(command, args, {
     cwd,
     env: commandEnvironment(command, args, cwd),
+    detached: process.platform !== 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let stderr = '';
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    terminateChildProcess(child);
+  }, STREAM_COMMAND_TIMEOUT_MS);
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk: string) => {
     stderr = `${stderr}${chunk}`.slice(-64 * 1024);
@@ -2102,16 +2172,19 @@ async function streamCommandToFile(
       exit,
       pipeline(child.stdout, createWriteStream(temporary, { flags: 'wx', mode: 0o600 })),
     ]);
+    if (timedOut) throw new Error(`${command} exceeded the ${STREAM_COMMAND_TIMEOUT_MS / 1000}-second archive deadline.`);
     if (exitCode !== 0) {
       throw new Error(`${command} ${args.join(' ')} exited with ${exitCode}. ${redact(stderr, secrets)}`.trim());
     }
     await chmod(temporary, 0o600);
-    await rename(temporary, destination);
+    await durableRename(temporary, destination);
   } catch (error) {
-    if (!child.killed) child.kill('SIGTERM');
+    terminateChildProcess(child);
     await rm(temporary, { force: true }).catch(() => undefined);
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`${detail}${stderr && !detail.includes(stderr) ? `\n${redact(stderr, secrets)}` : ''}`);
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -2126,9 +2199,15 @@ async function streamFileToCommand(
   const child = spawn(command, args, {
     cwd,
     env: commandEnvironment(command, args, cwd),
+    detached: process.platform !== 'win32',
     stdio: ['pipe', 'ignore', 'pipe'],
   });
   let stderr = '';
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    terminateChildProcess(child);
+  }, STREAM_COMMAND_TIMEOUT_MS);
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk: string) => {
     stderr = `${stderr}${chunk}`.slice(-64 * 1024);
@@ -2142,13 +2221,16 @@ async function streamFileToCommand(
       exit,
       pipeline(createReadStream(source), child.stdin),
     ]);
+    if (timedOut) throw new Error(`${command} exceeded the ${STREAM_COMMAND_TIMEOUT_MS / 1000}-second archive deadline.`);
     if (exitCode !== 0) {
       throw new Error(`${command} ${args.join(' ')} exited with ${exitCode}. ${redact(stderr, secrets)}`.trim());
     }
   } catch (error) {
-    if (!child.killed) child.kill('SIGTERM');
+    terminateChildProcess(child);
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`${detail}${stderr && !detail.includes(stderr) ? `\n${redact(stderr, secrets)}` : ''}`);
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -2248,6 +2330,7 @@ async function createBackup(
   await assertFreeSpaceForArchive(backupDir, volumeSize, 'Backup');
   let manifestWritten = false;
   let stopAttempted = false;
+  let backupFailure: Error | undefined;
   try {
     await mkdir(backupDir, { recursive: true, mode: 0o700 });
     await chmod(backupDir, 0o700);
@@ -2290,14 +2373,23 @@ async function createBackup(
   } catch (error) {
     if (!manifestWritten) {
       await removeNamedBackupArtifact(directory, backupId).catch(() => undefined);
-      throw new Error(`${error instanceof Error ? error.message : String(error)} The partial backup artifact at ${backupDir} was removed.`);
+      backupFailure = new Error(`${error instanceof Error ? error.message : String(error)} The partial backup artifact at ${backupDir} was removed.`);
+      throw backupFailure;
     }
+    backupFailure = error instanceof Error ? error : new Error(String(error));
     throw error;
   } finally {
     if (stopAttempted && restartAfter && initiallyRunning) {
       try {
         await startProject(directory, state.mode, env);
       } catch (error) {
+        const restartFailure = error instanceof Error ? error : new Error(String(error));
+        if (backupFailure) {
+          throw new AggregateError(
+            [backupFailure, restartFailure],
+            `Backup failed and OR3 could not restart. Primary failure: ${backupFailure.message}. Restart failure: ${restartFailure.message}`,
+          );
+        }
         throw new Error(`Backup was created but OR3 could not restart: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
@@ -2374,6 +2466,7 @@ async function assertRestoreFreeSpace(
 
 async function restoreBackupData(directory: string, state: ManagedState, env: Record<string, string>, backupPath: string) {
   const manifest = await readManifest(backupPath, directory);
+  assertRestorableManagedAssets(manifest);
   const backupEnv = parseEnv(await readText(join(backupPath, 'config.env')));
   if (backupEnv.OR3_VERSION !== manifest.appVersion || backupEnv.OR3_IMAGE !== manifest.image) {
     throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
@@ -2498,8 +2591,9 @@ async function initCommand(positionals: string[], flags: Flags) {
   const port = Number(stringFlag(flags, 'port') ?? DEFAULT_PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('--port must be a valid TCP port.');
   if (mode === 'public' && [80, 443].includes(port)) throw new Error('Public mode reserves ports 80 and 443 for Caddy; choose another --port for OR3.');
-  if (!await portAvailable(port)) throw new Error(`Port ${port} is already in use. Choose another port with --port.`);
-  if (mode === 'public') {
+  const localDockerDaemon = await dockerDaemonIsLocal();
+  if (localDockerDaemon && !await portAvailable(port)) throw new Error(`Port ${port} is already in use. Choose another port with --port.`);
+  if (mode === 'public' && localDockerDaemon) {
     for (const publicPort of [80, 443]) {
       if (!await portAvailable(publicPort)) throw new Error(`Public port ${publicPort} is already in use. Stop the conflicting service before starting Caddy.`);
     }
@@ -3099,6 +3193,7 @@ async function restoreCommand(directory: string, flags: Flags, positionals: stri
   if (!backupValue) throw new Error('restore requires a backup ID or path.');
   const backupPath = await resolveBackup(loaded.directory, backupValue);
   const manifest = await readManifest(backupPath, loaded.directory);
+  assertRestorableManagedAssets(manifest);
   const backupEnv = parseEnv(await readText(join(backupPath, 'config.env')));
   if (backupEnv.OR3_VERSION !== manifest.appVersion || backupEnv.OR3_IMAGE !== manifest.image) {
     throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
@@ -3189,6 +3284,7 @@ async function rollbackCommand(directory: string, flags: Flags) {
   if (!point) throw new Error('No immediate rollback point is recorded for this deployment.');
   const backupPath = await resolveBackup(loaded.directory, point.backupId);
   const manifest = await readManifest(backupPath, loaded.directory);
+  assertRestorableManagedAssets(manifest);
   if (manifest.appVersion !== point.appVersion || manifest.image !== point.image || manifest.imageDigest !== point.imageDigest) {
     throw new Error(`Rollback point ${point.backupId} no longer matches its recorded image/version. Refusing to mutate the deployment.`);
   }
@@ -3889,8 +3985,9 @@ async function adoptCommand(positionals: string[], flags: Flags) {
     sourceStopAttempted = true;
     const sourceStop = await run('docker', [...sourceComposeArgs(sourceDirectory, sourceComposeFiles), 'stop'], sourceDirectory);
     if (!sourceStop.ok) throw new Error(`Could not stop the V1 deployment. ${redact(sourceStop.stderr, secretValues(sourceEnv))}`);
-    if (!await portAvailable(Number(targetEnv.OR3_PORT))) throw new Error(`Port ${targetEnv.OR3_PORT} is still in use after stopping the V1 deployment.`);
-    if (mode === 'public') {
+    const localDockerDaemon = await dockerDaemonIsLocal();
+    if (localDockerDaemon && !await portAvailable(Number(targetEnv.OR3_PORT))) throw new Error(`Port ${targetEnv.OR3_PORT} is still in use after stopping the V1 deployment.`);
+    if (mode === 'public' && localDockerDaemon) {
       for (const publicPort of [80, 443]) {
         if (!await portAvailable(publicPort)) throw new Error(`Public port ${publicPort} is still in use after stopping the V1 deployment.`);
       }

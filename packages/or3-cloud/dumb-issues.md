@@ -491,7 +491,7 @@ Doctor does not validate operator enablement state, runtime digest, container id
 
 **Fix:** validate the resolved operator boundary when enabled/disabled, fail on orphans, inspect actual Caddy mappings/listeners, and separately probe public HTTPS.
 
-## 49. [MEDIUM] Docker commands can hang forever despite advertised deadlines
+## 49. [DONE — MEDIUM] Docker commands can hang forever despite advertised deadlines
 
 **Location:** `packages/or3-cloud/src/cli.ts:370-395,691-703,1223-1227,1482-1543`
 
@@ -501,7 +501,7 @@ The generic `execFile` wrapper and streaming helpers have no timeout or abort ha
 
 **Fix:** give every Docker call an abortable per-command timeout, kill the process group, close streams, and bound the total operation separately.
 
-## 50. [MEDIUM] Remote-Docker checks inspect the client machine
+## 50. [DONE — MEDIUM] Remote-Docker checks inspect the client machine
 
 **Location:** `packages/or3-cloud/src/cli.ts:741-747,880-908`
 
@@ -521,7 +521,7 @@ Dispatch accepts extra positionals for update, rollback, doctor, recover, remove
 
 **Fix:** centrally declare and enforce positional arity for every command before dispatch, or consistently support an explicit directory option.
 
-## 52. [MEDIUM] "Atomic" lifecycle files are not durable across power loss
+## 52. [DONE — MEDIUM] "Atomic" lifecycle files are not durable across power loss
 
 **Location:** `packages/or3-cloud/src/cli.ts:405-412,1189-1217,1482-1504`; `packages/or3-cloud/assets/dashboard-operator.mjs:40-58`
 
@@ -531,7 +531,7 @@ State, journal, job, and archive commits rename temporary files without syncing 
 
 **Fix:** fsync the temporary file before rename and fsync the containing directory afterward; add fault-injection tests around every phase boundary.
 
-## 53. [MEDIUM] Old backups without asset hashes restore under today's assets
+## 53. [DONE — MEDIUM] Old backups without asset hashes restore under today's assets
 
 **Location:** `packages/or3-cloud/src/cli.ts:1137-1175`
 
@@ -551,7 +551,7 @@ Password validation permits NUL/internal newline characters, while environment s
 
 **Fix:** validate environment-safe characters before any side effect and journal init before the first managed filesystem mutation.
 
-## 55. [MEDIUM] Failed asset rollback deletes its own remaining recovery copies
+## 55. [DONE — MEDIUM] Failed asset rollback deletes its own remaining recovery copies
 
 **Location:** `packages/or3-cloud/src/cli.ts:1070-1110`
 
@@ -611,7 +611,7 @@ The card polls every five seconds instead of two, uses an unbounded fixed interv
 
 **Fix:** use the specified two-second active polling with bounded backoff/timeout, stop on terminal state, and expose status through `aria-live`/appropriate status roles.
 
-## 61. [LOW] Backup enumeration hides real I/O failures as "no backups"
+## 61. [DONE — LOW] Backup enumeration hides real I/O failures as "no backups"
 
 **Location:** `packages/or3-cloud/src/cli.ts:1288-1331`
 
@@ -621,7 +621,7 @@ The card polls every five seconds instead of two, uses an unbounded fixed interv
 
 **Fix:** ignore only explicit not-found cases; surface permission/I/O/corruption errors with the affected path.
 
-## 62. [LOW] Backup restart errors erase the original failure
+## 62. [DONE — LOW] Backup restart errors erase the original failure
 
 **Location:** `packages/or3-cloud/src/cli.ts:1643-1656`
 

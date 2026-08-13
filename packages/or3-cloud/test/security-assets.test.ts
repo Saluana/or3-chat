@@ -249,6 +249,19 @@ test('credential reset keeps plaintext passwords out of Docker arguments', () =>
   expect(cli).not.toContain('`OR3_RESET_ADMIN_PASSWORD=${values.adminPassword}`');
 });
 
+test('lifecycle commands are deadline-bound and power-loss durable', () => {
+  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  const operator = readFileSync(DASHBOARD_OPERATOR, 'utf8');
+  expect(cli).toContain('timeout: COMMAND_TIMEOUT_MS');
+  expect(cli).toContain('detached: process.platform');
+  expect(cli).toContain("process.kill(-child.pid, 'SIGKILL')");
+  expect(cli).toContain("await run('docker', ['info', '--format', '{{.Architecture}}'])");
+  expect(cli).toContain('await durableRename(temporary, path)');
+  expect(cli).toContain('await syncDirectory(dirname(destination))');
+  expect(operator).toContain('await durableRename(temporary, jobPath)');
+  expect(operator).toContain('await directory.sync()');
+});
+
 test('updates and recovery use journaled snapshots rather than resuming a partial target', () => {
   const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
   expect(cli).toContain('const managedAssetSha256 = await snapshotManagedAssets(directory, state.mode, backupDir);');

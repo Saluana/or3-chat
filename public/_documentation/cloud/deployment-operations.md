@@ -107,6 +107,10 @@ forwarding headers); otherwise proxy-supplied client identity is untrusted.
   completed artifact through the restore reader before reporting success, and
   lets `recover` remove only a journal-bound incomplete artifact. Standalone
   backup and failed adoption preserve an intentionally stopped source service.
+  Docker operations are deadline-bound, daemon architecture is authoritative,
+  and lifecycle rename commits fsync both content and parent directories.
+  Assetless legacy restores fail with historical-release recovery guidance;
+  failed asset rollback retains any recovery copies that could not be restored.
   An exact-version update must use the same package and image version, such as
   `npx --yes @or3/cloud@0.1.39 update --to 0.1.39`.
 - The backup authentication key is not included in an exported archive. Escrow

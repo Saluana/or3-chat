@@ -114,6 +114,24 @@ test('first dashboard update can snapshot and restore a pre-operator deployment'
   }
 });
 
+test('refuses assetless legacy restores instead of mixing release assets', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'or3-cloud-assetless-'));
+  try {
+    await expect(restoreManagedAssets(directory, join(directory, 'backup'), {
+      schemaVersion: 1,
+      backupId: 'backup-assetless-test',
+      createdAt: new Date().toISOString(),
+      appVersion: '0.1.1',
+      image: 'ghcr.io/saluana/or3-chat:0.1.1',
+      imageDigest: `sha256:${'a'.repeat(64)}`,
+      dataSha256: 'b'.repeat(64),
+      mode: 'local',
+    })).rejects.toThrow('predates authenticated managed-asset snapshots');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('round trips the generated env format without losing values', () => {
   const source = {
     OR3_VERSION: '0.1.12',

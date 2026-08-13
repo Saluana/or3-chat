@@ -86,6 +86,13 @@ hard interruption leaves an incomplete artifact. A standalone backup and a
 failed adoption preserve whether the original app was intentionally stopped.
 Initialization and adoption also fail closed unless Docker explicitly confirms
 that the target volumes, project containers, and networks do not exist.
+Docker architecture checks query the selected daemon, remote daemons skip
+misleading client-host port probes, every Docker command has a deadline, and
+streaming archive children are terminated as a process group on timeout.
+Lifecycle commits fsync files and parent directories before/after rename.
+Restore refuses pre-authenticated-asset backups instead of mixing an old image
+with current Compose/Caddy files, and failed asset rollback retains any
+recovery copies it could not reinstall.
 Use owner/admin password files for noninteractive credential rotation. TTY
 prompts suppress input, Docker receives only environment variable names in its
 argument vector, and the admin credential file is committed with
