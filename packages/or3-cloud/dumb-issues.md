@@ -458,6 +458,15 @@ The command signs in and never logs out or revokes the resulting session in `fin
 
 The initial owner and admin passwords remain in `.env`, are injected into containers, copied into every backup, and are retained partly because `verify` depends on the bootstrap password. The separate initial-credentials file duplicates them until manually deleted.
 
+New installs now authenticate both accounts, persist only their password
+hashes in the managed volume, remove plaintext provisioning fields from `.env`,
+and recreate the container without those fields. Credential reset performs the
+same migration for existing deployments, and verification accepts a current
+password file instead of retaining the bootstrap password. The one-time `0600`
+handoff file remains until the operator saves and deletes it; other runtime
+signing secrets still use the general Compose environment, so this remains
+partial.
+
 **Consequence:** every backup and any Docker-inspect-capable user gets long-lived credentials; compromise has a larger blast radius than necessary.
 
 **Fix:** remove bootstrap credentials after provisioning, replace verification with a non-password mechanism, and deliver runtime secrets through a narrower secret file/store instead of general Compose environment.

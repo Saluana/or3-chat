@@ -34,6 +34,7 @@ import {
   supportedImageArchitectures,
   validateVerificationHealth,
   validatePassword,
+  withoutProvisioningCredentials,
 } from '../src/cli';
 import { ADMIN_PASSWORD_POLICY_VECTORS } from '../../../shared/cloud/wizard/admin-password-policy-vectors';
 import { MANAGED_PROFILE_SHARED_ENV } from '../../../shared/cloud/wizard/managed-profile-contract';
@@ -46,6 +47,20 @@ test('release image labels match the authenticated package source revision', () 
   };
   expect(() => assertImageReleaseLabels('or3', labels, '0.1.39', 'a'.repeat(40))).not.toThrow();
   expect(() => assertImageReleaseLabels('or3', labels, '0.1.39', 'b'.repeat(40))).toThrow('expected source/version release labels');
+});
+
+test('provisioned passwords are removed from persistent deployment metadata', () => {
+  const runtime = withoutProvisioningCredentials({
+    OR3_BASIC_AUTH_BOOTSTRAP_EMAIL: 'owner@example.com',
+    OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD: 'owner-secret',
+    OR3_ADMIN_PASSWORD: 'admin-secret',
+    OR3_MANAGED_OWNER_EMAIL: 'owner@example.com',
+    OR3_ADMIN_USERNAME: 'owner@example.com',
+  });
+  expect(runtime).toEqual({
+    OR3_MANAGED_OWNER_EMAIL: 'owner@example.com',
+    OR3_ADMIN_USERNAME: 'owner@example.com',
+  });
 });
 
 test('snapshots and restores checksummed managed deployment assets', async () => {

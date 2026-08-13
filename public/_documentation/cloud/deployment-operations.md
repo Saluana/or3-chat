@@ -126,6 +126,15 @@ forwarding headers); otherwise proxy-supplied client identity is untrusted.
   with `--verification-email` and `--verification-password-file`; it is used
   only for that run. Verification requires same-origin fixed-profile storage
   grants, deletes the probe, and revokes the temporary session in `finally`.
+  Before the one-time credential handoff is deleted, verification can read its
+  initial owner password directly from that protected file without restoring
+  it to `.env` or container metadata.
+- Managed initialization proves both account logins, persists bcrypt hashes in
+  the data volume, then removes bootstrap/admin plaintext passwords from `.env`
+  and recreates the container. The one-time `0600`
+  `.or3-initial-credentials` handoff remains until it is saved and deleted.
+  Credential reset migrates older deployments to the same password-free
+  runtime metadata and removes that handoff file.
 - Track HTTP rates for:
   - `/api/sync/push` and `/api/sync/pull`
   - `/api/storage/*`

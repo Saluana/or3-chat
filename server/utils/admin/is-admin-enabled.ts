@@ -19,7 +19,9 @@
 
 import type { H3Event } from 'h3';
 import { createError } from 'h3';
+import { existsSync } from 'node:fs';
 import { useRuntimeConfig } from '#imports';
+import { resolveAdminCredentialsPath } from '../../admin/auth/data-paths';
 
 /**
  * Purpose:
@@ -30,10 +32,12 @@ import { useRuntimeConfig } from '#imports';
  * - Without an event, falls back to `process.env` for server-only calls.
  *
  * Constraints:
- * - Admin is enabled only if both username and password are present.
+ * - Admin is enabled when protected persisted credentials exist, or during
+ *   first-boot provisioning when both username and password are present.
  * - This check is used for 404 gating, not authorization.
  */
 export function isAdminEnabled(event?: H3Event): boolean {
+    if (existsSync(resolveAdminCredentialsPath())) return true;
     // If event is provided, use runtime config
     if (event) {
         const config = useRuntimeConfig(event);

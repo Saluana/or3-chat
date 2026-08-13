@@ -7,9 +7,9 @@
  * invite-only sign-in gate, owner sign-in, admin access, workspace/chat
  * shell, storage upload/download, sign-out, and re-login.
  *
- * Credentials are read from the deployment .env (OR3_BASIC_AUTH_BOOTSTRAP_EMAIL
- * / OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD and OR3_ADMIN_USERNAME / OR3_ADMIN_PASSWORD),
- * mirroring scripts/release/smoke-create-docker.mjs.
+ * Account identifiers are read from deployment metadata and plaintext
+ * passwords only from the owner-only first-run handoff, mirroring
+ * scripts/release/smoke-create-docker.mjs.
  *
  * The anonymous sign-in surface may be either the lock page ("Sign in" button)
  * or the workspace shell with a sidebar "Login" button, depending on whether
@@ -47,6 +47,17 @@ function parseEnv(source) {
         values[key] = value;
     }
     return values;
+}
+
+async function deploymentCredentials() {
+    const env = parseEnv(await readFile(resolve('.env'), 'utf8'));
+    const handoff = parseEnv(await readFile(resolve('.or3-initial-credentials'), 'utf8'));
+    return {
+        ownerEmail: env.OR3_MANAGED_OWNER_EMAIL || handoff.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL,
+        ownerPassword: handoff.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD,
+        adminUsername: env.OR3_ADMIN_USERNAME || handoff.OR3_ADMIN_USERNAME,
+        adminPassword: handoff.OR3_ADMIN_PASSWORD,
+    };
 }
 
 function assert(condition, message) {
@@ -394,15 +405,16 @@ async function signOutOwner(page) {
 }
 
 async function main() {
-    const env = parseEnv(await readFile(resolve('.env'), 'utf8'));
-    const email = env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
-    const password = env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD;
-    const adminUsername = env.OR3_ADMIN_USERNAME;
-    const adminPassword = env.OR3_ADMIN_PASSWORD;
-    assert(email && password, 'OR3_BASIC_AUTH_BOOTSTRAP_EMAIL/PASSWORD missing from .env');
+    const {
+        ownerEmail: email,
+        ownerPassword: password,
+        adminUsername,
+        adminPassword,
+    } = await deploymentCredentials();
+    assert(email && password, 'Managed owner credentials missing from the first-run handoff');
     assert(
         adminUsername && adminPassword,
-        'OR3_ADMIN_USERNAME/OR3_ADMIN_PASSWORD missing from .env'
+        'Managed admin credentials missing from the first-run handoff'
     );
 
     const browser = await chromium.launch({ headless: true });

@@ -16,6 +16,10 @@ saves both values in the mode-`0600`
 `or3-cloud/.or3-initial-credentials` file. It does not print the password.
 Save the file in a password manager, then delete it. Open
 [http://127.0.0.1:3000](http://127.0.0.1:3000) and sign in.
+During initialization the CLI proves both account logins, persists their bcrypt
+hashes in the managed data volume, removes the plaintext provisioning passwords
+from `.env`, and recreates the container without them. The `0600` handoff file
+is the only remaining plaintext copy managed by the CLI.
 
 The published Cloud image supports `linux/amd64` and `linux/arm64` and uses
 Basic Auth + SQLite + filesystem storage. The CLI checks the image manifest,
@@ -63,6 +67,9 @@ HTTPS path (with no redirects) using `npx @or3/cloud verify --public`.
 After changing the owner password in the app, pass the current credential only
 through an owner-only file:
 `npx @or3/cloud verify --public --verification-email owner@example.com --verification-password-file /secure/current-owner-password`.
+Until the one-time handoff file is deleted, `verify` may read its initial owner
+credential from that protected file; it is never restored to `.env` or Docker
+container metadata.
 Verification rejects cross-origin filesystem grants and unexpected methods or
 headers, validates the storage ID before uploading, deletes its probe, and
 revokes its temporary session even when a later check fails.
@@ -98,6 +105,8 @@ prompts suppress input, Docker receives only environment variable names in its
 argument vector, and the admin credential file is committed with
 write/fsync/rename so journal replay cannot encounter a truncated JSON file.
 A successful rotation removes the obsolete `.or3-initial-credentials` copy.
+It also removes the plaintext provisioning passwords from `.env` and the
+recreated container; older deployments migrate to this layout on reset.
 
 The authentication key is intentionally not embedded in an exported archive.
 Escrow an owner-only copy of `.or3-cloud/backup-auth.key` separately in an

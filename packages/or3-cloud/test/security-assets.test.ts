@@ -340,6 +340,7 @@ test('release smoke re-resolves amd64 after architecture-specific scans', () => 
 test('clean browser smoke uses the explicit super-admin elevation route', () => {
   const smoke = readFileSync(BROWSER_SMOKE, 'utf8');
   expect(smoke).toContain("page.goto(`${baseUrl}/admin/login`, { waitUntil: 'domcontentloaded' })");
+  expect(smoke).toContain("readFile(resolve('.or3-initial-credentials'), 'utf8')");
   expect(smoke).not.toContain("page.goto(`${baseUrl}/admin`, { waitUntil: 'commit' })");
 });
 

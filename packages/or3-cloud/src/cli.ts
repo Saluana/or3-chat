@@ -45,6 +45,11 @@ const FREE_SPACE_HEADROOM_BYTES = 64 * 1024 * 1024;
 const BACKUP_ID_PATTERN = /^backup-[0-9A-Za-z-]+$/;
 const MANAGED_ASSET_INVENTORY_VERSION = 3;
 const DASHBOARD_LEASE_STALE_MS = 30_000;
+const PROVISIONING_CREDENTIAL_KEYS = [
+  'OR3_BASIC_AUTH_BOOTSTRAP_EMAIL',
+  'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD',
+  'OR3_ADMIN_PASSWORD',
+] as const;
 const SECRET_KEYS = [
   'OR3_BASIC_AUTH_JWT_SECRET',
   'OR3_BASIC_AUTH_REFRESH_SECRET',
@@ -234,6 +239,7 @@ const ALLOWED_ENV_KEYS = new Set([
   'OR3_BASIC_AUTH_DB_PATH',
   'OR3_BASIC_AUTH_BOOTSTRAP_EMAIL',
   'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD',
+  'OR3_MANAGED_OWNER_EMAIL',
   'OR3_SYNC_ENABLED',
   'OR3_CLOUD_SYNC_ENABLED',
   'OR3_SYNC_PROVIDER',
@@ -565,6 +571,14 @@ async function fileExists(path: string) {
 
 async function readText(path: string) {
   return readFile(path, 'utf8');
+}
+
+async function readOwnerOnlyText(path: string, label: string) {
+  const info = await stat(path);
+  if (!info.isFile() || (info.mode & 0o077) !== 0) {
+    throw new Error(`${label} must be a regular owner-only file with no group/world permissions.`);
+  }
+  return readText(path);
 }
 
 /** Total bytes an operation needs on disk: required data plus reserve headroom. */
@@ -1523,6 +1537,12 @@ function withoutDashboardOperator(env: Record<string, string>) {
   return result;
 }
 
+export function withoutProvisioningCredentials(env: Record<string, string>) {
+  const result = { ...env };
+  for (const key of PROVISIONING_CREDENTIAL_KEYS) delete result[key];
+  return result;
+}
+
 export function buildEnv(input: {
   mode: Mode;
   version: string;
@@ -1564,6 +1584,7 @@ export function buildEnv(input: {
     OR3_BASIC_AUTH_DB_PATH: '/data/auth.sqlite',
     OR3_BASIC_AUTH_BOOTSTRAP_EMAIL: input.email,
     OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD: input.password,
+    OR3_MANAGED_OWNER_EMAIL: input.email,
     OR3_AUTH_INVITE_TOKEN_SECRET:
       secrets.OR3_AUTH_INVITE_TOKEN_SECRET ?? randomSecret(),
     OR3_SYNC_ENABLED: 'true',
@@ -2660,6 +2681,15 @@ async function initCommand(positionals: string[], flags: Flags) {
   });
   try {
     await startProject(directory, mode, env);
+    await provisionManagedCredentials(
+      mode === 'public' ? new URL(`https://${domain}`) : new URL(`http://127.0.0.1:${port}`),
+      email,
+      password,
+    );
+    const runtimeEnv = withoutProvisioningCredentials(env);
+    await writeSecure(deploymentPaths(directory).env, serializeEnv(runtimeEnv));
+    await stopProject(directory, mode);
+    await startProject(directory, mode, runtimeEnv);
     await clearPending(directory, state);
     console.log(`\nOR3 Cloud ${version} is running at ${mode === 'public' ? `https://${domain}` : `http://127.0.0.1:${port}`}`);
     console.log(`Credentials were written to ${join(directory, '.or3-initial-credentials')} (mode 0600). Save them, then remove that file.`);
@@ -2817,10 +2847,31 @@ async function recoverCommand(directory: string) {
     // partially copied volume.
     await pullAndRequireImage(loaded.state.image, loaded.state.imageDigest, 'Current deployment');
     await startProject(loaded.directory, loaded.state.mode, loaded.env);
-    const digest = await imageDigest(loaded.env.OR3_IMAGE);
+    let recoveredEnv = loaded.env;
+    if (
+      (pending.operation === 'init' || pending.operation === 'adopt')
+      && loaded.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL
+      && loaded.env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD
+      && loaded.env.OR3_ADMIN_PASSWORD
+    ) {
+      await provisionManagedCredentials(
+        loaded.state.mode === 'public'
+          ? new URL(`https://${loaded.env.OR3_PUBLIC_DOMAIN}`)
+          : new URL(`http://127.0.0.1:${loaded.env.OR3_PORT}`),
+        loaded.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL,
+        loaded.env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD,
+        loaded.env.OR3_ADMIN_USERNAME,
+        loaded.env.OR3_ADMIN_PASSWORD,
+      );
+      recoveredEnv = withoutProvisioningCredentials(loaded.env);
+      await writeSecure(deploymentPaths(loaded.directory).env, serializeEnv(recoveredEnv));
+      await stopProject(loaded.directory, loaded.state.mode);
+      await startProject(loaded.directory, loaded.state.mode, recoveredEnv);
+    }
+    const digest = await imageDigest(recoveredEnv.OR3_IMAGE);
     const recovered = stateFromEnv(
       loaded.directory,
-      loaded.env,
+      recoveredEnv,
       loaded.state.mode,
       operationToStateOperation(pending.operation, loaded.state.lastSuccessfulOperation),
       digest,
@@ -3408,7 +3459,7 @@ async function doctorCommand(directory: string) {
     failures.push(error instanceof Error ? error.message : String(error));
     console.log('✗ Managed state or .env is missing/invalid');
   }
-  for (const file of [paths.env, paths.state]) {
+  for (const file of [paths.env, paths.state, join(resolved, '.or3-initial-credentials')]) {
     if (!existsSync(file)) continue;
     const mode = (await stat(file)).mode & 0o777;
     if (mode !== 0o600) {
@@ -3619,8 +3670,7 @@ export function assertVerificationGrant(value: Record<string, any>, expectedMeth
   }
 }
 
-async function verificationCredentials(flags: Flags, env: Record<string, string>) {
-  const email = stringFlag(flags, 'verification-email')?.trim() || env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
+async function verificationCredentials(directory: string, flags: Flags, env: Record<string, string>) {
   const passwordFile = stringFlag(flags, 'verification-password-file');
   if (flags['verification-email'] !== undefined && !stringFlag(flags, 'verification-email')) {
     throw new Error('--verification-email requires a value.');
@@ -3628,11 +3678,22 @@ async function verificationCredentials(flags: Flags, env: Record<string, string>
   if (flags['verification-password-file'] !== undefined && !passwordFile) {
     throw new Error('--verification-password-file requires a path.');
   }
+  const configuredEmail = stringFlag(flags, 'verification-email')?.trim()
+    || env.OR3_MANAGED_OWNER_EMAIL
+    || env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
+  let initialCredentials: Record<string, string> = {};
+  if ((!configuredEmail || (!passwordFile && !env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD))) {
+    const initialCredentialsPath = join(directory, '.or3-initial-credentials');
+    if (await fileExists(initialCredentialsPath)) {
+      initialCredentials = parseEnv(await readOwnerOnlyText(initialCredentialsPath, 'The initial credentials file'));
+    }
+  }
+  const email = configuredEmail || initialCredentials.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
   if (!email) throw new Error('A current owner email is required for verification.');
   validateEmail(email);
   const password = passwordFile
-    ? (await readText(resolve(passwordFile))).trim()
-    : env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD;
+    ? (await readOwnerOnlyText(resolve(passwordFile), 'The verification password file')).trim()
+    : env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD || initialCredentials.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD;
   if (!password) {
     throw new Error('A current owner password is required. Pass --verification-password-file after changing the bootstrap password.');
   }
@@ -3736,6 +3797,68 @@ async function verifyPublicApplication(baseUrl: URL, credentials: { email: strin
   }
 }
 
+function responseCookie(response: Response, label: string) {
+  const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+  const values = headers.getSetCookie?.() ?? [response.headers.get('set-cookie')].filter((value): value is string => Boolean(value));
+  const cookie = values.map((value) => value.split(';', 1)[0]).join('; ');
+  if (!cookie) throw new Error(`${label} did not set a session cookie.`);
+  return cookie;
+}
+
+async function provisionManagedCredentialsOnce(
+  baseUrl: URL,
+  email: string,
+  password: string,
+  adminUsername = email,
+  adminPassword = password,
+) {
+  const appSignIn = await verificationFetch(new URL('/api/basic-auth/sign-in', baseUrl), {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/json', origin: baseUrl.origin },
+    body: JSON.stringify({ email, password }),
+  });
+  if (appSignIn.status !== 200) throw new Error(`Managed owner provisioning returned HTTP ${appSignIn.status}.`);
+  const appCookie = responseCookie(appSignIn, 'Managed owner provisioning');
+  try {
+    const session = await verificationJson(baseUrl, '/api/auth/session', { cookie: appCookie });
+    if (session.session?.user?.email !== email || !session.session?.workspace?.id) {
+      throw new Error('Managed owner provisioning did not create the expected account and workspace.');
+    }
+  } finally {
+    await verificationJson(baseUrl, '/api/basic-auth/sign-out', { cookie: appCookie, method: 'POST' });
+  }
+
+  const adminSignIn = await verificationFetch(new URL('/api/admin/auth/login', baseUrl), {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/json', origin: baseUrl.origin },
+    body: JSON.stringify({ username: adminUsername, password: adminPassword }),
+  });
+  if (adminSignIn.status !== 200) throw new Error(`Managed admin provisioning returned HTTP ${adminSignIn.status}.`);
+  const adminCookie = responseCookie(adminSignIn, 'Managed admin provisioning');
+  await verificationJson(baseUrl, '/api/admin/auth/logout', { cookie: adminCookie, method: 'POST' });
+}
+
+async function provisionManagedCredentials(
+  baseUrl: URL,
+  email: string,
+  password: string,
+  adminUsername = email,
+  adminPassword = password,
+) {
+  const deadline = Date.now() + 60_000;
+  let lastError: unknown;
+  do {
+    try {
+      await provisionManagedCredentialsOnce(baseUrl, email, password, adminUsername, adminPassword);
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_000));
+    }
+  } while (Date.now() < deadline);
+  throw new Error(`Managed credential provisioning did not become ready within 60 seconds: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+}
+
 async function verifyCommand(directory: string, flags: Flags, positionals: string[]) {
   if (positionals.length) throw new Error('verify accepts no positional arguments.');
   if (flags.public !== undefined && !boolFlag(flags, 'public')) throw new Error('--public does not accept a value.');
@@ -3759,7 +3882,7 @@ async function verifyCommand(directory: string, flags: Flags, positionals: strin
       ? `https://${loaded.state.domain}`
       : `http://127.0.0.1:${loaded.state.port}`,
   );
-  await verifyPublicApplication(baseUrl, await verificationCredentials(flags, loaded.env));
+  await verifyPublicApplication(baseUrl, await verificationCredentials(loaded.directory, flags, loaded.env));
   const databaseCheck = await run('docker', [
     ...composeArgs(loaded.directory, loaded.state.mode, ['exec', '-T', 'or3', ...containerNodeCommand(VERIFY_DATABASES_SCRIPT)]),
   ], loaded.directory);
@@ -3984,8 +4107,8 @@ async function adoptCommand(positionals: string[], flags: Flags) {
   await writeSecure(join(targetDirectory, '.or3-initial-credentials'), serializeInitialCredentials({
     bootstrapEmail: email,
     bootstrapPassword: password,
-    adminUsername: email,
-    adminPassword: password,
+    adminUsername: targetEnv.OR3_ADMIN_USERNAME,
+    adminPassword: targetEnv.OR3_ADMIN_PASSWORD,
   }));
   const state = stateFromEnv(targetDirectory, targetEnv, mode, 'adopt', digest);
   const sourceBackupId = id('backup-adopt-source');
@@ -4040,6 +4163,17 @@ async function adoptCommand(positionals: string[], flags: Flags) {
     await updatePending(targetDirectory, state, { phase: 'snapshot-created' });
     await restoreVolumeArchive(targetDirectory, mode, targetEnv, sourceBackupDir);
     await startProject(targetDirectory, mode, targetEnv);
+    await provisionManagedCredentials(
+      mode === 'public' ? new URL(`https://${domain}`) : new URL(`http://127.0.0.1:${sourcePort}`),
+      email,
+      password,
+      targetEnv.OR3_ADMIN_USERNAME,
+      targetEnv.OR3_ADMIN_PASSWORD,
+    );
+    const runtimeEnv = withoutProvisioningCredentials(targetEnv);
+    await writeSecure(deploymentPaths(targetDirectory).env, serializeEnv(runtimeEnv));
+    await stopProject(targetDirectory, mode);
+    await startProject(targetDirectory, mode, runtimeEnv);
     await clearPending(targetDirectory, state);
     console.log(`Adopted ${sourceDirectory} into ${targetDirectory} at OR3 ${release.or3Version}.`);
     console.log(`Source backup: ${sourceBackupDir}`);
@@ -4240,7 +4374,7 @@ console.log('credentials-reset: owner hash, sessions, and admin credentials upda
 }
 
 function credentialResetValues(env: Record<string, string>) {
-  const ownerEmail = env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
+  const ownerEmail = env.OR3_MANAGED_OWNER_EMAIL || env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
   const ownerPassword = env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD;
   const adminUsername = env.OR3_ADMIN_USERNAME;
   const adminPassword = env.OR3_ADMIN_PASSWORD;
@@ -4320,13 +4454,14 @@ async function applyCredentialReset(directory: string, state: ManagedState, next
     await startProject(directory, state.mode, nextEnv);
   }
   await runCredentialsResetScript(directory, state.mode, values);
-  await writeSecure(deploymentPaths(directory).env, serializeEnv(nextEnv));
+  const runtimeEnv = withoutProvisioningCredentials(nextEnv);
+  await writeSecure(deploymentPaths(directory).env, serializeEnv(runtimeEnv));
   const initialCredentials = join(directory, '.or3-initial-credentials');
   // The caller supplied the new values; retaining another credential copy
   // after rotation only expands the secret blast radius.
   await rm(initialCredentials, { force: true });
   await stopProject(directory, state.mode);
-  await startProject(directory, state.mode, nextEnv);
+  await startProject(directory, state.mode, runtimeEnv);
   await verifyCredentialsInsideContainer(directory, state.mode, values);
 }
 
@@ -4336,13 +4471,14 @@ async function credentialsResetCommand(directory: string, flags: Flags) {
   const loaded = await loadManaged(directory);
   assertDeploymentDirectoryIdentity(directory, loaded.state);
   assertNoPending(loaded.state);
-  const ownerEmail = loaded.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
+  const ownerEmail = loaded.env.OR3_MANAGED_OWNER_EMAIL || loaded.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
   const adminUsername = loaded.env.OR3_ADMIN_USERNAME;
-  if (!ownerEmail) throw new Error('OR3_BASIC_AUTH_BOOTSTRAP_EMAIL is missing from .env, so the owner account cannot be reset.');
+  if (!ownerEmail) throw new Error('The managed owner email is missing from .env, so the owner account cannot be reset.');
   if (!adminUsername) throw new Error('OR3_ADMIN_USERNAME is missing from .env, so the admin password cannot be reset.');
   const { ownerPassword, adminPassword } = await resolveResetPasswords(flags);
   const nextEnv = {
     ...loaded.env,
+    OR3_MANAGED_OWNER_EMAIL: ownerEmail,
     OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD: ownerPassword,
     OR3_ADMIN_PASSWORD: adminPassword,
     // Rotating the admin JWT secret invalidates every previously issued admin
@@ -4362,7 +4498,7 @@ async function credentialsResetCommand(directory: string, flags: Flags) {
     await applyCredentialReset(loaded.directory, loaded.state, nextEnv);
     await clearPending(loaded.directory, loaded.state);
     console.log('Owner and admin credentials are now separate. The old owner password and all app sessions were revoked.');
-    console.log('Admin session cookies were invalidated by rotating OR3_ADMIN_JWT_SECRET. New passwords were written only to protected files; sign in again with them.');
+    console.log('Admin session cookies were invalidated by rotating OR3_ADMIN_JWT_SECRET. New passwords persist only as account hashes; sign in again with them.');
   } catch (error) {
     loaded.state.lastError = redact(error instanceof Error ? error.message : String(error), secretValues(nextEnv));
     await writeState(loaded.directory, loaded.state);

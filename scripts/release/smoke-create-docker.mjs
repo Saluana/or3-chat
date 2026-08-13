@@ -30,6 +30,17 @@ function parseEnv(source) {
     return values;
 }
 
+async function deploymentCredentials() {
+    const env = parseEnv(await readFile(resolve('.env'), 'utf8'));
+    const handoff = parseEnv(await readFile(resolve('.or3-initial-credentials'), 'utf8'));
+    return {
+        ownerEmail: env.OR3_MANAGED_OWNER_EMAIL || handoff.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL,
+        ownerPassword: handoff.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD,
+        adminUsername: env.OR3_ADMIN_USERNAME || handoff.OR3_ADMIN_USERNAME,
+        adminPassword: handoff.OR3_ADMIN_PASSWORD,
+    };
+}
+
 async function responseError(response) {
     const body = await response.text().catch(() => '');
     return new Error(
@@ -60,11 +71,9 @@ async function jsonRequest(path, { body, cookie, method = 'POST' } = {}) {
 }
 
 async function authenticate() {
-    const env = parseEnv(await readFile(resolve('.env'), 'utf8'));
-    const email = env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
-    const password = env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD;
+    const { ownerEmail: email, ownerPassword: password } = await deploymentCredentials();
     if (!email || !password) {
-        throw new Error('Basic Auth bootstrap credentials are missing from .env.');
+        throw new Error('Basic Auth owner credentials are missing from the managed handoff.');
     }
 
     const signIn = await fetch(new URL('/api/basic-auth/sign-in', baseUrl), {
@@ -103,11 +112,9 @@ async function authenticate() {
 }
 
 async function verifyAdminDashboard() {
-    const env = parseEnv(await readFile(resolve('.env'), 'utf8'));
-    const username = env.OR3_ADMIN_USERNAME;
-    const password = env.OR3_ADMIN_PASSWORD;
+    const { adminUsername: username, adminPassword: password } = await deploymentCredentials();
     if (!username || !password) {
-        throw new Error('Cloud smoke requires OR3_ADMIN_USERNAME and OR3_ADMIN_PASSWORD.');
+        throw new Error('Cloud smoke requires the managed admin credential handoff.');
     }
 
     const signIn = await fetch(new URL('/api/admin/auth/login', baseUrl), {
