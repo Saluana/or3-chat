@@ -168,10 +168,12 @@ jobs:
           npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"
           npm pkg set "or3Cloud.operatorImageDigest=$OPERATOR_IMAGE_DIGEST"
           node -e 'const p=require("./package.json"); if(p.version!==process.env.VERSION||p.or3Cloud?.imageDigest!==process.env.IMAGE_DIGEST||p.or3Cloud?.operatorImageDigest!==process.env.OPERATOR_IMAGE_DIGEST)process.exit(1)'
+          bun run check
           mkdir -p "$GITHUB_WORKSPACE/release-artifact"
           npm pack --ignore-scripts --pack-destination "$GITHUB_WORKSPACE/release-artifact"
           tarball="$GITHUB_WORKSPACE/release-artifact/or3-cloud-$VERSION.tgz"
           test -f "$tarball"
+          tar -tzf "$tarball" | grep -qx 'package/LICENSE'
           packed_digest="$(tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s).or3Cloud?.imageDigest||""))')"
           test "$packed_digest" = "$IMAGE_DIGEST"
           packed_operator_digest="$(tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s).or3Cloud?.operatorImageDigest||""))')"

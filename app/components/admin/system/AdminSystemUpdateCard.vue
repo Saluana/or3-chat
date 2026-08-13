@@ -28,13 +28,13 @@
                 </div>
             </div>
 
-            <p v-if="status.job && ['queued', 'running'].includes(status.job.phase)" class="mt-4 text-sm text-[var(--md-primary)]">
+            <p v-if="status.job && ['queued', 'running'].includes(status.job.phase)" role="status" aria-live="polite" class="mt-4 text-sm text-[var(--md-primary)]">
                 Updating to {{ status.job.targetVersion }}. OR3 will briefly restart while the verified update runs.
             </p>
-            <p v-else-if="status.job && ['failed', 'needs_attention'].includes(status.job.phase)" class="mt-4 text-sm text-[var(--md-sys-color-error,#b91c1c)]">
+            <p v-else-if="status.job && ['failed', 'needs_attention'].includes(status.job.phase)" role="alert" aria-live="assertive" class="mt-4 text-sm text-[var(--md-sys-color-error,#b91c1c)]">
                 {{ status.job.error || 'The previous update did not complete.' }}
             </p>
-            <p v-else-if="status.checkError" class="mt-4 text-sm text-[var(--md-sys-color-error,#b91c1c)]">
+            <p v-else-if="status.checkError" role="alert" aria-live="assertive" class="mt-4 text-sm text-[var(--md-sys-color-error,#b91c1c)]">
                 {{ status.checkError }}
             </p>
             <p v-else-if="status.updateAvailable === false" class="mt-4 text-sm opacity-70">You are up to date.</p>
@@ -74,22 +74,38 @@ const starting = ref(false);
 const busy = computed(() => checking.value || starting.value || Boolean(status.value?.kind === 'managed' && status.value.job && ['queued', 'running'].includes(status.value.job.phase)));
 const toast = useToast();
 const { confirm } = useConfirmDialog();
-let pollingTimer: ReturnType<typeof setInterval> | undefined;
+const ACTIVE_POLL_MS = 2000;
+const MAX_POLL_BACKOFF_MS = 30_000;
+const MAX_ACTIVE_POLL_MS = 15 * 60_000;
+let pollingTimer: ReturnType<typeof setTimeout> | undefined;
+let pollingStartedAt = 0;
+let pollingFailures = 0;
+
+function stopPolling() {
+    if (pollingTimer) clearTimeout(pollingTimer);
+    pollingTimer = undefined;
+    pollingStartedAt = 0;
+    pollingFailures = 0;
+}
 
 function updatePolling() {
     const running = status.value?.kind === 'managed' && status.value.job && ['queued', 'running'].includes(status.value.job.phase);
-    if (running && !pollingTimer) {
-        pollingTimer = setInterval(() => void loadStatus(true), 5000);
-    } else if (!running && pollingTimer) {
-        clearInterval(pollingTimer);
+    if (!running) return stopPolling();
+    if (!pollingStartedAt) pollingStartedAt = Date.now();
+    if (Date.now() - pollingStartedAt >= MAX_ACTIVE_POLL_MS || pollingTimer) return;
+    const delay = Math.min(ACTIVE_POLL_MS * (2 ** pollingFailures), MAX_POLL_BACKOFF_MS);
+    pollingTimer = setTimeout(() => {
         pollingTimer = undefined;
-    }
+        void loadStatus(true);
+    }, delay);
 }
 
 async function loadStatus(silent = false) {
     try {
         status.value = await $fetch<DashboardUpdateStatus>('/api/admin/update/status', { headers: ADMIN_HEADERS });
+        pollingFailures = 0;
     } catch (error) {
+        if (silent) pollingFailures += 1;
         if (!silent) toast.add({ title: 'Update status unavailable', description: parseErrorMessage(error, 'Could not reach the update service.'), color: 'error' });
     } finally {
         loading.value = false;
@@ -134,5 +150,5 @@ async function start() {
 }
 
 onMounted(loadStatus);
-onUnmounted(() => pollingTimer && clearInterval(pollingTimer));
+onUnmounted(stopPolling);
 </script>

@@ -123,6 +123,9 @@ Release-check results, including the last successful latest version and a
 bounded failure or compatibility reason, persist across page reloads and
 operator restarts. Accepted asynchronous starts return HTTP 202; corrupt or
 unavailable operator responses are reported separately from unsupported hosts.
+While an update is active, the card announces state changes and polls every two
+seconds, backing off on connection failures and stopping after 15 minutes or a
+terminal result.
 
 The application container never receives the Docker socket. A separate,
 socket-only operator sidecar is the only container with Docker access, and it

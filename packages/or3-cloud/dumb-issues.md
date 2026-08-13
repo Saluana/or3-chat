@@ -571,7 +571,7 @@ The purge file list omits `dashboard-operator.mjs`, even though `copyAssets()` a
 
 **Fix:** derive purge targets from `managedAssetNames(mode)` plus the explicitly managed secret/state files.
 
-## 57. [LOW] The published GPL package omits its license text
+## 57. [DONE — LOW] The published GPL package omits its license text
 
 **Location:** `packages/or3-cloud/package.json:6,21-24`
 
@@ -601,7 +601,7 @@ Argument parsing, secret handling, Compose resolution, image trust, archive stre
 
 **Fix:** split by concrete responsibility—trusted config/schema, Docker adapter, backup store, lifecycle state machine, commands—without inventing a generic framework. Keep one shared typed contract for dashboard state.
 
-## 60. [LOW] The dashboard UI does not implement its polling/accessibility contract
+## 60. [DONE — LOW] The dashboard UI does not implement its polling/accessibility contract
 
 **Location:** `app/components/admin/system/AdminSystemUpdateCard.vue:1-56,74-134`; `planning/admin-dashboard-updates/design.md:220-224`
 
@@ -701,7 +701,7 @@ The provenance policy requires an expected tag ref and merely some 40-hex `gitCo
 
 **Fix:** carry the candidate source SHA in signed package metadata/receipt and require equality across verified provenance, package metadata, image labels, and managed target version before mutation.
 
-## 70. [MEDIUM] Normal package checks never test the manifest shape that gets published
+## 70. [DONE — MEDIUM] Normal package checks never test the manifest shape that gets published
 
 **Location:** `packages/or3-cloud/package.json:18-20`; `.github/workflows/release-cloud-candidate.yml:119-139`
 
@@ -711,7 +711,7 @@ The checked-in package lacks `or3Cloud.imageDigest`. Candidate qualification mut
 
 **Fix:** generate the final manifest before package qualification or run the complete package/operator suite against the exact final tarball after digest injection.
 
-## 71. [LOW] HSTS claims every subdomain without validating that promise
+## 71. [DONE — LOW] HSTS claims every subdomain without validating that promise
 
 **Location:** `packages/or3-cloud/assets/Caddyfile:1-10`
 

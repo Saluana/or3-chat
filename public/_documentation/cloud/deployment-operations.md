@@ -168,7 +168,9 @@ through its exact target CLI; unrelated/manual work stays locked for host-side
 Release-check state is atomic and durable across reloads and sidecar restarts.
 The web boundary validates the exact status/job schema, distinguishes an
 unsupported host from an unavailable or corrupt operator, and returns HTTP 202
-when an asynchronous update is accepted.
+when an asynchronous update is accepted. The card announces asynchronous state
+changes and polls active work every two seconds, with bounded connection-error
+backoff and a 15-minute polling limit.
 `doctor` also validates the operator container image, deployment label, three
 required mounts, IPC types/modes, absence of an orphaned disabled operator,
 daemon-side Caddy port publication, and an actual public HTTPS 200 response.

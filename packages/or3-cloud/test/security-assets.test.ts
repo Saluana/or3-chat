@@ -14,6 +14,7 @@ const CANDIDATE_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/
 const CANDIDATE_RECEIPT = resolve(import.meta.dir, '../../../scripts/release/candidate-receipt.mjs');
 const ROOT_MANIFEST = resolve(import.meta.dir, '../../../package.json');
 const BROWSER_SMOKE = resolve(import.meta.dir, '../../../scripts/release/smoke-browser.mjs');
+const DASHBOARD_UPDATE_CARD = resolve(import.meta.dir, '../../../app/components/admin/system/AdminSystemUpdateCard.vue');
 
 function asset(name: string): string {
   return readFileSync(resolve(ASSET_ROOT, name), 'utf8');
@@ -22,7 +23,8 @@ function asset(name: string): string {
 test('Caddyfile sets the full security header set inside the site block', () => {
   const caddyfile = asset('Caddyfile');
   const siteBlock = caddyfile.slice(caddyfile.indexOf('{'), caddyfile.lastIndexOf('}'));
-  expect(siteBlock).toContain('Strict-Transport-Security "max-age=31536000; includeSubDomains"');
+  expect(siteBlock).toContain('Strict-Transport-Security "max-age=31536000"');
+  expect(siteBlock).not.toContain('includeSubDomains');
   expect(siteBlock).toContain('X-Content-Type-Options "nosniff"');
   expect(siteBlock).toContain('X-Frame-Options "DENY"');
   expect(siteBlock).toContain('Referrer-Policy "strict-origin-when-cross-origin"');
@@ -108,6 +110,16 @@ test('dashboard operator accepts only the exact start payload contract', () => {
   expect(validStartInput({ ...valid, command: 'docker system prune' })).toBe(false);
   expect(validStartInput({ ...valid, requestId: '../operator.sock' })).toBe(false);
   expect(validStartInput({ ...valid, targetVersion: '0.1.39 || true' })).toBe(false);
+});
+
+test('dashboard update polling is bounded and announces state changes', () => {
+  const card = readFileSync(DASHBOARD_UPDATE_CARD, 'utf8');
+  expect(card).toContain('const ACTIVE_POLL_MS = 2000;');
+  expect(card).toContain('const MAX_ACTIVE_POLL_MS = 15 * 60_000;');
+  expect(card).toContain('const MAX_POLL_BACKOFF_MS = 30_000;');
+  expect(card).toContain('role="status" aria-live="polite"');
+  expect(card).toContain('role="alert" aria-live="assertive"');
+  expect(card).not.toContain('setInterval');
 });
 
 test('dashboard operator persists only bounded release-check state', () => {
@@ -371,6 +383,17 @@ test('authenticated cloud package binds updates to the qualified image digest', 
   expect(cli).toContain('const targetImage = imageAtDigest(targetImageTag, targetDigest);');
   expect(cli).toContain('await assertRunningAppImage(directory, mode, env.OR3_IMAGE);');
   expect(cli).toContain('The image tag may have been replaced; refusing to continue.');
+});
+
+test('candidate qualification runs against the final digest-bound manifest', () => {
+  const candidate = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
+  const binding = candidate.indexOf('npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"');
+  const qualification = candidate.indexOf('bun run check', binding);
+  const packing = candidate.indexOf('npm pack --ignore-scripts', binding);
+  expect(binding).toBeGreaterThan(-1);
+  expect(qualification).toBeGreaterThan(binding);
+  expect(packing).toBeGreaterThan(qualification);
+  expect(candidate).toContain("tar -tzf \"$tarball\" | grep -qx 'package/LICENSE'");
 });
 
 test('compose.yaml hardens the or3 container', () => {
