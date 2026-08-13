@@ -10,7 +10,7 @@
  * - Dispatches to registered SyncGatewayAdapter.
  * - Returns changes + new global cursor (server version).
  */
-import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
+import { defineEventHandler, createError, setResponseHeader } from 'h3';
 import {
     PullRequestSchema,
     PullResponseSchema,
@@ -28,6 +28,9 @@ import {
 } from '../../utils/sync/rate-limiter';
 import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 import { setNoCacheHeaders } from '../../utils/headers';
+import { readLimitedJsonBody } from '../../utils/security/limited-json-body';
+
+const MAX_SYNC_PULL_REQUEST_BYTES = 8 * 1024;
 
 /**
  * POST /api/sync/pull
@@ -51,7 +54,10 @@ export default defineEventHandler(async (event) => {
     // Prevent caching of sensitive sync data
     setNoCacheHeaders(event);
 
-    const body: unknown = await readBody(event);
+    const body: unknown = await readLimitedJsonBody(
+        event,
+        MAX_SYNC_PULL_REQUEST_BYTES
+    );
     const parsed = PullRequestSchema.safeParse(body);
     if (!parsed.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid pull request' });
@@ -67,24 +73,22 @@ export default defineEventHandler(async (event) => {
         id: parsed.data.scope.workspaceId,
     });
 
-    // Rate limiting (per-user)
     const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:pull');
     enforceRateLimit(event, rateLimitResult);
 
-    // Add rate limit headers
     const stats = getSyncRateLimitStats(session.user.id, 'sync:pull');
     if (stats) {
         setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
         setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
     }
 
-    // Get sync gateway adapter from registry
+    recordSyncRequest(session.user.id, 'sync:pull');
+
     const adapter = getActiveSyncGatewayAdapter();
     if (!adapter) {
         throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
     }
 
-    // Dispatch to adapter
     const result = PullResponseSchema.safeParse(
         await adapter.pull(event, parsed.data)
     );
@@ -97,9 +101,6 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'Invalid pull response',
         });
     }
-
-    // Record successful request for rate limiting
-    recordSyncRequest(session.user.id, 'sync:pull');
 
     return result.data;
 });

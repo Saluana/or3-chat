@@ -50,6 +50,7 @@ test('snapshots and restores checksummed managed deployment assets', async () =>
       imageDigest: `sha256:${'a'.repeat(64)}`,
       dataSha256: 'b'.repeat(64),
       managedAssetSha256,
+      managedAssetInventoryVersion: 2 as const,
       mode: 'public' as const,
     };
 
@@ -58,11 +59,50 @@ test('snapshots and restores checksummed managed deployment assets', async () =>
     expect(await readFile(join(directory, 'compose.yaml'), 'utf8')).toBe(originalCompose);
     expect((await stat(join(directory, 'compose.yaml'))).mode & 0o777).toBe(0o644);
 
+    const incompleteManifest = {
+      ...manifest,
+      managedAssetSha256: Object.fromEntries(
+        Object.entries(managedAssetSha256).filter(([name]) => name !== 'dashboard-operator.mjs'),
+      ),
+    };
+    await expect(restoreManagedAssets(directory, backup, incompleteManifest)).rejects.toThrow(
+      'invalid managed asset inventory',
+    );
+
     await writeFile(join(backup, 'managed-assets', 'compose.yaml'), 'tampered\n');
     await expect(restoreManagedAssets(directory, backup, manifest)).rejects.toThrow(
       'managed asset checksum mismatch',
     );
     expect(await readFile(join(directory, 'compose.yaml'), 'utf8')).toBe(originalCompose);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('first dashboard update can snapshot and restore a pre-operator deployment', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'or3-cloud-legacy-assets-'));
+  const backup = join(directory, 'backup');
+  try {
+    await copyAssets(directory, 'public');
+    await rm(join(directory, 'dashboard-operator.mjs'));
+    const managedAssetSha256 = await snapshotManagedAssets(directory, 'public', backup);
+    expect(managedAssetSha256['dashboard-operator.mjs']).toBeUndefined();
+    const manifest = {
+      schemaVersion: 1 as const,
+      backupId: 'backup-legacy-assets-test',
+      createdAt: new Date().toISOString(),
+      appVersion: '0.1.38',
+      image: 'ghcr.io/saluana/or3-chat:0.1.38',
+      imageDigest: `sha256:${'a'.repeat(64)}`,
+      dataSha256: 'b'.repeat(64),
+      managedAssetSha256,
+      mode: 'public' as const,
+    };
+    await writeFile(join(directory, 'compose.yaml'), 'stale compose\n');
+    await writeFile(join(directory, 'dashboard-operator.mjs'), 'new release operator\n');
+    expect(await restoreManagedAssets(directory, backup, manifest)).toBe(true);
+    expect(await readFile(join(directory, 'compose.yaml'), 'utf8')).toContain('services:');
+    await expect(stat(join(directory, 'dashboard-operator.mjs'))).rejects.toMatchObject({ code: 'ENOENT' });
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -146,6 +186,32 @@ test('builds the fixed local cloud profile with persistent paths', () => {
   expect(env.OR3_ADMIN_PASSWORD).toBe('AValidPassword123');
   expect(env.OR3_FORCE_HTTPS).toBe('false');
   expect(env.OR3_TRUST_PROXY).toBe('false');
+});
+
+test('adds the dashboard operator only with an explicitly resolved local socket', () => {
+  const env = buildEnv({
+    mode: 'local',
+    version: '0.1.39',
+    directory: '/srv/or3-cloud',
+    email: 'admin@example.com',
+    password: 'SafePassword123',
+    port: 3000,
+    dashboardOperator: {
+      OR3_DASHBOARD_UPDATES_ENABLED: 'true',
+      COMPOSE_PROFILES: 'dashboard-updates',
+      OR3_OPERATOR_IMAGE: 'ghcr.io/saluana/or3-chat:0.1.39',
+      OR3_DEPLOYMENT_DIR: '/srv/or3-cloud',
+      OR3_OPERATOR_UID: '1000',
+      OR3_OPERATOR_GID: '1000',
+      OR3_DOCKER_SOCKET: '/var/run/docker.sock',
+      OR3_DOCKER_GID: '999',
+    },
+  });
+  expect(env).toMatchObject({
+    OR3_DASHBOARD_UPDATES_ENABLED: 'true',
+    COMPOSE_PROFILES: 'dashboard-updates',
+    OR3_DOCKER_SOCKET: '/var/run/docker.sock',
+  });
 });
 
 test('builds public origin settings without exposing secrets in the origin', () => {

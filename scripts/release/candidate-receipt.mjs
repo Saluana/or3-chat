@@ -36,8 +36,12 @@ if (command === 'create') {
     const workflowRunId = value('--run-id');
     const candidateDigest = await imageDigest(candidateImage);
     const { stdout: packageSource } = await execFile('tar', ['-xOf', tarball, 'package/package.json'], { encoding: 'utf8' });
-    const packageVersion = JSON.parse(packageSource).version;
+    const packageManifest = JSON.parse(packageSource);
+    const packageVersion = packageManifest.version;
     if (packageVersion !== version) throw new Error(`Packed CLI version ${packageVersion} does not match ${version}.`);
+    if (packageManifest.or3Cloud?.imageDigest !== candidateDigest) {
+        throw new Error('Packed CLI image digest does not match the qualified candidate image.');
+    }
     const receipt = assertCandidateReceipt({
         schemaVersion: 1,
         kind: 'or3-cloud-qualified-candidate',
@@ -62,6 +66,10 @@ if (command === 'create') {
     if (receipt.version !== expectedVersion) throw new Error(`Receipt version ${receipt.version} does not match ${expectedVersion}.`);
     if (receipt.candidateImage !== expectedImage) throw new Error('Receipt candidate image does not match the source-qualified candidate identity.');
     if (basename(tarball) !== receipt.tarballFile) throw new Error('Receipt tarball filename does not match the supplied artifact.');
+    const { stdout: packageSource } = await execFile('tar', ['-xOf', tarball, 'package/package.json'], { encoding: 'utf8' });
+    if (JSON.parse(packageSource).or3Cloud?.imageDigest !== receipt.candidateDigest) {
+        throw new Error('Qualified tarball image digest does not match the candidate receipt.');
+    }
     if (await sha(tarball, 'sha256') !== receipt.tarballSha256) throw new Error('Qualified tarball SHA-256 mismatch.');
     if (`sha512-${await sha(tarball, 'sha512')}` !== receipt.tarballIntegrity) throw new Error('Qualified tarball integrity mismatch.');
     if (await imageDigest(receipt.candidateImage) !== receipt.candidateDigest) throw new Error('Qualified candidate image digest mismatch.');

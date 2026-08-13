@@ -7,8 +7,9 @@ import type {
     SyncScope,
     SyncSubscribeOptions,
 } from '~~/shared/sync/types';
+import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 import { SubscriptionManager } from '../subscription-manager';
-import { createMemoryTable, createMockDb } from './sync-test-utils';
+import { createMemoryTable, createMockDb, createPendingOpsTable } from './sync-test-utils';
 import * as cursorManagerModule from '~/core/sync/cursor-manager';
 import { markRecentOpId } from '../recent-op-cache';
 
@@ -93,6 +94,7 @@ class SubscriptionProvider implements SyncProvider {
                 ],
                 nextCursor: 105,
                 hasMore: true,
+                ...FULL_HISTORY_PULL_RETENTION,
             };
         }
 
@@ -148,10 +150,16 @@ class SubscriptionProvider implements SyncProvider {
                 ],
                 nextCursor: 120,
                 hasMore: false,
+                ...FULL_HISTORY_PULL_RETENTION,
             };
         }
 
-        return { changes: [], nextCursor: request.cursor, hasMore: false };
+        return {
+            changes: [],
+            nextCursor: request.cursor,
+            hasMore: false,
+            ...FULL_HISTORY_PULL_RETENTION,
+        };
     }
 
     async push(): Promise<never> {
@@ -952,5 +960,112 @@ describe('SubscriptionManager', () => {
         expect(provider.subscribe).toHaveBeenCalledTimes(2);
         expect(manager.getStatus()).toBe('connected');
         await manager.stop();
+    });
+
+    it('rescans from a snapshot when pull reports requiresSnapshot', async () => {
+        (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = 10;
+        const snapshot = vi.fn(async () => ({
+            workspaceId: 'ws-1',
+            snapshotId: 'snap-1',
+            highWatermark: 40,
+            items: [],
+            nextPageToken: null,
+        }));
+        const pull = vi.fn(async (request: PullRequest): Promise<PullResponse> => {
+            if (request.cursor === 10) {
+                return {
+                    changes: [],
+                    nextCursor: 10,
+                    hasMore: false,
+                    oldestRetainedVersion: 20,
+                    requiresSnapshot: true,
+                };
+            }
+            return {
+                changes: [],
+                nextCursor: request.cursor,
+                hasMore: false,
+                ...FULL_HISTORY_PULL_RETENTION,
+            };
+        });
+        const provider: SyncProvider = {
+            id: 'sub-snapshot',
+            mode: 'direct',
+            auth: undefined,
+            subscribe: vi.fn(async () => () => undefined),
+            pull,
+            snapshot,
+            push: vi.fn(async () => { throw new Error('push not used'); }),
+            updateCursor: vi.fn(async () => undefined),
+            dispose: vi.fn(async () => undefined),
+        };
+        const db = createMockDb({
+            messages: createMemoryTable('id'),
+            tombstones: createMemoryTable('id'),
+            pending_ops: createPendingOpsTable([]),
+            sync_state: createMemoryTable('id'),
+        });
+        const manager = new SubscriptionManager(db as any, provider, { workspaceId: 'ws-1' });
+        await manager.start();
+        expect(snapshot).toHaveBeenCalled();
+        await manager.stop();
+    });
+
+    it('reapplies in_flight and retry_wait ops after snapshot replacement', async () => {
+        const pendingOps = createPendingOpsTable([
+            {
+                id: 'pending-inflight',
+                tableName: 'messages',
+                operation: 'put',
+                pk: 'm-local',
+                payload: {
+                    id: 'm-local',
+                    thread_id: 't1',
+                    role: 'user',
+                    index: 0,
+                    order_key: '1',
+                    deleted: false,
+                    created_at: 1,
+                    updated_at: 1,
+                    clock: 3,
+                },
+                stamp: {
+                    deviceId: 'device-1',
+                    opId: 'op-local',
+                    hlc: '0000000000003:0000:node',
+                    clock: 3,
+                },
+                createdAt: 1,
+                attempts: 1,
+                status: 'in_flight',
+            },
+        ]);
+        const messages = createMemoryTable('id');
+        const db = createMockDb({
+            messages,
+            tombstones: createMemoryTable('id'),
+            pending_ops: pendingOps,
+        });
+        const manager = new SubscriptionManager(
+            db as any,
+            {
+                id: 'reapply',
+                mode: 'direct',
+                subscribe: vi.fn(async () => () => undefined),
+                pull: vi.fn(async () => ({
+                    changes: [],
+                    nextCursor: 0,
+                    hasMore: false,
+                    ...FULL_HISTORY_PULL_RETENTION,
+                })),
+                push: vi.fn(async () => { throw new Error('unused'); }),
+                updateCursor: vi.fn(async () => undefined),
+                dispose: vi.fn(async () => undefined),
+            },
+            { workspaceId: 'ws-1' }
+        );
+
+        await (manager as unknown as { reapplyPendingOps: () => Promise<void> }).reapplyPendingOps();
+        expect(messages.__rows.get('m-local')).toMatchObject({ id: 'm-local', clock: 3 });
     });
 });

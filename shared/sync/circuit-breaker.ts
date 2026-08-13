@@ -47,16 +47,24 @@ export class SyncCircuitBreaker {
     }
 
     /**
-     * Check if a retry is allowed.
-     * Returns true if the circuit is closed or half-open.
+     * Read-only check: whether a retry/probe may be attempted.
+     * Does not claim the half-open probe slot.
      */
     canRetry(): boolean {
         this.updateState();
-        
         if (this.state === 'closed') return true;
         if (this.state === 'open') return false;
-        
-        // In half-open state (implied), only allow one probe at a time
+        return !this.probeInFlight;
+    }
+
+    /**
+     * Claim the exclusive half-open probe. In closed state this is a no-op
+     * success. Always pair a true return with `recordSuccess` or `recordFailure`.
+     */
+    beginProbe(): boolean {
+        this.updateState();
+        if (this.state === 'closed') return true;
+        if (this.state === 'open') return false;
         if (this.probeInFlight) return false;
         this.probeInFlight = true;
         return true;

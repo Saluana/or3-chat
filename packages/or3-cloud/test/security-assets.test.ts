@@ -2,13 +2,16 @@ import { expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { provenanceStatement, validStartInput } from '../assets/dashboard-operator.mjs';
 
 const ASSET_ROOT = resolve(import.meta.dir, '../assets');
 const RUNTIME_ENTRYPOINT = resolve(import.meta.dir, '../../../scripts/docker/runtime-entrypoint.mjs');
 const DOCKERFILE = resolve(import.meta.dir, '../../../Dockerfile');
 const CLOUD_CLI_SOURCE = resolve(import.meta.dir, '../src/cli.ts');
+const DASHBOARD_OPERATOR = resolve(ASSET_ROOT, 'dashboard-operator.mjs');
 const RELEASE_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/release-cloud.yml');
 const CANDIDATE_WORKFLOW = resolve(import.meta.dir, '../../../.github/workflows/release-cloud-candidate.yml');
+const CANDIDATE_RECEIPT = resolve(import.meta.dir, '../../../scripts/release/candidate-receipt.mjs');
 const ROOT_MANIFEST = resolve(import.meta.dir, '../../../package.json');
 const BROWSER_SMOKE = resolve(import.meta.dir, '../../../scripts/release/smoke-browser.mjs');
 
@@ -46,14 +49,106 @@ test('compose.yaml bridges managed proxy trust into Nuxt runtime config', () => 
   expect(compose).toContain('NUXT_SECURITY_PROXY_TRUST_PROXY: "${OR3_TRUST_PROXY:-false}"');
 });
 
+test('dashboard updates isolate Docker access to the operator sidecar', () => {
+  const compose = asset('compose.yaml');
+  const app = compose.slice(compose.indexOf('  or3:'), compose.indexOf('  or3-operator:'));
+  const operator = compose.slice(compose.indexOf('  or3-operator:'));
+  expect(app).toContain('./.or3-cloud/operator-ipc:/run/or3-operator:ro');
+  expect(app).not.toContain('/var/run/docker.sock');
+  expect(operator).toContain('profiles: ["dashboard-updates"]');
+  expect(operator).toContain('${OR3_DOCKER_SOCKET}:/var/run/docker.sock:rw');
+  expect(operator).toContain('./dashboard-operator.mjs:/operator/dashboard-operator.mjs:ro');
+  expect(operator).toContain('cap_drop:');
+  expect(operator).toContain('- ALL');
+  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  expect(cli).toContain('await chmod(ipc, 0o711);');
+});
+
+test('dashboard operator verifies exact release provenance before executing package code', () => {
+  const operator = readFileSync(DASHBOARD_OPERATOR, 'utf8');
+  expect(operator).toContain("NPM_CONFIG_IGNORE_SCRIPTS: 'true'");
+  expect(operator).toContain("'audit',\n    'signatures'");
+  expect(operator).toContain("expectedWorkflow = '.github/workflows/release-cloud.yml'");
+  expect(operator).toContain("expectedRepository = 'https://github.com/Saluana/or3-chat'");
+  expect(operator).toContain("statement?.predicate?.runDetails?.builder?.id !== 'https://github.com/actions/runner/github-hosted'");
+  expect(operator).toContain("entries.length !== 2");
+  expect(operator).toContain("manifest?.or3Cloud?.imageDigest");
+  expect(operator).toContain("OR3_EXPECTED_IMAGE_DIGEST: imageDigest");
+  expect(operator).toContain("maxAttestationBytes = 1024 * 1024");
+  expect(operator).toContain("await trustedProvenance(expectedRelease) !== provenanceFingerprint");
+  expect(operator).not.toContain("'exec',\n    '--yes'");
+  expect(operator).not.toContain('shell: true');
+});
+
+test('dashboard operator rejects loose payloads and reconciles interrupted jobs', () => {
+  const operator = readFileSync(DASHBOARD_OPERATOR, 'utf8');
+  expect(operator).toContain("keys.length === 2");
+  expect(operator).toContain("requestIdPattern.test(input.requestId)");
+  expect(operator).toContain("await reconcileInterruptedJob();");
+  expect(operator).toContain("job.phase = 'needs_attention'");
+  expect(operator).toContain("if (updateClaimed)");
+});
+
+test('dashboard operator accepts only the exact start payload contract', () => {
+  const valid = {
+    requestId: '123e4567-e89b-42d3-a456-426614174000',
+    targetVersion: '0.1.39',
+  };
+  expect(validStartInput(valid)).toBe(true);
+  expect(validStartInput({ ...valid, command: 'docker system prune' })).toBe(false);
+  expect(validStartInput({ ...valid, requestId: '../operator.sock' })).toBe(false);
+  expect(validStartInput({ ...valid, targetVersion: '0.1.39 || true' })).toBe(false);
+});
+
+test('dashboard operator binds provenance to the OR3 tagged release workflow', () => {
+  const version = '0.1.39';
+  const digestBytes = Buffer.alloc(64, 7);
+  const expectedRelease = {
+    version,
+    integrity: `sha512-${digestBytes.toString('base64')}`,
+  };
+  const statement = {
+    _type: 'https://in-toto.io/Statement/v1',
+    subject: [{
+      name: `pkg:npm/%40or3/cloud@${version}`,
+      digest: { sha512: digestBytes.toString('hex') },
+    }],
+    predicateType: 'https://slsa.dev/provenance/v1',
+    predicate: {
+      buildDefinition: {
+        externalParameters: {
+          workflow: {
+            ref: `refs/tags/v${version}`,
+            repository: 'https://github.com/Saluana/or3-chat',
+            path: '.github/workflows/release-cloud.yml',
+          },
+        },
+        resolvedDependencies: [{
+          uri: `git+https://github.com/Saluana/or3-chat@refs/tags/v${version}`,
+          digest: { gitCommit: 'a'.repeat(40) },
+        }],
+      },
+      runDetails: { builder: { id: 'https://github.com/actions/runner/github-hosted' } },
+    },
+  };
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64');
+  expect(provenanceStatement(encode(statement), expectedRelease)).toEqual(statement);
+  const malicious = structuredClone(statement);
+  malicious.predicate.buildDefinition.externalParameters.workflow.repository = 'https://github.com/attacker/or3-chat';
+  expect(() => provenanceStatement(encode(malicious), expectedRelease)).toThrow('does not match the trusted release workflow');
+});
+
 test('Dockerfile builds shared Nuxt output only once on the native runner', () => {
   const dockerfile = readFileSync(DOCKERFILE, 'utf8');
   expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:.* AS build$/m);
   expect(dockerfile).toMatch(/^FROM busybox:1\.37\.0-uclibc@sha256:.* AS runtime-tools$/m);
   expect(dockerfile).toMatch(/^FROM gcr\.io\/distroless\/nodejs24-debian13:.* AS runtime$/m);
+  expect(dockerfile).toMatch(/^FROM docker:27\.5\.1-cli@sha256:.* AS docker-client$/m);
   const toolsStage = dockerfile.slice(dockerfile.indexOf('FROM busybox:'), dockerfile.indexOf(' AS build'));
   expect(toolsStage).not.toContain('\nRUN ');
   expect(dockerfile).toContain('COPY --from=runtime-tools /bin/ /bin/');
+  expect(dockerfile).toContain('COPY --from=docker-client /usr/local/bin/docker /usr/local/bin/docker');
+  expect(dockerfile).toContain('COPY --from=docker-client /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose');
   expect(dockerfile).toContain('ENTRYPOINT ["/nodejs/bin/node"');
 });
 
@@ -191,6 +286,18 @@ test('candidate evidence is source-qualified and cannot publish a release', () =
   expect(candidate).toContain('or3 verify');
   expect(candidate).not.toContain('npm publish');
   expect(candidate).not.toContain('contents: write');
+});
+
+test('authenticated cloud package binds updates to the qualified image digest', () => {
+  const candidate = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
+  const receipt = readFileSync(CANDIDATE_RECEIPT, 'utf8');
+  const cli = readFileSync(CLOUD_CLI_SOURCE, 'utf8');
+  expect(candidate).toContain('npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"');
+  expect(candidate.indexOf('docker/build-push-action@v6')).toBeLessThan(candidate.indexOf('npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"'));
+  expect(receipt).toContain("packageManifest.or3Cloud?.imageDigest !== candidateDigest");
+  expect(receipt).toContain("JSON.parse(packageSource).or3Cloud?.imageDigest !== receipt.candidateDigest");
+  expect(cli).toContain('pullImage(targetImage, expectedImageDigest(targetVersion))');
+  expect(cli).toContain('The image tag may have been replaced; refusing to continue.');
 });
 
 test('compose.yaml hardens the or3 container', () => {

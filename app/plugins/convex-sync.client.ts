@@ -134,11 +134,11 @@ async function startSyncEngine(workspaceId: string): Promise<void> {
         const hookBridge = getHookBridge(db);
         hookBridge.start();
 
-        const outboxManager = new OutboxManager(db, resolvedProvider, scope);
-        outboxManager.start();
-
         const subscriptionManager = createSubscriptionManager(db, resolvedProvider, scope);
         await subscriptionManager.start();
+
+        const outboxManager = new OutboxManager(db, resolvedProvider, scope);
+        outboxManager.start();
 
         const gcManager = new GcManager(db, resolvedProvider, scope);
         gcManager.start();
@@ -244,29 +244,38 @@ export default defineNuxtPlugin(async () => {
         return window.location.pathname || '/';
     }
 
-    // Only run when SSR auth and sync are enabled
-    if (!runtimeConfig.public.ssrAuthEnabled || !runtimeConfig.public.sync?.enabled) {
+    if (!runtimeConfig.public.sync?.enabled) {
         if (import.meta.dev) console.log('[sync-engine] Sync disabled, skipping sync');
         return;
     }
-    authTokenBroker = useAuthTokenBroker();
 
     const providerId = runtimeConfig.public.sync?.provider ?? 'gateway';
-
-    // Register a gateway provider for the configured sync provider if none exists.
-    try {
-        if (!getActiveSyncProvider()) {
-            const gatewayProvider = createGatewaySyncProvider({ id: providerId });
-            registerSyncProvider(gatewayProvider);
+    const ssrAuthEnabled = Boolean(runtimeConfig.public.ssrAuthEnabled);
+    if (ssrAuthEnabled) {
+        try {
+            if (!getActiveSyncProvider()) {
+                const gatewayProvider = createGatewaySyncProvider({ id: providerId });
+                registerSyncProvider(gatewayProvider);
+            }
+            setActiveSyncProvider(providerId);
+            if (import.meta.dev) {
+                console.log('[sync-engine] Registered gateway sync provider:', providerId);
+            }
+        } catch (error) {
+            console.error('[sync-engine] Failed to register sync provider:', error);
+            return;
         }
-        setActiveSyncProvider(providerId);
-        if (import.meta.dev) {
-            console.log('[sync-engine] Registered gateway sync provider:', providerId);
+    } else {
+        const existing = getActiveSyncProvider();
+        if (!existing || existing.mode !== 'direct') {
+            if (import.meta.dev) {
+                console.log('[sync-engine] Direct sync provider not registered, skipping');
+            }
+            return;
         }
-    } catch (error) {
-        console.error('[sync-engine] Failed to register sync provider:', error);
-        return;
+        setActiveSyncProvider(existing.id);
     }
+    authTokenBroker = useAuthTokenBroker();
 
     // Watch for session changes
     const { data: sessionData } = useSessionContext();

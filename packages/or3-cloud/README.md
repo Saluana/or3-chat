@@ -76,6 +76,26 @@ For a destructive purge, export a fresh backup to a new directory on another
 filesystem first; `remove --purge-data --yes` verifies that export before it
 will delete anything.
 
+## Dashboard updates
+
+New managed Linux deployments with a local Docker socket expose a **Dashboard
+Update** card to super admins under **Admin → Operations**. Click **Check for
+updates**, then approve the exact latest release. The card uses the same
+managed updater as the CLI: it makes a verified backup, waits for deep health,
+and restores the prior release and data if the update fails.
+
+The application container never receives the Docker socket. A separate,
+socket-only operator sidecar is the only container with Docker access, and it
+accepts only status, release-check, and exact-version update requests. Before
+running privileged release code, it installs with lifecycle scripts disabled,
+verifies the npm registry signature and SLSA provenance, and requires that the
+signed package came from this repository's tagged `release-cloud.yml` workflow.
+That authenticated package also pins the qualified GHCR image digest, so moving
+or replacing the version tag is rejected before the image can run.
+If the operator is interrupted, it fails closed and asks for host-side `recover`
+instead of guessing. Existing deployments gain the card after one normal
+exact-version CLI update. Remote Docker hosts remain CLI-only.
+
 Managed registration is invite-only: the bootstrap owner signs in first and
 invites additional users from the in-product admin flow. Guest access and
 anonymous registration stay disabled. Uploading/installing custom plugins or

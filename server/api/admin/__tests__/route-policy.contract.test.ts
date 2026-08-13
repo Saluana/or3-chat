@@ -81,6 +81,24 @@ describe('admin route policy contracts', () => {
         }
     });
 
+    it('keeps dashboard update operations super-admin-only and CSRF-protected', async () => {
+        const files = [
+            'server/api/admin/update/status.get.ts',
+            'server/api/admin/update/check.post.ts',
+            'server/api/admin/update/start.post.ts',
+        ] as const;
+
+        for (const file of files) {
+            const source = await read(file);
+            expect(source).toContain('superAdminOnly: true');
+            expect(source).not.toContain('allowWorkspaceAdmin: true');
+        }
+
+        for (const file of files.slice(1)) {
+            expect(await read(file)).toContain('mutation: true');
+        }
+    });
+
     it('invalidates shared session cache after membership changes', async () => {
         const files = [
             'server/api/admin/workspace/members/upsert.post.ts',

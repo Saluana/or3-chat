@@ -1151,7 +1151,7 @@
                     "name": "deployment-operations.md",
                     "path": "/cloud/deployment-operations",
                     "category": "Operations",
-                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including the post-update production verification command."
+                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including verified CLI and dashboard updates plus post-update production checks."
                 },
                 {
                     "name": "environment-reference.md",
@@ -1277,7 +1277,7 @@
                     "name": "sync-layer.md",
                     "path": "/cloud/sync-layer",
                     "category": "Architecture",
-                    "summary": "The OR3 Sync Layer provides offline-first, bidirectional synchronization between the local Dexie database and the Convex backend. It enables users to work offline and have their changes automatically synced when connectivity is restored, with support for mu..."
+                    "summary": "OR3 sync is offline-first Dexie plus a change-log. Pulls include oldestRetainedVersion and requiresSnapshot; notifications are session-scoped; LWW ties break on op_id; server ops use UUID op_id."
                 },
                 {
                     "name": "troubleshooting.md",

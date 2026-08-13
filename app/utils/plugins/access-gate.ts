@@ -98,6 +98,7 @@ function getLocalDecision(policy?: PluginGatePolicy | null): PluginGateDecision 
 
 async function hydrateServerDecision(pluginId: string): Promise<void> {
     if (!shouldUseServerDecision()) return;
+    if (getCachedSessionContext()?.authenticated !== true) return;
     if (state.pending[pluginId]) return;
     const requestScopeKey = state.scopeKey;
 
@@ -145,6 +146,10 @@ export function getPluginGateDecision(
     }
 
     if (!shouldUseServerDecision()) {
+        return local;
+    }
+
+    if (getCachedSessionContext()?.authenticated !== true) {
         return local;
     }
 

@@ -8,6 +8,13 @@ const setHeaderMock = vi.fn();
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
     readBody: readBodyMock,
+    getHeader: (
+        event: { node?: { req?: { headers?: Record<string, string> } } },
+        name: string
+    ) => {
+        const headers = event?.node?.req?.headers ?? {};
+        return headers[name] ?? headers[name.toLowerCase()];
+    },
     setResponseHeader: setResponseHeaderMock,
     setHeader: setHeaderMock,
     createError: (opts: { statusCode: number; statusMessage?: string }) => {
@@ -98,6 +105,8 @@ describe('POST /api/sync/pull', () => {
             ],
             nextCursor: 5,
             hasMore: false,
+            oldestRetainedVersion: 0,
+            requiresSnapshot: false,
         });
         getActiveSyncGatewayAdapterMock.mockReset().mockReturnValue({
             id: 'adapter-1',
@@ -201,6 +210,8 @@ describe('POST /api/sync/pull', () => {
             ],
             nextCursor: 5,
             hasMore: false,
+            oldestRetainedVersion: 0,
+            requiresSnapshot: false,
         });
 
         expect(pullMock).toHaveBeenCalledWith(expect.anything(), body);
@@ -255,7 +266,7 @@ describe('POST /api/sync/pull', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({
             statusCode: 502,
         });
-        expect(recordSyncRequestMock).not.toHaveBeenCalled();
+        expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'sync:pull');
     });
 
     it('returns 502 when hasMore does not advance beyond the requested cursor', async () => {
@@ -275,6 +286,6 @@ describe('POST /api/sync/pull', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({
             statusCode: 502,
         });
-        expect(recordSyncRequestMock).not.toHaveBeenCalled();
+        expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'sync:pull');
     });
 });

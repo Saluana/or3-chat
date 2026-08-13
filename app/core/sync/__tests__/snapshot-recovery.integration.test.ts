@@ -270,7 +270,7 @@ describe('expired-cursor snapshot recovery', () => {
         await manager.start();
 
         expect(provider.snapshotRequests).toHaveLength(1);
-        expect(provider.pullCursors).toEqual([50]);
+        expect(provider.pullCursors.filter((cursor) => cursor >= 50)).toEqual([50]);
         expect(provider.subscribeCursors).toEqual([51]);
         expect(await db.sync_state.get(
             'sync_state:workspace-expired-snapshot:default'

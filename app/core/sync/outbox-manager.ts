@@ -32,7 +32,12 @@ import type { SyncProvider, SyncScope, PendingOp } from '~~/shared/sync/types';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
 import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
-import { markRecentOpId } from './recent-op-cache';
+import {
+    MAX_SYNC_PUSH_BATCH_BYTES,
+    syncJsonByteLength,
+} from '~~/shared/sync/schemas';
+import { markRecentOpId, unmarkRecentOpId } from './recent-op-cache';
+import { getHookBridge } from './hook-bridge';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 import { compareSyncRevision } from '~~/shared/sync/revision';
 
@@ -47,6 +52,14 @@ const DEFAULT_MAX_BATCH_SIZE = 50;
 
 /** Max pending ops before emitting capacity warning */
 const MAX_PENDING_OPS = 500;
+
+function httpStatusOf(error: unknown): number | null {
+    if (!error || typeof error !== 'object') return null;
+    const candidate = error as { status?: unknown; statusCode?: unknown };
+    if (typeof candidate.status === 'number') return candidate.status;
+    if (typeof candidate.statusCode === 'number') return candidate.statusCode;
+    return null;
+}
 
 /**
  * Purpose:
@@ -240,132 +253,38 @@ export class OutboxManager {
 
             if (!dueOps.length) return false;
 
-            const batch = dueOps.slice(0, this.config.maxBatchSize);
+            const batch = this.packDueOps(dueOps);
+            if (!batch.length) return false;
 
-            if (import.meta.dev) {
-                console.debug('[sync] outbox push start', {
-                    scope: this.scope,
-                    batchSize: batch.length,
-                });
-            }
+            if (!circuitBreaker.beginProbe()) return false;
+            let probeSettled = false;
 
-            await hooks.doAction('sync.push:action:before', {
-                scope: this.scope,
-                count: batch.length,
-            });
-            if (generation !== this.lifecycleGeneration) return false;
-
-            // Persist ownership of this batch before crossing the network boundary.
-            await this.db.pending_ops.bulkPut(
-                batch.map((op) => ({ ...op, status: 'in_flight' as const }))
-            );
-            if (generation !== this.lifecycleGeneration) return false;
-
-             try {
-                 const sanitizedBatch = batch.map((op) => ({
-                     ...op,
-                     payload: sanitizePayloadForSync(op.tableName, op.payload, op.operation),
-                 }));
-
-                 // Mark opIds as recent BEFORE push to avoid echo race conditions
-                 for (const op of batch) {
-                     markRecentOpId(op.stamp.opId);
-                 }
-
-                 // Push to provider
-                 const result = await this.provider.push({
-                     scope: this.scope,
-                     ops: sanitizedBatch,
-                 });
+            try {
+                const outcome = await this.pushBatchWithSplit(
+                    batch,
+                    generation,
+                    hooks
+                );
                 if (generation !== this.lifecycleGeneration) return false;
 
-                // Process results
-                const resultsById = new Map(result.results.map((res) => [res.opId, res]));
-                let successCount = 0;
-                let failCount = 0;
-
-                for (const op of batch) {
-                    const res = resultsById.get(op.stamp.opId);
-                    if (!res) {
-                        await this.handleFailedOp(op, 'Missing push result', 'UNKNOWN');
-                        failCount += 1;
-                        continue;
-                    }
-
-                    if (res.success) {
-                        // Record the terminal transition before compacting the outbox.
-                        if (op.operation === 'delete') {
-                            await this.markTombstoneSynced(op, res.serverVersion);
-                        }
-                        await this.db.pending_ops.put({ ...op, status: 'applied' });
-                        await this.db.pending_ops.delete(op.id);
-                        successCount += 1;
-                    } else {
-                        // Failed - handle retry
-                        await this.handleFailedOp(op, res.error, res.errorCode);
-                        failCount += 1;
-                    }
-                }
-
-                await hooks.doAction('sync.push:action:after', {
-                    scope: this.scope,
-                    successCount,
-                    failCount,
-                });
-
-                if (import.meta.dev) {
-                    console.debug('[sync] outbox push done', {
-                        scope: this.scope,
-                        successCount,
-                        failCount,
-                    });
-                }
-
-                // Update circuit breaker based on results
-                if (successCount > 0 && failCount === 0) {
+                if (outcome.deferred) {
                     circuitBreaker.recordSuccess();
-                } else if (failCount > 0) {
-                    circuitBreaker.recordFailure();
-                }
-            } catch (error) {
-                if (generation !== this.lifecycleGeneration) return false;
-                const deferredRetryDelayMs = this.getDeferredRetryDelayMs(error);
-                if (deferredRetryDelayMs !== null) {
-                    await this.releaseBatchForDeferredRetry(batch, deferredRetryDelayMs);
-                    this.providerRateLimitedUntil = Math.max(
-                        this.providerRateLimitedUntil,
-                        Date.now() + deferredRetryDelayMs
-                    );
-                    await hooks.doAction('sync.push:action:after', {
-                        scope: this.scope,
-                        successCount: 0,
-                        failCount: 0,
-                    });
-                    if (import.meta.dev) {
-                        console.warn('[OutboxManager] Push deferred by transient upstream status', {
-                            scope: this.scope,
-                            batchSize: batch.length,
-                            retryAfterMs: deferredRetryDelayMs,
-                        });
-                    }
+                    probeSettled = true;
                     return false;
                 }
 
-                const message = error instanceof Error ? error.message : String(error);
-                let failCount = 0;
-                for (const op of batch) {
-                    await this.handleFailedOp(op, message);
-                    failCount += 1;
+                if (outcome.successCount > 0 && outcome.failCount === 0) {
+                    circuitBreaker.recordSuccess();
+                } else if (outcome.failCount > 0) {
+                    circuitBreaker.recordFailure();
+                } else {
+                    circuitBreaker.recordSuccess();
                 }
-                await hooks.doAction('sync.push:action:after', {
-                    scope: this.scope,
-                    successCount: 0,
-                    failCount,
-                });
-                circuitBreaker.recordFailure();
-                console.error('[OutboxManager] Push error:', error);
+                probeSettled = true;
+                return true;
+            } finally {
+                if (!probeSettled) circuitBreaker.recordFailure();
             }
-            return true;
         } finally {
             if (this.flushOwner === owner) this.flushOwner = null;
         }
@@ -396,6 +315,243 @@ export class OutboxManager {
             if (captureOrder) return captureOrder;
             const revisionOrder = compareSyncRevision(a.stamp, b.stamp);
             return revisionOrder || a.id.localeCompare(b.id);
+        });
+    }
+
+    private packDueOps(dueOps: PendingOp[]): PendingOp[] {
+        const packed: PendingOp[] = [];
+        for (const op of dueOps) {
+            if (packed.length >= this.config.maxBatchSize) break;
+            const candidate = [...packed, op];
+            const bytes = syncJsonByteLength({
+                scope: this.scope,
+                ops: candidate,
+            });
+            if (packed.length > 0 && bytes > MAX_SYNC_PUSH_BATCH_BYTES) break;
+            packed.push(op);
+        }
+        return packed;
+    }
+
+    private async pushBatchWithSplit(
+        batch: PendingOp[],
+        generation: number,
+        hooks: ReturnType<typeof useHooks>
+    ): Promise<{ successCount: number; failCount: number; deferred: boolean }> {
+        if (generation !== this.lifecycleGeneration) {
+            return { successCount: 0, failCount: 0, deferred: false };
+        }
+
+        if (import.meta.dev) {
+            console.debug('[sync] outbox push start', {
+                scope: this.scope,
+                batchSize: batch.length,
+            });
+        }
+
+        await hooks.doAction('sync.push:action:before', {
+            scope: this.scope,
+            count: batch.length,
+        });
+        if (generation !== this.lifecycleGeneration) {
+            return { successCount: 0, failCount: 0, deferred: false };
+        }
+
+        await this.db.pending_ops.bulkPut(
+            batch.map((op) => ({ ...op, status: 'in_flight' as const }))
+        );
+        if (generation !== this.lifecycleGeneration) {
+            return { successCount: 0, failCount: 0, deferred: false };
+        }
+
+        try {
+            const sanitizedBatch = batch.map((op) => ({
+                ...op,
+                payload: sanitizePayloadForSync(op.tableName, op.payload, op.operation),
+            }));
+
+            for (const op of batch) {
+                markRecentOpId(op.stamp.opId);
+            }
+
+            const result = await this.provider.push({
+                scope: this.scope,
+                ops: sanitizedBatch,
+            });
+            if (generation !== this.lifecycleGeneration) {
+                return { successCount: 0, failCount: 0, deferred: false };
+            }
+
+            const resultsById = new Map(result.results.map((res) => [res.opId, res]));
+            let successCount = 0;
+            let failCount = 0;
+
+            for (const op of batch) {
+                const res = resultsById.get(op.stamp.opId);
+                if (!res) {
+                    await this.handleFailedOp(op, 'Missing push result', 'UNKNOWN');
+                    failCount += 1;
+                    continue;
+                }
+
+                if (res.success && res.applied === false) {
+                    const hasWinner =
+                        res.payload !== undefined && res.payload !== null;
+                    if (!hasWinner && op.operation !== 'delete') {
+                        await this.handleFailedOp(
+                            op,
+                            'Missing winner payload',
+                            'UNKNOWN'
+                        );
+                        failCount += 1;
+                        continue;
+                    }
+                    await this.applyRemoteWinner(op, res.payload);
+                    unmarkRecentOpId(op.stamp.opId);
+                    if (op.operation === 'delete') {
+                        await this.markTombstoneSynced(op, res.serverVersion);
+                    }
+                    await this.db.pending_ops.put({ ...op, status: 'applied' });
+                    await this.db.pending_ops.delete(op.id);
+                    successCount += 1;
+                    continue;
+                }
+
+                if (res.success) {
+                    if (op.operation === 'delete') {
+                        await this.markTombstoneSynced(op, res.serverVersion);
+                    }
+                    await this.db.pending_ops.put({ ...op, status: 'applied' });
+                    await this.db.pending_ops.delete(op.id);
+                    successCount += 1;
+                } else {
+                    await this.handleFailedOp(op, res.error, res.errorCode);
+                    failCount += 1;
+                }
+            }
+
+            await hooks.doAction('sync.push:action:after', {
+                scope: this.scope,
+                successCount,
+                failCount,
+            });
+
+            if (import.meta.dev) {
+                console.debug('[sync] outbox push done', {
+                    scope: this.scope,
+                    successCount,
+                    failCount,
+                });
+            }
+
+            return { successCount, failCount, deferred: false };
+        } catch (error) {
+            if (generation !== this.lifecycleGeneration) {
+                return { successCount: 0, failCount: 0, deferred: false };
+            }
+
+            const status = httpStatusOf(error);
+            if (status === 401 || status === 403) {
+                await this.releaseBatchForDeferredRetry(
+                    batch,
+                    this.config.retryDelays[0] ?? DEFAULT_RETRY_DELAYS[0] ?? 250
+                );
+                await hooks.doAction('sync.push:action:after', {
+                    scope: this.scope,
+                    successCount: 0,
+                    failCount: 0,
+                });
+                return { successCount: 0, failCount: 0, deferred: true };
+            }
+
+            if (this.isWholeRequestClientError(error) && batch.length > 1) {
+                const mid = Math.ceil(batch.length / 2);
+                const left = await this.pushBatchWithSplit(
+                    batch.slice(0, mid),
+                    generation,
+                    hooks
+                );
+                if (generation !== this.lifecycleGeneration) {
+                    return { successCount: 0, failCount: 0, deferred: false };
+                }
+                const right = await this.pushBatchWithSplit(
+                    batch.slice(mid),
+                    generation,
+                    hooks
+                );
+                return {
+                    successCount: left.successCount + right.successCount,
+                    failCount: left.failCount + right.failCount,
+                    deferred: left.deferred || right.deferred,
+                };
+            }
+
+            const deferredRetryDelayMs = this.getDeferredRetryDelayMs(error);
+            if (deferredRetryDelayMs !== null) {
+                await this.releaseBatchForDeferredRetry(batch, deferredRetryDelayMs);
+                this.providerRateLimitedUntil = Math.max(
+                    this.providerRateLimitedUntil,
+                    Date.now() + deferredRetryDelayMs
+                );
+                await hooks.doAction('sync.push:action:after', {
+                    scope: this.scope,
+                    successCount: 0,
+                    failCount: 0,
+                });
+                if (import.meta.dev) {
+                    console.warn('[OutboxManager] Push deferred by transient upstream status', {
+                        scope: this.scope,
+                        batchSize: batch.length,
+                        retryAfterMs: deferredRetryDelayMs,
+                    });
+                }
+                return { successCount: 0, failCount: 0, deferred: true };
+            }
+
+            const message = error instanceof Error ? error.message : String(error);
+            let failCount = 0;
+            for (const op of batch) {
+                await this.handleFailedOp(op, message);
+                failCount += 1;
+            }
+            await hooks.doAction('sync.push:action:after', {
+                scope: this.scope,
+                successCount: 0,
+                failCount,
+            });
+            console.error('[OutboxManager] Push error:', error);
+            return { successCount: 0, failCount, deferred: false };
+        }
+    }
+
+    private isWholeRequestClientError(error: unknown): boolean {
+        const status = httpStatusOf(error);
+        return status === 400 || status === 413;
+    }
+
+    private async applyRemoteWinner(op: PendingOp, winnerPayload: unknown): Promise<void> {
+        const hookBridge = getHookBridge(this.db);
+        const tableNames = Array.from(new Set([op.tableName, 'tombstones']));
+        await this.db.transaction('rw', tableNames, async (tx) => {
+            hookBridge.markSyncTransaction(tx);
+            const table = tx.table(op.tableName);
+            if (winnerPayload && typeof winnerPayload === 'object' && !Array.isArray(winnerPayload)) {
+                await table.put(winnerPayload as Record<string, unknown>);
+                return;
+            }
+            if (op.operation === 'delete') {
+                await table.delete(op.pk);
+                const deletedAt = nowSec();
+                await tx.table('tombstones').put({
+                    id: `${op.tableName}:${op.pk}`,
+                    tableName: op.tableName,
+                    pk: op.pk,
+                    deletedAt,
+                    clock: op.stamp.clock,
+                    hlc: op.stamp.hlc,
+                    opId: op.stamp.opId,
+                });
+            }
         });
     }
 

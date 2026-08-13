@@ -80,7 +80,7 @@ Generate Convex artifacts:
 bunx convex dev --once
 ```
 
-This creates `convex/_generated/` used by the Convex backend path.
+This creates `convex/_generated/` used by the Convex backend path. Keep the scaffolded `convex/tsconfig.json`; it ensures `convex dev --typecheck enable` actually checks the Convex functions.
 
 ## Runtime Registration
 

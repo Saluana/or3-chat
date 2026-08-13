@@ -142,6 +142,73 @@ function applyPostChange(
     posts.set(change.pk, payload);
 }
 
+function applySnapshotItem(
+    posts: Map<string, WorkflowPostPayload>,
+    item: {
+        kind: 'row' | 'tombstone';
+        tableName: string;
+        pk: string;
+        payload?: unknown;
+    }
+): void {
+    if (item.tableName !== 'posts') return;
+    if (item.kind === 'tombstone') {
+        posts.delete(item.pk);
+        return;
+    }
+    applyPostChange(posts, {
+        tableName: item.tableName,
+        pk: item.pk,
+        op: 'put',
+        payload: item.payload,
+    });
+}
+
+async function hydrateFromSnapshot(
+    event: H3Event,
+    workspaceId: string,
+    adapter: NonNullable<ReturnType<typeof getActiveSyncGatewayAdapter>>,
+    posts: Map<string, WorkflowPostPayload>
+): Promise<number> {
+    if (!adapter.snapshot) return 0;
+
+    let pageToken: string | undefined;
+    let pages = 0;
+    let highWatermark = 0;
+    const seen = new Set<string>();
+
+    while (true) {
+        pages += 1;
+        if (pages > MAX_PULL_PAGES) {
+            throw new WorkflowCatalogError(
+                `Workflow catalog exceeded ${MAX_PULL_PAGES} snapshot pages`,
+                503
+            );
+        }
+        const page = await adapter.snapshot(event, {
+            scope: { workspaceId },
+            pageSize: PULL_LIMIT,
+            tables: ['posts'],
+            ...(pageToken ? { pageToken } : {}),
+        });
+        for (const item of page.items) {
+            applySnapshotItem(posts, item);
+        }
+        highWatermark = page.highWatermark;
+        if (page.nextPageToken === null) break;
+        if (seen.has(page.nextPageToken)) {
+            throw new WorkflowCatalogError(
+                'Workflow catalog snapshot token repeated',
+                503
+            );
+        }
+        seen.add(page.nextPageToken);
+        pageToken = page.nextPageToken;
+    }
+
+    return highWatermark;
+}
+
 async function hydrateWorkspaceCache(
     event: H3Event,
     workspaceId: string,
@@ -160,8 +227,13 @@ async function hydrateWorkspaceCache(
         ? new Map<string, WorkflowPostPayload>()
         : new Map(cache.posts);
 
+    if (shouldFullRefresh && adapter.snapshot) {
+        cursor = await hydrateFromSnapshot(event, workspaceId, adapter, posts);
+    }
+
     let hasMore = true;
     let pages = 0;
+    let recoveredFromSnapshot = Boolean(shouldFullRefresh && adapter.snapshot);
     while (hasMore) {
         pages += 1;
         if (pages > MAX_PULL_PAGES) {
@@ -177,6 +249,13 @@ async function hydrateWorkspaceCache(
             limit: PULL_LIMIT,
             tables: ['posts'],
         });
+
+        if (result.requiresSnapshot && adapter.snapshot && !recoveredFromSnapshot) {
+            posts.clear();
+            cursor = await hydrateFromSnapshot(event, workspaceId, adapter, posts);
+            recoveredFromSnapshot = true;
+            continue;
+        }
 
         for (const change of result.changes) {
             applyPostChange(posts, change);

@@ -63,6 +63,15 @@ export function markRecentOpId(opId: string | undefined | null): void {
 
 /**
  * Purpose:
+ * Drop an opId from the echo filter so a later remote winner can apply.
+ */
+export function unmarkRecentOpId(opId: string | undefined | null): void {
+    if (!opId) return;
+    recentOps.delete(opId);
+}
+
+/**
+ * Purpose:
  * Determine whether an opId should be treated as an echo.
  *
  * Behavior:

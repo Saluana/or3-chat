@@ -125,6 +125,26 @@ re-owned; the updater does not recursively change per-file ownership in place.
 The previous root owner and backup remain the automatic recovery path until
 the replacement passes deep health.
 
+## Dashboard updates
+
+For managed Linux deployments using a local Docker socket, super admins can
+open **Admin → Operations → Dashboard Update**, check the latest compatible
+release, and approve it without running Docker commands. The card invokes the
+same exact-version `@or3/cloud` updater as the host CLI: it creates a verified
+backup, runs deep health checks, and restores the prior release/data when the
+update fails. Existing deployments gain this capability after one normal CLI
+update.
+
+Docker access stays outside the application container. A separate operator
+sidecar has the Docker socket and deployment-directory mount; the web service
+receives only a local Unix socket with status, check, and exact-update
+operations. The sidecar disables package lifecycle scripts and verifies the
+exact package's npm signature plus SLSA provenance, including this repository,
+the matching version tag, and `.github/workflows/release-cloud.yml`, before any
+privileged updater code runs. The authenticated package pins the qualified
+container image digest, so a replaced GHCR tag fails closed. Interrupted jobs fail closed and require
+host-side `npx @or3/cloud recover`. Remote Docker hosts remain CLI-only.
+
 ## Logging
 
 - Use structured logs from core error handling and background execution paths.

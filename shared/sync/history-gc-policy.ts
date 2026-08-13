@@ -37,3 +37,25 @@ export function supportsSyncHistoryRetention(
     return capabilities?.snapshotBootstrap === 'snapshot-v1' &&
         capabilities.historyRetention === 'snapshot-v1';
 }
+
+/**
+ * Compute pull retention signaling from the retained change-log minimum.
+ *
+ * Pull is exclusive (`server_version > cursor`), so a client whose next
+ * needed version is gone (`cursor + 1 < oldest retained`) must snapshot.
+ * An empty log uses `highWatermark + 1` as the exclusive retained floor.
+ */
+export function computePullRetention(input: {
+    cursor: number;
+    oldestLogVersion: number | null;
+    highWatermark: number;
+}): { oldestRetainedVersion: number; requiresSnapshot: boolean } {
+    const oldestRetainedVersion =
+        input.oldestLogVersion ?? Math.max(0, input.highWatermark) + 1;
+    return {
+        oldestRetainedVersion,
+        requiresSnapshot:
+            oldestRetainedVersion > 0 &&
+            input.cursor < Math.max(0, oldestRetainedVersion - 1),
+    };
+}

@@ -98,4 +98,54 @@ describe('workflow catalog cache', () => {
 
         expect(pull).toHaveBeenCalledTimes(102);
     });
+
+    it('hydrates from snapshot when change_log pull is empty', async () => {
+        const snapshot = vi.fn(async () => ({
+            workspaceId: 'workspace-snap',
+            snapshotId: 'snap-1',
+            highWatermark: 9,
+            items: [
+                {
+                    kind: 'row' as const,
+                    tableName: 'posts',
+                    pk: 'workflow-1',
+                    payload: {
+                        id: 'workflow-1',
+                        post_type: 'workflow-entry',
+                        title: 'From snapshot',
+                        updated_at: 1,
+                        meta: {
+                            nodes: [],
+                            edges: [],
+                            meta: { name: 'From snapshot' },
+                        },
+                    },
+                    revision: { clock: 1, hlc: '1:0:dev', opId: 'op-1' },
+                },
+            ],
+            nextPageToken: null,
+        }));
+        const pull = vi.fn(async () => ({
+            changes: [],
+            nextCursor: 9,
+            hasMore: false,
+            oldestRetainedVersion: 9,
+            requiresSnapshot: false,
+        }));
+        getAdapterMock.mockReturnValue({ pull, snapshot });
+        const resolveCanonicalWorkflow = await loadResolver();
+
+        const resolved = await resolveCanonicalWorkflow({} as H3Event, {
+            workspaceId: 'workspace-snap',
+            workflowId: 'workflow-1',
+        });
+        expect(snapshot).toHaveBeenCalled();
+        expect(pull).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ cursor: 9 })
+        );
+        expect(resolved.workflow).toMatchObject({
+            meta: { name: 'From snapshot' },
+        });
+    });
 });

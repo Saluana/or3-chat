@@ -8,6 +8,13 @@ const setHeaderMock = vi.fn();
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
     readBody: readBodyMock,
+    getHeader: (
+        event: { node?: { req?: { headers?: Record<string, string> } } },
+        name: string
+    ) => {
+        const headers = event?.node?.req?.headers ?? {};
+        return headers[name] ?? headers[name.toLowerCase()];
+    },
     setResponseHeader: setResponseHeaderMock,
     setHeader: setHeaderMock,
     createError: (opts: { statusCode: number; statusMessage?: string }) => {
@@ -158,13 +165,24 @@ describe('POST /api/sync/push', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
     });
 
-    it('returns 400 when put payload fails table schema', async () => {
+    it('returns mixed 200 results when put payload fails table schema', async () => {
         const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
         const body = makeBaseBody() as any;
         body.ops[0]!.payload = { id: 'm1', role: 'user' };
         readBodyMock.mockResolvedValue(body);
 
-        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+        await expect(handler(makeEvent())).resolves.toMatchObject({
+            results: [
+                {
+                    opId: STAMP_1.opId,
+                    success: false,
+                    errorCode: 'VALIDATION_ERROR',
+                },
+            ],
+            serverVersion: 0,
+        });
+        expect(pushMock).not.toHaveBeenCalled();
+        expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'sync:push');
     });
 
     it('accepts sync payloads larger than the former 64KB limit', async () => {
@@ -180,7 +198,7 @@ describe('POST /api/sync/push', () => {
         );
     });
 
-    it('rejects sync payloads larger than 256KB before reaching a provider', async () => {
+    it('rejects sync payloads larger than 256KB without reaching a provider', async () => {
         const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
         const body = makeBaseBody();
         (body.ops[0]!.payload as Record<string, unknown>).data = {
@@ -188,8 +206,15 @@ describe('POST /api/sync/push', () => {
         };
         readBodyMock.mockResolvedValue(body);
 
-        await expect(handler(makeEvent())).rejects.toMatchObject({
-            statusCode: 413,
+        await expect(handler(makeEvent())).resolves.toMatchObject({
+            results: [
+                {
+                    opId: STAMP_1.opId,
+                    success: false,
+                    errorCode: 'OVERSIZED',
+                },
+            ],
+            serverVersion: 0,
         });
         expect(pushMock).not.toHaveBeenCalled();
     });
@@ -409,6 +434,51 @@ describe('POST /api/sync/push', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({
             statusCode: 502,
         });
-        expect(recordSyncRequestMock).not.toHaveBeenCalled();
+        expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'sync:push');
+    });
+
+    it('returns mixed 200 results for a valid op beside an invalid sibling', async () => {
+        const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
+        const invalidStamp = {
+            ...STAMP_1,
+            opId: 'a1b2c3d4-5678-4abc-8def-123456789099',
+        };
+        const body = makeBaseBody();
+        body.ops.push({
+            ...body.ops[0]!,
+            id: 'pending-op-invalid',
+            pk: 'm-bad',
+            payload: { id: 'm-bad', role: 'user' } as never,
+            stamp: invalidStamp,
+        });
+        readBodyMock.mockResolvedValue(body);
+
+        const result = await handler(makeEvent()) as {
+            results: Array<{ opId: string; success: boolean; errorCode?: string }>;
+            serverVersion: number;
+        };
+        expect(result.results).toHaveLength(2);
+        expect(result.results[0]).toMatchObject({
+            opId: STAMP_1.opId,
+            success: true,
+        });
+        expect(result.results[1]).toMatchObject({
+            opId: invalidStamp.opId,
+            success: false,
+            errorCode: 'VALIDATION_ERROR',
+        });
+        expect(pushMock).toHaveBeenCalledTimes(1);
+        expect(pushMock.mock.calls[0]?.[1]?.ops).toHaveLength(1);
+    });
+
+    it('returns 413 when the declared content-length exceeds the batch ceiling', async () => {
+        const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
+        const event = {
+            context: {},
+            node: { req: { headers: { 'content-length': String(3 * 1024 * 1024) } } },
+        } as H3Event;
+
+        await expect(handler(event)).rejects.toMatchObject({ statusCode: 413 });
+        expect(pushMock).not.toHaveBeenCalled();
     });
 });

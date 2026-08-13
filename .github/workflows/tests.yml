@@ -20,7 +20,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      # paths-filter compares push events against the repository's default
+      # branch. A depth-1 checkout makes it repeatedly deepen both refs and can
+      # fail before any project check runs; fetch the history once instead.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: dorny/paths-filter@v4
         id: changes
         if: github.event_name != 'workflow_dispatch'
@@ -71,6 +76,11 @@ jobs:
             perf_browser:
               - 'tests/e2e/performance-budgets.e2e.ts'
             perf_build:
+              - 'Dockerfile'
+              - 'packages/or3-cloud/**'
+              - 'server/admin/update/**'
+              - 'server/api/admin/update/**'
+              - 'app/components/admin/system/AdminSystemUpdateCard.vue'
               - 'scripts/performance/production-build.perf.ts'
               - 'scripts/performance/report.ts'
               - 'scripts/__tests__/production-build-performance.test.ts'

@@ -12,7 +12,7 @@ export const MAX_SYNC_PUSH_BATCH_BYTES = 2 * 1024 * 1024;
 const MAX_SYNC_IDENTIFIER_LENGTH = 256;
 const MAX_SYNC_TABLE_FILTERS = 50;
 
-function jsonByteLength(value: unknown): number {
+export function syncJsonByteLength(value: unknown): number {
     try {
         return new TextEncoder().encode(JSON.stringify(value)).length;
     } catch {
@@ -261,6 +261,8 @@ export const PullResponseSchema = z
         changes: SyncChangesSchema.max(1000),
         nextCursor: z.number().int().nonnegative(),
         hasMore: z.boolean(),
+        oldestRetainedVersion: z.number().int().nonnegative(),
+        requiresSnapshot: z.boolean(),
     })
     .superRefine((response, ctx) => {
         let previousVersion = 0;
@@ -365,7 +367,7 @@ export const PushBatchSchema = z
         ops: z.array(PendingOpSchema).max(MAX_SYNC_PUSH_BATCH_OPS),
     })
     .superRefine((batch, ctx) => {
-        if (jsonByteLength(batch) > MAX_SYNC_PUSH_BATCH_BYTES) {
+        if (syncJsonByteLength(batch) > MAX_SYNC_PUSH_BATCH_BYTES) {
             ctx.addIssue({
                 code: 'custom',
                 path: ['ops'],
@@ -443,6 +445,9 @@ export function getPullResponseContractError(
     request: z.infer<typeof PullRequestSchema>,
     response: z.infer<typeof PullResponseSchema>
 ): string | null {
+    if (response.requiresSnapshot) {
+        return null;
+    }
     if (response.nextCursor < request.cursor) {
         return 'Pull response cursor regressed';
     }

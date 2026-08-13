@@ -78,6 +78,13 @@ function toRecord(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>;
 }
 
+type DexieHookTable = {
+    hook: (
+        event: 'creating' | 'updating' | 'deleting',
+        fn?: (...args: never[]) => unknown
+    ) => unknown;
+};
+
 /**
  * Purpose:
  * Bridge between local Dexie writes and the sync outbox (`pending_ops`).
@@ -98,6 +105,7 @@ export class HookBridge {
     private syncTransactionTokens = new WeakSet<object>();
     private captureEnabled = true;
     private hooksInstalled = false;
+    private hookUnsubscribers: Array<() => void> = [];
 
     constructor(db: Or3DB) {
         this.db = db;
@@ -127,17 +135,19 @@ export class HookBridge {
                 continue;
             }
 
-            const table = this.db.table(tableName);
+            const table = this.db.table(tableName) as unknown as DexieHookTable;
 
-
-            // Hook: Creating (insert)
-            table.hook('creating', (primKey, obj, transaction) => {
+            const creating = ((primKey: unknown, obj: unknown, transaction: Transaction) => {
                 if (!this.captureEnabled || this.isSyncTransaction(transaction)) return;
                 this.captureWrite(transaction, tableName, 'put', primKey, obj);
-            });
+            }) as (...args: never[]) => unknown;
 
-            // Hook: Updating (modify)
-            table.hook('updating', (modifications, primKey, obj, transaction) => {
+            const updating = ((
+                modifications: unknown,
+                primKey: unknown,
+                obj: unknown,
+                transaction: Transaction
+            ) => {
                 if (!this.captureEnabled || this.isSyncTransaction(transaction)) return;
 
                 // Guard: obj should be the existing record. If undefined, skip capture.
@@ -178,23 +188,54 @@ export class HookBridge {
                     merged,
                     isSoftDelete
                 );
-            });
+            }) as (...args: never[]) => unknown;
 
-            // Hook: Deleting
-            table.hook('deleting', (primKey, obj, transaction) => {
+            const deleting = ((primKey: unknown, obj: unknown, transaction: Transaction) => {
                 if (!this.captureEnabled || this.isSyncTransaction(transaction)) return;
                 this.captureWrite(transaction, tableName, 'delete', primKey, obj);
-            });
+            }) as (...args: never[]) => unknown;
+
+            this.registerTableHook(table, 'creating', creating);
+            this.registerTableHook(table, 'updating', updating);
+            this.registerTableHook(table, 'deleting', deleting);
         }
         this.hooksInstalled = true;
         this.captureEnabled = true;
     }
 
     /**
-     * Stop capturing writes
+     * Stop capturing writes and unsubscribe Dexie hooks so a later start
+     * cannot double-capture the same table events.
      */
     stop(): void {
         this.captureEnabled = false;
+        this.uninstallTableHooks();
+    }
+
+    private registerTableHook(
+        table: DexieHookTable,
+        event: 'creating' | 'updating' | 'deleting',
+        fn: (...args: never[]) => unknown
+    ): void {
+        table.hook(event, fn);
+        this.hookUnsubscribers.push(() => {
+            const hooked = table.hook(event) as
+                | { unsubscribe?: (listener: (...args: never[]) => unknown) => void }
+                | undefined;
+            hooked?.unsubscribe?.(fn);
+        });
+    }
+
+    private uninstallTableHooks(): void {
+        for (const unsubscribe of this.hookUnsubscribers) {
+            try {
+                unsubscribe();
+            } catch {
+                // Test doubles and older Dexie builds may omit unsubscribe.
+            }
+        }
+        this.hookUnsubscribers = [];
+        this.hooksInstalled = false;
     }
 
     /**

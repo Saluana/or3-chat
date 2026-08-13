@@ -168,6 +168,16 @@ health, and keeps the previous image/data snapshot as the immediate rollback
 point. If the new version fails deep health, it restores the previous version
 and snapshot automatically.
 
+On new managed Linux deployments using a local Docker socket, the same update
+flow is also available to super admins at **Admin → Operations → Dashboard
+Update**. Existing deployments gain the card after one normal CLI update.
+Remote Docker hosts remain CLI-only. The sidecar installs the exact npm package
+with lifecycle scripts disabled, then verifies its registry signature, SLSA
+provenance, source repository, tagged release ref, and release workflow before
+executing the updater. The signed package pins the qualified container digest;
+a replaced GHCR version tag is rejected before startup. An interrupted sidecar reports that host-side
+`npx @or3/cloud recover` is required rather than starting another operation.
+
 For adopted legacy volumes owned by an older runtime UID, the updater changes
 only the volume mount root and re-extracts the checksummed backup as the target
 runtime user. It never applies a recursive ownership rewrite. If startup or

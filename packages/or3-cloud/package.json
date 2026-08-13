@@ -15,6 +15,9 @@
   "bin": {
     "or3": "./dist/cli.mjs"
   },
+  "or3Cloud": {
+    "dashboardUpdateProtocol": 1
+  },
   "files": [
     "dist",
     "assets"

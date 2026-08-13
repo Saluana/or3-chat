@@ -87,6 +87,35 @@ const routeState: { value: { path: string } } = {
 
 const watchRecords: WatchRecord[] = [];
 
+const pluginControl = vi.hoisted(() => {
+    let release = () => undefined;
+    let gate: Promise<void> = Promise.resolve();
+    const runtime = {
+        ssrAuthEnabled: true,
+        sync: { enabled: true, provider: 'convex' },
+        admin: { basePath: '/admin' },
+    };
+    return {
+        runtime,
+        blockStart() {
+            gate = new Promise<void>((resolve) => {
+                release = resolve;
+            });
+        },
+        releaseStart() {
+            release();
+        },
+        waitStart() {
+            return gate;
+        },
+        reset() {
+            gate = Promise.resolve();
+            runtime.ssrAuthEnabled = true;
+            runtime.sync = { enabled: true, provider: 'convex' };
+        },
+    };
+});
+
 const providerRegistryState: { active: MockProvider | null } = {
     active: createProvider('convex'),
 };
@@ -152,7 +181,7 @@ vi.mock('~/core/sync/outbox-manager', () => ({
 vi.mock('~/core/sync/subscription-manager', () => ({
     createSubscriptionManager: vi.fn(() => {
         const instance: SubscriptionInstance = {
-            start: vi.fn(async () => undefined),
+            start: vi.fn(async () => pluginControl.waitStart()),
             stop: vi.fn(async () => undefined),
         };
         subscriptionInstances.push(instance);
@@ -213,11 +242,7 @@ vi.mock('vue', async () => {
 vi.mock('#app', () => ({
     defineNuxtPlugin: (plugin: () => unknown) => plugin(),
     useRuntimeConfig: () => ({
-        public: {
-            ssrAuthEnabled: true,
-            sync: { enabled: true, provider: 'convex' },
-            admin: { basePath: '/admin' },
-        },
+        public: pluginControl.runtime,
     }),
     useNuxtApp: () => ({ provide: vi.fn() }),
     useRouter: () => ({
@@ -262,6 +287,7 @@ describe('sync engine plugin', () => {
         vi.useFakeTimers();
         vi.resetModules();
 
+        pluginControl.reset();
         watchRecords.length = 0;
         outboxInstances.length = 0;
         subscriptionInstances.length = 0;
@@ -293,11 +319,7 @@ describe('sync engine plugin', () => {
         const globals = globalThis as NuxtTestGlobals;
         globals.defineNuxtPlugin = (plugin) => plugin();
         globals.useRuntimeConfig = () => ({
-            public: {
-                ssrAuthEnabled: true,
-                sync: { enabled: true, provider: 'convex' },
-                admin: { basePath: '/admin' },
-            },
+            public: pluginControl.runtime,
         });
         globals.useNuxtApp = () => ({ provide: vi.fn() });
         globals.useRouter = () => ({
@@ -456,5 +478,44 @@ describe('sync engine plugin', () => {
         expect(outboxInstances[0]?.stop).toHaveBeenCalledTimes(1);
         expect(subscriptionInstances[0]?.stop).toHaveBeenCalledTimes(1);
         expect(gcInstances[0]?.stop).toHaveBeenCalledTimes(1);
+    });
+
+    it('starts OutboxManager only after subscription bootstrap resolves', async () => {
+        pluginControl.blockStart();
+        await import('~/plugins/convex-sync.client');
+        await Promise.resolve();
+
+        expect(subscriptionInstances).toHaveLength(1);
+        expect(subscriptionInstances[0]?.start).toHaveBeenCalledTimes(1);
+        expect(outboxInstances).toHaveLength(0);
+
+        pluginControl.releaseStart();
+        await flushPluginAsyncWork();
+
+        expect(outboxInstances).toHaveLength(1);
+        expect(outboxInstances[0]?.start).toHaveBeenCalledTimes(1);
+    });
+
+    it('starts the engine for a non-SSR direct provider without registering gateway', async () => {
+        pluginControl.runtime.ssrAuthEnabled = false;
+        providerRegistryState.active = createProvider('convex', 'direct');
+
+        await import('~/plugins/convex-sync.client');
+        await flushPluginAsyncWork();
+
+        expect(createGatewaySyncProvider).not.toHaveBeenCalled();
+        expect(outboxInstances).toHaveLength(1);
+        expect(subscriptionInstances).toHaveLength(1);
+    });
+
+    it('does not start when SSR is off and no direct provider is registered', async () => {
+        pluginControl.runtime.ssrAuthEnabled = false;
+        providerRegistryState.active = null;
+
+        await import('~/plugins/convex-sync.client');
+        await flushPluginAsyncWork();
+
+        expect(outboxInstances).toHaveLength(0);
+        expect(createGatewaySyncProvider).not.toHaveBeenCalled();
     });
 });

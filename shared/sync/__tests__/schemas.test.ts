@@ -174,6 +174,8 @@ describe('sync schemas', () => {
             ],
             nextCursor: 2,
             hasMore: false,
+            oldestRetainedVersion: 0,
+            requiresSnapshot: false,
         });
 
         expect(parsed.success).toBe(false);
@@ -247,6 +249,15 @@ describe('sync schemas', () => {
                 changes: [],
                 nextCursor: 0,
                 hasMore: false,
+            }).success
+        ).toBe(false);
+        expect(
+            PullResponseSchema.safeParse({
+                changes: [],
+                nextCursor: 0,
+                hasMore: false,
+                oldestRetainedVersion: 0,
+                requiresSnapshot: false,
             }).success
         ).toBe(true);
         expect(

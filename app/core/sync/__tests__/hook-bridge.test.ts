@@ -59,15 +59,26 @@ function makeTx(storeNames: string[]) {
 }
 
 function makeDbWithHookableTable(tableNames: string[]) {
-    const hookFns = new Map<string, (...args: unknown[]) => unknown>();
+    const hookFns = new Map<string, Set<(...args: unknown[]) => unknown>>();
     const tables = tableNames.map((name) => ({ name }));
 
     const db = {
         name: 'test-db',
         tables,
         table: (name: string) => ({
-            hook: (kind: string, fn: (...args: unknown[]) => unknown) => {
-                hookFns.set(`${name}:${kind}`, fn);
+            hook: (kind: string, fn?: (...args: unknown[]) => unknown) => {
+                const key = `${name}:${kind}`;
+                if (fn) {
+                    const set = hookFns.get(key) ?? new Set();
+                    set.add(fn);
+                    hookFns.set(key, set);
+                    return;
+                }
+                return {
+                    unsubscribe: (listener: (...args: unknown[]) => unknown) => {
+                        hookFns.get(key)?.delete(listener);
+                    },
+                };
             },
         }),
         pending_ops: { add: vi.fn() },
@@ -75,6 +86,15 @@ function makeDbWithHookableTable(tableNames: string[]) {
     };
 
     return { db, hookFns };
+}
+
+function firstHook(
+    hookFns: Map<string, Set<(...args: unknown[]) => unknown>>,
+    key: string
+): ((...args: unknown[]) => unknown) | undefined {
+    const set = hookFns.get(key);
+    if (!set) return undefined;
+    return set.values().next().value;
 }
 
 describe('HookBridge', () => {
@@ -134,7 +154,7 @@ describe('HookBridge', () => {
 
         bridge.start();
 
-        const updating = hookFns.get('messages:updating');
+        const updating = firstHook(hookFns, 'messages:updating');
         expect(updating).toBeTypeOf('function');
 
         updating?.(
@@ -274,7 +294,7 @@ describe('HookBridge', () => {
         const bridge = new HookBridge(db as any);
         bridge.start();
 
-        const updating = hookFns.get('messages:updating');
+        const updating = firstHook(hookFns, 'messages:updating');
         const revision = updating?.(
             { deleted: true, updated_at: 200, clock: 8 },
             'm-soft-delete',
@@ -344,5 +364,22 @@ describe('HookBridge', () => {
             'sync.capture:action:nonAtomic',
             expect.objectContaining({ tableName: 'messages', pk: 'm1' })
         );
+    });
+
+    it('unsubscribes Dexie hooks on stop so a second start captures writes once', () => {
+        const { db, hookFns } = makeDbWithHookableTable(['messages', 'pending_ops', 'tombstones']);
+        const bridge = new HookBridge(db as any);
+        bridge.start();
+        const first = firstHook(hookFns, 'messages:creating');
+        expect(first).toBeTypeOf('function');
+
+        bridge.stop();
+        expect(hookFns.get('messages:creating')?.size ?? 0).toBe(0);
+
+        bridge.start();
+        expect(hookFns.get('messages:creating')?.size).toBe(1);
+        const second = firstHook(hookFns, 'messages:creating');
+        expect(second).toBeTypeOf('function');
+        expect(second).not.toBe(first);
     });
 });

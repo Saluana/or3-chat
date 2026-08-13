@@ -21,6 +21,10 @@ services:
       - "127.0.0.1:${OR3_PORT}:3000"
     volumes:
       - or3-data:/data
+      # The web service can only connect to the narrow Unix-socket API exposed
+      # by the dashboard operator. It never receives the Docker socket or the
+      # managed deployment directory.
+      - ./.or3-cloud/operator-ipc:/run/or3-operator:ro
     restart: unless-stopped
     # Leave enough time for Nuxt to close SSE responses and upstream provider
     # connections before Docker sends SIGKILL.
@@ -66,6 +70,33 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+
+  or3-operator:
+    # Enabled only by managed deployments that have explicitly opted in during
+    # init or update. It is a small host-side bridge, not part of the app.
+    profiles: ["dashboard-updates"]
+    image: ${OR3_OPERATOR_IMAGE}
+    entrypoint: ["/nodejs/bin/node", "/operator/dashboard-operator.mjs"]
+    working_dir: ${OR3_DEPLOYMENT_DIR}
+    environment:
+      DOCKER_HOST: unix:///var/run/docker.sock
+      OR3_DASHBOARD_OPERATOR_SOCKET: /run/or3-operator/operator.sock
+    user: "${OR3_OPERATOR_UID}:${OR3_OPERATOR_GID}"
+    group_add:
+      - "${OR3_DOCKER_GID}"
+    volumes:
+      - ${OR3_DEPLOYMENT_DIR}:${OR3_DEPLOYMENT_DIR}:rw
+      - ./dashboard-operator.mjs:/operator/dashboard-operator.mjs:ro
+      - ${OR3_DOCKER_SOCKET}:/var/run/docker.sock:rw
+      - ./.or3-cloud/operator-ipc:/run/or3-operator
+    restart: on-failure
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m
 
 volumes:
   or3-data:

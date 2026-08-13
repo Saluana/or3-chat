@@ -97,7 +97,23 @@ export interface PullResponse {
     changes: SyncChange[];
     nextCursor: number;
     hasMore: boolean;
+    /**
+     * Inclusive minimum `server_version` still present in change_log.
+     * `0` means the log still contains history from the origin.
+     */
+    oldestRetainedVersion: number;
+    /**
+     * True when incremental pull from `cursor` would skip deleted versions.
+     * Clients MUST snapshot-recover instead of advancing across the gap.
+     */
+    requiresSnapshot: boolean;
 }
+
+/** Default retention fields for a complete un-GCed log (cursor 0 is valid). */
+export const FULL_HISTORY_PULL_RETENTION = {
+    oldestRetainedVersion: 0,
+    requiresSnapshot: false,
+} as const;
 
 /** Request a bounded page from one consistent materialized snapshot. */
 export interface SnapshotRequest {

@@ -80,6 +80,22 @@ class GatewaySyncRequestError extends Error {
     }
 }
 
+function notifyInvalidSyncSession(error: GatewaySyncRequestError): void {
+    if (error.status !== 401 && error.status !== 403) return;
+    const eventTarget = globalThis as {
+        dispatchEvent?: (event: unknown) => boolean;
+    };
+    if (typeof eventTarget.dispatchEvent !== 'function') return;
+    eventTarget.dispatchEvent(
+        new CustomEvent('or3:sync-session-invalid', {
+            detail: {
+                status: error.status,
+                path: error.path,
+            },
+        })
+    );
+}
+
 export function isAbortLikeError(error: unknown): boolean {
     if (error instanceof DOMException) return error.name === 'AbortError';
     return error instanceof Error && error.name === 'AbortError';
@@ -192,7 +208,14 @@ async function requestJson<T>(
         const retryAfterMs = parseRetryAfterHeader(res.headers.get('Retry-After'));
         const text = await res.text();
         const sanitized = sanitizeErrorText(text);
-        throw new GatewaySyncRequestError(path, res.status, sanitized, retryAfterMs);
+        const error = new GatewaySyncRequestError(
+            path,
+            res.status,
+            sanitized,
+            retryAfterMs
+        );
+        notifyInvalidSyncSession(error);
+        throw error;
     }
 
     const text = await res.text();
@@ -298,6 +321,13 @@ export function createGatewaySyncProvider(
                         getPullResponseContractError(request, response)
                     );
 
+                    if (response.requiresSnapshot) {
+                        throw Object.assign(
+                            new Error('Remote history no longer covers this cursor'),
+                            { code: 'REQUIRES_SNAPSHOT' }
+                        );
+                    }
+
                     if (response.changes.length) {
                         // Allow async handlers (SubscriptionManager) to provide backpressure.
                         // This prevents overlapping apply cycles which can break cursor accounting.
@@ -327,26 +357,11 @@ export function createGatewaySyncProvider(
                     await poll();
                 } catch (error) {
                     if (isAbortLikeError(error)) return;
-                    console.error('[gateway-sync] Poll failed:', error);
                     if (
                         error instanceof GatewaySyncRequestError &&
                         (error.status === 401 || error.status === 403)
                     ) {
                         active = false;
-                        const eventTarget = globalThis as {
-                            dispatchEvent?: (event: unknown) => boolean;
-                        };
-                        if (typeof eventTarget.dispatchEvent === 'function') {
-                            eventTarget.dispatchEvent(
-                                new CustomEvent('or3:sync-session-invalid', {
-                                    detail: {
-                                        status: error.status,
-                                        path: error.path,
-                                        workspaceId: scope.workspaceId,
-                                    },
-                                })
-                            );
-                        }
                     } else if (
                         error instanceof GatewaySyncRequestError &&
                         error.retryAfterMs !== undefined
@@ -355,6 +370,8 @@ export function createGatewaySyncProvider(
                             Math.max(error.retryAfterMs, pollIntervalMs),
                             maxRetryAfterMs
                         );
+                    } else {
+                        console.error('[gateway-sync] Poll failed:', error);
                     }
                 } finally {
                     running = false;

@@ -6,7 +6,7 @@ import { createServer } from 'node:net';
 import { lookup } from 'node:dns/promises';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { createReadStream, createWriteStream, existsSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync, readFileSync } from 'node:fs';
 import {
   chmod,
   copyFile,
@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { createGunzip } from 'node:zlib';
 
 const execFile = promisify(execFileCallback);
+const PACKAGE_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
 export const PACKAGE_VERSION = '0.1.39';
 export const IMAGE_REPOSITORY = 'ghcr.io/saluana/or3-chat';
@@ -60,6 +61,16 @@ const DEPLOYMENT_ENV_KEYS = [
 type Mode = 'local' | 'public';
 type Operation = 'init' | 'update' | 'restore' | 'adopt' | 'credentials-reset';
 type PendingOperation = NonNullable<ManagedState['incompleteOperation']>;
+type DashboardOperatorEnv = {
+  OR3_DASHBOARD_UPDATES_ENABLED: 'true';
+  COMPOSE_PROFILES: 'dashboard-updates';
+  OR3_OPERATOR_IMAGE: string;
+  OR3_DEPLOYMENT_DIR: string;
+  OR3_OPERATOR_UID: string;
+  OR3_OPERATOR_GID: string;
+  OR3_DOCKER_SOCKET: string;
+  OR3_DOCKER_GID: string;
+};
 
 export type ManagedState = {
   schemaVersion: 1;
@@ -106,6 +117,8 @@ export type BackupManifest = {
   configSha256?: string;
   /** Checksums for the generated Compose/Caddy files needed by this release. */
   managedAssetSha256?: Record<string, string>;
+  /** Inventory 2 includes the dashboard operator asset and requires an exact file set. */
+  managedAssetInventoryVersion?: number;
   mode: Mode;
   domain?: string;
   composeProject?: string;
@@ -491,6 +504,7 @@ function deploymentPaths(directory: string) {
     operations: join(cloud, 'operations'),
     backups: join(cloud, 'backups'),
     exports: join(cloud, 'exports'),
+    operatorIpc: join(cloud, 'operator-ipc'),
   };
 }
 
@@ -518,15 +532,25 @@ async function readDirectoryEmpty(directory: string) {
   }
 }
 
+function dashboardUpdatesEnabled(directory: string) {
+  try {
+    return parseEnv(readFileSync(join(directory, '.env'), 'utf8')).OR3_DASHBOARD_UPDATES_ENABLED === 'true';
+  } catch {
+    return false;
+  }
+}
+
 function composeArgs(directory: string, mode: Mode, command: string[] = []) {
   const files = ['-f', join(directory, 'compose.yaml')];
   if (mode === 'public') files.push('-f', join(directory, 'compose.public.yaml'));
+  const profile = dashboardUpdatesEnabled(directory) ? ['--profile', 'dashboard-updates'] : [];
   return [
     'compose',
     '--project-directory',
     directory,
     '--env-file',
     join(directory, '.env'),
+    ...profile,
     ...files,
     ...command,
   ];
@@ -734,9 +758,43 @@ async function waitForDeepHealth(directory: string, mode: Mode, secrets: string[
   }
 }
 
-async function pullImage(image: string) {
+function packagedImageDigest(version: string) {
+  let manifest: { version?: unknown; or3Cloud?: { imageDigest?: unknown } };
+  try {
+    manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8'));
+  } catch {
+    return undefined;
+  }
+  if (manifest.version !== version || manifest.or3Cloud?.imageDigest === undefined) return undefined;
+  const digest = manifest.or3Cloud.imageDigest;
+  if (typeof digest !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(digest)) {
+    throw new Error('This @or3/cloud package contains an invalid release image digest. Refusing to pull an unverified image.');
+  }
+  return digest;
+}
+
+function expectedImageDigest(version: string) {
+  const packaged = packagedImageDigest(version);
+  const supplied = process.env.OR3_EXPECTED_IMAGE_DIGEST?.trim();
+  if (supplied && !/^sha256:[0-9a-f]{64}$/.test(supplied)) {
+    throw new Error('OR3_EXPECTED_IMAGE_DIGEST must be a complete sha256 digest.');
+  }
+  if (packaged && supplied && packaged !== supplied) {
+    throw new Error('The requested image digest does not match the authenticated @or3/cloud package.');
+  }
+  return packaged ?? supplied;
+}
+
+async function pullImage(image: string, expectedDigest?: string) {
   const local = await run('docker', ['image', 'inspect', image]);
-  if (!local.ok && process.env.OR3_CLOUD_SKIP_PULL !== 'true') {
+  if (local.ok) {
+    const localDigest = await imageDigest(image);
+    if (!expectedDigest || localDigest === expectedDigest) return localDigest;
+    if (process.env.OR3_CLOUD_SKIP_PULL === 'true') {
+      throw new Error(`Local image digest mismatch for ${image}. Expected ${expectedDigest}, found ${localDigest}, and OR3_CLOUD_SKIP_PULL=true prevents downloading the authenticated image.`);
+    }
+  }
+  if (process.env.OR3_CLOUD_SKIP_PULL !== 'true') {
     const result = await run('docker', ['pull', image]);
     if (!result.ok) {
       const detail = result.stderr.trim();
@@ -745,10 +803,14 @@ async function pullImage(image: string) {
       }
       throw new Error(`Could not download ${image}. Check your internet connection and Docker registry access, then retry. ${detail}`);
     }
-  } else if (!local.ok) {
+  } else {
     throw new Error(`${image} is not available locally and OR3_CLOUD_SKIP_PULL=true prevents downloading it.`);
   }
-  return imageDigest(image);
+  const actual = await imageDigest(image);
+  if (expectedDigest && actual !== expectedDigest) {
+    throw new Error(`Published image digest mismatch for ${image}. Expected the package-authenticated ${expectedDigest}, found ${actual}. The image tag may have been replaced; refusing to continue.`);
+  }
+  return actual;
 }
 
 function imageRepository(image: string) {
@@ -767,7 +829,7 @@ async function requireImageDigest(image: string, expected: string, label: string
 }
 
 async function pullAndRequireImage(image: string, expected: string, label: string) {
-  const actual = await pullImage(image);
+  const actual = await pullImage(image, expected);
   if (actual !== expected) {
     throw new Error(`${label} image digest mismatch for ${image}. Expected ${expected}, found ${actual}. The registry tag may have moved; refusing to mutate the deployment.`);
   }
@@ -856,6 +918,48 @@ function composeProjectNames(directory: string) {
   };
 }
 
+/**
+ * Dashboard updates are available only when this CLI can see a local Unix
+ * Docker socket and has a concrete Unix identity to pass into the isolated
+ * operator container. Remote Docker daemons intentionally stay CLI-only.
+ */
+async function dashboardOperatorEnv(directory: string, version: string): Promise<DashboardOperatorEnv | undefined> {
+  if (process.platform !== 'linux' || !process.getuid || !process.getgid) return undefined;
+  const configured = process.env.DOCKER_HOST?.trim();
+  if (configured && !configured.startsWith('unix://')) return undefined;
+  const socket = configured ? configured.slice('unix://'.length) : '/var/run/docker.sock';
+  if (!isAbsolute(socket)) return undefined;
+  try {
+    const socketStat = await stat(socket);
+    if (!socketStat.isSocket()) return undefined;
+    const uid = process.getuid();
+    const gid = process.getgid();
+    if (!Number.isSafeInteger(uid) || uid < 0 || !Number.isSafeInteger(gid) || gid < 0) return undefined;
+    return {
+      OR3_DASHBOARD_UPDATES_ENABLED: 'true',
+      COMPOSE_PROFILES: 'dashboard-updates',
+      OR3_OPERATOR_IMAGE: imageFor(version),
+      OR3_DEPLOYMENT_DIR: resolve(directory),
+      OR3_OPERATOR_UID: String(uid),
+      OR3_OPERATOR_GID: String(gid),
+      OR3_DOCKER_SOCKET: socket,
+      OR3_DOCKER_GID: String(socketStat.gid),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+async function prepareDashboardOperatorIpc(directory: string, enabled: boolean) {
+  if (!enabled) return;
+  const ipc = deploymentPaths(directory).operatorIpc;
+  // The app's fixed container UID needs to traverse its read-only bind mount
+  // to connect to the socket. Execute-only access prevents it from listing
+  // this host-owned directory or creating another socket beside it.
+  await mkdir(ipc, { recursive: true, mode: 0o711 });
+  await chmod(ipc, 0o711);
+}
+
 export function buildEnv(input: {
   mode: Mode;
   version: string;
@@ -865,6 +969,7 @@ export function buildEnv(input: {
   domain?: string;
   port: number;
   secrets?: Record<string, string>;
+  dashboardOperator?: DashboardOperatorEnv;
 }) {
   const names = composeProjectNames(input.directory);
   const secrets = input.secrets ?? {};
@@ -918,6 +1023,7 @@ export function buildEnv(input: {
     OR3_TRUST_PROXY: input.mode === 'public' ? 'true' : 'false',
     OR3_FORWARDED_FOR_HEADER: 'x-forwarded-for',
   };
+  if (input.dashboardOperator) Object.assign(values, input.dashboardOperator);
   return values;
 }
 
@@ -958,7 +1064,7 @@ async function readPassword(flags: Flags) {
 }
 
 export function managedAssetNames(mode: Mode) {
-  return ['compose.yaml', ...(mode === 'public' ? ['compose.public.yaml', 'Caddyfile'] : [])];
+  return ['compose.yaml', 'dashboard-operator.mjs', ...(mode === 'public' ? ['compose.public.yaml', 'Caddyfile'] : [])];
 }
 
 async function installManagedAssets(directory: string, assets: Map<string, Buffer>) {
@@ -1018,6 +1124,9 @@ export async function snapshotManagedAssets(directory: string, mode: Mode, backu
   await chmod(assetDir, 0o700);
   const checksums: Record<string, string> = {};
   for (const name of managedAssetNames(mode)) {
+    // The first dashboard-capable update must still snapshot and roll back a
+    // deployment created before the operator asset existed.
+    if (name === 'dashboard-operator.mjs' && !await fileExists(join(directory, name))) continue;
     const destination = join(assetDir, name);
     await copySecure(join(directory, name), destination);
     checksums[name] = await sha256File(destination);
@@ -1028,9 +1137,16 @@ export async function snapshotManagedAssets(directory: string, mode: Mode, backu
 async function verifiedManagedAssetContents(backupPath: string, manifest: BackupManifest) {
   const checksums = manifest.managedAssetSha256;
   if (!checksums) return undefined;
-  const expected = managedAssetNames(manifest.mode).sort();
+  const expected = (manifest.managedAssetInventoryVersion === 2
+    ? managedAssetNames(manifest.mode)
+    : ['compose.yaml', ...(manifest.mode === 'public' ? ['compose.public.yaml', 'Caddyfile'] : [])]
+  ).sort();
   const actual = Object.keys(checksums).sort();
-  if (actual.length !== expected.length || actual.some((name, index) => name !== expected[index])) {
+  if (
+    (manifest.managedAssetInventoryVersion !== undefined && manifest.managedAssetInventoryVersion !== 2)
+    || actual.length !== expected.length
+    || actual.some((name, index) => name !== expected[index])
+  ) {
     throw new Error(`Backup ${manifest.backupId} has an invalid managed asset inventory.`);
   }
   const assets = new Map<string, Buffer>();
@@ -1053,6 +1169,9 @@ export async function restoreManagedAssets(directory: string, backupPath: string
   const assets = await verifiedManagedAssetContents(backupPath, manifest);
   if (!assets) return false;
   await installManagedAssets(directory, assets);
+  if (manifest.managedAssetInventoryVersion !== 2) {
+    await rm(join(directory, 'dashboard-operator.mjs'), { force: true });
+  }
   return true;
 }
 
@@ -1504,6 +1623,7 @@ async function createBackup(directory: string, state: ManagedState, env: Record<
       dataBytes: volumeSize,
       configSha256: await sha256File(join(backupDir, 'config.env')),
       managedAssetSha256,
+      managedAssetInventoryVersion: managedAssetSha256['dashboard-operator.mjs'] ? 2 : undefined,
       mode: state.mode,
       domain: state.domain,
       composeProject: state.composeProject,
@@ -1715,14 +1835,16 @@ async function initCommand(positionals: string[], flags: Flags) {
   const password = await readPassword(flags);
   const version = PACKAGE_VERSION;
   const image = imageFor(version);
-  await pullImage(image);
+  const digest = await pullImage(image, expectedImageDigest(version));
   await assertSupportedHostArchitecture(image);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await chmod(directory, 0o700);
   await mkdir(deploymentPaths(directory).operations, { recursive: true, mode: 0o700 });
   await mkdir(deploymentPaths(directory).backups, { recursive: true, mode: 0o700 });
+  const operator = await dashboardOperatorEnv(directory, version);
+  await prepareDashboardOperatorIpc(directory, Boolean(operator));
   await copyAssets(directory, mode);
-  const env = buildEnv({ mode, version, directory, email, password, domain, port });
+  const env = buildEnv({ mode, version, directory, email, password, domain, port, dashboardOperator: operator });
   await writeSecure(deploymentPaths(directory).env, serializeEnv(env));
   await writeSecure(join(directory, '.or3-initial-credentials'), serializeInitialCredentials({
     bootstrapEmail: email,
@@ -1730,7 +1852,6 @@ async function initCommand(positionals: string[], flags: Flags) {
     adminUsername: email,
     adminPassword: password,
   }));
-  const digest = await imageDigest(image);
   const state = stateFromEnv(directory, env, mode, 'init', digest);
   await markPending(directory, state, {
     id: id('init'),
@@ -1744,6 +1865,7 @@ async function initCommand(positionals: string[], flags: Flags) {
     console.log(`\nOR3 Cloud ${version} is running at ${mode === 'public' ? `https://${domain}` : `http://127.0.0.1:${port}`}`);
     console.log(`Credentials were written to ${join(directory, '.or3-initial-credentials')} (mode 0600). Save them, then remove that file.`);
     console.log(`\nCheck: cd ${quote(directory)} && npx @or3/cloud doctor`);
+    if (operator) console.log('Dashboard updates are enabled for super admins in Operations.');
   } catch (error) {
     state.lastError = redact(error instanceof Error ? error.message : String(error), secretValues(env));
     await writeState(directory, state);
@@ -2081,7 +2203,7 @@ async function updateCommand(directory: string, flags: Flags) {
   }
   if (targetVersion === state.appVersion) throw new Error(`The deployment is already on OR3 ${targetVersion}.`);
   const targetImage = imageFor(targetVersion);
-  const targetDigest = await pullImage(targetImage);
+  const targetDigest = await pullImage(targetImage, expectedImageDigest(targetVersion));
   await assertSupportedHostArchitecture(targetImage);
   const oldEnv = { ...env };
   const pending: PendingOperation = {
@@ -2097,7 +2219,16 @@ async function updateCommand(directory: string, flags: Flags) {
   try {
     const backup = await createBackup(loaded.directory, state, env);
     await updatePending(loaded.directory, state, { backupId: backup.backupId });
-    const nextEnv = { ...env, OR3_VERSION: targetVersion, OR3_IMAGE: targetImage };
+    const operator = env.OR3_DASHBOARD_UPDATES_ENABLED === 'true'
+      ? undefined
+      : await dashboardOperatorEnv(loaded.directory, targetVersion);
+    await prepareDashboardOperatorIpc(loaded.directory, Boolean(operator));
+    const nextEnv = {
+      ...env,
+      OR3_VERSION: targetVersion,
+      OR3_IMAGE: targetImage,
+      ...(operator ?? {}),
+    };
     const previousRootOwnership = await managedVolumeRootOwnership(targetImage, state.volumeName);
     const migrateLegacyVolume = previousRootOwnership.uid !== MANAGED_RUNTIME_UID || previousRootOwnership.gid !== MANAGED_RUNTIME_GID;
     try {
@@ -2683,7 +2814,7 @@ async function adoptCommand(positionals: string[], flags: Flags) {
   if (sourceEnv.OR3_IMAGE && sourceEnv.OR3_IMAGE !== image) {
     throw new Error(`V1 OR3_IMAGE ${sourceEnv.OR3_IMAGE} does not match the published image for ${release.or3Version}.`);
   }
-  await pullImage(image);
+  const digest = await pullImage(image, expectedImageDigest(release.or3Version));
   await assertSupportedHostArchitecture(image);
   const sourceVolume = await readSourceVolume(sourceDirectory);
   const email = sourceEnv.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
@@ -2730,7 +2861,6 @@ async function adoptCommand(positionals: string[], flags: Flags) {
     adminUsername: email,
     adminPassword: password,
   }));
-  const digest = await imageDigest(image);
   const state = stateFromEnv(targetDirectory, targetEnv, mode, 'adopt', digest);
   await markPending(targetDirectory, state, {
     id: id('adopt'),

@@ -10,7 +10,10 @@ import type {
     SyncScope,
     SyncSubscribeOptions,
 } from '~~/shared/sync/types';
+import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 import { OutboxManager } from '../outbox-manager';
+import { _resetSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
+import { isRecentOpId, markRecentOpId } from '../recent-op-cache';
 import {
     createMemoryTable,
     createMockDb,
@@ -50,7 +53,12 @@ class SpyProvider implements SyncProvider {
     }
 
     async pull(_request: PullRequest): Promise<PullResponse> {
-        return { changes: [], nextCursor: 0, hasMore: false };
+        return {
+            changes: [],
+            nextCursor: 0,
+            hasMore: false,
+            ...FULL_HISTORY_PULL_RETENTION,
+        };
     }
 
     async updateCursor(): Promise<void> {
@@ -97,6 +105,7 @@ describe('OutboxManager', () => {
     beforeEach(() => {
         hookState.doAction.mockClear();
         opCounter = 0;
+        _resetSyncCircuitBreaker();
     });
 
     it('coalesces multiple ops for the same record and drops stale entries', async () => {
@@ -418,6 +427,39 @@ describe('OutboxManager', () => {
         ).toBe(false);
     });
 
+    it('preserves queued writes on session loss without logging or consuming attempts', async () => {
+        const pendingOp = createPendingOp({ id: 'pending-session-loss' });
+        const pendingOps = createPendingOpsTable([pendingOp]);
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async () => {
+            const error = new Error('Unauthorized') as Error & { status: number };
+            error.status = 401;
+            throw error;
+        });
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.spyOn(Date, 'now').mockReturnValue(1000);
+        const outbox = new OutboxManager(
+            createMockDb({ pending_ops: pendingOps }) as any,
+            provider,
+            { workspaceId: 'workspace-1' },
+            { retryDelays: [250] }
+        );
+
+        await expect(outbox.flush()).resolves.toBe(false);
+
+        expect(pendingOps.__rows.get(pendingOp.id)).toMatchObject({
+            status: 'retry_wait',
+            attempts: 0,
+            nextAttemptAt: 1250,
+        });
+        expect(consoleError).not.toHaveBeenCalled();
+        expect(
+            hookState.doAction.mock.calls.some(
+                (call) => call[0] === 'sync.error:action'
+            )
+        ).toBe(false);
+    });
+
     it('defers retries on transient upstream 503 without incrementing attempts', async () => {
         const pendingOp = createPendingOp({
             id: 'pending-upstream-unavailable',
@@ -636,5 +678,172 @@ describe('OutboxManager', () => {
         expect(pendingOps.__rows.has(pending.id)).toBe(false);
         expect(provider.push).toHaveBeenCalledTimes(1);
         outbox.stop();
+    });
+
+    it('applies the winner payload when push reports applied: false', async () => {
+        const pendingOp = createPendingOp({
+            id: 'pending-loser',
+            pk: 'm1',
+            payload: { id: 'm1', text: 'local' },
+            stamp: {
+                deviceId: 'device-1',
+                opId: 'op-local',
+                hlc: '0000000000001:0000:node',
+                clock: 1,
+            },
+        });
+        const pendingOps = createPendingOpsTable([pendingOp]);
+        const messages = createMemoryTable('id', [{ id: 'm1', text: 'local' }]);
+        const db = createMockDb({
+            pending_ops: pendingOps,
+            messages,
+            tombstones: createMemoryTable('id'),
+        });
+        const provider = new SpyProvider();
+        const winner = { id: 'm1', text: 'remote-winner', clock: 9 };
+        provider.push = vi.fn(async () => ({
+            results: [{
+                opId: 'op-local',
+                success: true,
+                applied: false,
+                payload: winner,
+            }],
+            serverVersion: 4,
+        }));
+        markRecentOpId('op-local');
+        const outbox = new OutboxManager(db as any, provider, { workspaceId: 'workspace-1' });
+
+        await outbox.flush();
+
+        expect(pendingOps.__rows.size).toBe(0);
+        expect(messages.__rows.get('m1')).toMatchObject(winner);
+        expect(isRecentOpId('op-local')).toBe(false);
+    });
+
+    it('keeps the outbox row when applied: false has no winner payload', async () => {
+        const pendingOp = createPendingOp({
+            id: 'pending-missing-winner',
+            stamp: {
+                deviceId: 'device-1',
+                opId: 'op-missing',
+                hlc: '0000000000001:0000:node',
+                clock: 1,
+            },
+        });
+        const pendingOps = createPendingOpsTable([pendingOp]);
+        const db = createMockDb({ pending_ops: pendingOps });
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async () => ({
+            results: [{
+                opId: 'op-missing',
+                success: true,
+                applied: false,
+            }],
+            serverVersion: 4,
+        }));
+        const outbox = new OutboxManager(db as any, provider, { workspaceId: 'workspace-1' });
+
+        await outbox.flush();
+
+        expect(pendingOps.__rows.has('pending-missing-winner')).toBe(true);
+        expect(pendingOps.__rows.get('pending-missing-winner')?.status).toBe('retry_wait');
+    });
+
+    it('packs batches under the byte ceiling across multiple flushes', async () => {
+        const ops = [0, 1, 2].map((index) =>
+            createPendingOp({
+                id: `pending-big-${index}`,
+                pk: `p${index}`,
+                tableName: 'posts',
+                payload: {
+                    id: `p${index}`,
+                    title: 'Post',
+                    content: 'x'.repeat(800_000),
+                    post_type: 'markdown',
+                    deleted: false,
+                    created_at: 1,
+                    updated_at: 1,
+                    clock: 1,
+                },
+                stamp: {
+                    deviceId: 'device-1',
+                    opId: `op-big-${index}`,
+                    hlc: `000000000000${index}:0000:node`,
+                    clock: 1,
+                },
+            })
+        );
+        const pendingOps = createPendingOpsTable(ops);
+        const db = createMockDb({ pending_ops: pendingOps });
+        const provider = new SpyProvider();
+        const sizes: number[] = [];
+        provider.push = vi.fn(async (batch: PushBatch) => {
+            sizes.push(batch.ops.length);
+            return {
+                results: batch.ops.map((op) => ({ opId: op.stamp.opId, success: true })),
+                serverVersion: 1,
+            };
+        });
+        const outbox = new OutboxManager(db as any, provider, { workspaceId: 'workspace-1' });
+
+        await outbox.flush();
+        await outbox.flush();
+
+        expect(sizes.length).toBeGreaterThan(1);
+        expect(sizes.every((size) => size < 3)).toBe(true);
+        expect(pendingOps.__rows.size).toBe(0);
+    });
+
+    it('binary-splits a whole-request 413 down to single ops', async () => {
+        const ops = [0, 1].map((index) =>
+            createPendingOp({
+                id: `pending-split-${index}`,
+                pk: `s${index}`,
+                stamp: {
+                    deviceId: 'device-1',
+                    opId: `op-split-${index}`,
+                    hlc: `000000000000${index}:0000:node`,
+                    clock: 1,
+                },
+            })
+        );
+        const pendingOps = createPendingOpsTable(ops);
+        const db = createMockDb({ pending_ops: pendingOps });
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async (batch: PushBatch) => {
+            if (batch.ops.length > 1) {
+                const err = new Error('Payload too large') as Error & { statusCode: number };
+                err.statusCode = 413;
+                throw err;
+            }
+            return {
+                results: batch.ops.map((op) => ({ opId: op.stamp.opId, success: true })),
+                serverVersion: 1,
+            };
+        });
+        const outbox = new OutboxManager(db as any, provider, { workspaceId: 'workspace-1' });
+
+        await outbox.flush();
+
+        expect(provider.push.mock.calls.some((call) => call[0].ops.length === 1)).toBe(true);
+        expect(pendingOps.__rows.size).toBe(0);
+    });
+
+    it('does not claim a half-open probe on an empty flush', async () => {
+        const db = createMockDb({ pending_ops: createPendingOpsTable([]) });
+        const provider = new SpyProvider();
+        const outbox = new OutboxManager(db as any, provider, { workspaceId: 'empty-probe' });
+        const breaker = (await import('~~/shared/sync/circuit-breaker')).getSyncCircuitBreaker(
+            'empty-probe:spy'
+        );
+        for (let i = 0; i < 5; i++) breaker.recordFailure();
+        vi.spyOn(Date, 'now').mockReturnValue(breaker.getTimeUntilRetry() + Date.now() + 1);
+        // Force open duration to elapse
+        vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_000);
+        expect(breaker.getState() === 'open' || breaker.getState() === 'half-open' || breaker.canRetry()).toBeTruthy();
+
+        await outbox.flush();
+        expect(provider.push).not.toHaveBeenCalled();
+        expect(breaker.canRetry()).toBe(true);
     });
 });

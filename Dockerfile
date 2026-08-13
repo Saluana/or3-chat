@@ -7,6 +7,11 @@
 # so the multi-arch build does not require QEMU.
 FROM busybox:1.37.0-uclibc@sha256:8d7b1636e974e0adfd8d945955fca609304f0a56c18799dfd032d6e661382d84 AS runtime-tools
 
+# Kept out of the app container at runtime. A second, explicitly scoped
+# dashboard-operator service receives these client binaries together with the
+# Docker socket; the web service never mounts that socket.
+FROM docker:27.5.1-cli@sha256:851f91d241214e7c6db86513b270d58776379aacc5eb9c4a87e5b47115e3065c AS docker-client
+
 # The Nuxt output is architecture-neutral and better-sqlite3 ships both Linux
 # runtime bindings in its package. Build it once on the native CI platform;
 # only the runtime and static operator tools vary across output architectures.
@@ -98,6 +103,12 @@ COPY --from=build --chown=65532:65532 /app/.output ./.output
 COPY --from=build --chown=65532:65532 /app/scripts/docker/runtime-entrypoint.mjs ./scripts/docker/runtime-entrypoint.mjs
 COPY --from=build --chown=65532:65532 /tmp/or3-runtime-data /data
 COPY --from=runtime-tools /bin/ /bin/
+# The operator sidecar invokes the published, exact @or3/cloud package through
+# npm. These files are inert in the normal web-service container because that
+# service has neither the Docker client nor the Docker socket.
+COPY --from=build /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+COPY --from=docker-client /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker-client /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
 
 USER 65532:65532
 EXPOSE 3000

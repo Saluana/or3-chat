@@ -46,20 +46,6 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: bun run release:prepare -- --version "$VERSION" --registry --full
-      - name: Pack the exact operator artifact
-        id: pack
-        working-directory: packages/or3-cloud
-        run: |
-          set -euo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/release-artifact"
-          npm pack --ignore-scripts --pack-destination "$GITHUB_WORKSPACE/release-artifact"
-          tarball="$GITHUB_WORKSPACE/release-artifact/or3-cloud-${{ inputs.version }}.tgz"
-          test -f "$tarball"
-          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
-      - name: Check documentation against the exact tarball
-        env:
-          CLOUD_TARBALL: ${{ steps.pack.outputs.tarball }}
-        run: bun run check:docs -- --cloud-tarball "$CLOUD_TARBALL"
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -112,6 +98,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Verify manifest and anonymous pull
+        id: image
         env:
           OR3_IMAGE: ${{ steps.candidate.outputs.image }}
         run: |
@@ -119,6 +106,9 @@ jobs:
           inspect="$(docker buildx imagetools inspect "$OR3_IMAGE")"
           grep -q 'linux/amd64' <<<"$inspect"
           grep -q 'linux/arm64' <<<"$inspect"
+          digest="$(awk '$1 == "Digest:" { print $2; exit }' <<<"$inspect")"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
           docker logout ghcr.io
           docker pull --platform linux/amd64 "$OR3_IMAGE"
       - uses: docker/login-action@v3
@@ -126,6 +116,27 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Bind and pack the operator to the qualified image digest
+        id: pack
+        working-directory: packages/or3-cloud
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"
+          node -e 'const p=require("./package.json"); if(p.version!==process.env.VERSION||p.or3Cloud?.imageDigest!==process.env.IMAGE_DIGEST)process.exit(1)'
+          mkdir -p "$GITHUB_WORKSPACE/release-artifact"
+          npm pack --ignore-scripts --pack-destination "$GITHUB_WORKSPACE/release-artifact"
+          tarball="$GITHUB_WORKSPACE/release-artifact/or3-cloud-$VERSION.tgz"
+          test -f "$tarball"
+          packed_digest="$(tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s).or3Cloud?.imageDigest||""))')"
+          test "$packed_digest" = "$IMAGE_DIGEST"
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+      - name: Check documentation against the exact tarball
+        env:
+          CLOUD_TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: bun run check:docs -- --cloud-tarball "$CLOUD_TARBALL"
       - name: Install Syft
         id: syft
         uses: anchore/sbom-action/download-syft@d8a2c0130026bf585de5c176ab8f7ce62d75bf04

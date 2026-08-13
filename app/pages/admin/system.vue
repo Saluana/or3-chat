@@ -37,6 +37,8 @@
                     />
                 </div>
 
+                <AdminSystemUpdateCard v-if="isOwner" :is-owner="isOwner" />
+
                 <section v-if="providerActions.length" class="space-y-3">
                     <div>
                         <h3 class="text-lg font-semibold">Maintenance</h3>
@@ -102,6 +104,7 @@ import type { ProviderAction } from '~/composables/admin/useAdminTypes';
 import AdminSystemStatusCard from '~/components/admin/system/AdminSystemStatusCard.vue';
 import AdminSystemOperationsCard from '~/components/admin/system/AdminSystemOperationsCard.vue';
 import AdminSystemProviderActions from '~/components/admin/system/AdminSystemProviderActions.vue';
+import AdminSystemUpdateCard from '~/components/admin/system/AdminSystemUpdateCard.vue';
 
 definePageMeta({
     layout: 'admin',

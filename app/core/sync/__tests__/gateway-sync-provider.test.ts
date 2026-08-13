@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PullResponse, SnapshotResponse, SyncChange, SyncScope } from '~~/shared/sync/types';
+import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 import { createGatewaySyncProvider } from '../providers/gateway-sync-provider';
 import { OutboxManager } from '../outbox-manager';
 import { createMockDb, createPendingOpsTable } from './sync-test-utils';
@@ -15,10 +16,18 @@ vi.mock('~/core/hooks/useHooks', () => ({
 }));
 
 function makeOkResponse(body: unknown) {
+    const payload =
+        body &&
+        typeof body === 'object' &&
+        'hasMore' in body &&
+        !('results' in body) &&
+        !('oldestRetainedVersion' in body)
+            ? { ...FULL_HISTORY_PULL_RETENTION, ...(body as object) }
+            : body;
     return {
         ok: true,
         status: 200,
-        text: vi.fn(async () => JSON.stringify(body)),
+        text: vi.fn(async () => JSON.stringify(payload)),
     } as unknown as Response;
 }
 
@@ -361,6 +370,7 @@ describe('GatewaySyncProvider', () => {
 
     it('stops polling and emits sync-session-invalid event on auth/permission failures', async () => {
         vi.spyOn(Math, 'random').mockReturnValue(0);
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
         const fetchMock = vi.fn(async () =>
             makeErrorResponse(403, { statusMessage: 'Forbidden' })
@@ -383,6 +393,7 @@ describe('GatewaySyncProvider', () => {
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(sessionInvalidSpy).toHaveBeenCalledTimes(1);
+        expect(consoleError).not.toHaveBeenCalled();
 
         // Provider should stop scheduling polls after 401/403.
         await vi.advanceTimersByTimeAsync(1000);
@@ -390,6 +401,24 @@ describe('GatewaySyncProvider', () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
 
         unsubscribe();
+        window.removeEventListener('or3:sync-session-invalid', sessionInvalidSpy);
+    });
+
+    it('emits sync-session-invalid for an unauthorized push without logging', async () => {
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        (globalThis as unknown as { fetch: unknown }).fetch = vi.fn(async () =>
+            makeErrorResponse(401, { statusMessage: 'Unauthorized' })
+        );
+        const sessionInvalidSpy = vi.fn();
+        window.addEventListener('or3:sync-session-invalid', sessionInvalidSpy);
+
+        await expect(createGatewaySyncProvider().push(pushBatch())).rejects.toMatchObject({
+            status: 401,
+            path: '/api/sync/push',
+        });
+
+        expect(sessionInvalidSpy).toHaveBeenCalledTimes(1);
+        expect(consoleError).not.toHaveBeenCalled();
         window.removeEventListener('or3:sync-session-invalid', sessionInvalidSpy);
     });
 

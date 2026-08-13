@@ -31,6 +31,30 @@ export type StatusResponse = {
     session?: { role?: string };
 };
 
+export type DashboardUpdateJob = {
+    id: string;
+    targetVersion: string;
+    phase: 'queued' | 'running' | 'succeeded' | 'failed' | 'needs_attention';
+    startedAt: string;
+    completedAt?: string;
+    error?: string;
+};
+
+export type DashboardUpdateStatus =
+    | {
+          kind: 'managed';
+          enabled: true;
+          currentVersion: string | null;
+          latestVersion?: string;
+          updateAvailable?: boolean;
+          job: DashboardUpdateJob | null;
+      }
+    | {
+          kind: 'unsupported';
+          enabled: false;
+          reason: string;
+      };
+
 export type ConfigEntry = {
     key: string;
     value: string | null;

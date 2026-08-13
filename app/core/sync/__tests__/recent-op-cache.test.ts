@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { isRecentOpId, markRecentOpId } from '../recent-op-cache';
+import { isRecentOpId, markRecentOpId, unmarkRecentOpId } from '../recent-op-cache';
 
 describe('recent-op-cache', () => {
     beforeEach(() => {
@@ -18,5 +18,12 @@ describe('recent-op-cache', () => {
 
         vi.advanceTimersByTime(61_000);
         expect(isRecentOpId('op-2')).toBe(false);
+    });
+
+    it('unmarks an opId so a later winner echo can apply', () => {
+        markRecentOpId('op-3');
+        expect(isRecentOpId('op-3')).toBe(true);
+        unmarkRecentOpId('op-3');
+        expect(isRecentOpId('op-3')).toBe(false);
     });
 });

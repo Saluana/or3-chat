@@ -35,6 +35,7 @@ import type {
     SyncChange,
     PullResponse,
     SnapshotResponse,
+    PendingOp,
 } from '~~/shared/sync/types';
 import { ConflictResolver } from './conflict-resolver';
 import { getCursorManager, type CursorManager } from './cursor-manager';
@@ -104,6 +105,7 @@ export class SubscriptionManager {
     private isBootstrapping = false;
     private boundBeforeUnload: (() => void) | null = null;
     private lastSubscriptionCursor: number | null = null;
+    private recoveringExpiredCursor = false;
     private changeQueue: Promise<void> = Promise.resolve();
     /** Invalidates every async continuation created by an older lifecycle. */
     private lifecycleGeneration = 0;
@@ -151,29 +153,43 @@ export class SubscriptionManager {
         this.setStatus('connecting');
 
         try {
-            // Check if bootstrap is needed
-            const needsBootstrap = await this.cursorManager.isBootstrapNeeded();
-            if (!this.isCurrentGeneration(generation)) return;
-            const cursorExpired =
-                !needsBootstrap &&
-                (await this.cursorManager.isCursorPotentiallyExpired());
-            if (!this.isCurrentGeneration(generation)) return;
-
-            if (cursorExpired) {
-                await this.rescan(generation);
+            const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
+            if (!circuitBreaker.canRetry() || !circuitBreaker.beginProbe()) {
+                throw new Error(
+                    'Circuit breaker is open; subscription cannot start'
+                );
             }
+            let probeSettled = false;
+            try {
+                const needsBootstrap = await this.cursorManager.isBootstrapNeeded();
+                if (!this.isCurrentGeneration(generation)) return;
+                if (needsBootstrap) {
+                    await this.bootstrap(generation);
+                } else {
+                    const recovered = await this.recoverIfHistoryExpired(generation);
+                    if (!recovered) {
+                        const cursorExpired =
+                            await this.cursorManager.isCursorPotentiallyExpired();
+                        if (!this.isCurrentGeneration(generation)) return;
+                        if (cursorExpired) {
+                            await this.rescan(generation);
+                        }
+                    }
+                }
+                if (!this.isCurrentGeneration(generation)) return;
 
-            if (needsBootstrap) {
-                await this.bootstrap(generation);
+                await this.subscribe(generation);
+                if (!this.isCurrentGeneration(generation)) return;
+
+                this.reconnectAttempts = 0;
+                this.setStatus('connected');
+                circuitBreaker.recordSuccess();
+                probeSettled = true;
+            } finally {
+                if (!probeSettled) {
+                    circuitBreaker.recordFailure();
+                }
             }
-            if (!this.isCurrentGeneration(generation)) return;
-
-            // Subscribe to real-time changes
-            await this.subscribe(generation);
-            if (!this.isCurrentGeneration(generation)) return;
-
-            this.reconnectAttempts = 0;
-            this.setStatus('connected');
         } catch (error) {
             if (!this.isCurrentGeneration(generation) || isAbortLikeError(error)) {
                 return;
@@ -275,6 +291,7 @@ export class SubscriptionManager {
 
                 const response = await pendingFetch!;
                 if (!this.isCurrentGeneration(generation)) return;
+                if (await this.honorRequiresSnapshot(response, generation)) return;
 
                 // Loop guard: only error if backend says there is more data but cursor is stuck.
                 if (response.hasMore && response.nextCursor <= cursor) {
@@ -469,6 +486,48 @@ export class SubscriptionManager {
         }
     }
 
+    private async recoverIfHistoryExpired(generation: number): Promise<boolean> {
+        const cursor = await this.cursorManager.getCursor();
+        if (!this.isCurrentGeneration(generation)) return true;
+        try {
+            const probe = await this.provider.pull({
+                scope: this.scope,
+                cursor,
+                limit: 1,
+                tables: this.config.tables,
+            });
+            if (!this.isCurrentGeneration(generation)) return true;
+            if (typeof probe.requiresSnapshot !== 'boolean') return false;
+            if (probe.requiresSnapshot) {
+                await this.recoverFromExpiredCursor(generation);
+            }
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    private async recoverFromExpiredCursor(generation: number): Promise<void> {
+        if (this.recoveringExpiredCursor) {
+            throw new Error('Snapshot recovery did not cover the requested cursor');
+        }
+        this.recoveringExpiredCursor = true;
+        try {
+            await this.rescan(generation);
+        } finally {
+            this.recoveringExpiredCursor = false;
+        }
+    }
+
+    private async honorRequiresSnapshot(
+        response: PullResponse,
+        generation: number
+    ): Promise<boolean> {
+        if (!response.requiresSnapshot) return false;
+        await this.recoverFromExpiredCursor(generation);
+        return true;
+    }
+
     /**
      * Perform a full rescan when cursor is expired
      */
@@ -524,6 +583,7 @@ export class SubscriptionManager {
                     tables: this.config.tables,
                 });
                 if (!this.isCurrentGeneration(generation)) return;
+                if (await this.honorRequiresSnapshot(response, generation)) return;
 
                 if (response.changes.length) {
                     const filtered = this.filterRecentOps(response.changes);
@@ -581,10 +641,19 @@ export class SubscriptionManager {
     }
 
     private async reapplyPendingOps(): Promise<void> {
-        const pendingOps = await this.db.pending_ops
-            .where('status')
-            .equals('pending')
-            .toArray();
+        const statuses = [
+            'pending',
+            'in_flight',
+            'retry_wait',
+            'failed_retryable',
+            'syncing',
+        ] as const;
+        const pendingOps: PendingOp[] = [];
+        for (const status of statuses) {
+            pendingOps.push(
+                ...(await this.db.pending_ops.where('status').equals(status).toArray())
+            );
+        }
         if (!pendingOps.length) return;
 
         // IMPORTANT: Sort by createdAt to ensure deterministic replay order
@@ -834,6 +903,10 @@ export class SubscriptionManager {
                 tables: this.config.tables,
             });
             if (!this.isCurrentGeneration(generation)) break;
+            if (await this.honorRequiresSnapshot(response, generation)) {
+                totals.cursor = await this.cursorManager.getCursor();
+                break;
+            }
 
             const newChanges = response.changes.filter(
                 (change) => change.serverVersion > cursor
