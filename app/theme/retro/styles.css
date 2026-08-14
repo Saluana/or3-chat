@@ -46,6 +46,7 @@
 		--or3-tab-shadow-hover: 2px 2px 0 0 var(--md-border-color);
 		--or3-tab-shadow-active: 2px 2px 0 0 var(--md-border-color);
 		--or3-tab-menu-shadow: 3px 3px 0 0 var(--md-surface-variant);
+		border-bottom: var(--md-border-width) solid var(--md-border-color) !important;
 	}
 
 	.workspace-chrome .workspace-tab,

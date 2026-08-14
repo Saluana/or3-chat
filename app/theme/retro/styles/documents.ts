@@ -32,6 +32,11 @@ export const documentsStyles = {
             fontFamily: `${documentReadingFont} !important`,
         },
     },
+    '.document-editor-root .document-content .ProseMirror:focus-visible': {
+        style: {
+            outline: 'none',
+        },
+    },
     '.document-editor-root .document-content h1, .document-editor-root .document-content h2, .document-editor-root .document-content h3':
         {
             style: {

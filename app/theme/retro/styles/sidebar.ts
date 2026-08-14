@@ -162,7 +162,7 @@ export const sidebarCssSelectors = {
     // Sidebar container border
     '#sidebar-container-outer': {
         style: {
-            borderRight: 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color)',
+            borderRight: 'var(--md-border-width) solid var(--md-border-color)',
         },
     },
     '.sidenav-header-separator': {
@@ -217,7 +217,7 @@ export const sidebarCssSelectors = {
         style: {
             minWidth: '64px !important',
             maxWidth: '64px !important',
-            borderRight: 'var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color)',
+            borderRight: 'var(--md-border-width) solid var(--md-border-color)',
         },
     },
     '#nav-top-section, #nav-footer-section, #nav-pages-section, #nav-middle-section':

@@ -1,5 +1,5 @@
 [data-theme="retro"] #sidebar-container-outer {
-  border-right: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color);
+  border-right: var(--md-border-width) solid var(--md-border-color);
 }
 
 [data-theme="retro"] .sidenav-header-separator {
@@ -44,7 +44,7 @@
 [data-theme="retro"] #nav-collapsed-container {
   min-width: 64px !important;
   max-width: 64px !important;
-  border-right: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color);
+  border-right: var(--md-border-width) solid var(--md-border-color);
 }
 
 [data-theme="retro"] #nav-top-section,
@@ -247,6 +247,10 @@
 
 [data-theme="retro"] .document-editor-root .document-content {
   font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+[data-theme="retro"] .document-editor-root .document-content .ProseMirror:focus-visible {
+  outline: none;
 }
 
 [data-theme="retro"] .document-editor-root .document-content h1,

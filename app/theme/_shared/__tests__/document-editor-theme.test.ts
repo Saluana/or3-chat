@@ -78,11 +78,12 @@ describe('document editor theme contract', () => {
         );
     });
 
-    it('blank document editor does not draw a focus border around the writing canvas', () => {
+    it.each([
+        ['blank', blankDocumentStyles],
+        ['retro', retroDocumentStyles],
+    ])('%s document editor does not draw a focus border around the writing canvas', (_name, styles) => {
         const editor =
-            blankDocumentStyles[
-                '.document-editor-root .document-content .ProseMirror:focus-visible'
-            ]?.style;
+            styles['.document-editor-root .document-content .ProseMirror:focus-visible']?.style;
         expect(editor?.outline).toBe('none');
     });
 
