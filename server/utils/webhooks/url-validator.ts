@@ -25,7 +25,7 @@ export async function validateWebhookUrl(
     rawUrl: string,
     options: WebhookUrlValidationOptions = {}
 ): Promise<URL> {
-    const { requireHttps = false, blockPrivateIps = false } = options;
+    const { requireHttps = false, blockPrivateIps = true } = options;
 
     let parsed: URL;
     try {

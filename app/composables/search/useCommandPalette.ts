@@ -111,6 +111,7 @@ let hostContext: PaletteHostContext | null = null;
 let hostContextOwner: symbol | null = null;
 let previousFocus: HTMLElement | null = null;
 let previewGeneration = 0;
+let openGeneration = 0;
 let previewCleanup: (() => void) | null = null;
 let previewAbort: AbortController | null = null;
 
@@ -166,12 +167,6 @@ async function ensureCoordinator(): Promise<PaletteCoordinator> {
             });
             coordinator = created;
             unsubscribeSnapshot = created.subscribe(applySnapshot);
-            try {
-                unbindLifecycle = bindPaletteLifecycle(created);
-            } catch {
-                // Hook engine unavailable (e.g. tests); incremental updates are optional.
-            }
-            void created.ensureWarm();
             return created;
         })();
     }
@@ -189,6 +184,7 @@ export function disposeCommandPalette(): void {
     coordinator = null;
     coordinatorPromise = null;
     isOpen.value = false;
+    openGeneration += 1;
     query.value = '';
     results.value = [];
     statuses.value = [];
@@ -356,12 +352,28 @@ function open(): void {
         previousFocus = active instanceof HTMLElement ? active : null;
     }
     isOpen.value = true;
+    const generation = ++openGeneration;
     errorMessage.value = null;
     focusToken.value += 1;
     hoverLock.value = 'keyboard';
     pointerArmedKey.value = null;
     void (async () => {
+        const wasAlreadyCreated = Boolean(coordinator || coordinatorPromise);
         const instance = await ensureCoordinator();
+        if (generation !== openGeneration) return;
+        if (!unbindLifecycle) {
+            try {
+                unbindLifecycle = bindPaletteLifecycle(instance);
+            } catch {
+                // Hook engine unavailable (e.g. tests); incremental updates are optional.
+            }
+        }
+        if (wasAlreadyCreated) {
+            await instance.refreshSources();
+        } else {
+            await instance.ensureWarm();
+        }
+        if (generation !== openGeneration) return;
         applySnapshot(instance.getSnapshot());
         instance.setQuery(query.value);
     })();
@@ -370,6 +382,9 @@ function open(): void {
 function close(): void {
     if (!isOpen.value) return;
     isOpen.value = false;
+    openGeneration += 1;
+    unbindLifecycle?.();
+    unbindLifecycle = null;
     query.value = '';
     coordinator?.setQuery('');
     actionTrayOpen.value = false;
@@ -571,7 +586,8 @@ export function useCommandPalette(): CommandPaletteController {
             announcement.value = message;
         },
         warm: async () => {
-            await ensureCoordinator();
+            const instance = await ensureCoordinator();
+            await instance.ensureWarm();
         },
         getCoordinator: () => coordinator,
     };

@@ -427,6 +427,14 @@ describe('buildOr3CloudConfigFromEnv', () => {
         expect(config.webhooks?.logRetentionHours).toBe(96);
     });
 
+    it('blocks private webhook destinations by default', () => {
+        const config = buildOr3CloudConfigFromEnv({
+            SSR_AUTH_ENABLED: 'true',
+        });
+
+        expect(config.webhooks?.blockPrivateIps).toBe(true);
+    });
+
     it('prefers OR3_WEBHOOKS_ENCRYPTION_KEY over the admin secret', () => {
         const config = buildOr3CloudConfigFromEnv({
             SSR_AUTH_ENABLED: 'true',

@@ -19,7 +19,10 @@ import {
     hashPassword,
     validatePasswordStrength,
 } from '../../../admin/auth/hash';
-import { getAdminFromCookie } from '../../../admin/auth/jwt';
+import {
+    getAdminFromCookie,
+    setAdminCookie,
+} from '../../../admin/auth/jwt';
 import { isAdminEnabled } from '../../../utils/admin/is-admin-enabled';
 
 interface ChangePasswordBody {
@@ -103,6 +106,9 @@ export default defineEventHandler(async (event) => {
     await updateAdminCredentials({
         password_hash_bcrypt: newHash,
     });
+    // Rotate every other session while keeping the successful password-change
+    // flow signed in with a token bound to the new credential revision.
+    await setAdminCookie(event, adminClaims.username);
 
     return {
         success: true,

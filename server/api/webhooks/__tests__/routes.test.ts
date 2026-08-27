@@ -441,6 +441,16 @@ describe('user webhook API routes', () => {
 
         expect(await store.getWebhook(created.webhook.id)).toBeNull();
         expect(await store.getDeliveryLogs(created.webhook.id, 0)).toEqual([]);
+        expect(requireCanMock).toHaveBeenCalledWith(
+            expect.anything(),
+            'workspace.read',
+            expect.anything()
+        );
+        expect(requireCanMock).toHaveBeenCalledWith(
+            expect.anything(),
+            'workspace.write',
+            expect.anything()
+        );
     });
 
     it('returns validation errors for bad input and enforced limits', async () => {

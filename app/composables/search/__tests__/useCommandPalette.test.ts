@@ -34,6 +34,7 @@ const coordinator: PaletteCoordinator = {
     },
     ensureWarm: vi.fn(async () => {}),
     refreshSources: vi.fn(async () => {}),
+    refreshRecords: vi.fn(async () => {}),
     retrySource,
     getResource: vi.fn(),
     hydratePreview,

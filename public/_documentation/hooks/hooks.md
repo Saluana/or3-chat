@@ -45,6 +45,8 @@ Lightweight hook engine that powers OR3’s action/filter system with priority s
 | `currentPriority`       | `() => number \| false`                | Reports the priority currently executing.              |
 
 Diagnostics live under `_diagnostics` with per-hook timing arrays and error counts.
+Each timing array retains only its latest 128 samples so long-running sessions do not
+grow diagnostics without bound.
 
 ---
 

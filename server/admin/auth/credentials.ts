@@ -6,6 +6,7 @@
 import { readFile, writeFile, mkdir, access, chmod } from 'fs/promises';
 import { join } from 'path';
 import { constants } from 'fs';
+import { randomUUID } from 'node:crypto';
 
 const DATA_DIR = '.data';
 const CREDENTIALS_FILE = join(DATA_DIR, 'admin-credentials.json');
@@ -15,6 +16,8 @@ export type AdminCredentialsFile = {
     password_hash_bcrypt: string;
     created_at: string; // ISO
     updated_at: string; // ISO
+    /** Rotated whenever credentials change so existing sessions can be revoked. */
+    session_revision?: string;
 };
 
 /**
@@ -105,6 +108,7 @@ export async function bootstrapAdminCredentialsFromEnv(
         password_hash_bcrypt: await hashPassword(password),
         created_at: now,
         updated_at: now,
+        session_revision: randomUUID(),
     };
 
     await writeAdminCredentials(credentials);
@@ -127,6 +131,7 @@ export async function updateAdminCredentials(
         ...existing,
         ...updates,
         updated_at: new Date().toISOString(),
+        session_revision: randomUUID(),
     };
 
     await writeAdminCredentials(updated);

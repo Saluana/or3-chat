@@ -13,6 +13,7 @@ import {
 } from '../../utils/webhooks/store/resolve-store';
 import type { WebhookRegistration, WebhookStore } from '../../utils/webhooks/store/types';
 import { validateWebhookUrl } from '../../utils/webhooks/url-validator';
+import type { Permission } from '~/core/hooks/hook-types';
 
 export type UserWebhookResponse = Omit<WebhookRegistration, 'signing_secret_enc'>;
 
@@ -54,7 +55,8 @@ function resolveWebhookStore(): WebhookStore {
 }
 
 export async function requireWebhookApiContext(
-    event: H3Event
+    event: H3Event,
+    permission: Permission = 'workspace.read'
 ): Promise<WebhookApiContext> {
     const config = useRuntimeConfig();
     if (!config.auth.enabled || !config.webhooks.enabled) {
@@ -76,7 +78,7 @@ export async function requireWebhookApiContext(
         });
     }
 
-    requireCan(session, 'workspace.read', {
+    requireCan(session, permission, {
         kind: 'workspace',
         id: workspaceId,
     });

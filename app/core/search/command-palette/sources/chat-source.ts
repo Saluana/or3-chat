@@ -32,6 +32,17 @@ export function createChatPaletteSource(): PaletteSearchSource {
             context.signal?.throwIfAborted();
             return buildChatResources(threads, messages, context);
         },
+        async loadRecord(context, threadId) {
+            context.signal?.throwIfAborted();
+            const db = (await context.getDb()) as Or3DB;
+            const thread = await db.threads.get(threadId);
+            if (!thread || thread.deleted) return null;
+            const messages = (
+                await db.messages.where('thread_id').equals(threadId).toArray()
+            ).filter((message) => !message.deleted);
+            context.signal?.throwIfAborted();
+            return buildChatResources([thread], messages, context)[0] ?? null;
+        },
     };
 }
 

@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { Blob } from 'node:buffer';
+import { Blob as NodeBlob } from 'node:buffer';
 import Dexie, { type Table } from 'dexie';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -7,6 +7,8 @@ import {
     WORKSPACE_BACKUP_FORMAT,
     WORKSPACE_BACKUP_VERSION,
 } from '~/utils/workspace-backup-stream';
+
+const Blob = NodeBlob as unknown as typeof globalThis.Blob;
 
 interface TestRow {
     id: string;

@@ -8,6 +8,8 @@ import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { getJobLiveState } from '../../../utils/background-jobs/viewers';
+import { resumeBackgroundWorkflow } from '../../../utils/workflows/background-execution';
+import { publicWorkflowState } from '../../../utils/workflows/resume-envelope';
 
 function logBgStream(
     _stage: string,
@@ -65,6 +67,7 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 404);
         return { error: 'Job not found or unauthorized' };
     }
+    await resumeBackgroundWorkflow(job, provider);
 
     const query = getQuery(event);
     const offsetParam = typeof query.offset === 'string' ? query.offset : null;
@@ -149,7 +152,7 @@ export default defineEventHandler(async (event) => {
             completedAt: effectiveCompletedAt,
             error: effectiveError,
             tool_calls: effectiveToolCalls,
-            workflow_state: effectiveWorkflowState,
+            workflow_state: publicWorkflowState(effectiveWorkflowState),
             content_delta: contentDelta,
             content_length: contentLength,
             content: safeOffset < offset ? effectiveContent : undefined,
@@ -173,7 +176,7 @@ export default defineEventHandler(async (event) => {
         completedAt: effectiveCompletedAt,
         error: effectiveError,
         tool_calls: effectiveToolCalls,
-        workflow_state: effectiveWorkflowState,
+        workflow_state: publicWorkflowState(effectiveWorkflowState),
         content: effectiveContent,
     };
 });

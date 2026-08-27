@@ -20,6 +20,8 @@ import {
     registerJobStream,
     registerJobViewer,
 } from '../../../utils/background-jobs/viewers';
+import { resumeBackgroundWorkflow } from '../../../utils/workflows/background-execution';
+import { publicWorkflowState } from '../../../utils/workflows/resume-envelope';
 
 function logBgStream(
     _stage: string,
@@ -85,7 +87,9 @@ export function serializeJobStatus(
         completedAt: job.completedAt,
         error: job.error,
         tool_calls: overrides?.tool_calls ?? job.tool_calls,
-        workflow_state: overrides?.workflow_state ?? job.workflow_state,
+        workflow_state: publicWorkflowState(
+            overrides?.workflow_state ?? job.workflow_state
+        ),
         content_delta: overrides?.content_delta,
         content_length:
             typeof overrides?.content_length === 'number'
@@ -156,6 +160,7 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 404);
         return { error: 'Job not found or unauthorized' };
     }
+    await resumeBackgroundWorkflow(initialJob, provider);
 
     const query = getQuery(event);
     const offsetParam = typeof query.offset === 'string' ? query.offset : null;

@@ -483,6 +483,7 @@ export async function moveMessage(
             });
         await hooks.doAction('db.messages.move:action:after', {
             messageId,
+            fromThreadId: m.thread_id,
             toThreadId,
         });
     });

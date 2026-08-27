@@ -2,6 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { signAdminJwt, verifyAdminJwt } from '../../server/admin/auth/jwt';
 import type { H3Event } from 'h3';
 
+const credentialState = vi.hoisted(() => ({
+    current: {
+        username: 'testadmin',
+        password_hash_bcrypt: 'hash',
+        created_at: '2026-01-01T00:00:00.000Z',
+        updated_at: '2026-01-01T00:00:00.000Z',
+        session_revision: 'revision-1',
+    },
+}));
+
+vi.mock('../../server/admin/auth/credentials', () => ({
+    readAdminCredentials: vi.fn(async () => credentialState.current),
+}));
+
 // Mock the runtime config and h3 utilities
 vi.mock('h3', async () => {
     const actual = await vi.importActual<typeof import('h3')>('h3');
@@ -58,6 +72,8 @@ describe('Admin Auth - JWT', () => {
 
     beforeEach(() => {
         mockEvent = createMockEvent();
+        credentialState.current.username = 'testadmin';
+        credentialState.current.session_revision = 'revision-1';
     });
 
     describe('signAdminJwt', () => {
@@ -71,7 +87,9 @@ describe('Admin Auth - JWT', () => {
         });
 
         it('should create different tokens for different usernames', async () => {
+            credentialState.current.username = 'admin1';
             const token1 = await signAdminJwt(mockEvent, 'admin1');
+            credentialState.current.username = 'admin2';
             const token2 = await signAdminJwt(mockEvent, 'admin2');
 
             expect(token1).not.toBe(token2);
@@ -121,6 +139,13 @@ describe('Admin Auth - JWT', () => {
             expect(claims).toBeNull();
         });
 
+        it('rejects a token after the credential revision changes', async () => {
+            const token = await signAdminJwt(mockEvent, 'testadmin');
+            credentialState.current.session_revision = 'revision-2';
+
+            await expect(verifyAdminJwt(mockEvent, token)).resolves.toBeNull();
+        });
+
         it('should handle token verification with different secrets', async () => {
             const username = 'testadmin';
             const token = await signAdminJwt(mockEvent, username);
@@ -151,6 +176,7 @@ describe('Admin Auth - JWT', () => {
             expect(claims).toMatchObject({
                 kind: 'super_admin',
                 username: 'testadmin',
+                credential_revision: 'revision-1',
             });
             expect(claims?.iat).toBeTypeOf('number');
             expect(claims?.exp).toBeTypeOf('number');

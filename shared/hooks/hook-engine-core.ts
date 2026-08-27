@@ -308,12 +308,15 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
     };
 
     function recordTiming(name: string, ms: number) {
-        if (Object.hasOwn(diagnostics.timings, name)) {
-            diagnostics.timings[name]!.push(ms);
+        const samples = diagnostics.timings[name];
+        if (!samples) {
+            diagnostics.timings[name] = [ms];
             return;
         }
-
-        diagnostics.timings[name] = [ms];
+        samples.push(ms);
+        if (samples.length > 128) {
+            samples.splice(0, samples.length - 128);
+        }
     }
 
     function recordError(name: string) {

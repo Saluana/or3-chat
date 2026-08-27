@@ -10,7 +10,7 @@ import { createWebhookTestHandler } from '../route-factories';
 export default createWebhookTestHandler({
     getWebhookId: requireWebhookId,
     resolveContext(event) {
-        return requireWebhookApiContext(event);
+        return requireWebhookApiContext(event, 'workspace.write');
     },
     resolveWebhook(context, webhookId) {
         return requireOwnedWebhook(

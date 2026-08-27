@@ -7,13 +7,17 @@ const privateResolver = async () => [{ address: '10.0.0.9', family: 4 }];
 
 describe('validateWebhookUrl', () => {
     it('accepts a valid HTTPS URL', async () => {
-        const parsed = await validateWebhookUrl('https://example.com/hooks');
+        const parsed = await validateWebhookUrl('https://example.com/hooks', {
+            resolver: publicResolver,
+        });
 
         expect(parsed.toString()).toBe('https://example.com/hooks');
     });
 
     it('accepts HTTP when HTTPS is not required', async () => {
-        const parsed = await validateWebhookUrl('http://example.com/hooks');
+        const parsed = await validateWebhookUrl('http://example.com/hooks', {
+            resolver: publicResolver,
+        });
 
         expect(parsed.toString()).toBe('http://example.com/hooks');
     });
@@ -70,6 +74,12 @@ describe('validateWebhookUrl', () => {
         });
 
         expect(parsed.hostname).toBe('127.0.0.1');
+    });
+
+    it('blocks private targets by default', async () => {
+        await expect(
+            validateWebhookUrl('http://127.0.0.1/hooks')
+        ).rejects.toThrow(/private ip/i);
     });
 
     it('blocks hostnames that resolve to private IPs when enabled', async () => {

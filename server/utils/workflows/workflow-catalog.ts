@@ -18,6 +18,7 @@ const WORKFLOW_POST_TYPE = 'workflow-entry';
 const CACHE_TTL_MS = 30_000;
 const PULL_LIMIT = 500;
 const MAX_PULL_PAGES = 200;
+const MAX_WORKSPACE_CACHES = 100;
 
 type WorkflowPostPayload = Record<string, unknown>;
 
@@ -25,7 +26,9 @@ type WorkspaceWorkflowCache = {
     cursor: number;
     hydrated: boolean;
     expiresAt: number;
+    lastAccessAt: number;
     posts: Map<string, WorkflowPostPayload>;
+    refreshPromise?: Promise<WorkspaceWorkflowCache>;
 };
 
 const workspaceCaches = new Map<string, WorkspaceWorkflowCache>();
@@ -70,16 +73,35 @@ function asNumber(value: unknown): number | undefined {
 }
 
 function getWorkspaceCache(workspaceId: string): WorkspaceWorkflowCache {
+    const now = Date.now();
     let cache = workspaceCaches.get(workspaceId);
     if (!cache) {
+        if (workspaceCaches.size >= MAX_WORKSPACE_CACHES) {
+            let oldestWorkspaceId: string | null = null;
+            let oldestAccess = Number.POSITIVE_INFINITY;
+            for (const [candidateId, candidate] of workspaceCaches) {
+                if (
+                    !candidate.refreshPromise &&
+                    candidate.lastAccessAt < oldestAccess
+                ) {
+                    oldestWorkspaceId = candidateId;
+                    oldestAccess = candidate.lastAccessAt;
+                }
+            }
+            if (oldestWorkspaceId) {
+                workspaceCaches.delete(oldestWorkspaceId);
+            }
+        }
         cache = {
             cursor: 0,
             hydrated: false,
             expiresAt: 0,
+            lastAccessAt: now,
             posts: new Map<string, WorkflowPostPayload>(),
         };
         workspaceCaches.set(workspaceId, cache);
     }
+    cache.lastAccessAt = now;
     return cache;
 }
 
@@ -126,43 +148,65 @@ async function refreshWorkspaceCache(
 
     const now = Date.now();
     const cache = getWorkspaceCache(workspaceId);
-    const shouldFullRefresh = !cache.hydrated || cache.expiresAt <= now;
-
-    let cursor = shouldFullRefresh ? 0 : cache.cursor;
-    if (shouldFullRefresh) {
-        cache.posts.clear();
+    if (cache.hydrated && cache.expiresAt > now) {
+        return cache;
+    }
+    if (cache.refreshPromise) {
+        return cache.refreshPromise;
     }
 
-    let hasMore = true;
-    let pages = 0;
-    while (hasMore) {
-        pages += 1;
-        if (pages > MAX_PULL_PAGES) {
-            throw new WorkflowCatalogError(
-                `Workflow catalog exceeded ${MAX_PULL_PAGES} pull pages`,
-                503
-            );
+    cache.refreshPromise = (async () => {
+        let cursor = cache.cursor;
+        if (!cache.hydrated && cursor === 0) {
+            // Only the first page of a true bootstrap clears state. If the
+            // bounded page budget is exhausted, the next request resumes from
+            // the persisted cursor instead of replaying page zero.
+            cache.posts.clear();
         }
 
-        const result = await adapter.pull(event, {
-            scope: { workspaceId },
-            cursor,
-            limit: PULL_LIMIT,
-            tables: ['posts'],
-        });
+        let hasMore = true;
+        let pages = 0;
+        while (hasMore) {
+            if (pages >= MAX_PULL_PAGES) {
+                cache.expiresAt = 0;
+                throw new WorkflowCatalogError(
+                    'Workflow catalog refresh is still in progress; retry shortly',
+                    503
+                );
+            }
+            pages += 1;
 
-        for (const change of result.changes) {
-            applyPostChange(cache.posts, change);
+            const result = await adapter.pull(event, {
+                scope: { workspaceId },
+                cursor,
+                limit: PULL_LIMIT,
+                tables: ['posts'],
+            });
+
+            for (const change of result.changes) {
+                applyPostChange(cache.posts, change);
+            }
+
+            cursor = result.nextCursor;
+            cache.cursor = cursor;
+            hasMore = result.hasMore;
         }
 
-        cursor = result.nextCursor;
-        hasMore = result.hasMore;
+        cache.hydrated = true;
+        cache.expiresAt = Date.now() + CACHE_TTL_MS;
+        return cache;
+    })();
+
+    try {
+        return await cache.refreshPromise;
+    } finally {
+        cache.refreshPromise = undefined;
     }
+}
 
-    cache.cursor = cursor;
-    cache.hydrated = true;
-    cache.expiresAt = now + CACHE_TTL_MS;
-    return cache;
+/** Test-only reset for module-scoped cache state. */
+export function resetWorkflowCatalogCacheForTests(): void {
+    workspaceCaches.clear();
 }
 
 function resolveWorkflowVersion(workflow: WorkflowData): string | undefined {

@@ -1,6 +1,8 @@
 import { HookDiagnostics } from './hook-diagnostics';
 import type { HookEngine, HookKind } from './hook-engine-core';
 
+const MAX_LEGACY_TIMING_SAMPLES = 128;
+
 export interface V1HookDiagnosticsAdapter {
     readonly diagnostics: HookDiagnostics;
     readonly facade: HookEngine['_diagnostics'];
@@ -33,7 +35,12 @@ export function createV1HookDiagnosticsAdapter(options: {
             configurable: false,
             get: () => timings,
             set: (next: Record<string, number[]>) => {
-                timings = next;
+                timings = Object.fromEntries(
+                    Object.entries(next).map(([name, samples]) => [
+                        name,
+                        samples.slice(-MAX_LEGACY_TIMING_SAMPLES),
+                    ])
+                );
             },
         },
         errors: {
@@ -50,8 +57,18 @@ export function createV1HookDiagnosticsAdapter(options: {
         diagnostics,
         facade,
         recordTiming(name: string, milliseconds: number) {
-            if (Object.hasOwn(timings, name)) timings[name]!.push(milliseconds);
-            else timings[name] = [milliseconds];
+            const samples = timings[name];
+            if (!samples) {
+                timings[name] = [milliseconds];
+                return;
+            }
+            samples.push(milliseconds);
+            if (samples.length > MAX_LEGACY_TIMING_SAMPLES) {
+                samples.splice(
+                    0,
+                    samples.length - MAX_LEGACY_TIMING_SAMPLES
+                );
+            }
         },
         recordError(name: string) {
             errors[name] = Object.hasOwn(errors, name) ? errors[name]! + 1 : 1;

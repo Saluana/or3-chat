@@ -1,0 +1,8 @@
+diff --git a/dist/runtime/server/plugins/register.js b/dist/runtime/server/plugins/register.js
+--- a/dist/runtime/server/plugins/register.js
++++ b/dist/runtime/server/plugins/register.js
+@@ -1,3 +1,4 @@
++import { defineNitroPlugin } from "nitropack/runtime";
+ import { CONVEX_PROVIDER_ID, CONVEX_STORAGE_PROVIDER_ID } from "~~/shared/cloud/provider-ids";
+ import { registerAuthWorkspaceStore } from "~~/server/auth/store/registry";
+ import { registerSyncGatewayAdapter } from "~~/server/sync/gateway/registry";

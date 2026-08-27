@@ -28,7 +28,10 @@ export default defineEventHandler(async (event) => {
         });
     }
 
-    const { store, userId, workspaceId } = await requireWebhookApiContext(event);
+    const { store, userId, workspaceId } = await requireWebhookApiContext(
+        event,
+        'workspace.write'
+    );
     const webhookId = requireWebhookId(event);
     const existing = await requireOwnedWebhook(store, webhookId, userId, workspaceId);
 

@@ -5,6 +5,9 @@ import type { H3Event } from 'h3';
 
 const getMethodMock = vi.fn(() => 'GET');
 const getRouterParamMock = vi.fn();
+const readSelectedPackageMock = vi.hoisted(() => vi.fn());
+const resolvePackageHandlerMock = vi.hoisted(() => vi.fn());
+const createAuthorizedContextMock = vi.hoisted(() => vi.fn());
 
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
@@ -21,7 +24,16 @@ vi.mock('h3', () => ({
     },
 }));
 
-const useRuntimeConfigMock = vi.fn(() => ({
+interface DispatcherRuntimeConfig {
+    admin: {
+        pluginRouteDispatcherEnabled: boolean;
+        disableNonCorePlugins: boolean;
+        pluginModuleLoaderV2Enabled?: boolean;
+        pluginIsolationEnabled?: boolean;
+    };
+}
+
+const useRuntimeConfigMock = vi.fn<() => DispatcherRuntimeConfig>(() => ({
     admin: {
         pluginRouteDispatcherEnabled: true,
         disableNonCorePlugins: false,
@@ -40,6 +52,26 @@ const listInstalledExtensionsMock = vi.fn();
 vi.mock('../../../admin/extensions/extension-manager', () => ({
     listInstalledExtensions: listInstalledExtensionsMock as any,
 }));
+
+vi.mock('../../../admin/plugins/package-route-catalog', () => ({
+    PluginPackageRouteCatalog: class {
+        readSelected = readSelectedPackageMock;
+    },
+}));
+
+vi.mock('../../../admin/plugins/server-module-resolver', async () => {
+    const actual =
+        await vi.importActual<
+            typeof import('../../../admin/plugins/server-module-resolver')
+        >('../../../admin/plugins/server-module-resolver');
+    return {
+        ...actual,
+        ServerModuleResolver: class {
+            createAuthorizedContext = createAuthorizedContextMock;
+            resolveHandler = resolvePackageHandlerMock;
+        },
+    };
+});
 
 const requirePluginAccessMock = vi.fn();
 vi.mock('../../../utils/plugins/access/require-plugin-access', () => ({
@@ -82,6 +114,12 @@ describe('plugin route dispatcher', () => {
             },
         });
         requireCanMock.mockReset();
+        readSelectedPackageMock.mockReset().mockResolvedValue({
+            status: 'inactive',
+            pluginId: 'plugin.a',
+        });
+        resolvePackageHandlerMock.mockReset();
+        createAuthorizedContextMock.mockReset();
     });
 
     it('dispatches declared route handler', async () => {
@@ -283,6 +321,87 @@ describe('plugin route dispatcher', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
 
         rmSync(siblingDir, { recursive: true, force: true });
+    });
+
+    it.each([
+        [false, 'isolation-disabled'],
+        [true, 'isolated-server-runtime-unavailable'],
+    ] as const)(
+        'never imports isolated-server packages when isolationEnabled=%s',
+        async (pluginIsolationEnabled, expectedCode) => {
+            useRuntimeConfigMock.mockReturnValue({
+                admin: {
+                    pluginRouteDispatcherEnabled: true,
+                    disableNonCorePlugins: false,
+                    pluginModuleLoaderV2Enabled: true,
+                    pluginIsolationEnabled,
+                },
+            });
+            readSelectedPackageMock.mockResolvedValue({
+                status: 'ready',
+                pluginId: 'plugin.a',
+                packageDigest: `sha256-${'a'.repeat(64)}`,
+                manifest: {
+                    trust: 'isolated-server',
+                },
+                routes: [
+                    {
+                        method: 'GET',
+                        path: 'health',
+                        handler: 'server/health.get.mjs',
+                    },
+                ],
+            });
+
+            const handler = (await import('../[pluginId]/[...path]')).default as (
+                event: H3Event
+            ) => Promise<any>;
+
+            await expect(handler(makeEvent())).rejects.toMatchObject({
+                statusCode: 503,
+                data: expect.objectContaining({ code: expectedCode }),
+            });
+            expect(resolvePackageHandlerMock).not.toHaveBeenCalled();
+        }
+    );
+
+    it('continues dispatching trusted-host V2 packages', async () => {
+        useRuntimeConfigMock.mockReturnValue({
+            admin: {
+                pluginRouteDispatcherEnabled: true,
+                disableNonCorePlugins: false,
+                pluginModuleLoaderV2Enabled: true,
+                pluginIsolationEnabled: false,
+            },
+        });
+        readSelectedPackageMock.mockResolvedValue({
+            status: 'ready',
+            pluginId: 'plugin.a',
+            packageDigest: `sha256-${'b'.repeat(64)}`,
+            manifest: {
+                trust: 'trusted-host',
+            },
+            routes: [
+                {
+                    method: 'GET',
+                    path: 'health',
+                    handler: 'server/health.get.mjs',
+                },
+            ],
+        });
+        resolvePackageHandlerMock.mockResolvedValue({
+            handler: vi.fn(async () => ({ ok: true, source: 'v2' })),
+        });
+
+        const handler = (await import('../[pluginId]/[...path]')).default as (
+            event: H3Event
+        ) => Promise<any>;
+
+        await expect(handler(makeEvent())).resolves.toEqual({
+            ok: true,
+            source: 'v2',
+        });
+        expect(resolvePackageHandlerMock).toHaveBeenCalledTimes(1);
     });
 
     afterEach(() => {

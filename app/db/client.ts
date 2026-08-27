@@ -25,7 +25,13 @@ import type {
     Post,
     Notification,
 } from './schema';
-import type { PendingOp, Tombstone, SyncState, SyncRun } from '~~/shared/sync/types';
+import type {
+    PendingOp,
+    SnapshotItem,
+    Tombstone,
+    SyncState,
+    SyncRun,
+} from '~~/shared/sync/types';
 import type { FileTransfer } from '~~/shared/storage/types';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { cleanupHookBridge } from '~/core/sync/hook-bridge';
@@ -53,6 +59,15 @@ const WORKSPACE_DB_TTL_MS = 5 * 60 * 1000;
 export interface FileBlobRow {
     hash: string; // primary key
     blob: Blob; // actual binary Blob
+}
+
+/** Local-only bounded staging row used while downloading a sync snapshot. */
+export interface SnapshotStagingRow {
+    id: string;
+    snapshotKey: string;
+    order: number;
+    createdAt: number;
+    item: SnapshotItem;
 }
 
 // Dexie database versioning & schema
@@ -86,6 +101,7 @@ export class Or3DB extends Dexie {
     tombstones!: Table<Tombstone, string>;
     sync_state!: Table<SyncState, string>;
     sync_runs!: Table<SyncRun, string>;
+    snapshot_staging!: Table<SnapshotStagingRow, string>;
 
     constructor(name = 'or3-db') {
         super(name);
@@ -241,6 +257,13 @@ export class Or3DB extends Dexie {
                         delete post.post_type;
                     })
             );
+
+        // Version 16: stage snapshot pages on disk so large workspaces do not
+        // need to retain the complete snapshot in browser memory.
+        this.version(16).stores({
+            snapshot_staging:
+                'id, snapshotKey, [snapshotKey+order], createdAt',
+        });
     }
 }
 

@@ -8,7 +8,7 @@ describe.each([
 ] as const)(
     'V1 _diagnostics compatibility fixture (%s)',
     (_runtime, createHookEngine) => {
-        it('preserves direct plugin reads, unbounded samples, resets, errors, and callback counts', () => {
+        it('preserves direct plugin reads, bounded samples, resets, errors, and callback counts', () => {
             const engine = createHookEngine();
             const sampleCount = 1_025;
             const timingHook = 'fixture:action:timings';
@@ -28,7 +28,7 @@ describe.each([
             engine.doActionSync(errorHook);
 
             expect(engine._diagnostics.timings[timingHook]).toHaveLength(
-                sampleCount * 2,
+                128,
             );
             expect(
                 engine._diagnostics.timings[timingHook]?.every(Number.isFinite),
@@ -45,12 +45,12 @@ describe.each([
 
             expect(engine._diagnostics.timings).toEqual({});
             expect(engine._diagnostics.errors).toEqual({});
-            expect(oldTimings[timingHook]).toHaveLength(sampleCount * 2);
+            expect(oldTimings[timingHook]).toHaveLength(128);
             expect(oldErrors[errorHook]).toBe(2);
 
             engine.doActionSync(timingHook);
             expect(engine._diagnostics.timings[timingHook]).toHaveLength(2);
-            expect(oldTimings[timingHook]).toHaveLength(sampleCount * 2);
+            expect(oldTimings[timingHook]).toHaveLength(128);
         });
     },
 );

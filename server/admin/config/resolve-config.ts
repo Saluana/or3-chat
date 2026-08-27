@@ -480,7 +480,7 @@ export function buildOr3CloudConfigFromEnv(
                     env.OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS,
                     DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
                 ) ?? DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
-            blockPrivateIps: envBool(env.OR3_WEBHOOKS_BLOCK_PRIVATE_IPS, false),
+            blockPrivateIps: envBool(env.OR3_WEBHOOKS_BLOCK_PRIVATE_IPS, true),
             encryptionKey:
                 env.OR3_WEBHOOKS_ENCRYPTION_KEY ||
                 env.OR3_ADMIN_JWT_SECRET ||

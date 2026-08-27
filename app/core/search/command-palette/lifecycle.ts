@@ -13,27 +13,63 @@ export function bindPaletteLifecycle(
 ): () => void {
     const hooks = useHooks();
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const registrations: Array<{ name: string; fn: () => void }> = [];
+    const registrations: Array<{
+        name: string;
+        fn: (payload?: unknown) => void;
+    }> = [];
     const pendingSourceIds = new Set<string>();
+    const pendingRecordIds = new Map<string, Set<string>>();
     let fullReconcilePending = false;
 
+    const scheduleFlush = () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+            timer = null;
+            const sourceIds = fullReconcilePending
+                ? undefined
+                : [...pendingSourceIds];
+            const recordBatches = [...pendingRecordIds.entries()].filter(
+                ([sourceId]) =>
+                    !fullReconcilePending && !pendingSourceIds.has(sourceId)
+            );
+            fullReconcilePending = false;
+            pendingSourceIds.clear();
+            pendingRecordIds.clear();
+            void Promise.all([
+                ...(sourceIds === undefined || sourceIds.length
+                    ? [coordinator.refreshSources(sourceIds)]
+                    : []),
+                ...recordBatches.map(([sourceId, recordIds]) =>
+                    coordinator.refreshRecords(sourceId, [...recordIds])
+                ),
+            ]);
+        }, RECONCILE_DEBOUNCE_MS);
+    };
     const scheduleReconcile = (sourceIds?: readonly string[]) => {
         if (!sourceIds) {
             fullReconcilePending = true;
             pendingSourceIds.clear();
+            pendingRecordIds.clear();
         } else if (!fullReconcilePending) {
-            for (const sourceId of sourceIds) pendingSourceIds.add(sourceId);
+            for (const sourceId of sourceIds) {
+                pendingSourceIds.add(sourceId);
+                pendingRecordIds.delete(sourceId);
+            }
         }
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => {
-            timer = null;
-            const ids = fullReconcilePending
-                ? undefined
-                : [...pendingSourceIds];
-            fullReconcilePending = false;
-            pendingSourceIds.clear();
-            void coordinator.refreshSources(ids);
-        }, RECONCILE_DEBOUNCE_MS);
+        scheduleFlush();
+    };
+    const scheduleRecords = (sourceId: string, recordIds: readonly string[]) => {
+        if (fullReconcilePending || pendingSourceIds.has(sourceId)) return;
+        const pending = pendingRecordIds.get(sourceId) ?? new Set<string>();
+        for (const recordId of recordIds) {
+            if (recordId) pending.add(recordId);
+        }
+        if (!pending.size) {
+            scheduleReconcile([sourceId]);
+            return;
+        }
+        pendingRecordIds.set(sourceId, pending);
+        scheduleFlush();
     };
     const scheduleFullReconcile = () => scheduleReconcile();
 
@@ -52,30 +88,73 @@ export function bindPaletteLifecycle(
         registrations.push({ name: event, fn: scheduleFullReconcile });
     }
 
+    const asRecord = (value: unknown): Record<string, unknown> | null =>
+        value && typeof value === 'object' && !Array.isArray(value)
+            ? (value as Record<string, unknown>)
+            : null;
+    const stringField = (
+        value: Record<string, unknown> | null,
+        ...keys: string[]
+    ): string | null => {
+        for (const key of keys) {
+            if (typeof value?.[key] === 'string' && value[key]) {
+                return value[key] as string;
+            }
+        }
+        return null;
+    };
+    const chatRecordIds = (
+        payload: unknown,
+        isThreadMutation: boolean
+    ): string[] => {
+        const value = asRecord(payload);
+        const entity = asRecord(value?.entity);
+        const message = asRecord(value?.message);
+        return [
+            stringField(value, 'threadId', 'thread_id'),
+            stringField(value, 'fromThreadId'),
+            stringField(value, 'toThreadId'),
+            stringField(entity, 'threadId', 'thread_id'),
+            stringField(message, 'threadId', 'thread_id'),
+            isThreadMutation ? stringField(entity, 'id') : null,
+            isThreadMutation ? stringField(value, 'id') : null,
+        ].filter((id): id is string => Boolean(id));
+    };
+
+    const chatMutationNames = [
+        'db.threads.create:action:after',
+        'db.threads.upsert:action:after',
+        'db.threads.fork:action:after',
+        'db.threads.updateSystemPrompt:action:after',
+        'db.threads.delete:action:soft:after',
+        'db.threads.delete:action:hard:after',
+        'db.messages.create:action:after',
+        'db.messages.upsert:action:after',
+        'db.messages.append:action:after',
+        'db.messages.move:action:after',
+        'db.messages.copy:action:after',
+        'db.messages.insertAfter:action:after',
+        'db.messages.normalize:action:after',
+        'db.messages.delete:action:soft:after',
+        'db.messages.delete:action:hard:after',
+    ] as const;
+    for (const name of chatMutationNames) {
+        const chatListener = (payload?: unknown) =>
+            scheduleRecords(
+                'chat',
+                chatRecordIds(payload, name.startsWith('db.threads.'))
+            );
+        (hooks.addAction as (
+            name: string,
+            fn: (payload?: unknown) => void
+        ) => void)(name, chatListener);
+        registrations.push({ name, fn: chatListener });
+    }
+
     const localMutationGroups: ReadonlyArray<{
         names: readonly string[];
         sourceIds: () => readonly string[];
     }> = [
-        {
-            names: [
-                'db.threads.create:action:after',
-                'db.threads.upsert:action:after',
-                'db.threads.fork:action:after',
-                'db.threads.updateSystemPrompt:action:after',
-                'db.threads.delete:action:soft:after',
-                'db.threads.delete:action:hard:after',
-                'db.messages.create:action:after',
-                'db.messages.upsert:action:after',
-                'db.messages.append:action:after',
-                'db.messages.move:action:after',
-                'db.messages.copy:action:after',
-                'db.messages.insertAfter:action:after',
-                'db.messages.normalize:action:after',
-                'db.messages.delete:action:soft:after',
-                'db.messages.delete:action:hard:after',
-            ],
-            sourceIds: () => ['chat'],
-        },
         {
             names: [
                 'db.documents.create:action:after',
@@ -142,9 +221,13 @@ export function bindPaletteLifecycle(
     return () => {
         if (timer) clearTimeout(timer);
         pendingSourceIds.clear();
+        pendingRecordIds.clear();
         fullReconcilePending = false;
         for (const { name, fn } of registrations) {
-            (hooks.removeAction as (name: string, fn: () => void) => void)(
+            (hooks.removeAction as (
+                name: string,
+                fn: (payload?: unknown) => void
+            ) => void)(
                 name,
                 fn
             );

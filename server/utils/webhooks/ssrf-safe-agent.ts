@@ -222,7 +222,7 @@ function selectAddress(
 export function createSsrfSafeLookup(
     options: SsrfSafeAgentOptions = {}
 ): LookupFunction {
-    const { blockPrivateIps = false, lookup = dnsLookup as NodeLookup } = options;
+    const { blockPrivateIps = true, lookup = dnsLookup as NodeLookup } = options;
 
     return (hostname, lookupOptions, callback) => {
         if (!blockPrivateIps) {

@@ -329,7 +329,7 @@ const webhooksConfig = {
     adminMax: or3CloudConfig.webhooks?.adminMax ?? 50,
     rateLimitPerMinute: or3CloudConfig.webhooks?.rateLimitPerMinute ?? 120,
     deliveryTimeoutMs: or3CloudConfig.webhooks?.deliveryTimeoutMs ?? 10_000,
-    blockPrivateIps: or3CloudConfig.webhooks?.blockPrivateIps ?? false,
+    blockPrivateIps: or3CloudConfig.webhooks?.blockPrivateIps ?? true,
     encryptionKey: or3CloudConfig.webhooks?.encryptionKey ?? '',
     maxRetryHours: or3CloudConfig.webhooks?.maxRetryHours ?? 1,
     logRetentionHours: or3CloudConfig.webhooks?.logRetentionHours ?? 72,
@@ -982,31 +982,6 @@ export default defineNuxtConfig({
         ],
     },
     vite: {
-        resolve: {
-            alias: [
-                {
-                    find: /^or3-scroll$/,
-                    replacement: resolve(
-                        __dirname,
-                        '../or3-vsc/src/lib/index.ts',
-                    ),
-                },
-                {
-                    find: /^or3-workflow-vue$/,
-                    replacement: resolve(
-                        __dirname,
-                        '../or3-workflows/packages/workflow-vue/src/index.ts',
-                    ),
-                },
-                {
-                    find: /^or3-workflow-core$/,
-                    replacement: resolve(
-                        __dirname,
-                        '../or3-workflows/packages/workflow-core/src/index.ts',
-                    ),
-                },
-            ],
-        },
         optimizeDeps: {
             exclude: [
                 'or3-scroll',

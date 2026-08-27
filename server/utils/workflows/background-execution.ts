@@ -34,6 +34,11 @@ import {
     type WorkflowStateWithJournal,
 } from './background-run-store';
 import { DEFAULT_WORKFLOW_TOOL_POLICY } from '~~/shared/chat/workflow-tool-policy';
+import {
+    createWorkflowResumeEnvelope,
+    readWorkflowResumeEnvelope,
+    type WorkflowStateWithResume,
+} from './resume-envelope';
 
 function logBgStream(
     _stage: string,
@@ -45,7 +50,8 @@ function warnBgStream(
     _details?: Record<string, unknown>
 ): void {}
 
-const MAX_WORKFLOW_STATE_BYTES = 64 * 1024;
+const MAX_WORKFLOW_STATE_BYTES = 512 * 1024;
+const EXTERNAL_ABORT_POLL_MS = 250;
 type ConversationHistoryMessage = { role: string; content: string };
 type ExecutionInputWithHistory = ExecutionInput & {
     conversationHistory?: ConversationHistoryMessage[];
@@ -72,6 +78,8 @@ export interface BackgroundWorkflowResult {
     jobId: string;
     status: 'streaming';
 }
+
+const activeWorkflowRuns = new Set<string>();
 
 /**
  * Background jobs must reflect the adapter's terminal result. Node failures are
@@ -130,12 +138,17 @@ async function updateWorkflowJob(
     });
 }
 
-async function executeWorkflowToolCall(
+export async function executeWorkflowToolCall(
     name: string,
     args: unknown,
     context?: {
         jobId: string;
         workflowId: string;
+        userId: string;
+        workspaceId: string;
+        threadId: string;
+        messageId: string;
+        abortSignal: AbortSignal;
         tool?: WorkflowToolExecutionContext;
     }
 ): Promise<string> {
@@ -148,10 +161,10 @@ async function executeWorkflowToolCall(
     });
     try {
         const execution = await executeServerTool(name, serialized, {
-            subject: null,
-            workspaceId: null,
-            threadId: null,
-            messageId: null,
+            subject: context?.userId ?? null,
+            workspaceId: context?.workspaceId ?? null,
+            threadId: context?.threadId ?? null,
+            messageId: context?.messageId ?? null,
             callId:
                 context?.tool?.callId ??
                 `${context?.workflowId ?? 'workflow'}:${name}`,
@@ -161,6 +174,7 @@ async function executeWorkflowToolCall(
                 crypto.randomUUID(),
             abortSignal:
                 context?.tool?.signal ??
+                context?.abortSignal ??
                 new AbortController().signal,
         });
         if (execution.error) {
@@ -195,16 +209,95 @@ async function executeWorkflowToolCall(
     }
 }
 
+/**
+ * Only tools that explicitly opt into workflow execution are exposed to the
+ * model. This prevents newly registered plugin tools from silently acquiring
+ * background execution authority.
+ */
+export function listWorkflowEligibleServerTools() {
+    return listServerTools().filter((tool) => tool.workflowPolicy !== undefined);
+}
+
+/**
+ * Bridge both in-process abort signals and durable-provider polling to the
+ * workflow adapter. Returns a cleanup callback for terminal execution paths.
+ */
+export function monitorBackgroundWorkflowAbort(
+    provider: BackgroundJobProvider,
+    jobId: string,
+    abort: () => void
+): () => void {
+    let disposed = false;
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
+    const localController = provider.getAbortController?.(jobId);
+    const isDisposed = () => disposed;
+
+    const abortOnce = () => {
+        if (disposed) return;
+        disposed = true;
+        if (pollTimer) clearTimeout(pollTimer);
+        localController?.signal.removeEventListener('abort', abortOnce);
+        abort();
+    };
+
+    if (localController) {
+        if (localController.signal.aborted) {
+            abortOnce();
+        } else {
+            localController.signal.addEventListener('abort', abortOnce, {
+                once: true,
+            });
+        }
+    }
+
+    const poll = async () => {
+        if (disposed || !provider.checkJobAborted) return;
+        try {
+            if (await provider.checkJobAborted(jobId)) {
+                abortOnce();
+                return;
+            }
+        } catch {
+            // A transient provider read must not terminate a healthy workflow.
+        }
+        if (!isDisposed()) {
+            pollTimer = setTimeout(poll, EXTERNAL_ABORT_POLL_MS);
+            pollTimer.unref();
+        }
+    };
+    if (provider.checkJobAborted && !isDisposed()) {
+        pollTimer = setTimeout(poll, EXTERNAL_ABORT_POLL_MS);
+        pollTimer.unref();
+    }
+
+    return () => {
+        if (disposed) return;
+        disposed = true;
+        if (pollTimer) clearTimeout(pollTimer);
+        localController?.signal.removeEventListener('abort', abortOnce);
+    };
+}
+
 export async function startBackgroundWorkflow(
     params: BackgroundWorkflowParams
 ): Promise<BackgroundWorkflowResult> {
     const provider = await getJobProvider();
+    const workflowState = createWorkflowState({
+        workflowId: params.workflowId,
+        workflowName: params.workflowName,
+        prompt: params.prompt,
+        attachments: params.attachments,
+    }) as WorkflowStateWithJournal & WorkflowStateWithResume;
+    if (provider.name !== 'memory') {
+        workflowState.serverResume = createWorkflowResumeEnvelope(params);
+    }
     const jobId = await provider.createJob({
         userId: params.userId,
         threadId: params.threadId,
         messageId: params.messageId,
         model: 'workflow',
         kind: 'workflow',
+        workflow_state: workflowState,
     });
     logBackgroundEvent('info', 'background.workflow.started', {
         jobId,
@@ -216,7 +309,20 @@ export async function startBackgroundWorkflow(
         workflowName: params.workflowName,
     });
 
-    runWorkflowInBackground(jobId, params, provider).catch((err) => {
+    launchWorkflowRun(jobId, params, provider, workflowState);
+
+    return { jobId, status: 'streaming' };
+}
+
+function launchWorkflowRun(
+    jobId: string,
+    params: BackgroundWorkflowParams,
+    provider: BackgroundJobProvider,
+    initialState?: WorkflowStateWithJournal & WorkflowStateWithResume
+): boolean {
+    if (activeWorkflowRuns.has(jobId)) return false;
+    activeWorkflowRuns.add(jobId);
+    runWorkflowInBackground(jobId, params, provider, initialState).catch((err) => {
         logBackgroundEvent('error', 'background.workflow.failed', {
             jobId,
             userId: params.userId,
@@ -228,24 +334,86 @@ export async function startBackgroundWorkflow(
             error: err instanceof Error ? err.message : String(err),
         });
         void provider.failJob(jobId, err instanceof Error ? err.message : String(err));
+    }).finally(() => {
+        activeWorkflowRuns.delete(jobId);
     });
+    return true;
+}
 
-    return { jobId, status: 'streaming' };
+/**
+ * Re-enter a persisted streaming workflow after an SSR process restart.
+ * The first authenticated viewer claims the run; the durable journal prevents
+ * already-receipted tool calls from executing twice.
+ */
+export async function resumeBackgroundWorkflow(
+    job: {
+        id: string;
+        userId: string;
+        threadId: string;
+        messageId: string;
+        status: string;
+        kind?: string;
+        workflow_state?: WorkflowMessageData;
+    },
+    provider: BackgroundJobProvider
+): Promise<boolean> {
+    if (
+        job.status !== 'streaming' ||
+        job.kind !== 'workflow' ||
+        !job.workflow_state ||
+        activeWorkflowRuns.has(job.id)
+    ) {
+        return false;
+    }
+    try {
+        const currentJob = await provider.getJob(job.id, job.userId);
+        if (
+            currentJob?.status !== 'streaming' ||
+            currentJob.kind !== 'workflow' ||
+            !currentJob.workflow_state ||
+            activeWorkflowRuns.has(job.id)
+        ) {
+            return false;
+        }
+        const state = currentJob.workflow_state as WorkflowStateWithJournal &
+            WorkflowStateWithResume;
+        const params = readWorkflowResumeEnvelope(state);
+        if (
+            params.userId !== currentJob.userId ||
+            params.threadId !== currentJob.threadId ||
+            params.messageId !== currentJob.messageId
+        ) {
+            throw new Error('Background workflow resume identity mismatch');
+        }
+        return launchWorkflowRun(job.id, params, provider, state);
+    } catch (error) {
+        await provider.failJob(
+            job.id,
+            error instanceof Error
+                ? error.message
+                : 'Background workflow could not resume'
+        );
+        return false;
+    }
 }
 
 async function runWorkflowInBackground(
     jobId: string,
     params: BackgroundWorkflowParams,
-    provider: BackgroundJobProvider
+    provider: BackgroundJobProvider,
+    initialState?: WorkflowStateWithJournal & WorkflowStateWithResume
 ): Promise<void> {
     const notificationEmitter = getNotificationEmitter(provider.name);
     const shouldNotify = () => !hasJobViewers(jobId);
-    const workflowState = createWorkflowState({
-        workflowId: params.workflowId,
-        workflowName: params.workflowName,
-        prompt: params.prompt,
-        attachments: params.attachments,
-    }) as WorkflowStateWithJournal;
+    const workflowState = structuredClone(
+        initialState ??
+            (createWorkflowState({
+                workflowId: params.workflowId,
+                workflowName: params.workflowName,
+                prompt: params.prompt,
+                attachments: params.attachments,
+            }) as WorkflowStateWithJournal & WorkflowStateWithResume)
+    );
 
     // Durable run journal for wave/tool restart safety (R7.AC1, R7.AC7).
     // Hydrate from any prior journal on the job so SSR process restarts resume
@@ -311,7 +479,8 @@ async function runWorkflowInBackground(
             await queueWorkflowWrite();
         }
     );
-    const registeredTools = listServerTools();
+    const executionAbortController = new AbortController();
+    const registeredTools = listWorkflowEligibleServerTools();
     const workflowTools: WorkflowTool[] = registeredTools.map((tool) => {
         const idempotencyKey = tool.workflowPolicy?.idempotencyKey;
         const policy = {
@@ -336,6 +505,11 @@ async function runWorkflowInBackground(
                     {
                         jobId,
                         workflowId: params.workflowId,
+                        userId: params.userId,
+                        workspaceId: params.workspaceId,
+                        threadId: params.threadId,
+                        messageId: params.messageId,
+                        abortSignal: executionAbortController.signal,
                         tool: toolContext,
                     }
                 ),
@@ -356,7 +530,7 @@ async function runWorkflowInBackground(
         workflowTools,
         toolExecutionPolicy: {
             mode: 'parallel',
-            defaultApproval: 'auto',
+            defaultApproval: 'require',
         },
         runStore,
         runId: jobId,
@@ -365,6 +539,11 @@ async function runWorkflowInBackground(
             executeWorkflowToolCall(name, args, {
                 jobId,
                 workflowId: params.workflowId,
+                userId: params.userId,
+                workspaceId: params.workspaceId,
+                threadId: params.threadId,
+                messageId: params.messageId,
+                abortSignal: executionAbortController.signal,
             }),
         onHITLRequest: async (request: HITLRequest): Promise<HITLResponse> => {
             logBackgroundEvent('info', 'background.workflow.hitl.requested', {
@@ -421,6 +600,14 @@ async function runWorkflowInBackground(
             });
         },
     });
+    const stopAbortMonitor = monitorBackgroundWorkflowAbort(
+        provider,
+        jobId,
+        () => {
+            executionAbortController.abort();
+            adapter.stop();
+        }
+    );
 
     const emitWorkflowStreamingState = (force = false) => {
         const now = Date.now();
@@ -558,6 +745,7 @@ async function runWorkflowInBackground(
         workflowState.executionState = 'completed';
         workflowState.currentNodeId = null;
         workflowState.version = (workflowState.version ?? 0) + 1;
+        delete workflowState.serverResume;
         await queueWorkflowWrite();
 
         const latestJob = await provider.getJob(jobId, params.userId);
@@ -646,7 +834,10 @@ async function runWorkflowInBackground(
             }
         }
     } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
+        if (
+            executionAbortController.signal.aborted ||
+            (error instanceof Error && error.name === 'AbortError')
+        ) {
             logBackgroundEvent('warn', 'background.workflow.aborted', {
                 jobId,
                 workflowId: params.workflowId,
@@ -740,6 +931,7 @@ async function runWorkflowInBackground(
         }
         throw error;
     } finally {
+        stopAbortMonitor();
         clearHitlRequestsForJob(jobId);
     }
 }

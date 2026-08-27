@@ -14,6 +14,7 @@ import {
     ServerModuleResolverError,
     type RuntimePluginRouteHandler,
 } from '../../../admin/plugins/server-module-resolver';
+import { evaluateTrustImport } from '../../../../shared/plugins/isolation/trust-policy';
 
 type RuntimeRouteDef = {
     method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -87,6 +88,7 @@ export default defineEventHandler(async (event) => {
 
     let route: RuntimeRouteDef | null = null;
     let packageDigest: string | null = null;
+    let packageTrust = 'trusted-host';
 
     if (packageCatalog.status === 'ready') {
         route =
@@ -95,6 +97,7 @@ export default defineEventHandler(async (event) => {
                 ? resolveRouteDef(packageCatalog.routes, 'GET', requestPath)
                 : null);
         packageDigest = packageCatalog.packageDigest;
+        packageTrust = packageCatalog.manifest.trust;
     } else {
         const installed = await listInstalledExtensions();
         const plugin = installed.find(
@@ -207,6 +210,38 @@ export default defineEventHandler(async (event) => {
         kind: 'workspace',
         id: session.workspace?.id,
     });
+
+    const trustDecision = evaluateTrustImport({
+        trust: packageTrust,
+        pluginIsolationEnabled:
+            (runtimeConfig.admin as { pluginIsolationEnabled?: boolean } | undefined)
+                ?.pluginIsolationEnabled === true,
+    });
+    if (!trustDecision.allowed) {
+        throw createError({
+            statusCode: 503,
+            statusMessage: 'Plugin trust boundary is unavailable',
+            data: {
+                code: trustDecision.code,
+                pluginId,
+                trust: packageTrust,
+            },
+        });
+    }
+    if (trustDecision.trust !== 'trusted-host') {
+        // The production child-process dispatcher is not wired to H3 route
+        // invocation yet. Never downgrade an isolated package to an in-process
+        // import; keep it unavailable until that boundary is present.
+        throw createError({
+            statusCode: 503,
+            statusMessage: 'Isolated server plugin routes are not available',
+            data: {
+                code: 'isolated-server-runtime-unavailable',
+                pluginId,
+                trust: trustDecision.trust,
+            },
+        });
+    }
 
     // Request context is host-created and never captured by the module cache.
     serverModuleResolver.createAuthorizedContext({

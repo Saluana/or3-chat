@@ -1751,6 +1751,7 @@ export class ExternalAgentController {
     if (!latest) return;
     this.#applyLatestTurn(session, latest);
     const eventTurns = session.turns.slice(-MAX_EVENT_TURNS);
+    const remoteEvents: ExternalRemoteEvent[] = [];
     for (const turn of eventTurns) {
       const events = await this.#listCanonicalTurnEvents(
         client,
@@ -1759,10 +1760,9 @@ export class ExternalAgentController {
         this.#hostController?.signal,
       );
       this.#assertSessionRefresh(session, generation, lease, refreshVersion);
-      for (const event of events) {
-        this.#ingestRemoteEvent(session, event);
-      }
+      remoteEvents.push(...events);
     }
+    this.#ingestRemoteEvents(session, remoteEvents);
     if (
       session.approvals.some((approval) => approval.status === "pending") &&
       !isTerminal(session.status)
@@ -1813,9 +1813,7 @@ export class ExternalAgentController {
       .slice(-MAX_REHYDRATED_TURNS);
     const latest = session.turns.at(-1);
     if (latest) this.#applyLatestTurn(session, latest);
-    for (const event of events) {
-      this.#ingestRemoteEvent(session, event);
-    }
+    this.#ingestRemoteEvents(session, events);
     if (
       session.approvals.some((approval) => approval.status === "pending") &&
       !isTerminal(session.status)
@@ -1945,6 +1943,13 @@ export class ExternalAgentController {
     session: ExternalAgentSession,
     remote: ExternalRemoteEvent,
   ): void {
+    this.#ingestRemoteEvents(session, [remote]);
+  }
+
+  #ingestRemoteEvents(
+    session: ExternalAgentSession,
+    remotes: readonly ExternalRemoteEvent[],
+  ): void {
     if (
       session.hostGeneration !== this.#generation ||
       session.hostId !== this.#activeHostId ||
@@ -1954,20 +1959,28 @@ export class ExternalAgentController {
     ) {
       return;
     }
-    const normalized = normalizeTimelineEvent(
-      session.hostId,
-      session.hostGeneration,
-      session.remoteSessionId,
-      remote,
-    );
-    if (session.events.some((event) => event.id === normalized.id)) return;
+    const seenIds = new Set(session.events.map((event) => event.id));
+    const normalizedEvents: ExternalAgentTimelineEvent[] = [];
+    for (const remote of remotes) {
+      const normalized = normalizeTimelineEvent(
+        session.hostId,
+        session.hostGeneration,
+        session.remoteSessionId,
+        remote,
+      );
+      if (seenIds.has(normalized.id)) continue;
+      seenIds.add(normalized.id);
+      normalizedEvents.push(normalized);
+    }
+    if (!normalizedEvents.length) return;
+
     const retainedTurns = session.turns.slice(-MAX_EVENT_TURNS);
     const retainedTurnIds = new Set(retainedTurns.map((turn) => turn.id));
     const turnOrder = new Map(
       retainedTurns.map((turn, index) => [turn.id, index] as const),
     );
-    const nextEvents = [...session.events, normalized].filter((event) =>
-      retainedTurnIds.has(event.turnId),
+    const nextEvents = [...session.events, ...normalizedEvents].filter(
+      (event) => retainedTurnIds.has(event.turnId),
     );
     const boundedByTurn = new Map<string, ExternalAgentTimelineEvent[]>();
     for (const event of nextEvents) {
@@ -1993,88 +2006,92 @@ export class ExternalAgentController {
           left.event.id.localeCompare(right.event.id),
       )
       .map(({ event }) => event);
-    const approval = approvalFromEvent(normalized);
-    if (approval) {
-      let index = session.approvals.findIndex(
-        (item) => item.id === approval.id,
-      );
-      if (index < 0) {
-        index = session.approvals.findLastIndex(
+
+    for (const normalized of normalizedEvents) {
+      const approval = approvalFromEvent(normalized);
+      if (approval) {
+        let index = session.approvals.findIndex(
+          (item) => item.id === approval.id,
+        );
+        if (index < 0) {
+          index = session.approvals.findLastIndex(
+            (item) =>
+              item.turnId === approval.turnId &&
+              item.status === "pending" &&
+              approval.status === "pending" &&
+              (isFallbackApprovalId(item) ||
+                isFallbackApprovalId(approval) ||
+                item.id === "0" ||
+                approval.id === "0" ||
+                isGenericApproval(item) ||
+                isGenericApproval(approval)),
+          );
+        }
+        if (index >= 0) {
+          session.approvals[index] = mergeApproval(
+            session.approvals[index]!,
+            approval,
+          );
+        } else session.approvals.push(approval);
+        session.approvals = session.approvals.slice(-MAX_SESSION_APPROVALS);
+        if (approval.status === "pending" && !isTerminal(session.status)) {
+          session.status = "waiting_approval";
+        }
+      }
+
+      for (const artifact of artifactsFromEvent(normalized)) {
+        const index = session.artifacts.findIndex(
           (item) =>
-            item.turnId === approval.turnId &&
-            item.status === "pending" &&
-            approval.status === "pending" &&
-            (isFallbackApprovalId(item) ||
-              isFallbackApprovalId(approval) ||
-              item.id === "0" ||
-              approval.id === "0" ||
-              isGenericApproval(item) ||
-              isGenericApproval(approval)),
+            item.id === artifact.id ||
+            (item.turnId === artifact.turnId &&
+              item.kind === artifact.kind &&
+              item.artifactId === artifact.artifactId &&
+              item.label === artifact.label &&
+              item.content === artifact.content),
         );
+        if (index >= 0) session.artifacts[index] = artifact;
+        else session.artifacts.push(artifact);
       }
-      if (index >= 0) {
-        session.approvals[index] = mergeApproval(
-          session.approvals[index]!,
-          approval,
+      session.artifacts = session.artifacts.slice(-MAX_SESSION_ARTIFACTS);
+      if (normalized.type === "error") {
+        session.error = presentExternalAgentError(normalized.text).message;
+      }
+      const terminalStatus = timelineTerminalStatus(normalized);
+      if (terminalStatus) {
+        const turnIndex = session.turns.findIndex(
+          (turn) => turn.id === normalized.turnId,
         );
-      } else session.approvals.push(approval);
-      session.approvals = session.approvals.slice(-MAX_SESSION_APPROVALS);
-      if (approval.status === "pending" && !isTerminal(session.status)) {
-        session.status = "waiting_approval";
+        const existingTurn = turnIndex >= 0 ? session.turns[turnIndex] : null;
+        const existingStatus = existingTurn
+          ? mapExternalAgentStatus(existingTurn.status, "queued")
+          : null;
+        const preserveFailure =
+          existingStatus === "failed" && terminalStatus !== "failed";
+        if (existingTurn && !preserveFailure) {
+          session.turns[turnIndex] = {
+            ...existingTurn,
+            status: terminalStatus,
+            completed_at:
+              existingTurn.completed_at ?? Date.parse(normalized.occurredAt),
+            error:
+              terminalStatus === "failed"
+                ? (normalized.text ?? existingTurn.error)
+                : existingTurn.error,
+          };
+        }
+        if (
+          session.activeTurnId === normalized.turnId &&
+          !(session.status === "failed" && terminalStatus !== "failed")
+        ) {
+          session.status = terminalStatus;
+          session.completedAt ??= normalized.occurredAt;
+        }
       }
-    }
-    for (const artifact of artifactsFromEvent(normalized)) {
-      const index = session.artifacts.findIndex(
-        (item) =>
-          item.id === artifact.id ||
-          (item.turnId === artifact.turnId &&
-            item.kind === artifact.kind &&
-            item.artifactId === artifact.artifactId &&
-            item.label === artifact.label &&
-            item.content === artifact.content),
-      );
-      if (index >= 0) session.artifacts[index] = artifact;
-      else session.artifacts.push(artifact);
-    }
-    session.artifacts = session.artifacts.slice(-MAX_SESSION_ARTIFACTS);
-    if (normalized.type === "error") {
-      session.error = presentExternalAgentError(normalized.text).message;
-    }
-    const terminalStatus = timelineTerminalStatus(normalized);
-    if (terminalStatus) {
-      const turnIndex = session.turns.findIndex(
-        (turn) => turn.id === normalized.turnId,
-      );
-      const existingTurn = turnIndex >= 0 ? session.turns[turnIndex] : null;
-      const existingStatus = existingTurn
-        ? mapExternalAgentStatus(existingTurn.status, "queued")
-        : null;
-      const preserveFailure =
-        existingStatus === "failed" && terminalStatus !== "failed";
-      if (existingTurn && !preserveFailure) {
-        session.turns[turnIndex] = {
-          ...existingTurn,
-          status: terminalStatus,
-          completed_at:
-            existingTurn.completed_at ?? Date.parse(normalized.occurredAt),
-          error:
-            terminalStatus === "failed"
-              ? (normalized.text ?? existingTurn.error)
-              : existingTurn.error,
-        };
+      if (Date.parse(normalized.occurredAt) >= Date.parse(session.updatedAt)) {
+        session.updatedAt = normalized.occurredAt;
       }
-      if (
-        session.activeTurnId === normalized.turnId &&
-        !(session.status === "failed" && terminalStatus !== "failed")
-      ) {
-        session.status = terminalStatus;
-        session.completedAt ??= normalized.occurredAt;
-      }
+      this.#emit({ type: "timeline", session, event: normalized });
     }
-    if (Date.parse(normalized.occurredAt) >= Date.parse(session.updatedAt)) {
-      session.updatedAt = normalized.occurredAt;
-    }
-    this.#emit({ type: "timeline", session, event: normalized });
   }
 
   #startStream(session: ExternalAgentSession, turnId: string): void {

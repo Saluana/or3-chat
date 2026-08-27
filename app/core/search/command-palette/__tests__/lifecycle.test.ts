@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PaletteCoordinator } from '../coordinator';
 
-const actions = new Map<string, () => void>();
-const addAction = vi.fn((name: string, fn: () => void) => {
+const actions = new Map<string, (payload?: unknown) => void>();
+const addAction = vi.fn((name: string, fn: (payload?: unknown) => void) => {
     actions.set(name, fn);
 });
-const removeAction = vi.fn((name: string, fn: () => void) => {
+const removeAction = vi.fn(
+    (name: string, fn: (payload?: unknown) => void) => {
     if (actions.get(name) === fn) actions.delete(name);
-});
+    }
+);
 
 vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => ({ addAction, removeAction }),
@@ -34,15 +36,21 @@ describe('bindPaletteLifecycle', () => {
 
     it('binds real mutation hooks and refreshes only affected sources', async () => {
         const refreshSources = vi.fn(async () => undefined);
-        const coordinator = { refreshSources } as unknown as PaletteCoordinator;
+        const refreshRecords = vi.fn(async () => undefined);
+        const coordinator = {
+            refreshSources,
+            refreshRecords,
+        } as unknown as PaletteCoordinator;
         const { bindPaletteLifecycle } = await import('../lifecycle');
         const dispose = bindPaletteLifecycle(coordinator);
 
         expect(actions.has('db.messages.append:action:after')).toBe(true);
         expect(actions.has('db.messages.update:action:after')).toBe(false);
-        actions.get('db.messages.append:action:after')?.();
+        actions.get('db.messages.append:action:after')?.({
+            thread_id: 'thread-1',
+        });
         await vi.advanceTimersByTimeAsync(250);
-        expect(refreshSources).toHaveBeenLastCalledWith(['chat']);
+        expect(refreshRecords).toHaveBeenLastCalledWith('chat', ['thread-1']);
 
         actions.get('db.posts.upsert:action:after')?.();
         await vi.advanceTimersByTimeAsync(250);

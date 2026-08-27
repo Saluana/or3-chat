@@ -167,6 +167,11 @@ export interface PaletteSearchSource {
     pluginGeneration?: number;
     access?: PluginGatePolicy;
     load(context: PaletteLoadContext): Promise<readonly PaletteResource[]>;
+    /** Load one record without rescanning the complete source. */
+    loadRecord?(
+        context: PaletteLoadContext,
+        recordId: string
+    ): Promise<PaletteResource | null>;
     hydratePreview?(
         resource: PaletteResource,
         context: PalettePreviewContext

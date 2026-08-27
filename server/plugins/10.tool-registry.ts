@@ -154,7 +154,14 @@ export default defineNitroPlugin(() => {
 
             return `Calculation complete: ${a} ${operation} ${b} = ${result}`;
         },
-        { override: true }
+        {
+            override: true,
+            workflowPolicy: {
+                sideEffect: 'none',
+                approval: 'never',
+                parallelSafe: true,
+            },
+        }
     );
 
     registerServerTool(
@@ -165,7 +172,14 @@ export default defineNitroPlugin(() => {
             const sum = a + b;
             return `Sum: ${a} + ${b} = ${sum}`;
         },
-        { override: true }
+        {
+            override: true,
+            workflowPolicy: {
+                sideEffect: 'none',
+                approval: 'never',
+                parallelSafe: true,
+            },
+        }
     );
 
     registerServerTool(
@@ -180,6 +194,13 @@ export default defineNitroPlugin(() => {
             const price = await fetchCoinGeckoPrice(coinId, vsCurrency);
             return `CoinGecko price for ${coinId} in ${vsCurrency.toUpperCase()}: ${price}`;
         },
-        { override: true }
+        {
+            override: true,
+            workflowPolicy: {
+                sideEffect: 'none',
+                approval: 'never',
+                parallelSafe: true,
+            },
+        }
     );
 });

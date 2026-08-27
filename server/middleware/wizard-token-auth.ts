@@ -67,7 +67,11 @@ export default defineEventHandler((event) => {
 
     const expectedToken = String(config.wizardUi.token).trim();
     if (!expectedToken) {
-        return;
+        throw createError({
+            statusCode: 503,
+            statusMessage:
+                'Wizard authentication is not configured. Set OR3_WIZARD_UI_TOKEN.',
+        });
     }
 
     const queryToken = (url.searchParams.get('token') ?? '').trim();

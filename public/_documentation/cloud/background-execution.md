@@ -111,6 +111,12 @@ subscribers, but completion persistence always targets that original database.
 
 This is what keeps background output visible and restorable after navigation/reload.
 
+For durable providers, workflow jobs also persist an encrypted, server-only resume
+envelope. After a process restart, the first authenticated status or SSE viewer can
+resume a non-terminal workflow from that envelope. Resume data is never returned by
+job APIs, requires a stable admin JWT or webhook-encryption key across restarts, and
+uses the persisted tool receipt journal so an acknowledged tool call is not repeated.
+
 ## Job Payload Contract
 
 Background job APIs include these metadata fields:

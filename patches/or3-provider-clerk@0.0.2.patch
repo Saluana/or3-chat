@@ -1,0 +1,16 @@
+diff --git a/dist/runtime/server/middleware/00.clerk.js b/dist/runtime/server/middleware/00.clerk.js
+--- a/dist/runtime/server/middleware/00.clerk.js
++++ b/dist/runtime/server/middleware/00.clerk.js
+@@ -1,3 +1,4 @@
++import { defineEventHandler } from "h3";
+ import { useRuntimeConfig } from "#imports";
+ import { CLERK_PROVIDER_ID } from "~~/shared/cloud/provider-ids";
+ export default defineEventHandler(async (event) => {
+diff --git a/dist/runtime/server/plugins/register.js b/dist/runtime/server/plugins/register.js
+--- a/dist/runtime/server/plugins/register.js
++++ b/dist/runtime/server/plugins/register.js
+@@ -1,3 +1,4 @@
++import { defineNitroPlugin } from "nitropack/runtime";
+ import { CLERK_PROVIDER_ID } from "~~/shared/cloud/provider-ids";
+ import { registerAuthProvider } from "~~/server/auth/registry";
+ import { registerProviderTokenBroker } from "~~/server/auth/token-broker/registry";

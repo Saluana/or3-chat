@@ -9,7 +9,7 @@ import { createWebhookToggleHandler } from '../route-factories';
 export default createWebhookToggleHandler({
     getWebhookId: requireWebhookId,
     async resolveContext(event) {
-        return requireWebhookApiContext(event);
+        return requireWebhookApiContext(event, 'workspace.write');
     },
     resolveWebhook(context, webhookId) {
         return requireOwnedWebhook(

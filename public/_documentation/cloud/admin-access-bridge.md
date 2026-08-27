@@ -46,6 +46,10 @@ This is why a first Clerk account often becomes admin during initial setup.
 ## Is It Permanent?
 
 The super-admin cookie is session auth for `/admin` and can be cleared by logout.
+Its signed claims are bound to the current credential revision. Changing the
+configured username or password advances that revision and invalidates existing
+admin sessions; a successful password-change request issues a replacement cookie
+for the new revision.
 
 The deployment admin grant in Convex is separate and persistent:
 

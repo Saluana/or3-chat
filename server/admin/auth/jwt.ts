@@ -6,6 +6,7 @@ import type { H3Event } from 'h3';
 import { getCookie, setCookie, deleteCookie } from 'h3';
 import jwt from 'jsonwebtoken';
 import { useRuntimeConfig } from '#imports';
+import { readAdminCredentials } from './credentials';
 
 const COOKIE_NAME = 'or3_admin';
 const COOKIE_PATH = '/';
@@ -36,9 +37,18 @@ function parseExpiryToSeconds(expiry: string): number {
 export type AdminJwtClaims = {
     kind: 'super_admin';
     username: string;
+    credential_revision: string;
     iat: number;
     exp: number;
 };
+
+async function getCredentialRevision(username: string): Promise<string | null> {
+    const credentials = await readAdminCredentials();
+    if (!credentials || credentials.username !== username) {
+        return null;
+    }
+    return credentials.session_revision ?? credentials.updated_at;
+}
 
 /**
  * Get the JWT secret from runtime config or generate one.
@@ -93,10 +103,15 @@ export async function signAdminJwt(
     const config = useRuntimeConfig(event);
     const secret = await getJwtSecret(event);
     const expiry = config.admin.auth.jwtExpiry || '24h';
+    const credentialRevision = await getCredentialRevision(username);
+    if (!credentialRevision) {
+        throw new Error('Admin credentials are not initialized');
+    }
 
     const claims: Omit<AdminJwtClaims, 'iat' | 'exp'> = {
         kind: 'super_admin',
         username,
+        credential_revision: credentialRevision,
     };
 
     return jwt.sign(claims, secret, {
@@ -127,7 +142,18 @@ export async function verifyAdminJwt(
             decoded.kind !== 'super_admin' ||
             !('username' in decoded) ||
             typeof decoded.username !== 'string' ||
-            !decoded.username
+            !decoded.username ||
+            !('credential_revision' in decoded) ||
+            typeof decoded.credential_revision !== 'string' ||
+            !decoded.credential_revision
+        ) {
+            return null;
+        }
+
+        const currentRevision = await getCredentialRevision(decoded.username);
+        if (
+            !currentRevision ||
+            decoded.credential_revision !== currentRevision
         ) {
             return null;
         }

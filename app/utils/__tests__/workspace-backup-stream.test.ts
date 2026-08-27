@@ -1,5 +1,7 @@
-import { Blob } from 'node:buffer';
+import { Blob as NodeBlob } from 'node:buffer';
 import { describe, it, expect, vi } from 'vitest';
+
+const Blob = NodeBlob as unknown as typeof globalThis.Blob;
 
 vi.mock('dexie', () => ({
     default: {

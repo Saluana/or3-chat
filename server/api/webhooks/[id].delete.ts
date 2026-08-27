@@ -10,7 +10,7 @@ export default createWebhookDeleteHandler(
     {
         getWebhookId: requireWebhookId,
         resolveContext(event) {
-            return requireWebhookApiContext(event);
+            return requireWebhookApiContext(event, 'workspace.write');
         },
         resolveWebhook(context, webhookId) {
             return requireOwnedWebhook(

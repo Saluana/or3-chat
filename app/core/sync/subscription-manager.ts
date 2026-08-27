@@ -34,7 +34,6 @@ import type {
     SyncScope,
     SyncChange,
     PullResponse,
-    SnapshotResponse,
 } from '~~/shared/sync/types';
 import { ConflictResolver } from './conflict-resolver';
 import { getCursorManager, type CursorManager } from './cursor-manager';
@@ -43,7 +42,7 @@ import { getHookBridge } from './hook-bridge';
 import { isRecentOpId } from './recent-op-cache';
 import { isAbortLikeError } from './providers/gateway-sync-provider';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
-import { applySnapshotChain } from './snapshot-applier';
+import { SnapshotChainStager } from './snapshot-applier';
 
 /** Default tables to sync */
 const DEFAULT_TABLES = ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta', 'notifications'];
@@ -375,53 +374,58 @@ export class SubscriptionManager {
         if (!snapshot) return;
 
         const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
-        const pages: SnapshotResponse[] = [];
+        const stager = new SnapshotChainStager(
+            this.db,
+            this.scope,
+            this.cursorManager.getDeviceId(),
+            replacementTables
+        );
         const seenPageTokens = new Set<string>();
         let pageToken: string | undefined;
         let totalPulled = 0;
+        let highWatermark: number;
 
-        while (true) {
-            if (!this.isCurrentGeneration(generation)) return;
-            if (!circuitBreaker.canRetry()) {
-                throw new Error('Circuit breaker opened during snapshot bootstrap');
-            }
+        try {
+            while (true) {
+                if (!this.isCurrentGeneration(generation)) return;
+                if (!circuitBreaker.canRetry()) {
+                    throw new Error('Circuit breaker opened during snapshot bootstrap');
+                }
 
-            const page = await snapshot({
-                scope: this.scope,
-                pageSize: this.config.bootstrapPageSize,
-                tables: this.config.tables,
-                ...(pageToken ? { pageToken } : {}),
-            });
-            if (!this.isCurrentGeneration(generation)) return;
-
-            pages.push(page);
-            totalPulled += page.items.length;
-            if (emitBootstrapEvents) {
-                await useHooks().doAction('sync.bootstrap:action:progress', {
+                const page = await snapshot({
                     scope: this.scope,
-                    cursor: page.highWatermark,
-                    pulledCount: totalPulled,
-                    hasMore: page.nextPageToken !== null,
+                    pageSize: this.config.bootstrapPageSize,
+                    tables: this.config.tables,
+                    ...(pageToken ? { pageToken } : {}),
                 });
                 if (!this.isCurrentGeneration(generation)) return;
+
+                await stager.addPage(page);
+                totalPulled += page.items.length;
+                if (emitBootstrapEvents) {
+                    await useHooks().doAction('sync.bootstrap:action:progress', {
+                        scope: this.scope,
+                        cursor: page.highWatermark,
+                        pulledCount: totalPulled,
+                        hasMore: page.nextPageToken !== null,
+                    });
+                    if (!this.isCurrentGeneration(generation)) return;
+                }
+
+                if (page.nextPageToken === null) break;
+                if (seenPageTokens.has(page.nextPageToken)) {
+                    throw new Error('Snapshot pagination token repeated before completion');
+                }
+                seenPageTokens.add(page.nextPageToken);
+                pageToken = page.nextPageToken;
             }
 
-            if (page.nextPageToken === null) break;
-            if (seenPageTokens.has(page.nextPageToken)) {
-                throw new Error('Snapshot pagination token repeated before completion');
-            }
-            seenPageTokens.add(page.nextPageToken);
-            pageToken = page.nextPageToken;
+            highWatermark = await stager.apply(
+                () => this.isCurrentGeneration(generation)
+            );
+        } finally {
+            await stager.dispose();
         }
-
-        const highWatermark = await applySnapshotChain(
-            this.db,
-            pages,
-            this.scope,
-            this.cursorManager.getDeviceId(),
-            () => this.isCurrentGeneration(generation),
-            replacementTables
-        );
         if (!this.isCurrentGeneration(generation)) return;
 
         // The watermark and materialized rows commit atomically. Pull semantics

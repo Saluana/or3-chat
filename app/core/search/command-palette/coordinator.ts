@@ -53,6 +53,7 @@ export interface PaletteCoordinator {
     subscribe(listener: SnapshotListener): () => void;
     ensureWarm(): Promise<void>;
     refreshSources(sourceIds?: readonly string[]): Promise<void>;
+    refreshRecords(sourceId: string, recordIds: readonly string[]): Promise<void>;
     retrySource(sourceId: string): Promise<void>;
     getResource(
         sourceId: string,
@@ -608,6 +609,59 @@ export function createPaletteCoordinator(options?: {
         return refreshChain;
     }
 
+    function refreshRecords(
+        sourceId: string,
+        recordIds: readonly string[]
+    ): Promise<void> {
+        const ids = [...new Set(recordIds.filter(Boolean))];
+        if (!ids.length || disposed) return Promise.resolve();
+        const generation = workspaceGeneration;
+        refreshChain = refreshChain
+            .catch(() => undefined)
+            .then(async () => {
+                if (!bound.size) await startWarm();
+                else if (warmPromise) await warmPromise;
+                if (disposed || generation !== workspaceGeneration) return;
+                const entry = bound.get(sourceId);
+                if (!entry?.source.loadRecord) {
+                    await reconcileSources(generation, {
+                        sourceIds: new Set([sourceId]),
+                        signal: warmAbortController.signal,
+                    });
+                    await runSearch(rawQuery, true);
+                    return;
+                }
+                const signal = warmAbortController.signal;
+                const context = loadContext(signal);
+                for (const recordId of ids) {
+                    const resource = await entry.source.loadRecord(
+                        context,
+                        recordId
+                    );
+                    if (signal.aborted) return;
+                    const existing = entry.index
+                        .getResources()
+                        .filter((item) => item.recordId === recordId);
+                    if (resource) {
+                        await entry.index.upsertResource(resource, {
+                            signal,
+                        });
+                        for (const stale of existing) {
+                            if (stale.key !== resource.key) {
+                                await entry.index.removeResource(stale.key);
+                            }
+                        }
+                    } else {
+                        for (const stale of existing) {
+                            await entry.index.removeResource(stale.key);
+                        }
+                    }
+                }
+                await runSearch(rawQuery, true);
+            });
+        return refreshChain;
+    }
+
     return {
         setQuery,
         getSnapshot: () => {
@@ -629,6 +683,7 @@ export function createPaletteCoordinator(options?: {
         },
         ensureWarm,
         refreshSources,
+        refreshRecords,
         retrySource,
         getResource,
         hydratePreview,
