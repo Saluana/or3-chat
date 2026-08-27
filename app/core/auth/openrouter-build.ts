@@ -89,6 +89,52 @@ export interface ORMessage {
     name?: string;
 }
 
+/**
+ * A user attachment could not be represented on the provider wire format.
+ *
+ * This is deliberately a typed error so callers can keep their existing
+ * request-error/toast path while distinguishing an attachment problem from a
+ * provider/network failure. The message never includes the attachment data or
+ * URL (which may contain sensitive query parameters).
+ */
+export class AttachmentHydrationError extends Error {
+    readonly code = 'ATTACHMENT_HYDRATION_FAILED' as const;
+    readonly messageIndex: number;
+    readonly filename?: string;
+    readonly reason:
+        | 'missing'
+        | 'unsupported'
+        | 'unavailable'
+        | 'invalid'
+        | 'not-image';
+
+    constructor(options: {
+        messageIndex: number;
+        filename?: string;
+        reason:
+            | 'missing'
+            | 'unsupported'
+            | 'unavailable'
+            | 'invalid'
+            | 'not-image';
+    }) {
+        const attachmentLabel = options.filename
+            ? ` "${options.filename}"`
+            : '';
+        const messageLabel = Number.isInteger(options.messageIndex)
+            ? ` in message ${options.messageIndex + 1}`
+            : '';
+        super(
+            `Unable to prepare attachment${attachmentLabel}${messageLabel}. Remove it or reattach it, then try again.`
+        );
+        this.name = 'AttachmentHydrationError';
+        this.messageIndex = options.messageIndex;
+        this.filename = options.filename;
+        this.reason = options.reason;
+        Object.setPrototypeOf(this, new.target.prototype);
+    }
+}
+
 // Caches on global scope to avoid repeated blob -> base64 conversions.
 type GlobalCaches = {
     __or3ImageDataUrlCache?: Map<string, string>;
@@ -164,6 +210,41 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
     });
 }
 
+type BinaryAttachmentData = ArrayBuffer | ArrayBufferView;
+
+function isBinaryAttachmentData(value: unknown): value is BinaryAttachmentData {
+    return (
+        (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer) ||
+        (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView(value))
+    );
+}
+
+function hasUsableDataUrl(value: string): boolean {
+    const prefix = /^data:[^,]+,/i.exec(value)?.[0];
+    return Boolean(prefix && value.slice(prefix.length).length > 0);
+}
+
+async function binaryToDataUrl(
+    value: BinaryAttachmentData,
+    mediaType: string
+): Promise<string> {
+    const bytes =
+        value instanceof ArrayBuffer
+            ? new Uint8Array(value)
+            : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    if (bytes.byteLength === 0) {
+        throw new Error('empty-binary-attachment');
+    }
+    // Copy the view before passing it to Blob so Buffer/subarray offsets are
+    // respected and the caller cannot mutate data while it is being encoded.
+    const copy = Uint8Array.from(bytes);
+    return blobToDataUrl(
+        new Blob([copy.buffer as ArrayBuffer], {
+            type: mediaType || 'application/octet-stream',
+        })
+    );
+}
+
 async function hydrateHashToDataUrl(hash: string): Promise<string | null> {
     if (dataUrlCache.has(hash)) return dataUrlCache.get(hash)!;
     if (inflight.has(hash)) return inflight.get(hash)!;
@@ -184,6 +265,91 @@ async function hydrateHashToDataUrl(hash: string): Promise<string | null> {
     })();
     inflight.set(hash, p);
     return p;
+}
+
+async function hydrateFileData(
+    value: unknown,
+    mediaType: string,
+    filename: string,
+    messageIndex: number
+): Promise<string> {
+    if (isBinaryAttachmentData(value)) {
+        try {
+            return await binaryToDataUrl(value, mediaType);
+        } catch {
+            throw new AttachmentHydrationError({
+                filename,
+                messageIndex,
+                reason: 'invalid',
+            });
+        }
+    }
+
+    if (typeof value !== 'string' || value.trim() === '') {
+        throw new AttachmentHydrationError({
+            filename,
+            messageIndex,
+            reason: 'missing',
+        });
+    }
+
+    const ref = value.trim();
+    if (/^data:/i.test(ref)) {
+        if (!hasUsableDataUrl(ref)) {
+            throw new AttachmentHydrationError({
+                filename,
+                messageIndex,
+                reason: 'invalid',
+            });
+        }
+        return ref;
+    }
+
+    // Provider APIs can accept valid remote URLs directly. Keep this path
+    // unchanged for compatibility and avoid an unnecessary client fetch.
+    if (/^https?:/i.test(ref)) return ref;
+
+    if (/^blob:/i.test(ref)) {
+        const hydrated = await remoteRefToDataUrl(ref);
+        if (hydrated && hasUsableDataUrl(hydrated)) return hydrated;
+        throw new AttachmentHydrationError({
+            filename,
+            messageIndex,
+            reason: 'unavailable',
+        });
+    }
+
+    // Keep the shared hash cache and local-store path used by historical
+    // messages. A cached value may remain usable even while IndexedDB is
+    // temporarily unavailable.
+    try {
+        const hydrated = await hydrateHashToDataUrl(ref);
+        if (hydrated && hasUsableDataUrl(hydrated)) {
+            const dataUrlMime = /^data:([^;,]+)[;,]/i.exec(hydrated)?.[1];
+            const normalizedMime =
+                dataUrlMime === 'application/octet-stream' && mediaType
+                    ? mediaType
+                    : dataUrlMime;
+            return normalizedMime
+                ? hydrated.replace(
+                      /^data:[^;]+;/i,
+                      `data:${normalizedMime};`
+                  )
+                : hydrated;
+        }
+        // Retain the prior remote-ref fallback for custom reference schemes.
+        const remote = await remoteRefToDataUrl(ref);
+        if (remote && hasUsableDataUrl(remote)) return remote;
+    } catch {
+        // Convert all local-store/fetch failures into one caller-facing typed
+        // error below.
+    }
+
+    throw new AttachmentHydrationError({
+        filename,
+        messageIndex,
+        reason: 'unavailable',
+    });
 }
 
 /**
@@ -234,6 +400,13 @@ interface ChatContentPart {
     name?: string;
 }
 
+type InlineImageCandidate = {
+    data: unknown;
+    mediaType?: string;
+};
+
+const INLINE_IMAGE_PREFIX = '__or3_inline_image__';
+
 // Build OpenRouter messages with hydrated images.
 /**
  * Purpose:
@@ -277,6 +450,7 @@ export async function buildOpenRouterMessages(
 
     // Collect hash candidates
     const hashCandidates: BuildImageCandidate[] = [];
+    const inlineImageCandidates = new Map<string, InlineImageCandidate>();
     for (const idx of candidateMessages) {
         const m = messages[idx];
         if (!m) continue;
@@ -307,21 +481,34 @@ export async function buildOpenRouterMessages(
                 // Parse error - skip this message
             }
         }
-        // Also inspect inline parts if array form
+        // Also inspect inline parts if array form. Binary images are assigned
+        // an internal candidate key so they share the existing image cap and
+        // dedupe policy with hash/URL candidates.
         if (Array.isArray(m.content)) {
-            for (const p of m.content) {
+            for (const [partIndex, p] of m.content.entries()) {
                 if (
                     (m.role === 'user' || m.role === 'assistant') &&
-                    p.type === 'image' &&
-                    typeof p.image === 'string'
+                    p.type === 'image'
                 ) {
-                    if (
-                        p.image.startsWith('data:image/') ||
-                        /^https?:/i.test(p.image) ||
-                        /^blob:/i.test(p.image)
-                    ) {
+                    if (typeof p.image === 'string') {
+                        // Keep opaque local hashes as candidates too. Some
+                        // callers provide an inline image part without a
+                        // duplicate `file_hashes` entry; silently dropping
+                        // that part would turn an attachment request into a
+                        // text-only request.
                         hashCandidates.push({
                             hash: p.image,
+                            role: m.role as BuildImageCandidate['role'],
+                            messageIndex: idx,
+                        });
+                    } else {
+                        const candidateKey = `${INLINE_IMAGE_PREFIX}${idx}:${partIndex}`;
+                        inlineImageCandidates.set(candidateKey, {
+                            data: p.image,
+                            mediaType: p.mediaType || p.mime,
+                        });
+                        hashCandidates.push({
+                            hash: candidateKey,
                             role: m.role as BuildImageCandidate['role'],
                             messageIndex: idx,
                         });
@@ -383,7 +570,6 @@ export async function buildOpenRouterMessages(
                     continue;
                 }
                 if (part.type === 'file') {
-                    if (!part.data) continue;
                     const mediaType =
                         part.mediaType ||
                         part.mime ||
@@ -393,50 +579,13 @@ export async function buildOpenRouterMessages(
                         part.filename ||
                         part.name ||
                         (isPdf ? 'document.pdf' : 'file');
-                    // Convert Uint8Array/Buffer to string if needed
-                    let fileData: string | null | undefined =
-                        typeof part.data === 'string' ? part.data : null; // Binary data needs special handling below
-
-                    // Local hash or opaque ref -> hydrate via blob to data URL preserving mime
-                    if (!/^data:|^https?:|^blob:/i.test(String(fileData))) {
-                        try {
-                            const { getFileBlob } = await getFilesMod();
-                            const blob = await getFileBlob(String(fileData));
-                            if (blob) {
-                                const mime = blob.type || mediaType;
-                                const dataUrl = await blobToDataUrl(blob);
-                                fileData = dataUrl.replace(
-                                    /^data:[^;]+;/,
-                                    `data:${mime};`
-                                );
-                            } else {
-                                const hydrated = await hydrateHashToDataUrl(
-                                    String(fileData)
-                                );
-                                if (hydrated) fileData = hydrated;
-                            }
-                            if (!fileData) {
-                                const remote = await remoteRefToDataUrl(
-                                    String(fileData)
-                                );
-                                if (remote) fileData = remote;
-                            }
-                        } catch {
-                            fileData = null;
-                        }
-                    }
-
-                    // If still not a usable scheme and it's a blob: URL, we can't send blob: (server can't fetch) -> skip
-                    if (fileData && /^blob:/i.test(String(fileData))) {
-                        if (debug)
-                            console.warn(
-                                '[or-build] skipping blob: URL (inaccessible server-side)',
-                                { filename }
-                            );
-                        fileData = null;
-                    }
+                    let fileData = await hydrateFileData(
+                        part.data,
+                        mediaType,
+                        filename,
+                        i
+                    );
                     if (
-                        fileData &&
                         isPdf &&
                         !fileData.startsWith('data:application/pdf')
                     ) {
@@ -448,16 +597,19 @@ export async function buildOpenRouterMessages(
                             );
                         }
                     }
-                    if (fileData && /^data:|^https?:/i.test(String(fileData))) {
+                    if (/^data:|^https?:/i.test(fileData)) {
                         parts.push({
                             type: 'file',
-                            file: { filename, file_data: String(fileData) },
+                            file: { filename, file_data: fileData },
                         });
-                    } else if (debug) {
-                        console.warn(
-                            '[or-build] skipping file part, could not hydrate',
-                            { ref: part.data, filename, messageIndex: i }
-                        );
+                    } else {
+                        // `hydrateFileData` should already reject this case;
+                        // keep a typed guard if a future ref type is added.
+                        throw new AttachmentHydrationError({
+                            filename,
+                            messageIndex: i,
+                            reason: 'unsupported',
+                        });
                     }
                 }
             }
@@ -472,8 +624,37 @@ export async function buildOpenRouterMessages(
         // Add images associated with this message index (only if truly images)
         const imgs = byMessageIndex.get(i) || [];
         for (const img of imgs) {
+            const inlineImage = inlineImageCandidates.get(img.hash);
+            if (inlineImage) {
+                const mediaType = inlineImage.mediaType?.startsWith('image/')
+                    ? inlineImage.mediaType
+                    : 'image/png';
+                let dataUrl: string;
+                try {
+                    if (!isBinaryAttachmentData(inlineImage.data)) {
+                        throw new Error('unsupported-inline-image');
+                    }
+                    dataUrl = await binaryToDataUrl(
+                        inlineImage.data,
+                        mediaType
+                    );
+                } catch {
+                    throw new AttachmentHydrationError({
+                        messageIndex: i,
+                        reason: 'invalid',
+                    });
+                }
+                parts.push({ type: 'image_url', image_url: { url: dataUrl } });
+                continue;
+            }
             // Quick allow path: already a data image URL
             if (img.hash.startsWith('data:image/')) {
+                if (!hasUsableDataUrl(img.hash)) {
+                    throw new AttachmentHydrationError({
+                        messageIndex: i,
+                        reason: 'invalid',
+                    });
+                }
                 parts.push({ type: 'image_url', image_url: { url: img.hash } });
                 continue;
             }
@@ -487,7 +668,7 @@ export async function buildOpenRouterMessages(
             }
             // If it's a local hash (not http/data/blob) inspect metadata to confirm mime starts with image/
             const looksLocal = !/^https?:|^data:|^blob:/i.test(img.hash);
-            let isImage = false;
+            let knownNonImage = false;
             if (looksLocal) {
                 try {
                     const { getFileMeta } = await getFilesMod();
@@ -503,29 +684,39 @@ export async function buildOpenRouterMessages(
                             ? (meta as { mimeType?: string }).mimeType
                             : null;
                     if (
-                        meta?.kind === 'image' ||
-                        (metaMime && metaMime.startsWith('image/'))
+                        meta &&
+                        meta.kind !== 'image' &&
+                        !(metaMime && metaMime.startsWith('image/'))
                     ) {
-                        isImage = true;
+                        knownNonImage = true;
                     }
                 } catch {
-                    // File meta lookup failed - assume image
+                    // A metadata lookup failure is handled by hydration below.
                 }
             }
-            if (!isImage && looksLocal) {
-                // Not an image (likely a PDF or other file) -> skip to avoid triggering image-capable endpoint routing
+            if (knownNonImage) {
+                // `file_hashes` is also persisted for PDFs and other
+                // non-image attachments. Those files are represented by a
+                // file content part above; they must not be treated as image
+                // candidates, but the presence of their hash is not itself
+                // an attachment failure.
                 continue;
             }
             // At this point either it's declared an image or remote unknown -> attempt hydration
             let dataUrl = await hydrateHashToDataUrl(img.hash);
             if (!dataUrl) dataUrl = await remoteRefToDataUrl(img.hash);
             if (dataUrl && dataUrl.startsWith('data:image/')) {
+                if (!hasUsableDataUrl(dataUrl)) {
+                    throw new AttachmentHydrationError({
+                        messageIndex: i,
+                        reason: 'invalid',
+                    });
+                }
                 parts.push({ type: 'image_url', image_url: { url: dataUrl } });
-            } else if (debug) {
-                console.warn('[or-build] hydrate-fail-or-non-image', {
-                    ref: img.hash,
-                    role: img.role,
-                    messageIndex: img.messageIndex,
+            } else {
+                throw new AttachmentHydrationError({
+                    messageIndex: i,
+                    reason: dataUrl ? 'not-image' : 'unavailable',
                 });
             }
         }

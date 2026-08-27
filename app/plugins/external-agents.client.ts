@@ -28,6 +28,7 @@ import type {
   ExternalAgentClientFactory,
   ExternalAgentDriver,
   ExternalAgentSession,
+  ExternalAgentStagingCleanupResult,
   ExternalAgentUploadAttachment,
 } from "~/core/external-agents/types";
 import { externalAgentDriver } from "~/core/external-agents/types";
@@ -35,6 +36,56 @@ import { getActiveWorkspaceId, subscribeActiveWorkspaceDb } from "~/db/client";
 import { getGlobalMultiPaneApi } from "~/utils/multiPaneApi";
 
 export function adaptInternClient(client: InternClient): ExternalAgentClient {
+  const cleanupUnsupportedWarning =
+    "This host cannot release temporary attachment files yet. The files are retained to protect the runner; remove the generated .or3-upload-* folder from the workspace after the failed turn if needed.";
+  const cleanupFailedWarning =
+    "Temporary attachment cleanup could not be confirmed. The files are retained to protect the runner; remove the generated .or3-upload-* folder from the workspace after the failed turn if needed.";
+  const stagingBatchPattern = /^\.or3-upload-[0-9]{10,}-[a-z0-9]{6}$/u;
+
+  const stagingBatchFromPath = (path: string): string | undefined => {
+    const normalized = path.replaceAll("\\", "/");
+    const [batchName, fileName, ...rest] = normalized.split("/");
+    if (
+      !batchName ||
+      !fileName ||
+      rest.length > 0 ||
+      !stagingBatchPattern.test(batchName) ||
+      fileName === "." ||
+      fileName === ".."
+    ) {
+      return undefined;
+    }
+    return batchName;
+  };
+
+  const cleanupBatch = async (
+    rootId: string,
+    batchName: string,
+  ): Promise<ExternalAgentStagingCleanupResult> => {
+    if (rootId !== "workspace" || !stagingBatchPattern.test(batchName)) {
+      return { status: "failed", warning: cleanupFailedWarning };
+    }
+    try {
+      await client.transport.request("/internal/v1/files/staging/release", {
+        method: "POST",
+        body: { root_id: rootId, path: batchName },
+        timeoutMs: 3_000,
+      });
+      return { status: "released" };
+    } catch (error) {
+      const errorRecord =
+        error && typeof error === "object" ? (error as object) : {};
+      const status = Number(
+        Reflect.get(errorRecord, "status") ??
+          Reflect.get(errorRecord, "statusCode"),
+      );
+      if (status === 403 || status === 404 || status === 405) {
+        return { status: "unsupported", warning: cleanupUnsupportedWarning };
+      }
+      return { status: "failed", warning: cleanupFailedWarning };
+    }
+  };
+
   const stageFiles = async (
     attachments: readonly ExternalAgentUploadAttachment[],
     options?: { signal?: AbortSignal },
@@ -76,34 +127,95 @@ export function adaptInternClient(client: InternClient): ExternalAgentClient {
     });
 
     const staged: ExternalAgentAttachment[] = [];
-    for (const attachment of attachments) {
-      const form = new FormData();
-      form.set("root_id", workspaceRoot.id);
-      form.set("path", batchName);
-      form.set("file", attachment.data, attachment.name);
-      const uploaded = await client.transport.request<{
-        root_id?: string;
-        path?: string;
-      }>("/internal/v1/files/upload", {
-        method: "POST",
-        body: form,
-        signal: options?.signal,
-      });
-      const rootId = uploaded.root_id || workspaceRoot.id;
-      const path = uploaded.path || `${batchName}/${attachment.name}`;
-      staged.push({
-        id: `${rootId}:${path}`,
-        source: "workspace_ref",
-        kind: attachment.kind,
-        name: attachment.name,
-        mime_type: attachment.mimeType || undefined,
-        size_bytes: attachment.sizeBytes,
-        root_id: rootId,
-        path,
-        preview: path,
-      });
+    try {
+      for (const attachment of attachments) {
+        const form = new FormData();
+        form.set("root_id", workspaceRoot.id);
+        form.set("path", batchName);
+        form.set("file", attachment.data, attachment.name);
+        const uploaded = await client.transport.request<{
+          root_id?: string;
+          path?: string;
+        }>("/internal/v1/files/upload", {
+          method: "POST",
+          body: form,
+          signal: options?.signal,
+        });
+        const rootId = uploaded.root_id || workspaceRoot.id;
+        if (rootId !== workspaceRoot.id) {
+          throw new Error("The host returned an unexpected attachment root.");
+        }
+        const safeName = attachment.name
+          .replaceAll("\\", "/")
+          .split("/")
+          .pop();
+        const returnedPath = uploaded.path?.replaceAll("\\", "/");
+        const path = returnedPath || `${batchName}/${safeName || "attachment"}`;
+        const pathParts = path.split("/");
+        if (
+          pathParts.length !== 2 ||
+          pathParts[0] !== batchName ||
+          !pathParts[1] ||
+          pathParts[1] === "." ||
+          pathParts[1] === ".." ||
+          (safeName && pathParts[1] !== safeName)
+        ) {
+          throw new Error("The host returned an unsafe attachment path.");
+        }
+        staged.push({
+          id: `${rootId}:${path}`,
+          source: "workspace_ref",
+          kind: attachment.kind,
+          name: attachment.name,
+          mime_type: attachment.mimeType || undefined,
+          size_bytes: attachment.sizeBytes,
+          root_id: rootId,
+          path,
+          preview: path,
+        });
+      }
+      return staged;
+    } catch (error) {
+      const cleanup = await cleanupBatch(workspaceRoot.id, batchName);
+      if (cleanup.warning) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`${message} ${cleanup.warning}`, { cause: error });
+      }
+      throw error;
     }
-    return staged;
+  };
+
+  const releaseStagedFiles = async (
+    attachments: readonly ExternalAgentAttachment[],
+  ): Promise<ExternalAgentStagingCleanupResult> => {
+    const batches = new Map<string, string>();
+    for (const attachment of attachments) {
+      if (attachment.source !== "workspace_ref") continue;
+      const rootId = attachment.root_id?.trim();
+      const path = attachment.path?.trim();
+      const batchName = path ? stagingBatchFromPath(path) : undefined;
+      if (!rootId || !batchName || !path) {
+        return { status: "failed", warning: cleanupFailedWarning };
+      }
+      batches.set(`${rootId}:${batchName}`, batchName);
+    }
+    if (!batches.size) return { status: "released" };
+    const results = await Promise.all(
+      [...batches].map(([key, batchName]) => {
+        const rootId = key.slice(0, key.indexOf(":"));
+        return cleanupBatch(rootId, batchName);
+      }),
+    );
+    const warning = results.find((result) => result.warning)?.warning;
+    if (warning) {
+      return {
+        status: results.some((result) => result.status === "failed")
+          ? "failed"
+          : "unsupported",
+        warning,
+      };
+    }
+    return { status: "released" };
   };
 
   return {
@@ -132,6 +244,7 @@ export function adaptInternClient(client: InternClient): ExternalAgentClient {
         options,
       ),
     stageFiles,
+    releaseStagedFiles,
     getTurn: (sessionId, turnId, options) =>
       client.getTurn(sessionId, turnId, options),
     listTurnEvents: (sessionId, turnId, input = {}) =>

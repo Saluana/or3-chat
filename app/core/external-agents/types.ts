@@ -335,6 +335,17 @@ export interface ExternalAgentAttachment {
   readonly content_excerpt?: string;
 }
 
+export type ExternalAgentStagingCleanupStatus =
+  | "released"
+  | "unsupported"
+  | "failed";
+
+export interface ExternalAgentStagingCleanupResult {
+  readonly status: ExternalAgentStagingCleanupStatus;
+  /** A user-facing explanation when cleanup could not be confirmed. */
+  readonly warning?: string;
+}
+
 export interface ExternalAgentApprovalInput {
   readonly note?: string;
   readonly allow_session?: boolean;
@@ -386,8 +397,15 @@ export interface ExternalAgentClient {
     attachments: readonly ExternalAgentUploadAttachment[],
     options?: { signal?: AbortSignal },
   ): Promise<readonly ExternalAgentAttachment[]>;
-  /** Release browser-side staged attachment bytes when a request never starts. */
-  releaseStagedFiles?(attachments: readonly ExternalAgentAttachment[]): void;
+  /**
+   * Release staged files when a turn was not accepted by the remote host.
+   * Successful turns retain workspace files until a runner-owned lifecycle
+   * proves that consumption is complete, so an async runner never loses its
+   * inputs.
+   */
+  releaseStagedFiles?(
+    attachments: readonly ExternalAgentAttachment[],
+  ): ExternalAgentStagingCleanupResult | Promise<ExternalAgentStagingCleanupResult>;
   getTurn(
     sessionId: string,
     turnId: string,

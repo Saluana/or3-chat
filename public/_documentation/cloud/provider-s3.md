@@ -90,6 +90,9 @@ OR3 client flow:
 5. Client calls `POST /api/storage/commit` so the server can verify the upload (size/type) and finalize metadata.
 
 Downloads are similar via `POST /api/storage/presign-download` + direct `GET`.
+The gateway first requires a live, committed `file_meta` row in the requested
+workspace and then verifies both the S3 object and its commit marker before
+signing; a raw key/hash or pending upload cannot be downloaded.
 `POST /api/storage/delete` derives the object key from the authorized workspace
 and hash, rejects a mismatched `storage_id`, and idempotently removes the blob
 and commit marker.

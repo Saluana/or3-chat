@@ -25,7 +25,7 @@ export async function validateWebhookUrl(
     rawUrl: string,
     options: WebhookUrlValidationOptions = {}
 ): Promise<URL> {
-    const { requireHttps = false, blockPrivateIps = false } = options;
+    const { requireHttps = false, blockPrivateIps = true } = options;
 
     let parsed: URL;
     try {
@@ -55,7 +55,13 @@ export async function validateWebhookUrl(
         throw new Error('Invalid webhook URL');
     }
 
-    if (hostname === 'localhost') {
+    if (
+        hostname === 'localhost' ||
+        hostname === 'localhost.localdomain' ||
+        hostname.endsWith('.localhost') ||
+        hostname.endsWith('.local') ||
+        hostname.endsWith('.internal')
+    ) {
         throw new Error('Webhook URL cannot target a private IP');
     }
 
@@ -73,11 +79,11 @@ export async function validateWebhookUrl(
     try {
         addresses = await resolver(hostname);
     } catch {
-        throw new Error(`Webhook URL DNS lookup failed for ${hostname}`);
+        throw new Error('Webhook URL could not be resolved');
     }
 
     if (addresses.length === 0) {
-        throw new Error(`Webhook URL DNS lookup returned no addresses for ${hostname}`);
+        throw new Error('Webhook URL could not be resolved');
     }
 
     if (addresses.some((address) => isBlockedWebhookAddress(address.address))) {

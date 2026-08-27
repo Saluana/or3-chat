@@ -164,15 +164,54 @@ export function isPrivateIpv6Address(value: string): boolean {
 
     const embeddedIpv4 = extractEmbeddedIpv4(words);
     if (embeddedIpv4) {
-        return isPrivateIp(embeddedIpv4);
+        return isBlockedIpv4Address(embeddedIpv4);
     }
 
     const firstWord = words[0]!;
+    if ((firstWord & 0xff00) === 0xff00) {
+        return true;
+    }
+
     if ((firstWord & 0xfe00) === 0xfc00) {
         return true;
     }
 
-    return (firstWord & 0xffc0) === 0xfe80;
+    if ((firstWord & 0xffc0) === 0xfe80 || (firstWord & 0xffc0) === 0xfec0) {
+        return true;
+    }
+
+    // IPv6 special-use and documentation ranges are not routable webhook
+    // destinations even though they are not all conventionally called private.
+    if (
+        (firstWord === 0x0100 && words[1] === 0 && words[2] === 0 && words[3] === 0) ||
+        (firstWord === 0x2001 &&
+            (words[1] === 0x0000 ||
+                words[1] === 0x0002 ||
+                words[1] === 0x0010 ||
+                words[1] === 0x0020 ||
+                words[1] === 0x0db8))
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
+function isBlockedIpv4Address(value: string): boolean {
+    if (isPrivateIp(value)) return true;
+
+    const parts = value.split('.');
+    const first = Number(parts[0]);
+    const second = Number(parts[1]);
+    if (!Number.isInteger(first) || !Number.isInteger(second)) return true;
+
+    // Multicast (224/4), future/reserved (240/4), protocol assignments
+    // (192.0.0/24), and benchmarking (198.18/15) are not public targets.
+    return (
+        first >= 224 ||
+        (first === 192 && second === 0) ||
+        (first === 198 && (second === 18 || second === 19))
+    );
 }
 
 export function isBlockedWebhookAddress(value: string): boolean {
@@ -182,7 +221,7 @@ export function isBlockedWebhookAddress(value: string): boolean {
 
     const family = isIP(normalized);
     if (family === 4) {
-        return isPrivateIp(normalized);
+        return isBlockedIpv4Address(normalized);
     }
 
     if (family === 6) {
@@ -222,7 +261,7 @@ function selectAddress(
 export function createSsrfSafeLookup(
     options: SsrfSafeAgentOptions = {}
 ): LookupFunction {
-    const { blockPrivateIps = false, lookup = dnsLookup as NodeLookup } = options;
+    const { blockPrivateIps = true, lookup = dnsLookup as NodeLookup } = options;
 
     return (hostname, lookupOptions, callback) => {
         if (!blockPrivateIps) {
@@ -264,7 +303,7 @@ export function createSsrfSafeLookup(
 
                 if (blockedAddress) {
                     const privateIpError = new Error(
-                        `Webhook target resolved to a private IP: ${blockedAddress.address}`
+                        'Webhook target resolved to a private or reserved address'
                     ) as NodeJS.ErrnoException;
                     privateIpError.code = 'EPRIVATEIP';
                     failLookup(lookupOptions, callback, privateIpError);

@@ -14,6 +14,7 @@ import type {
     SyncScope,
     SyncSubscribeOptions,
 } from '~~/shared/sync/types';
+import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 
 const hookState = vi.hoisted(() => ({
     doAction: vi.fn(async () => undefined),
@@ -114,9 +115,15 @@ class PrunedHistoryProvider implements SyncProvider {
                 ],
                 nextCursor: 11,
                 hasMore: false,
+                ...FULL_HISTORY_PULL_RETENTION,
             };
         }
-        return { changes: [], nextCursor: request.cursor, hasMore: false };
+        return {
+            changes: [],
+            nextCursor: request.cursor,
+            hasMore: false,
+            ...FULL_HISTORY_PULL_RETENTION,
+        };
     }
 
     async subscribe(

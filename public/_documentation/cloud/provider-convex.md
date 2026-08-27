@@ -178,6 +178,10 @@ blob lifecycle consume these views directly; retained `change_log` entries are
 never used to infer liveness. Active reservation pages are an explicit empty
 view until upload-intent persistence is enabled.
 
+Convex download URLs are issued only for a workspace member whose canonical
+`file_meta` row is live and has a storage ID. Soft-deleted or pending metadata
+returns no URL, including when an older bare SHA-256 hash form is requested.
+
 ## Common Issues
 
 ### Provider not loaded

@@ -7,13 +7,17 @@ const privateResolver = async () => [{ address: '10.0.0.9', family: 4 }];
 
 describe('validateWebhookUrl', () => {
     it('accepts a valid HTTPS URL', async () => {
-        const parsed = await validateWebhookUrl('https://example.com/hooks');
+        const parsed = await validateWebhookUrl('https://example.com/hooks', {
+            resolver: publicResolver,
+        });
 
         expect(parsed.toString()).toBe('https://example.com/hooks');
     });
 
     it('accepts HTTP when HTTPS is not required', async () => {
-        const parsed = await validateWebhookUrl('http://example.com/hooks');
+        const parsed = await validateWebhookUrl('http://example.com/hooks', {
+            resolver: publicResolver,
+        });
 
         expect(parsed.toString()).toBe('http://example.com/hooks');
     });
@@ -51,9 +55,15 @@ describe('validateWebhookUrl', () => {
         'http://127.0.0.1/hooks',
         'http://10.0.0.1/hooks',
         'http://192.168.1.1/hooks',
+        'http://192.0.0.1/hooks',
+        'http://224.0.0.1/hooks',
+        'http://240.0.0.1/hooks',
         'http://[::1]/hooks',
         'http://[fe80::1]/hooks',
         'http://[fd00::1]/hooks',
+        'http://[ff02::1]/hooks',
+        'http://[100::1]/hooks',
+        'http://[2001:db8::1]/hooks',
         'http://[::ffff:127.0.0.1]/hooks',
     ])('blocks private targets when enabled: %s', async (url) => {
         await expect(
@@ -61,6 +71,17 @@ describe('validateWebhookUrl', () => {
                 blockPrivateIps: true,
                 resolver: publicResolver,
             })
+        ).rejects.toThrow(/private ip/i);
+    });
+
+    it.each([
+        'https://localhost/hooks',
+        'https://service.localhost/hooks',
+        'https://service.local/hooks',
+        'https://service.internal/hooks',
+    ])('blocks localhost-style names when enabled: %s', async (url) => {
+        await expect(
+            validateWebhookUrl(url, { blockPrivateIps: true })
         ).rejects.toThrow(/private ip/i);
     });
 

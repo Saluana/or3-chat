@@ -12,6 +12,7 @@ import type {
     SyncScope,
     SyncSubscribeOptions,
 } from '~~/shared/sync/types';
+import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 import { _resetCursorManagers } from '../cursor-manager';
 import { _resetHookBridge } from '../hook-bridge';
 import { SubscriptionManager } from '../subscription-manager';
@@ -187,12 +188,14 @@ class ExpiredCursorSnapshotProvider implements SyncProvider {
                 ],
                 nextCursor: 51,
                 hasMore: false,
+                ...FULL_HISTORY_PULL_RETENTION,
             };
         }
         return {
             changes: [],
             nextCursor: request.cursor,
             hasMore: false,
+            ...FULL_HISTORY_PULL_RETENTION,
         };
     }
 

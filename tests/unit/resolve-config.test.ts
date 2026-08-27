@@ -200,6 +200,7 @@ describe('buildOr3CloudConfigFromEnv', () => {
         expect(config.auth.autoProvision).toBe(true);
         expect(config.auth.lockPage?.enabled).toBe(false);
         expect(config.webhooks?.enabled).toBe(false);
+        expect(config.webhooks?.blockPrivateIps).toBe(true);
     });
 
     it('maps auth provisioning controls from env', () => {
@@ -693,11 +694,12 @@ describe('buildOr3CloudConfigFromEnv', () => {
         expect(configWithSync.limits?.storageProvider).toBe('convex');
     });
 
-    it('allows overriding limits storage provider', () => {
-        const config = buildOr3CloudConfigFromEnv({
-            OR3_LIMITS_STORAGE_PROVIDER: 'redis',
-        });
-        expect(config.limits?.storageProvider).toBe('redis');
+    it('rejects unimplemented limits storage providers', () => {
+        expect(() =>
+            buildOr3CloudConfigFromEnv({
+                OR3_LIMITS_STORAGE_PROVIDER: 'redis',
+            }),
+        ).toThrow(/limits\.storageProvider "redis" is not implemented/i);
     });
 
     it('uses correct storage provider for background streaming based on sync', () => {

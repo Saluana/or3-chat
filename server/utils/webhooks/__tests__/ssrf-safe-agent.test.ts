@@ -79,6 +79,7 @@ describe('ssrf-safe webhook lookup', () => {
             })
         ).rejects.toMatchObject({
             code: 'EPRIVATEIP',
+            message: 'Webhook target resolved to a private or reserved address',
         });
     });
 

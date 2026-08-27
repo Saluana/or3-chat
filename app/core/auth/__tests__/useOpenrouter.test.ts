@@ -7,6 +7,8 @@ const sessionData = ref({ session: null as { authenticated: boolean } | null });
 const runtimeConfig = { public: { ssrAuthEnabled: true } };
 
 describe('useOpenRouterAuth', () => {
+    const kvDelete = vi.fn();
+
     beforeEach(() => {
         vi.resetModules();
         toastAdd.mockClear();
@@ -16,7 +18,8 @@ describe('useOpenRouterAuth', () => {
             useRuntimeConfig: () => runtimeConfig,
             useToast: () => ({ add: toastAdd }),
         }));
-        vi.doMock('~/db', () => ({ kv: { delete: vi.fn() } }));
+        kvDelete.mockReset().mockResolvedValue(undefined);
+        vi.doMock('~/db', () => ({ kv: { delete: kvDelete } }));
         vi.doMock('~/composables/auth/useSessionContext', () => ({
             useSessionContext: () => ({ data: sessionData, refresh }),
         }));
@@ -32,5 +35,26 @@ describe('useOpenRouterAuth', () => {
             expect.objectContaining({ title: 'Sign in required' })
         );
         expect(sessionStorage.getItem('openrouter_code_verifier')).toBeNull();
+    });
+
+    it('clears canonical reactive state before waiting for persisted-key deletion', async () => {
+        let resolveDelete!: () => void;
+        kvDelete.mockImplementation(
+            () => new Promise<void>((resolve) => (resolveDelete = resolve))
+        );
+
+        const { state } = await import('~/state/global');
+        state.value.openrouterKey = 'sk-or-v1-abcdefghijklmnop';
+        localStorage.setItem('openrouter_api_key', 'sk-or-v1-abcdefghijklmnop');
+
+        const { useOpenRouterAuth } = await import('~/core/auth/useOpenrouter');
+        const logout = useOpenRouterAuth().logoutOpenRouter();
+
+        expect(state.value.openrouterKey).toBeNull();
+        expect(localStorage.getItem('openrouter_api_key')).toBeNull();
+
+        resolveDelete();
+        await logout;
+        expect(kvDelete).toHaveBeenCalledWith('openrouter_api_key');
     });
 });

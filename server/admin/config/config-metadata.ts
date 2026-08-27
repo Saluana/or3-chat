@@ -541,7 +541,7 @@ export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
     },
     'OR3_LIMITS_STORAGE_PROVIDER': {
         label: 'Rate Limit Storage Provider',
-        description: 'Backend for storing rate limit data (e.g., memory, redis)',
+        description: 'Backend for rate-limit data: memory or Convex.',
         group: 'Limits & Security',
         order: 7,
     },

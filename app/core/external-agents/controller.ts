@@ -43,6 +43,7 @@ import type {
   ExternalAgentPersistenceSnapshot,
   ExternalAgentSession,
   ExternalAgentSessionRef,
+  ExternalAgentStagingCleanupResult,
   ExternalAgentStoreEvent,
   ExternalAgentStoreSnapshot,
   ExternalRemoteEvent,
@@ -93,6 +94,37 @@ function record(value: unknown): Record<string, unknown> {
 function redactErrorMessage(error: unknown, fallback: string): string {
   return presentExternalAgentError(error, fallback).message;
 }
+
+function errorStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const value = Number(
+    Reflect.get(error, "status") ?? Reflect.get(error, "statusCode"),
+  );
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function canReleaseAfterStartFailure(error: unknown): boolean {
+  const status = errorStatus(error);
+  // A completed HTTP 4xx response proves the request was rejected before a
+  // turn could be accepted. Network errors and 5xx responses are ambiguous:
+  // the host may have queued the turn before the response was lost, so retain
+  // staged files until a runner-owned lifecycle can prove consumption.
+  return (
+    status === 400 ||
+    status === 401 ||
+    status === 403 ||
+    status === 404 ||
+    status === 405 ||
+    status === 413 ||
+    status === 415 ||
+    status === 422
+  );
+}
+
+const uncertainStartCleanupWarning =
+  "The host did not confirm whether the turn started, so temporary attachment files were retained to protect the runner. Remove the generated .or3-upload-* folder after confirming the turn did not start.";
+const unconfirmedStagingCleanupWarning =
+  "Temporary attachment cleanup could not be confirmed, so the files were retained to protect the runner. Remove them manually if the turn did not start.";
 
 function randomId(prefix: string): string {
   const cryptoApi = Reflect.get(globalThis, "crypto") as
@@ -1135,6 +1167,7 @@ export class ExternalAgentController {
         )
       : [];
     let attachmentsTransferred = false;
+    let startTurnAttempted = false;
     let session: ExternalAgentSession | undefined;
     try {
       this.#assertGeneration(hostId, generation);
@@ -1170,6 +1203,7 @@ export class ExternalAgentController {
       this.#assertWorkspaceLease(lease);
       this.#emit({ type: "session", session });
 
+      startTurnAttempted = true;
       const started = await this.#commands.startTurn(
         client,
         remote.id,
@@ -1187,7 +1221,6 @@ export class ExternalAgentController {
         this.#connections.hostSignal,
       );
       attachmentsTransferred = true;
-      this.#commands.releaseFiles(client, attachments);
       this.#assertGeneration(hostId, generation);
       session.activeTurnId = started.turn_id;
       const startedStatus = mapExternalAgentStatus(started.status, "queued");
@@ -1200,18 +1233,40 @@ export class ExternalAgentController {
       if (!isTerminal(session.status)) this.#startStream(session, started.turn_id);
       return session;
     } catch (error) {
+      let cleanup: ExternalAgentStagingCleanupResult | undefined;
       if (!attachmentsTransferred && attachments.length) {
-        this.#commands.releaseFiles(client, attachments);
+        if (!startTurnAttempted || canReleaseAfterStartFailure(error)) {
+          cleanup = await this.#commands
+            .releaseFiles(client, attachments)
+            .catch(() => ({
+              status: "failed" as const,
+              warning: unconfirmedStagingCleanupWarning,
+            }));
+          if (!cleanup) {
+            cleanup = {
+              status: "unsupported",
+              warning: unconfirmedStagingCleanupWarning,
+            };
+          }
+        } else {
+          cleanup = {
+            status: "failed",
+            warning: uncertainStartCleanupWarning,
+          };
+        }
       }
       if (this.#isStaleResponseError(error)) throw error;
       const message = redactErrorMessage(
         error,
         "The remote session was created, but its first turn did not start.",
       );
+      const messageWithCleanupWarning = cleanup?.warning
+        ? `${message} ${cleanup.warning}`
+        : message;
       if (session) {
         session.status = "failed";
-        session.error = message;
-        session.actionError = message;
+        session.error = messageWithCleanupWarning;
+        session.actionError = messageWithCleanupWarning;
         session.completedAt = nowIso();
         session.updatedAt = nowIso();
         this.#rememberSession(session);
@@ -1253,6 +1308,7 @@ export class ExternalAgentController {
           };
     let attachments: readonly ExternalAgentAttachment[] = [];
     let attachmentsTransferred = false;
+    let startTurnAttempted = false;
     try {
       if (settings) {
         const validation = validateExternalAgentLaunch(this.#runners, {
@@ -1273,6 +1329,7 @@ export class ExternalAgentController {
           )
         : [];
       this.#assertSessionGeneration(session);
+      startTurnAttempted = true;
       const started = await this.#commands.startTurn(
         client,
         session.remoteSessionId,
@@ -1297,7 +1354,6 @@ export class ExternalAgentController {
         this.#connections.hostSignal,
       );
       attachmentsTransferred = true;
-      this.#commands.releaseFiles(client, attachments);
       this.#assertSessionGeneration(session);
       if (settings && !isSlashCommand) {
         session.model = settings.model;
@@ -1318,14 +1374,36 @@ export class ExternalAgentController {
       this.#emit({ type: "session", session });
       if (!isTerminal(session.status)) this.#startStream(session, started.turn_id);
     } catch (error) {
+      let cleanup: ExternalAgentStagingCleanupResult | undefined;
       if (!attachmentsTransferred && attachments.length) {
-        this.#commands.releaseFiles(client, attachments);
+        if (!startTurnAttempted || canReleaseAfterStartFailure(error)) {
+          cleanup = await this.#commands
+            .releaseFiles(client, attachments)
+            .catch(() => ({
+              status: "failed" as const,
+              warning: unconfirmedStagingCleanupWarning,
+            }));
+          if (!cleanup) {
+            cleanup = {
+              status: "unsupported",
+              warning: unconfirmedStagingCleanupWarning,
+            };
+          }
+        } else {
+          cleanup = {
+            status: "failed",
+            warning: uncertainStartCleanupWarning,
+          };
+        }
       }
       if (this.#isStaleResponseError(error)) throw error;
-      session.actionError = redactErrorMessage(
+      const message = redactErrorMessage(
         error,
         "Remote follow-up failed. Try again.",
       );
+      session.actionError = cleanup?.warning
+        ? `${message} ${cleanup.warning}`
+        : message;
       this.#emit({ type: "session", session });
       throw error;
     }
@@ -1626,7 +1704,7 @@ export class ExternalAgentController {
 
   #isStaleResponseError(error: unknown): boolean {
     if (!error || typeof error !== "object") return false;
-    const code = Reflect.get(error, "code");
+    const code = (error as { readonly code?: unknown }).code;
     return (
       code === "stale_workspace" ||
       code === "stale_host" ||

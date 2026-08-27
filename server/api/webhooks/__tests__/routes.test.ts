@@ -449,6 +449,22 @@ describe('user webhook API routes', () => {
                 event: H3Event
             ) => Promise<unknown>;
 
+        runtimeConfig.webhooks.blockPrivateIps = true;
+        await expect(
+            createHandler(
+                makeEvent({
+                    body: {
+                        url: 'http://127.0.0.1/hooks/private',
+                        events: ['thread.created'],
+                    },
+                })
+            )
+        ).rejects.toMatchObject({
+            statusCode: 400,
+            statusMessage: 'Webhook URL cannot target a private IP',
+        });
+        runtimeConfig.webhooks.blockPrivateIps = false;
+
         await expect(
             createHandler(
                 makeEvent({

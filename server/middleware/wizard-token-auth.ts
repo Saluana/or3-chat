@@ -65,9 +65,15 @@ export default defineEventHandler((event) => {
         });
     }
 
-    const expectedToken = String(config.wizardUi.token).trim();
+    const expectedToken =
+        typeof config.wizardUi.token === 'string'
+            ? config.wizardUi.token.trim()
+            : '';
     if (!expectedToken) {
-        return;
+        throw createError({
+            statusCode: 503,
+            statusMessage: 'Wizard token is not configured.',
+        });
     }
 
     const queryToken = (url.searchParams.get('token') ?? '').trim();

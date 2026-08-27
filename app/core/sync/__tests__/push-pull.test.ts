@@ -10,6 +10,7 @@ import type {
     SyncScope,
     SyncSubscribeOptions,
 } from '~~/shared/sync/types';
+import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 import { ConflictResolver } from '../conflict-resolver';
 import { OutboxManager } from '../outbox-manager';
 import {
@@ -100,6 +101,7 @@ class FakeSyncProvider implements SyncProvider {
             changes: slice,
             nextCursor,
             hasMore,
+            ...FULL_HISTORY_PULL_RETENTION,
         };
     }
 

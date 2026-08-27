@@ -94,6 +94,33 @@ jobs:
         run: bash scripts/check-banned-imports.sh
       - name: Check documentation
         run: bun run check:docs
+      - name: Lint changed source files
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          base_sha="${PR_BASE_SHA:-${PUSH_BEFORE_SHA:-}}"
+          if [ -z "$base_sha" ] || ! git cat-file -e "$base_sha^{commit}" 2>/dev/null; then
+            base_sha="$(git rev-parse HEAD^ 2>/dev/null || git rev-parse HEAD)"
+          fi
+          mapfile -t files < <(
+            git diff --name-only --diff-filter=ACMR "$base_sha...HEAD" -- \
+              '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.vue'
+          )
+          if ((${#files[@]} == 0)); then
+            echo 'No changed JavaScript or TypeScript source files to lint.'
+          else
+            bun run lint:changed -- "${files[@]}"
+          fi
+      # The repository-wide lint baseline currently has existing violations in
+      # legacy/generated trees. Keep reporting them without blocking PRs while
+      # the required incremental gate above protects changed source files.
+      - name: Report full-project ESLint baseline (advisory)
+        continue-on-error: true
+        run: bun run lint
+      - name: Type-check application
+        run: bun run type-check
       - name: Run core tests
         run: bun run test
       - name: Run script tests

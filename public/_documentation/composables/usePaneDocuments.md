@@ -10,6 +10,7 @@ Pane-aware controller that lets the dashboard create or switch documents inside 
 
 -   Create a fresh document in the active pane while flushing/releasing the previous one.
 -   Switch the active pane to a different document, honouring hook vetoes and autosave semantics.
+-   Keep the current document active when its pending changes cannot be saved.
 -   Emit `$hooks` actions (`ui.pane.doc:action:saved`, `:changed`) so listeners react to transitions.
 -   Reuse `useDocumentState` + `releaseDocument` to keep autosave + memory management consistent.
 
@@ -50,6 +51,7 @@ await selectDocumentInActive(existingDocId);
 `await newDocumentInActive(initial?)`:
 
 -   Flushes + releases the currently bound doc (if any), emitting `ui.pane.doc:action:saved` when staged changes existed.
+-   If the flush fails, keeps the current pane and its unsaved document state in place, reports the save failure, and does not create or select a replacement.
 -   Creates the new record via `createNewDoc`.
 -   Runs `ui.pane.doc:filter:select` filters, allowing plugins to veto/redirect.
 -   Updates the pane (`mode = 'doc'`, sets `documentId`, clears chat state) and fires `ui.pane.doc:action:changed` with `{ created: true }` metadata.
@@ -60,6 +62,7 @@ await selectDocumentInActive(existingDocId);
 
 -   Applies the same select filter to allow vetoes.
 -   Flushes + saves pending edits on the current doc when switching away and emits the saved action if needed.
+-   If the flush fails, keeps the current document selected with its unsaved state intact and reports the save failure.
 -   Releases the previous document state to free memory.
 -   Updates the pane bindings and emits `ui.pane.doc:action:changed` with `reason: 'select'`.
 
@@ -94,7 +97,7 @@ Both methods run asynchronously and should be awaited to ensure flushes complete
 
 -   **Null pane**: If no pane exists at the active index, helpers exit early.
 -   **Duplicate select**: Selecting the already-active doc short-circuits after reset; no extra hook events fire.
--   **Error suppression**: Internal `try { ... } catch {}` blocks ensure hook misbehaviour doesn’t crash the UX—but you should still log within your own filters/actions.
+-   **Error suppression**: Hook filter failures remain isolated, while document flush failures block navigation, preserve edits, and show the standard save-failed toast.
 -   **Testing**: You can stub `createNewDoc` / `flushDocument` to use in Vitest without hitting Dexie.
 
 ---

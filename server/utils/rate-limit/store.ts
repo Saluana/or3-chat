@@ -6,7 +6,8 @@
  *
  * Responsibilities:
  * - Choose a provider based on runtime config.
- * - Fall back to the in-memory provider when unavailable.
+ * - Use memory only when it is explicitly configured (or while Convex is
+ *   registering during startup).
  * - Cache the resolved provider instance.
  *
  * Non-Goals:
@@ -26,7 +27,8 @@ let cachedProvider: RateLimitProvider | null = null;
  *
  * Behavior:
  * - Uses runtime config to pick a provider.
- * - Falls back to memory when the configured provider is unavailable.
+ * - Rejects configured providers that are unavailable rather than silently
+ *   weakening multi-instance limits.
  * - Caches the resolved provider for reuse.
  */
 export function getRateLimitProvider(): RateLimitProvider {
@@ -53,21 +55,27 @@ export function getRateLimitProvider(): RateLimitProvider {
         }
 
         case LIMITS_PROVIDER_IDS.redis:
-            // Future: Redis provider
-            console.warn('[rate-limit] Redis provider not yet implemented, using memory');
-            cachedProvider = memoryRateLimitProvider;
-            break;
-
         case LIMITS_PROVIDER_IDS.postgres:
-            // Future: Postgres provider
-            console.warn('[rate-limit] Postgres provider not yet implemented, using memory');
-            cachedProvider = memoryRateLimitProvider;
-            break;
+            throw new Error(
+                `[rate-limit] Provider "${storageProvider}" is not implemented. ` +
+                    'Set OR3_LIMITS_STORAGE_PROVIDER to "memory" or "convex".'
+            );
 
         case LIMITS_PROVIDER_IDS.memory:
-        default:
             cachedProvider = memoryRateLimitProvider;
             break;
+
+        default: {
+            const registered = getRateLimitProviderById(storageProvider);
+            if (!registered) {
+                throw new Error(
+                    `[rate-limit] Provider "${storageProvider}" is not registered. ` +
+                        'Install its provider package or set OR3_LIMITS_STORAGE_PROVIDER to "memory" or "convex".'
+                );
+            }
+            cachedProvider = registered;
+            break;
+        }
     }
 
     return cachedProvider;

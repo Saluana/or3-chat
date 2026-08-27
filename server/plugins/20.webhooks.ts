@@ -63,7 +63,8 @@ export async function startWebhookRuntime(
         {
             rateLimitPerMinute: Number(config.webhooks.rateLimitPerMinute),
             deliveryTimeoutMs: Number(config.webhooks.deliveryTimeoutMs),
-            blockPrivateIps: Boolean(config.webhooks.blockPrivateIps),
+            blockPrivateIps: config.webhooks.blockPrivateIps !== false,
+            requireHttps: Boolean(config.security.forceHttps),
             encryptionKey,
             maxRetryHours: Number(config.webhooks.maxRetryHours),
         },

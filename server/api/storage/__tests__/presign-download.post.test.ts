@@ -13,8 +13,10 @@ vi.mock('h3', () => ({
     createError: (opts: { statusCode: number; statusMessage?: string }) => {
         const err = new Error(opts.statusMessage ?? 'Error') as Error & {
             statusCode: number;
+            statusMessage?: string;
         };
         err.statusCode = opts.statusCode;
+        err.statusMessage = opts.statusMessage;
         return err;
     },
 }));
@@ -61,8 +63,15 @@ vi.mock('../../../utils/storage/presign-expiry', () => ({
 
 const presignDownloadMock = vi.fn();
 const getActiveStorageGatewayAdapterMock = vi.fn();
+const queryCanonicalStorageMock = vi.fn();
 vi.mock('../../../storage/gateway/registry', () => ({
     getActiveStorageGatewayAdapter: getActiveStorageGatewayAdapterMock as any,
+}));
+
+vi.mock('../../../sync/gateway/registry', () => ({
+    getActiveSyncGatewayAdapter: () => ({
+        queryCanonicalStorage: queryCanonicalStorageMock,
+    }),
 }));
 
 function makeEvent(): H3Event {
@@ -72,7 +81,7 @@ function makeEvent(): H3Event {
 function makeValidBody() {
     return {
         workspace_id: 'ws-1',
-        hash: 'sha256:abc',
+        hash: `sha256:${'a'.repeat(64)}`,
         expires_in_ms: 54_321,
         disposition: 'attachment',
     };
@@ -94,6 +103,16 @@ describe('POST /api/storage/presign-download', () => {
         checkSyncRateLimitMock.mockReset().mockReturnValue({ allowed: true, remaining: 10 });
         recordSyncRequestMock.mockReset();
         recordDownloadStartMock.mockReset();
+        queryCanonicalStorageMock.mockReset().mockResolvedValue({
+            items: [{
+                kind: 'metadata',
+                hash: `sha256:${'a'.repeat(64)}`,
+                sizeBytes: 3,
+                storageId: 'storage-live',
+                updatedAt: 1,
+            }],
+            hasMore: false,
+        });
         presignDownloadMock.mockReset().mockResolvedValue({
             url: 'https://download.example',
             expiresAt: 9_999,
@@ -142,6 +161,14 @@ describe('POST /api/storage/presign-download', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
     });
 
+    it('returns 400 for a non-canonical hash', async () => {
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), hash: 'raw-object-key' });
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+        expect(presignDownloadMock).not.toHaveBeenCalled();
+    });
+
     it('returns 401 when session is unauthenticated', async () => {
         const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue(makeValidBody());
@@ -160,6 +187,8 @@ describe('POST /api/storage/presign-download', () => {
         });
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 403 });
+        expect(queryCanonicalStorageMock).not.toHaveBeenCalled();
+        expect(presignDownloadMock).not.toHaveBeenCalled();
     });
 
     it('returns 429 and Retry-After when rate limited', async () => {
@@ -169,6 +198,8 @@ describe('POST /api/storage/presign-download', () => {
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 429 });
         expect(setResponseHeaderMock).toHaveBeenCalledWith(expect.anything(), 'Retry-After', 2);
+        expect(queryCanonicalStorageMock).not.toHaveBeenCalled();
+        expect(presignDownloadMock).not.toHaveBeenCalled();
     });
 
     it('returns 500 when adapter is missing', async () => {
@@ -177,6 +208,37 @@ describe('POST /api/storage/presign-download', () => {
         getActiveStorageGatewayAdapterMock.mockReturnValue(null);
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 500 });
+    });
+
+    it('returns a generic 404 for missing, soft-deleted, or pending metadata', async () => {
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue(makeValidBody());
+
+        for (const items of [
+            [],
+            [{
+                kind: 'metadata',
+                hash: `sha256:${'a'.repeat(64)}`,
+                sizeBytes: 3,
+                storageId: 'storage-live',
+                deleted: true,
+                updatedAt: 1,
+            }],
+            [{
+                kind: 'metadata',
+                hash: `sha256:${'a'.repeat(64)}`,
+                sizeBytes: 3,
+                updatedAt: 1,
+            }],
+        ]) {
+            queryCanonicalStorageMock.mockResolvedValueOnce({ items, hasMore: false });
+            await expect(handler(makeEvent())).rejects.toMatchObject({
+                statusCode: 404,
+                statusMessage: 'File not found',
+            });
+        }
+
+        expect(presignDownloadMock).not.toHaveBeenCalled();
     });
 
     it('uses provider expiresAt when provided', async () => {
@@ -234,10 +296,16 @@ describe('POST /api/storage/presign-download', () => {
 
         await handler(makeEvent());
 
+        expect(queryCanonicalStorageMock).toHaveBeenCalledWith(expect.anything(), {
+            scope: { workspaceId: 'ws-1' },
+            kind: 'live_metadata',
+            hash: `sha256:${'a'.repeat(64)}`,
+            limit: 1,
+        });
         expect(presignDownloadMock).toHaveBeenCalledWith(expect.anything(), {
             workspaceId: 'ws-1',
-            hash: 'sha256:abc',
-            storageId: undefined,
+            hash: `sha256:${'a'.repeat(64)}`,
+            storageId: 'storage-live',
             expiresInMs: 54_321,
             disposition: 'attachment',
         });

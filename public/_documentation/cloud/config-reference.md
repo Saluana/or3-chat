@@ -571,13 +571,14 @@ These are instance-level usage limits (mostly for SSR / hosted deployments).
 
 #### `limits.storageProvider`
 
-- Type: `'memory' | 'convex' | 'redis' | 'postgres'`
+- Type: `'memory' | 'convex'` (custom registered providers are also supported)
 - Default:
-  - `'convex'` when sync is enabled
+  - `'convex'` when Convex sync is enabled
   - otherwise `'memory'`
 - Env: `OR3_LIMITS_STORAGE_PROVIDER`
 - Purpose: Where rate limit counters are stored.
-- Notes: use a persistent provider for production.
+- Notes: Redis and Postgres are reserved for future providers and are rejected;
+  use a registered provider or `memory`.
 
 #### `limits.operationRateLimits`
 

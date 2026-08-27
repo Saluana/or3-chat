@@ -88,7 +88,7 @@ const routeState: { value: { path: string } } = {
 const watchRecords: WatchRecord[] = [];
 
 const pluginControl = vi.hoisted(() => {
-    let release = () => undefined;
+    let release: () => void = () => undefined;
     let gate: Promise<void> = Promise.resolve();
     const runtime = {
         ssrAuthEnabled: true,

@@ -349,7 +349,12 @@ describe('SubscriptionManager', () => {
                 _onChanges: (changes: SyncChange[]) => void,
                 _options?: SyncSubscribeOptions
             ) => () => undefined),
-            pull: vi.fn(async () => ({ changes: [], nextCursor: 1, hasMore: false })),
+            pull: vi.fn(async () => ({
+                changes: [],
+                nextCursor: 1,
+                hasMore: false,
+                ...FULL_HISTORY_PULL_RETENTION,
+            })),
             push: vi.fn(async () => {
                 throw new Error('push not used');
             }),
@@ -439,7 +444,12 @@ describe('SubscriptionManager', () => {
                 _onChanges: (changes: SyncChange[]) => void,
                 _options?: SyncSubscribeOptions
             ) => () => undefined),
-            pull: vi.fn(async () => ({ changes: [], nextCursor: 1, hasMore: false })),
+            pull: vi.fn(async () => ({
+                changes: [],
+                nextCursor: 1,
+                hasMore: false,
+                ...FULL_HISTORY_PULL_RETENTION,
+            })),
             push: vi.fn(async () => {
                 throw new Error('push not used');
             }),
@@ -515,6 +525,7 @@ describe('SubscriptionManager', () => {
                 changes: [],
                 nextCursor: request.cursor,
                 hasMore: false,
+                ...FULL_HISTORY_PULL_RETENTION,
             })),
             push: vi.fn(async () => {
                 throw new Error('push not used');
@@ -574,6 +585,7 @@ describe('SubscriptionManager', () => {
                 changes: [],
                 nextCursor: request.cursor,
                 hasMore: false,
+                ...FULL_HISTORY_PULL_RETENTION,
             })),
             push: vi.fn(async () => {
                 throw new Error('push not used');
@@ -619,6 +631,7 @@ describe('SubscriptionManager', () => {
                 changes: [buildChange(1)],
                 nextCursor: 0,
                 hasMore: true,
+                ...FULL_HISTORY_PULL_RETENTION,
             })),
             push: vi.fn(async () => {
                 throw new Error('push not used');
@@ -654,6 +667,7 @@ describe('SubscriptionManager', () => {
             changes: [],
             nextCursor: request.cursor,
             hasMore: true,
+            ...FULL_HISTORY_PULL_RETENTION,
         }));
 
         const provider: SyncProvider = {
@@ -715,6 +729,7 @@ describe('SubscriptionManager', () => {
                     changes: [buildChange(1)],
                     nextCursor: 1,
                     hasMore: true,
+                    ...FULL_HISTORY_PULL_RETENTION,
                 };
             }
             if (request.cursor === 1) {
@@ -722,9 +737,15 @@ describe('SubscriptionManager', () => {
                     changes: [buildChange(2)],
                     nextCursor: 2,
                     hasMore: false,
+                    ...FULL_HISTORY_PULL_RETENTION,
                 };
             }
-            return { changes: [], nextCursor: request.cursor, hasMore: false };
+            return {
+                changes: [],
+                nextCursor: request.cursor,
+                hasMore: false,
+                ...FULL_HISTORY_PULL_RETENTION,
+            };
         });
 
         const provider: SyncProvider = {
@@ -780,6 +801,7 @@ describe('SubscriptionManager', () => {
                 changes: request.cursor === 0 ? [buildChange(1)] : [],
                 nextCursor: request.cursor === 0 ? 1 : request.cursor,
                 hasMore: false,
+                ...FULL_HISTORY_PULL_RETENTION,
             })),
             push: vi.fn(async () => { throw new Error('push not used'); }),
             updateCursor: vi.fn(async () => {
@@ -829,6 +851,7 @@ describe('SubscriptionManager', () => {
                 changes: [],
                 nextCursor: 0,
                 hasMore: false,
+                ...FULL_HISTORY_PULL_RETENTION,
             })),
             push: vi.fn(async () => { throw new Error('push not used'); }),
             updateCursor: vi.fn(async () => undefined),
@@ -883,7 +906,12 @@ describe('SubscriptionManager', () => {
         const starting = manager.start();
         for (let i = 0; i < 20 && !vi.mocked(provider.pull).mock.calls.length; i++) await Promise.resolve();
         await manager.stop();
-        releasePull?.({ changes: [buildChange(1)], nextCursor: 1, hasMore: false });
+        releasePull?.({
+            changes: [buildChange(1)],
+            nextCursor: 1,
+            hasMore: false,
+            ...FULL_HISTORY_PULL_RETENTION,
+        });
         await starting;
 
         expect(await messages.get('m-1')).toBeUndefined();

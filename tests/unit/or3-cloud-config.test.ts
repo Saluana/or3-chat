@@ -35,6 +35,7 @@ describe('defineOr3CloudConfig', () => {
         expect(config.backgroundStreaming?.maxConcurrentJobsPerUser).toBe(5);
         expect(config.webhooks?.maxPerUser).toBe(20);
         expect(config.webhooks?.rateLimitPerMinute).toBe(120);
+        expect(config.webhooks?.blockPrivateIps).toBe(true);
         expect(config.auth.lockPage?.enabled).toBe(false);
         expect(config.auth.lockPage?.adapter).toBe('default');
     });
@@ -127,6 +128,18 @@ describe('defineOr3CloudConfig', () => {
                 },
             }),
         ).not.toThrow();
+    });
+
+    it('rejects rate-limit providers that core does not implement', () => {
+        expect(() =>
+            defineOr3CloudConfig(
+                {
+                    ...baseConfig,
+                    limits: { storageProvider: 'redis' },
+                },
+                { strict: false },
+            ),
+        ).toThrow(/limits\.storageProvider "redis" is not implemented/i);
     });
 
     it('merges nested objects correctly', () => {

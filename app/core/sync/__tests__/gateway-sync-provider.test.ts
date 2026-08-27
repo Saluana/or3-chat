@@ -257,8 +257,18 @@ describe('GatewaySyncProvider', () => {
         vi.spyOn(Math, 'random').mockReturnValue(0);
 
         const pulls: PullResponse[] = [
-            { changes: [change(1, 'op-1')], nextCursor: 1, hasMore: false },
-            { changes: [change(2, 'op-2')], nextCursor: 2, hasMore: false },
+            {
+                changes: [change(1, 'op-1')],
+                nextCursor: 1,
+                hasMore: false,
+                ...FULL_HISTORY_PULL_RETENTION,
+            },
+            {
+                changes: [change(2, 'op-2')],
+                nextCursor: 2,
+                hasMore: false,
+                ...FULL_HISTORY_PULL_RETENTION,
+            },
         ];
 
         const fetchMock = vi.fn(async () => {

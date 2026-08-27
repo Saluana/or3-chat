@@ -345,6 +345,119 @@ describe('continue/retry regressions', () => {
         expect(tailAssistant.value?.pending).toBe(false);
     });
 
+    it('continue cleans up UI and persistence when setup fails before streaming', async () => {
+        const target = {
+            id: 'a-setup',
+            thread_id: 't1',
+            role: 'assistant',
+            index: 2,
+            content: 'Partial answer',
+            data: { content: 'Partial answer' },
+            file_hashes: null,
+            stream_id: null,
+            error: null,
+            pending: false,
+            created_at: 1,
+            updated_at: 1,
+            deleted: false,
+            clock: 1,
+        };
+        dbState.messagesGet.mockResolvedValue(target);
+        const whereChain = {
+            between: vi.fn().mockReturnThis(),
+            filter: vi.fn().mockReturnThis(),
+            toArray: vi.fn().mockResolvedValue([target]),
+        };
+        dbState.where.mockReturnValue(whereChain);
+        makeAssistantPersisterSpy.mockImplementationOnce(() => {
+            throw new Error('persister setup failed');
+        });
+
+        const loading = ref(false);
+        const abortController = ref<AbortController | null>(null);
+        const tailAssistant = ref<{
+            id: string;
+            role: string;
+            text: string;
+            pending: boolean;
+            error: string | null;
+            reasoning_text: string | null;
+        } | null>(null);
+        const messages = ref([
+            {
+                id: 'a-setup',
+                role: 'assistant',
+                text: 'Partial answer',
+                pending: false,
+                error: null,
+                reasoning_text: null,
+            },
+        ]);
+        const rawMessages = ref([
+            {
+                id: 'a-setup',
+                role: 'assistant',
+                content: 'Partial answer',
+                error: null,
+            },
+        ]);
+
+        await continueMessageImpl(
+            {
+                loading,
+                aborted: ref(false),
+                abortController,
+                threadIdRef: ref('t1'),
+                tailAssistant: tailAssistant as any,
+                rawMessages: rawMessages as any,
+                messages: messages as any,
+                streamId: ref<string | undefined>(undefined),
+                streamAcc: {
+                    reset: vi.fn(),
+                    append: vi.fn(),
+                    finalize: vi.fn(),
+                    state: { finalized: false },
+                },
+                streamState: { finalized: false },
+                hooks: {
+                    applyFilters: vi.fn(async (_name, value) => value),
+                },
+                effectiveApiKey: ref('k'),
+                hasInstanceKey: ref(false),
+                defaultModelId: 'model-a',
+                getSystemPromptContent: async () => null,
+                useAiSettings: () => ({ settings: ref(undefined) }),
+                resetStream: vi.fn(),
+            },
+            'a-setup'
+        );
+
+        expect(loading.value).toBe(false);
+        expect(abortController.value).toBeNull();
+        expect(tailAssistant.value).toMatchObject({
+            text: 'Partial answer',
+            pending: false,
+            error: 'stream_interrupted',
+        });
+        expect(rawMessages.value[0]).toMatchObject({
+            content: 'Partial answer',
+            error: 'stream_interrupted',
+        });
+        expect(updateMessageRecordSpy).toHaveBeenCalledWith(
+            expect.anything(),
+            'a-setup',
+            expect.objectContaining({
+                pending: false,
+                error: 'stream_interrupted',
+                data: expect.objectContaining({
+                    generation_state: 'interrupted',
+                }),
+            }),
+            target
+        );
+        expect(reportErrorSpy).toHaveBeenCalled();
+    });
+
     it('retry preserves the source branch and resends with the prior turn boundary', async () => {
         const userMsg = {
             id: 'u1',

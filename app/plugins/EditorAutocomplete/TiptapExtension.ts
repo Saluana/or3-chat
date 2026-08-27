@@ -29,10 +29,10 @@ function isMissingKeyError(error: unknown): boolean {
 }
 
 async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
-    const orKey =
-        state.value.openrouterKey ||
-        localStorage.getItem('openrouter_api_key') ||
-        null;
+    // The reactive key is the sole autocomplete credential source. Legacy
+    // localStorage reads could resurrect a key after logout and bypass the
+    // canonical KV/state lifecycle.
+    const orKey = state.value.openrouterKey || null;
 
     const { default: systemPrompt } = await import('./AutocompletePrompt');
     const prompt = systemPrompt(content);

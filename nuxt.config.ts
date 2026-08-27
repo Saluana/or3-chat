@@ -13,6 +13,7 @@ import {
 import { providerIdToModuleId } from './shared/cloud/provider-compatibility';
 import { stripBrokenOpenRouterSourcemapsPlugin } from './plugins/vite-strip-broken-openrouter-sourcemaps';
 import { resolveConnectCloudflareReadiness } from './shared/cloud/wizard/cloudflare-attestation';
+import { DEFAULT_WEBHOOKS_BLOCK_PRIVATE_IPS } from './shared/config/constants';
 
 // SSR auth is gated by environment variable to preserve static builds
 const isSsrAuthEnabled = or3CloudConfig.auth.enabled;
@@ -434,7 +435,9 @@ const webhooksConfig = {
     adminMax: or3CloudConfig.webhooks?.adminMax ?? 50,
     rateLimitPerMinute: or3CloudConfig.webhooks?.rateLimitPerMinute ?? 120,
     deliveryTimeoutMs: or3CloudConfig.webhooks?.deliveryTimeoutMs ?? 10_000,
-    blockPrivateIps: or3CloudConfig.webhooks?.blockPrivateIps ?? false,
+    blockPrivateIps:
+        or3CloudConfig.webhooks?.blockPrivateIps ??
+        DEFAULT_WEBHOOKS_BLOCK_PRIVATE_IPS,
     encryptionKey: or3CloudConfig.webhooks?.encryptionKey ?? '',
     maxRetryHours: or3CloudConfig.webhooks?.maxRetryHours ?? 1,
     logRetentionHours: or3CloudConfig.webhooks?.logRetentionHours ?? 72,

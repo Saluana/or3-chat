@@ -54,6 +54,9 @@ The `FileTransferQueue` (`core/storage/transfer-queue.ts`) manages all network a
 1.  **Request**: UI components use `useObjectUrl(hash)` or explicit `queue.download(hash)`.
 2.  **Queueing**: A transfer is created if the blob is missing locally.
 3.  **Presigning**: Fetches a signed download URL (`/api/storage/presign-download`).
+    The gateway only signs a canonical live `file_meta` row in the requested
+    workspace that has a provider storage ID; pending uploads, soft-deleted
+    rows, and hashes from another workspace return the same not-found response.
 4.  **Stream**: The file is downloaded and verified against its hash.
 5.  **Cache**: The blob is stored in `file_blobs` for future offline use.
 
@@ -165,7 +168,9 @@ export default defineNuxtPlugin(() => {
 *   **Rate Limiting**: Per-user limits on upload/download generation endpoints.
 *   **Hash Verification**: Files verified against SHA-256 hash after download.
 *   **Presigned URLs**: Upload and download URLs are capped at one hour; provider
-    defaults are shorter. Commit authorization never relies on URL possession alone.
+    defaults are shorter. Download signing also checks the provider's commit
+    marker/sidecar, so a raw hash or uncommitted object is never sufficient.
+    Commit authorization never relies on URL possession alone.
 
 ## Canonical metadata, quota, and garbage collection
 

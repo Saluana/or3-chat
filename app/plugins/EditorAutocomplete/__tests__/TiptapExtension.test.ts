@@ -1,14 +1,25 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions/placeholder';
 import { AutocompleteExtension } from '../TiptapExtension';
+import AutocompleteState from '../state';
+import { state as globalState } from '~/state/global';
+
+const { openRouterStream } = vi.hoisted(() => ({
+    openRouterStream: vi.fn(),
+}));
+
+vi.mock('~/utils/chat/openrouterStream', () => ({ openRouterStream }));
 
 let editor: Editor | undefined;
 
 afterEach(() => {
     editor?.destroy();
     editor = undefined;
+    openRouterStream.mockReset();
+    globalState.value.openrouterKey = null;
+    localStorage.removeItem('openrouter_api_key');
 });
 
 function makeEditor() {
@@ -51,5 +62,22 @@ describe('AutocompleteExtension decorations', () => {
 
         expect(current.view.dom.querySelector('.autocomplete-suggestion')).toBeNull();
         expect(current.view.dom.querySelector('.has-autocomplete-suggestion')).toBeNull();
+    });
+
+    it('does not resurrect a legacy localStorage key after logout', async () => {
+        openRouterStream.mockImplementation(async function* (params: { apiKey?: string | null }) {
+            expect(params.apiKey).toBeNull();
+            yield { type: 'text', text: '<next_line> suggestion</next_line>' };
+        });
+        AutocompleteState.value.isEnabled = true;
+        globalState.value.openrouterKey = null;
+        localStorage.setItem('openrouter_api_key', 'legacy-key');
+
+        const current = makeEditor();
+        current.commands.setTextSelection(current.state.doc.content.size - 1);
+        current.commands.insertContent('A');
+
+        await new Promise((resolve) => setTimeout(resolve, 700));
+        expect(openRouterStream).toHaveBeenCalledTimes(1);
     });
 });

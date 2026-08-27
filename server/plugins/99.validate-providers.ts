@@ -11,6 +11,7 @@ import { listStorageGatewayAdapterIds } from '../storage/gateway/registry';
 import { listConnectStoreIds } from '../connect/store/registry';
 import { listConnectRelayIds } from '../connect/relay/registry';
 import { listBackgroundJobProviderIds } from '../utils/background-jobs/registry';
+import { listRateLimitProviderIds } from '../utils/rate-limit/registry';
 import { parseConnectMaxComputers } from '../connect/config';
 import { useRuntimeConfig } from '#imports';
 import { resolveStrictMode } from '../../shared/cloud/env-contract';
@@ -74,6 +75,19 @@ export default defineNitroPlugin(() => {
             errors.push(
                 `backgroundJobs.storageProvider "${backgroundProviderId}" is not registered. ` +
                     `Install the provider package that registers it (e.g. or3-provider-${backgroundProviderId}).`
+            );
+        }
+    }
+
+    if (config.limits?.enabled) {
+        const limitsProviderId = config.limits.storageProvider;
+        if (
+            limitsProviderId !== 'memory' &&
+            !listRateLimitProviderIds().includes(limitsProviderId)
+        ) {
+            errors.push(
+                `limits.storageProvider "${limitsProviderId}" is not registered. ` +
+                    `Install the provider package that registers it or use "memory".`
             );
         }
     }

@@ -11,6 +11,7 @@ import {
     DEFAULT_LIMITS_PROVIDER_ID,
     DEFAULT_STORAGE_PROVIDER_ID,
     DEFAULT_SYNC_PROVIDER_ID,
+    LIMITS_PROVIDER_IDS,
 } from '../shared/cloud/provider-ids';
 import {
     DEFAULT_REQUESTS_PER_MINUTE,
@@ -33,6 +34,7 @@ import {
     DEFAULT_WEBHOOKS_ADMIN_MAX,
     DEFAULT_WEBHOOKS_RATE_LIMIT_PER_MINUTE,
     DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
+    DEFAULT_WEBHOOKS_BLOCK_PRIVATE_IPS,
     DEFAULT_WEBHOOKS_MAX_RETRY_HOURS,
     DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS,
 } from '../shared/config/constants';
@@ -166,7 +168,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         adminMax: DEFAULT_WEBHOOKS_ADMIN_MAX,
         rateLimitPerMinute: DEFAULT_WEBHOOKS_RATE_LIMIT_PER_MINUTE,
         deliveryTimeoutMs: DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
-        blockPrivateIps: false,
+        blockPrivateIps: DEFAULT_WEBHOOKS_BLOCK_PRIVATE_IPS,
         encryptionKey: undefined,
         maxRetryHours: DEFAULT_WEBHOOKS_MAX_RETRY_HOURS,
         logRetentionHours: DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS,
@@ -432,6 +434,16 @@ function validateConfig(config: Or3CloudConfig, strict: boolean): void {
     ) {
         nonStrictErrors.push(
             'auth.lockPage.adapter must not be empty when provided.',
+        );
+    }
+
+    const limitsProvider = config.limits?.storageProvider;
+    if (
+        limitsProvider === LIMITS_PROVIDER_IDS.redis ||
+        limitsProvider === LIMITS_PROVIDER_IDS.postgres
+    ) {
+        nonStrictErrors.push(
+            `limits.storageProvider "${limitsProvider}" is not implemented. Use "memory" or "convex".`,
         );
     }
 

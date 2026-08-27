@@ -19,6 +19,7 @@ import type {
     SyncScope,
     SyncSubscribeOptions,
 } from '~~/shared/sync/types';
+import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 
 const scope: SyncScope = { workspaceId: 'outbox-benchmark' };
 
@@ -59,7 +60,12 @@ class BenchmarkProvider implements SyncProvider {
     }
 
     async pull(_request: PullRequest): Promise<PullResponse> {
-        return { changes: [], nextCursor: 0, hasMore: false };
+        return {
+            changes: [],
+            nextCursor: 0,
+            hasMore: false,
+            ...FULL_HISTORY_PULL_RETENTION,
+        };
     }
 
     async subscribe(

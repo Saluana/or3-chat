@@ -295,22 +295,27 @@ export function assertWebWizardEnabled(event: H3Event): void {
         );
     }
 
-    const expectedToken = config.wizardUi.token;
-    if (expectedToken) {
-        const headerToken = toStringOrUndefined(getHeader(event, 'x-wizard-token'));
-        const queryToken = toStringOrUndefined(getQuery(event).token);
-        const cookieToken = toStringOrUndefined(getCookie(event, 'or3_wizard_token'));
-        const isAuthorized =
-            headerToken === expectedToken ||
-            queryToken === expectedToken ||
-            cookieToken === expectedToken;
+    const expectedToken = toStringOrUndefined(config.wizardUi.token);
+    if (!expectedToken) {
+        throw createError({
+            statusCode: 503,
+            statusMessage: 'Wizard token is not configured.',
+        });
+    }
 
-        if (!isAuthorized) {
-            throw createError({
-                statusCode: 403,
-                statusMessage: 'Invalid wizard token.',
-            });
-        }
+    const headerToken = toStringOrUndefined(getHeader(event, 'x-wizard-token'));
+    const queryToken = toStringOrUndefined(getQuery(event).token);
+    const cookieToken = toStringOrUndefined(getCookie(event, 'or3_wizard_token'));
+    const isAuthorized =
+        headerToken === expectedToken ||
+        queryToken === expectedToken ||
+        cookieToken === expectedToken;
+
+    if (!isAuthorized) {
+        throw createError({
+            statusCode: 403,
+            statusMessage: 'Invalid wizard token.',
+        });
     }
 }
 

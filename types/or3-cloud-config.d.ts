@@ -328,7 +328,8 @@ export interface Or3CloudConfig {
 
         /**
          * Block deliveries to private or internal IPs.
-         * @default false
+         * Set to false only for an intentional local-development escape hatch.
+         * @default true
          */
         blockPrivateIps?: boolean;
 

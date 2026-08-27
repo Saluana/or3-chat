@@ -78,6 +78,86 @@ describe("external agent attachment staging", () => {
     ]);
     expect(request).toHaveBeenCalledTimes(3);
   });
+
+  it("rolls back the whole batch when a later upload fails", async () => {
+    let uploadCount = 0;
+    const request = vi.fn(
+      async (path: string, options?: { body?: unknown }) => {
+        if (path === "/internal/v1/files/roots") {
+          return { items: [{ id: "workspace", writable: true }] };
+        }
+        if (path === "/internal/v1/files/mkdir") {
+          return { root_id: "workspace" };
+        }
+        if (path === "/internal/v1/files/upload") {
+          uploadCount += 1;
+          if (uploadCount === 2) {
+            throw Object.assign(new Error("second upload failed"), {
+              status: 500,
+            });
+          }
+          const form = options?.body as FormData;
+          return {
+            root_id: "workspace",
+            path: `${String(form.get("path"))}/notes.md`,
+          };
+        }
+        if (path === "/internal/v1/files/staging/release") {
+          expect(options?.body).toEqual({
+            root_id: "workspace",
+            path: expect.stringMatching(/^\.or3-upload-/),
+          });
+          return { status: "released" };
+        }
+        throw new Error(`Unexpected request: ${path}`);
+      },
+    );
+    const client = adaptInternClient({
+      transport: { request },
+    } as unknown as InternClient);
+
+    await expect(
+      client.stageFiles([
+        {
+          id: "attachment-1",
+          kind: "text",
+          name: "notes.md",
+          data: new Blob(["notes"]),
+        },
+        {
+          id: "attachment-2",
+          kind: "text",
+          name: "todo.md",
+          data: new Blob(["todo"]),
+        },
+      ]),
+    ).rejects.toThrow("second upload failed");
+    expect(request).toHaveBeenCalledWith(
+      "/internal/v1/files/staging/release",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("refuses cleanup for an arbitrary workspace path", async () => {
+    const request = vi.fn();
+    const client = adaptInternClient({
+      transport: { request },
+    } as unknown as InternClient);
+
+    const result = await client.releaseStagedFiles?.([
+      {
+        id: "workspace:keep.txt",
+        source: "workspace_ref",
+        kind: "text",
+        name: "keep.txt",
+        root_id: "workspace",
+        path: "keep.txt",
+      },
+    ]);
+
+    expect(result?.status).toBe("failed");
+    expect(request).not.toHaveBeenCalled();
+  });
 });
 
 describe("external agent plugin background startup", () => {

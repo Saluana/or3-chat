@@ -10,6 +10,7 @@ import type {
   ExternalAgentHostHealth,
   ExternalAgentHostReadiness,
   ExternalAgentRunner,
+  ExternalAgentStagingCleanupResult,
   ExternalAgentStartTurnInput,
   ExternalAgentUploadAttachment,
   ExternalRemoteEvent,
@@ -1385,10 +1386,13 @@ class RunsExternalAgentClient implements ExternalAgentClient {
     }
   }
 
-  releaseStagedFiles(attachments: readonly ExternalAgentAttachment[]): void {
+  releaseStagedFiles(
+    attachments: readonly ExternalAgentAttachment[],
+  ): ExternalAgentStagingCleanupResult {
     for (const attachment of attachments) {
       this.#stagedAttachments.delete(attachment.id);
     }
+    return { status: "released" };
   }
 
   async getTurn(

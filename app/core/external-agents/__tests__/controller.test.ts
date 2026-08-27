@@ -184,16 +184,17 @@ function fakeClient(
     stageFiles: vi.fn(
       async (attachments: readonly ExternalAgentUploadAttachment[]) =>
         attachments.map((attachment) => ({
-          id: `workspace:.or3-upload/${attachment.name}`,
+          id: `workspace:.or3-upload-1730000000000-abc123/${attachment.name}`,
           source: "workspace_ref" as const,
           kind: attachment.kind,
           name: attachment.name,
           mime_type: attachment.mimeType,
           size_bytes: attachment.sizeBytes,
           root_id: "workspace",
-          path: `.or3-upload/${attachment.name}`,
+          path: `.or3-upload-1730000000000-abc123/${attachment.name}`,
         })),
     ),
+    releaseStagedFiles: vi.fn(async () => ({ status: "released" as const })),
     getTurn: vi.fn(async () => remoteTurn),
     listTurnEvents: vi.fn(async () => ({
       events: input.events ?? [],
@@ -1628,12 +1629,13 @@ describe("ExternalAgentController", () => {
           expect.objectContaining({
             source: "workspace_ref",
             root_id: "workspace",
-            path: ".or3-upload/answer.ts",
+            path: ".or3-upload-1730000000000-abc123/answer.ts",
           }),
         ],
       }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+    expect(client.releaseStagedFiles).not.toHaveBeenCalled();
   });
 
   it("treats a streamed runtime error as terminal even when the wrapper reports success", async () => {
@@ -1832,7 +1834,9 @@ describe("ExternalAgentController", () => {
       sessionRefs: [],
     });
     const client = fakeClient({
-      startError: new Error("selected model unsupported"),
+      startError: Object.assign(new Error("selected model unsupported"), {
+        status: 400,
+      }),
     });
     const controller = new ExternalAgentController({
       persistence: saved.adapter,
@@ -1856,6 +1860,171 @@ describe("ExternalAgentController", () => {
       error: "The selected model is unavailable for this agent.",
     });
     expect(saved.state.sessionRefs[0]?.status).toBe("failed");
+  });
+
+  it("releases staged files when an attachment turn is rejected before start", async () => {
+    const saved = persistence({
+      hosts: [host],
+      activeHostId: host.id,
+      sessionRefs: [],
+    });
+    const client = fakeClient({
+      startError: Object.assign(new Error("selected model unsupported"), {
+        status: 400,
+      }),
+    });
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await expect(
+      controller.launch({
+        runnerId: "codex",
+        instruction: "Start with an attachment",
+        mode: "review",
+        isolation: "host_readonly",
+        attachments: [
+          {
+            id: "attachment-1",
+            kind: "text",
+            name: "notes.md",
+            data: new Blob(["notes"]),
+          },
+        ],
+      }),
+    ).rejects.toThrow("unsupported");
+
+    expect(client.releaseStagedFiles).toHaveBeenCalledWith([
+      expect.objectContaining({
+        source: "workspace_ref",
+        path: ".or3-upload-1730000000000-abc123/notes.md",
+      }),
+    ]);
+  });
+
+  it("reports when staged-file cleanup cannot be confirmed", async () => {
+    const saved = persistence({
+      hosts: [host],
+      activeHostId: host.id,
+      sessionRefs: [],
+    });
+    const client = fakeClient({
+      startError: Object.assign(new Error("selected model unsupported"), {
+        status: 400,
+      }),
+    });
+    client.releaseStagedFiles = vi.fn(async () => {
+      throw new Error("cleanup endpoint unavailable");
+    });
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await expect(
+      controller.launch({
+        runnerId: "codex",
+        instruction: "Start with an attachment",
+        mode: "review",
+        isolation: "host_readonly",
+        attachments: [
+          {
+            id: "attachment-1",
+            kind: "text",
+            name: "notes.md",
+            data: new Blob(["notes"]),
+          },
+        ],
+      }),
+    ).rejects.toThrow("unsupported");
+
+    expect(controller.getSession("session-1")).toMatchObject({
+      actionError: expect.stringContaining("cleanup could not be confirmed"),
+    });
+  });
+
+  it("retains staged files when a start conflict leaves acceptance ambiguous", async () => {
+    const saved = persistence({
+      hosts: [host],
+      activeHostId: host.id,
+      sessionRefs: [],
+    });
+    const client = fakeClient({
+      startError: Object.assign(new Error("turn conflict"), { status: 409 }),
+    });
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await expect(
+      controller.launch({
+        runnerId: "codex",
+        instruction: "Start with a possibly accepted attachment",
+        mode: "review",
+        isolation: "host_readonly",
+        attachments: [
+          {
+            id: "attachment-1",
+            kind: "text",
+            name: "notes.md",
+            data: new Blob(["notes"]),
+          },
+        ],
+      }),
+    ).rejects.toThrow("conflict");
+
+    expect(client.releaseStagedFiles).not.toHaveBeenCalled();
+    expect(controller.getSession("session-1")).toMatchObject({
+      actionError: expect.stringContaining("did not confirm whether the turn started"),
+    });
+  });
+
+  it("retains staged files when the start request times out", async () => {
+    const saved = persistence({
+      hosts: [host],
+      activeHostId: host.id,
+      sessionRefs: [],
+    });
+    const client = fakeClient({
+      startError: Object.assign(new Error("start timed out"), { status: 408 }),
+    });
+    const controller = new ExternalAgentController({
+      persistence: saved.adapter,
+      credentials: vault({ "cred-1": "token" }),
+      createClient: () => client,
+      getWorkspaceScope: () => "workspace-a",
+    });
+    await controller.initialize();
+
+    await expect(
+      controller.launch({
+        runnerId: "codex",
+        instruction: "Start after a timeout",
+        mode: "review",
+        isolation: "host_readonly",
+        attachments: [
+          {
+            id: "attachment-1",
+            kind: "text",
+            name: "notes.md",
+            data: new Blob(["notes"]),
+          },
+        ],
+      }),
+    ).rejects.toThrow("timed out");
+
+    expect(client.releaseStagedFiles).not.toHaveBeenCalled();
   });
 
   it("discovers workspace-scoped canonical sessions that have no local ref", async () => {

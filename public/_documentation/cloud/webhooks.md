@@ -462,13 +462,16 @@ A delivery is considered **successful** on any HTTP 2xx response. Any non-2xx, n
 
 ### SSRF Protection
 
-OR3 can perform DNS-time private IP checks before delivering webhooks. When
-enabled, URLs resolving to private/internal IP ranges (10.x, 172.16-31.x,
-192.168.x, 127.x, ::1, etc.) are blocked.
+OR3 validates webhook targets when they are created or updated and again before
+each delivery. DNS answers are checked immediately before connecting, and
+redirects are followed only when every hop remains safe. Loopback, private,
+link-local, multicast, reserved, and localhost-style destinations are blocked
+by default.
 
-Control this with `OR3_WEBHOOKS_BLOCK_PRIVATE_IPS`:
-- `true` — blocks private IPs (enable this for production)
-- `false` (default) — allows private IPs (useful for local development)
+Control the policy with `OR3_WEBHOOKS_BLOCK_PRIVATE_IPS`:
+- `true` (default) — blocks unsafe private or non-public destinations
+- `false` — explicit local-development escape hatch; never enable this for a
+  publicly reachable deployment
 
 ### Signing Secret Encryption
 
@@ -479,7 +482,8 @@ Signing secrets are encrypted at rest using AES-256-GCM with the `OR3_WEBHOOKS_E
 Webhook URLs must:
 - Use `https://` or `http://` protocol
 - Not contain embedded username/password credentials
-- Not resolve to private IP addresses (when SSRF protection is enabled)
+- Not resolve to private, loopback, link-local, multicast, or reserved addresses
+  (unless the explicit local-development escape hatch is enabled)
 - Be reachable within the configured delivery timeout
 
 ---
@@ -494,7 +498,7 @@ Webhook URLs must:
 | Admin limit | `OR3_WEBHOOKS_ADMIN_MAX` | `50` | Max admin-scope webhooks |
 | Rate limit | `OR3_WEBHOOKS_RATE_LIMIT_PER_MINUTE` | `120` | Max deliveries per webhook per minute |
 | Delivery timeout | `OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS` | `10000` | HTTP timeout per delivery attempt |
-| Block private IPs | `OR3_WEBHOOKS_BLOCK_PRIVATE_IPS` | `false` | SSRF protection toggle |
+| Block private IPs | `OR3_WEBHOOKS_BLOCK_PRIVATE_IPS` | `true` | SSRF protection toggle; set `false` only for intentional local development |
 | Retry window | `OR3_WEBHOOKS_MAX_RETRY_HOURS` | `1` | Hours to keep retrying failed deliveries |
 | Log retention | `OR3_WEBHOOKS_LOG_RETENTION_HOURS` | `72` | Hours to keep delivery logs |
 

@@ -122,7 +122,7 @@ export function getWebhookRuntimeSettings(): WebhookRuntimeSettings {
         maxPerUser: Number(config.webhooks.maxPerUser),
         rateLimitPerMinute: Number(config.webhooks.rateLimitPerMinute),
         deliveryTimeoutMs: Number(config.webhooks.deliveryTimeoutMs),
-        blockPrivateIps: Boolean(config.webhooks.blockPrivateIps),
+        blockPrivateIps: config.webhooks.blockPrivateIps !== false,
         maxRetryHours: Number(config.webhooks.maxRetryHours),
         logRetentionHours: Number(config.webhooks.logRetentionHours),
     };
@@ -154,6 +154,7 @@ export function createWebhookRouteDispatcher(
         rateLimitPerMinute: settings.rateLimitPerMinute,
         deliveryTimeoutMs: settings.deliveryTimeoutMs,
         blockPrivateIps: settings.blockPrivateIps,
+        requireHttps: settings.forceHttps,
         encryptionKey: requireWebhookEncryptionKey(),
         maxRetryHours: settings.maxRetryHours,
     });

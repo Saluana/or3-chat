@@ -58,6 +58,39 @@ beforeEach(() => {
 });
 
 describe('webhook dispatcher', () => {
+    it('delivers to a public target after an immediate DNS safety check', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store, {
+            url: 'https://public.example/webhooks',
+        });
+        const fetchImpl = vi.fn(async () => new Response('ok', { status: 200 }));
+        const dispatcher = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: true,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                urlResolver: async () => [{ address: '8.8.8.8', family: 4 }],
+                fetchImpl,
+            },
+            'worker-1'
+        );
+
+        await dispatcher.enqueue({
+            webhookId: webhook.id,
+            eventType: 'thread.created',
+            eventId: randomUUID(),
+            payload: { ok: true },
+        });
+        await dispatcher.claimAndProcess();
+
+        const [log] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(log).toMatchObject({ status: 'success', http_status: 200 });
+    });
+
     it('enqueues deliveries without performing network I/O on the request path', async () => {
         const { store } = createTestContext();
         const webhook = await createStoredWebhook(store);
@@ -422,6 +455,170 @@ describe('webhook dispatcher', () => {
         expect(log).toBeDefined();
         expect(log!.status).toBe('pending');
         expect(log!.error_message?.toLowerCase()).toContain('private ip');
+    });
+
+    it('blocks a public hostname that resolves to a private address at delivery time', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store, {
+            url: 'https://rebind.example/webhooks',
+        });
+        const fetchImpl = vi.fn(async () => new Response('ok', { status: 200 }));
+        const dispatcher = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: true,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                urlResolver: async () => [{ address: '10.0.0.9', family: 4 }],
+                fetchImpl,
+            },
+            'worker-1'
+        );
+
+        await dispatcher.enqueue({
+            webhookId: webhook.id,
+            eventType: 'thread.created',
+            eventId: randomUUID(),
+            payload: { ok: true },
+        });
+        await dispatcher.claimAndProcess();
+
+        const [log] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(fetchImpl).not.toHaveBeenCalled();
+        expect(log).toMatchObject({ status: 'pending' });
+        expect(log?.error_message?.toLowerCase()).toContain('private ip');
+    });
+
+    it('rejects redirects to unsafe targets before following them', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store, {
+            url: 'https://public.example/webhooks',
+        });
+        const fetchImpl = vi.fn(async () =>
+            new Response(null, {
+                status: 302,
+                headers: { location: 'http://127.0.0.1/internal' },
+            })
+        );
+        const dispatcher = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: true,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                urlResolver: async () => [{ address: '8.8.8.8', family: 4 }],
+                fetchImpl,
+            },
+            'worker-1'
+        );
+
+        await dispatcher.enqueue({
+            webhookId: webhook.id,
+            eventType: 'thread.created',
+            eventId: randomUUID(),
+            payload: { ok: true },
+        });
+        await dispatcher.claimAndProcess();
+
+        const [log] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        expect(log).toMatchObject({ status: 'pending' });
+        expect(log?.error_message?.toLowerCase()).toContain('private ip');
+    });
+
+    it('matches fetch redirect semantics by switching POST to bodyless GET on 302', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store, {
+            url: 'https://public.example/webhooks',
+        });
+        const fetchImpl = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(null, {
+                    status: 302,
+                    headers: { location: 'https://public.example/redirected' },
+                })
+            )
+            .mockResolvedValueOnce(new Response('ok', { status: 200 }));
+        const dispatcher = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: true,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                urlResolver: async () => [{ address: '8.8.8.8', family: 4 }],
+                fetchImpl,
+            },
+            'worker-1'
+        );
+
+        await dispatcher.enqueue({
+            webhookId: webhook.id,
+            eventType: 'thread.created',
+            eventId: randomUUID(),
+            payload: { ok: true },
+        });
+        await dispatcher.claimAndProcess();
+
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        const redirectedInit = fetchImpl.mock.calls[1]?.[1];
+        expect(redirectedInit?.method).toBe('GET');
+        expect(redirectedInit?.body).toBeUndefined();
+        expect(new Headers(redirectedInit?.headers).has('content-type')).toBe(false);
+        const [log] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(log).toMatchObject({ status: 'success', http_status: 200 });
+    });
+
+    it('preserves POST method and body across a 307 redirect', async () => {
+        const { store } = createTestContext();
+        const webhook = await createStoredWebhook(store, {
+            url: 'https://public.example/webhooks',
+        });
+        const fetchImpl = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(null, {
+                    status: 307,
+                    headers: { location: 'https://public.example/redirected' },
+                })
+            )
+            .mockResolvedValueOnce(new Response('ok', { status: 200 }));
+        const dispatcher = createWebhookDispatcher(
+            store,
+            {
+                rateLimitPerMinute: 10,
+                deliveryTimeoutMs: 1000,
+                blockPrivateIps: true,
+                encryptionKey: 'test-encryption-key',
+                maxRetryHours: 1,
+                urlResolver: async () => [{ address: '8.8.8.8', family: 4 }],
+                fetchImpl,
+            },
+            'worker-1'
+        );
+
+        await dispatcher.enqueue({
+            webhookId: webhook.id,
+            eventType: 'thread.created',
+            eventId: randomUUID(),
+            payload: { ok: true },
+        });
+        await dispatcher.claimAndProcess();
+
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+        const firstInit = fetchImpl.mock.calls[0]?.[1];
+        const redirectedInit = fetchImpl.mock.calls[1]?.[1];
+        expect(redirectedInit?.method).toBe('POST');
+        expect(redirectedInit?.body).toBe(firstInit?.body);
+        expect(new Headers(redirectedInit?.headers).has('content-type')).toBe(true);
+        const [log] = await store.getDeliveryLogs(webhook.id, 0);
+        expect(log).toMatchObject({ status: 'success', http_status: 200 });
     });
 
     it('does not process the same delivery twice across concurrent dispatchers', async () => {

@@ -241,7 +241,7 @@ is selected.
 | `OR3_REQUESTS_PER_MINUTE` | `20` | Per-user LLM request limit. |
 | `OR3_MAX_CONVERSATIONS` | `0` | Conversation cap; `0` means unlimited. |
 | `OR3_MAX_MESSAGES_PER_DAY` | `0` | Daily message cap; `0` means unlimited. |
-| `OR3_LIMITS_STORAGE_PROVIDER` | sync provider or `memory` | Backend for rate-limit counters. |
+| `OR3_LIMITS_STORAGE_PROVIDER` | `convex` when Convex sync is selected; otherwise `memory` | Backend for rate-limit counters. Supported values are `memory` (per-process, resets on restart) and `convex` (shared/persistent). Redis and Postgres are rejected until providers exist. |
 | `OR3_RATE_LIMIT_OVERRIDES_JSON` | `{}` | JSON map of per-operation `{windowMs,maxRequests}` overrides. |
 | `DISABLE_RATE_LIMIT` | unset | Development switch. Set to `1` to disable rate limiting. Admin login limits honor it always; sync push limits honor it only outside production. |
 | `OR3_BACKGROUND_STREAMING_ENABLED` | `false` | Enable SSR background AI jobs. |
@@ -286,7 +286,7 @@ encryption key is required before webhook creation.
 | `OR3_WEBHOOKS_ADMIN_MAX` | `50` | Admin webhook limit. |
 | `OR3_WEBHOOKS_RATE_LIMIT_PER_MINUTE` | `120` | Delivery rate limit. |
 | `OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS` | `10000` | HTTP delivery timeout. |
-| `OR3_WEBHOOKS_BLOCK_PRIVATE_IPS` | `false` | Block private/internal target addresses. Enable for stricter SSRF policy. |
+| `OR3_WEBHOOKS_BLOCK_PRIVATE_IPS` | `true` | Block private, loopback, link-local, multicast, and reserved target addresses. Set to `false` only for intentional local development. |
 | `OR3_WEBHOOKS_MAX_RETRY_HOURS` | `1` | Retry horizon. |
 | `OR3_WEBHOOKS_LOG_RETENTION_HOURS` | `72` | Delivery-log retention. |
 
@@ -358,7 +358,7 @@ See [OR3 Connect](./or3-connect) before enabling this feature.
 |---|---|---|
 | `OR3_CLOUD_WIZARD_HOME` | source wizard CLI | Overrides the home directory used for wizard sessions/presets. |
 | `OR3_WIZARD_UI_ENABLED` | wizard UI process | Enables the browser wizard UI; disable for production runtime processes. |
-| `OR3_WIZARD_UI_TOKEN` | wizard UI process | Token required by the wizard UI API. |
+| `OR3_WIZARD_UI_TOKEN` | wizard UI process | Non-blank token required by the wizard UI API; if the UI is enabled without one, requests fail closed with HTTP 503. |
 | `OR3_WIZARD_ENABLE_INSTALL` | source wizard CLI | Set to `1` to allow the wizard to execute dependency installation. |
 
 The wizard writes only selected provider settings, removes stale values from

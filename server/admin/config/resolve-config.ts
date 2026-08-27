@@ -49,6 +49,7 @@ import {
     DEFAULT_WEBHOOKS_ADMIN_MAX,
     DEFAULT_WEBHOOKS_RATE_LIMIT_PER_MINUTE,
     DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
+    DEFAULT_WEBHOOKS_BLOCK_PRIVATE_IPS,
     DEFAULT_WEBHOOKS_MAX_RETRY_HOURS,
     DEFAULT_WEBHOOKS_LOG_RETENTION_HOURS,
 } from '../../../shared/config/constants';
@@ -330,8 +331,8 @@ export function buildOr3CloudConfigFromEnv(
                     DEFAULT_MAX_MESSAGES_PER_DAY,
                 ) ?? DEFAULT_MAX_MESSAGES_PER_DAY,
             storageProvider: (env.OR3_LIMITS_STORAGE_PROVIDER ??
-                (syncEnabled
-                    ? syncProvider
+                (syncEnabled && syncProvider === 'convex'
+                    ? LIMITS_PROVIDER_IDS.convex
                     : LIMITS_PROVIDER_IDS.memory)) as LimitsProviderId,
             operationRateLimits: parseRateLimitOverrides(
                 env.OR3_RATE_LIMIT_OVERRIDES_JSON,
@@ -477,7 +478,10 @@ export function buildOr3CloudConfigFromEnv(
                     env.OR3_WEBHOOKS_DELIVERY_TIMEOUT_MS,
                     DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
                 ) ?? DEFAULT_WEBHOOKS_DELIVERY_TIMEOUT_MS,
-            blockPrivateIps: readEnvBoolean(env.OR3_WEBHOOKS_BLOCK_PRIVATE_IPS, false),
+            blockPrivateIps: readEnvBoolean(
+                env.OR3_WEBHOOKS_BLOCK_PRIVATE_IPS,
+                DEFAULT_WEBHOOKS_BLOCK_PRIVATE_IPS,
+            ),
             encryptionKey:
                 env.OR3_WEBHOOKS_ENCRYPTION_KEY ||
                 env.OR3_ADMIN_JWT_SECRET ||

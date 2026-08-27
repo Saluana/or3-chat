@@ -191,6 +191,13 @@ export async function continueMessageImpl(
     const hasKey = Boolean(ctx.effectiveApiKey.value) || ctx.hasInstanceKey.value;
     if (!hasKey) return;
     const originDb = getDb();
+    let activeTarget: StoredMessage | undefined;
+    let activeCurrent: UiChatMessage | null = null;
+    let activePersister: ReturnType<typeof makeAssistantPersister> | null = null;
+    let targetMarkedPending = false;
+    let continuationSetLoading = false;
+    let continuationAbortController: AbortController | null = null;
+    let innerStreamLifecycleStarted = false;
 
     try {
         const target = (await originDb.messages.get(messageId)) as StoredMessage | undefined;
@@ -201,6 +208,7 @@ export async function continueMessageImpl(
         ) {
             return;
         }
+        activeTarget = target;
 
         const inMemoryText =
             ctx.tailAssistant.value?.id === target.id ? ctx.tailAssistant.value.text : '';
@@ -375,8 +383,10 @@ export async function continueMessageImpl(
         const newStreamId = newId();
         ctx.streamId.value = newStreamId;
         ctx.loading.value = true;
+        continuationSetLoading = true;
         ctx.aborted.value = false;
-        ctx.abortController.value = new AbortController();
+        continuationAbortController = new AbortController();
+        ctx.abortController.value = continuationAbortController;
 
         const existingReasoning = normalizedTarget.reasoningText;
         const existingHashes = target.file_hashes ? parseHashes(target.file_hashes) : [];
@@ -405,6 +415,7 @@ export async function continueMessageImpl(
         current.error = null;
         if (existingHashes.length) current.file_hashes = existingHashes;
         ctx.tailAssistant.value = current;
+        activeCurrent = current;
 
         if (ctx.streamAcc.hydrate) {
             ctx.streamAcc.hydrate({
@@ -426,9 +437,11 @@ export async function continueMessageImpl(
             target,
             assistantFileHashes
         );
+        activePersister = persistAssistant;
 
         // Durable generation identity must precede the first continuation byte,
         // so reload can distinguish an active continuation from a stale row.
+        targetMarkedPending = true;
         target.pending = true;
         target.stream_id = newStreamId;
         target.error = null;
@@ -474,6 +487,7 @@ export async function continueMessageImpl(
             writeCoalescer.markDirty(utf8Bytes(delta));
         };
 
+        innerStreamLifecycleStarted = true;
         try {
             for await (const ev of stream) {
                 if (ev.type === 'reasoning') {
@@ -604,16 +618,141 @@ export async function continueMessageImpl(
             }, 0);
         }
     } catch (e) {
+        const setupError =
+            e instanceof Error ? e : new Error(String(e));
+        const errorType = 'stream_interrupted';
+
+        // The inner lifecycle owns stream errors and its own finally block.
+        // Do not run setup cleanup a second time if its finalization happens
+        // to throw; surface that failure without rewriting the row again.
+        if (innerStreamLifecycleStarted) {
+            reportError(setupError, {
+                code: 'ERR_INTERNAL',
+                tags: {
+                    domain: 'chat',
+                    op: 'continueMessage',
+                    stage: 'continue_finalize',
+                },
+            });
+            return;
+        }
+
+        // The inner stream try/finally starts after the provider stream is
+        // created. Failures before that point still need to release the
+        // request state and finalize the row that was marked pending above.
+        const current = activeCurrent;
+        if (current) {
+            current.pending = false;
+            current.error = errorType;
+            if (ctx.tailAssistant.value?.id !== current.id) {
+                ctx.messages.value = [...ctx.messages.value];
+            }
+        }
+
+        let persistenceError: unknown = null;
+        if (activeTarget && (targetMarkedPending || current)) {
+            const content = current?.text ?? '';
+            const reasoning = current?.reasoning_text ?? null;
+            if (activePersister) {
+                try {
+                    await activePersister({
+                        content,
+                        reasoning,
+                        toolCalls: current?.toolCalls ?? null,
+                        finalize: true,
+                    });
+                } catch (error) {
+                    persistenceError = error;
+                }
+            }
+            try {
+                await updateMessageRecord(
+                    originDb,
+                    activeTarget.id,
+                    {
+                        pending: false,
+                        error: errorType,
+                        data: {
+                            content,
+                            reasoning_text: reasoning,
+                            generation_state: 'interrupted',
+                            error: errorType,
+                        },
+                    },
+                    activeTarget
+                );
+            } catch (error) {
+                persistenceError ??= error;
+            }
+
+            const rawIdx = ctx.rawMessages.value.findIndex(
+                (message) => message.id === activeTarget?.id
+            );
+            if (rawIdx >= 0) {
+                const existingRaw = ctx.rawMessages.value[rawIdx];
+                if (existingRaw) {
+                    ctx.rawMessages.value[rawIdx] = {
+                        ...existingRaw,
+                        content: content || existingRaw.content,
+                        reasoning_text: reasoning ?? existingRaw.reasoning_text,
+                        error: errorType,
+                    };
+                }
+            }
+        }
+
+        if (persistenceError) {
+            reportError(
+                err(
+                    'ERR_DB_WRITE_FAILED',
+                    'Failed to finalize the continued assistant message.',
+                    {
+                        cause: persistenceError,
+                        tags: {
+                            domain: 'chat',
+                            threadId: ctx.threadIdRef.value || '',
+                            messageId,
+                            stage: 'continue_setup',
+                        },
+                    }
+                ),
+                { silent: true }
+            );
+        }
+
+        try {
+            ctx.streamAcc.finalize({ error: setupError });
+        } catch (finalizeError) {
+            // Keep the cleanup below authoritative even if an accumulator
+            // implementation is already finalized or throws during teardown.
+            reportError(
+                err(
+                    'ERR_INTERNAL',
+                    'Failed to finalize the continued stream accumulator.',
+                    { cause: finalizeError }
+                ),
+                { silent: true }
+            );
+        }
         reportError(
-            e instanceof Error
-                ? e
-                : err('ERR_INTERNAL', '[continueMessage] failed', {
-                      tags: { domain: 'chat', op: 'continueMessage' },
-                  }),
+            setupError,
             {
                 code: 'ERR_INTERNAL',
                 tags: { domain: 'chat', op: 'continueMessage' },
             }
         );
+    } finally {
+        // Covers setup failures that happen before the inner stream finally.
+        if (continuationSetLoading) ctx.loading.value = false;
+        if (ctx.abortController.value === continuationAbortController) {
+            ctx.abortController.value = null;
+        }
+        if (!innerStreamLifecycleStarted && (activeCurrent || targetMarkedPending)) {
+            setTimeout(() => {
+                if (!ctx.loading.value && ctx.streamState.finalized) {
+                    ctx.resetStream();
+                }
+            }, 0);
+        }
     }
 }

@@ -1927,10 +1927,96 @@ export function useChat(
 
             // Also skip if messages array is empty (e.g., workflow returned empty)
             if (orMessages.length === 0) {
+                const emptyContextError =
+                    'No model input remained after request filters.';
+                const failedAssistant = resolveUiMessage(assistantDbMsg.id);
+                if (failedAssistant) {
+                    failedAssistant.pending = false;
+                    failedAssistant.error = 'empty_context';
+                    messages.value = [...messages.value];
+                }
+
+                // The assistant placeholder was persisted before the final
+                // before_send hook ran. Finalize it here so a filter that
+                // removes every provider message cannot strand a pending row.
+                // Keep the user message and the failed assistant record in
+                // history; this makes the terminal outcome visible after a
+                // reload and preserves retry/branching invariants.
+                let finalizationError: unknown = null;
+                try {
+                    await persistAssistant({
+                        content: failedAssistant?.text ?? '',
+                        reasoning: failedAssistant?.reasoning_text ?? null,
+                        toolCalls: failedAssistant?.toolCalls ?? null,
+                        finalize: true,
+                    });
+                } catch (error) {
+                    finalizationError = error;
+                }
+                try {
+                    await updateMessageRecord(
+                        requestScope.originDb,
+                        assistantDbMsg.id,
+                        {
+                            pending: false,
+                            error: 'empty_context',
+                            data: {
+                                content: failedAssistant?.text ?? '',
+                                reasoning_text:
+                                    failedAssistant?.reasoning_text ?? null,
+                                generation_state: 'error',
+                                error: 'empty_context',
+                            },
+                        },
+                        assistantDbMsg
+                    );
+                } catch (error) {
+                    finalizationError ??= error;
+                }
+                if (finalizationError) {
+                    reportError(
+                        err(
+                            'ERR_DB_WRITE_FAILED',
+                            'Failed to finalize the filtered assistant message.',
+                            {
+                                cause: finalizationError,
+                                tags: {
+                                    domain: 'chat',
+                                    threadId: requestThreadId,
+                                    messageId: assistantDbMsg.id,
+                                    stage: 'before_send_filter',
+                                },
+                            }
+                        ),
+                        { silent: true }
+                    );
+                }
+                requestScope.accumulator.finalize({
+                    error: new Error(emptyContextError),
+                });
+                toast.add({
+                    title: 'Message not sent',
+                    description:
+                        'A message filter removed all model input. Nothing was sent.',
+                    color: 'warning',
+                    duration: 3500,
+                });
+                reportError(
+                    err('ERR_HOOK_FAILURE', emptyContextError, {
+                        severity: 'info',
+                        tags: {
+                            domain: 'chat',
+                            threadId: requestThreadId,
+                            messageId: assistantDbMsg.id,
+                            stage: 'before_send_filter',
+                        },
+                    }),
+                    { toast: false }
+                );
                 loading.value = false;
                 return {
                     status: 'failed', requestId, reason: 'empty_context',
-                    error: 'No model input remained after request filters.',
+                    error: emptyContextError,
                     userMessageId: userDbMsg.id,
                     assistantMessageId: assistantDbMsg.id,
                 };

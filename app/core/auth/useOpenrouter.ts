@@ -27,8 +27,8 @@
  */
 import { ref } from 'vue';
 import { useRuntimeConfig, useToast } from '#imports';
-import { kv } from '~/db';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { clearPersistedUserApiKey } from './useUserApiKey';
 
 function base64urlencode(str: ArrayBuffer) {
     return btoa(String.fromCharCode(...new Uint8Array(str)))
@@ -192,17 +192,18 @@ export function useOpenRouterAuth() {
     };
 
     const logoutOpenRouter = async () => {
+        // Clear the canonical reactive state before awaiting IndexedDB so a
+        // slow storage operation can never leave a usable in-memory key.
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('openrouter_api_key');
+        }
         try {
-            // Remove local copy immediately for UX
-            if (typeof window !== 'undefined') {
-                localStorage.removeItem('openrouter_api_key');
-            }
-            // Best-effort: clear synced KV by setting empty
-            try {
-                await kv.delete('openrouter_api_key');
-            } catch {
-                // KV delete may fail - non-critical
-            }
+            await clearPersistedUserApiKey();
+        } catch {
+            // Keep logout responsive even if IndexedDB is unavailable. The
+            // in-memory state was already cleared by the helper.
+        }
+        try {
             // Notify UI listeners (Sidebar, etc.) to recompute state
             try {
                 window.dispatchEvent(new CustomEvent('openrouter:connected'));

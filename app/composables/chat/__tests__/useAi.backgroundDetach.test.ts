@@ -775,6 +775,40 @@ describe('useChat background detach race', () => {
         });
     });
 
+    it('finalizes the assistant placeholder when before_send removes every message', async () => {
+        hookApplyFiltersMock.mockImplementation(
+            async (name: string, value: unknown) =>
+                name === 'ai.chat.messages:filter:before_send'
+                    ? { messages: [] }
+                    : value
+        );
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1');
+
+        const result = await chat.sendMessage('hello', {
+            files: [], model: 'test-model', file_hashes: [], online: false,
+            context_hashes: [],
+        });
+
+        expect(result).toMatchObject({
+            status: 'failed',
+            reason: 'empty_context',
+            assistantMessageId: 'assistant-msg-1',
+        });
+        expect(chat.loading.value).toBe(false);
+        expect(chat.tailAssistant.value).toBeNull();
+        expect(chat.messages.value.every((message) => !message.pending)).toBe(true);
+        expect(messageStore.get('assistant-msg-1')).toMatchObject({
+            pending: false,
+            error: 'empty_context',
+            data: expect.objectContaining({
+                generation_state: 'error',
+                error: 'empty_context',
+            }),
+        });
+    });
+
     it('reports an abort when stopped during background admission', async () => {
         startBackgroundStreamMock.mockImplementationOnce(
             ({ signal }: { signal?: AbortSignal }) =>

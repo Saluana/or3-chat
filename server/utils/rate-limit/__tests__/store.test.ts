@@ -52,4 +52,19 @@ describe('rate-limit provider resolution', () => {
         mocks.registeredProvider = null;
         expect(getRateLimitProvider()).toBe(sharedProvider);
     });
+
+    it('rejects an unimplemented configured backend instead of falling back to memory', () => {
+        mocks.storageProvider = 'redis';
+
+        expect(() => getRateLimitProvider()).toThrow(
+            /redis.*not implemented.*memory.*convex/i,
+        );
+    });
+
+    it('uses a registered extension provider', () => {
+        mocks.storageProvider = 'custom-test';
+        mocks.registeredProvider = sharedProvider;
+
+        expect(getRateLimitProvider()).toBe(sharedProvider);
+    });
 });

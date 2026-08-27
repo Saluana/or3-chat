@@ -29,6 +29,7 @@ import { kv } from '~/db';
 import { state } from '~/state/global';
 
 let kvHydrationStarted = false;
+let kvHydrationGeneration = 0;
 
 const OPENROUTER_KEY_PREFIX = 'sk-or-';
 
@@ -61,6 +62,9 @@ export async function persistUserApiKey(key: string): Promise<void> {
             `That doesn't look like an OpenRouter API key. Keys start with "${OPENROUTER_KEY_PREFIX}" — get yours at openrouter.ai/keys.`
         );
     }
+    // Invalidate an in-flight initial read so an older persisted value cannot
+    // overwrite the key the user just supplied.
+    kvHydrationGeneration += 1;
     await kv.set('openrouter_api_key', trimmed);
     state.value.openrouterKey = trimmed;
     try {
@@ -81,6 +85,7 @@ function hasKvTable(db: { tables?: Array<{ name?: string }> }): boolean {
 }
 
 export async function hydrateUserApiKeyFromKv(): Promise<void> {
+    const hydrationGeneration = kvHydrationGeneration;
     let db: ReturnType<typeof getDb>;
     try {
         db = getDb();
@@ -93,6 +98,7 @@ export async function hydrateUserApiKeyFromKv(): Promise<void> {
     try {
         const kv = db.table<KvApiKeyRow, string>('kv');
         const rec = await kv.where('name').equals('openrouter_api_key').first();
+        if (hydrationGeneration !== kvHydrationGeneration) return;
         if (rec && typeof rec.value === 'string') {
             state.value.openrouterKey = rec.value;
         } else if (rec && rec.value == null) {
@@ -103,6 +109,19 @@ export async function hydrateUserApiKeyFromKv(): Promise<void> {
             console.warn('[useUserApiKey] kv hydration skipped:', error);
         }
     }
+}
+
+/**
+ * Clear the canonical in-memory key and its persisted KV value.
+ *
+ * The reactive state is cleared before awaiting storage so callers cannot use
+ * a key during a slow IndexedDB delete. The generation guard also prevents a
+ * previously-started hydration read from restoring the key after logout.
+ */
+export async function clearPersistedUserApiKey(): Promise<void> {
+    kvHydrationGeneration += 1;
+    state.value.openrouterKey = null;
+    await kv.delete('openrouter_api_key');
 }
 
 /**
@@ -126,10 +145,12 @@ export function useUserApiKey() {
     }
 
     function setKey(key: string) {
+        kvHydrationGeneration += 1;
         state.value.openrouterKey = key;
     }
 
     function clearKey() {
+        kvHydrationGeneration += 1;
         state.value.openrouterKey = null;
     }
 

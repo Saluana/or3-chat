@@ -5,6 +5,7 @@ import { checkWebhookRateLimit } from './rate-limit';
 import { buildDeliveryHeaders, signPayload } from './signing';
 import { createSsrfSafeAgent } from './ssrf-safe-agent';
 import { validateWebhookUrl } from './url-validator';
+import type { WebhookUrlResolver } from './url-validator';
 import type { WebhookStore } from './store/types';
 import type { WebhookPayload } from '../../../shared/webhooks/payload';
 import type { WebhookRegistration } from './store/types';
@@ -27,6 +28,7 @@ const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_REAPER_INTERVAL_MS = 60_000;
 const STALE_IN_FLIGHT_MS = 2 * 60 * 1000;
 const MAX_RESPONSE_BODY_CHARS = 4 * 1024;
+const MAX_REDIRECTS = 5;
 
 export interface WebhookDeliveryJob {
     webhookId: string;
@@ -52,6 +54,7 @@ export interface WebhookDispatcherConfig {
     rateLimitPerMinute: number;
     deliveryTimeoutMs: number;
     blockPrivateIps: boolean;
+    requireHttps?: boolean;
     encryptionKey: string;
     maxRetryHours: number;
     batchSize?: number;
@@ -59,6 +62,8 @@ export interface WebhookDispatcherConfig {
     reaperIntervalMs?: number;
     deliveryConcurrency?: number;
     fetchImpl?: DispatchingFetch;
+    /** Test-only DNS injection; production uses the system resolver. */
+    urlResolver?: WebhookUrlResolver;
 }
 
 export interface WebhookDispatcher {
@@ -175,6 +180,71 @@ export function createWebhookDispatcher(
         blockPrivateIps: config.blockPrivateIps,
     });
 
+    async function fetchWithValidatedRedirects(
+        targetUrl: string,
+        init: RequestInit & { dispatcher?: unknown }
+    ): Promise<Response> {
+        let currentUrl = targetUrl;
+        let currentInit = init;
+
+        for (let redirectCount = 0; ; redirectCount += 1) {
+            const parsedUrl = await validateWebhookUrl(currentUrl, {
+                requireHttps: config.requireHttps,
+                blockPrivateIps: config.blockPrivateIps,
+                resolver: config.urlResolver,
+            });
+            const response = await fetchImpl(parsedUrl.toString(), {
+                ...currentInit,
+                redirect: 'manual',
+            });
+
+            if (![301, 302, 303, 307, 308].includes(response.status)) {
+                return response;
+            }
+
+            const location = response.headers.get('location');
+            if (!location) {
+                return response;
+            }
+
+            if (redirectCount >= MAX_REDIRECTS) {
+                await response.body?.cancel();
+                throw new Error('Webhook redirect limit exceeded');
+            }
+
+            await response.body?.cancel();
+            const method = String(currentInit.method ?? 'GET').toUpperCase();
+            const shouldSwitchToGet =
+                (response.status === 303 && method !== 'GET' && method !== 'HEAD') ||
+                ((response.status === 301 || response.status === 302) &&
+                    method === 'POST');
+            if (shouldSwitchToGet) {
+                const headers = new Headers(currentInit.headers);
+                for (const header of [
+                    'content-encoding',
+                    'content-language',
+                    'content-length',
+                    'content-location',
+                    'content-type',
+                ]) {
+                    headers.delete(header);
+                }
+                currentInit = {
+                    ...currentInit,
+                    method: 'GET',
+                    body: undefined,
+                    headers,
+                };
+            }
+
+            try {
+                currentUrl = new URL(location, parsedUrl).toString();
+            } catch {
+                throw new Error('Webhook redirect target is invalid');
+            }
+        }
+    }
+
     let processInterval: ReturnType<typeof setInterval> | null = null;
     let reaperInterval: ReturnType<typeof setInterval> | null = null;
     let processing = false;
@@ -197,13 +267,7 @@ export function createWebhookDispatcher(
         );
 
         try {
-            if (config.blockPrivateIps) {
-                await validateWebhookUrl(targetUrl, {
-                    blockPrivateIps: true,
-                });
-            }
-
-            const response = await fetchImpl(targetUrl, {
+            const response = await fetchWithValidatedRedirects(targetUrl, {
                 method: 'POST',
                 headers,
                 body,

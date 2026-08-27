@@ -172,7 +172,7 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 | `limits.requestsPerMinute`   | `OR3_REQUESTS_PER_MINUTE`       | `20`                                            | Per-user requests/minute                               |
 | `limits.maxMessagesPerDay`   | `OR3_MAX_MESSAGES_PER_DAY`      | `0` (unlimited)                                 | Daily message cap                                      |
 | `limits.maxConversations`    | `OR3_MAX_CONVERSATIONS`         | `0` (unlimited)                                 | Max conversations                                      |
-| `limits.storageProvider`     | `OR3_LIMITS_STORAGE_PROVIDER`   | `sync.provider` (if sync), otherwise `"memory"` | Rate limit backend                                     |
+| `limits.storageProvider`     | `OR3_LIMITS_STORAGE_PROVIDER`   | `"convex"` when Convex sync is selected; otherwise `"memory"` | Rate limit backend; Redis and Postgres are rejected until providers exist |
 | `limits.operationRateLimits` | `OR3_RATE_LIMIT_OVERRIDES_JSON` | `{}`                                            | Per-operation `{ windowMs, maxRequests }` override map |
 
 Example `OR3_RATE_LIMIT_OVERRIDES_JSON`:
@@ -259,14 +259,14 @@ Admin routes are **disabled by default**. They become available only when `OR3_A
 auth ─┬→ sync
       └→ storage
 
-sync (optional) ─→ limits.storageProvider default
+sync (optional) ─→ limits.storageProvider default (Convex only)
 sync (optional) ─→ backgroundStreaming.storageProvider default
 ```
 
 - **Auth** is the gate—sync and storage require it
 - **Sync** defaults to enabled when auth is enabled
 - **Storage** defaults to enabled when auth is enabled
-- **Rate limit storage** defaults to `sync.provider` when sync is enabled, otherwise memory
+- **Rate limit storage** defaults to `convex` when Convex sync is enabled, otherwise memory
 - **Background job storage** defaults to `sync.provider` when sync is enabled, otherwise memory
 
 ## Static vs SSR Builds

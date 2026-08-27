@@ -4,6 +4,7 @@ import type {
   ExternalAgentClient,
   ExternalAgentCreateSessionInput,
   ExternalAgentStartTurnInput,
+  ExternalAgentStagingCleanupResult,
   ExternalAgentUploadAttachment,
 } from "./types";
 
@@ -33,8 +34,8 @@ export class ExternalAgentTurnCommandService {
   releaseFiles(
     client: ExternalAgentClient,
     attachments: readonly ExternalAgentAttachment[],
-  ): void {
-    client.releaseStagedFiles?.(attachments);
+  ): Promise<ExternalAgentStagingCleanupResult | undefined> {
+    return Promise.resolve(client.releaseStagedFiles?.(attachments));
   }
 
   startTurn(

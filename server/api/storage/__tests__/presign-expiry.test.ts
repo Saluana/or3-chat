@@ -69,6 +69,21 @@ vi.mock('../../../storage/gateway/registry', () => ({
     getActiveStorageGatewayAdapter: () => mockStorageAdapter,
 }));
 
+vi.mock('../../../sync/gateway/registry', () => ({
+    getActiveSyncGatewayAdapter: () => ({
+        queryCanonicalStorage: vi.fn().mockResolvedValue({
+            items: [{
+                kind: 'metadata',
+                hash: 'sha256:' + 'a'.repeat(64),
+                sizeBytes: 1024,
+                storageId: 'storage-1',
+                updatedAt: 1,
+            }],
+            hasMore: false,
+        }),
+    }),
+}));
+
 vi.mock('~~/config.or3', () => ({
     or3Config: {
         limits: { maxCloudFileSizeBytes: 10_000_000 },
@@ -82,7 +97,7 @@ vi.mock('../../../utils/storage/metrics', () => ({
 
 const baseBody = {
     workspace_id: 'ws-1',
-    hash: 'hash-1',
+    hash: 'sha256:' + 'a'.repeat(64),
     mime_type: 'image/png',
     size_bytes: 1024,
     disposition: 'inline',

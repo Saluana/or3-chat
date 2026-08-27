@@ -57,6 +57,15 @@ and sends only canonical `workspace_ref` metadata with the turn. Uploads use
 the same header credential resolver as runner-chat requests; file bytes and
 tokens are not persisted in OR3 Chat session references.
 
+Attachment staging has an explicit lifecycle: create a generated
+`.or3-upload-<timestamp>-<random>` batch, upload all files, and roll back that
+batch when an upload or known pre-start request fails. Once `startTurn` is
+accepted, Chat leaves the batch available for the asynchronous runner. A
+successful batch is retained until a future runner-owned, reference-counted
+lifecycle can prove that consumption is complete. A host that predates the
+release endpoint is kept compatible: Chat retains the files and surfaces a
+cleanup warning instead of deleting a path it cannot prove is safe.
+
 The transcript resolves the active theme's same `chat-message` component and
 message-row geometry as primary Chat. Its composer uses the shared composer
 shell in `lg` mode; primary Chat and Document AI use the same shell in `sm`
