@@ -42,11 +42,12 @@ const setupBrowserMocks = () => {
         },
         writable: true,
     });
-    // Mock MutationObserver
-    global.MutationObserver = vi.fn().mockImplementation(() => ({
-        observe: vi.fn(),
-        disconnect: vi.fn(),
-    }));
+    // Vitest 5 requires constructor mocks to be constructable functions/classes.
+    global.MutationObserver = class MockMutationObserver {
+        observe = vi.fn();
+        disconnect = vi.fn();
+        takeRecords = vi.fn(() => []);
+    } as unknown as typeof MutationObserver;
 };
 
 describe('useUserThemeOverrides', () => {
