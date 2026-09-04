@@ -32,7 +32,7 @@
                 <UButton
                     v-bind="themeModeButtonProps"
                     aria-label="Reset current theme mode"
-                    @click="showResetModal = true"
+                    @click="() => { showResetModal = true; }"
                     :title="'Reset ' + activeMode + ' profile'"
                     >Reset {{ activeMode }}</UButton
                 >
@@ -60,7 +60,7 @@
                     <UButton
                         variant="ghost"
                         color="neutral"
-                        @click="showResetModal = false"
+                        @click="() => { showResetModal = false; }"
                     >
                         Cancel
                     </UButton>

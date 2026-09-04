@@ -275,7 +275,7 @@
                                         importMode === option.value,
                                 }"
                                 block
-                                @click="importModeModel = option.value"
+                                @click="() => { importModeModel = option.value; }"
                                 :aria-pressed="importMode === option.value"
                             >
                                 <div class="flex items-start gap-3 w-full">

@@ -325,7 +325,7 @@ onMounted(() => {
                 </div>
             </template>
             <template #footer>
-                <UButton variant="ghost" @click="showCreateModal = false">
+                <UButton variant="ghost" @click="() => { showCreateModal = false; }">
                     Cancel
                 </UButton>
                 <UButton @click="handleCreateWorkflow">Create</UButton>
@@ -356,7 +356,7 @@ onMounted(() => {
                 </div>
             </template>
             <template #footer>
-                <UButton variant="ghost" @click="showDeleteModal = false">
+                <UButton variant="ghost" @click="() => { showDeleteModal = false; }">
                     Cancel
                 </UButton>
                 <UButton color="error" @click="handleDeleteWorkflow">
@@ -382,7 +382,7 @@ onMounted(() => {
                 </div>
             </template>
             <template #footer>
-                <UButton variant="ghost" @click="showRenameModal = false">
+                <UButton variant="ghost" @click="() => { showRenameModal = false; }">
                     Cancel
                 </UButton>
                 <UButton @click="handleRenameWorkflow">Save</UButton>

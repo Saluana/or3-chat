@@ -79,7 +79,7 @@
             </div>
         </template>
         <template #footer>
-            <UButton variant="ghost" @click="showRenameModal = false"
+            <UButton variant="ghost" @click="() => { showRenameModal = false; }"
                 >Cancel</UButton
             >
             <UButton color="primary" @click="saveRename">Save</UButton>
@@ -104,7 +104,7 @@
             </div>
         </template>
         <template #footer>
-            <UButton variant="ghost" @click="showRenameProjectModal = false"
+            <UButton variant="ghost" @click="() => { showRenameProjectModal = false; }"
                 >Cancel</UButton
             >
             <UButton
@@ -128,7 +128,7 @@
             </p>
         </template>
         <template #footer>
-            <UButton variant="ghost" @click="showDeleteModal = false"
+            <UButton variant="ghost" @click="() => { showDeleteModal = false; }"
                 >Cancel</UButton
             >
             <UButton color="error" @click="deleteThread">Delete</UButton>
@@ -147,7 +147,7 @@
             </p>
         </template>
         <template #footer>
-            <UButton variant="ghost" @click="showDeleteDocumentModal = false"
+            <UButton variant="ghost" @click="() => { showDeleteDocumentModal = false; }"
                 >Cancel</UButton
             >
             <UButton color="error" @click="deleteDocument">Delete</UButton>
@@ -167,7 +167,7 @@
             </p>
         </template>
         <template #footer>
-            <UButton variant="ghost" @click="showDeleteProjectModal = false"
+            <UButton variant="ghost" @click="() => { showDeleteProjectModal = false; }"
                 >Cancel</UButton
             >
             <UButton color="error" @click="deleteProject">Delete</UButton>
@@ -252,7 +252,7 @@
                                 ? 'bg-primary/30'
                                 : 'opacity-70'
                         "
-                        @click="addMode = 'select'"
+                        @click="() => { addMode = 'select'; }"
                     >
                         Select Existing
                     </button>
@@ -263,7 +263,7 @@
                                 ? 'bg-primary/30'
                                 : 'opacity-70'
                         "
-                        @click="addMode = 'create'"
+                        @click="() => { addMode = 'create'; }"
                     >
                         Create New
                     </button>

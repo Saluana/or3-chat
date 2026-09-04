@@ -521,7 +521,7 @@ watch(
                     :style="showValidation ? activeButtonStyle : undefined"
                     :aria-pressed="showValidation"
                     :disabled="toolbarDisabled"
-                    @click="showValidation = !showValidation"
+                    @click="() => { showValidation = !showValidation; }"
                 />
             </UTooltip>
 

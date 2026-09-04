@@ -16,7 +16,7 @@
                             v-bind="searchClearButtonProps"
                             class="flex items-center justify-center p-0"
                             aria-label="Clear input"
-                            @click="sidebarQuery = ''"
+                            @click="() => { sidebarQuery = ''; }"
                         />
                     </template>
                 </UInput>
@@ -42,7 +42,7 @@
                 </div>
             </template>
             <template #footer>
-                <UButton variant="ghost" @click="showRenameModal = false"
+                <UButton variant="ghost" @click="() => { showRenameModal = false; }"
                     >Cancel</UButton
                 >
                 <UButton color="primary" @click="saveRename">Save</UButton>
@@ -66,7 +66,7 @@
                 </div>
             </template>
             <template #footer>
-                <UButton variant="ghost" @click="showRenameProjectModal = false"
+                <UButton variant="ghost" @click="() => { showRenameProjectModal = false; }"
                     >Cancel</UButton
                 >
                 <UButton
@@ -158,7 +158,7 @@
                                     ? 'bg-primary/30'
                                     : 'opacity-70'
                             "
-                            @click="addMode = 'select'"
+                            @click="() => { addMode = 'select'; }"
                         >
                             Select Existing
                         </button>
@@ -169,7 +169,7 @@
                                     ? 'bg-primary/30'
                                     : 'opacity-70'
                             "
-                            @click="addMode = 'create'"
+                            @click="() => { addMode = 'create'; }"
                         >
                             Create New
                         </button>
