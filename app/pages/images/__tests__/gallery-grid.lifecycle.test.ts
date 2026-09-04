@@ -80,10 +80,12 @@ describe('GalleryGrid lifecycle management', () => {
     it('revokes object URLs when items are removed', async () => {
         const createObjectURL = vi.fn(() => 'blob://meta-a');
         const revokeObjectURL = vi.fn();
-        vi.stubGlobal('URL', {
-            createObjectURL,
-            revokeObjectURL,
+        class TestURL extends URL {}
+        Object.defineProperties(TestURL, {
+            createObjectURL: { value: createObjectURL, configurable: true },
+            revokeObjectURL: { value: revokeObjectURL, configurable: true },
         });
+        vi.stubGlobal('URL', TestURL);
 
         const idleCallbacks = new Map<number, any>();
         let idleHandle = 1;
