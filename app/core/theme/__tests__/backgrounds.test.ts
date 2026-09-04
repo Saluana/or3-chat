@@ -3,10 +3,11 @@ import { applyThemeBackgrounds } from '../backgrounds';
 import type { ThemeBackgrounds } from '~/theme/_shared/types';
 
 describe('Theme Backgrounds', () => {
-    let mockResolveToken: ReturnType<typeof vi.fn>;
+    type ResolveToken = (token: string) => Promise<string | null>;
+let mockResolveToken: ReturnType<typeof vi.fn<ResolveToken>>;
 
     beforeEach(() => {
-        mockResolveToken = vi.fn(async (token: string) => {
+        mockResolveToken = vi.fn<ResolveToken>(async (token) => {
             if (token.startsWith('internal-file://')) return null;
             return token;
         });
