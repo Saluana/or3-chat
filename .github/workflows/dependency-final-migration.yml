@@ -1,0 +1,189 @@
+name: Dependency final migration
+
+on:
+  push:
+    branches:
+      - automation/deps-2026-09-04
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: automation/deps-2026-09-04
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Select compatible package lines
+        shell: bash
+        run: |
+          bun add \
+            '@tiptap/core@3.13.0' \
+            '@tiptap/extension-mention@3.13.0' \
+            '@tiptap/extension-placeholder@3.13.0' \
+            '@tiptap/pm@3.13.0' \
+            '@tiptap/starter-kit@3.13.0' \
+            '@tiptap/suggestion@3.13.0' \
+            '@tiptap/vue-3@3.13.0' \
+            'or3-workflow-core@0.1.1' \
+            'or3-workflow-vue@0.1.3'
+
+          # The OpenRouter 1.x migration was intentionally deferred, so restore
+          # the existing 0.3.x-compatible error normalization implementation.
+          git checkout origin/master -- shared/openrouter/errors.ts
+          bun install
+
+      - name: Apply source/test compatibility migrations
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          # Vue's newer generated component types require click handlers to
+          # return void rather than the value of assignment expressions.
+          assignment_files = [
+              'app/components/FatalErrorBoundary.vue',
+              'app/components/dashboard/theme/ResetSection.vue',
+              'app/components/dashboard/theme/ThemeModeToggle.vue',
+              'app/components/dashboard/workspace/WorkspaceBackupApp.vue',
+              'app/components/sidebar/SideBar.vue',
+              'app/components/sidebar/SideNavHeader.vue',
+              'app/plugins/workflows/components/WorkflowPane.vue',
+              'app/plugins/workflows/components/sidebar/WorkflowsTab.vue',
+          ]
+          assignment = re.compile(
+              r'@click="([A-Za-z_$][\w.$]*(?:\[[^\]]+\])?\s*=(?!=)\s*[^\"]+)"'
+          )
+          for name in assignment_files:
+              path = Path(name)
+              text = path.read_text()
+              text = assignment.sub(
+                  lambda m: '@click="() => { ' + m.group(1).strip() + '; }"', text
+              )
+              path.write_text(text)
+
+          viewer = Path('app/pages/images/ImageViewer.vue')
+          text = viewer.read_text()
+          replacements = {
+              '@click="item && emit(\'copy-prompt\', item)"': '@click="() => { if (item) emit(\'copy-prompt\', item); }"',
+              '@click="item && emit(\'edit-prompt\', item)"': '@click="() => { if (item) emit(\'edit-prompt\', item); }"',
+              '@click="item && emit(\'download\', item)"': '@click="() => { if (item) emit(\'download\', item); }"',
+              '@click="item && emit(\'download-both\', item)"': '@click="() => { if (item) emit(\'download-both\', item); }"',
+              '@click="item && emit(\'delete\', item)"': '@click="() => { if (item) emit(\'delete\', item); }"',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'ImageViewer handler not found: {old}')
+              text = text.replace(old, new)
+          viewer.write_text(text)
+
+          # OpenRouter 0.3.16 tightened model metadata to the API's actual shape.
+          catalog = Path('app/components/modal/ModelCatalog.vue')
+          text = catalog.read_text()
+          text = text.replace(
+              "formatPrice(m.pricing.prompt, m.pricing.currency ?? 'USD')",
+              "formatPrice(m.pricing?.prompt, 'USD')",
+          )
+          text = text.replace(
+              "formatPrice(m.pricing.completion, m.pricing.currency ?? 'USD')",
+              "formatPrice(m.pricing?.completion, 'USD')",
+          )
+          text = text.replace(
+              "value: `${m.architecture?.modality ?? 'n/a'}`",
+              "value: [...(m.architecture?.input_modalities ?? []), ...(m.architecture?.output_modalities ?? [])].join(' / ') || 'n/a'",
+          )
+          catalog.write_text(text)
+
+          # Vitest 5's generic Mock type no longer preserves this callback's
+          # signature without an explicit procedure type.
+          backgrounds = Path('app/core/theme/__tests__/backgrounds.test.ts')
+          text = backgrounds.read_text()
+          text = text.replace(
+              "let mockResolveToken: ReturnType<typeof vi.fn>;",
+              "type ResolveToken = (token: string) => Promise<string | null>;\nlet mockResolveToken: ReturnType<typeof vi.fn<ResolveToken>>;",
+          )
+          text = text.replace(
+              "mockResolveToken = vi.fn(async (token: string) => {",
+              "mockResolveToken = vi.fn<ResolveToken>(async (token) => {",
+          )
+          backgrounds.write_text(text)
+
+          # Vitest 5 requires constructor globals to be genuinely constructable.
+          gallery = Path('app/pages/images/__tests__/gallery-grid.lifecycle.test.ts')
+          text = gallery.read_text()
+          old = """        vi.stubGlobal(\n            'IntersectionObserver',\n            vi.fn(() => ({ observe, disconnect })) as unknown as typeof IntersectionObserver,\n        );\n"""
+          new = """        class TestIntersectionObserver {\n            readonly root = null;\n            readonly rootMargin = '';\n            readonly thresholds: readonly number[] = [];\n            observe = observe;\n            unobserve = vi.fn();\n            disconnect = disconnect;\n            takeRecords = vi.fn(() => []);\n        }\n        vi.stubGlobal(\n            'IntersectionObserver',\n            TestIntersectionObserver as unknown as typeof IntersectionObserver,\n        );\n"""
+          if old not in text:
+              raise SystemExit('IntersectionObserver mock block not found')
+          gallery.write_text(text.replace(old, new))
+          PY
+
+          bun install
+
+      - name: Typecheck
+        id: typecheck
+        continue-on-error: true
+        run: bun run type-check
+
+      - name: Lint
+        id: lint
+        continue-on-error: true
+        run: bun run lint
+
+      - name: Test
+        id: test
+        continue-on-error: true
+        run: bun run test
+
+      - name: Build
+        id: build
+        continue-on-error: true
+        run: bun run build
+
+      - name: Commit migration
+        if: always()
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/dependency-final-migration.yml
+          git add package.json bun.lock shared/openrouter/errors.ts \
+            app/components/FatalErrorBoundary.vue \
+            app/components/dashboard/theme/ResetSection.vue \
+            app/components/dashboard/theme/ThemeModeToggle.vue \
+            app/components/dashboard/workspace/WorkspaceBackupApp.vue \
+            app/components/sidebar/SideBar.vue \
+            app/components/sidebar/SideNavHeader.vue \
+            app/pages/images/ImageViewer.vue \
+            app/components/modal/ModelCatalog.vue \
+            app/core/theme/__tests__/backgrounds.test.ts \
+            app/pages/images/__tests__/gallery-grid.lifecycle.test.ts \
+            app/plugins/workflows/components/WorkflowPane.vue \
+            app/plugins/workflows/components/sidebar/WorkflowsTab.vue
+          if ! git diff --cached --quiet; then
+            git commit -m "fix: finish dependency compatibility migrations"
+            git push origin HEAD:automation/deps-2026-09-04
+          fi
+
+      - name: Report verification
+        if: always()
+        shell: bash
+        run: |
+          echo "typecheck=${{ steps.typecheck.outcome }}"
+          echo "lint=${{ steps.lint.outcome }}"
+          echo "test=${{ steps.test.outcome }}"
+          echo "build=${{ steps.build.outcome }}"
+          if [ "${{ steps.typecheck.outcome }}" != "success" ] || \
+             [ "${{ steps.lint.outcome }}" != "success" ] || \
+             [ "${{ steps.test.outcome }}" != "success" ] || \
+             [ "${{ steps.build.outcome }}" != "success" ]; then
+            exit 1
+          fi
