@@ -13,7 +13,7 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "analyze": "bun run build && npx vite-bundle-visualizer dist/stats.html",
-        "lint": "echo 'Lint script would go here'",
+        "lint": "eslint .",
         "type-check": "nuxt typecheck",
         "theme:validate": "tsx scripts/cli/validate-theme.ts",
         "theme:create": "tsx scripts/cli/create-theme.ts",
@@ -75,7 +75,8 @@
         "typescript-eslint": "^8.69.0",
         "vite": "^8.2.2",
         "vite-bundle-visualizer": "^1.2.1",
-        "vitest": "^5.0.0"
+        "vitest": "^5.0.0",
+        "vue-tsc": "^3.3.11"
     },
     "trustedDependencies": [
         "@parcel/watcher"

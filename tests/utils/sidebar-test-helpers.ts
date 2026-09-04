@@ -395,63 +395,65 @@ export function createMockMultiPaneApi() {
     };
 }
 
-/**
- * Mocks common composables used in sidebar tests
- */
-export function mockSidebarComposables() {
-    vi.mock('~/composables/sidebar/useSidebarSearch', () => ({
-        useSidebarSearch: () => ({
-            query: ref(''),
-            threadResults: ref([]),
-            projectResults: ref([]),
-            documentResults: ref([]),
-        }),
-    }));
+// Vitest hoists vi.mock calls, so these declarations must live at module scope.
+vi.mock('~/composables/sidebar/useSidebarSearch', () => ({
+    useSidebarSearch: () => ({
+        query: ref(''),
+        threadResults: ref([]),
+        projectResults: ref([]),
+        documentResults: ref([]),
+    }),
+}));
 
-    vi.mock('~/composables/sidebar/useActiveSidebarPage', () => ({
-        useActiveSidebarPage: () => ({
-            activePageId: ref('sidebar-home'),
-            activePageDef: ref({ id: 'sidebar-home', usesDefaultHeader: true }),
-            setActivePage: vi.fn().mockResolvedValue(true),
-            resetToDefault: vi.fn().mockResolvedValue(true),
-        }),
-    }));
+vi.mock('~/composables/sidebar/useActiveSidebarPage', () => ({
+    useActiveSidebarPage: () => ({
+        activePageId: ref('sidebar-home'),
+        activePageDef: ref({ id: 'sidebar-home', usesDefaultHeader: true }),
+        setActivePage: vi.fn().mockResolvedValue(true),
+        resetToDefault: vi.fn().mockResolvedValue(true),
+    }),
+}));
 
-    vi.mock('~/db', () => ({
-        db: {
-            threads: {
-                orderBy: () => ({
-                    reverse: () => ({
-                        filter: () => ({ toArray: async () => [] }),
-                    }),
+vi.mock('~/db', () => ({
+    db: {
+        threads: {
+            orderBy: () => ({
+                reverse: () => ({
+                    filter: () => ({ toArray: async () => [] }),
                 }),
-            },
-            projects: {
-                orderBy: () => ({
-                    reverse: () => ({
-                        filter: () => ({ toArray: async () => [] }),
-                    }),
-                }),
-            },
-            posts: {
-                where: () => ({
-                    equals: () => ({
-                        and: () => ({ toArray: async () => [] }),
-                    }),
-                }),
-            },
+            }),
         },
-        upsert: vi.fn(),
-        del: vi.fn(),
-        create: vi.fn(),
-    }));
+        projects: {
+            orderBy: () => ({
+                reverse: () => ({
+                    filter: () => ({ toArray: async () => [] }),
+                }),
+            }),
+        },
+        posts: {
+            where: () => ({
+                equals: () => ({
+                    and: () => ({ toArray: async () => [] }),
+                }),
+            }),
+        },
+    },
+    upsert: vi.fn(),
+    del: vi.fn(),
+    create: vi.fn(),
+}));
 
-    vi.mock('dexie', () => ({
-        liveQuery: () => ({
-            subscribe: () => ({ unsubscribe() {} }),
-        }),
-    }));
-}
+vi.mock('dexie', () => ({
+    liveQuery: () => ({
+        subscribe: () => ({ unsubscribe() {} }),
+    }),
+}));
+
+/**
+ * Kept for backwards compatibility with existing tests. Mocks are registered
+ * at module scope because Vitest hoists vi.mock calls.
+ */
+export function mockSidebarComposables() {}
 
 /**
  * Sets up a complete test environment for sidebar tests

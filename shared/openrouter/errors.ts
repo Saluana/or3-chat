@@ -15,7 +15,7 @@ import {
     ServiceUnavailableResponseError,
     EdgeNetworkTimeoutResponseError,
     ProviderOverloadedResponseError,
-    ChatError,
+    OpenRouterDefaultError,
 } from '@openrouter/sdk/models/errors';
 
 export type ErrorCode =
@@ -156,13 +156,27 @@ export function normalizeSDKError(error: unknown): NormalizedError {
         };
     }
 
-    if (error instanceof ChatError) {
-        const errData = error.error;
+    if (error instanceof OpenRouterDefaultError) {
+        let message = error.message || 'Chat request failed.';
+
+        try {
+            const body = JSON.parse(error.body) as {
+                error?: { message?: string };
+                message?: string;
+            };
+            message = body.error?.message || body.message || message;
+        } catch {
+            // Non-JSON error bodies are already represented by error.message.
+        }
+
         return {
             code: 'ERR_CHAT',
-            message: errData.message || 'Chat request failed.',
-            status: 400,
-            retryable: false,
+            message,
+            status: error.statusCode,
+            retryable:
+                error.statusCode === 408 ||
+                error.statusCode === 429 ||
+                error.statusCode >= 500,
             raw: error,
         };
     }

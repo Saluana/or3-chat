@@ -13,11 +13,11 @@ export default defineConfig({
     plugins: [vueAny()],
     resolve: {
         alias: {
-            '#imports': path.resolve(__dirname, 'tests/stubs/nuxt-imports.ts'),
-            '~': path.resolve(__dirname, 'app'),
-            '~~': path.resolve(__dirname),
-            '~~/': path.resolve(__dirname) + '/',
-            '#app': path.resolve(__dirname, 'tests/stubs/nuxt-app.ts'),
+            '#imports': path.resolve(import.meta.dirname, 'tests/stubs/nuxt-imports.ts'),
+            '~': path.resolve(import.meta.dirname, 'app'),
+            '~~': path.resolve(import.meta.dirname),
+            '~~/': path.resolve(import.meta.dirname) + '/',
+            '#app': path.resolve(import.meta.dirname, 'tests/stubs/nuxt-app.ts'),
         },
     },
     test: {

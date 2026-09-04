@@ -4,38 +4,21 @@ import type { ThemeBackgrounds } from '~/theme/_shared/types';
 
 describe('Theme Backgrounds', () => {
     let mockResolveToken: ReturnType<typeof vi.fn>;
-    let originalDocument: Document;
 
     beforeEach(() => {
-        originalDocument = global.document;
         mockResolveToken = vi.fn(async (token: string) => {
             if (token.startsWith('internal-file://')) return null;
             return token;
         });
 
-        // Create minimal DOM mock
-        const mockStyle = new Map<string, string>();
-        const styleApi = {
-            setProperty: vi.fn((key: string, value: string) => {
-                mockStyle.set(key, value);
-            }),
-            getPropertyValue: vi.fn((key: string) => mockStyle.get(key) || ''),
-            removeProperty: vi.fn((key: string) => {
-                mockStyle.delete(key);
-                return '';
-            }),
-        };
-
-        global.document = {
-            documentElement: {
-                style: styleApi,
-            },
-        } as any;
+        document.documentElement.removeAttribute('style');
+        vi.spyOn(document.documentElement.style, 'setProperty');
+        vi.spyOn(document.documentElement.style, 'removeProperty');
     });
 
     afterEach(() => {
-        global.document = originalDocument;
-        vi.clearAllMocks();
+        document.documentElement.removeAttribute('style');
+        vi.restoreAllMocks();
     });
 
     describe('applyThemeBackgrounds', () => {
