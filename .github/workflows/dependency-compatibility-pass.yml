@@ -1,0 +1,109 @@
+name: Dependency compatibility pass
+
+on:
+  push:
+    branches:
+      - automation/deps-2026-09-04
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: automation/deps-2026-09-04
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Keep breaking toolchains on latest compatible majors
+        shell: bash
+        run: |
+          # These latest majors require broad application migrations and are not
+          # appropriate for an automated maintenance PR yet. Resolve the newest
+          # releases in the currently compatible major lines instead.
+          bun add \
+            '@nuxt/ui@^3' \
+            '@openrouter/sdk@^0.3' \
+            '@tiptap/core@^3.13' \
+            '@tiptap/extension-mention@^3.13' \
+            '@tiptap/extension-placeholder@^3.13' \
+            '@tiptap/pm@^3.13' \
+            '@tiptap/starter-kit@^3.13' \
+            '@tiptap/suggestion@^3.13' \
+            '@tiptap/vue-3@^3.13' \
+            'tiptap-markdown@^0.8'
+
+          bun add -d \
+            '@vitejs/plugin-vue@^5' \
+            'vite@^7' \
+            'typescript@6.0.3' \
+            'vue-tsc@latest'
+
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('app/pages/images/__tests__/gallery-grid.lifecycle.test.ts')
+          text = p.read_text()
+          old = """        vi.stubGlobal('URL', {\n            createObjectURL,\n            revokeObjectURL,\n        });\n"""
+          new = """        class TestURL extends URL {}\n        Object.defineProperties(TestURL, {\n            createObjectURL: { value: createObjectURL, configurable: true },\n            revokeObjectURL: { value: revokeObjectURL, configurable: true },\n        });\n        vi.stubGlobal('URL', TestURL);\n"""
+          if old not in text:
+              raise SystemExit('URL mock block not found')
+          p.write_text(text.replace(old, new))
+          PY
+
+          bun install
+
+      - name: Typecheck
+        id: typecheck
+        continue-on-error: true
+        run: bun run type-check
+
+      - name: Lint
+        id: lint
+        continue-on-error: true
+        run: bun run lint
+
+      - name: Test
+        id: test
+        continue-on-error: true
+        run: bun run test
+
+      - name: Build
+        id: build
+        continue-on-error: true
+        env:
+          NITRO_DEBUG: "1"
+        run: bun run build
+
+      - name: Commit compatibility selection
+        if: always()
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/dependency-compatibility-pass.yml
+          git add package.json bun.lock app/pages/images/__tests__/gallery-grid.lifecycle.test.ts
+          if ! git diff --cached --quiet; then
+            git commit -m "fix: retain compatible dependency majors"
+            git push origin HEAD:automation/deps-2026-09-04
+          fi
+
+      - name: Report status
+        if: always()
+        shell: bash
+        run: |
+          echo "typecheck=${{ steps.typecheck.outcome }}"
+          echo "lint=${{ steps.lint.outcome }}"
+          echo "test=${{ steps.test.outcome }}"
+          echo "build=${{ steps.build.outcome }}"
+          if [ "${{ steps.typecheck.outcome }}" != "success" ] || \
+             [ "${{ steps.lint.outcome }}" != "success" ] || \
+             [ "${{ steps.test.outcome }}" != "success" ] || \
+             [ "${{ steps.build.outcome }}" != "success" ]; then
+            exit 1
+          fi
