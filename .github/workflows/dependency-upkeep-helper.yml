@@ -26,6 +26,9 @@ jobs:
       - name: Upgrade direct dependencies
         run: bunx npm-check-updates@latest -u --target latest
 
+      - name: Keep Vue typechecking on supported TypeScript
+        run: bun add -d typescript@^6.0.2 vue-tsc@^3.3.11
+
       - name: Refresh lockfile
         run: bun install
 
