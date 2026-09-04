@@ -317,7 +317,7 @@ watch(
                                 v-bind="downloadButtonProps"
                                 :icon="iconDownload"
                                 @click.stop.self="
-                                    meta && emit('download', meta)
+                                    void (meta && emit('download', meta))
                                 "
                             >
                                 Download
@@ -325,14 +325,14 @@ watch(
                             <UButton
                                 v-bind="copyButtonProps"
                                 :icon="iconCopy"
-                                @click.stop.self="meta && emit('copy', meta)"
+                                @click.stop.self="void (meta && emit('copy', meta))"
                             >
                                 Copy
                             </UButton>
                             <UButton
                                 :icon="iconDelete"
                                 v-bind="deleteButtonProps"
-                                @click.stop.self="meta && emit('delete', meta)"
+                                @click.stop.self="void (meta && emit('delete', meta))"
                             >
                                 Delete
                             </UButton>
@@ -341,14 +341,14 @@ watch(
                             <UButton
                                 v-bind="restoreButtonProps"
                                 :icon="iconRepeat"
-                                @click.stop.self="meta && emit('restore', meta)"
+                                @click.stop.self="void (meta && emit('restore', meta))"
                             >
                                 Restore
                             </UButton>
                             <UButton
                                 v-bind="permanentDeleteButtonProps"
                                 :icon="iconTrash"
-                                @click.stop.self="meta && emit('delete', meta)"
+                                @click.stop.self="void (meta && emit('delete', meta))"
                             >
                                 Delete permanently
                             </UButton>

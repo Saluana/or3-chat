@@ -12,14 +12,14 @@
             <UButton
                 v-if="detailsOpen === false"
                 v-bind="detailsButtonProps"
-                @click="detailsOpen = true"
+                @click="void (detailsOpen = true)"
             >
                 Details
             </UButton>
             <UButton
                 v-else
                 v-bind="detailsButtonProps"
-                @click="detailsOpen = false"
+                @click="void (detailsOpen = false)"
             >
                 Hide
             </UButton>
