@@ -1,0 +1,52 @@
+name: Dependency upkeep helper
+
+on:
+  push:
+    branches:
+      - chore/dependency-upkeep-2026-09-04
+
+permissions:
+  contents: write
+
+jobs:
+  update-and-verify:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Upgrade direct dependencies
+        run: bunx npm-check-updates@latest -u --target latest
+
+      - name: Refresh lockfile
+        run: bun install
+
+      - name: Commit dependency metadata
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json bun.lock
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: refresh dependencies [skip ci]"
+            git push
+          fi
+
+      - name: Typecheck
+        run: bun run type-check
+
+      - name: Tests
+        run: bun run test
+
+      - name: Build
+        run: bun run build
+
+      - name: Lint
+        run: bun run lint
