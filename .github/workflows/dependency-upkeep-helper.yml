@@ -26,8 +26,30 @@ jobs:
       - name: Upgrade direct dependencies
         run: bunx npm-check-updates@latest -u --target latest
 
-      - name: Keep Vue typechecking on supported TypeScript
-        run: bun add -d typescript@^6.0.2 vue-tsc@^3.3.11
+      - name: Keep incompatible major migrations deferred
+        run: |
+          bun add \
+            @nuxt/ui@^3.3.7 \
+            @openrouter/sdk@^0.3.11 \
+            @tiptap/core@3.13.0 \
+            @tiptap/extension-mention@3.13.0 \
+            @tiptap/extension-placeholder@3.13.0 \
+            @tiptap/pm@3.13.0 \
+            @tiptap/starter-kit@3.13.0 \
+            @tiptap/suggestion@3.13.0 \
+            @tiptap/vue-3@3.13.0 \
+            tiptap-markdown@0.8.10
+          bun add -d \
+            typescript@^6.0.2 \
+            vue-tsc@^3.3.11 \
+            vite@^7.2.0 \
+            @vitejs/plugin-vue@^5.2.4 \
+            vitest@^2.1.9 \
+            @vitest/ui@^2.1.9 \
+            @vitest/coverage-v8@2.1.9 \
+            eslint@^9.39.1 \
+            @eslint/js@^9.39.1 \
+            jsdom@^25.0.1
 
       - name: Refresh lockfile
         run: bun install
