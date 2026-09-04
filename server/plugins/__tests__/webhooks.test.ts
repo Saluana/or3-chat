@@ -63,6 +63,7 @@ function createRuntimeConfig(overrides?: Partial<ReturnType<typeof baseConfig>>)
 function baseConfig() {
     return {
         auth: { enabled: true },
+        security: { forceHttps: false },
         webhooks: {
             enabled: true,
             rateLimitPerMinute: 25,

@@ -55,7 +55,7 @@
                     <UButton
                         variant="ghost"
                         color="neutral"
-                        @click="showResetModal = false"
+                        @click="void (showResetModal = false)"
                     >
                         Cancel
                     </UButton>
