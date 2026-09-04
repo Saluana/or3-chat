@@ -112,10 +112,16 @@ describe('GalleryGrid lifecycle management', () => {
 
         const observe = vi.fn();
         const disconnect = vi.fn();
-        vi.stubGlobal(
-            'IntersectionObserver',
-            vi.fn(() => ({ observe, disconnect }))
-        );
+        class TestIntersectionObserver {
+            readonly root = null;
+            readonly rootMargin = '';
+            readonly thresholds: readonly number[] = [];
+            observe = observe;
+            unobserve = vi.fn();
+            disconnect = disconnect;
+            takeRecords = vi.fn(() => []);
+        }
+        vi.stubGlobal('IntersectionObserver', TestIntersectionObserver);
 
         mocks.getFileBlob.mockResolvedValue(
             new Blob(['ok'], { type: 'image/png' })
@@ -247,10 +253,16 @@ describe('GalleryGrid lifecycle management', () => {
 
         const observe = vi.fn();
         const disconnect = vi.fn();
-        vi.stubGlobal(
-            'IntersectionObserver',
-            vi.fn(() => ({ observe, disconnect }))
-        );
+        class TestIntersectionObserver {
+            readonly root = null;
+            readonly rootMargin = '';
+            readonly thresholds: readonly number[] = [];
+            observe = observe;
+            unobserve = vi.fn();
+            disconnect = disconnect;
+            takeRecords = vi.fn(() => []);
+        }
+        vi.stubGlobal('IntersectionObserver', TestIntersectionObserver);
 
         mocks.getFileBlob.mockResolvedValue(
             new Blob(['ok'], { type: 'image/png' })
