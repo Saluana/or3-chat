@@ -60,6 +60,9 @@ OR3_STORAGE_WORKSPACE_QUOTA_BYTES=optional-quota-bytes
   and `reason: "canonical_reference_state_required"`. It never falls back to
   retained sync history.
 - Keep `Cache-Control: no-store` on presign/upload/download responses.
+- Downloads apply canonical safe response headers: generic files use an
+  octet-stream attachment with `X-Content-Type-Options: nosniff`; supported
+  raster images and PDFs may remain inline.
 
 ## Related
 

@@ -23,6 +23,10 @@ import {
 } from '../../utils/sync/rate-limiter';
 import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 import { setNoCacheHeaders } from '../../utils/headers';
+import {
+    isGenericFileMetaPayload,
+    requireFileKindCapability,
+} from '../../utils/storage/file-kind-capability';
 
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isSyncEnabled(event)) {
@@ -64,11 +68,20 @@ export default defineEventHandler(async (event) => {
     const response = SnapshotResponseSchema.safeParse(
         await adapter.snapshot(event, request.data)
     );
-    if (
-        !response.success ||
-        getSnapshotResponseContractError(request.data, response.data)
-    ) {
+    if (!response.success) {
         throw createError({ statusCode: 502, statusMessage: 'Invalid snapshot response' });
+    }
+    if (getSnapshotResponseContractError(request.data, response.data)) {
+        throw createError({ statusCode: 502, statusMessage: 'Invalid snapshot response' });
+    }
+
+    // Snapshot pages are collected before installation, so reject the whole
+    // page before any caller can apply a partial generic-file record.
+    if (response.data.items.some((item) =>
+        item.kind === 'row' &&
+        isGenericFileMetaPayload(item.tableName, item.payload)
+    )) {
+        requireFileKindCapability(request.data.fileKindCapability);
     }
 
     recordSyncRequest(session.user.id, 'sync:snapshot');

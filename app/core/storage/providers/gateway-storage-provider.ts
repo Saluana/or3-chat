@@ -21,6 +21,7 @@
  * @see core/storage/providers/convex-storage-provider for the Convex-specific variant
  */
 import type { ObjectStorageProvider, PresignedUrlResult } from '../types';
+import { FILE_KIND_CAPABILITY } from '~~/shared/files/file-capability';
 
 /**
  * Purpose:
@@ -102,6 +103,7 @@ export function createGatewayStorageProvider(
                 size_bytes: input.sizeBytes,
                 expires_in_ms: input.expiresInMs,
                 disposition: input.disposition,
+                file_kind_capability: FILE_KIND_CAPABILITY,
             }, baseUrl);
 
             return {
@@ -128,6 +130,7 @@ export function createGatewayStorageProvider(
                 mime_type: input.mimeType,
                 expires_in_ms: input.expiresInMs,
                 disposition: input.disposition,
+                file_kind_capability: FILE_KIND_CAPABILITY,
             }, baseUrl);
 
             return {
@@ -153,6 +156,7 @@ export function createGatewayStorageProvider(
                 width: input.meta.width,
                 height: input.meta.height,
                 page_count: input.meta.pageCount,
+                file_kind_capability: FILE_KIND_CAPABILITY,
             }, baseUrl);
         },
 

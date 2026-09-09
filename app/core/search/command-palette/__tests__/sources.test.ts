@@ -118,6 +118,35 @@ describe('palette source adapters', () => {
         expect(resource.keywords?.some((k) => k.includes('100x50'))).toBe(true);
     });
 
+    it('does not index active SVG metadata as a trusted image', () => {
+        expect(isImageFileMeta({
+            hash: 'b'.repeat(64),
+            name: 'active.svg',
+            mime_type: 'image/svg+xml',
+            kind: 'file',
+            size_bytes: 10,
+            updated_at: 3,
+            created_at: 1,
+            deleted: false,
+            ref_count: 1,
+            clock: 1,
+        } as never)).toBe(false);
+    });
+
+    it('keeps legacy raster metadata visible when kind is absent', () => {
+        expect(isImageFileMeta({
+            hash: 'c'.repeat(64),
+            name: 'legacy.png',
+            mime_type: 'image/png',
+            size_bytes: 10,
+            updated_at: 3,
+            created_at: 1,
+            deleted: false,
+            ref_count: 1,
+            clock: 1,
+        } as never)).toBe(true);
+    });
+
     it('indexes plugin post metadata allowlist', () => {
         const resource = postToPluginResource(
             {

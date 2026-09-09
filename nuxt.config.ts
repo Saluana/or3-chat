@@ -554,6 +554,7 @@ export default defineNuxtConfig({
             provider: or3CloudConfig.storage.provider,
             allowedMimeTypes:
                 or3CloudConfig.storage.allowedMimeTypes ?? undefined,
+            allowAnyFileType: or3CloudConfig.storage.allowAnyFileType ?? false,
             workspaceQuotaBytes:
                 or3CloudConfig.storage.workspaceQuotaBytes !== undefined
                     ? String(or3CloudConfig.storage.workspaceQuotaBytes)
@@ -650,6 +651,7 @@ export default defineNuxtConfig({
             storage: {
                 enabled: effectiveStorageEnabled,
                 provider: or3CloudConfig.storage.provider,
+                allowAnyFileType: or3CloudConfig.storage.allowAnyFileType ?? false,
             },
             sync: {
                 enabled: effectiveSyncEnabled,

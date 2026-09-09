@@ -14,6 +14,7 @@
 import { z } from 'zod';
 import { newId, nowSec } from './util';
 import { isValidHash } from '~/utils/hash';
+import { FILE_KINDS } from '~~/shared/files/file-kind';
 
 function isJsonSerializable(
     value: unknown,
@@ -592,7 +593,7 @@ export const FileMetaSchema = z.object({
     hash: z.string().refine(isValidHash, 'Invalid file hash format'),
     name: z.string(),
     mime_type: z.string(),
-    kind: z.enum(['image', 'pdf']).default('image'),
+    kind: z.enum(FILE_KINDS).default('image'),
     size_bytes: z.number().int(),
     width: z.number().int().optional(),
     height: z.number().int().optional(),

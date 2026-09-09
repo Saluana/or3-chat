@@ -27,6 +27,9 @@ import {
     recordSyncRequest,
 } from '../../utils/sync/rate-limiter';
 import { enforceRateLimit } from '../../utils/rate-limit/enforce';
+import { classifyFileKind } from '~~/shared/files/file-kind';
+import { FILE_KIND_CAPABILITY } from '~~/shared/files/file-capability';
+import { requireFileKindCapability } from '../../utils/storage/file-kind-capability';
 
 const BodySchema = z.object({
     workspace_id: z.string(),
@@ -35,12 +38,13 @@ const BodySchema = z.object({
     intent_id: z.string().min(1).optional(),
     storage_provider_id: z.string(),
     mime_type: z.string(),
-    size_bytes: z.number(),
+    size_bytes: z.number().int().nonnegative(),
     name: z.string(),
-    kind: z.enum(['image', 'pdf']),
+    kind: z.enum(['image', 'pdf', 'file']),
     width: z.number().optional(),
     height: z.number().optional(),
     page_count: z.number().optional(),
+    file_kind_capability: z.literal(FILE_KIND_CAPABILITY).optional(),
 });
 
 /**
@@ -84,6 +88,13 @@ export default defineEventHandler(async (event) => {
     // Rate limiting
     const rateLimitResult = checkSyncRateLimit(userId, 'storage:commit');
     enforceRateLimit(event, rateLimitResult);
+
+    if (
+        body.data.kind === 'file' ||
+        classifyFileKind(body.data.mime_type) === 'file'
+    ) {
+        requireFileKindCapability(body.data.file_kind_capability);
+    }
 
     // Get storage gateway adapter from registry
     const adapter = getActiveStorageGatewayAdapter();

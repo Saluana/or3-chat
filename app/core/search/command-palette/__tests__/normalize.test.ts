@@ -6,6 +6,11 @@ import {
 } from '../normalize';
 
 describe('normalize', () => {
+    it('excludes private plugin records even when their plugin is disabled', () => {
+        expect(isIndexablePostType('or3:plugin-private:example:proposal')).toBe(false);
+        expect(isIndexablePostType('or3:plugin-private:example:content')).toBe(false);
+        expect(isIndexablePostType('example:project')).toBe(true);
+    });
     it('extracts TipTap plain text with block boundaries', () => {
         const doc = {
             type: 'doc',

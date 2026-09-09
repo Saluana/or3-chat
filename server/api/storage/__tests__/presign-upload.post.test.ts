@@ -101,6 +101,7 @@ describe('POST /api/storage/presign-upload', () => {
         useRuntimeConfigMock.mockReset().mockReturnValue({
             storage: {
                 allowedMimeTypes: undefined,
+                allowAnyFileType: false,
                 workspaceQuotaBytes: undefined,
             },
         });
@@ -142,7 +143,6 @@ describe('POST /api/storage/presign-upload', () => {
         { field: 'workspace_id', value: '   ' },
         { field: 'hash', value: '' },
         { field: 'mime_type', value: '' },
-        { field: 'size_bytes', value: 0 },
         { field: 'size_bytes', value: -1 },
         { field: 'size_bytes', value: 1.5 },
         { field: 'size_bytes', value: Number.POSITIVE_INFINITY },
@@ -224,6 +224,52 @@ describe('POST /api/storage/presign-upload', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 415 });
     });
 
+    it('accepts a zero-byte upload', async () => {
+        const handler = (await import('../presign-upload.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), size_bytes: 0 });
+
+        await expect(handler(makeEvent())).resolves.toMatchObject({
+            url: 'https://upload.example',
+        });
+        expect(presignUploadMock).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ sizeBytes: 0 }),
+        );
+    });
+
+    it('admits arbitrary MIME types only with the explicit capability setting', async () => {
+        const handler = (await import('../presign-upload.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), mime_type: 'application/zip', file_kind_capability: 'v1' });
+
+        useRuntimeConfigMock.mockReturnValue({
+            storage: {
+                allowedMimeTypes: ['image/png'],
+                allowAnyFileType: true,
+            },
+        });
+
+        await expect(handler(makeEvent())).resolves.toMatchObject({
+            url: 'https://upload.example',
+        });
+    });
+
+    it('returns 426 for an allowlisted generic MIME without file-kind capability', async () => {
+        const handler = (await import('../presign-upload.post')).default as (event: H3Event) => Promise<unknown>;
+        useRuntimeConfigMock.mockReturnValue({
+            storage: {
+                allowedMimeTypes: ['text/plain'],
+            },
+        });
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), mime_type: 'text/plain' });
+
+        const failure = await handler(makeEvent()).catch((error: unknown) => error);
+        expect(failure).toMatchObject({
+            statusCode: 426,
+            message: 'Update OR3 Chat to use general files',
+        });
+        expect(presignUploadMock).not.toHaveBeenCalled();
+    });
+
     it('uses runtime-config MIME allowlist when provided', async () => {
         const handler = (await import('../presign-upload.post')).default as (event: H3Event) => Promise<unknown>;
         useRuntimeConfigMock.mockReturnValue({
@@ -234,6 +280,7 @@ describe('POST /api/storage/presign-upload', () => {
         readBodyMock.mockResolvedValue({
             ...makeValidBody(),
             mime_type: 'application/json',
+            file_kind_capability: 'v1',
         });
 
         await expect(handler(makeEvent())).resolves.toMatchObject({

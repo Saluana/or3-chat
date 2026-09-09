@@ -15,6 +15,21 @@
 import { getDb } from './client';
 import type { FileMeta } from './schema';
 import { nowSec, nextClock, getWriteTxTableNames } from './util';
+import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
+
+/**
+ * Image-library rows must carry trusted raster metadata. Keep accepting old
+ * rows without a `kind` field when their MIME is one of the supported raster
+ * formats, while generic files remain inert even if their MIME looks like an
+ * image.
+ */
+function isTrustedRasterMeta(meta: FileMeta): boolean {
+    const kind = (meta as unknown as { kind?: string }).kind;
+    return (
+        isSupportedRasterMimeType(meta.mime_type) &&
+        (kind === 'image' || kind === undefined)
+    );
+}
 
 // List image FileMeta records, newest first, with simple paging.
 // Filters: deleted !== true AND kind === 'image'.
@@ -40,9 +55,7 @@ export async function listImageMetasPaged(
         .orderBy('updated_at')
         .reverse()
         .filter(
-            (m) =>
-                m.deleted !== true &&
-                (m.kind === 'image' || m.mime_type.startsWith('image/'))
+            (m) => m.deleted !== true && isTrustedRasterMeta(m)
         )
         .offset(offset)
         .limit(limit)
@@ -71,9 +84,7 @@ export async function listDeletedImageMetasPaged(
         .orderBy('updated_at')
         .reverse()
         .filter(
-            (m) =>
-                m.deleted === true &&
-                (m.kind === 'image' || m.mime_type.startsWith('image/'))
+            (m) => m.deleted === true && isTrustedRasterMeta(m)
         )
         .offset(offset)
         .limit(limit)
@@ -89,9 +100,7 @@ export async function listAllImageMetas(deleted = false): Promise<FileMeta[]> {
         .orderBy('updated_at')
         .reverse()
         .filter(
-            (m) =>
-                m.deleted === deleted &&
-                (m.kind === 'image' || m.mime_type.startsWith('image/'))
+            (m) => m.deleted === deleted && isTrustedRasterMeta(m)
         )
         .toArray();
 }

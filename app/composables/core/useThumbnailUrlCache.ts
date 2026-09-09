@@ -1,3 +1,8 @@
+import {
+    classifyFileBlob,
+    isSupportedRasterMimeType,
+} from '~~/shared/files/file-kind';
+
 export interface ThumbState {
     status: 'ready' | 'error';
     url?: string;
@@ -55,7 +60,7 @@ function getGlobalCache(graceMs: number): GlobalThumbCache {
  *
  * Non-Goals:
  * - Does not persist thumbnails across reloads
- * - Does not validate blob contents
+ * - Only creates thumbnail URLs for verified raster image blobs
  *
  * @example
  * ```ts
@@ -127,7 +132,7 @@ export function useThumbnailUrlCache(opts: { graceMs?: number } = {}) {
     };
 
     const decodeImage = async (url: string, blob: Blob) => {
-        if (!blob.type.startsWith('image/') || typeof Image === 'undefined') {
+        if (!isSupportedRasterMimeType(blob.type) || typeof Image === 'undefined') {
             return;
         }
         const image = new Image();
@@ -154,6 +159,12 @@ export function useThumbnailUrlCache(opts: { graceMs?: number } = {}) {
                 if (!blob) return;
                 const url = URL.createObjectURL(blob);
                 try {
+                    const classification = await classifyFileBlob(blob);
+                    if (classification.kind !== 'image') {
+                        URL.revokeObjectURL(url);
+                        globalCache.cache.set(hash, { status: 'error' });
+                        return;
+                    }
                     await decodeImage(url, blob);
                 } catch {
                     URL.revokeObjectURL(url);

@@ -249,6 +249,82 @@ describe('POST /api/sync/push', () => {
         );
     });
 
+    it('rejects a batch containing a generic file before dispatch for an older writer', async () => {
+        const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue({
+            scope: { workspaceId: 'ws-1' },
+            ops: [{
+                id: 'pending-file-1',
+                tableName: 'file_meta',
+                operation: 'put',
+                pk: 'sha256:file',
+                payload: {
+                    hash: 'sha256:file',
+                    kind: 'file',
+                    mime_type: 'text/plain',
+                    size_bytes: 0,
+                    deleted: false,
+                    created_at: 1,
+                    updated_at: 1,
+                    clock: 1,
+                },
+                stamp: {
+                    ...STAMP_1,
+                    opId: 'a1b2c3d4-5678-4abc-8def-123456789012',
+                },
+                createdAt: 1,
+                attempts: 0,
+                status: 'pending',
+            }],
+        });
+
+        const failure = await handler(makeEvent()).catch((error: unknown) => error);
+        expect(failure).toMatchObject({
+            statusCode: 426,
+            message: 'Update OR3 Chat to use general files',
+        });
+        expect(pushMock).not.toHaveBeenCalled();
+    });
+
+    it('dispatches a generic file batch after advertising file-kind v1', async () => {
+        const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
+        const body = {
+            scope: { workspaceId: 'ws-1' },
+            fileKindCapability: 'v1' as const,
+            ops: [{
+                id: 'pending-file-2',
+                tableName: 'file_meta',
+                operation: 'put' as const,
+                pk: 'sha256:file',
+                payload: {
+                    hash: 'sha256:file',
+                    kind: 'file',
+                    mime_type: 'text/plain',
+                    size_bytes: 0,
+                    deleted: false,
+                    created_at: 1,
+                    updated_at: 1,
+                    clock: 1,
+                },
+                stamp: {
+                    ...STAMP_1,
+                    opId: 'a1b2c3d4-5678-4abc-8def-123456789013',
+                },
+                createdAt: 1,
+                attempts: 0,
+                status: 'pending' as const,
+            }],
+        };
+        readBodyMock.mockResolvedValue(body);
+
+        await expect(handler(makeEvent())).resolves.toMatchObject({
+            results: [{ opId: body.ops[0]!.stamp.opId, success: true }],
+        });
+        expect(pushMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+            ops: expect.any(Array),
+        }));
+    });
+
     it('returns 401 when unauthenticated or missing user/workspace', async () => {
         const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue(makeBaseBody());

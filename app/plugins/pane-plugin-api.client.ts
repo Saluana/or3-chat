@@ -16,6 +16,7 @@ import type { Ref } from 'vue';
 import type { PaneState } from '~/composables/core/useMultiPane';
 import { createPost, upsertPost, getPost, softDeletePost } from '~/db/posts';
 import { getDb } from '~/db/client';
+import { isInternalPostType } from '~~/shared/posts/visibility';
 import type { Post, PostCreate } from '~/db/schema';
 import type { TipTapDocument } from '~/types/database';
 
@@ -492,7 +493,7 @@ function makeApi(): PanePluginApi {
                 source,
             }: CreatePostOptions) {
                 if (!source) return err('missing_source', 'source required');
-                if (!postType || typeof postType !== 'string')
+                if (!postType || typeof postType !== 'string' || isInternalPostType(postType))
                     return err('invalid_post_type', 'postType required');
                 if (!title || typeof title !== 'string' || !title.trim())
                     return err('invalid_text', 'title required');
@@ -520,7 +521,7 @@ function makeApi(): PanePluginApi {
 
                 try {
                     const post = await getPost(id);
-                    if (!post) {
+                    if (!post || isInternalPostType((post as unknown as Post).postType)) {
                         return err('post_not_found', 'post not found');
                     }
 
@@ -547,7 +548,7 @@ function makeApi(): PanePluginApi {
 
                 try {
                     const existing = await getPost(id);
-                    if (!existing)
+                    if (!existing || isInternalPostType((existing as unknown as Post).postType) || (patch.postType && isInternalPostType(patch.postType)))
                         return err('post_not_found', 'post not found');
 
                     // getPost returns Post through getDb().posts.get
@@ -582,7 +583,7 @@ function makeApi(): PanePluginApi {
 
                 try {
                     const existing = await getPost(id);
-                    if (!existing)
+                    if (!existing || isInternalPostType((existing as unknown as Post).postType))
                         return err('post_not_found', 'post not found');
 
                     await softDeletePost(id);
@@ -597,7 +598,7 @@ function makeApi(): PanePluginApi {
             },
 
             async listByType({ postType, limit }: ListPostsByTypeOptions) {
-                if (!postType || typeof postType !== 'string')
+                if (!postType || typeof postType !== 'string' || isInternalPostType(postType))
                     return err('invalid_post_type', 'postType required');
 
                 try {

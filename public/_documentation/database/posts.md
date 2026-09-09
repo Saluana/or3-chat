@@ -57,3 +57,9 @@ Internal post types `or3:document-revision` and `or3:document-revision-chunk` (e
 -   Use `postType` to segment content (e.g., `'doc'` and `'prompt'` reuse this table via other modules).
 -   Normalize heavily structured `meta` objects before calling `createPost`; the helper will serialize for you but invalid JSON becomes `undefined`.
 -   Hooks are the right place to inject slug generation or analytics side effects.
+
+## Prepared plugin batches and private records
+
+Trusted client plugins can use `commitPreparedPostBatch` with a captured workspace database, a live `assertCurrent` guard, prepared `Post` records, and expected head content. Optional `expectedRecords` guards related approval records in the same transaction. Content, file-reference deltas, and captured pending sync operations commit together; a failed check rolls everything back. `immutableIds` rejects overwriting retained content. Each serialized post is limited to 192 KiB. Prepare IDs, hashes, and content before entering the transaction. This is local atomicity; remote sync still resolves individual records with LWW and may deliver dependencies out of order.
+
+Use the reserved `or3:plugin-private:` post-type prefix for source parts, receipts, proposals, and saves. The host excludes this prefix from generic post tools and command-palette indexing even while the owning plugin is disabled. A plugin can register a separate public project summary type. Private records remain included in backup and synchronization; the prefix is an integration boundary, not a sandbox against trusted host code.

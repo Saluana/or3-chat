@@ -29,14 +29,20 @@ import { recordUploadStart } from '../../utils/storage/metrics';
 import { setNoCacheHeaders } from '../../utils/headers';
 import { getWorkspaceStorageUsageSnapshot } from '../../utils/storage/quota';
 import { normalizeStorageHash } from '../../utils/storage/normalize-hash';
+import { classifyFileKind } from '~~/shared/files/file-kind';
+import { FILE_KIND_CAPABILITY } from '~~/shared/files/file-capability';
+import {
+    requireFileKindCapability,
+} from '../../utils/storage/file-kind-capability';
 
 const BodySchema = z.object({
     workspace_id: z.string().trim().min(1).max(256),
     hash: z.string().trim().min(1).max(256),
     mime_type: z.string().trim().min(1).max(255),
-    size_bytes: z.number().int().positive(),
+    size_bytes: z.number().int().nonnegative(),
     expires_in_ms: z.number().int().min(1).max(86_400_000).optional(),
     disposition: z.enum(['inline', 'attachment']).optional(),
+    file_kind_capability: z.literal(FILE_KIND_CAPABILITY).optional(),
 });
 
 function normalizeMimeType(value: string): string {
@@ -65,12 +71,14 @@ function toPositiveFiniteNumber(value: unknown): number | undefined {
  * Behavior:
  * 1. Checks permissions.
  * 2. Checks strict file size limit (from config).
- * 3. Checks allowed MIME types allowlist.
+ * 3. Checks the built-in MIME allowlist unless the explicit admin
+ *    `allowAnyFileType` setting is enabled.
  * 4. Returns signed URL via registered StorageGatewayAdapter.
  *
  * Constraints:
  * - Max file size: `or3Config.limits.maxCloudFileSizeBytes`.
- * - Allowed Types: Images, PDF, Text/Markdown.
+ * - Allowed Types: Images, PDF, Text/Markdown by default.
+ * - Empty files are valid when their size is zero.
  */
 export default defineEventHandler(async (event) => {
     if (!isSsrAuthEnabled(event) || !isStorageEnabled(event)) {
@@ -98,6 +106,7 @@ export default defineEventHandler(async (event) => {
     const storageConfig = runtimeConfig.storage as
         | {
               allowedMimeTypes?: unknown;
+              allowAnyFileType?: unknown;
               workspaceQuotaBytes?: unknown;
           }
         | undefined;
@@ -127,11 +136,16 @@ export default defineEventHandler(async (event) => {
     );
     const requestedMime = normalizeMimeType(body.data.mime_type);
 
-    if (!allowedMimeTypes.has(requestedMime)) {
+    const allowAnyFileType = storageConfig?.allowAnyFileType === true;
+    if (!allowAnyFileType && !allowedMimeTypes.has(requestedMime)) {
         throw createError({
             statusCode: 415,
             statusMessage: `MIME type ${body.data.mime_type} not allowed`
         });
+    }
+
+    if (classifyFileKind(requestedMime) === 'file') {
+        requireFileKindCapability(body.data.file_kind_capability);
     }
 
     // Optional per-workspace storage quota enforcement

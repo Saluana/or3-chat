@@ -29,6 +29,7 @@
  */
 
 import { parseFileHashes } from '~/db/files-util';
+import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
 /**
  * Purpose:
@@ -172,8 +173,18 @@ function getFilesMod(): Promise<typeof import('~/db/files')> {
 // Remote / blob URL hydration cache shares same map (keyed by original ref string)
 // We intentionally do not distinguish hash vs URL; collisions are unlikely and harmless
 // because a content hash would never start with http/blob.
+function dataUrlMime(value: string): string {
+    return /^data:([^;,]+)/iu.exec(value)?.[1]?.trim().toLowerCase() ?? '';
+}
+
+function isSupportedRasterDataUrl(value: string): boolean {
+    return isSupportedRasterMimeType(dataUrlMime(value));
+}
+
 async function remoteRefToDataUrl(ref: string): Promise<string | null> {
-    if (ref.startsWith('data:image/')) return ref; // already data URL
+    if (ref.startsWith('data:')) {
+        return isSupportedRasterDataUrl(ref) ? ref : null;
+    }
     if (!/^https?:|^blob:/.test(ref)) return null;
     if (dataUrlCache.has(ref)) return dataUrlCache.get(ref)!;
     if (inflight.has(ref)) return inflight.get(ref)!;
@@ -188,6 +199,7 @@ async function remoteRefToDataUrl(ref: string): Promise<string | null> {
             // Basic guardrail: cap at ~5MB to avoid huge token usage
             if (blob.size > 5 * 1024 * 1024) return null;
             const dataUrl = await blobToDataUrl(blob);
+            if (!isSupportedRasterDataUrl(dataUrl)) return null;
             dataUrlCache.set(ref, dataUrl);
             pruneCache(dataUrlCache);
             return dataUrl;
@@ -626,9 +638,13 @@ export async function buildOpenRouterMessages(
         for (const img of imgs) {
             const inlineImage = inlineImageCandidates.get(img.hash);
             if (inlineImage) {
-                const mediaType = inlineImage.mediaType?.startsWith('image/')
-                    ? inlineImage.mediaType
-                    : 'image/png';
+                if (inlineImage.mediaType && !isSupportedRasterMimeType(inlineImage.mediaType)) {
+                    throw new AttachmentHydrationError({
+                        messageIndex: i,
+                        reason: 'unsupported',
+                    });
+                }
+                const mediaType = inlineImage.mediaType || 'image/png';
                 let dataUrl: string;
                 try {
                     if (!isBinaryAttachmentData(inlineImage.data)) {
@@ -647,9 +663,9 @@ export async function buildOpenRouterMessages(
                 parts.push({ type: 'image_url', image_url: { url: dataUrl } });
                 continue;
             }
-            // Quick allow path: already a data image URL
-            if (img.hash.startsWith('data:image/')) {
-                if (!hasUsableDataUrl(img.hash)) {
+            // Quick allow path: already a supported raster data URL
+            if (img.hash.startsWith('data:')) {
+                if (!hasUsableDataUrl(img.hash) || !isSupportedRasterDataUrl(img.hash)) {
                     throw new AttachmentHydrationError({
                         messageIndex: i,
                         reason: 'invalid',
@@ -658,15 +674,28 @@ export async function buildOpenRouterMessages(
                 parts.push({ type: 'image_url', image_url: { url: img.hash } });
                 continue;
             }
-            // Remote URL that looks like an image (basic heuristic)
+            // Remote URL that looks like an image (basic heuristic). Fetch it
+            // through the bounded path so the response MIME is checked before
+            // it becomes a model image part; never pass an arbitrary remote
+            // active-content URL directly to the model.
             if (
                 /^https?:/i.test(img.hash) &&
                 /(\.png|\.jpe?g|\.gif|\.webp|\.avif|\?)/i.test(img.hash)
             ) {
-                parts.push({ type: 'image_url', image_url: { url: img.hash } });
+                const remote = await remoteRefToDataUrl(img.hash);
+                if (!remote || !isSupportedRasterDataUrl(remote)) {
+                    throw new AttachmentHydrationError({
+                        messageIndex: i,
+                        reason: remote ? 'not-image' : 'unavailable',
+                    });
+                }
+                parts.push({ type: 'image_url', image_url: { url: remote } });
                 continue;
             }
-            // If it's a local hash (not http/data/blob) inspect metadata to confirm mime starts with image/
+            // If it's a local hash (not http/data/blob), inspect the persisted
+            // trusted kind and exact raster MIME before hydrating it as an
+            // image. Generic files can retain an image-looking MIME for
+            // download purposes, but must never become model image parts.
             const looksLocal = !/^https?:|^data:|^blob:/i.test(img.hash);
             let knownNonImage = false;
             if (looksLocal) {
@@ -685,8 +714,9 @@ export async function buildOpenRouterMessages(
                             : null;
                     if (
                         meta &&
-                        meta.kind !== 'image' &&
-                        !(metaMime && metaMime.startsWith('image/'))
+                        (meta.kind !== 'image' ||
+                            !metaMime ||
+                            !isSupportedRasterMimeType(metaMime))
                     ) {
                         knownNonImage = true;
                     }
@@ -705,7 +735,7 @@ export async function buildOpenRouterMessages(
             // At this point either it's declared an image or remote unknown -> attempt hydration
             let dataUrl = await hydrateHashToDataUrl(img.hash);
             if (!dataUrl) dataUrl = await remoteRefToDataUrl(img.hash);
-            if (dataUrl && dataUrl.startsWith('data:image/')) {
+            if (dataUrl && isSupportedRasterDataUrl(dataUrl)) {
                 if (!hasUsableDataUrl(dataUrl)) {
                     throw new AttachmentHydrationError({
                         messageIndex: i,

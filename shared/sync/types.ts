@@ -5,6 +5,8 @@
  * These types define the contract between client sync engine and SyncProviders.
  */
 
+import type { FileKindCapability } from '../files/file-capability';
+
 // ============================================================
 // CORE TYPES
 // ============================================================
@@ -88,6 +90,8 @@ export interface PullRequest {
     cursor: number; // Server version cursor
     limit: number;
     tables?: string[];
+    /** Reader capability required before generic file metadata is returned. */
+    fileKindCapability?: FileKindCapability;
 }
 
 /**
@@ -122,6 +126,8 @@ export interface SnapshotRequest {
     /** Opaque provider token; callers return it unchanged. */
     pageToken?: string;
     tables?: string[];
+    /** Reader capability required before generic file metadata is returned. */
+    fileKindCapability?: FileKindCapability;
 }
 
 export interface SnapshotRevision {
@@ -165,6 +171,8 @@ export interface SnapshotResponse {
 export interface PushBatch {
     scope: SyncScope;
     ops: PendingOp[];
+    /** Writer capability required before generic file metadata is accepted. */
+    fileKindCapability?: FileKindCapability;
 }
 
 /**

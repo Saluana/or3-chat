@@ -1,6 +1,7 @@
 import { getFileBlob, getFileMeta } from '~/db/files';
 import { parseHashes } from '~/utils/files/attachments';
 import { useThumbnailUrlCache } from '~/composables/core/useThumbnailUrlCache';
+import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
 type MessageWithFiles = { file_hashes?: unknown };
 type PrefetchRange = { startIndex: number; endIndex: number };
@@ -52,9 +53,14 @@ export function createMessageMediaPrefetchController(
     };
 
     const isImageMeta = (meta: Awaited<ReturnType<typeof loadMeta>>) => {
-        if (!meta) return true;
-        if (meta.kind) return meta.kind === 'image';
-        return meta.mime_type?.startsWith('image/') ?? true;
+        if (!meta) return false;
+        if (meta.kind) {
+            return (
+                meta.kind === 'image' &&
+                (!meta.mime_type || isSupportedRasterMimeType(meta.mime_type))
+            );
+        }
+        return isSupportedRasterMimeType(meta.mime_type ?? '');
     };
 
     const load = async (hash: string, taskEpoch: number) => {

@@ -26,7 +26,7 @@ import { ref, computed, watch, onScopeDispose, getCurrentScope } from 'vue';
 import { useToast, useAppConfig, useRuntimeConfig } from '#imports';
 import { nowSec, newId, getWriteTxTableNames } from '~/db/util';
 import { type Message } from '~/db';
-import { getDb, type Or3DB } from '~/db/client';
+import { getDb, getActiveWorkspaceId, type Or3DB } from '~/db/client';
 import { serializeFileHashes } from '~/db/files-util';
 import { normalizeFileUrl } from '~/utils/chat/useAi-internal/files';
 import {
@@ -288,6 +288,7 @@ export function useChat(
     type ChatRequestScope = {
         requestId: string;
         originDb: Or3DB;
+        workspaceId: string;
         accumulator: typeof streamAcc;
         /** Thread selected when the request was admitted (or created for it). */
         threadId?: string;
@@ -296,11 +297,21 @@ export function useChat(
         settled: Promise<void>;
         resolveSettled: () => void;
         streamId?: string;
+        /** Assistant row whose detached workflow may finish after sendMessage. */
+        workflowMessageId?: string;
         abortController: AbortController | null;
         toolLedger: Map<string, ToolLedgerEntry>;
         persistAssistant?: ReturnType<typeof makeAssistantPersister>;
     };
     let activeRequestScope: ChatRequestScope | null = null;
+    type WorkflowMessageScope = Pick<
+        ChatRequestScope,
+        'originDb' | 'workspaceId' | 'threadId'
+    >;
+    // Workflow execution is detached from sendMessage, so its terminal hook
+    // can run after activeRequestScope has been cleared. Keep only the
+    // immutable DB/workspace/thread authority needed to hydrate that result.
+    const workflowMessageScopes = new Map<string, WorkflowMessageScope>();
     const backgroundJobId = ref<string | null>(null);
     const backgroundJobMode = ref<'none' | 'background'>('none');
     const backgroundJobInfo = ref<{
@@ -485,6 +496,43 @@ export function useChat(
         finalOutput: string
     ) {
         if (!messageId || !finalOutput) return;
+
+        const workflowScope = workflowMessageScopes.get(messageId);
+        // A terminal event is global. Never fall back to the currently active
+        // request: a late event for an old message could otherwise mutate a
+        // different request or workspace that reused its id.
+        if (!workflowScope) return;
+        const originDb = workflowScope.originDb;
+        const originWorkspaceId = workflowScope.workspaceId;
+        const originThreadId = workflowScope.threadId;
+        if (!originThreadId || threadIdRef.value !== originThreadId) return;
+
+        const ownsCurrentView = () =>
+            threadIdRef.value === originThreadId &&
+            getDb() === originDb &&
+            (getActiveWorkspaceId() ?? 'local') === originWorkspaceId;
+
+        // Read the persisted row before changing either projection. Generated
+        // workflow images append their hashes in this row after the workflow
+        // message placeholder was rendered.
+        let persistedRow: StoredMessage | null = null;
+        try {
+            const row = (await originDb.messages.get(
+                messageId
+            )) as StoredMessage | undefined;
+            if (row && row.thread_id !== originThreadId) return;
+            persistedRow = row ?? null;
+        } catch {
+            // Preserve the existing live text update when a read is
+            // temporarily unavailable; the durable row remains authoritative.
+        }
+        if (!ownsCurrentView()) return;
+
+        const persistedFileHashes =
+            persistedRow?.file_hashes !== null &&
+            persistedRow?.file_hashes !== undefined
+                ? persistedRow.file_hashes
+                : undefined;
         let updated = false;
 
         const rawIdx = rawMessages.value.findIndex((m) => m.id === messageId);
@@ -494,6 +542,8 @@ export function useChat(
                 ...existingRaw,
                 role: existingRaw.role,
                 content: finalOutput,
+                file_hashes:
+                    persistedFileHashes ?? existingRaw.file_hashes,
             };
             rawMessages.value.splice(rawIdx, 1, next);
             updated = true;
@@ -502,15 +552,24 @@ export function useChat(
         const uiIdx = messages.value.findIndex((m) => m.id === messageId);
         const existingUi = uiIdx !== -1 ? messages.value[uiIdx] : null;
         if (existingUi) {
-            const next: UiChatMessage = { ...existingUi, text: finalOutput };
+            const liveFileHashes =
+                persistedFileHashes ?? existingRaw?.file_hashes;
+            const next: UiChatMessage = {
+                ...existingUi,
+                text: finalOutput,
+                file_hashes:
+                    liveFileHashes !== null && liveFileHashes !== undefined
+                        ? parseHashes(liveFileHashes)
+                        : existingUi.file_hashes,
+            };
             messages.value.splice(uiIdx, 1, next);
             updated = true;
         }
 
-        if (!updated && threadIdRef.value) {
+        if (!updated && persistedRow) {
             try {
-                const row = await getDb().messages.get(messageId);
-                if (row && row.thread_id === threadIdRef.value) {
+                const row = persistedRow;
+                if (row.thread_id === originThreadId) {
                     const data =
                         (row.data as Record<string, unknown> | null) || null;
                     const content =
@@ -579,11 +638,17 @@ export function useChat(
                     typeof state.finalOutput === 'string'
                         ? state.finalOutput
                         : '';
-                if (!isDone || !finalOutput) return;
+                if (!isDone) return;
+                if (!finalOutput) {
+                    workflowMessageScopes.delete(payload.messageId);
+                    return;
+                }
                 void applyWorkflowResultToMessages(
                     payload.messageId,
                     finalOutput
-                );
+                ).finally(() => {
+                    workflowMessageScopes.delete(payload.messageId);
+                });
             }
         )
     );
@@ -1277,6 +1342,7 @@ export function useChat(
         const requestScope: ChatRequestScope = {
             requestId,
             originDb: getDb(),
+            workspaceId: getActiveWorkspaceId() ?? 'local',
             accumulator: streamAcc,
             threadId: threadIdRef.value,
             cancelled: false,
@@ -1333,6 +1399,12 @@ export function useChat(
                 requestState.value = { status: 'terminal', requestId, result };
             }
             requestScope.resolveSettled();
+            if (
+                result.status !== 'detached' &&
+                requestScope.workflowMessageId
+            ) {
+                workflowMessageScopes.delete(requestScope.workflowMessageId);
+            }
         }
         return result;
     }
@@ -1855,6 +1927,16 @@ export function useChat(
             );
             requestScope.persistAssistant = persistAssistant;
 
+            // Workflow execution returns control to the caller immediately,
+            // so retain the request's DB/thread authority after sendMessage
+            // detaches and clears activeRequestScope.
+            workflowMessageScopes.set(assistantDbMsg.id, {
+                originDb: requestScope.originDb,
+                workspaceId: requestScope.workspaceId,
+                threadId: requestThreadId,
+            });
+            requestScope.workflowMessageId = assistantDbMsg.id;
+
             await hooks.doAction('ai.chat.send:action:before', {
                 threadId: requestThreadId,
                 modelId,
@@ -1866,7 +1948,7 @@ export function useChat(
             });
 
             const toolRegistry = useToolRegistry();
-            const enabledToolDefs = toolRegistry.getEnabledDefinitions();
+            const enabledToolDefs = toolRegistry.getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: requestThreadId });
 
             // Track tool calls across all loop iterations (persists state)
             const activeToolCalls = new Map<string, ToolCallInfo>();
@@ -1924,6 +2006,10 @@ export function useChat(
                     assistantMessageId: assistantDbMsg.id,
                 };
             }
+
+            // This request is going through the regular model path; there is
+            // no detached workflow completion that needs the retained scope.
+            workflowMessageScopes.delete(assistantDbMsg.id);
 
             // Also skip if messages array is empty (e.g., workflow returned empty)
             if (orMessages.length === 0) {
@@ -2270,6 +2356,7 @@ export function useChat(
                 streamId: newStreamId,
                 threadId: requestThreadId,
                 streamAcc: requestScope.accumulator,
+                workspaceId: requestScope.workspaceId,
                 hooks,
                 toolRegistry,
                 persistAssistant,
@@ -2741,6 +2828,7 @@ export function useChat(
     function dispose() {
         if (disposed) return;
         disposed = true;
+        workflowMessageScopes.clear();
         const keepTracking = Boolean(
             backgroundJobId.value ||
             backgroundJobMode.value !== 'none' ||

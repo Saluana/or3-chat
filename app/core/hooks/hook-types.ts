@@ -64,6 +64,7 @@ import type {
     ThreadCreateEntity,
     ThreadEntity,
 } from '~~/shared/hooks/hook-domain-types';
+import type { FileKind } from '~~/shared/files/file-kind';
 
 // Keep these names explicit: Nuxt's auto-import scanner does not follow a
 // wildcard type re-export, and V1 plugins rely on these public type imports.
@@ -325,7 +326,7 @@ export interface FilesAttachInputPayload {
     name: string;
     mime: string;
     size: number;
-    kind: 'image' | 'pdf';
+    kind: FileKind;
 }
 
 // ============================================================================

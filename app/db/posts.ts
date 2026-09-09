@@ -23,14 +23,69 @@ import {
     type PostCreate,
 } from './schema';
 import type { PostEntity } from '../core/hooks/hook-types';
+import { changeRefCount } from './files';
+import { parseFileHashes } from './files-util';
+import { isInternalPostType } from '../../shared/posts/visibility';
+export { INTERNAL_POST_TYPES } from '../../shared/posts/visibility';
 
-export const INTERNAL_POST_TYPES = new Set([
-    'or3:document-revision',
-    'or3:document-revision-chunk',
-]);
+/** Prepared plugin records and their captured sync operations share one local commit.
+ * This provides local atomicity only; remote record delivery is still LWW.
+ */
+export async function commitPreparedPostBatch(input: {
+    db: ReturnType<typeof getDb>;
+    assertCurrent: () => void;
+    expected: { id: string; content: string | null };
+    expectedRecords?: { id: string; content: string | null }[];
+    posts: Post[];
+    immutableIds: string[];
+}): Promise<void> {
+    input.assertCurrent();
+    if (input.posts.length > 515 || new Set(input.posts.map(p => p.id)).size !== input.posts.length) {
+        throw new Error('POST_BATCH_LIMIT: Invalid prepared batch.');
+    }
+    const hooks = useHooks();
+    const prepared: Post[] = [];
+    for (const post of input.posts) {
+        const filtered = await hooks.applyFilters('db.posts.upsert:filter:input', structuredClone(post));
+        const value = PostSchema.parse(filtered);
+        if (value.id !== post.id || value.postType !== post.postType || value.content !== post.content || value.file_hashes !== post.file_hashes) {
+            throw new Error('POST_BATCH_FILTER: A host filter changed an immutable prepared payload.');
+        }
+        if (new TextEncoder().encode(JSON.stringify(value)).length > 192 * 1024) throw new Error('POST_BATCH_SIZE: Split this document into smaller parts.');
+        prepared.push(value);
+        await hooks.doAction('db.posts.upsert:action:before', { entity: toPostEntity(value), tableName: 'posts' });
+    }
+    const immutable = new Set(input.immutableIds);
+    await input.db.transaction('rw', getWriteTxTableNames(input.db, ['posts', 'file_meta']), async () => {
+        input.assertCurrent();
+        for (const expected of [input.expected, ...(input.expectedRecords ?? [])]) {
+            const head = await input.db.posts.get(expected.id);
+            if ((head?.content ?? null) !== expected.content || head?.deleted) throw new Error('STALE_REVISION: The project changed. Reload or preserve a copy.');
+        }
+        for (const value of prepared) {
+            const previous = await input.db.posts.get(value.id);
+            if (previous && immutable.has(value.id)) throw new Error('IMMUTABLE_RECORD: This content version already exists.');
+            const oldHashes = new Set(parseFileHashes(previous?.file_hashes));
+            const newHashes = new Set(parseFileHashes(value.file_hashes));
+            for (const hash of newHashes) if (!oldHashes.has(hash)) {
+                const meta = await input.db.file_meta.get(hash);
+                if (!meta || meta.deleted) throw new Error(`MISSING_FILE: ${hash}`);
+                await changeRefCount(hash, 1, input.db);
+            }
+            for (const hash of oldHashes) if (!newHashes.has(hash)) await changeRefCount(hash, -1, input.db);
+            await input.db.posts.put({ ...value, clock: nextClock(previous?.clock ?? value.clock) });
+        }
+        input.assertCurrent();
+    });
+    // A notification failure cannot turn a committed transaction into a failed save.
+    for (const post of prepared) {
+        try { await hooks.doAction('db.posts.upsert:action:after', { entity: toPostEntity(post), tableName: 'posts' }); }
+        catch (error) { console.warn('[posts] Prepared batch committed; after-commit notification failed', error); }
+    }
+}
 
 function isPublicPost(post: Post): boolean {
-    return !INTERNAL_POST_TYPES.has(post.postType);
+    return !isInternalPostType(post.postType);
 }
 
 // Convert Post schema type to PostEntity for hooks (where applicable)
@@ -193,7 +248,9 @@ export function getPost(id: string) {
         entity: 'posts',
         action: 'get',
     }).then((res) =>
-        res ? hooks.applyFilters('db.posts.get:filter:output', res) : undefined
+        res && !isInternalPostType(res.postType)
+            ? hooks.applyFilters('db.posts.get:filter:output', res)
+            : undefined
     );
 }
 

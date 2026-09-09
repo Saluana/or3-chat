@@ -151,6 +151,7 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 | `storage.enabled`             | `OR3_STORAGE_ENABLED` (or `OR3_CLOUD_STORAGE_ENABLED`) | `true` (if auth)         | Enable cloud storage                          |
 | `storage.provider`            | `NUXT_PUBLIC_STORAGE_PROVIDER`                         | `"convex"`               | Backend (`fs` / `convex` / `s3` / `custom`)   |
 | `storage.allowedMimeTypes`    | `OR3_STORAGE_ALLOWED_MIME_TYPES`                       | image/pdf/text allowlist | Comma-separated upload MIME allowlist         |
+| `storage.allowAnyFileType`    | `OR3_STORAGE_ALLOW_ANY_FILE_TYPE`                      | `false`                  | Explicitly admit MIME types outside the allowlist |
 | `storage.workspaceQuotaBytes` | `OR3_STORAGE_WORKSPACE_QUOTA_BYTES`                    | unset                    | Optional per-workspace storage quota in bytes |
 | `storage.gcRetentionSeconds`  | `OR3_STORAGE_GC_RETENTION_SECONDS`                     | `2592000`                | Default retention used by storage GC          |
 | `storage.gcCooldownMs`        | `OR3_STORAGE_GC_COOLDOWN_MS`                           | `60000`                  | Cooldown between manual storage GC runs       |

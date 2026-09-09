@@ -1,4 +1,8 @@
-import { classifyKind, getMaxFileBytes } from '~/components/chat/file-upload-utils';
+import { getMaxFileBytes } from '~/components/chat/file-upload-utils';
+import {
+    classifyFileKind,
+    isSupportedRasterMimeType,
+} from '~~/shared/files/file-kind';
 
 export const MAX_DOCUMENT_AI_ATTACHMENTS = 4;
 
@@ -34,7 +38,8 @@ export function validateDocumentAiAttachment(
         throw new Error('Unsupported attachment kind.');
     }
     const mime = String(attachment.mime ?? '').trim().toLowerCase();
-    const classified = classifyKind(mime);
+    const classifiedKind = classifyFileKind(mime);
+    const classified = classifiedKind === 'file' ? null : classifiedKind;
     if (classified !== attachment.kind) {
         throw new Error(`Attachment “${attachment.name}” mime type does not match its kind.`);
     }
@@ -45,7 +50,7 @@ export function validateDocumentAiAttachment(
     }
     const dataMime = String(match[1] ?? '').trim().toLowerCase();
     if (attachment.kind === 'image') {
-        if (!dataMime.startsWith('image/')) {
+        if (!isSupportedRasterMimeType(dataMime)) {
             throw new Error(`Attachment “${attachment.name}” is not an image data URL.`);
         }
     } else if (dataMime !== 'application/pdf') {

@@ -297,6 +297,10 @@ export function buildOr3CloudConfigFromEnv(
                       .map((mime) => mime.trim())
                       .filter(Boolean)
                 : undefined,
+            allowAnyFileType: readEnvBoolean(
+                env.OR3_STORAGE_ALLOW_ANY_FILE_TYPE,
+                false,
+            ),
             workspaceQuotaBytes: envNum(env.OR3_STORAGE_WORKSPACE_QUOTA_BYTES),
             gcRetentionSeconds: envNum(env.OR3_STORAGE_GC_RETENTION_SECONDS),
             gcCooldownMs: envNum(env.OR3_STORAGE_GC_COOLDOWN_MS),

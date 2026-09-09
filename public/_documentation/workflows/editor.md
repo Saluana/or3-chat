@@ -41,6 +41,15 @@ Provider failures preserve OpenRouter's upstream error details when available,
 so a rejected retry identifies the provider reason instead of reporting only a
 generic failure.
 
+### Generated images
+
+Workflows that use a catalog model with image output stay on the foreground
+execution path so the generated image is stored as a local file attachment on
+the workflow message. The attachment appears when the result arrives and is
+restored after a reload. Text-only workflows can still use background
+execution when it is enabled; workflows with an unknown or missing model
+reference stay in the foreground until their output capability is known.
+
 ## Workflow browser
 
 The Workflows sidebar groups saved workflows by update date using the same row, timestamp, selection, and overflow-action patterns as Home. Each row shows the workflow name and a short description so its purpose is visible before opening it.
@@ -54,6 +63,10 @@ Nodes are selected with a click and moved by dragging. In Pan mode, drag empty c
 Connection handles expose their purpose with accessible labels. Drag an output handle onto empty canvas to choose and automatically connect a compatible common node. Double-click empty canvas to open the same quick-add menu without creating a connection. Edges use arrowheads to show execution direction.
 
 Validation issues appear directly on affected nodes. Activating the issue indicator opens that node in the inspector.
+
+## Agent tool selection
+
+An explicit empty tool selection disables tools for that agent. Selecting tools sends only those tools; older programmatic nodes that omit the `tools` field retain inherited global tools. Image-only models should have no tools selected and use the native backend. The optional Responses backend requires a host-provided adapter; selecting it does not install or configure that adapter.
 
 ## Agent context and prompt caching
 
@@ -81,4 +94,4 @@ section; leaving it blank uses the provider's model limit.
 
 ## Local package development
 
-When a sibling `or3-workflows` checkout exists, `nuxt.config.ts` aliases `or3-workflow-core`, `or3-workflow-vue`, and the workflow stylesheet to package source. Nuxt therefore hot-reloads workflow component and style changes without publishing or rebuilding the registry package. Installed package versions remain the fallback for generated projects and deployments without the sibling checkout.
+When `OR3_USE_LOCAL_PACKAGES=true` and a sibling `or3-workflows` checkout exists, `nuxt.config.ts` aliases `or3-workflow-core`, `or3-workflow-vue`, and the workflow stylesheet to package source. Nuxt therefore hot-reloads workflow component and style changes without publishing or rebuilding the registry package. Installed package versions remain the fallback for generated projects and deployments without the sibling checkout.

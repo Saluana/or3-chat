@@ -26,6 +26,7 @@ import type {
     SnapshotRequest,
     SnapshotResponse,
 } from '~~/shared/sync/types';
+import type { FileKind } from '~~/shared/files/file-kind';
 
 export type CanonicalStorageQueryKind =
     | 'live_metadata'
@@ -50,6 +51,10 @@ export interface CanonicalStorageMetadataRecord {
     hash: string;
     sizeBytes: number;
     storageId?: string;
+    /** Canonical metadata used to apply safe download response policy. */
+    mimeType?: string;
+    name?: string;
+    fileKind?: FileKind;
     updatedAt: number;
 }
 

@@ -201,13 +201,59 @@ describe('buildOpenRouterMessages attachment hydration', () => {
         });
     });
 
+    it('rejects an inline SVG data URL as an image model part', async () => {
+        await expect(buildOpenRouterMessages([
+            {
+                role: 'user',
+                content: [
+                    {
+                        type: 'image',
+                        image: 'data:image/svg+xml;base64,PHN2Zy8+',
+                        mediaType: 'image/svg+xml',
+                    },
+                ],
+            },
+        ])).rejects.toMatchObject({
+            name: 'AttachmentHydrationError',
+            reason: 'invalid',
+        });
+    });
+
+    it('does not pass an active remote image response to the model', async () => {
+        const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+            new Response('<svg/>', {
+                status: 200,
+                headers: { 'content-type': 'image/svg+xml' },
+            }),
+        );
+
+        await expect(buildOpenRouterMessages([
+            {
+                role: 'user',
+                content: [{
+                    type: 'image',
+                    image: 'https://cdn.example.test/preview.png?active=1',
+                    mediaType: 'image/png',
+                }],
+            },
+        ])).rejects.toMatchObject({
+            name: 'AttachmentHydrationError',
+            reason: 'unavailable',
+        });
+
+        fetchSpy.mockRestore();
+    });
+
     it('hydrates an inline image hash instead of dropping it', async () => {
         getFileMeta.mockResolvedValueOnce({
             kind: 'image',
             mime_type: 'image/png',
         });
         getFileBlob.mockResolvedValueOnce(
-            new Blob(['png bytes'], { type: 'image/png' })
+            new Blob(
+                [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+                { type: 'image/png' }
+            )
         );
 
         const result = await buildOpenRouterMessages([
@@ -229,6 +275,49 @@ describe('buildOpenRouterMessages attachment hydration', () => {
                 url: expect.stringMatching(/^data:image\/png;base64,/),
             },
         });
+    });
+
+    it('does not hydrate a generic SVG-looking file as a model image', async () => {
+        getFileMeta.mockResolvedValueOnce({
+            kind: 'file',
+            mime_type: 'image/svg+xml',
+        });
+
+        const result = await buildOpenRouterMessages([
+            {
+                role: 'user',
+                content: 'Keep this attachment as a file',
+                file_hashes: JSON.stringify(['generic-svg-hash']),
+            },
+        ]);
+
+        expect(result[0]?.content).toEqual([
+            { type: 'text', text: 'Keep this attachment as a file' },
+        ]);
+        expect(getFileBlob).not.toHaveBeenCalled();
+    });
+
+    it('does not hydrate a generic file with a raster-looking MIME', async () => {
+        getFileMeta.mockResolvedValueOnce({
+            kind: 'file',
+            mime_type: 'image/png',
+        });
+
+        const result = await buildOpenRouterMessages([
+            {
+                role: 'user',
+                content: 'Do not send this generic file as an image',
+                file_hashes: JSON.stringify(['generic-png-hash']),
+            },
+        ]);
+
+        expect(result[0]?.content).toEqual([
+            {
+                type: 'text',
+                text: 'Do not send this generic file as an image',
+            },
+        ]);
+        expect(getFileBlob).not.toHaveBeenCalled();
     });
 
     it('fails when a selected image hash cannot be hydrated', async () => {

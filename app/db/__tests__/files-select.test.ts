@@ -134,6 +134,18 @@ describe('files-select helpers', () => {
                     mime_type: 'application/pdf',
                 }),
                 baseMeta({
+                    hash: 'skip-generic-raster-mime',
+                    updated_at: 7,
+                    kind: 'file',
+                    mime_type: 'image/png',
+                }),
+                baseMeta({
+                    hash: 'skip-svg',
+                    updated_at: 8,
+                    kind: 'file',
+                    mime_type: 'image/svg+xml',
+                }),
+                baseMeta({
                     hash: 'keep-3',
                     updated_at: 4,
                     mime_type: 'image/jpeg',
@@ -159,6 +171,11 @@ describe('files-select helpers', () => {
                     hash: 'pdf',
                     kind: 'pdf',
                     mime_type: 'application/pdf',
+                }),
+                baseMeta({
+                    hash: 'generic-raster-mime',
+                    kind: 'file',
+                    mime_type: 'image/jpeg',
                 }),
             ]);
 

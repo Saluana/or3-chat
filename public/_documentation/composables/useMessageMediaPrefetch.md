@@ -11,7 +11,9 @@ Controller that warms image blobs for a virtual window of messages without mount
 -   `dispose()` — reset and mark the controller as finished.
 -   `whenIdle()` — resolves once no loads are queued or in flight.
 
-Loading is bounded by `concurrency` (default 4). Non-image metadata is skipped. Loaded blobs are stored in the thumbnail URL cache.
+Loading is bounded by `concurrency` (default 4). Non-image metadata, including
+generic files with an `image/*` MIME, is skipped. Loaded verified raster blobs
+are stored in the thumbnail URL cache.
 
 ## Options
 

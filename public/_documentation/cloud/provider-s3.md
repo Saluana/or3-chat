@@ -93,6 +93,11 @@ Downloads are similar via `POST /api/storage/presign-download` + direct `GET`.
 The gateway first requires a live, committed `file_meta` row in the requested
 workspace and then verifies both the S3 object and its commit marker before
 signing; a raw key/hash or pending upload cannot be downloaded.
+The gateway supplies a canonical response MIME and disposition: generic files
+are signed as `application/octet-stream` attachments, while supported raster
+images and PDFs may be served inline. Direct S3 responses cannot add
+`X-Content-Type-Options`, so the attachment/octet-stream policy is applied in
+the signed request itself.
 `POST /api/storage/delete` derives the object key from the authorized workspace
 and hash, rejects a mismatched `storage_id`, and idempotently removes the blob
 and commit marker.

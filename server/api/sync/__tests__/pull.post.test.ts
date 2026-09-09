@@ -218,6 +218,83 @@ describe('POST /api/sync/pull', () => {
         expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'sync:pull');
     });
 
+    it('rejects a generic file change for an older reader before returning the page', async () => {
+        const handler = (await import('../pull.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue(makeValidBody());
+        pullMock.mockResolvedValue({
+            changes: [{
+                tableName: 'file_meta',
+                pk: 'sha256:file',
+                op: 'put',
+                payload: {
+                    hash: 'sha256:file',
+                    kind: 'file',
+                    mime_type: 'text/plain',
+                    size_bytes: 1,
+                    deleted: false,
+                    created_at: 1,
+                    updated_at: 1,
+                    clock: 1,
+                },
+                serverVersion: 6,
+                stamp: {
+                    clock: 1,
+                    hlc: '1:1:dev',
+                    deviceId: 'dev',
+                    opId: 'a1b2c3d4-5678-4abc-8def-123456789010',
+                },
+            }],
+            nextCursor: 6,
+            hasMore: false,
+            oldestRetainedVersion: 0,
+            requiresSnapshot: false,
+        });
+
+        const failure = await handler(makeEvent()).catch((error: unknown) => error);
+        expect(failure).toMatchObject({ statusCode: 426 });
+        expect(failure).toHaveProperty('message', 'Update OR3 Chat to use general files');
+        expect(pullMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns a generic file change to a reader advertising file-kind v1', async () => {
+        const handler = (await import('../pull.post')).default as (event: H3Event) => Promise<unknown>;
+        const body = { ...makeValidBody(), fileKindCapability: 'v1' as const };
+        readBodyMock.mockResolvedValue(body);
+        pullMock.mockResolvedValue({
+            changes: [{
+                tableName: 'file_meta',
+                pk: 'sha256:file',
+                op: 'put',
+                payload: {
+                    hash: 'sha256:file',
+                    kind: 'file',
+                    mime_type: 'text/plain',
+                    size_bytes: 1,
+                    deleted: false,
+                    created_at: 1,
+                    updated_at: 1,
+                    clock: 1,
+                },
+                serverVersion: 6,
+                stamp: {
+                    clock: 1,
+                    hlc: '1:1:dev',
+                    deviceId: 'dev',
+                    opId: 'a1b2c3d4-5678-4abc-8def-123456789011',
+                },
+            }],
+            nextCursor: 6,
+            hasMore: false,
+            oldestRetainedVersion: 0,
+            requiresSnapshot: false,
+        });
+
+        await expect(handler(makeEvent())).resolves.toMatchObject({
+            nextCursor: 6,
+        });
+        expect(pullMock).toHaveBeenCalledWith(expect.anything(), body);
+    });
+
     it.each([
         [
             'a regressing cursor',

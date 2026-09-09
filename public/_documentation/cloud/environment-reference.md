@@ -195,6 +195,7 @@ binding and must run in a Workers request context. See
 | Variable | Default | Purpose |
 |---|---:|---|
 | `OR3_STORAGE_ALLOWED_MIME_TYPES` | built-in image/PDF/text list | Comma-separated upload MIME allowlist. |
+| `OR3_STORAGE_ALLOW_ANY_FILE_TYPE` | `false` | Explicit admin opt-in for MIME types outside the built-in allowlist. |
 | `OR3_STORAGE_WORKSPACE_QUOTA_BYTES` | unset | Per-workspace storage quota. |
 | `OR3_STORAGE_GC_RETENTION_SECONDS` | `2592000` | Default retention window for storage GC. |
 | `OR3_STORAGE_GC_COOLDOWN_MS` | `60000` | Minimum delay between manual GC runs. |

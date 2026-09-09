@@ -23,7 +23,7 @@
         >
             <!-- Label -->
             <div
-            class="absolute top-0 left-0 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-[var(--md-on-surface-variant)] bg-[var(--md-surface-container)] rounded-br-[var(--md-border-radius-small,var(--md-border-radius))] rounded-tl-[var(--md-border-radius-small,var(--md-border-radius))] border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-r-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-outline-variant)]"
+                class="absolute top-0 left-0 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-[var(--md-on-surface-variant)] bg-[var(--md-surface-container)] rounded-br-[var(--md-border-radius-small,var(--md-border-radius))] rounded-tl-[var(--md-border-radius-small,var(--md-border-radius))] border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-r-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-outline-variant)]"
             >
                 Result
             </div>
@@ -38,6 +38,18 @@
                 />
             </div>
         </div>
+
+        <MessageAttachmentsGallery
+            v-if="showImages && imageHashes.length"
+            :hashes="imageHashes"
+            @collapse="showImages = false"
+        />
+        <UButton
+            v-else-if="imageHashes.length"
+            variant="ghost"
+            label="Show generated images"
+            @click="showImages = true"
+        />
 
         <!-- Action buttons (Copy, Resume, etc) - Reusing similar layout to ChatMessage but simplified -->
         <div
@@ -63,7 +75,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
+import { parseHashes } from '~/utils/files/attachments';
 import { useClipboard } from '@vueuse/core';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
@@ -79,13 +93,15 @@ const props = defineProps<{
     message: UiChatMessage;
 }>();
 
+const showImages = ref(true);
+const imageHashes = computed(() => parseHashes(props.message.file_hashes));
 const toast = useToast();
 const nuxtApp = useNuxtApp();
 const or3Config = useOr3Config();
 const workflowExecutionEnabled = computed(
     () =>
         or3Config.features.workflows.enabled &&
-        or3Config.features.workflows.execution
+        or3Config.features.workflows.execution,
 );
 
 // Theme
@@ -100,7 +116,7 @@ const currentShikiTheme = computed(() => {
 const workflowStatusComponent = computed(
     () =>
         themePlugin.value.activeComponents.value['workflow-status'] ??
-        WorkflowExecutionStatus
+        WorkflowExecutionStatus,
 );
 
 // Prefer finalOutput, fall back to live streaming text so the last message always renders as Markdown.
@@ -122,7 +138,7 @@ const outputContent = computed(() => {
 const showResultBox = computed(
     () =>
         props.message.workflowState?.executionState === 'completed' &&
-        outputContent.value.length > 0
+        outputContent.value.length > 0,
 );
 
 const canRetry = computed(() => {
@@ -131,7 +147,7 @@ const canRetry = computed(() => {
     // The retry handler reconciles stale or missing checkpoint node IDs with
     // the current workflow graph before resuming.
     return ['error', 'interrupted', 'stopped'].includes(
-        wf.executionState as string
+        wf.executionState as string,
     );
 });
 

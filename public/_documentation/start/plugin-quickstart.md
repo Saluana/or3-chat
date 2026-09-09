@@ -1007,3 +1007,24 @@ const doc = await createDocument({
 ```
 
 You're now ready to build powerful OR3 plugins! 🚀
+
+
+## Keep editor tools inside the active pane
+
+A canvas-based plugin can render its canvas, toolbars and inspector as one pane layout. Ordinary navigation should replace the active pane using `setPaneApp`; reserve `newPaneForApp` for an explicitly requested split. OR3 Tactics uses this pattern for its map workspace and keeps project navigation in the registered sidebar.
+
+Scope keyboard shortcuts to the focused plugin region and ignore editable inputs. Use `v-theme` on the plugin's regions and inherit the host `--md-*` surface, text and border tokens. An internal inspector can become a dismissible overlay when its pane is narrow, without creating another host pane.
+
+Keep hover previews separate from persisted project operations. OR3 Tactics shows prop placement ghosts, footprint validity and terrain brush feedback without creating revisions; clicking commits a validated edit. Its Select tool opens the clicked object's inspector within the current pane.
+
+New OR3 Tactics demos include modern grass, dirt, mud, sand, gravel and stone materials. The installer stages a local texture atlas through the asset bridge; map geometry supplies the isometric perspective. Saved games retain their existing asset references.
+
+Tactics terrain presentation is editable in **Map inspector → Map → Visual**: ground/cliff repeat, painted or pixel filtering, and separate face textures. The canvas **Quality** selector controls viewport resolution. Settings persist with the project and carry into playtests and exports; painting remains cell-based.
+
+Height editing previews retain an outline on the original cell and connect it to the proposed elevation, with before/after height status. This keeps the target clear when isometric projection shifts the raised surface toward neighboring tiles.
+
+Bundled Kenney dirt textures exclude the shaded source-image border and mirror repeat boundaries. The same read-time correction covers existing saved demos without changing custom crops.
+
+Tactics map tools use Nuxt UI tooltips with keyboard hints. Letter shortcuts are scoped to the editor and ignore text entry; Cmd/Ctrl-drag pans temporarily without committing terrain edits.
+
+Map panning compensates for camera pitch and zoom so horizontal and vertical drags track equal screen distances.

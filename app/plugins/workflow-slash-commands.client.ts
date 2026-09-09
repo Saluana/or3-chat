@@ -57,6 +57,7 @@ import {
     generateImageCaption,
     shouldGenerateCaption,
 } from './WorkflowSlashCommands/workflowImageCaption';
+import { workflowNeedsForegroundImagePersistence } from './WorkflowSlashCommands/workflowImageOutput';
 import {
     consumeChatSendHandled,
     markChatSendHandled,
@@ -1225,12 +1226,18 @@ export default defineNuxtPlugin((nuxtApp) => {
         });
 
         const session = sessionContext?.data.value?.session ?? null;
+        const requiresForegroundImagePersistence =
+            workflowNeedsForegroundImagePersistence(
+                workflowPost.meta,
+                useModelStore().catalog.value
+            );
         const backgroundAllowed =
             runtimeConfig.public.backgroundStreaming?.enabled === true &&
             isBackgroundStreamingEnabled(
                 runtimeConfig.public.backgroundStreaming?.enabled
             ) &&
-            Boolean(session?.authenticated && session.user?.id);
+            Boolean(session?.authenticated && session.user?.id) &&
+            !requiresForegroundImagePersistence;
 
         if (backgroundAllowed) {
             let backgroundJob:
@@ -1325,6 +1332,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             },
             resumeFrom,
             sessionId: `workflow:${workflowPost.id}:${assistantContext.id}`,
+            messageId: assistantContext.id,
         });
 
         activeController = controller;

@@ -1,6 +1,10 @@
 import type { Or3DB } from '~/db/client';
 import type { FileMeta } from '~/db/schema';
 import {
+    classifyFileKind,
+    isSupportedRasterMimeType,
+} from '~~/shared/files/file-kind';
+import {
     CORE_PALETTE_CATEGORIES,
     type PalettePreview,
     type PalettePreviewContext,
@@ -13,9 +17,10 @@ function category() {
 }
 
 export function isImageFileMeta(meta: FileMeta): boolean {
-    if (meta.deleted) return false;
-    if (meta.kind === 'image') return true;
-    return (meta.mime_type ?? '').startsWith('image/');
+    const kind = meta.kind ?? classifyFileKind(meta.mime_type);
+    return !meta.deleted &&
+        kind === 'image' &&
+        isSupportedRasterMimeType(meta.mime_type ?? '');
 }
 
 export function createImagePaletteSource(): PaletteSearchSource {

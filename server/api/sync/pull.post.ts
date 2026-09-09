@@ -29,6 +29,10 @@ import {
 import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 import { setNoCacheHeaders } from '../../utils/headers';
 import { readLimitedJsonBody } from '../../utils/security/limited-json-body';
+import {
+    isGenericFileMetaPayload,
+    requireFileKindCapability,
+} from '../../utils/storage/file-kind-capability';
 
 const MAX_SYNC_PULL_REQUEST_BYTES = 8 * 1024;
 
@@ -92,14 +96,28 @@ export default defineEventHandler(async (event) => {
     const result = PullResponseSchema.safeParse(
         await adapter.pull(event, parsed.data)
     );
-    if (
-        !result.success ||
-        getPullResponseContractError(parsed.data, result.data)
-    ) {
+    if (!result.success) {
         throw createError({
             statusCode: 502,
             statusMessage: 'Invalid pull response',
         });
+    }
+
+    if (getPullResponseContractError(parsed.data, result.data)) {
+        throw createError({
+            statusCode: 502,
+            statusMessage: 'Invalid pull response',
+        });
+    }
+
+    // Validate the complete page before returning it. An older reader must
+    // receive an explicit update boundary instead of a partially applicable
+    // change list containing the new generic file kind.
+    if (result.data.changes.some((change) =>
+        change.op === 'put' &&
+        isGenericFileMetaPayload(change.tableName, change.payload)
+    )) {
+        requireFileKindCapability(parsed.data.fileKindCapability);
     }
 
     return result.data;

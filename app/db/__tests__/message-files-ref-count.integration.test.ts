@@ -11,6 +11,7 @@ import {
     addFilesToMessage,
     removeFileFromMessage,
 } from '../message-files';
+import { createOrRefFile } from '../files';
 import { parseFileHashes } from '../files-util';
 
 const hooks = vi.hoisted(() => {
@@ -47,11 +48,13 @@ vi.mock('~/core/hooks/useHooks', () => ({
 
 const TEST_HASH = `sha256:${'a'.repeat(64)}`;
 
+const computeFileHashMock = vi.hoisted(() => vi.fn());
+
 vi.mock('~/utils/hash', async (importOriginal) => {
     const actual = await importOriginal<typeof import('~/utils/hash')>();
     return {
         ...actual,
-        computeFileHash: vi.fn(async () => TEST_HASH),
+        computeFileHash: computeFileHashMock,
     };
 });
 
@@ -96,6 +99,8 @@ async function storedHashes(messageId: string): Promise<string[]> {
 
 beforeEach(async () => {
     hooks.clear();
+    computeFileHashMock.mockReset();
+    computeFileHashMock.mockResolvedValue(TEST_HASH);
     workspaceId = `file-ref-count-${crypto.randomUUID()}`;
     const db = setActiveWorkspaceDb(workspaceId);
     await db.open();
@@ -109,6 +114,41 @@ afterEach(async () => {
 });
 
 describe('message file ref_count integrity', () => {
+    it('rejects a stale workspace after hashing before writing metadata', async () => {
+        const originalWorkspaceId = workspaceId;
+        let releaseHash!: () => void;
+        let hashStarted!: () => void;
+        const hashGate = new Promise<void>((resolve) => {
+            releaseHash = resolve;
+        });
+        const started = new Promise<void>((resolve) => {
+            hashStarted = resolve;
+        });
+        computeFileHashMock.mockImplementationOnce(async () => {
+            hashStarted();
+            await hashGate;
+            return TEST_HASH;
+        });
+
+        const pending = createOrRefFile(
+            new Blob(['source'], { type: 'text/plain' }),
+            'source.txt'
+        );
+        await started;
+
+        const nextWorkspaceId = `file-ref-count-next-${crypto.randomUUID()}`;
+        const nextDb = setActiveWorkspaceDb(nextWorkspaceId);
+        await nextDb.open();
+        releaseHash();
+
+        await expect(pending).rejects.toThrow('workspace changed');
+
+        setActiveWorkspaceDb(null);
+        evictWorkspaceDb(nextWorkspaceId);
+        await Dexie.delete(`or3-db-${nextWorkspaceId}`);
+        workspaceId = originalWorkspaceId;
+    });
+
     it('increments a hash attachment once and keeps duplicate attachment idempotent', async () => {
         const db = getDb();
         await db.messages.put(message('message-1'));

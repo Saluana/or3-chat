@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
     NotificationPayloadSchema,
+    PullRequestSchema,
     PullResponseSchema,
     PostPayloadSchema,
     PushBatchSchema,
     PushResultSchema,
+    SnapshotRequestSchema,
     SnapshotResponseSchema,
     TABLE_PAYLOAD_SCHEMAS,
     TombstoneSchema,
@@ -12,6 +14,31 @@ import {
 } from '../schemas';
 
 describe('sync schemas', () => {
+    it('accepts only the current generic-file capability marker on requests', () => {
+        const scope = { workspaceId: 'workspace-1' };
+        expect(PullRequestSchema.safeParse({
+            scope,
+            cursor: 0,
+            limit: 10,
+            fileKindCapability: 'v1',
+        }).success).toBe(true);
+        expect(SnapshotRequestSchema.safeParse({
+            scope,
+            pageSize: 10,
+            fileKindCapability: 'v1',
+        }).success).toBe(true);
+        expect(PushBatchSchema.safeParse({
+            scope,
+            ops: [],
+            fileKindCapability: 'v1',
+        }).success).toBe(true);
+        expect(PullRequestSchema.safeParse({
+            scope,
+            cursor: 0,
+            limit: 10,
+            fileKindCapability: 'v0',
+        }).success).toBe(false);
+    });
     it('reads legacy tombstones and preserves full deterministic revisions', () => {
         expect(TombstoneSchema.safeParse({
             id: 'messages:m1', tableName: 'messages', pk: 'm1', deletedAt: 1, clock: 1,

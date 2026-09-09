@@ -184,6 +184,43 @@ describe('FileTransferQueue', () => {
         expect(hookState.doAction).toHaveBeenCalledWith('storage.files.upload:action:after', expect.anything());
     });
 
+    it('uploads a zero-byte generic file without treating an empty response as a failure', async () => {
+        const meta = makeMeta({
+            kind: 'file',
+            mime_type: 'application/octet-stream',
+            name: 'empty.bin',
+            size_bytes: 0,
+            hash: `sha256:${'e'.repeat(64)}`,
+        });
+        const db = createDbStub([meta], [{ hash: meta.hash, blob: new Blob([]) }]);
+        const provider: ObjectStorageProvider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(async (input) => {
+                expect(input.sizeBytes).toBe(0);
+                expect(input.mimeType).toBe('application/octet-stream');
+                return { url: 'https://upload.example', expiresAt: Date.now(), storageId: 'st-empty' };
+            }),
+            getPresignedDownloadUrl: vi.fn(async () => ({ url: 'https://download.example', expiresAt: Date.now() })),
+            commitUpload: vi.fn(async (input) => {
+                expect(input.meta.sizeBytes).toBe(0);
+                expect(input.meta.kind).toBe('file');
+            }),
+        };
+
+        vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })));
+        const queue = new FileTransferQueue(db as any, provider, { concurrency: 1, maxAttempts: 2 });
+        queue.setWorkspaceId('ws-1');
+
+        const transfer = await queue.enqueue(meta.hash, 'upload');
+        await pumpQueue();
+        await queue.waitForTransfer(transfer!.id);
+
+        expect(provider.commitUpload).toHaveBeenCalledOnce();
+        expect(await db.file_transfers.get(transfer!.id)).toMatchObject({ state: 'done', bytes_total: 0, bytes_done: 0 });
+    });
+
     it('defaults fs token upload URLs to PUT when presign method is missing', async () => {
         const meta = makeMeta({ kind: 'image', mime_type: 'image/png', name: 'a.png', size_bytes: 3 });
         const db = createDbStub([meta], [{ hash: meta.hash, blob: new Blob(['abc']) }]);
@@ -475,7 +512,7 @@ describe('FileTransferQueue', () => {
     });
 
     it('accepts downloads with missing or octet-stream content-type using file_meta mime', async () => {
-        const meta = makeMeta({ storage_id: 'st_1', mime_type: 'image/webp' });
+        const meta = makeMeta({ kind: 'image', storage_id: 'st_1', mime_type: 'image/webp' });
         const db = createDbStub([meta], []);
         const provider: ObjectStorageProvider = {
             id: 'provider-1',
@@ -531,6 +568,74 @@ describe('FileTransferQueue', () => {
             expect.any(AbortSignal)
         );
         expect(await db.file_blobs.get(meta.hash)).toBeDefined();
+    });
+
+    it('keeps generic downloads inert even when metadata has an active MIME', async () => {
+        const meta = makeMeta({
+            kind: 'file',
+            mime_type: 'text/html',
+            storage_id: 'st_1',
+        });
+        const db = createDbStub([meta], []);
+        const provider: ObjectStorageProvider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(async () => ({ url: 'upload', expiresAt: Date.now() })),
+            getPresignedDownloadUrl: vi.fn(async () => ({ url: 'download', expiresAt: Date.now() })),
+        };
+        const queue = new FileTransferQueue(db as any, provider);
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => ({
+                ok: true,
+                status: 200,
+                headers: { get: () => 'application/octet-stream' },
+                body: { cancel: vi.fn() },
+            }))
+        );
+        (queue as any).readBlobWithProgress = vi.fn(async (
+            _response: Response,
+            _id: string,
+            _db: unknown,
+            _max: number,
+            mimeType: string,
+        ) => ({
+            blob: {
+                size: 5,
+                type: mimeType,
+                arrayBuffer: async () => new TextEncoder().encode('hello').buffer,
+            } as Blob,
+            bytesTotal: 5,
+        }));
+
+        await (queue as any).doDownload(
+            {
+                id: 'generic-download',
+                hash: meta.hash,
+                workspace_id: 'ws-1',
+                direction: 'download',
+                bytes_total: 0,
+                bytes_done: 0,
+                state: 'running',
+                attempts: 0,
+                created_at: 1,
+                updated_at: 1,
+            },
+            new AbortController().signal,
+        );
+
+        expect((queue as any).readBlobWithProgress).toHaveBeenCalledWith(
+            expect.anything(),
+            'generic-download',
+            expect.anything(),
+            expect.anything(),
+            'application/octet-stream',
+            expect.any(AbortSignal),
+        );
+        expect((await db.file_blobs.get(meta.hash))?.blob.type).toBe(
+            'application/octet-stream',
+        );
     });
 
     it('cancels in-flight transfer on workspace switch and explicit cancellation', async () => {
@@ -1008,6 +1113,36 @@ describe('FileTransferQueue', () => {
         await pumpQueue();
         await expect(blobPromise).resolves.toBeUndefined();
         expect(provider.getPresignedDownloadUrl).not.toHaveBeenCalled();
+    });
+
+    it('rejects a workspace switch during the initial blob read before enqueueing', async () => {
+        const hash = `sha256:${'b'.repeat(64)}`;
+        const oldDb = createDbStub([makeMeta({ hash, storage_id: 'old-storage' })], []);
+        const newDb = createDbStub([makeMeta({ hash, storage_id: 'new-storage' })], []);
+        let activeDb = oldDb;
+        const provider: ObjectStorageProvider = {
+            id: 'provider-1',
+            displayName: 'Provider',
+            supports: { presignedUpload: true, presignedDownload: true },
+            getPresignedUploadUrl: vi.fn(),
+            getPresignedDownloadUrl: vi.fn(),
+        };
+        const queue = new FileTransferQueue(oldDb as any, provider, {
+            dbResolver: () => activeDb as any,
+        });
+        queue.setWorkspaceId('ws-old');
+        const originalGet = oldDb.file_blobs.get.bind(oldDb.file_blobs);
+        oldDb.file_blobs.get = vi.fn(async (key: string) => {
+            activeDb = newDb;
+            queue.setWorkspaceId('ws-new');
+            return originalGet(key);
+        });
+
+        await expect(queue.ensureDownloadedBlob(hash)).rejects.toThrow(
+            'workspace changed during storage transfer',
+        );
+        expect(newDb.file_transfers.dump().size).toBe(0);
+        queue.dispose();
     });
 
     it('disposes timers, waiters, lease renewals, and running requests idempotently', async () => {

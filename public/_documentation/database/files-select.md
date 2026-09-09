@@ -25,7 +25,11 @@ Read-only helpers for paging `file_meta` rows when browsing uploads or the recyc
 
 ## Filtering rules
 
--   Images are detected via `kind === 'image'` or `mime_type` prefix `image/`.
+-   Images require `kind === 'image'` and one of the verified raster MIME types
+    (`image/png`, `image/jpeg`, `image/webp`, or `image/gif`). Legacy rows with
+    no `kind` field remain eligible when their MIME is one of those exact
+    types. Generic files stay out of image-library queries even when their MIME
+    begins with `image/`.
 -   Deleted and non-deleted lists are separated to simplify UI logic.
 
 ---

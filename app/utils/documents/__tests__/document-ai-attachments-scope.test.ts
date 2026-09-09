@@ -26,6 +26,12 @@ describe('document AI attachment revalidation', () => {
 
     it('rejects forged mime, non-data schemes, and empty payloads', () => {
         expect(() => validateDocumentAiAttachment({
+            name: 'active.svg',
+            mime: 'image/svg+xml',
+            kind: 'image',
+            dataUrl: 'data:image/svg+xml;base64,PHN2Zy8+',
+        })).toThrow(/mime/iu);
+        expect(() => validateDocumentAiAttachment({
             name: 'evil.png',
             mime: 'image/png',
             kind: 'image',

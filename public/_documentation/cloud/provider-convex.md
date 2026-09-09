@@ -173,10 +173,13 @@ gate.
 
 The Convex sync gateway pages live materialized `file_meta` rows and reference
 edges from `messages.file_hashes` and `posts.file_hashes` with opaque,
-filter-bound cursors and a 500-record hard cap. Workspace quota and filesystem
-blob lifecycle consume these views directly; retained `change_log` entries are
-never used to infer liveness. Active reservation pages are an explicit empty
-view until upload-intent persistence is enabled.
+filter-bound cursors and a 500-record hard cap. Workspace quota, filesystem
+garbage collection, and blob lifecycle consume these views directly; retained
+`change_log` entries are never used to infer liveness. Active reservation pages
+are an explicit empty view until upload-intent persistence is enabled. Gateway
+clients advertise the typed file-kind `v1` capability; the host returns HTTP
+426 with update guidance before a generic file record crosses an older reader
+or writer boundary.
 
 Convex download URLs are issued only for a workspace member whose canonical
 `file_meta` row is live and has a storage ID. Soft-deleted or pending metadata

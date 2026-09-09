@@ -205,6 +205,7 @@ export type ForegroundStreamContext = {
     parentTurnId?: string;
     streamId: string;
     threadId: string;
+    workspaceId?: string;
     streamAcc: StreamAccumulatorLike;
     hooks: HooksLike;
     toolRegistry: ToolRegistryLike;
@@ -561,7 +562,7 @@ export async function runForegroundStreamLoop(
                             toolCall.function.arguments,
                             {
                                 subject: null,
-                                workspaceId: null,
+                                workspaceId: ctx.workspaceId ?? null,
                                 threadId: ctx.threadId,
                                 messageId: ctx.assistantId,
                                 callId: toolCall.id,

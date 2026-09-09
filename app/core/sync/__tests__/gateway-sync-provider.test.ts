@@ -484,6 +484,7 @@ describe('GatewaySyncProvider', () => {
                     pageSize: 50,
                     pageToken: 'opaque-page',
                     tables: ['messages'],
+                    fileKindCapability: 'v1',
                 }),
             })
         );

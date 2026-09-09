@@ -107,6 +107,37 @@ describe('POST /api/sync/snapshot', () => {
         await expect(handler(event())).rejects.toMatchObject({ statusCode: 503 });
     });
 
+    it('rejects a generic file row before an older reader can apply the page', async () => {
+        const handler = (await import('../snapshot.post')).default as
+            (input: H3Event) => Promise<unknown>;
+        snapshotMock.mockResolvedValue({
+            ...response,
+            items: [{
+                kind: 'row',
+                tableName: 'file_meta',
+                pk: 'sha256:file',
+                payload: {
+                    hash: 'sha256:file',
+                    kind: 'file',
+                    mime_type: 'text/plain',
+                    size_bytes: 1,
+                    deleted: false,
+                    created_at: 1,
+                    updated_at: 1,
+                    clock: 1,
+                },
+                revision: { clock: 1, hlc: '1:0:d', opId: 'op-file' },
+            }],
+        });
+
+        const failure = await handler(event()).catch((error: unknown) => error);
+        expect(failure).toMatchObject({
+            statusCode: 426,
+            message: 'Update OR3 Chat to use general files',
+        });
+        expect(recordSyncRequestMock).not.toHaveBeenCalled();
+    });
+
     it('rejects malformed adapter output', async () => {
         const handler = (await import('../snapshot.post')).default as
             (input: H3Event) => Promise<unknown>;

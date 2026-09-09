@@ -86,7 +86,7 @@ vi.mock('../../core/hooks/useHooks', () => ({
     })),
 }));
 
-import { softDeleteFile, softDeleteMany } from '../files';
+import { getFileMeta, softDeleteFile, softDeleteMany } from '../files';
 import { db } from '../client';
 
 const table = db.file_meta as unknown as {
@@ -118,6 +118,20 @@ describe('files soft delete', () => {
     beforeEach(() => {
         table.__setRows([]);
         nowSecState.value = 1000;
+    });
+
+    it('derives a safe generic kind for legacy rows without kind metadata', async () => {
+        const legacy = baseMeta({
+            hash: 'legacy-kind',
+            kind: undefined as unknown as FileMeta['kind'],
+            mime_type: 'text/html',
+        });
+        table.__setRows([legacy]);
+
+        await expect(getFileMeta('legacy-kind')).resolves.toMatchObject({
+            kind: 'file',
+            mime_type: 'text/html',
+        });
     });
 
     describe('softDeleteFile', () => {

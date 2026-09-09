@@ -176,6 +176,41 @@ describe('POST /api/storage/commit', () => {
         expect(commitMock).toHaveBeenCalledWith(expect.anything(), body);
     });
 
+    it('accepts generic zero-byte commit metadata', async () => {
+        const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
+        const body = {
+            ...makeValidBody(),
+            mime_type: 'application/octet-stream',
+            size_bytes: 0,
+            name: 'empty.bin',
+            kind: 'file',
+            width: undefined,
+            height: undefined,
+            file_kind_capability: 'v1',
+        };
+        readBodyMock.mockResolvedValue(body);
+
+        await expect(handler(makeEvent())).resolves.toEqual({ ok: true });
+        expect(commitMock).toHaveBeenCalledWith(expect.anything(), body);
+    });
+
+    it('returns 426 for generic commit metadata from an older writer', async () => {
+        const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
+        const body = {
+            ...makeValidBody(),
+            mime_type: 'application/octet-stream',
+            kind: 'file',
+        };
+        readBodyMock.mockResolvedValue(body);
+
+        const failure = await handler(makeEvent()).catch((error: unknown) => error);
+        expect(failure).toMatchObject({
+            statusCode: 426,
+            message: 'Update OR3 Chat to use general files',
+        });
+        expect(commitMock).not.toHaveBeenCalled();
+    });
+
     it('records metrics and sync accounting only on success', async () => {
         const handler = (await import('../commit.post')).default as (event: H3Event) => Promise<unknown>;
         readBodyMock.mockResolvedValue(makeValidBody());

@@ -45,6 +45,7 @@ import {
     getPushResultContractError,
     getSnapshotResponseContractError,
 } from '~~/shared/sync/schemas';
+import { FILE_KIND_CAPABILITY } from '~~/shared/files/file-capability';
 
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 const DEFAULT_PULL_LIMIT = 100;
@@ -306,6 +307,7 @@ export function createGatewaySyncProvider(
                         cursor,
                         limit,
                         tables,
+                        fileKindCapability: FILE_KIND_CAPABILITY,
                     };
                     const response = await requestJson<PullResponse>(
                         '/api/sync/pull',
@@ -411,7 +413,7 @@ export function createGatewaySyncProvider(
         async pull(request: PullRequest): Promise<PullResponse> {
             const response = await requestJson<PullResponse>(
                 '/api/sync/pull',
-                request,
+                { ...request, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl,
                 { schema: PullResponseSchema }
             );
@@ -425,7 +427,7 @@ export function createGatewaySyncProvider(
         async snapshot(request: SnapshotRequest): Promise<SnapshotResponse> {
             const response = await requestJson<SnapshotResponse>(
                 '/api/sync/snapshot',
-                request,
+                { ...request, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl,
                 { schema: SnapshotResponseSchema }
             );
@@ -439,7 +441,7 @@ export function createGatewaySyncProvider(
         async push(batch: PushBatch): Promise<PushResult> {
             const response = await requestJson<PushResult>(
                 '/api/sync/push',
-                batch,
+                { ...batch, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl,
                 { schema: PushResultSchema }
             );

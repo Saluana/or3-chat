@@ -114,6 +114,9 @@ describe('createGatewayStorageProvider', () => {
         const commitBody = JSON.parse((fetchMock.mock.calls[2]?.[1] as RequestInit).body as string);
         expect(commitBody.storage_provider_id).toBe('custom-gateway');
         expect(commitBody.intent_id).toBe('intent-1');
+        expect(JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string).file_kind_capability).toBe('v1');
+        expect(JSON.parse((fetchMock.mock.calls[1]?.[1] as RequestInit).body as string).file_kind_capability).toBe('v1');
+        expect(commitBody.file_kind_capability).toBe('v1');
         const deleteBody = JSON.parse((fetchMock.mock.calls[3]?.[1] as RequestInit).body as string);
         expect(deleteBody).toEqual({
             workspace_id: 'ws-1',

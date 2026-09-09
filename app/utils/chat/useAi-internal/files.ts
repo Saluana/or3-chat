@@ -28,6 +28,7 @@
  */
 
 import type { ContentPart } from '~/utils/chat/types';
+import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 type DbFilesModule = typeof import('~/db/files');
 
 /**
@@ -57,6 +58,14 @@ const blobToDataUrl = (blob: Blob): Promise<string> =>
         fr.onload = () => resolve(fr.result as string);
         fr.readAsDataURL(blob);
     });
+
+function dataUrlMime(value: string): string {
+    return /^data:([^;,]+)/iu.exec(value)?.[1]?.trim().toLowerCase() ?? '';
+}
+
+function isSupportedImageDataUrl(value: string): boolean {
+    return isSupportedRasterMimeType(dataUrlMime(value));
+}
 
 let dbFilesModulePromise: Promise<DbFilesModule> | null = null;
 
@@ -98,10 +107,12 @@ export async function normalizeFileUrl(f: { type: string; url: string }): Promis
     if (typeof FileReader === 'undefined') return f; // SSR safeguard
     const mime = f.type || '';
     // Only process images; leave other files (e.g., PDFs) untouched for now.
-    if (!mime.startsWith('image/')) return f;
+    if (!isSupportedRasterMimeType(mime)) return f;
     let url = f.url || '';
     // Already a data URL - pass through (for pasted images not yet stored)
-    if (url.startsWith('data:image/')) return { ...f, url };
+    if (url.startsWith('data:') && isSupportedImageDataUrl(url)) {
+        return { ...f, url };
+    }
 
     try {
         // Local hash -> verify blob exists, return hash reference
@@ -171,15 +182,18 @@ export async function prepareFilesForModel(
             // Hash reference -> load from IndexedDB and convert to Base64
             if (!/^https?:|^data:|^blob:/i.test(f.url)) {
                 const { getFileMeta, getFileBlob } = await getDbFilesModule();
+                const meta = await getFileMeta(f.url).catch(() => null);
                 const blob = await getFileBlob(f.url);
                 if (!blob) continue;
 
                 const dataUrl = await blobToDataUrl(blob);
 
-                if (mime.startsWith('image/')) {
+                const imageAllowed =
+                    meta?.kind === 'image' &&
+                    isSupportedRasterMimeType(meta.mime_type || mime);
+                if (imageAllowed) {
                     parts.push({ type: 'image', image: dataUrl, mediaType: mime });
                 } else if (mime === 'application/pdf') {
-                    const meta = await getFileMeta(f.url).catch(() => null);
                     parts.push({
                         type: 'file',
                         data: dataUrl,
@@ -198,7 +212,7 @@ export async function prepareFilesForModel(
                     if (!blobResponse.ok) continue;
                     const blob = await blobResponse.blob();
                     const dataUrl = await blobToDataUrl(blob);
-                    if (mime.startsWith('image/')) {
+                    if (isSupportedRasterMimeType(mime)) {
                         parts.push({ type: 'image', image: dataUrl, mediaType: mime });
                     }
                 } catch {
@@ -209,7 +223,7 @@ export async function prepareFilesForModel(
 
             // Already Base64 data URL -> use directly
             if (f.url.startsWith('data:')) {
-                if (mime.startsWith('image/')) {
+                if (isSupportedImageDataUrl(f.url) && isSupportedRasterMimeType(mime)) {
                     parts.push({ type: 'image', image: f.url, mediaType: mime });
                 }
             }
@@ -258,7 +272,7 @@ export async function hashToContentPart(hash: string): Promise<ContentPart | nul
 
         // Only include images/PDFs to avoid bloating text-only contexts
         const mime = meta?.mime_type || blob.type || '';
-        if (mime === 'application/pdf') {
+        if (mime === 'application/pdf' && meta?.kind === 'pdf') {
             const dataUrl = await blobToDataUrl(blob);
             return {
                 type: 'file',
@@ -267,7 +281,9 @@ export async function hashToContentPart(hash: string): Promise<ContentPart | nul
                 name: meta?.name || 'document.pdf',
             };
         }
-        if (!mime.startsWith('image/')) return null;
+        if (meta?.kind !== 'image' || !isSupportedRasterMimeType(mime)) {
+            return null;
+        }
 
         const dataUrl = await blobToDataUrl(blob);
         return { type: 'image', image: dataUrl, mediaType: mime };

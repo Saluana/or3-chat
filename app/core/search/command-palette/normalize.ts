@@ -1,6 +1,6 @@
 import { promptJsonToString } from '~/utils/chat/prompt-utils';
 import { deriveMessageContent } from '~/utils/chat/messages';
-import { PALETTE_EXCLUDED_POST_TYPES } from './validation';
+import { isInternalPostType } from '../../../../shared/posts/visibility';
 
 /**
  * Convert TipTap JSON (object or string) into plain text.
@@ -95,7 +95,7 @@ export function pickScalarMetadata(
 }
 
 export function isIndexablePostType(postType: string): boolean {
-    return Boolean(postType) && !PALETTE_EXCLUDED_POST_TYPES.has(postType);
+    return Boolean(postType) && !isInternalPostType(postType);
 }
 
 function safeParseObject(raw: string): Record<string, unknown> | null {

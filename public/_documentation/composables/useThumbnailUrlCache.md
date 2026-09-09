@@ -30,7 +30,10 @@ cache.release(hash); // cleanup scheduled after the grace period
 ## Notes
 
 -   The cache lives on `globalThis`, so every consumer shares it.
--   Image blobs are decoded before they become `ready`; decode failures become `error` states.
+-   Blobs are verified as supported raster images before they become `ready` or
+    reach the browser image decoder; decode failures become `error` states.
+-   PDFs, SVGs, generic files, and forged raster MIME declarations produce an
+    `error` state.
 -   Nothing persists across reloads.
 
 ## Related

@@ -17,7 +17,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useThumbnailUrlCache } from '~/composables/core/useThumbnailUrlCache';
-import { getFileBlob } from '~/db/files';
+import { getFileBlob, getFileMeta } from '~/db/files';
+import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
 const props = defineProps<{
     hash: string;
@@ -54,7 +55,18 @@ async function load(hash: string): Promise<void> {
     if (!hash || tooLarge()) return;
     retainedHash = hash;
     cache.retain(hash);
-    const state = await cache.ensure(hash, () => getFileBlob(hash));
+    const state = await cache.ensure(hash, async () => {
+        const meta = await getFileMeta(hash).catch(() => undefined);
+        if (
+            !meta ||
+            meta.kind !== 'image' ||
+            !isSupportedRasterMimeType(meta.mime_type)
+        ) {
+            return null;
+        }
+        const blob = await getFileBlob(hash);
+        return blob;
+    });
     // The row may have been recycled to another image while the blob loaded.
     if (retainedHash !== hash) return;
     url.value = state?.status === 'ready' ? state.url : undefined;

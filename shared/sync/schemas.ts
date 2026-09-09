@@ -6,6 +6,7 @@
  */
 import { z } from 'zod';
 import { toServerFormat } from './field-mappings';
+import { FILE_KIND_CAPABILITY } from '../files/file-capability';
 
 export const MAX_SYNC_PUSH_BATCH_OPS = 100;
 export const MAX_SYNC_PUSH_BATCH_BYTES = 2 * 1024 * 1024;
@@ -254,6 +255,7 @@ export const PullRequestSchema = z.object({
         .array(z.string().trim().min(1).max(128))
         .max(MAX_SYNC_TABLE_FILTERS)
         .optional(),
+    fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
 });
 
 export const PullResponseSchema = z
@@ -302,6 +304,7 @@ export const SnapshotRequestSchema = z.object({
         .array(z.string().trim().min(1).max(128))
         .max(MAX_SYNC_TABLE_FILTERS)
         .optional(),
+    fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
 });
 
 export const SnapshotRevisionSchema = z.object({
@@ -365,6 +368,7 @@ export const PushBatchSchema = z
     .object({
         scope: SyncScopeSchema,
         ops: z.array(PendingOpSchema).max(MAX_SYNC_PUSH_BATCH_OPS),
+        fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
     })
     .superRefine((batch, ctx) => {
         if (syncJsonByteLength(batch) > MAX_SYNC_PUSH_BATCH_BYTES) {

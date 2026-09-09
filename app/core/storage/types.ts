@@ -20,6 +20,7 @@
  * @see core/storage/provider-registry for provider registration
  * @see core/storage/transfer-queue for the upload/download queue
  */
+import type { FileKind } from '~~/shared/files/file-kind';
 
 /** Result of generating a presigned URL for upload or download. */
 export interface PresignedUrlResult {
@@ -84,7 +85,7 @@ export interface ObjectStorageProvider {
             name: string;
             mimeType: string;
             sizeBytes: number;
-            kind: 'image' | 'pdf';
+            kind: FileKind;
             width?: number;
             height?: number;
             pageCount?: number;

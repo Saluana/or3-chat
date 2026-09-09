@@ -6,6 +6,8 @@
  * mapping from becoming the owner of every database and service shape.
  */
 
+import type { FileKind } from '../files/file-kind';
+
 export interface MessageEntity {
     id: string;
     thread_id: string;
@@ -85,6 +87,7 @@ export interface FileEntity {
     name: string;
     mime: string;
     size: number;
+    kind: FileKind;
     ref_count?: number;
 }
 

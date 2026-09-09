@@ -28,7 +28,22 @@ describe('useThumbnailUrlCache image readiness', () => {
 
         const state = await cache.ensure(
             'image',
-            async () => new Blob(['image'], { type: 'image/png' })
+            async () =>
+                new Blob(
+                    [
+                        new Uint8Array([
+                            0x89,
+                            0x50,
+                            0x4e,
+                            0x47,
+                            0x0d,
+                            0x0a,
+                            0x1a,
+                            0x0a,
+                        ]),
+                    ],
+                    { type: 'image/png' }
+                )
         );
 
         expect(decode).toHaveBeenCalledTimes(1);
@@ -46,10 +61,45 @@ describe('useThumbnailUrlCache image readiness', () => {
 
         const state = await cache.ensure(
             'broken',
-            async () => new Blob(['broken'], { type: 'image/png' })
+            async () =>
+                new Blob(
+                    [
+                        new Uint8Array([
+                            0x89,
+                            0x50,
+                            0x4e,
+                            0x47,
+                            0x0d,
+                            0x0a,
+                            0x1a,
+                            0x0a,
+                        ]),
+                    ],
+                    { type: 'image/png' }
+                )
         );
 
         expect(state).toEqual({ status: 'error' });
         expect(revokeObjectURL).toHaveBeenCalledWith('blob:decoded-image');
+    });
+
+    it('does not invoke the image decoder for SVG or forged raster bytes', async () => {
+        const cache = useThumbnailUrlCache();
+
+        const svgState = await cache.ensure(
+            'svg',
+            async () =>
+                new Blob(['<svg><script>alert(1)</script></svg>'], {
+                    type: 'image/svg+xml',
+                })
+        );
+        const forgedState = await cache.ensure(
+            'forged-png',
+            async () => new Blob(['not a PNG'], { type: 'image/png' })
+        );
+
+        expect(svgState).toEqual({ status: 'error' });
+        expect(forgedState).toEqual({ status: 'error' });
+        expect(decode).not.toHaveBeenCalled();
     });
 });

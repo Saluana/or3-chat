@@ -15,6 +15,10 @@ import {
     computeHashHex,
     parseHash,
 } from '~/utils/hash';
+import {
+    DEFAULT_FILE_MIME_TYPE,
+    isSupportedRasterMimeType,
+} from '~~/shared/files/file-kind';
 import { err, reportError } from '~/utils/errors';
 import { getActiveStorageProvider } from './provider-registry';
 import type { ObjectStorageProvider } from './types';
@@ -39,6 +43,11 @@ import {
 } from './transfer-queue-support';
 
 export type { FileTransferQueueConfig } from './transfer-queue-support';
+
+type BoundQueueContext = {
+    workspaceId: string;
+    db: Or3DB;
+};
 
 function isAbortError(error: unknown): boolean {
     return typeof error === 'object'
@@ -154,23 +163,29 @@ export class FileTransferQueue {
 
     async enqueue(
         hash: string,
-        direction: FileTransferDirection
+        direction: FileTransferDirection,
+        boundContext?: BoundQueueContext
     ): Promise<FileTransfer | null> {
-        if (!this.workspaceId) {
+        const workspaceId = boundContext?.workspaceId ?? this.workspaceId;
+        if (!workspaceId) {
             return null;
         }
 
-        this.rebindDb();
+        const db = boundContext?.db ?? (this.rebindDb(), this.db);
+        if (boundContext) this.assertBoundContext(boundContext);
 
-        const existing = await this.findExistingTransfer(hash, direction);
+        const existing = await this.findExistingTransfer(hash, direction, db);
+        if (boundContext) this.assertBoundContext(boundContext);
         if (existing) {
             // Prior 404 / pre-commit races park here; re-queue so later success can proceed.
             if (
                 existing.state === 'remote_missing' ||
                 existing.state === 'pending_upload'
             ) {
-                await this.retryRecoverable(existing.id);
-                const retried = await this.db.file_transfers.get(existing.id);
+                await this.retryRecoverable(existing.id, db, boundContext);
+                if (boundContext) this.assertBoundContext(boundContext);
+                const retried = await db.file_transfers.get(existing.id);
+                if (boundContext) this.assertBoundContext(boundContext);
                 return retried ?? existing;
             }
             if (existing.state !== 'failed') {
@@ -183,7 +198,7 @@ export class FileTransferQueue {
         const transfer: FileTransfer = {
             id: createRuntimeUuid(),
             hash,
-            workspace_id: this.workspaceId,
+            workspace_id: workspaceId,
             direction,
             bytes_total: 0,
             bytes_done: 0,
@@ -194,12 +209,14 @@ export class FileTransferQueue {
             updated_at: now,
         };
 
-        await this.db.file_transfers.put(transfer);
+        if (boundContext) this.assertBoundContext(boundContext);
+        await db.file_transfers.put(transfer);
+        if (boundContext) this.assertBoundContext(boundContext);
         this.scheduleProcessQueue(0);
         return transfer;
     }
 
-    async waitForTransfer(id: string, timeoutMs = 60_000): Promise<void> {
+    async waitForTransfer(id: string, timeoutMs = 60_000, db = this.db): Promise<void> {
         // Register waiter first to avoid race condition where transfer
         // completes between state check and Promise creation
         const waiterPromise = new Promise<void>((resolve, reject) => {
@@ -219,7 +236,7 @@ export class FileTransferQueue {
         waiterPromise.catch(() => {});
 
         // Check current state - if already done/failed, resolve immediately
-        const transfer = await this.db.file_transfers.get(id);
+        const transfer = await db.file_transfers.get(id);
         if (!transfer) {
             this.resolveWaiters(id); // Clean up the just-added waiter
             throw new Error('Transfer not found');
@@ -247,34 +264,57 @@ export class FileTransferQueue {
     }
 
     /** Explicitly retry a transfer after upload/reconciliation state changes. */
-    async retryRecoverable(id: string): Promise<boolean> {
-        const transfer = await this.db.file_transfers.get(id);
+    async retryRecoverable(
+        id: string,
+        db = this.db,
+        boundContext?: BoundQueueContext
+    ): Promise<boolean> {
+        const transfer = await db.file_transfers.get(id);
+        if (boundContext) this.assertBoundContext(boundContext);
         if (
             !transfer ||
             (transfer.state !== 'pending_upload' && transfer.state !== 'remote_missing')
         ) {
             return false;
         }
+        if (boundContext) this.assertBoundContext(boundContext);
         await this.updateTransfer(id, {
             state: 'queued',
             retry_at: 0,
             last_error: undefined,
-        });
+        }, db);
+        if (boundContext) this.assertBoundContext(boundContext);
         this.scheduleProcessQueue(0);
         return true;
     }
 
-    async ensureDownloadedBlob(hash: string): Promise<Blob | undefined> {
-        const existing = await this.db.file_blobs.get(hash);
+    async ensureDownloadedBlob(
+        hash: string,
+        boundContext?: BoundQueueContext
+    ): Promise<Blob | undefined> {
+        const db = boundContext?.db ?? this.db;
+        const workspaceId = boundContext?.workspaceId ?? this.workspaceId;
+        const capturedContext = workspaceId ? { workspaceId, db } : undefined;
+        const existing = await db.file_blobs.get(hash);
+        if (capturedContext) this.assertBoundContext(capturedContext);
         if (existing?.blob) return existing.blob;
-        const transfer = await this.enqueue(hash, 'download');
+        if (!workspaceId) return undefined;
+        if (capturedContext) this.assertBoundContext(capturedContext);
+        const transfer = await this.enqueue(hash, 'download', {
+            workspaceId,
+            db,
+        });
         if (!transfer) return undefined;
+        if (capturedContext) this.assertBoundContext(capturedContext);
         try {
-            await this.waitForTransfer(transfer.id);
+            await this.waitForTransfer(transfer.id, 60_000, db);
+            if (capturedContext) this.assertBoundContext(capturedContext);
         } catch (error) {
+            if (capturedContext) this.assertBoundContext(capturedContext);
             // Pre-commit / temporary remote gaps are expected; caller retries later.
             if (isRecoverableTransferError(error)) return undefined;
-            const parked = await this.db.file_transfers.get(transfer.id);
+            const parked = await db.file_transfers.get(transfer.id);
+            if (capturedContext) this.assertBoundContext(capturedContext);
             if (
                 parked?.state === 'pending_upload' ||
                 parked?.state === 'remote_missing'
@@ -283,16 +323,25 @@ export class FileTransferQueue {
             }
             throw error;
         }
-        const row = await this.db.file_blobs.get(hash);
+        if (capturedContext) this.assertBoundContext(capturedContext);
+        const row = await db.file_blobs.get(hash);
+        if (capturedContext) this.assertBoundContext(capturedContext);
         return row?.blob;
+    }
+
+    private assertBoundContext(context: BoundQueueContext): void {
+        if (this.db !== context.db || this.workspaceId !== context.workspaceId) {
+            throw new Error('workspace changed during storage transfer');
+        }
     }
 
     private async findExistingTransfer(
         hash: string,
-        direction: FileTransferDirection
+        direction: FileTransferDirection,
+        db = this.db
     ): Promise<FileTransfer | undefined> {
         try {
-            const existing = await this.db.file_transfers
+            const existing = await db.file_transfers
                 .where('[hash+direction]')
                 .equals([hash, direction])
                 .toArray();
@@ -301,6 +350,7 @@ export class FileTransferQueue {
             if (!this.isDatabaseClosedError(error)) {
                 throw error;
             }
+            if (db !== this.db) throw error;
             this.rebindDb();
             return undefined;
         }
@@ -802,6 +852,16 @@ export class FileTransferQueue {
             ? normalizeTransferMime(responseMime)
             : '';
         const expectedMime = normalizeTransferMime(meta.mime_type);
+        const fileKind = (meta as FileMeta & { kind?: string }).kind;
+        const expectedMimeCanBeActive =
+            fileKind === 'file'
+                ? false
+                : fileKind === 'pdf'
+                    ? expectedMime === 'application/pdf'
+                    : fileKind === 'image'
+                        ? isSupportedRasterMimeType(expectedMime)
+                        : isSupportedRasterMimeType(expectedMime) ||
+                            expectedMime === 'application/pdf';
         const mimeTrusted =
             !actualMime ||
             actualMime === 'application/octet-stream' ||
@@ -816,8 +876,12 @@ export class FileTransferQueue {
         }
         const blobMime =
             actualMime && actualMime !== 'application/octet-stream'
-                ? responseMime!
-                : meta.mime_type;
+                ? expectedMimeCanBeActive
+                    ? responseMime!
+                    : DEFAULT_FILE_MIME_TYPE
+                : expectedMimeCanBeActive
+                    ? meta.mime_type
+                    : DEFAULT_FILE_MIME_TYPE;
 
         const { blob, bytesTotal } = await this.readBlobWithProgress(
             response,

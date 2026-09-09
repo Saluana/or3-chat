@@ -39,6 +39,8 @@ const { thumbnails, displayedHashes, expanded, toggleExpanded } =
 
 -   Thumbnail references are retained while the component is mounted and released on unmount.
 -   PDF blobs are detected by MIME type or file kind; their blobs are not turned into image URLs.
+-   Only `kind: "image"` metadata with a supported raster MIME and matching
+    bytes reaches the image decoder. Generic files remain inert attachments.
 
 ## Related
 

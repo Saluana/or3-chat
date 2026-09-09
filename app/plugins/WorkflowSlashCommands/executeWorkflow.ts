@@ -109,6 +109,8 @@ export interface WorkflowExecutionOptions {
     resumeFrom?: ResumeFromOptions;
     /** Stable provider-routing key for this workflow run and any retry. */
     sessionId?: string;
+    /** Owning foreground message for generated image references. */
+    messageId?: string;
     /** Attachments (files, images) to include */
     attachments?: Attachment[];
 }
@@ -722,7 +724,11 @@ export function executeWorkflow(
         );
 
         // Provider-neutral gateway over the unpatched public SDK v1 transport.
-        const gateway = createWorkflowModelGateway({ apiKey });
+        let gateway = createWorkflowModelGateway({ apiKey });
+        if (options.messageId) {
+            const {withWorkflowGeneratedImages} = await import('./workflowGeneratedImages');
+            gateway = withWorkflowGeneratedImages(gateway, options.messageId);
+        }
 
         const toolFallbackModel = pickToolFallbackModel(DEFAULT_TOOL_MODEL);
         const toolModelCheck = ensureToolCapableModels(

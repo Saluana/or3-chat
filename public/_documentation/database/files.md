@@ -20,7 +20,7 @@ File storage layer that deduplicates blobs by hash, keeps metadata in Dexie, and
 | `hash`           | SHA-256 hash (`sha256:` prefix) used as primary key for both metadata and blob tables; legacy MD5 hashes remain readable. |
 | `name`           | Display name supplied by uploader.                              |
 | `mime_type`      | MIME type (defaults to `application/octet-stream`).             |
-| `kind`           | `'image'` or `'pdf'` (auto-detected).                           |
+| `kind`           | `'image'`, `'pdf'`, or generic `'file'`; only verified PNG/JPEG/WebP/GIF bytes use image processing. |
 | `size_bytes`     | Blob size in bytes; enforced against a default 20 MB cap.       |
 | `width`/`height` | Optional image dimensions extracted via object URL.             |
 | `ref_count`      | Number of referencing entities (messages).                      |
@@ -63,7 +63,7 @@ These make it easy to inject custom validation, analytics, or audit trails aroun
 ## Implementation notes
 
 1. **Perf markers** — In dev mode the module records `performance.measure` spans for create/ref operations.
-2. **Image metadata** — Uses an object URL to resolve dimensions without full decode; errors are swallowed gracefully.
+2. **File classification** — Missing MIME uses `application/octet-stream`; unknown, active, or signature-mismatched content is stored as generic `file`. Only verified PNG/JPEG/WebP/GIF bytes use the image dimension decoder. PDF handling remains MIME based.
 3. **Transactions** — Critical write operations run inside Dexie transactions covering both metadata and blob tables to keep state consistent. Deduplication is rechecked inside the write transaction so concurrent identical uploads increment one canonical metadata row instead of overwriting its reference count.
 4. **Transfer queue** — New files without a remote storage id are enqueued for upload; `ensureFileBlob` downloads missing blobs through the storage transfer queue when it is available.
 

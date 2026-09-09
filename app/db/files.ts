@@ -41,6 +41,12 @@ import type {
     FileEntity,
 } from '../core/hooks/hook-types';
 import { useRuntimeConfig } from '#imports';
+import {
+    classifyFileBlob,
+    classifyFileKind,
+    normalizeFileMimeType,
+    type FileKind,
+} from '~~/shared/files/file-kind';
 
 // Default max file size (20MB) - can be overridden by config
 const DEFAULT_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
@@ -75,17 +81,37 @@ function getMaxFileSizeBytes(): number {
 
 const FILE_TABLE = 'files';
 
+/**
+ * Metadata fields can be absent on rows created before the generic-file
+ * rollout. Keep that legacy shape explicit so callers do not cast incomplete
+ * records to the current FileMeta type.
+ */
+type LegacyFileMetaInput = {
+    kind?: FileKind;
+    mime_type?: string;
+};
+
 function toFileEntity(meta: FileMeta): FileEntity {
     return {
         hash: meta.hash,
         name: meta.name,
         mime: meta.mime_type,
         size: meta.size_bytes,
+        // Rows written before the generic-file rollout have no `kind`. Derive
+        // that legacy value from MIME metadata instead of defaulting them to
+        // trusted image handling.
+        kind: resolveStoredFileKind(meta),
         ref_count: meta.ref_count,
     };
 }
 
-function applyFileEntityToMeta<T extends Record<string, unknown>>(
+function resolveStoredFileKind(meta: LegacyFileMetaInput): FileKind {
+    return meta.kind ?? classifyFileKind(meta.mime_type);
+}
+
+function applyFileEntityToMeta<
+    T extends Record<string, unknown> & LegacyFileMetaInput,
+>(
     meta: T,
     entity: FileEntity
 ): T {
@@ -95,6 +121,7 @@ function applyFileEntityToMeta<T extends Record<string, unknown>>(
         name: entity.name,
         mime_type: entity.mime,
         size_bytes: entity.size,
+        kind: entity.kind ?? resolveStoredFileKind(meta),
         ref_count:
             entity.ref_count ?? (meta as { ref_count?: number }).ref_count,
     } as T;
@@ -111,6 +138,7 @@ function createFileDeletePayload(
               name: hash,
               mime: 'application/octet-stream',
               size: 0,
+              kind: 'file' as const,
               ref_count: 0,
           };
     return {
@@ -123,9 +151,9 @@ function createFileDeletePayload(
 /** Internal helper to change ref_count and fire hook */
 async function changeRefCount(
     hash: string,
-    delta: number
+    delta: number,
+    db = getDb()
 ): Promise<FileMeta | undefined> {
-    const db = getDb();
     return db.transaction(
         'rw',
         getWriteTxTableNames(db, 'file_meta'),
@@ -134,6 +162,7 @@ async function changeRefCount(
             if (!meta) return undefined;
             const next = {
                 ...meta,
+                kind: resolveStoredFileKind(meta),
                 ref_count: Math.max(0, meta.ref_count + delta),
                 updated_at: nowSec(),
                 clock: nextClock(meta.clock),
@@ -169,6 +198,12 @@ export async function createOrRefFile(
     file: Blob,
     name: string
 ): Promise<FileMeta> {
+    const db = getDb();
+    const assertCurrentDb = () => {
+        if (getDb() !== db) {
+            throw new Error('workspace changed while creating file');
+        }
+    };
     const dev = import.meta.dev;
     const hasPerf = typeof performance !== 'undefined';
     const markId =
@@ -178,11 +213,26 @@ export async function createOrRefFile(
     if (markId && hasPerf) performance.mark(`${markId}:start`);
     if (file.size > getMaxFileSizeBytes()) throw new Error('file too large');
     const hooks = useHooks();
-    const hash = await computeFileHash(file);
-    const existing = await getDb().file_meta.get(hash);
+    const declaredMime = normalizeFileMimeType(file.type);
+    let kind: FileKind = classifyFileKind(declaredMime);
+    let hash: string;
+    if (kind === 'image') {
+        const [computedHash, classification] = await Promise.all([
+            computeFileHash(file),
+            classifyFileBlob(file),
+        ]);
+        hash = computedHash;
+        kind = classification.kind;
+    } else {
+        hash = await computeFileHash(file);
+    }
+    assertCurrentDb();
+    const existing = await db.file_meta.get(hash);
+    assertCurrentDb();
     if (existing) {
-        const incremented = await changeRefCount(hash, 1);
+        const incremented = await changeRefCount(hash, 1, db);
         if (incremented) {
+            assertCurrentDb();
             if (import.meta.dev) {
                 console.debug('[files] ref existing', {
                     hash: hash.slice(0, 8),
@@ -192,16 +242,19 @@ export async function createOrRefFile(
             }
             if (markId && hasPerf) finalizePerf(markId, 'ref', file.size);
             if (!incremented.storage_id) {
-                await enqueueUpload(hash);
+                assertCurrentDb();
+                await enqueueUpload(hash, db);
+                assertCurrentDb();
             }
             return incremented;
         }
     }
-    const mime = file.type || 'application/octet-stream';
+    const mime = declaredMime;
+    assertCurrentDb();
     // Basic image dimension extraction if image
     let width: number | undefined;
     let height: number | undefined;
-    if (mime.startsWith('image/')) {
+    if (kind === 'image') {
         try {
             const bmp = await blobImageSize(file);
             width = bmp?.width;
@@ -210,11 +263,12 @@ export async function createOrRefFile(
             // Silently ignore image dimension extraction failures
         }
     }
+    assertCurrentDb();
     const baseCreate = {
         hash,
         name,
         mime_type: mime,
-        kind: mime === 'application/pdf' ? 'pdf' : 'image',
+        kind,
         size_bytes: file.size,
         width,
         height,
@@ -227,9 +281,11 @@ export async function createOrRefFile(
             name,
             mime,
             size: file.size,
+            kind,
             ref_count: 1,
         } as FileEntity
     );
+    assertCurrentDb();
     const prepared = parseOrThrow(
         FileMetaCreateSchema,
         applyFileEntityToMeta(baseCreate, filteredEntity)
@@ -244,7 +300,7 @@ export async function createOrRefFile(
 
     let storedMeta: FileMeta | null = null;
     let createdNew = false;
-    const db = getDb();
+    assertCurrentDb();
     await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'file_meta', { include: ['file_blobs'] }),
@@ -256,10 +312,12 @@ export async function createOrRefFile(
         if (concurrentExisting) {
             const next = {
                 ...concurrentExisting,
+                kind: resolveStoredFileKind(concurrentExisting),
                 ref_count: concurrentExisting.ref_count + 1,
                 updated_at: nowSec(),
                 clock: nextClock(concurrentExisting.clock),
             };
+            assertCurrentDb();
             await db.file_meta.put(next);
             await hooks.doAction('db.files.refchange:action:after', {
                 before: toFileEntity(concurrentExisting),
@@ -271,11 +329,13 @@ export async function createOrRefFile(
         }
 
         await hooks.doAction('db.files.create:action:before', actionPayload);
+        assertCurrentDb();
         const mergedMeta = parseOrThrow(
             FileMetaSchema,
             applyFileEntityToMeta(seededMeta, actionPayload.entity)
         );
         // Parallel writes for ~20% faster file creation
+        assertCurrentDb();
         await Promise.all([
             db.file_meta.put(mergedMeta),
             db.file_blobs.put({ hash: mergedMeta.hash, blob: file }),
@@ -288,6 +348,7 @@ export async function createOrRefFile(
         };
         await hooks.doAction('db.files.create:action:after', actionPayload);
     });
+    assertCurrentDb();
     // storedMeta is always set within the transaction, but TypeScript doesn't track this
     // Use non-null assertion since the transaction guarantees the value is set
     const finalMeta = storedMeta!;
@@ -302,7 +363,9 @@ export async function createOrRefFile(
         finalizePerf(markId, createdNew ? 'create' : 'ref', file.size);
     }
     if (!finalMeta.storage_id) {
-        await enqueueUpload(finalMeta.hash);
+        assertCurrentDb();
+        await enqueueUpload(finalMeta.hash, db);
+        assertCurrentDb();
     }
     return finalMeta;
 }
@@ -367,16 +430,20 @@ export async function getFileBlob(hash: string): Promise<Blob | undefined> {
 export async function ensureFileBlob(
     hash: string
 ): Promise<Blob | undefined> {
-    const row = await getDb().file_blobs.get(hash);
+    const db = getDb();
+    const row = await db.file_blobs.get(hash);
     if (row?.blob) return row.blob;
     if (!import.meta.client) return undefined;
     try {
         const { getStorageTransferQueue } = await import(
             '~/core/storage/transfer-queue'
         );
+        if (getDb() !== db) throw new Error('workspace changed while reading file');
         const queue = getStorageTransferQueue();
         if (!queue) return undefined;
-        return await queue.ensureDownloadedBlob(hash);
+        const workspaceId = queue.getWorkspaceId();
+        if (!workspaceId || getDb() !== db) return undefined;
+        return await queue.ensureDownloadedBlob(hash, { db, workspaceId });
     } catch (error) {
         const { isRecoverableTransferError } = await import(
             '~/core/storage/transfer-queue-support'
@@ -623,15 +690,18 @@ export function fileDeleteError(message: string, cause?: unknown) {
  */
 export { changeRefCount };
 
-async function enqueueUpload(hash: string): Promise<void> {
+async function enqueueUpload(hash: string, db = getDb()): Promise<void> {
     if (!import.meta.client) return;
     try {
         const { getStorageTransferQueue } = await import(
             '~/core/storage/transfer-queue'
         );
+        if (getDb() !== db) throw new Error('workspace changed while enqueueing upload');
         const queue = getStorageTransferQueue();
         if (!queue) return;
-        await queue.enqueue(hash, 'upload');
+        const workspaceId = queue.getWorkspaceId();
+        if (!workspaceId) return;
+        await queue.enqueue(hash, 'upload', { db, workspaceId });
     } catch (error) {
         reportError(error, {
             silent: true,

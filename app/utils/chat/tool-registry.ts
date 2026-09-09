@@ -78,6 +78,7 @@ export interface RegisteredTool {
     enabled: Ref<boolean>;
     lastError: Ref<string | null>;
     runtime: ToolRuntime;
+    available?: (context: ToolAvailabilityContext) => boolean;
     workflowPolicy?: WorkflowToolRegistrationPolicy;
     /** Removes this exact registration; returns false after replacement/disposal. */
     dispose: () => boolean;
@@ -85,10 +86,13 @@ export interface RegisteredTool {
     _stopWatcher: () => void;
 }
 
+export interface ToolAvailabilityContext { workspaceId: string | null; threadId: string | null }
 interface RegisterOptions {
     override?: boolean; // allow replacing an existing tool
     enabled?: boolean; // explicit initial enabled state
     runtime?: ToolRuntime;
+    /** Optional origin gate, checked both before advertising and before execution. */
+    available?: (context: ToolAvailabilityContext) => boolean;
     workflowPolicy?: WorkflowToolRegistrationPolicy;
 }
 
@@ -297,6 +301,7 @@ export function useToolRegistry() {
             enabled: ref(initialEnabled),
             lastError: ref(null),
             runtime,
+            available: opts.available,
             workflowPolicy: opts.workflowPolicy,
             _owner: owner,
             _stopWatcher: () => undefined,
@@ -372,9 +377,9 @@ export function useToolRegistry() {
     /**
      * Get all tool definitions that are currently enabled (for OpenRouter).
      */
-    function getEnabledDefinitions(): ToolDefinition[] {
+    function getEnabledDefinitions(context: ToolAvailabilityContext = { workspaceId: null, threadId: null }): ToolDefinition[] {
         return Array.from(registryState.tools.values())
-            .filter((tool) => tool.enabled.value)
+            .filter((tool) => tool.enabled.value && (!tool.available || tool.available(context)))
             .map((tool) => tool.definition);
     }
 
@@ -407,6 +412,10 @@ export function useToolRegistry() {
                 error: `Tool "${toolName}" is not registered.`,
                 timedOut: false,
             };
+        }
+
+        if (tool.available && !tool.available(context ?? { workspaceId: null, threadId: null })) {
+            return { result: null, toolName, error: `Tool "${toolName}" is unavailable for this conversation context.`, timedOut: false };
         }
 
         if (admission) {

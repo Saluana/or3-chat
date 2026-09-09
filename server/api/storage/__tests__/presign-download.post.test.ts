@@ -109,6 +109,9 @@ describe('POST /api/storage/presign-download', () => {
                 hash: `sha256:${'a'.repeat(64)}`,
                 sizeBytes: 3,
                 storageId: 'storage-live',
+                mimeType: 'image/png',
+                name: 'image.png',
+                fileKind: 'image',
                 updatedAt: 1,
             }],
             hasMore: false,
@@ -306,9 +309,62 @@ describe('POST /api/storage/presign-download', () => {
             workspaceId: 'ws-1',
             hash: `sha256:${'a'.repeat(64)}`,
             storageId: 'storage-live',
+            mimeType: 'image/png',
             expiresInMs: 54_321,
             disposition: 'attachment',
+            filename: 'image.png',
         });
+    });
+
+    it('forces generic files to inert attachment downloads despite caller hints', async () => {
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), disposition: 'inline', file_kind_capability: 'v1' });
+        queryCanonicalStorageMock.mockResolvedValue({
+            items: [{
+                kind: 'metadata',
+                hash: `sha256:${'a'.repeat(64)}`,
+                sizeBytes: 3,
+                storageId: 'storage-live',
+                mimeType: 'text/html',
+                name: '../../evil' + String.fromCharCode(13, 10) + '.html',
+                fileKind: 'file',
+                updatedAt: 1,
+            }],
+            hasMore: false,
+        });
+
+        await expect(handler(makeEvent())).resolves.toMatchObject({
+            disposition: 'attachment',
+        });
+        expect(presignDownloadMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+            mimeType: 'application/octet-stream',
+            disposition: 'attachment',
+            filename: '.._.._evil__.html',
+        }));
+    });
+
+    it('returns 426 before presigning a generic file for an older reader', async () => {
+        const handler = (await import('../presign-download.post')).default as (event: H3Event) => Promise<unknown>;
+        queryCanonicalStorageMock.mockResolvedValue({
+            items: [{
+                kind: 'metadata',
+                hash: `sha256:${'a'.repeat(64)}`,
+                sizeBytes: 3,
+                storageId: 'storage-live',
+                mimeType: 'text/plain',
+                name: 'notes.txt',
+                fileKind: 'file',
+                updatedAt: 1,
+            }],
+            hasMore: false,
+        });
+        readBodyMock.mockResolvedValue(makeValidBody());
+
+        await expect(handler(makeEvent())).rejects.toMatchObject({
+            statusCode: 426,
+            statusMessage: 'Update OR3 Chat to use general files',
+        });
+        expect(presignDownloadMock).not.toHaveBeenCalled();
     });
 
     it('passes through download method/headers/storageId from adapter response', async () => {

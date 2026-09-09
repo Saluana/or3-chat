@@ -6,6 +6,7 @@ import {
     type ThumbState,
 } from '~/composables/core/useThumbnailUrlCache';
 import { truncateAttachmentName } from '~/utils/chat/truncateAttachmentName';
+import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
 type MessageWithAttachments = {
     file_hashes?: unknown;
@@ -48,6 +49,21 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
 
     async function ensureThumb(hash: string) {
         if (pdfMeta[hash]) return;
+
+        const meta = await getFileMeta(hash).catch(() => undefined);
+        if (meta && meta.kind === 'pdf') {
+            pdfMeta[hash] = { name: meta.name, kind: meta.kind };
+            delete thumbnails[hash];
+            return;
+        }
+        if (
+            !meta ||
+            meta.kind !== 'image' ||
+            !isSupportedRasterMimeType(meta.mime_type)
+        ) {
+            delete thumbnails[hash];
+            return;
+        }
         if (thumbnails[hash] && thumbnails[hash].status === 'ready') return;
 
         const cached = thumbUrlCache.get(hash);
@@ -59,25 +75,15 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
 
         try {
             const state = await thumbUrlCache.ensure(hash, async () => {
-                const [blob, meta] = await Promise.all([
-                    (await import('~/db/files')).getFileBlob(hash),
-                    getFileMeta(hash).catch(() => undefined),
-                ]);
-
-                if (meta && meta.kind === 'pdf') {
-                    pdfMeta[hash] = { name: meta.name, kind: meta.kind };
-                    return null;
-                }
+                const blob = await (await import('~/db/files')).getFileBlob(
+                    hash
+                );
                 thumbUrlCache.setIntrinsicSize(
                     hash,
-                    meta?.width,
-                    meta?.height
+                    meta.width,
+                    meta.height
                 );
                 if (!blob) return null;
-                if (blob.type === 'application/pdf') {
-                    pdfMeta[hash] = { name: meta?.name, kind: 'pdf' };
-                    return null;
-                }
                 return blob;
             });
 
@@ -103,13 +109,8 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
             for (const hash of nextSet) {
                 if (!currentHashes.has(hash)) {
                     if (!thumbnails[hash]) {
-                        const cached = thumbUrlCache.get(hash);
-                        if (cached) {
-                            thumbnails[hash] = cached;
-                        } else {
-                            thumbnails[hash] = { status: 'loading' };
-                            newHashes.push(hash);
-                        }
+                        thumbnails[hash] = { status: 'loading' };
+                        newHashes.push(hash);
                     } else if (thumbnails[hash].status === 'loading') {
                         newHashes.push(hash);
                     }
@@ -122,7 +123,7 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
 
             for (const hash of nextSet) {
                 if (!currentHashes.has(hash)) {
-                    const state = thumbUrlCache.get(hash);
+                    const state = thumbnails[hash];
                     if (state?.status === 'ready') {
                         if (!isComponentActive) {
                             retainThumb(hash);

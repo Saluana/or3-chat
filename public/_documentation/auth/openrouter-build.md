@@ -214,6 +214,11 @@ hash = 'abc123def456'
 → 'data:image/png;base64,...'
 ```
 
+Only metadata classified as `kind: "image"` with a supported raster MIME is
+hydrated into an `image_url` part. Generic files, including files whose MIME
+starts with `image/`, remain file attachments and are never sent as model
+images.
+
 ### Remote URL → data URL
 
 ```ts
@@ -232,8 +237,11 @@ Blob URLs (`blob:`) can't be accessed server-side, so they're skipped.
 
 Some refs are used as-is without hydration:
 
-- `data:image/...` URLs go straight into the message
-- Remote URLs that look like images (`.png`, `.jpg`, `.gif`, `.webp`, `.avif`, or a query string) pass through as `image_url` parts
+- Supported raster `data:` URLs go straight into the message; SVG and other
+  active `image/*` URLs are rejected.
+- Remote URLs that look like images (`.png`, `.jpg`, `.gif`, `.webp`, `.avif`,
+  or a query string) are fetched through the bounded hydrator and become model
+  images only when the response has a supported raster MIME.
 
 ---
 
@@ -323,7 +331,9 @@ const orMessages = await buildOpenRouterMessages(messages, {
 ### Image types supported
 
 - **Input**: PNG, JPG, GIF, WebP, AVIF
-- **Detection**: Local hashes are checked against file metadata (`kind: 'image'` or an `image/*` MIME type); remote URLs use an extension or query-string heuristic
+- **Detection**: Local hashes are checked against file metadata (`kind:
+  'image'` with a supported raster MIME); remote URLs use an extension or
+  query-string heuristic followed by bounded response-MIME validation.
 - **Inline formats**: data URLs, https URLs, local hashes, blob URLs
 
 ### PDF handling

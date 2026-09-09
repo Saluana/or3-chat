@@ -15,6 +15,7 @@ const hookApplyFiltersMock = vi.fn(async (_name: string, value: unknown) => valu
 const messagesByThreadMock = vi.fn<() => Promise<any[]>>(async () => []);
 const backgroundJobTrackers = new Map<string, any>();
 const messageStore = new Map<string, any>();
+let consumeWorkflowSend = false;
 const enabledToolDefsRef = { value: [] as any[] };
 const runtimeConfigRef = {
     value: {
@@ -79,7 +80,11 @@ vi.mock('~/db', () => ({
 }));
 
 vi.mock('~/db/client', () => ({
-    getDb: () => ({
+    getDb: () => activeDb,
+    getActiveWorkspaceId: () => null,
+}));
+
+const dbMock = {
         messages: {
             get: async (id: string) => messageStore.get(id),
             delete: vi.fn(async (id: string) => {
@@ -91,8 +96,8 @@ vi.mock('~/db/client', () => ({
             _tables: string[],
             fn: () => Promise<unknown>
         ) => await fn(),
-    }),
-}));
+};
+let activeDb = dbMock;
 
 vi.mock('~/db/files-util', () => ({
     serializeFileHashes: (hashes: string[]) => JSON.stringify(hashes),
@@ -103,7 +108,16 @@ vi.mock('~/utils/chat/useAi-internal/files', () => ({
 }));
 
 vi.mock('~/utils/files/attachments', () => ({
-    parseHashes: () => [],
+    parseHashes: (raw: unknown) => {
+        if (Array.isArray(raw)) return raw;
+        if (typeof raw !== 'string') return [];
+        try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return raw ? [raw] : [];
+        }
+    },
     mergeAssistantFileHashes: (_prev: string[], next: string[]) => next || [],
 }));
 
@@ -228,7 +242,7 @@ vi.mock('~/state/global', () => ({
 }));
 
 vi.mock('~/utils/chat/send-interception', () => ({
-    consumeChatSendHandled: () => false,
+    consumeChatSendHandled: () => consumeWorkflowSend,
 }));
 
 vi.mock('~/core/notifications/notification-user', () => ({
@@ -307,6 +321,8 @@ describe('useChat background detach race', () => {
         vi.clearAllMocks();
         backgroundJobTrackers.clear();
         messageStore.clear();
+        activeDb = dbMock;
+        consumeWorkflowSend = false;
         resolveBackgroundStart = null;
         latestTracker = null;
         enabledToolDefsRef.value = [];
@@ -444,6 +460,186 @@ describe('useChat background detach race', () => {
         expect(ensureBackgroundJobTrackerMock).toHaveBeenCalledTimes(1);
         expect(subscribeBackgroundJobMock).not.toHaveBeenCalled();
         expect(latestTracker?.subscribers.size ?? -1).toBe(0);
+    });
+
+    it('hydrates persisted workflow image hashes into the live message', async () => {
+        consumeWorkflowSend = true;
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1');
+
+        await expect(
+            chat.sendMessage('generate an image', {
+                files: [],
+                model: 'test-model',
+                file_hashes: [],
+                online: false,
+                context_hashes: [],
+            } as any)
+        ).resolves.toMatchObject({
+            status: 'detached',
+            assistantMessageId: 'assistant-msg-1',
+        });
+
+        const workflowHook = hookOnMock.mock.calls.find(
+            ([name]) => name === 'workflow.execution:action:state_update'
+        )?.[1] as
+            | ((payload: {
+                  messageId: string;
+                  state: { executionState: string; finalOutput: string };
+              }) => void)
+            | undefined;
+        expect(workflowHook).toBeTypeOf('function');
+
+        messageStore.set('assistant-msg-1', {
+            ...messageStore.get('assistant-msg-1'),
+            file_hashes: JSON.stringify(['generated-image-hash']),
+        });
+        workflowHook?.({
+            messageId: 'assistant-msg-1',
+            state: { executionState: 'completed', finalOutput: 'done' },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            chat.rawMessages.value.find((m) => m.id === 'assistant-msg-1')
+        ).toMatchObject({
+            content: 'done',
+            file_hashes: JSON.stringify(['generated-image-hash']),
+        });
+        expect(
+            chat.messages.value.find((m) => m.id === 'assistant-msg-1')
+        ).toMatchObject({
+            text: 'done',
+            file_hashes: ['generated-image-hash'],
+        });
+    });
+
+    it('releases a detached scope when the workflow ends without output', async () => {
+        consumeWorkflowSend = true;
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1');
+        await expect(
+            chat.sendMessage('generate an image', {
+                files: [],
+                model: 'test-model',
+                file_hashes: [],
+                online: false,
+                context_hashes: [],
+            } as any)
+        ).resolves.toMatchObject({ status: 'detached' });
+
+        const workflowHook = hookOnMock.mock.calls.find(
+            ([name]) => name === 'workflow.execution:action:state_update'
+        )?.[1] as
+            | ((payload: {
+                  messageId: string;
+                  state: { executionState: string; finalOutput?: string };
+              }) => void)
+            | undefined;
+        expect(workflowHook).toBeTypeOf('function');
+        workflowHook?.({
+            messageId: 'assistant-msg-1',
+            state: { executionState: 'error' },
+        });
+
+        workflowHook?.({
+            messageId: 'assistant-msg-1',
+            state: { executionState: 'completed', finalOutput: 'done' },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            chat.rawMessages.value.find((m) => m.id === 'assistant-msg-1')
+        ).not.toMatchObject({ content: 'done' });
+    });
+
+    it('ignores a late workflow event while another request is active', async () => {
+        consumeWorkflowSend = true;
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1');
+        await expect(
+            chat.sendMessage('generate an image', {
+                files: [],
+                model: 'test-model',
+                file_hashes: [],
+                online: false,
+                context_hashes: [],
+            } as any)
+        ).resolves.toMatchObject({ status: 'detached' });
+
+        const workflowHook = hookOnMock.mock.calls.find(
+            ([name]) => name === 'workflow.execution:action:state_update'
+        )?.[1] as
+            | ((payload: {
+                  messageId: string;
+                  state: { executionState: string; finalOutput?: string };
+              }) => void)
+            | undefined;
+        expect(workflowHook).toBeTypeOf('function');
+        workflowHook?.({
+            messageId: 'assistant-msg-1',
+            state: { executionState: 'error' },
+        });
+
+        consumeWorkflowSend = false;
+        const secondSend = chat.sendMessage('unrelated request', {
+            files: [],
+            model: 'test-model',
+            file_hashes: [],
+            online: false,
+            context_hashes: [],
+        } as any);
+        await waitForCall(startBackgroundStreamMock);
+
+        workflowHook?.({
+            messageId: 'assistant-msg-1',
+            state: { executionState: 'completed', finalOutput: 'stale' },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(
+            chat.rawMessages.value.find((m) => m.id === 'assistant-msg-1')
+        ).not.toMatchObject({ content: 'stale' });
+
+        resolveBackgroundStart?.({ jobId: 'job-after-workflow' });
+        await secondSend;
+    });
+
+    it('releases a workflow scope when request setup fails before routing', async () => {
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        hookDoActionMock.mockRejectedValueOnce(new Error('setup failed'));
+        const chat = useChat([], 'thread-1');
+        await expect(
+            chat.sendMessage('hello', {
+                files: [],
+                model: 'test-model',
+                file_hashes: [],
+                online: false,
+                context_hashes: [],
+            } as any)
+        ).resolves.toMatchObject({ status: 'failed' });
+
+        const workflowHook = hookOnMock.mock.calls.find(
+            ([name]) => name === 'workflow.execution:action:state_update'
+        )?.[1] as
+            | ((payload: {
+                  messageId: string;
+                  state: { executionState: string; finalOutput?: string };
+              }) => void)
+            | undefined;
+        expect(workflowHook).toBeTypeOf('function');
+        workflowHook?.({
+            messageId: 'assistant-msg-1',
+            state: { executionState: 'completed', finalOutput: 'done' },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            chat.rawMessages.value.find((m) => m.id === 'assistant-msg-1')
+        ).toBeUndefined();
     });
 
     it('admits only one send synchronously before the first await', async () => {

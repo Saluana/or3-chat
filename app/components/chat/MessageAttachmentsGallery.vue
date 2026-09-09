@@ -36,7 +36,35 @@
                         >
                     </div>
                 </template>
-                <template v-else-if="thumbs[h]?.status === 'ready'">
+                <template v-else-if="meta[h]?.kind === 'file'">
+                    <div
+                        class="message-attachment-file-placeholder w-full h-full flex flex-col items-center justify-center gap-2 bg-[var(--md-surface-container-low)] text-center p-2"
+                    >
+                        <span
+                            class="message-attachment-file-label text-[10px] font-semibold tracking-wide uppercase"
+                            >FILE</span
+                        >
+                        <span
+                            class="message-attachment-file-name text-[9px] leading-snug line-clamp-3 break-words px-1"
+                            :title="fileNames[h] || h.slice(0, 8)"
+                            >{{ fileNames[h] || 'Attachment' }}</span
+                        >
+                        <button
+                            type="button"
+                            class="message-attachment-file-download text-[10px] underline"
+                            :disabled="downloading[h] === true"
+                            @click="downloadAttachment(h)"
+                        >
+                            {{ downloading[h] ? 'Downloading…' : 'Download' }}
+                        </button>
+                    </div>
+                </template>
+                <template
+                    v-else-if="
+                        meta[h]?.kind === 'image' &&
+                        thumbs[h]?.status === 'ready'
+                    "
+                >
                     <img
                         :id="`attachment-image-${index}`"
                         :src="thumbs[h].url"
@@ -98,6 +126,7 @@ import {
     useThumbnailUrlCache,
     type ThumbState,
 } from '~/composables/core/useThumbnailUrlCache';
+import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
 type LocalThumbState = ThumbState | { status: 'loading' };
 
@@ -124,8 +153,23 @@ const thumbUrlCache = useThumbnailUrlCache({ graceMs: 30000 });
 const thumbs = reactive<Record<string, LocalThumbState>>({});
 const meta = reactive<Record<string, FileMeta>>({});
 const fileNames = reactive<Record<string, string>>({});
+const downloading = reactive<Record<string, boolean>>({});
 
 async function ensure(h: string) {
+    const m = await getFileMeta(h).catch(() => undefined);
+    if (m) {
+        meta[h] = m;
+        if (m.name) fileNames[h] = m.name;
+    }
+    if (
+        !m ||
+        m.kind !== 'image' ||
+        !isSupportedRasterMimeType(m.mime_type)
+    ) {
+        thumbs[h] = { status: 'error' };
+        return;
+    }
+
     if (thumbs[h] && thumbs[h].status === 'ready') return;
     const cached = thumbUrlCache.get(h);
     if (cached) {
@@ -135,21 +179,31 @@ async function ensure(h: string) {
 
     thumbs[h] = { status: 'loading' };
     const state = await thumbUrlCache.ensure(h, async () => {
-        const [blob, m] = await Promise.all([
-            getFileBlob(h),
-            getFileMeta(h).catch(() => undefined),
-        ]);
-        if (m) {
-            meta[h] = m;
-            if (m.name) fileNames[h] = m.name;
-            thumbUrlCache.setIntrinsicSize(h, m.width, m.height);
-        }
+        const blob = await getFileBlob(h);
+        thumbUrlCache.setIntrinsicSize(h, m.width, m.height);
         return blob;
     });
     if (state) {
         thumbs[h] = state;
     } else {
         thumbs[h] = { status: 'error' };
+    }
+}
+
+async function downloadAttachment(hash: string): Promise<void> {
+    if (downloading[hash]) return;
+    downloading[hash] = true;
+    try {
+        const blob = await getFileBlob(hash);
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = fileNames[hash] || 'attachment';
+        anchor.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } finally {
+        delete downloading[hash];
     }
 }
 

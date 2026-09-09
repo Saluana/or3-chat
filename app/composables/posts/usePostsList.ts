@@ -2,6 +2,7 @@ import { ref, computed, onScopeDispose, getCurrentScope } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
 import { getDb } from '~/db/client';
 import type { Post } from '~/db/schema';
+import { isInternalPostType } from '~~/shared/posts/visibility';
 
 export interface UsePostsListOptions {
     /** Maximum number of posts to return */
@@ -38,7 +39,7 @@ export function usePostsList(
     postType: string,
     opts: UsePostsListOptions = {}
 ) {
-    if (!process.client) {
+    if (!process.client || isInternalPostType(postType)) {
         // SSR-safe no-op
         return {
             items: computed(() => [] as PostData[]),

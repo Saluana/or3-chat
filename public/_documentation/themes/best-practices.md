@@ -103,6 +103,12 @@ in a correctly configured viewport.
 Auto-detection only covers `chat`, `sidebar`, `dashboard`, and `header`. For
 other areas, add `data-context="..."` on a wrapper element.
 
+## Embedded plugin panes
+
+Use host surface, text, border and primary color tokens for pane controls; keep game-world colors separate from interface colors. Set an explicit `data-context` on custom plugin roots. Prefer container queries for inspector layouts: a wide browser can still contain a narrow split pane.
+
+Give a pane sidebar `min-height: 0` and a dedicated scrolling navigation region when it has a persistent action footer. Verify that the host's overflow boundaries cannot clip lower actions. Canvas containers need a definite height so intrinsic bitmap dimensions do not stretch their surrounding controls. Test both host themes, a narrow pane, keyboard focus and any independently exported shell.
+
 ## Testing
 
 - Run `bun run theme:validate` to catch schema and selector issues.

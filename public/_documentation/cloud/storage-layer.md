@@ -162,7 +162,17 @@ export default defineNuxtPlugin(() => {
 
 ## Security & Validation
 
-*   **MIME Types**: Strict allowlist (images, PDFs, text).
+*   **MIME Types**: Uploads use the built-in image/PDF/text allowlist unless an
+    administrator explicitly enables `storage.allowAnyFileType`.
+*   **Generic files**: Generic and active-content files download as
+    `application/octet-stream` attachments with `nosniff`; only supported raster
+    images and PDFs retain inline serving.
+*   **Reader compatibility**: Gateway sync and storage requests advertise the
+    typed file-kind `v1` capability. If a generic file record would cross an
+    older reader or writer boundary, the host rejects the complete operation
+    with HTTP 426 and directs the client to update OR3 Chat before applying or
+    committing the record.
+*   **Empty files**: Zero-byte generic files are valid and remain hash checked.
 *   **Size Limits**: Enforced at the Gateway level (default 100MB).
 *   **Permissions**: `requireCan(session, 'workspace.write')` checks on all operations.
 *   **Rate Limiting**: Per-user limits on upload/download generation endpoints.

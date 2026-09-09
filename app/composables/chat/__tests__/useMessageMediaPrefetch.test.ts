@@ -117,6 +117,33 @@ describe('message media prefetch controller', () => {
         expect(cache.release).toHaveBeenCalledWith('pdf');
     });
 
+    it('does not prefetch generic or unsupported image MIME attachments', async () => {
+        const cache = createCache();
+        const loadMeta = vi.fn(async (hash: string) =>
+            hash === 'generic-png'
+                ? { kind: 'file', mime_type: 'image/png' }
+                : { kind: 'image', mime_type: 'image/svg+xml' }
+        );
+        const loadBlob = vi.fn(async () =>
+            new Blob(['bytes'], { type: 'image/png' })
+        );
+        const controller = createMessageMediaPrefetchController({
+            cache,
+            loadMeta,
+            loadBlob,
+        });
+
+        controller.updateRange(
+            [{ file_hashes: ['generic-png', 'svg-image'] }],
+            { startIndex: 0, endIndex: 0 }
+        );
+        await controller.whenIdle();
+
+        expect(loadMeta).toHaveBeenCalledTimes(2);
+        expect(loadBlob).not.toHaveBeenCalled();
+        expect(cache.ensure).not.toHaveBeenCalled();
+    });
+
     it('cannot release a same-hash retention acquired by a newer epoch', async () => {
         const cache = createCache();
         let releaseOldMeta!: () => void;

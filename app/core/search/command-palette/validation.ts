@@ -2,12 +2,10 @@ import type {
     PaletteCommandDefinition,
     PalettePostSourceDefinition,
 } from './types';
+import { isInternalPostType, INTERNAL_POST_TYPES } from '../../../../shared/posts/visibility';
 
 /** Mirrors `INTERNAL_POST_TYPES` from `app/db/posts` without importing Dexie. */
-export const PALETTE_EXCLUDED_POST_TYPES = new Set([
-    'or3:document-revision',
-    'or3:document-revision-chunk',
-]);
+export const PALETTE_EXCLUDED_POST_TYPES = INTERNAL_POST_TYPES;
 
 const ID_RE = /^[a-z0-9-]+$/;
 const TARGET_ID_RE = /^[a-z0-9][a-z0-9._:-]*$/;
@@ -62,7 +60,7 @@ export function validatePostType(postType: string): PaletteValidationResult {
     if (typeof postType !== 'string' || !postType.trim()) {
         return { ok: false, message: 'postType is required' };
     }
-    if (PALETTE_EXCLUDED_POST_TYPES.has(postType)) {
+    if (isInternalPostType(postType)) {
         return {
             ok: false,
             message: `postType "${postType}" is reserved for internal revisions`,

@@ -36,6 +36,23 @@ describe('V1 client tool registry profile', () => {
         vi.restoreAllMocks();
     });
 
+    it('advertises and executes origin-scoped tools only in the attached conversation', async () => {
+        const handler = vi.fn(() => '{"ok":true}');
+        registry.registerTool(definition('origin_scoped', 'client'), handler, {
+            enabled: true,
+            available: context => context.workspaceId === 'workspace-a' && context.threadId === 'thread-a',
+        });
+        expect(registry.getEnabledDefinitions()).toEqual([]);
+        expect(registry.getEnabledDefinitions({ workspaceId: 'workspace-b', threadId: 'thread-a' })).toEqual([]);
+        expect(registry.getEnabledDefinitions({ workspaceId: 'workspace-a', threadId: 'thread-a' })).toHaveLength(1);
+        const rejected = await registry.executeTool('origin_scoped', '{}');
+        expect(rejected.error).toContain('unavailable'); expect(handler).not.toHaveBeenCalled();
+        const result = await registry.executeTool('origin_scoped', '{}', {
+            subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: 'message', callId: 'call', requestId: 'request', abortSignal: new AbortController().signal,
+        });
+        expect(result.result).toBe('{"ok":true}'); expect(handler).toHaveBeenCalledOnce();
+    });
+
     it('rejects duplicates, overrides by identity, exposes refs, and normalizes runtime hints', () => {
         const def = definition('profile_client_tool', 'client');
         const first = registry.registerTool(def, () => 'first', {

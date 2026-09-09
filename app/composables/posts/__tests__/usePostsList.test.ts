@@ -21,6 +21,15 @@ describe('usePostsList', () => {
         });
     });
 
+    it('hides private plugin post types from the generic list surface', async () => {
+        const { usePostsList } = await import('../usePostsList');
+        const { items, loading, error } = usePostsList('or3:plugin-private:or3-tactics:revision');
+
+        expect(items.value).toEqual([]);
+        expect(loading.value).toBe(false);
+        expect(error.value).toBeNull();
+    });
+
     it('should initialize with correct default options', async () => {
         // This test verifies the composable structure
         const { usePostsList } = await import('../usePostsList');

@@ -27,6 +27,10 @@ import { recordDownloadStart } from '../../utils/storage/metrics';
 import { setNoCacheHeaders } from '../../utils/headers';
 import { resolvePresignExpiresAt } from '../../utils/storage/presign-expiry';
 import { getActiveSyncGatewayAdapter } from '../../sync/gateway/registry';
+import { resolveDownloadPolicy } from '../../utils/storage/download-policy';
+import { classifyFileKind } from '~~/shared/files/file-kind';
+import { FILE_KIND_CAPABILITY } from '~~/shared/files/file-capability';
+import { requireFileKindCapability } from '../../utils/storage/file-kind-capability';
 
 const BodySchema = z.object({
     workspace_id: z.string().trim().min(1).max(256),
@@ -35,6 +39,7 @@ const BodySchema = z.object({
     mime_type: z.string().min(1).optional(),
     expires_in_ms: z.number().int().min(1).max(86_400_000).optional(),
     disposition: z.enum(['inline', 'attachment']).optional(),
+    file_kind_capability: z.literal(FILE_KIND_CAPABILITY).optional(),
 });
 
 function normalizeDownloadHash(value: string): string | null {
@@ -50,7 +55,13 @@ async function resolveLiveStorageId(
     event: H3Event,
     workspaceId: string,
     hash: string,
-): Promise<{ hash: string; storageId: string }> {
+): Promise<{
+    hash: string;
+    storageId: string;
+    mimeType?: string;
+    name?: string;
+    fileKind?: 'image' | 'pdf' | 'file';
+}> {
     const canonicalHash = normalizeDownloadHash(hash);
     if (!canonicalHash) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid request' });
@@ -91,7 +102,13 @@ async function resolveLiveStorageId(
         throw createError({ statusCode: 404, statusMessage: 'File not found' });
     }
 
-    return { hash: canonicalHash, storageId: record.storageId.trim() };
+    return {
+        hash: canonicalHash,
+        storageId: record.storageId.trim(),
+        ...(typeof record.mimeType === 'string' ? { mimeType: record.mimeType } : {}),
+        ...(typeof record.name === 'string' ? { name: record.name } : {}),
+        ...(record.fileKind ? { fileKind: record.fileKind } : {}),
+    };
 }
 
 /**
@@ -141,6 +158,18 @@ export default defineEventHandler(async (event) => {
         body.data.workspace_id,
         body.data.hash,
     );
+    if (
+        liveFile.fileKind === 'file' ||
+        (!liveFile.fileKind && classifyFileKind(liveFile.mimeType) === 'file')
+    ) {
+        requireFileKindCapability(body.data.file_kind_capability);
+    }
+    const downloadPolicy = resolveDownloadPolicy({
+        fileKind: liveFile.fileKind,
+        mimeType: liveFile.mimeType,
+        filename: liveFile.name,
+        requestedDisposition: body.data.disposition,
+    });
 
     // Get storage gateway adapter from registry
     const adapter = getActiveStorageGatewayAdapter();
@@ -156,9 +185,10 @@ export default defineEventHandler(async (event) => {
         // provider object. This prevents stale or cross-object storage IDs
         // from becoming an authority.
         storageId: liveFile.storageId,
-        mimeType: body.data.mime_type,
+        mimeType: downloadPolicy.mimeType,
         expiresInMs: body.data.expires_in_ms,
-        disposition: body.data.disposition,
+        disposition: downloadPolicy.disposition,
+        filename: downloadPolicy.filename,
     });
 
     recordSyncRequest(userId, 'storage:download');
@@ -169,7 +199,7 @@ export default defineEventHandler(async (event) => {
     return {
         url: result.url,
         expiresAt,
-        disposition: body.data.disposition,
+        disposition: downloadPolicy.disposition,
         ...(typeof result.method === 'string' ? { method: result.method } : {}),
         ...(result.headers ? { headers: result.headers } : {}),
         ...(typeof result.storageId === 'string' ? { storageId: result.storageId } : {}),

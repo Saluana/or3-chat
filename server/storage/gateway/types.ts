@@ -83,8 +83,10 @@ export interface PresignDownloadRequest {
     mimeType?: string;
     /** Optional client-requested TTL (ms). Provider must clamp/bound. */
     expiresInMs?: number;
-    /** Optional disposition hint (e.g. inline/attachment). Provider may honor. */
+    /** Canonical server-selected disposition. Providers must honor this policy. */
     disposition?: string;
+    /** Canonical sanitized filename for Content-Disposition. */
+    filename?: string;
 }
 
 /**

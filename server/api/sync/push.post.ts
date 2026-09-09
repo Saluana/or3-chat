@@ -36,6 +36,11 @@ import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 import { setNoCacheHeaders } from '../../utils/headers';
 import { readLimitedJsonBody } from '../../utils/security/limited-json-body';
 import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
+import {
+    isGenericFileMetaPayload,
+    requireFileKindCapability,
+} from '../../utils/storage/file-kind-capability';
+import { FILE_KIND_CAPABILITY } from '~~/shared/files/file-capability';
 
 type PendingOp = z.infer<typeof PendingOpSchema>;
 type PushResultItem = z.infer<typeof PushResultSchema>['results'][number];
@@ -43,6 +48,7 @@ type PushResultItem = z.infer<typeof PushResultSchema>['results'][number];
 const PushEnvelopeSchema = z.object({
     scope: SyncScopeSchema,
     ops: z.array(z.unknown()).max(MAX_SYNC_PUSH_BATCH_OPS),
+    fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
 });
 
 function serializedPayloadBytes(payload: unknown): number {
@@ -169,7 +175,7 @@ export default defineEventHandler(async (event) => {
 
     recordSyncRequest(session.user.id, 'sync:push');
 
-    const merged: PushResultItem[] = new Array(envelope.data.ops.length);
+    const merged = new Array<PushResultItem>(envelope.data.ops.length);
     const validOps: PendingOp[] = [];
     const validIndexes: number[] = [];
 
@@ -188,6 +194,13 @@ export default defineEventHandler(async (event) => {
             results: merged,
             serverVersion: 0,
         };
+    }
+
+    if (validOps.some((op) =>
+        op.operation === 'put' &&
+        isGenericFileMetaPayload(op.tableName, op.payload)
+    )) {
+        requireFileKindCapability(envelope.data.fileKindCapability);
     }
 
     const adapter = getActiveSyncGatewayAdapter();

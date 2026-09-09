@@ -35,7 +35,7 @@
                     "name": "plugin-quickstart.md",
                     "path": "/start/plugin-quickstart",
                     "category": "Tutorial",
-                    "summary": "This guide shows you how to extend the dashboard, chat messages, and sidebar through either source-level Nuxt plugins or installable V1 workspace packages. Both use the same reactive registries, but their module exports are different."
+                    "summary": "This guide shows you how to extend the dashboard, chat messages, and sidebar through either source-level Nuxt plugins or installable V1 workspace packages. Both use the same reactive registries, but their module exports are different. Includes active-pane editor layouts, transient edit previews, terrain presentation controls, bundled seam correction and anchored height previews, scoped tool shortcuts, Nuxt UI tooltips, pitch-corrected modifier-drag panning and host theme integration."
                 },
                 {
                     "name": "snake-game-tutorial.md",
@@ -809,7 +809,7 @@
                     "name": "files.md",
                     "path": "/database/files",
                     "category": "Entities",
-                    "summary": "File storage layer that deduplicates blobs by hash, keeps metadata in Dexie, and exposes hook-friendly lifecycle helpers."
+                    "summary": "File storage layer that deduplicates blobs by hash, keeps metadata in Dexie, classifies verified raster/PDF files with a generic fallback, and exposes hook-friendly lifecycle helpers."
                 },
                 {
                     "name": "index.md",
@@ -839,7 +839,7 @@
                     "name": "posts.md",
                     "path": "/database/posts",
                     "category": "Entities",
-                    "summary": "Generic post storage built on the posts Dexie table; used for lightweight CMS data like release notes or docs."
+                    "summary": "Post persistence, captured atomic plugin batches, related-record preconditions, and private plugin record visibility."
                 },
                 {
                     "name": "projects.md",
@@ -971,7 +971,7 @@
                     "name": "tool-registry.md",
                     "path": "/utils/tool-registry",
                     "category": "Tools",
-                    "summary": "Lightweight singleton registry for managing LLM function-calling tools in OR3 Chat. Lets plugins register OpenRouter-compatible tools with handlers, metadata, and toggle persistence. Think of the tool registry as your plugin's control panel for extending th..."
+                    "summary": "Client tool registration, enablement, runtime admission, and captured foreground workspace/thread availability gates."
                 },
                 {
                     "name": "tool-runtime.md",
@@ -1055,7 +1055,7 @@
                     "name": "best-practices.md",
                     "path": "/themes/best-practices",
                     "category": "Guide",
-                    "summary": "Guidance for maintainable, performant themes."
+                    "summary": "Guidance for maintainable, performant themes, including theme-aware embedded panes, scrolling sidebars and responsive canvas layouts."
                 },
                 {
                     "name": "component-overrides.md",
@@ -1109,7 +1109,7 @@
                     "name": "editor.md",
                     "path": "/workflows/editor",
                     "category": "Guide",
-                    "summary": "Browse, build, validate, and run workflows with explicit agent dataflow, cache-efficient prompt routing, quick connected-node insertion, and local package hot reload behavior."
+                    "summary": "Browse, build, validate, and run workflows with explicit agent dataflow and tool selection, cache-efficient prompt routing, generated-image persistence and foreground routing, quick connected-node insertion, and opt-in local package hot reload behavior."
                 }
             ]
         },
@@ -1229,7 +1229,7 @@
                     "name": "provider-convex.md",
                     "path": "/cloud/provider-convex",
                     "category": "Guide",
-                    "summary": "Dedicated install and wiring guide for the Convex sync/storage/backend provider package."
+                    "summary": "Dedicated install and wiring guide for the Convex sync/storage/backend provider package, including the typed generic-file compatibility boundary."
                 },
                 {
                     "name": "provider-fs.md",
@@ -1271,7 +1271,7 @@
                     "name": "storage-layer.md",
                     "path": "/cloud/storage-layer",
                     "category": "Architecture",
-                    "summary": "The OR3 Storage Layer handles large binary assets (images, PDFs) separately from the main database sync. It uses a local-first, hash-addressed architecture to ensure assets are always available offline once downloaded."
+                    "summary": "The OR3 Storage Layer handles hash-addressed binary assets separately from database sync, with explicit MIME admission, safe generic-file download policy, and a typed reader/writer compatibility gate."
                 },
                 {
                     "name": "sync-layer.md",

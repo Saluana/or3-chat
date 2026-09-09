@@ -568,3 +568,9 @@ function useToolRegistry(): {
 ---
 
 Document generated from `app/utils/chat/tool-registry.ts` implementation.
+
+## Foreground origin gates
+
+`registerTool(definition, handler, { runtime: 'client', available })` can restrict a client tool to explicitly attached chats. `available` receives `{ workspaceId, threadId }` and is checked both while collecting enabled definitions and immediately before execution. Foreground requests capture workspace and thread identity before asynchronous work and forward them to the handler. Missing context is represented by `null`; an origin-bound tool should reject it.
+
+Capture the exact project/session attachment before awaiting. Recheck it after asynchronous reads and inside a write transaction. Never use the currently focused pane to retarget an in-flight call. Register the tool disposer with the owning managed plugin scope. A client tool does not become available to background/server execution without a separate implementation and admission policy.
