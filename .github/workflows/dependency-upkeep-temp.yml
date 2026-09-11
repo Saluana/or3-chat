@@ -25,13 +25,77 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Apply safe dependency migrations
+      - name: Apply dependency and compatibility updates
         shell: bash
         run: |
           bun add --exact streamdown-vue@1.0.32
           bun add tiptap-markdown@0.9.0
           bun add -d vue-tsc@3.3.11
-          bun -e 'const p = await Bun.file("package.json").json(); p.scripts.lint = "eslint ."; await Bun.write("package.json", JSON.stringify(p, null, 4) + "\n")'
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          package = Path('package.json')
+          data = json.loads(package.read_text())
+          data['scripts']['lint'] = 'eslint .'
+          package.write_text(json.dumps(data, indent=4) + '\n')
+
+          replacements = {
+              'app/components/FatalErrorBoundary.vue': [
+                  ('@click="detailsOpen = true"', '@click="() => { detailsOpen = true }"'),
+                  ('@click="detailsOpen = false"', '@click="() => { detailsOpen = false }"'),
+              ],
+              'app/components/dashboard/theme/ResetSection.vue': [
+                  ('@click="showResetModal = false"', '@click="() => { showResetModal = false }"'),
+              ],
+              'app/components/dashboard/theme/ThemeModeToggle.vue': [
+                  ('@click="showResetModal = true"', '@click="() => { showResetModal = true }"'),
+                  ('@click="showResetModal = false"', '@click="() => { showResetModal = false }"'),
+              ],
+              'app/components/dashboard/workspace/WorkspaceBackupApp.vue': [
+                  ('@click="importModeModel = option.value"', '@click="() => { importModeModel = option.value }"'),
+              ],
+              'app/components/sidebar/SideBar.vue': [
+                  ('@click="showRenameModal = false"', '@click="() => { showRenameModal = false }"'),
+                  ('@click="showRenameProjectModal = false"', '@click="() => { showRenameProjectModal = false }"'),
+                  ('@click="showDeleteModal = false"', '@click="() => { showDeleteModal = false }"'),
+                  ('@click="showDeleteDocumentModal = false"', '@click="() => { showDeleteDocumentModal = false }"'),
+                  ('@click="showDeleteProjectModal = false"', '@click="() => { showDeleteProjectModal = false }"'),
+              ],
+              'app/components/sidebar/SideNavHeader.vue': [
+                  ('@click="sidebarQuery = \'\'"', '@click="() => { sidebarQuery = \'\' }"'),
+                  ('@click="showRenameModal = false"', '@click="() => { showRenameModal = false }"'),
+                  ('@click="showRenameProjectModal = false"', '@click="() => { showRenameProjectModal = false }"'),
+              ],
+              'app/pages/images/ImageViewer.vue': [
+                  ('meta && emit(\'download\', meta)', "() => { if (meta) emit('download', meta) }"),
+                  ('meta && emit(\'copy\', meta)', "() => { if (meta) emit('copy', meta) }"),
+                  ('meta && emit(\'delete\', meta)', "() => { if (meta) emit('delete', meta) }"),
+                  ('meta && emit(\'restore\', meta)', "() => { if (meta) emit('restore', meta) }"),
+              ],
+              'app/plugins/workflows/components/WorkflowPane.vue': [
+                  ('@click="showValidation = !showValidation"', '@click="() => { showValidation = !showValidation }"'),
+              ],
+              'app/plugins/workflows/components/sidebar/WorkflowsTab.vue': [
+                  ('@click="showCreateModal = false"', '@click="() => { showCreateModal = false }"'),
+                  ('@click="showDeleteModal = false"', '@click="() => { showDeleteModal = false }"'),
+                  ('@click="showRenameModal = false"', '@click="() => { showRenameModal = false }"'),
+              ],
+              'app/pages/_tests/use-workflows.vue': [
+                  ('new OpenRouterExecutionAdapter(client, {', 'new OpenRouterExecutionAdapter(\n        client as unknown as ConstructorParameters<typeof OpenRouterExecutionAdapter>[0],\n        {'),
+                  ('        defaultModel: DEFAULT_MODEL,\n    });', '            defaultModel: DEFAULT_MODEL,\n        },\n    );'),
+              ],
+          }
+
+          for filename, reps in replacements.items():
+              path = Path(filename)
+              text = path.read_text()
+              for old, new in reps:
+                  if old not in text:
+                      raise SystemExit(f'missing replacement in {filename}: {old}')
+                  text = text.replace(old, new)
+              path.write_text(text)
+          PY
 
       - name: Frozen install
         run: bun install --frozen-lockfile
@@ -53,7 +117,17 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json bun.lock
+          git add package.json bun.lock \
+            app/components/FatalErrorBoundary.vue \
+            app/components/dashboard/theme/ResetSection.vue \
+            app/components/dashboard/theme/ThemeModeToggle.vue \
+            app/components/dashboard/workspace/WorkspaceBackupApp.vue \
+            app/components/sidebar/SideBar.vue \
+            app/components/sidebar/SideNavHeader.vue \
+            app/pages/images/ImageViewer.vue \
+            app/plugins/workflows/components/WorkflowPane.vue \
+            app/plugins/workflows/components/sidebar/WorkflowsTab.vue \
+            app/pages/_tests/use-workflows.vue
           if git diff --cached --quiet; then
             exit 0
           fi
