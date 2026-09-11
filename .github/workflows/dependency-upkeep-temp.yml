@@ -5,12 +5,8 @@ on:
     branches:
       - chore/dependency-upkeep-2026-09-11
 
-permissions:
-  contents: write
-
 jobs:
   verify:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -18,14 +14,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: chore/dependency-upkeep-2026-09-11
-          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Verify and capture diagnostics
+      - name: Verify
         shell: bash
         run: |
           set +e
@@ -42,39 +37,20 @@ jobs:
           bun run build > /tmp/build.log 2>&1
           build_status=$?
 
-          {
-            echo "DEPENDENCY UPKEEP DIAGNOSTICS"
-            echo "install=$install_status"
-            echo "typecheck=$typecheck_status"
-            echo "lint=$lint_status"
-            echo "test=$test_status"
-            echo "build=$build_status"
-            echo "outdated_exit=$outdated_status"
-            echo
-            echo "===== OUTDATED ====="
-            cat /tmp/outdated.log
-            echo
-            echo "===== INSTALL ====="
-            cat /tmp/install.log
-            echo
-            echo "===== TYPECHECK ====="
-            cat /tmp/typecheck.log
-            echo
-            echo "===== LINT ====="
-            cat /tmp/lint.log
-            echo
-            echo "===== TEST ====="
-            tail -n 250 /tmp/test.log
-            echo
-            echo "===== BUILD ====="
-            tail -n 250 /tmp/build.log
-          } > dependency-upkeep-diagnostics.txt
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add dependency-upkeep-diagnostics.txt
-          git commit -m "chore: capture dependency verification diagnostics"
-          git push origin HEAD:chore/dependency-upkeep-2026-09-11
+          echo "DEPENDENCY UPKEEP DIAGNOSTICS"
+          echo "install=$install_status typecheck=$typecheck_status lint=$lint_status test=$test_status build=$build_status outdated_exit=$outdated_status"
+          echo "===== OUTDATED ====="
+          cat /tmp/outdated.log
+          echo "===== INSTALL ====="
+          cat /tmp/install.log
+          echo "===== TYPECHECK ====="
+          cat /tmp/typecheck.log
+          echo "===== LINT ====="
+          cat /tmp/lint.log
+          echo "===== TEST TAIL ====="
+          tail -n 250 /tmp/test.log
+          echo "===== BUILD TAIL ====="
+          tail -n 250 /tmp/build.log
 
           if [ "$install_status" -ne 0 ] || [ "$typecheck_status" -ne 0 ] || [ "$lint_status" -ne 0 ] || [ "$test_status" -ne 0 ] || [ "$build_status" -ne 0 ]; then
             exit 1
